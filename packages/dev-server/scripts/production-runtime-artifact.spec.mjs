@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, cp, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+    access,
+    chmod,
+    cp,
+    lstat,
+    mkdir,
+    mkdtemp,
+    readFile,
+    readlink,
+    rename,
+    rm,
+    stat,
+    symlink,
+    writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -27,6 +41,7 @@ import {
     writeBunAuditEvidence,
 } from './production-runtime-audit.mjs';
 import {
+    assertRuntimeSymlinksResolve,
     assertVendureWorkspaceSymlinksResolve,
     collectArtifactEntries,
     collectPackageInventory,
@@ -274,6 +289,300 @@ void test('runtime artifact pruning removes build-only and denied packages', asy
     }
 });
 
+void test('runtime pruning removes only declared denied-package command links at each install level', async () => {
+    let root = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-prune-bins-'));
+    try {
+        for (const modules of ['node_modules', 'node_modules/owner/node_modules']) {
+            await mkdir(path.join(root, modules, '.bin'), { recursive: true });
+            await mkdir(path.join(root, modules, 'typescript/bin'), { recursive: true });
+            await writeFile(
+                path.join(root, modules, 'typescript/package.json'),
+                JSON.stringify({
+                    name: 'typescript',
+                    version: '5.9.3',
+                    bin: { tsc: './bin/tsc', tsserver: './bin/tsserver' },
+                }),
+            );
+            for (const command of ['tsc', 'tsserver']) {
+                await writeFile(path.join(root, modules, 'typescript/bin', command), 'process.exit(0);\n');
+                await symlink(`../typescript/bin/${command}`, path.join(root, modules, '.bin', command));
+            }
+        }
+        await mkdir(path.join(root, 'node_modules/less/bin'), { recursive: true });
+        await writeFile(
+            path.join(root, 'node_modules/less/package.json'),
+            JSON.stringify({ name: 'less', version: '4.2.2', bin: './bin/less.js' }),
+        );
+        await writeFile(path.join(root, 'node_modules/less/bin/less.js'), 'process.exit(0);\n');
+        await symlink('../less/bin/less.js', path.join(root, 'node_modules/.bin/less'));
+        await mkdir(path.join(root, 'node_modules/runtime-cli/bin'), { recursive: true });
+        await writeFile(
+            path.join(root, 'node_modules/runtime-cli/package.json'),
+            JSON.stringify({ name: 'runtime-cli', version: '1.0.0', bin: { 'runtime-cli': 'bin/run.js' } }),
+        );
+        await writeFile(
+            path.join(root, 'node_modules/runtime-cli/bin/run.js'),
+            '#!/usr/bin/env node\nprocess.stdout.write("RUNTIME_OK");\n',
+        );
+        await chmod(path.join(root, 'node_modules/runtime-cli/bin/run.js'), 0o755);
+        await symlink('../runtime-cli/bin/run.js', path.join(root, 'node_modules/.bin/runtime-cli'));
+
+        const removed = await pruneDeniedRuntimePackages(root);
+        assert.equal(removed.length, 3);
+        for (const modules of ['node_modules', 'node_modules/owner/node_modules']) {
+            for (const command of ['tsc', 'tsserver']) {
+                await assert.rejects(lstat(path.join(root, modules, '.bin', command)), { code: 'ENOENT' });
+            }
+            await assert.rejects(access(path.join(root, modules, 'typescript')), { code: 'ENOENT' });
+        }
+        await assert.rejects(lstat(path.join(root, 'node_modules/.bin/less')), { code: 'ENOENT' });
+        assert.equal(
+            await readlink(path.join(root, 'node_modules/.bin/runtime-cli')),
+            '../runtime-cli/bin/run.js',
+        );
+        await writeIntegrityFiles(root);
+        const inventory = JSON.parse(await readFile(path.join(root, 'RUNTIME-SYMLINKS.json'), 'utf8'));
+        assert.deepEqual(inventory, [
+            { path: 'node_modules/.bin/runtime-cli', target: '../runtime-cli/bin/run.js' },
+        ]);
+        const installedRoot = `${root}-installed`;
+        await rename(root, installedRoot);
+        root = installedRoot;
+        await assertRuntimeSymlinksResolve(root);
+        const executable = spawnSync(path.join(root, 'node_modules/.bin/runtime-cli'), [], {
+            encoding: 'utf8',
+        });
+        assert.equal(executable.status, 0, executable.stderr);
+        assert.equal(executable.stdout, 'RUNTIME_OK');
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+void test('runtime pruning preserves a same-name command owned by an allowed package', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-prune-conflict-'));
+    try {
+        await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+        await mkdir(path.join(root, 'node_modules/typescript/bin'), { recursive: true });
+        await mkdir(path.join(root, 'node_modules/allowed/bin'), { recursive: true });
+        await writeFile(
+            path.join(root, 'node_modules/typescript/package.json'),
+            JSON.stringify({
+                name: 'typescript',
+                version: '5.9.3',
+                bin: { tsc: 'bin/tsc' },
+            }),
+        );
+        await writeFile(path.join(root, 'node_modules/typescript/bin/tsc'), 'process.exit(0);\n');
+        await writeFile(path.join(root, 'node_modules/allowed/bin/tsc'), 'process.exit(0);\n');
+        await symlink('../allowed/bin/tsc', path.join(root, 'node_modules/.bin/tsc'));
+        await pruneDeniedRuntimePackages(root);
+        assert.equal(await readlink(path.join(root, 'node_modules/.bin/tsc')), '../allowed/bin/tsc');
+        await writeIntegrityFiles(root);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+void test('runtime pruning leaves unrelated aliases visible for strict closure rejection', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-prune-alias-'));
+    try {
+        await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+        await mkdir(path.join(root, 'node_modules/typescript/bin'), { recursive: true });
+        await writeFile(
+            path.join(root, 'node_modules/typescript/package.json'),
+            JSON.stringify({
+                name: 'typescript',
+                version: '5.9.3',
+                bin: { tsc: 'bin/tsc' },
+            }),
+        );
+        await writeFile(path.join(root, 'node_modules/typescript/bin/tsc'), 'process.exit(0);\n');
+        await symlink('../typescript/bin/tsc', path.join(root, 'node_modules/.bin/tsc'));
+        await symlink('../typescript/bin/tsc', path.join(root, 'node_modules/.bin/undeclared-alias'));
+        await symlink('node_modules/typescript', path.join(root, 'non-bin-alias'));
+        await pruneDeniedRuntimePackages(root);
+        assert.equal(
+            await readlink(path.join(root, 'node_modules/.bin/undeclared-alias')),
+            '../typescript/bin/tsc',
+        );
+        assert.equal(await readlink(path.join(root, 'non-bin-alias')), 'node_modules/typescript');
+        await assert.rejects(writeIntegrityFiles(root), /Runtime symlink is broken or cyclic/u);
+        await assert.rejects(access(path.join(root, 'SHA256SUMS')), { code: 'ENOENT' });
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+void test('runtime pruning fails before mutation for invalid bins and command targets', async t => {
+    const cases = [
+        ['bin-name-escape', { '../tsc': 'bin/tsc' }, '../typescript/bin/tsc'],
+        ['absolute-bin', { tsc: '/outside/tsc' }, '../typescript/bin/tsc'],
+        ['bin-path-escape', { tsc: '../../outside' }, '../typescript/bin/tsc'],
+        ['invalid-bin-value', { tsc: 1 }, '../typescript/bin/tsc'],
+        ['invalid-bin-map', [], '../typescript/bin/tsc'],
+        ['null-bin-map', null, '../typescript/bin/tsc'],
+        ['missing-bin-file', { tsc: 'bin/missing' }, '../typescript/bin/tsc'],
+        ['directory-bin-target', { tsc: 'bin' }, '../typescript/bin/tsc'],
+        ['wrong-package-file', { tsc: 'bin/tsc' }, '../typescript/bin/other'],
+        ['command-path-escape', { tsc: 'bin/tsc' }, '../../../outside'],
+    ];
+    for (const [label, bin, link] of cases) {
+        await t.test(label, async () => {
+            const root = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-invalid-bin-'));
+            try {
+                await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+                await mkdir(path.join(root, 'node_modules/typescript/bin'), { recursive: true });
+                await writeFile(
+                    path.join(root, 'node_modules/typescript/package.json'),
+                    JSON.stringify({
+                        name: 'typescript',
+                        version: '5.9.3',
+                        bin,
+                    }),
+                );
+                for (const name of ['tsc', 'other']) {
+                    await writeFile(
+                        path.join(root, 'node_modules/typescript/bin', name),
+                        'process.exit(0);\n',
+                    );
+                }
+                await symlink(link, path.join(root, 'node_modules/.bin/tsc'));
+                await assert.rejects(pruneDeniedRuntimePackages(root));
+                await access(path.join(root, 'node_modules/typescript/package.json'));
+                assert.equal(await readlink(path.join(root, 'node_modules/.bin/tsc')), link);
+            } finally {
+                await rm(root, { recursive: true, force: true });
+            }
+        });
+    }
+});
+
+void test('runtime pruning validates all commands before removing an earlier valid alias', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-prune-before-mutation-'));
+    try {
+        await mkdir(path.join(root, 'node_modules/typescript/bin'), { recursive: true });
+        await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+        await writeFile(
+            path.join(root, 'node_modules/typescript/package.json'),
+            JSON.stringify({
+                name: 'typescript',
+                version: '5.9.3',
+                bin: { tsc: 'bin/tsc', tsserver: '../outside' },
+            }),
+        );
+        await writeFile(path.join(root, 'node_modules/typescript/bin/tsc'), 'process.exit(0);\n');
+        await symlink('../typescript/bin/tsc', path.join(root, 'node_modules/.bin/tsc'));
+        await assert.rejects(pruneDeniedRuntimePackages(root), /bin escapes its package/u);
+        assert.equal(await readlink(path.join(root, 'node_modules/.bin/tsc')), '../typescript/bin/tsc');
+        await access(path.join(root, 'node_modules/typescript/package.json'));
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
+void test('runtime pruning rejects redirected bins without touching outside resources', async () => {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-redirected-bin-'));
+    const root = path.join(fixture, 'runtime');
+    const outside = path.join(fixture, 'outside');
+    try {
+        await mkdir(path.join(root, 'node_modules/.bin'), { recursive: true });
+        await mkdir(path.join(root, 'node_modules/typescript/bin'), { recursive: true });
+        await mkdir(outside);
+        await writeFile(path.join(outside, 'tsc'), 'OUTSIDE_MUST_SURVIVE\n');
+        await writeFile(
+            path.join(root, 'node_modules/typescript/package.json'),
+            JSON.stringify({
+                name: 'typescript',
+                version: '5.9.3',
+                bin: { tsc: 'bin/tsc' },
+            }),
+        );
+        await symlink('../../../../outside/tsc', path.join(root, 'node_modules/typescript/bin/tsc'));
+        await symlink('../typescript/bin/tsc', path.join(root, 'node_modules/.bin/tsc'));
+        await assert.rejects(pruneDeniedRuntimePackages(root), /bin has an invalid target/u);
+        assert.equal(await readFile(path.join(outside, 'tsc'), 'utf8'), 'OUTSIDE_MUST_SURVIVE\n');
+        await access(path.join(root, 'node_modules/typescript/package.json'));
+    } finally {
+        await rm(fixture, { recursive: true, force: true });
+    }
+});
+
+void test('runtime pruning rejects a redirected command directory before unlinking outside aliases', async () => {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-redirected-bin-directory-'));
+    const root = path.join(fixture, 'runtime');
+    const outside = path.join(fixture, 'outside');
+    try {
+        await mkdir(path.join(root, 'node_modules/typescript/bin'), { recursive: true });
+        await mkdir(path.join(outside, 'bin'), { recursive: true });
+        await writeFile(
+            path.join(root, 'node_modules/typescript/package.json'),
+            JSON.stringify({
+                name: 'typescript',
+                version: '5.9.3',
+                bin: { tsc: 'bin/tsc' },
+            }),
+        );
+        await writeFile(path.join(root, 'node_modules/typescript/bin/tsc'), 'process.exit(0);\n');
+        await writeFile(path.join(outside, 'sentinel'), 'OUTSIDE_MUST_SURVIVE\n');
+        await symlink('../runtime/node_modules/typescript', path.join(outside, 'typescript'));
+        await symlink('../typescript/bin/tsc', path.join(outside, 'bin/tsc'));
+        await symlink('../../outside/bin', path.join(root, 'node_modules/.bin'));
+        await assert.rejects(pruneDeniedRuntimePackages(root), /command directory is not a real directory/u);
+        assert.equal(await readlink(path.join(outside, 'bin/tsc')), '../typescript/bin/tsc');
+        assert.equal(await readFile(path.join(outside, 'sentinel'), 'utf8'), 'OUTSIDE_MUST_SURVIVE\n');
+        await access(path.join(root, 'node_modules/typescript/package.json'));
+    } finally {
+        await rm(fixture, { recursive: true, force: true });
+    }
+});
+
+void test('runtime symlink closure preserves workspace links and rejects broken, cyclic or escaping links', async t => {
+    const fixture = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-link-closure-'));
+    const root = path.join(fixture, 'runtime');
+    try {
+        await mkdir(path.join(root, 'node_modules/@vendure'), { recursive: true });
+        await mkdir(path.join(root, 'packages/common/lib'), { recursive: true });
+        await writeFile(path.join(root, 'packages/common/lib/index.js'), 'module.exports = {};\n');
+        await symlink('../../packages/common', path.join(root, 'node_modules/@vendure/common'));
+        await symlink('node_modules/@vendure/common/lib/index.js', path.join(root, 'workspace-entry'));
+        await assertRuntimeSymlinksResolve(root);
+        await writeIntegrityFiles(root);
+        assert.equal(JSON.parse(await readFile(path.join(root, 'RUNTIME-SYMLINKS.json'), 'utf8')).length, 2);
+        await writeFile(path.join(fixture, 'outside'), 'OUTSIDE_MUST_SURVIVE\n');
+        for (const [label, target] of [
+            ['broken', 'missing'],
+            ['cyclic', 'invalid-link'],
+            ['escaping', '../outside'],
+            ['absolute-inside', path.join(root, 'packages/common/lib/index.js')],
+            ['absolute-outside', path.join(fixture, 'outside')],
+        ]) {
+            await t.test(label, async () => {
+                await symlink(target, path.join(root, 'invalid-link'));
+                try {
+                    await assert.rejects(assertRuntimeSymlinksResolve(root), /Runtime symlink/u);
+                    await assert.rejects(writeIntegrityFiles(root), /Runtime symlink/u);
+                } finally {
+                    await rm(path.join(root, 'invalid-link'));
+                }
+            });
+        }
+        await mkdir(path.join(fixture, 'outside-directory'));
+        await writeFile(path.join(fixture, 'outside-directory/file.js'), 'OUTSIDE_MUST_SURVIVE\n');
+        await symlink('../outside-directory', path.join(root, 'redirect'));
+        await symlink('redirect/file.js', path.join(root, 'indirect'));
+        await assert.rejects(
+            assertRuntimeSymlinksResolve(root, [
+                { path: 'indirect', target: 'redirect/file.js', type: 'symlink' },
+            ]),
+            /redirects outside/u,
+        );
+        assert.equal(await readFile(path.join(fixture, 'outside'), 'utf8'), 'OUTSIDE_MUST_SURVIVE\n');
+    } finally {
+        await rm(fixture, { recursive: true, force: true });
+    }
+});
+
 void test('runtime package scan finds denied transitive packages without following symlinks', async () => {
     const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'vendure-runtime-scan-'));
     try {
@@ -331,6 +640,12 @@ void test('runtime verification rejects files added after the integrity manifest
         await writeIntegrityFiles(fixtureRoot);
 
         await verifyRuntimeArtifact(fixtureRoot, { expectedSha: 'a'.repeat(40), verifyModules: false });
+        await symlink('node_modules/typescript/bin/tsc', path.join(fixtureRoot, 'unexpected-command'));
+        await assert.rejects(
+            verifyRuntimeArtifact(fixtureRoot, { expectedSha: 'a'.repeat(40), verifyModules: false }),
+            /Runtime symlink is broken or cyclic/u,
+        );
+        await rm(path.join(fixtureRoot, 'unexpected-command'));
         await writeFile(path.join(fixtureRoot, 'unexpected.txt'), 'unexpected\n');
         await assert.rejects(
             () =>
