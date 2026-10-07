@@ -2,6 +2,7 @@ import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { AssetType, GlobalFlag } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
+    AdministratorService,
     Asset,
     AssetService,
     AssetTranslation,
@@ -32,6 +33,7 @@ import {
     ProductVariantService,
     RequestContext,
     RequestContextService,
+    RoleService,
     SessionService,
     ShippingMethod,
     ShippingMethodService,
@@ -42,7 +44,14 @@ import {
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
-import { createTestEnvironment, registerInitializer, SqljsInitializer, testConfig } from '@vendure/testing';
+import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
+import {
+    createTestEnvironment,
+    registerInitializer,
+    SimpleGraphQLClient,
+    SqljsInitializer,
+    testConfig,
+} from '@vendure/testing';
 import gql from 'graphql-tag';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -77,6 +86,7 @@ import {
 import { CatalogGovernanceService } from '../src/catalog-governance.service';
 import { DataRetentionService } from '../src/data-retention.service';
 import { DataSubjectService } from '../src/data-subject.service';
+import { AdministratorAccessProfile } from '../src/entities/administrator-access-profile.entity';
 import { DataRetentionRecord } from '../src/entities/data-retention-record.entity';
 import { DataSubjectRequest } from '../src/entities/data-subject-request.entity';
 import { GovernanceAuditEntry } from '../src/entities/governance-audit-entry.entity';
@@ -100,6 +110,7 @@ const serverConfig = mergeConfig(testConfig, {
         }),
         CatalogManagementPlugin,
         StorefrontCartPlugin,
+        StorefrontContentPlugin,
         ContentTranslationPlugin.init({
             provider: {
                 name: 'governance-test',
@@ -1211,7 +1222,7 @@ describe('platform governance real database and API boundaries', () => {
         await expect(
             shipping.update(a, { id: method.id, code: 'cannot-change-shared', translations: [] }),
         ).rejects.toThrow('共享配送方式');
-        await expect(shipping.softDelete(b, method.id)).rejects.toThrow('共享配送方式');
+        await expect(shipping.softDelete(b, method.id)).rejects.toThrow(/共享配送方式|维护归属/u);
         expect((await shipping.findOne(b, method.id))?.code).toBe('synthetic-isolation-shipping');
         adminClient.setChannelToken(b.channel.token);
         try {
@@ -1228,7 +1239,7 @@ describe('platform governance real database and API boundaries', () => {
                     `,
                     { id: String(method.id) },
                 ),
-            ).rejects.toThrow('共享配送方式');
+            ).rejects.toThrow(/共享配送方式|维护归属/u);
         } finally {
             adminClient.setChannelToken(platform.channel.token);
         }
@@ -1384,15 +1395,24 @@ describe('platform governance real database and API boundaries', () => {
                     }
                 `),
             ).rejects.toThrow('平台管理中心');
-            await expect(
-                adminClient.query(gql`
-                    query {
-                        systemAnnouncements {
+            const announcements = await adminClient.query(gql`
+                query {
+                    systemAnnouncements {
+                        id
+                        targetMode
+                        channels {
                             id
                         }
                     }
-                `),
-            ).rejects.toThrow('平台管理中心');
+                }
+            `);
+            expect(
+                announcements.systemAnnouncements.every(
+                    (item: any) =>
+                        item.targetMode === 'ALL' ||
+                        item.channels.some((channel: any) => channel.id === String(b.channelId)),
+                ),
+            ).toBe(true);
             await expect(
                 adminClient.query(gql`
                     query {
@@ -1455,6 +1475,315 @@ describe('platform governance real database and API boundaries', () => {
         } finally {
             adminClient.setChannelToken(platform.channel.token);
         }
+    });
+    it('returns a fresh non-sensitive capability snapshot and rejects unsupported store APIs', async () => {
+        const repository = connection.rawConnection.getRepository(Channel);
+        const channel = await repository.findOneByOrFail({ id: a.channelId });
+        const previousMode = channel.customFields.commerceMode;
+        const query = gql`
+            query {
+                currentAdminCapabilities {
+                    channelId
+                    channelCode
+                    scope
+                    commerceMode
+                    capabilities {
+                        id
+                        state
+                        canRead
+                        canWrite
+                        canConfigure
+                    }
+                }
+            }
+        `;
+        try {
+            await repository.save({
+                ...channel,
+                customFields: { ...channel.customFields, commerceMode: 'DIGITAL_ONLY' },
+            } as any);
+            adminClient.setChannelToken(a.channel.token);
+            const result = (await adminClient.query(query)).currentAdminCapabilities;
+            expect(result).toMatchObject({
+                channelId: String(a.channelId),
+                scope: 'STORE',
+                commerceMode: 'DIGITAL_ONLY',
+            });
+            for (const id of [
+                '/settings/store-profile/shipping',
+                '/settings/system-ops/settings',
+                '/settings/system-ops/jobs',
+            ])
+                expect(result.capabilities.find((item: any) => item.id === id)).toMatchObject({
+                    state: 'UNSUPPORTED',
+                    canRead: false,
+                    canWrite: false,
+                    canConfigure: false,
+                });
+            await expect(
+                adminClient.query(gql`
+                    query {
+                        shippingMethods {
+                            totalItems
+                        }
+                    }
+                `),
+            ).rejects.toThrow();
+            adminClient.setChannelToken(platform.channel.token);
+            const platformResult = (await adminClient.query(query)).currentAdminCapabilities;
+            expect(platformResult).toMatchObject({
+                channelId: String(platform.channelId),
+                scope: 'PLATFORM',
+                commerceMode: null,
+            });
+            expect(
+                platformResult.capabilities.find((item: any) => item.id === '/settings/system-ops/settings'),
+            ).toMatchObject({ state: 'READY', canRead: true });
+            expect(
+                platformResult.capabilities.find((item: any) => item.id === '/sales/profit'),
+            ).toMatchObject({ canRead: true, canWrite: false, canConfigure: false });
+        } finally {
+            await repository.save({
+                ...channel,
+                customFields: { ...channel.customFields, commerceMode: previousMode },
+            } as any);
+            adminClient.setChannelToken(platform.channel.token);
+        }
+    });
+
+    it('keeps announcement maintenance ownership separate from its target store through the real API', async () => {
+        const create = gql`
+            mutation ($input: CreateSystemAnnouncementInput!) {
+                createSystemAnnouncement(input: $input) {
+                    id
+                    ownerChannelId
+                }
+            }
+        `;
+        const update = gql`
+            mutation ($input: UpdateSystemAnnouncementInput!) {
+                updateSystemAnnouncement(input: $input) {
+                    id
+                    enabled
+                }
+            }
+        `;
+        try {
+            adminClient.setChannelToken(platform.channel.token);
+            const platformNotice = (
+                await adminClient.query(create, {
+                    input: {
+                        titleZh: '平台定向通知',
+                        contentZh: '平台维护',
+                        targetMode: 'SINGLE',
+                        channelIds: [String(a.channelId)],
+                    },
+                })
+            ).createSystemAnnouncement;
+            expect(platformNotice.ownerChannelId).toBeNull();
+            adminClient.setChannelToken(a.channel.token);
+            const own = (
+                await adminClient.query(create, {
+                    input: {
+                        titleZh: '本店通知',
+                        contentZh: '本店维护',
+                        targetMode: 'SINGLE',
+                        channelIds: [String(a.channelId)],
+                    },
+                })
+            ).createSystemAnnouncement;
+            expect(own.ownerChannelId).toBe(String(a.channelId));
+            const ownInput = { id: own.id, titleZh: '本店通知', contentZh: '本店维护', enabled: false };
+            await adminClient.query(update, { input: ownInput });
+            await expect(
+                adminClient.query(update, {
+                    input: {
+                        id: platformNotice.id,
+                        titleZh: '平台定向通知',
+                        contentZh: '平台维护',
+                        enabled: false,
+                    },
+                }),
+            ).rejects.toThrow();
+            adminClient.setChannelToken(b.channel.token);
+            const rows = (
+                await adminClient.query(gql`
+                    query {
+                        systemAnnouncements {
+                            id
+                        }
+                    }
+                `)
+            ).systemAnnouncements;
+            expect(rows.map((row: any) => row.id)).not.toContain(own.id);
+            await expect(adminClient.query(update, { input: ownInput })).rejects.toThrow();
+        } finally {
+            adminClient.setChannelToken(platform.channel.token);
+        }
+    });
+    it('adopts the public free-shipping version only in the current store and preserves its original', async () => {
+        const channels = connection.rawConnection.getRepository(Channel);
+        const originals = await channels.findBy({
+            id: (await channels.findOneByOrFail({ id: a.channelId })).id,
+        });
+        originals.push(await channels.findOneByOrFail({ id: b.channelId }));
+        for (const channel of originals)
+            await channels.save({
+                ...channel,
+                customFields: { ...channel.customFields, commerceMode: 'HYBRID' },
+            } as any);
+        const fields = `latestPlatformVersion adoptedPlatformTemplateId items {
+            method { id code } platformTemplate templateVersion ownedByStore enabled
+            assignedStoreChannels { id }
+        }`;
+        const read = gql(`query { shippingTemplateManagement { ${fields} } }`);
+        const enabled = gql(`mutation ($id: ID!, $enabled: Boolean!) {
+            setMyShippingTemplateEnabled(id: $id, enabled: $enabled) { ${fields} }
+        }`);
+        try {
+            adminClient.setChannelToken(platform.channel.token);
+            const initialized = (
+                await adminClient.query(
+                    gql(`mutation {
+                initializePlatformShippingTemplates { ${fields} }
+            }`),
+                )
+            ).initializePlatformShippingTemplates;
+            const publicTemplates = initialized.items.filter((item: any) => item.platformTemplate);
+            expect(publicTemplates).toHaveLength(1);
+            const publicId = publicTemplates[0].method.id;
+            adminClient.setChannelToken(a.channel.token);
+            const adopted = (await adminClient.query(enabled, { id: publicId, enabled: true }))
+                .setMyShippingTemplateEnabled;
+            expect(adopted.adoptedPlatformTemplateId).toBe(publicId);
+            expect(adopted.items.find((item: any) => item.method.id === publicId).enabled).toBe(true);
+            expect(
+                adopted.items
+                    .find((item: any) => item.method.id === publicId)
+                    .assignedStoreChannels.every((c: any) => c.id === String(a.channelId)),
+            ).toBe(true);
+            await expect(
+                adminClient.query(
+                    gql`
+                        mutation ($id: ID!) {
+                            updateShippingMethod(
+                                input: { id: $id, code: "overwrite-public", translations: [] }
+                            ) {
+                                id
+                            }
+                        }
+                    `,
+                    { id: publicId },
+                ),
+            ).rejects.toThrow();
+            adminClient.setChannelToken(b.channel.token);
+            expect(
+                (await adminClient.query(read)).shippingTemplateManagement.items.find(
+                    (item: any) => item.method.id === publicId,
+                ).enabled,
+            ).toBe(false);
+            await expect(
+                adminClient.query(gql`
+                    mutation {
+                        createPlatformFreeShippingVersion {
+                            latestPlatformVersion
+                        }
+                    }
+                `),
+            ).rejects.toThrow();
+            adminClient.setChannelToken(platform.channel.token);
+            const version = (
+                await adminClient.query(
+                    gql(`mutation {
+                createPlatformFreeShippingVersion { ${fields} }
+            }`),
+                )
+            ).createPlatformFreeShippingVersion;
+            expect(version.latestPlatformVersion).toBe(initialized.latestPlatformVersion + 1);
+            adminClient.setChannelToken(a.channel.token);
+            expect((await adminClient.query(read)).shippingTemplateManagement.adoptedPlatformTemplateId).toBe(
+                publicId,
+            );
+            const off = (await adminClient.query(enabled, { id: publicId, enabled: false }))
+                .setMyShippingTemplateEnabled;
+            expect(off.items.find((item: any) => item.method.id === publicId).enabled).toBe(false);
+        } finally {
+            for (const channel of originals) await channels.save(channel);
+            adminClient.setChannelToken(platform.channel.token);
+        }
+    });
+    it('lets a read-only employee inspect their store while rejecting writes and another store', async () => {
+        const role = await server.app.get(RoleService).create(platform, {
+            code: `read-only-${randomUUID()}`,
+            description: 'Synthetic read-only store employee',
+            channelIds: [a.channelId],
+            permissions: [Permission.ReadSettings, 'ReadStorefrontContent' as Permission],
+        });
+        const password = randomUUID();
+        const emailAddress = `readonly-${randomUUID()}@fixture.test`;
+        const employee = await server.app.get(AdministratorService).create(platform, {
+            firstName: 'Synthetic',
+            lastName: 'ReadOnly',
+            emailAddress,
+            password,
+            roleIds: [role.id],
+        });
+        const profiles = connection.rawConnection.getRepository(AdministratorAccessProfile);
+        const existing = await profiles.findOneBy({ userId: employee.user.id });
+        await profiles.save({
+            ...existing,
+            administratorId: employee.id,
+            userId: employee.user.id,
+            scope: 'STORE',
+            authority: 'STAFF',
+            status: 'ACTIVE',
+            channelId: a.channelId,
+            mustChangePassword: false,
+            platformOwnerSlot: null,
+            storePrimarySlot: null,
+            createdByAdministratorId: null,
+        });
+        const client = new SimpleGraphQLClient(serverConfig, 'http://localhost:3477/admin-api');
+        client.setChannelToken(a.channel.token);
+        await client.asUserWithCredentials(emailAddress, password);
+        const query = gql`
+            query {
+                currentAdminCapabilities {
+                    channelId
+                    capabilities {
+                        id
+                        canRead
+                        canWrite
+                        canConfigure
+                    }
+                }
+            }
+        `;
+        const capabilities = (await client.query(query)).currentAdminCapabilities;
+        expect(capabilities.channelId).toBe(String(a.channelId));
+        expect(
+            capabilities.capabilities.find((item: any) => item.id === '/storefront/content/announcements'),
+        ).toMatchObject({ canRead: true, canWrite: false, canConfigure: false });
+        await client.query(gql`
+            query {
+                systemAnnouncements {
+                    id
+                }
+            }
+        `);
+        await expect(
+            client.query(gql`
+                mutation {
+                    createSystemAnnouncement(
+                        input: { titleZh: "拒绝写入", contentZh: "仅只读", targetMode: SINGLE }
+                    ) {
+                        id
+                    }
+                }
+            `),
+        ).rejects.toThrow();
+        client.setChannelToken(b.channel.token);
+        await expect(client.query(query)).rejects.toThrow();
     });
     registerCardConcurrencyAcceptance(() => ({ server, connection, platform, a, b, variantIds }));
 });

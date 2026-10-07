@@ -1,7 +1,7 @@
 import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
-import { Beaker, CreditCard, Info, Pencil, Plus, Sparkles, Trash2, Truck, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Beaker, CreditCard, Pencil, Plus, Sparkles, Trash2, Truck, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { sensitiveActionContext } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
@@ -34,9 +34,11 @@ import {
     type ConfigurableOperationRecord,
     type StoreManagementResult,
 } from '../../graphql/management.graphql';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import {
     configurableArgumentLabel,
@@ -49,13 +51,9 @@ import {
     getLocalizedEntityTranslation,
 } from '../../utils/localized-entity-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { ShippingTemplatesPanel } from './ShippingTemplatesPanel';
 import { UsdtPaymentSetupPanel } from './UsdtPaymentSetupPanel';
-import {
-    SHIPPING_PRESETS,
-    formatFulfillmentHandlerSummary,
-    formatShippingCalculatorSummary,
-    formatShippingCheckerSummary,
-} from './shipping-manager-utils';
+import { SHIPPING_PRESETS } from './shipping-manager-utils';
 import {
     USDT_PAYMENT_HANDLER_CODE,
     USDT_PAYMENT_METHOD_CODE,
@@ -125,17 +123,23 @@ export function PaymentShippingManager({
 }) {
     const standalonePage = useStandaloneAdminPage();
     const requestConfirmation = useConfirmDialog();
-    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {});
-    const commerceMode = commerceModeQuery.data?.myStoreCommerceMode.mode ?? 'HYBRID';
-    const { hasAnyPermission } = useAdminPermissions();
     const isPlatform = data.activeChannel.code === '__default_channel__';
+    const { snapshot } = useAdminCapabilities();
+    const capabilityMode =
+        snapshot?.channelId === data.activeChannel.id && snapshot.scope === 'STORE'
+            ? snapshot.commerceMode
+            : null;
+    const commerceModeQuery = useQuery<StoreCommerceModeData>(STORE_COMMERCE_MODE_QUERY, {
+        skip: section !== 'shipping' || isPlatform || capabilityMode != null,
+    });
+    const readMode = capabilityMode ?? commerceModeQuery.data?.myStoreCommerceMode?.mode;
+    const commerceMode =
+        readMode && ['DIGITAL_ONLY', 'PHYSICAL_ONLY', 'HYBRID'].includes(readMode) ? readMode : null;
+    const { hasAnyPermission } = useAdminPermissions();
     const canConfigurePayment = isPlatform && hasAnyPermission(['SuperAdmin']);
     const canCreatePayment = canConfigurePayment;
     const canUpdatePayment = canConfigurePayment;
     const canDeletePayment = canConfigurePayment;
-    const canCreateShipping = hasAnyPermission(['CreateSettings', 'CreateShippingMethod']);
-    const canUpdateShipping = hasAnyPermission(['UpdateSettings', 'UpdateShippingMethod']);
-    const canDeleteShipping = hasAnyPermission(['DeleteSettings', 'DeleteShippingMethod']);
     const [editor, setEditor] = useState<EditorState | null>(null);
     const [togglePayment, toggleState] = useMutation(UPDATE_PAYMENT_METHOD_MUTATION);
     const [deletePayment, deletePaymentState] = useMutation<{
@@ -348,122 +352,36 @@ export function PaymentShippingManager({
                     </section>
                 )}
 
-                {section === 'shipping' && commerceMode !== 'DIGITAL_ONLY' && (
-                    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-5">
-                            <div>
-                                <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                    <Truck className="h-4 w-4 text-blue-600" /> 配送方式
-                                    <FeatureHelpButton
-                                        topic="settings.payment-shipping"
-                                        title="配送方式"
-                                        description={'管理资格检查器、运费计算器和履约处理器'}
-                                    />
-                                </h2>
-                            </div>
-                            {canCreateShipping && (
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => setEditor({ kind: 'shipping' })}
-                                    className={primaryButton}
-                                >
-                                    <Plus className="h-3.5 w-3.5" /> 新增
-                                </AdminButton>
-                            )}
-                        </div>
-                        <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-3.5">
-                            <div className="flex items-start gap-2.5">
-                                <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                                <div className="space-y-1 text-xs text-slate-600">
-                                    <p className="font-semibold text-slate-800">
-                                        💡 配送设置与客户端展示指引
-                                    </p>
-                                    <p className="leading-relaxed">
-                                        •{' '}
-                                        <strong className="text-slate-700">满额免邮无需单独建两个方式</strong>
-                                        ：选择「实物小计免邮门槛计算器」（新增时可直接套用【标准快递】模板），在一条规则内填写基础运费和免邮门槛，买家购物车达标时客户端自动变为
-                                        0 元免邮。
-                                    </p>
-                                    <p className="leading-relaxed">
-                                        • <strong className="text-slate-700">支持多种提货方式</strong>
-                                        ：可同时配置「标准快递」和「上门自提（0元）」，买家在结算时可自主选择，系统会自动优先推荐免邮或最实惠的选项。
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="divide-y divide-slate-100">
-                            {data.shippingMethods.items.map(item => {
-                                const displayName = getLocalizedEntityName(item);
-                                const displayDescription = getLocalizedEntityDescription(item);
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="flex items-center justify-between gap-4 p-5"
-                                    >
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <strong className="text-xs font-bold text-slate-900">
-                                                    {displayName}
-                                                </strong>
-                                            </div>
-                                            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-                                                    {formatShippingCalculatorSummary(
-                                                        item.calculator,
-                                                        data.activeChannel.defaultCurrencyCode,
-                                                    )}
-                                                </span>
-                                                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-700/10">
-                                                    {formatShippingCheckerSummary(item.checker)}
-                                                </span>
-                                                <span className="inline-flex items-center rounded-md bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10">
-                                                    {formatFulfillmentHandlerSummary(
-                                                        item.fulfillmentHandlerCode,
-                                                        data.fulfillmentHandlers,
-                                                    )}
-                                                </span>
-                                            </div>
-                                            {displayDescription && (
-                                                <p className="mt-1.5 line-clamp-2 text-[11px] text-slate-500">
-                                                    {displayDescription}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-1">
-                                            {canUpdateShipping && (
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => setEditor({ kind: 'shipping', item })}
-                                                    className="rounded-md p-1.5 text-blue-600 hover:bg-blue-50"
-                                                    aria-label={`编辑配送方式${displayName}`}
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </AdminButton>
-                                            )}
-                                            {canDeleteShipping && (
-                                                <AdminButton
-                                                    type="button"
-                                                    disabled={deleting}
-                                                    onClick={() =>
-                                                        void removeMethod({ kind: 'shipping', item })
-                                                    }
-                                                    className="rounded-md p-1.5 text-rose-600 hover:bg-rose-50"
-                                                    aria-label={`删除配送方式${displayName}`}
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </AdminButton>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {!data.shippingMethods.items.length && (
-                                <div className="p-10 text-center text-xs text-slate-400">未配置配送方式</div>
-                            )}
-                        </div>
+                {section === 'shipping' &&
+                    (isPlatform || commerceMode === 'PHYSICAL_ONLY' || commerceMode === 'HYBRID') && (
+                        <ShippingTemplatesPanel
+                            data={data}
+                            onCreate={() => setEditor({ kind: 'shipping' })}
+                            onEdit={item => setEditor({ kind: 'shipping', item })}
+                            onDelete={item => void removeMethod({ kind: 'shipping', item })}
+                            deleting={deleting}
+                            onChanged={onChanged}
+                            onError={onError}
+                        />
+                    )}
+                {section === 'shipping' && !isPlatform && commerceMode == null && (
+                    <section
+                        className="rounded-xl border border-slate-200 bg-white p-5"
+                        role={commerceModeQuery.error ? 'alert' : 'status'}
+                    >
+                        <p>
+                            {commerceModeQuery.error
+                                ? '读取本店经营模式失败，暂时无法操作配送设置。'
+                                : '正在确认本店经营模式…'}
+                        </p>
+                        {commerceModeQuery.error && (
+                            <AdminButton type="button" onClick={() => void commerceModeQuery.refetch()}>
+                                重试读取
+                            </AdminButton>
+                        )}
                     </section>
                 )}
-                {section === 'shipping' && commerceMode === 'DIGITAL_ONLY' && (
+                {section === 'shipping' && !isPlatform && commerceMode === 'DIGITAL_ONLY' && (
                     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                         <div className="border-b border-slate-100 p-5">
                             <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -630,17 +548,44 @@ function MethodEditorDialog({
     state: EditorState;
 }) {
     const item = state.item;
+    const storeShipping = state.kind === 'shipping' && data.activeChannel.code !== '__default_channel__';
     const initialTestPayment = state.kind === 'payment' && state.testPayment;
     const languageCode = getAdminDisplayLanguage();
     const selectedTranslation = getLocalizedEntityTranslation(item?.translations, languageCode);
     const checkerDefinitions =
-        state.kind === 'payment' ? data.paymentMethodEligibilityCheckers : data.shippingEligibilityCheckers;
+        state.kind === 'payment'
+            ? data.paymentMethodEligibilityCheckers
+            : data.shippingEligibilityCheckers.filter(
+                  definition =>
+                      data.activeChannel.code === '__default_channel__' ||
+                      definition.code === 'store-shipping-zone-eligibility-checker',
+              );
     const mainDefinitions =
         state.kind === 'payment'
             ? selectablePaymentHandlers(data.paymentMethodHandlers)
-            : data.shippingCalculators;
+            : data.shippingCalculators
+                  .filter(
+                      definition =>
+                          data.activeChannel.code === '__default_channel__' ||
+                          definition.code === 'physical-subtotal-shipping-calculator',
+                  )
+                  .map(definition => ({
+                      ...definition,
+                      args: definition.args.filter(
+                          arg =>
+                              !storeShipping ||
+                              !['sourceCurrencyCode', 'currencyCode', 'baseRate', 'freeAbove'].includes(
+                                  arg.name,
+                              ),
+                      ),
+                  }));
     const [code, setCode] = useState(
-        item?.code ?? (initialTestPayment ? 'controlled-test-payment-platform' : ''),
+        item?.code ??
+            (initialTestPayment
+                ? 'controlled-test-payment-platform'
+                : storeShipping
+                  ? `store-shipping-${data.activeChannel.id}-${globalThis.crypto.randomUUID()}`
+                  : ''),
     );
     const [name, setName] = useState(
         selectedTranslation?.name ?? (item ? '' : initialTestPayment ? '测试支付' : ''),
@@ -649,17 +594,25 @@ function MethodEditorDialog({
     const [enabled, setEnabled] = useState(
         state.kind === 'payment' ? (state.item?.enabled ?? !initialTestPayment) : true,
     );
-    const [checkerCode, setCheckerCode] = useState(item?.checker?.code ?? '');
+    const [checkerCode, setCheckerCode] = useState(
+        storeShipping ? 'store-shipping-zone-eligibility-checker' : (item?.checker?.code ?? ''),
+    );
     const [handlerCode, setHandlerCode] = useState(
         state.kind === 'payment'
             ? (state.item?.handler.code ?? (initialTestPayment ? testPaymentHandler : ''))
             : '',
     );
     const [calculatorCode, setCalculatorCode] = useState(
-        state.kind === 'shipping' ? (state.item?.calculator.code ?? '') : '',
+        state.kind === 'shipping'
+            ? storeShipping
+                ? 'physical-subtotal-shipping-calculator'
+                : (state.item?.calculator.code ?? '')
+            : '',
     );
     const [fulfillmentHandler, setFulfillmentHandler] = useState(
-        state.kind === 'shipping' ? (state.item?.fulfillmentHandlerCode ?? '') : '',
+        state.kind === 'shipping'
+            ? (state.item?.fulfillmentHandlerCode ?? (storeShipping ? 'manual-fulfillment' : ''))
+            : '',
     );
     const [checkerArgs, setCheckerArgs] = useState(() => argsToForm(item?.checker, checkerDefinitions));
     const [handlerArgs, setHandlerArgs] = useState(() =>
@@ -670,8 +623,49 @@ function MethodEditorDialog({
                   data.paymentMethodHandlers,
               ),
     );
-    const [calculatorArgs, setCalculatorArgs] = useState(() =>
-        argsToForm(state.kind === 'shipping' ? state.item?.calculator : undefined, data.shippingCalculators),
+    const [calculatorArgs, setCalculatorArgs] = useState<Record<string, string>>(() =>
+        storeShipping &&
+        state.kind === 'shipping' &&
+        state.item?.calculator.code === 'default-shipping-calculator'
+            ? (() => {
+                  const original = argsToForm(state.item.calculator, data.shippingCalculators);
+                  return {
+                      ...defaultArgs('physical-subtotal-shipping-calculator', data.shippingCalculators),
+                      baseRate: original.rate ?? '0',
+                      freeAbove: '0',
+                      sourceCurrencyCode:
+                          original.sourceCurrencyCode ||
+                          original.currencyCode ||
+                          data.activeChannel.defaultCurrencyCode,
+                      taxRate: original.taxRate ?? '0',
+                      priceIncludesTax: String(original.includesTax === 'include'),
+                  };
+              })()
+            : state.kind === 'shipping' && !item && storeShipping
+              ? {
+                    ...defaultArgs('physical-subtotal-shipping-calculator', data.shippingCalculators),
+                    sourceCurrencyCode: data.activeChannel.defaultCurrencyCode,
+                }
+              : argsToForm(
+                    state.kind === 'shipping' ? state.item?.calculator : undefined,
+                    data.shippingCalculators,
+                ),
+    );
+    const [amountCurrency] = useState(
+        () =>
+            calculatorArgs.sourceCurrencyCode ||
+            calculatorArgs.currencyCode ||
+            data.activeChannel.defaultCurrencyCode,
+    );
+    const currentShippingItem =
+        state.kind === 'shipping' && item
+            ? data.shippingMethods.items.find(method => method.id === item.id)
+            : undefined;
+    const shippingVersionChanged = Boolean(
+        state.kind === 'shipping' &&
+        item &&
+        currentShippingItem &&
+        currentShippingItem.updatedAt !== item.updatedAt,
     );
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>(() =>
         customFieldValuesFromEntity(customFieldDefinitions, item?.customFields, item?.translations),
@@ -686,29 +680,57 @@ function MethodEditorDialog({
         createShippingState.loading ||
         updateShippingState.loading;
 
+    const serializedDraft = JSON.stringify({
+        code,
+        name,
+        description,
+        checkerCode,
+        checkerArgs,
+        calculatorCode,
+        calculatorArgs,
+        fulfillmentHandler,
+        customFieldValues,
+    });
+    const [initialDraft] = useState(() => serializedDraft);
+    const shippingDirty = state.kind === 'shipping' && serializedDraft !== initialDraft;
+    useUnsavedChangesWarning(shippingDirty, '配送模板还有未保存的修改，确定放弃吗？');
+    const requestConfirmation = useConfirmDialog();
+    const requestClose = async () => {
+        if (busy) return;
+        if (
+            shippingDirty &&
+            !(await requestConfirmation({
+                title: '放弃配送模板修改？',
+                description: '尚未保存的内容将被放弃。',
+                confirmLabel: '放弃修改',
+            }))
+        )
+            return;
+        onClose();
+    };
     const isControlledTest = state.kind === 'payment' && handlerCode === testPaymentHandler;
     const fulfillmentDefinition = data.fulfillmentHandlers?.find(
         definition => definition.code === fulfillmentHandler,
     );
 
     const applyShippingPreset = (presetKey: 'standard-threshold' | 'pickup-in-store' | 'free-shipping') => {
-        const defaultCurrency = data.activeChannel.defaultCurrencyCode || 'MYR';
+        const defaultCurrency = amountCurrency;
         const defaultFulfillment = data.fulfillmentHandlers.some(d => d.code === 'manual-fulfillment')
             ? 'manual-fulfillment'
             : (data.fulfillmentHandlers[0]?.code ?? 'manual-fulfillment');
 
         if (presetKey === 'standard-threshold') {
-            setCode('standard-shipping');
-            setName('标准快递');
+            if (!storeShipping) setCode('standard-shipping');
+            setName('本店配送');
             setDescription('普通快递配送，实物商品满额即享免运费');
             setFulfillmentHandler(defaultFulfillment);
 
             const hasDestChecker = data.shippingEligibilityCheckers.some(
-                d => d.code === 'supported-destination-eligibility-checker',
+                d => d.code === 'store-shipping-zone-eligibility-checker',
             );
             if (hasDestChecker) {
-                setCheckerCode('supported-destination-eligibility-checker');
-                setCheckerArgs({ allowedCountryCodes: 'MY', blockedPostalPrefixes: '' });
+                setCheckerCode('store-shipping-zone-eligibility-checker');
+                setCheckerArgs({ allowedCountryCodes: '', blockedPostalPrefixes: '' });
             } else {
                 const fallbackChecker =
                     data.shippingEligibilityCheckers[0]?.code ?? 'default-shipping-eligibility-checker';
@@ -722,9 +744,9 @@ function MethodEditorDialog({
             if (hasPhysicalCalc) {
                 setCalculatorCode('physical-subtotal-shipping-calculator');
                 setCalculatorArgs({
-                    baseRate: '500',
-                    freeAbove: '20000',
-                    currencyCode: defaultCurrency,
+                    baseRate: '0',
+                    freeAbove: '0',
+                    sourceCurrencyCode: defaultCurrency,
                     taxRate: '0',
                     priceIncludesTax: 'false',
                     estimateMinDays: '1',
@@ -733,29 +755,27 @@ function MethodEditorDialog({
             } else {
                 setCalculatorCode('default-shipping-calculator');
                 setCalculatorArgs({
-                    rate: '500',
+                    rate: '0',
                     taxRate: '0',
                     includesTax: 'include',
                 });
             }
         } else if (presetKey === 'pickup-in-store') {
-            setCode('pickup-in-store');
+            if (!storeShipping) setCode('pickup-in-store');
             setName('上门自提');
             setDescription('买家自行前往门店或自提点取货，免运费');
             setFulfillmentHandler(defaultFulfillment);
 
             const defaultChecker =
-                data.shippingEligibilityCheckers.find(
-                    d => d.code === 'default-shipping-eligibility-checker',
-                ) ?? data.shippingEligibilityCheckers[0];
+                checkerDefinitions.find(d => d.code === 'default-shipping-eligibility-checker') ??
+                checkerDefinitions[0];
             if (defaultChecker) {
                 setCheckerCode(defaultChecker.code);
                 setCheckerArgs(defaultArgs(defaultChecker.code, data.shippingEligibilityCheckers));
             }
 
             const defaultCalc =
-                data.shippingCalculators.find(d => d.code === 'default-shipping-calculator') ??
-                data.shippingCalculators[0];
+                mainDefinitions.find(d => d.code === 'default-shipping-calculator') ?? mainDefinitions[0];
             if (defaultCalc?.code === 'default-shipping-calculator') {
                 setCalculatorCode('default-shipping-calculator');
                 setCalculatorArgs({ rate: '0', taxRate: '0', includesTax: 'include' });
@@ -764,7 +784,7 @@ function MethodEditorDialog({
                 setCalculatorArgs({
                     baseRate: '0',
                     freeAbove: '0',
-                    currencyCode: defaultCurrency,
+                    sourceCurrencyCode: defaultCurrency,
                     taxRate: '0',
                     priceIncludesTax: 'false',
                     estimateMinDays: '0',
@@ -775,23 +795,21 @@ function MethodEditorDialog({
                 setCalculatorArgs(defaultArgs(defaultCalc.code, data.shippingCalculators));
             }
         } else if (presetKey === 'free-shipping') {
-            setCode('free-shipping');
+            if (!storeShipping) setCode('free-shipping');
             setName('全场包邮');
             setDescription('全场实物商品免运费配送');
             setFulfillmentHandler(defaultFulfillment);
 
             const defaultChecker =
-                data.shippingEligibilityCheckers.find(
-                    d => d.code === 'default-shipping-eligibility-checker',
-                ) ?? data.shippingEligibilityCheckers[0];
+                checkerDefinitions.find(d => d.code === 'default-shipping-eligibility-checker') ??
+                checkerDefinitions[0];
             if (defaultChecker) {
                 setCheckerCode(defaultChecker.code);
                 setCheckerArgs(defaultArgs(defaultChecker.code, data.shippingEligibilityCheckers));
             }
 
             const defaultCalc =
-                data.shippingCalculators.find(d => d.code === 'default-shipping-calculator') ??
-                data.shippingCalculators[0];
+                mainDefinitions.find(d => d.code === 'default-shipping-calculator') ?? mainDefinitions[0];
             if (defaultCalc?.code === 'default-shipping-calculator') {
                 setCalculatorCode('default-shipping-calculator');
                 setCalculatorArgs({ rate: '0', taxRate: '0', includesTax: 'include' });
@@ -800,7 +818,7 @@ function MethodEditorDialog({
                 setCalculatorArgs({
                     baseRate: '0',
                     freeAbove: '0',
-                    currencyCode: defaultCurrency,
+                    sourceCurrencyCode: defaultCurrency,
                     taxRate: '0',
                     priceIncludesTax: 'false',
                     estimateMinDays: '1',
@@ -814,6 +832,18 @@ function MethodEditorDialog({
     };
 
     const submit = async () => {
+        if (shippingVersionChanged)
+            return onError('此配送模板已被更新，请关闭并重新打开后编辑，避免覆盖最新内容。');
+        if (
+            storeShipping &&
+            ['baseRate', 'freeAbove'].some(
+                key =>
+                    calculatorArgs[key] === '' ||
+                    !Number.isSafeInteger(Number(calculatorArgs[key])) ||
+                    Number(calculatorArgs[key]) < 0,
+            )
+        )
+            return onError('请填写有效的基础运费与免邮门槛，金额不能小于零。');
         if (!code.trim() || !name.trim()) return onError('请填写配置代码和显示名称');
         const customFieldErrors = validateCustomFieldValues(
             customFieldDefinitions,
@@ -909,7 +939,11 @@ function MethodEditorDialog({
                 };
                 if (item?.id) await updateShipping({ variables: { input } });
                 else await createShipping({ variables: { input } });
-                await onCompleted(item ? '配送方式已更新' : '配送方式已创建');
+                try {
+                    await onCompleted(item ? '配送方式已更新' : '配送方式已创建');
+                } catch {
+                    onError('配送方式已保存，但读取最新列表失败，请刷新；不要重复保存。');
+                }
             }
         } catch (error) {
             onError(toUserFacingError(error, '配置保存失败，请检查处理器参数'));
@@ -920,7 +954,7 @@ function MethodEditorDialog({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
             <AccessibleDialogSurface
                 accessibleName={`${item ? '编辑' : '新增'}${state.kind === 'payment' ? '支付方式' : '配送方式'}`}
-                onRequestClose={onClose}
+                onRequestClose={() => void requestClose()}
                 className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
             >
                 <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
@@ -929,9 +963,18 @@ function MethodEditorDialog({
                             {item ? '编辑' : '新增'}
                             {state.kind === 'payment' ? '支付方式' : '配送方式'}
                         </h2>
-                        <p className="mt-1 text-xs text-slate-400">参数值会直接写入 Vendure 配置</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                            {state.kind === 'shipping'
+                                ? '保存后可在配送列表中为本店启用或停用'
+                                : '参数值会直接写入 Vendure 配置'}
+                        </p>
                     </div>
-                    <AdminButton type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500">
+                    <AdminButton
+                        type="button"
+                        onClick={() => void requestClose()}
+                        disabled={busy}
+                        className="rounded-lg p-2 text-slate-500"
+                    >
                         <X className="h-4 w-4" />
                     </AdminButton>
                 </header>
@@ -972,14 +1015,16 @@ function MethodEditorDialog({
                         </div>
                     )}
                     <div className="grid gap-3 sm:grid-cols-2">
-                        <Field label="配置代码 *">
-                            <AdminInput
-                                value={code}
-                                disabled={isControlledTest}
-                                onChange={event => setCode(event.target.value)}
-                                className={inputClass}
-                            />
-                        </Field>
+                        {!storeShipping && (
+                            <Field label="配置代码 *">
+                                <AdminInput
+                                    value={code}
+                                    disabled={isControlledTest}
+                                    onChange={event => setCode(event.target.value)}
+                                    className={inputClass}
+                                />
+                            </Field>
+                        )}
                         <Field label="显示名称 *">
                             <AdminInput
                                 value={name}
@@ -996,6 +1041,14 @@ function MethodEditorDialog({
                             className={inputClass}
                         />
                     </Field>
+                    {state.kind === 'shipping' && (
+                        <Field label="金额来源币种">
+                            <AdminInput value={amountCurrency} readOnly className={inputClass} />
+                            <p className="mt-1 text-xs text-slate-500">
+                                新模板使用本店默认币种；已保存的金额按来源币种计算，不随店铺币种改动重新解释。
+                            </p>
+                        </Field>
+                    )}
                     {state.kind === 'payment' && (
                         <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
                             <AdminInput
@@ -1012,7 +1065,7 @@ function MethodEditorDialog({
                         </p>
                     ) : (
                         <OperationEditor
-                            label={state.kind === 'payment' ? '资格检查器（可选）' : '资格检查器 *'}
+                            label={state.kind === 'payment' ? '资格检查器（可选）' : '配送范围'}
                             allowEmpty={state.kind === 'payment'}
                             code={checkerCode}
                             values={checkerArgs}
@@ -1050,18 +1103,45 @@ function MethodEditorDialog({
                         </div>
                     ) : (
                         <>
+                            {storeShipping && (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <ShippingAmountField
+                                        label="基础运费"
+                                        currency={amountCurrency}
+                                        value={calculatorArgs.baseRate ?? '0'}
+                                        onChange={value =>
+                                            setCalculatorArgs(args => ({ ...args, baseRate: value }))
+                                        }
+                                    />
+                                    <ShippingAmountField
+                                        label="实物免邮门槛（0 表示不启用）"
+                                        currency={amountCurrency}
+                                        value={calculatorArgs.freeAbove ?? '0'}
+                                        onChange={value =>
+                                            setCalculatorArgs(args => ({ ...args, freeAbove: value }))
+                                        }
+                                    />
+                                    <p className="text-xs text-slate-500 sm:col-span-2">
+                                        直接填写金额，例如
+                                        5.50；免邮门槛由本店自行决定，仅计算优惠后含税实物商品小计。
+                                    </p>
+                                </div>
+                            )}
                             <OperationEditor
-                                label="运费计算器 *"
+                                label="运费与免邮规则"
                                 code={calculatorCode}
                                 values={calculatorArgs}
                                 definitions={mainDefinitions}
                                 onCodeChange={nextCode => {
                                     setCalculatorCode(nextCode);
-                                    setCalculatorArgs(defaultArgs(nextCode, mainDefinitions));
+                                    setCalculatorArgs({
+                                        ...defaultArgs(nextCode, data.shippingCalculators),
+                                        ...(storeShipping ? { sourceCurrencyCode: amountCurrency } : {}),
+                                    });
                                 }}
                                 onValuesChange={setCalculatorArgs}
                             />
-                            <Field label="履约处理器 *">
+                            <Field label="发货方式">
                                 <AdminSelect
                                     value={fulfillmentHandler}
                                     onChange={event => setFulfillmentHandler(event.target.value)}
@@ -1099,7 +1179,12 @@ function MethodEditorDialog({
                     />
                 </div>
                 <footer className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
-                    <AdminButton type="button" onClick={onClose} className={secondaryButton}>
+                    <AdminButton
+                        type="button"
+                        onClick={() => void requestClose()}
+                        disabled={busy}
+                        className={secondaryButton}
+                    >
                         取消
                     </AdminButton>
                     <AdminButton
@@ -1113,6 +1198,46 @@ function MethodEditorDialog({
                 </footer>
             </AccessibleDialogSurface>
         </div>
+    );
+}
+
+/** Business amounts are entered in currency units; Vendure stores integer minor units. */
+function ShippingAmountField({
+    label,
+    currency,
+    value,
+    onChange,
+}: {
+    label: string;
+    currency: string;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    const [text, setText] = useState(() => (value === '' ? '' : String(Number(value) / 100)));
+    const lastWritten = useRef(value);
+    useEffect(() => {
+        if (value !== lastWritten.current) {
+            setText(value === '' ? '' : String(Number(value) / 100));
+            lastWritten.current = value;
+        }
+    }, [value]);
+    return (
+        <Field label={`${label} · ${currency}`}>
+            <AdminInput
+                type="number"
+                min="0"
+                step="0.01"
+                value={text}
+                className={inputClass}
+                onChange={event => {
+                    const next = event.target.value;
+                    setText(next);
+                    const minor = next === '' ? '' : String(Math.round(Number(next) * 100));
+                    lastWritten.current = minor;
+                    onChange(minor);
+                }}
+            />
+        </Field>
     );
 }
 

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { randomUUID } from 'node:crypto';
 import { In, IsNull, LessThanOrEqual, MoreThan } from 'typeorm';
@@ -222,10 +223,14 @@ export class ContentTranslationRetryService {
         return this.connection.withTransaction(ctx, async txCtx => {
             const repository = this.connection.getRepository(txCtx, ContentTranslationState);
             const states = await repository.find({
-                where: [
-                    { id: In(ids), channelId: String(ctx.channelId), locked: false, origin: 'AUTO' },
-                    { id: In(ids), channelId: IsNull(), locked: false, origin: 'AUTO' },
-                ],
+                where: {
+                    id: In(ids),
+                    locked: false,
+                    origin: 'AUTO',
+                    ...(ctx.channel?.code === DEFAULT_CHANNEL_CODE
+                        ? {}
+                        : { channelId: String(ctx.channelId) }),
+                },
             });
             if (states.length !== new Set(ids).size)
                 throw new UserInputError('翻译字段不存在、不属于此店铺或已人工锁定');

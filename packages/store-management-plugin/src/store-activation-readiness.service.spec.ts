@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     evaluateStoreActivationReadiness,
     hasCompleteStoreProfile,
+    hasReadyShippingMethod,
     isProductionPaymentMethod,
     isUsableEnglishContent,
 } from './store-activation-readiness.service';
@@ -18,6 +19,29 @@ const completeSnapshot = {
     shipping: true,
     payment: true,
 };
+
+describe('shipping activation readiness', () => {
+    const channel = {
+        code: 'store-a',
+        defaultShippingZone: { name: 'store-a-shipping', members: [{ enabled: true }] },
+    } as any;
+    const shared = { checker: { code: 'store-shipping-zone-eligibility-checker' } } as any;
+    it('accepts enabled public or owned regional templates without a required legacy code', () => {
+        expect(hasReadyShippingMethod(channel, [shared])).toBe(true);
+        expect(hasReadyShippingMethod(channel, [])).toBe(false);
+    });
+    it('does not accept an absent or empty store shipping region', () => {
+        expect(hasReadyShippingMethod({ ...channel, defaultShippingZone: null }, [shared])).toBe(false);
+        expect(hasReadyShippingMethod({ ...channel, defaultShippingZone: { members: [] } }, [shared])).toBe(
+            false,
+        );
+        expect(
+            hasReadyShippingMethod({ ...channel, defaultShippingZone: { members: [{ enabled: false }] } }, [
+                shared,
+            ]),
+        ).toBe(false);
+    });
+});
 
 describe('store activation readiness', () => {
     it('is ready only when all launch checks pass', () => {

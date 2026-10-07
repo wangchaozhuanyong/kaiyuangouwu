@@ -9,7 +9,16 @@ import {
 
 describe('translation audit database pagination', () => {
     // A disposable SQL database verifies actual filter grouping and LIKE escaping.
-    const schema = new EntitySchema({
+    const schema = new EntitySchema<{
+        id: number;
+        channelId: string | null;
+        entityType: string;
+        entityId: string;
+        fieldPath: string;
+        status: string;
+        error: string | null;
+        updatedAt: Date;
+    }>({
         name: 'AuditState',
         columns: {
             id: { type: Number, primary: true, generated: true },
@@ -67,8 +76,21 @@ describe('translation audit database pagination', () => {
         if (database.isInitialized) await database.destroy();
     });
 
+    it('keeps store audit local even for SuperAdmin and rejects global or other-store requests', async () => {
+        const ctx = {
+            channelId: 'channel-a',
+            channel: { code: 'channel-a' },
+            userHasPermissions: () => true,
+        } as any;
+        const result = await service.audit(ctx, 'channel-a');
+        expect(result.total).toBe(1105);
+        expect(result.states.every(state => state.channelId === 'channel-a')).toBe(true);
+        await expect(service.audit(ctx, null)).rejects.toThrow('跨店或平台翻译审计');
+        await expect(service.audit(ctx, 'channel-b')).rejects.toThrow('跨店或平台翻译审计');
+    });
+
     it('preserves the legacy limit while reporting complete counts', async () => {
-        const result = await service.audit({} as any, 'channel-a');
+        const result = await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a');
         expect(result.total).toBe(1106);
         expect(result.filteredTotal).toBe(1106);
         expect(result.states).toHaveLength(1000);
@@ -77,8 +99,14 @@ describe('translation audit database pagination', () => {
     });
 
     it('can reach records beyond 1000 with stable ordering for equal timestamps', async () => {
-        const first = await service.audit({} as any, 'channel-a', { skip: 1000, take: 100 });
-        const last = await service.audit({} as any, 'channel-a', { skip: 1100, take: 100 });
+        const first = await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a', {
+            skip: 1000,
+            take: 100,
+        });
+        const last = await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a', {
+            skip: 1100,
+            take: 100,
+        });
         expect(first.states).toHaveLength(100);
         expect(last.states).toHaveLength(6);
         expect(last.states.at(-1)?.entityId).toBe('old-target');
@@ -86,7 +114,7 @@ describe('translation audit database pagination', () => {
     });
 
     it('searches older records on the server and keeps channel and global conditions grouped', async () => {
-        const result = await service.audit({} as any, 'channel-a', {
+        const result = await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a', {
             search: 'OLD-TARGET',
             status: 'FAILED',
             entityType: 'Product',
@@ -99,22 +127,41 @@ describe('translation audit database pagination', () => {
     });
 
     it('treats percent, underscore, escape marker and backslash as literal search text', async () => {
-        const result = await service.audit({} as any, 'channel-a', { search: '100!%_\\done' });
+        const result = await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a', {
+            search: '100!%_\\done',
+        });
         expect(result.filteredTotal).toBe(1);
         expect(result.states[0].entityId).toBe('old-target');
-        expect((await service.audit({} as any, 'channel-a', { search: 'not-found' })).filteredTotal).toBe(0);
+        expect(
+            (
+                await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a', {
+                    search: 'not-found',
+                })
+            ).filteredTotal,
+        ).toBe(0);
     });
 
     it('supports global-only scope, empty pages and bounded page sizes', async () => {
-        expect((await service.audit({} as any, null, {})).states.map(state => state.entityId)).toEqual([
-            'global-record',
-        ]);
-        const emptyPage = await service.audit({} as any, 'channel-a', { skip: 2000, take: 20 });
+        expect(
+            (await service.audit({ channel: { code: '__default_channel__' } } as any, null, {})).states.map(
+                state => state.entityId,
+            ),
+        ).toEqual(['global-record']);
+        const emptyPage = await service.audit(
+            { channel: { code: '__default_channel__' } } as any,
+            'channel-a',
+            { skip: 2000, take: 20 },
+        );
         expect(emptyPage.states).toEqual([]);
         expect(emptyPage.filteredTotal).toBe(1106);
-        expect((await service.audit({} as any, 'channel-a', { skip: -20, take: 9999 })).states).toHaveLength(
-            100,
-        );
+        expect(
+            (
+                await service.audit({ channel: { code: '__default_channel__' } } as any, 'channel-a', {
+                    skip: -20,
+                    take: 9999,
+                })
+            ).states,
+        ).toHaveLength(100);
     });
 });
 
@@ -367,6 +414,12 @@ describe('ContentTranslationService localized fields', () => {
                         _value: expect.arrayContaining(['STALE', 'PENDING', 'NOTIFY_PENDING', 'FAILED']),
                     }),
                 },
+            ],
+        });
+        await service.countStale({ channelId: 'default', channel: { code: '__default_channel__' } } as any);
+        expect(repository.count).toHaveBeenLastCalledWith({
+            where: [
+                { channelId: 'default', status: expect.anything() },
                 { channelId: expect.anything(), status: expect.anything() },
             ],
         });

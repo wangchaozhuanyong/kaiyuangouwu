@@ -5,6 +5,7 @@ import {
     LanguageCode,
     SortOrder,
 } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 import type { ProductVariant } from '@vendure/core';
 import {
@@ -416,6 +417,7 @@ export class StorePromotionCampaignService {
         if (!existingPromotion || !this.isManagedPromotion(existingPromotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        await this.assertExclusivePromotionOwner(ctx, existingPromotion.id);
         if (this.toCouponView(existingPromotion)) await this.lockOwnedCampaign(ctx, existingPromotion);
         if (!enabled && this.toCouponView(existingPromotion)) {
             const issuedCount = await this.connection
@@ -452,6 +454,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.isManagedPromotion(promotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        await this.assertExclusivePromotionOwner(ctx, promotion.id);
         if (this.toCouponView(promotion)) await this.lockOwnedCampaign(ctx, promotion);
         const name = this.requiredText(value, '活动名称', 120);
         const result = await this.promotionService.updatePromotion(ctx, {
@@ -558,6 +561,7 @@ export class StorePromotionCampaignService {
         if (!promotion || !this.isManagedPromotion(promotion)) {
             throw new UserInputError('找不到该营销活动');
         }
+        await this.assertExclusivePromotionOwner(ctx, promotion.id);
         if (this.toCouponView(promotion)) {
             await this.lockOwnedCampaign(ctx, promotion);
             const issuedCount = await this.connection
@@ -893,6 +897,7 @@ export class StorePromotionCampaignService {
         if (config && !idsAreEqual(config.channelId, ctx.channelId))
             throw new UserInputError('该优惠券属于其他店铺');
         if (!config) {
+            await this.assertExclusivePromotionOwner(ctx, promotion.id);
             config = await repository.save(
                 new StoreCouponCampaignConfig({
                     channelId: ctx.channelId,
@@ -911,6 +916,15 @@ export class StorePromotionCampaignService {
             );
         }
         return config;
+    }
+
+    private async assertExclusivePromotionOwner(ctx: RequestContext, id: ID): Promise<void> {
+        if (ctx.channel.code === DEFAULT_CHANNEL_CODE) return;
+        const promotion = await this.promotionService.findOne(ctx, id, ['channels']);
+        const stores = promotion?.channels?.filter(channel => channel.code !== DEFAULT_CHANNEL_CODE) ?? [];
+        if (stores.length !== 1 || !idsAreEqual(stores[0].id, ctx.channelId)) {
+            throw new UserInputError('该促销由其他店铺或多个店铺共享，请在平台管理中心处理');
+        }
     }
 
     private findPromotions(ctx: RequestContext): Promise<Promotion[]> {

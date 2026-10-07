@@ -1,4 +1,5 @@
 import { useState, type ComponentProps } from 'react';
+import { useAdminCapabilities } from '../hooks/use-admin-capabilities';
 
 export const PAGE_REFRESH_EVENT = 'vendure:refresh-admin-page';
 export interface PageRefreshRequest {
@@ -12,9 +13,17 @@ export function AdminButton({
     className = '',
     onClick,
     disabled,
+    capabilityId,
+    capabilityOperation = 'read',
     ...props
-}: ComponentProps<'button'> & { refreshPage?: boolean }) {
+}: ComponentProps<'button'> & {
+    refreshPage?: boolean;
+    capabilityId?: string;
+    capabilityOperation?: 'read' | 'write' | 'configure';
+}) {
     const [refreshing, setRefreshing] = useState(false);
+    const { canUseCapability } = useAdminCapabilities();
+    if (capabilityId && !canUseCapability(capabilityId, capabilityOperation)) return null;
     return (
         <button
             {...props}

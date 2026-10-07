@@ -95,14 +95,19 @@ describe('StoreDomainMiddleware', () => {
     it('rejects an unknown host in require-domain mode', async () => {
         const { middleware } = createMiddleware(null, { routingMode: 'require-domain' });
         const { response, status } = createResponse();
+        const next = vi.fn();
 
         await middleware.use(
-            { headers: { host: 'unknown.example.com' }, query: {} } as any,
+            {
+                headers: { host: 'unknown.example.com', 'vendure-token': 'attacker-shop' },
+                query: { 'vendure-token': 'attacker-shop' },
+            } as any,
             response,
-            vi.fn(),
+            next,
         );
 
         expect(status).toHaveBeenCalledWith(404);
+        expect(next).not.toHaveBeenCalled();
     });
 
     it('uses x-forwarded-host only when proxy headers are trusted', async () => {

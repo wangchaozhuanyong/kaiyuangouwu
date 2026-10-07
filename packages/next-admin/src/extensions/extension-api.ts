@@ -74,6 +74,7 @@ export interface NextAdminPageBlockContext {
 }
 
 export interface NextAdminPageBlockDefinition {
+    capabilityId?: string;
     id: string;
     pageId: string;
     component: NextAdminExtensionComponent<{ context: NextAdminPageBlockContext }>;
@@ -83,6 +84,8 @@ export interface NextAdminPageBlockDefinition {
 }
 
 export interface NextAdminActionDefinition {
+    capabilityId?: string;
+    capabilityOperation?: 'read' | 'write' | 'configure';
     id: string;
     pageId: string;
     label: string;
@@ -93,6 +96,7 @@ export interface NextAdminActionDefinition {
 }
 
 export interface NextAdminDashboardWidgetDefinition {
+    capabilityId?: string;
     id: string;
     title: string;
     titleTranslations?: NextAdminInterfaceTranslations;
@@ -104,6 +108,7 @@ export interface NextAdminDashboardWidgetDefinition {
 }
 
 export interface NextAdminDashboardAlertDefinition {
+    capabilityId?: string;
     id: string;
     component: NextAdminExtensionComponent;
     order?: number;

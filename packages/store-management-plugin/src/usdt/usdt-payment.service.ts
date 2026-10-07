@@ -8,6 +8,7 @@ import {
     Order,
     OrderService,
     Payment,
+    paymentHandlerArgumentsHash,
     PaymentMethod,
     RequestContext,
     RequestContextService,
@@ -29,11 +30,12 @@ import { StorefrontUsdtPaymentIntent } from '../entities/storefront-usdt-payment
 
 import { maskTronAddress, StoreUsdtWalletService } from './store-usdt-wallet.service';
 import { loadReviewedRefundSenders } from './usdt-manual-refund.service';
-import { createUsdtPaymentProof } from './usdt-payment-proof';
+import { createUsdtPaymentProof, verifyUsdtPaymentProof } from './usdt-payment-proof';
 import {
     USDT_PAYMENT_INTENT_STATUS,
     USDT_TRC20_CONTRACT_ADDRESS,
     USDT_TRC20_NETWORK,
+    USDT_TRC20_PAYMENT_HANDLER_CODE,
     USDT_TRC20_PAYMENT_METHOD_CODE,
 } from './usdt-payment.constants';
 import { ConfirmedTrc20Transfer, UsdtTrc20Client } from './usdt-trc20-client';
@@ -566,6 +568,17 @@ export class UsdtPaymentService {
         ctx: RequestContext,
         quote: StorefrontUsdtCheckoutQuote,
     ): Promise<StorefrontUsdtPaymentIntent> {
+        return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
+            await this.assertQuoteScope(txCtx, quote);
+            await this.orderService.lockOrderForRefund(txCtx, quote.orderId);
+            return this.ensureIntentInTransaction(txCtx, quote);
+        });
+    }
+
+    private async ensureIntentInTransaction(
+        ctx: RequestContext,
+        quote: StorefrontUsdtCheckoutQuote,
+    ): Promise<StorefrontUsdtPaymentIntent> {
         await this.assertQuoteScope(ctx, quote);
         const repository = this.connection.getRepository(ctx, StorefrontUsdtPaymentIntent);
         const existing = await repository.findOne({ where: { quoteId: quote.id } });
@@ -585,7 +598,21 @@ export class UsdtPaymentService {
             (await this.connection.getRepository(ctx, StorePaymentMethodState).findOne({
                 where: { channelId: ctx.channelId, paymentMethodId: platformMethod.id, enabled: true },
             }));
-        if (!shopSwitch) throw new UserInputError('本店未开启平台 USDT 支付');
+        if (!platformMethod || !shopSwitch) throw new UserInputError('本店未开启平台 USDT 支付');
+        if (
+            platformMethod.handler.code !== USDT_TRC20_PAYMENT_HANDLER_CODE ||
+            !Array.isArray(platformMethod.handler.args) ||
+            platformMethod.handler.args.length !== 0
+        )
+            throw new UserInputError('平台 USDT 支付处理器配置无效');
+        const acceptedHandlerSnapshot = {
+            version: 1 as const,
+            methodId: String(platformMethod.id),
+            methodCode: platformMethod.code,
+            handlerCode: platformMethod.handler.code,
+            argsHash: paymentHandlerArgumentsHash(platformMethod.handler.args),
+            acceptedAt: Date.now(),
+        };
         const wallet = await this.storeWallets.requireConfigured(ctx, quote.channelId);
 
         const baseAmount = normalizeUsdtAmount(quote.usdtAmount);
@@ -618,6 +645,7 @@ export class UsdtPaymentService {
                         baseUsdtAmount: baseAmount,
                         expectedUsdtAmount,
                         status: USDT_PAYMENT_INTENT_STATUS.pending,
+                        acceptedHandlerSnapshot,
                         transactionId: null,
                         senderAddress: null,
                         receivedUsdtAmount: null,
@@ -960,6 +988,37 @@ export class UsdtPaymentService {
                 );
                 this.assertIntentScope(locked, quote);
                 await this.assertQuoteScope(ctx, quote);
+                const snapshot = locked.acceptedHandlerSnapshot;
+                if (
+                    !snapshot ||
+                    snapshot.version !== 1 ||
+                    typeof snapshot.methodId !== 'string' ||
+                    !snapshot.methodId ||
+                    snapshot.methodCode !== USDT_TRC20_PAYMENT_METHOD_CODE ||
+                    snapshot.handlerCode !== USDT_TRC20_PAYMENT_HANDLER_CODE ||
+                    !/^[a-f0-9]{64}$/u.test(snapshot.argsHash) ||
+                    !Number.isSafeInteger(snapshot.acceptedAt) ||
+                    snapshot.acceptedAt <= 0 ||
+                    snapshot.acceptedAt > Date.now()
+                )
+                    throw new UserInputError('已收款 USDT 缺少可信受理快照，请人工核对');
+                const method = await this.connection.getRepository(ctx, PaymentMethod).findOne({
+                    where: {
+                        code: USDT_TRC20_PAYMENT_METHOD_CODE,
+                        channels: { code: '__default_channel__' },
+                    },
+                });
+                // Only the original accepted method and fixed handler contract may settle this intent.
+                if (
+                    !method ||
+                    String(method.id) !== snapshot.methodId ||
+                    method.handler.code !== snapshot.handlerCode ||
+                    !Array.isArray(method.handler.args) ||
+                    method.handler.args.length !== 0 ||
+                    paymentHandlerArgumentsHash(method.handler.args) !== snapshot.argsHash
+                ) {
+                    throw new UserInputError('已收款 USDT 支付处理器已变更，请人工核对');
+                }
                 const proof = createUsdtPaymentProof({
                     channelId: String(locked.channelId),
                     quoteId: String(locked.quoteId),
@@ -971,11 +1030,30 @@ export class UsdtPaymentService {
                     receivingAddressFingerprint: locked.receivingAddressFingerprint,
                     expiresAt: Date.now() + PAYMENT_PROOF_TTL_MS,
                     paidAt: transfer.blockTimestamp.getTime(),
+                    paymentMethodId: snapshot.methodId,
+                    handlerCode: snapshot.handlerCode,
+                    handlerArgumentsHash: snapshot.argsHash,
                 });
-                const paymentResult = await this.orderService.addPaymentToOrder(ctx, locked.orderId, {
-                    method: USDT_TRC20_PAYMENT_METHOD_CODE,
-                    metadata: { proof },
-                });
+                const verified = verifyUsdtPaymentProof(proof);
+                if (!verified?.paymentMethodId || !verified.handlerCode || !verified.handlerArgumentsHash) {
+                    throw new UserInputError('已收款 USDT 结算凭证无效，请人工核对');
+                }
+                // Only this locked, chain-matched branch constructs the internal settlement scope.
+                // Handler identity and argument hash originate from the persisted acceptance snapshot.
+                const paymentResult = await this.orderService.addPaymentToOrderFromAcceptedIntent(
+                    ctx,
+                    {
+                        channelId: verified.channelId,
+                        orderId: verified.orderId,
+                        method: USDT_TRC20_PAYMENT_METHOD_CODE,
+                        paymentMethodId: verified.paymentMethodId,
+                        handlerCode: verified.handlerCode,
+                        handlerArgumentsHash: verified.handlerArgumentsHash,
+                        amount: verified.fiatAmount,
+                        currencyCode: verified.fiatCurrencyCode,
+                    },
+                    { proof },
+                );
                 if (isGraphQlErrorResult(paymentResult)) {
                     locked.status = USDT_PAYMENT_INTENT_STATUS.manualReview;
                     locked.failureReason = (

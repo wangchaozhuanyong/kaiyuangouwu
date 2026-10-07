@@ -1,7 +1,8 @@
-import { Component, Suspense, useId, useMemo, useState, type ReactNode } from 'react';
+import { Component, Suspense, useContext, useId, useMemo, useState, type ReactNode } from 'react';
 import { AdminButton } from '../components/AdminControls';
 
-import { useAdminPermissions } from '../hooks/use-admin-permissions';
+import { useAdminCapabilities } from '../hooks/use-admin-capabilities';
+import { AdminPermissionsContext, useAdminPermissions } from '../hooks/use-admin-permissions';
 
 import {
     getNextAdminActions,
@@ -76,11 +77,13 @@ export function NextAdminPageBlocks({
     includeIds?: string[];
 }) {
     const { hasAnyPermission } = useAdminPermissions();
+    const { canUseCapability } = useAdminCapabilities();
     const context = useExtensionContext(pageId, entity);
     const blocks = getNextAdminPageBlocks(pageId).filter(
         block =>
             (!includeIds || includeIds.includes(block.id)) &&
             !excludeIds.includes(block.id) &&
+            Boolean(block.capabilityId && canUseCapability(block.capabilityId)) &&
             hasAnyPermission(block.permissions ?? []) &&
             (!block.shouldRender || block.shouldRender(context)),
     );
@@ -113,9 +116,17 @@ export function NextAdminActions({
 }) {
     const [expanded, setExpanded] = useState(false);
     const actionsId = useId();
-    const { hasAnyPermission } = useAdminPermissions();
+    // An action can have a different scope from its read-only host page (e.g. platform allocation).
+    const { hasAnyPermission } = useContext(AdminPermissionsContext);
+    const { canUseCapability } = useAdminCapabilities();
     const context = useExtensionContext(pageId, entity);
-    const actions = getNextAdminActions(pageId).filter(action => hasAnyPermission(action.permissions ?? []));
+    const actions = getNextAdminActions(pageId).filter(
+        action =>
+            Boolean(
+                action.capabilityId &&
+                canUseCapability(action.capabilityId, action.capabilityOperation ?? 'write'),
+            ) && hasAnyPermission(action.permissions ?? []),
+    );
 
     if (actions.length === 0) return null;
     return (
@@ -156,7 +167,12 @@ export function NextAdminActions({
 
 export function NextAdminDashboardAlerts() {
     const { hasAnyPermission } = useAdminPermissions();
-    const alerts = getNextAdminDashboardAlerts().filter(alert => hasAnyPermission(alert.permissions ?? []));
+    const { canUseCapability } = useAdminCapabilities();
+    const alerts = getNextAdminDashboardAlerts().filter(
+        alert =>
+            Boolean(alert.capabilityId && canUseCapability(alert.capabilityId)) &&
+            hasAnyPermission(alert.permissions ?? []),
+    );
     if (alerts.length === 0) return null;
     return (
         <div className="space-y-3" data-extension-location="dashboard:alerts">
@@ -176,8 +192,11 @@ export function NextAdminDashboardAlerts() {
 
 export function NextAdminDashboardWidgets() {
     const { hasAnyPermission } = useAdminPermissions();
-    const widgets = getNextAdminDashboardWidgets().filter(widget =>
-        hasAnyPermission(widget.permissions ?? []),
+    const { canUseCapability } = useAdminCapabilities();
+    const widgets = getNextAdminDashboardWidgets().filter(
+        widget =>
+            Boolean(widget.capabilityId && canUseCapability(widget.capabilityId)) &&
+            hasAnyPermission(widget.permissions ?? []),
     );
     if (widgets.length === 0) return null;
     return (

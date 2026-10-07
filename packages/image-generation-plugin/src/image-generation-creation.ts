@@ -95,6 +95,7 @@ export class ImageGenerationCreation {
                         where: { channelId: txCtx.channelId },
                     });
                 if (!config?.enabled) throw new UserInputError('当前店铺尚未开启 AI 图片工坊');
+                await this.dependencies.configService.assertStorefrontEntryEnabled(txCtx);
                 const model = await this.dependencies.connection
                     .getRepository(txCtx, ImageModelConfig)
                     .findOne({

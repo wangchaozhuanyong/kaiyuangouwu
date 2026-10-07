@@ -60,7 +60,7 @@ export class AdministratorAccessInterceptor implements NestInterceptor {
             // still enforces the mailbox permission for this exact field.
             return next.handle();
         }
-        const profile = await this.accessService.current(requestContext);
+        const profile = await this.accessService.currentForChannel(requestContext);
         if (profile.status === 'SUSPENDED') {
             throw new UserInputError('当前管理账号已被停用，请联系上级管理员');
         }

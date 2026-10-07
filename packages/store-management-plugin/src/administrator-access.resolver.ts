@@ -25,7 +25,7 @@ export class AdministratorAccessResolver {
     @Query()
     @Allow(Permission.Authenticated)
     myAdministratorAccess(@Ctx() ctx: RequestContext) {
-        return this.accessService.current(ctx);
+        return this.accessService.currentForChannel(ctx);
     }
 
     @Query()
@@ -49,7 +49,7 @@ export class AdministratorAccessResolver {
     @Query()
     @Allow(Permission.Authenticated)
     async permissionPolicyCatalog(@Ctx() ctx: RequestContext) {
-        const actor = await this.accessService.current(ctx);
+        const actor = await this.accessService.currentForChannel(ctx);
         return {
             permissions: this.policies.catalogForAccess(actor.scope, actor.authority),
             templates: this.policies.templates(),

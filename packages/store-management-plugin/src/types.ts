@@ -459,6 +459,7 @@ export interface StoreCommerceConfiguration {
     channelCode: string;
     updatedAt: Date;
     currencyCode: CurrencyCode;
+    shippingSourceCurrencyCode: CurrencyCode | null;
     pricesIncludeTax: boolean;
     countryCode: string | null;
     taxRate: number;
@@ -486,17 +487,17 @@ export interface UpdateMyStoreCommerceConfigurationInput {
     pricesIncludeTax: boolean;
     countryCode: string;
     taxRate: number;
-    shippingMethodNameZh: string;
-    shippingMethodNameEn: string;
-    shippingDescriptionZh: string;
-    shippingDescriptionEn: string;
-    baseRate: number;
-    freeShippingThreshold: number;
-    shippingTaxRate: number;
-    shippingPriceIncludesTax: boolean;
-    estimateMinDays: number;
-    estimateMaxDays: number;
-    blockedPostalPrefixes: string;
+    shippingMethodNameZh?: string;
+    shippingMethodNameEn?: string;
+    shippingDescriptionZh?: string;
+    shippingDescriptionEn?: string;
+    baseRate?: number;
+    freeShippingThreshold?: number;
+    shippingTaxRate?: number;
+    shippingPriceIncludesTax?: boolean;
+    estimateMinDays?: number;
+    estimateMaxDays?: number;
+    blockedPostalPrefixes?: string;
 }
 
 export type StoreCurrencyRateMode = 'AUTO' | 'MANUAL';

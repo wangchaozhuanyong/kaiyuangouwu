@@ -12,7 +12,7 @@ const ctx = {
     channelId: 'channel-1',
     languageCode: 'zh_Hans',
     currencyCode: 'CNY',
-    channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+    channel: { id: 'channel-1', code: 'channel-1', defaultCurrencyCode: 'CNY', customFields: {} },
 } as any;
 
 describe('StorePromotionCampaignService', () => {
@@ -462,11 +462,15 @@ function createHarness({
     const updatePromotion = vi.fn((_ctx: unknown, input: any) => ({
         ...(promotions.find(promotion => promotion.id === input.id) ?? {}),
         id: input.id,
-        name: input.translations[0].name,
+        ...input,
+        name: input.translations?.[0]?.name ?? promotions.find(promotion => promotion.id === input.id)?.name,
     }));
     const promotionService = {
         findAll: findAllPromotions,
-        findOne: vi.fn((_ctx: unknown, id: string) => promotions.find(promotion => promotion.id === id)),
+        findOne: vi.fn((_ctx: unknown, id: string) => {
+            const promotion = promotions.find(item => item.id === id);
+            return promotion ? { ...promotion, channels: promotion.channels ?? [ctx.channel] } : undefined;
+        }),
         createPromotion,
         updatePromotion,
         softDeletePromotion,
@@ -625,3 +629,53 @@ function productVariant(id: string, priceWithTax: number, currencyCode = 'CNY') 
         },
     };
 }
+
+describe('promotion maintainer isolation', () => {
+    function sharedPromotion(couponCode?: string) {
+        return {
+            id: 'shared',
+            name: 'Shared',
+            enabled: true,
+            couponCode,
+            translations: [{ languageCode: 'zh_Hans', name: 'Shared' }],
+            actions: couponCode
+                ? couponPromotion().actions
+                : [{ code: 'store_flash_sale_price', args: { variantRules: '[]' } }],
+            conditions: [],
+            channels: [
+                { id: 'default', code: '__default_channel__' },
+                { id: 'channel-1', code: 'a' },
+                { id: 'channel-2', code: 'b' },
+            ],
+        };
+    }
+    it.each(['setEnabled', 'updateName', 'delete'] as const)(
+        'blocks store maintenance of shared promotion via %s',
+        async action => {
+            const harness = createHarness({ promotions: [sharedPromotion()] });
+            await expect(
+                (harness.service[action] as any)(ctx, 'shared', action === 'setEnabled' ? false : 'Renamed'),
+            ).rejects.toThrow('多个店铺共享');
+            expect(harness.updatePromotion).not.toHaveBeenCalled();
+            expect(harness.softDeletePromotion).not.toHaveBeenCalled();
+        },
+    );
+    it('prevents claiming a legacy shared coupon configuration for one store', async () => {
+        const harness = createHarness({ promotions: [sharedPromotion('CPN_LEGACY')] });
+        await expect(
+            (harness.service as any).configForPromotion(ctx, sharedPromotion('CPN_LEGACY')),
+        ).rejects.toThrow('多个店铺共享');
+        expect(harness.updatePromotion).not.toHaveBeenCalled();
+    });
+    it('allows platform maintenance of shared flash sales', async () => {
+        const harness = createHarness({ promotions: [sharedPromotion()] });
+        await expect(
+            harness.service.setEnabled(
+                { ...ctx, channel: { ...ctx.channel, code: '__default_channel__' } },
+                'shared',
+                false,
+            ),
+        ).resolves.toMatchObject({ id: 'shared', enabled: false });
+        expect(harness.updatePromotion).toHaveBeenCalledOnce();
+    });
+});

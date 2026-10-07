@@ -5,6 +5,7 @@ import {
     StockLevelInput,
     StockMovementListOptions,
 } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
 import { In } from 'typeorm';
 
@@ -68,6 +69,15 @@ export class StockMovementService {
             .build<StockMovement>(StockMovement as any, options, { ctx })
             .leftJoin('stockmovement.productVariant', 'productVariant')
             .andWhere('productVariant.id = :productVariantId', { productVariantId });
+
+        if (ctx.channel.code !== DEFAULT_CHANNEL_CODE) {
+            qb.innerJoin('stockmovement.stockLocation', 'stockLocation').innerJoin(
+                'stockLocation.channels',
+                'stockLocationChannel',
+                'stockLocationChannel.id = :channelId',
+                { channelId: ctx.channelId },
+            );
+        }
 
         if (options?.type) {
             qb.andWhere('stockmovement.type = :type', { type: options.type });

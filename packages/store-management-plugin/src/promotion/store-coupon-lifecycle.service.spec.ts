@@ -771,3 +771,29 @@ function chainQueryBuilder(overrides: Record<string, (...args: any[]) => any>) {
     Object.assign(builder, overrides);
     return builder;
 }
+
+describe('legacy coupon configuration ownership', () => {
+    it('does not let a storefront claim an unowned shared coupon configuration', async () => {
+        const save = vi.fn();
+        const service = new StoreCouponLifecycleService(
+            { getRepository: () => ({ findOne: vi.fn(async () => null), save }) } as any,
+            {} as any,
+            {
+                findOne: vi.fn(async () => ({
+                    channels: [
+                        { id: 'channel-1', code: 'a' },
+                        { id: 'channel-2', code: 'b' },
+                    ],
+                })),
+            } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        await expect((service as any).configForPromotion(ctx, { id: 'legacy' })).rejects.toThrow(
+            '唯一经营店铺',
+        );
+        expect(save).not.toHaveBeenCalled();
+    });
+});

@@ -133,11 +133,31 @@ describe('PaymentShippingManager', () => {
             loading: false,
         });
 
-        const html = renderManager('shipping');
+        const html = renderManager('shipping', {
+            ...data,
+            activeChannel: { ...data.activeChannel, code: 'store-b' },
+        });
 
         expect(html).toContain('当前为纯数字商品模式，无需配置配送方式');
         expect(html).not.toContain('测试配送');
         expect(html).not.toContain('USDT 收款设置');
+    });
+
+    it('does not infer hybrid mode when a store mode read fails', () => {
+        apolloMocks.useQuery.mockReturnValue({
+            data: undefined,
+            loading: false,
+            error: new Error('offline'),
+            refetch: vi.fn(),
+        });
+        const html = renderManager('shipping', {
+            ...data,
+            activeChannel: { ...data.activeChannel, code: 'store-b' },
+        });
+        expect(html).toContain('读取本店经营模式失败');
+        expect(html).toContain('重试读取');
+        expect(html).not.toContain('测试配送');
+        expect(html).not.toContain('新增本店模板');
     });
 
     it('formats shipping calculator and eligibility checker summaries cleanly', () => {
@@ -181,7 +201,7 @@ describe('PaymentShippingManager', () => {
         expect(formatFulfillmentHandlerSummary('unregistered-handler')).toBe('履约方式');
     });
 
-    it('displays shipping guidance card and badges in shipping section', () => {
+    it('explains store region and physical subtotal rules alongside legacy shipping summaries', () => {
         const customData = {
             ...data,
             shippingMethods: {
@@ -225,15 +245,15 @@ describe('PaymentShippingManager', () => {
             </AdminPermissionsContext.Provider>,
         );
 
-        expect(html).toContain('💡 配送设置与客户端展示指引');
-        expect(html).toContain('满额免邮无需单独建两个方式');
+        expect(html).toContain('包邮仍限定本店已配置的配送区域');
+        expect(html).toContain('优惠后含税实物商品小计');
         expect(html).toContain('基础运费: 5.00 CNY · 满 200.00 CNY 免邮');
         expect(html).toContain('仅限配送: MY');
         expect(html).not.toContain('standard-shipping');
     });
 });
 
-function renderManager(section: 'payment' | 'shipping') {
+function renderManager(section: 'payment' | 'shipping', managerData = data) {
     return renderToStaticMarkup(
         <AdminPermissionsContext.Provider
             value={{ permissions: ['SuperAdmin'], hasAnyPermission: () => true }}
@@ -241,7 +261,7 @@ function renderManager(section: 'payment' | 'shipping') {
             <ConfirmDialogContext.Provider value={async () => false}>
                 <PaymentShippingManager
                     section={section}
-                    data={data}
+                    data={managerData}
                     paymentMethodCustomFields={[]}
                     shippingMethodCustomFields={[]}
                     onChanged={async () => undefined}

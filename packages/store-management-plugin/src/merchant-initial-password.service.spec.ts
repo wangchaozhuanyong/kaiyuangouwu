@@ -272,6 +272,12 @@ describe('MerchantInitialPasswordService', () => {
             service.assertRootFieldAccess(ctx, 'Query', 'merchantInitialPasswordStatus'),
         ).resolves.toBeUndefined();
         await expect(
+            service.assertRootFieldAccess(ctx, 'Query', 'currentAdminCapabilities'),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'currentAdminCapabilities'),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        await expect(
             service.assertRootFieldAccess(ctx, 'Mutation', 'completeInitialPasswordChange'),
         ).resolves.toBeUndefined();
         for (const field of ['adminBeginLogin', 'adminCompleteTwoFactorLogin']) {

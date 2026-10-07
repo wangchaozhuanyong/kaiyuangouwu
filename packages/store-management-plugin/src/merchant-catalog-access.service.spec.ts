@@ -17,7 +17,8 @@ import {
     StockLocation,
     User,
 } from '@vendure/core';
-import { describe, expect, it, vi } from 'vitest';
+import { DataSource, EntitySchema } from 'typeorm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { hasMachineMailboxAccess } from './constants';
 import { AdministratorAccessProfile } from './entities/administrator-access-profile.entity';
@@ -27,6 +28,7 @@ import { MerchantCatalogAccessService } from './merchant-catalog-access.service'
 
 function createService(options?: {
     merchant?: boolean;
+    commerceMode?: string | null;
     couponConfigs?: Array<{ promotionId: string; channelId: string }>;
     channelIds?: string[];
     visibleEntityIds?: string[];
@@ -57,6 +59,16 @@ function createService(options?: {
     const refundRepository = { find: vi.fn().mockResolvedValue(options?.refunds ?? []) };
     const connection = {
         getRepository: vi.fn((_ctx, entity) => {
+            if (entity === Channel)
+                return {
+                    findOne: vi.fn().mockResolvedValue({
+                        id: 'store-a',
+                        customFields: {
+                            commerceMode:
+                                options?.commerceMode === undefined ? 'HYBRID' : options.commerceMode,
+                        },
+                    }),
+                };
             if (entity === StoreCouponCampaignConfig)
                 return { find: vi.fn().mockResolvedValue(options?.couponConfigs ?? []) };
             if (entity === StoreAdministratorAccess) return accessRepository;
@@ -71,7 +83,14 @@ function createService(options?: {
                         ),
                 };
             if (entity === User) return userRepository;
-            if (entity === Order) return { count: vi.fn().mockResolvedValue(visibleEntityIds.length) };
+            if (entity === Order)
+                return {
+                    count: vi.fn(({ where }) =>
+                        Promise.resolve(
+                            (where.id.value as string[]).filter(id => visibleEntityIds.includes(id)).length,
+                        ),
+                    ),
+                };
             if (entity === OrderLine) return orderLineRepository;
             if (entity === Fulfillment) return fulfillmentRepository;
             if (entity === Payment) return paymentRepository;
@@ -117,7 +136,7 @@ const merchantContext = {
     apiType: 'admin',
     activeUserId: 'user-a',
     channelId: 'store-a',
-    channel: { code: 'store-a' },
+    channel: { code: 'store-a', customFields: { commerceMode: 'HYBRID' } },
     userHasPermissions: vi.fn().mockReturnValue(false),
 } as any;
 
@@ -196,7 +215,7 @@ describe('MerchantCatalogAccessService', () => {
         async (parentType, fieldName, permission) => {
             const { service, connection } = createService({ merchant: false });
             const ctx = mailboxMachineContext([permission, Permission.SuperAdmin]);
-            const store = { ...ctx, channel: { code: 'store-a' } } as RequestContext;
+            const store = { ...ctx, channel: { code: 'store-a' } } as unknown as RequestContext;
             await expect(service.assertRootFieldAccess(store, parentType, fieldName, {})).rejects.toThrow(
                 '平台管理中心',
             );
@@ -212,7 +231,7 @@ describe('MerchantCatalogAccessService', () => {
             const native = {
                 ...ctx,
                 session: { authenticationStrategy: 'native' },
-            } as RequestContext;
+            } as unknown as RequestContext;
             await expect(service.assertRootFieldAccess(native, parentType, fieldName, {})).rejects.toThrow(
                 '超级管理员',
             );
@@ -296,6 +315,7 @@ describe('MerchantCatalogAccessService', () => {
                         channelPermissions: [
                             {
                                 id: permissionsChannelId,
+                                code: permissionsChannelId,
                                 token: 'fixture-channel-token',
                                 permissions: [...permissions] as Permission[],
                             },
@@ -394,20 +414,36 @@ describe('MerchantCatalogAccessService', () => {
         ).resolves.toBeUndefined();
         expect(connection.getRepository).not.toHaveBeenCalled();
     });
+    it.each(['jobs', 'storePaymentStats', 'telegramNotificationDeliveries', 'governanceApprovals'])(
+        'rejects platform %s from a store context even for SuperAdmin',
+        async fieldName => {
+            const { service, connection } = createService({ merchant: false });
+            const superInStore = { ...merchantContext, userHasPermissions: () => true };
+            await expect(service.assertRootFieldAccess(superInStore, 'Query', fieldName, {})).rejects.toThrow(
+                '平台管理中心',
+            );
+            expect(connection.getRepository).not.toHaveBeenCalled();
+        },
+    );
     it.each([
-        'jobs',
-        'storePaymentStats',
-        'systemAnnouncements',
-        'telegramNotificationDeliveries',
-        'governanceApprovals',
-    ])('rejects platform %s from a store context even for SuperAdmin', async fieldName => {
-        const { service, connection } = createService({ merchant: false });
-        const superInStore = { ...merchantContext, userHasPermissions: () => true };
-        await expect(service.assertRootFieldAccess(superInStore, 'Query', fieldName, {})).rejects.toThrow(
-            '平台管理中心',
-        );
-        expect(connection.getRepository).not.toHaveBeenCalled();
-    });
+        ['Query', 'systemAnnouncements'],
+        ['Mutation', 'createSystemAnnouncement'],
+        ['Mutation', 'updateSystemAnnouncement'],
+        ['Mutation', 'deleteSystemAnnouncement'],
+    ])(
+        'allows scope-aware announcements through %s.%s while retaining merchant channel isolation',
+        async (type, field) => {
+            const { service } = createService();
+            await expect(
+                service.assertRootFieldAccess(merchantContext, type, field, {}),
+            ).resolves.toBeUndefined();
+            const wrongStore = createService({ channelIds: ['store-b'] });
+            await expect(
+                wrongStore.service.assertRootFieldAccess(merchantContext, type, field, {}),
+            ).rejects.toThrow();
+        },
+    );
+
     it.each(['createPaymentMethod', 'updatePaymentMethod', 'deletePaymentMethod', 'deletePaymentMethods'])(
         'requires platform context and SuperAdmin for %s',
         async fieldName => {
@@ -481,9 +517,53 @@ describe('MerchantCatalogAccessService', () => {
     it('preserves ordinary platform promotion editing', async () => {
         const { service } = createService({ merchant: false });
         await expect(
-            service.assertRootFieldAccess(merchantContext, 'Mutation', 'updatePromotion', {
-                input: { id: 'ordinary-promotion' },
+            service.assertRootFieldAccess(
+                { ...merchantContext, channel: { code: '__default_channel__' } },
+                'Mutation',
+                'updatePromotion',
+                {
+                    input: { id: 'ordinary-promotion' },
+                },
+            ),
+        ).resolves.toBeUndefined();
+    });
+
+    it.each([
+        'createPromotion',
+        'updatePromotion',
+        'deletePromotion',
+        'updateStockLocation',
+        'createAdministrator',
+    ])('uses the active store for platform staff without a merchant profile: %s', async fieldName => {
+        const { service } = createService({ merchant: false });
+        const ctx = { ...merchantContext, userHasPermissions: () => true };
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', fieldName, {
+                input: { id: 'foreign-stock' },
             }),
+        ).rejects.toThrow();
+    });
+
+    it.each([
+        ['Query', 'scheduledTasks'],
+        ['Mutation', 'updateScheduledTask'],
+        ['Mutation', 'runScheduledTask'],
+        ['Query', 'globalSettings'],
+        ['Mutation', 'updateGlobalSettings'],
+        ['Mutation', 'backfillCustomerContentTranslations'],
+    ])('keeps technical %s.%s in the platform context', async (parent, fieldName) => {
+        const { service } = createService({ merchant: false });
+        const ctx = { ...merchantContext, userHasPermissions: () => true };
+        await expect(service.assertRootFieldAccess(ctx, parent, fieldName, {})).rejects.toThrow(
+            '平台管理中心',
+        );
+        await expect(
+            service.assertRootFieldAccess(
+                { ...ctx, channel: { code: '__default_channel__' } },
+                parent,
+                fieldName,
+                {},
+            ),
         ).resolves.toBeUndefined();
     });
 
@@ -517,7 +597,7 @@ describe('MerchantCatalogAccessService', () => {
         ).rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it('blocks cross-store assignment and platform-managed stock-location mutations', async () => {
+    it('blocks cross-store assignment and foreign stock-location mutations', async () => {
         const { service } = createService();
 
         await expect(
@@ -530,6 +610,57 @@ describe('MerchantCatalogAccessService', () => {
                 input: { id: 'stock-a', name: 'Changed' },
             }),
         ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+    it.each([
+        ['createStockLocation', { input: { name: 'Own new warehouse' } }],
+        ['updateStockLocation', { input: { id: 'stock-a', name: 'Own warehouse' } }],
+        ['deleteStockLocation', { input: { id: 'stock-a', transferToLocationId: 'stock-target' } }],
+        ['deleteStockLocations', { input: [{ id: 'stock-a' }] }],
+    ])('allows own %s under native resolver RBAC', async (field, args) => {
+        const { service } = createService({ visibleEntityIds: ['stock-a', 'stock-target'] });
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', field, args),
+        ).resolves.toBeUndefined();
+    });
+    it.each([
+        ['updateStockLocation', { input: { id: 'stock-shared', name: 'Shared' } }],
+        ['deleteStockLocation', { input: { id: 'stock-a', transferToLocationId: 'stock-shared' } }],
+        ['deleteStockLocation', { input: { id: 'stock-a', transferToLocationId: 'foreign-stock' } }],
+    ])(
+        'rejects foreign or cross-store shared warehouse maintenance through %s including SuperAdmin',
+        async (field, args) => {
+            const { service } = createService({
+                merchant: false,
+                visibleEntityIds: ['stock-a', 'stock-shared'],
+                sharedEntityIds: ['stock-shared'],
+            });
+            await expect(
+                service.assertRootFieldAccess(
+                    { ...merchantContext, userHasPermissions: () => true },
+                    'Mutation',
+                    field,
+                    args,
+                ),
+            ).rejects.toBeInstanceOf(ForbiddenError);
+        },
+    );
+    it('allows own draft creation but prevents sales in the default platform context', async () => {
+        const { service } = createService();
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', 'createDraftOrder', {}),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(
+                {
+                    ...merchantContext,
+                    channel: { code: '__default_channel__' },
+                    userHasPermissions: () => true,
+                },
+                'Mutation',
+                'createDraftOrder',
+                {},
+            ),
+        ).rejects.toThrow('平台管理中心不创建销售订单');
     });
 
     it('requires merchants to use the managed promotion mutations', async () => {
@@ -795,6 +926,23 @@ describe('MerchantCatalogAccessService', () => {
         expect(shared.connection.findByIdsInChannel).not.toHaveBeenCalled();
     });
 
+    it('rejects a forged foreign warehouse even for SuperAdmin in a store context', async () => {
+        const { service, connection } = createService({ merchant: false, visibleEntityIds: ['variant-a'] });
+        const ctx = { ...merchantContext, userHasPermissions: () => true };
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'updateProductVariant', {
+                input: { id: 'variant-a', stockLevels: [{ stockLocationId: 'stock-b' }] },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+        expect(connection.findByIdsInChannel).toHaveBeenCalledWith(
+            ctx,
+            StockLocation,
+            ['stock-b'],
+            'store-a',
+            {},
+        );
+    });
+
     it('validates both the target and parent when moving a collection', async () => {
         const ownTree = createService({
             visibleEntityIds: ['collection-a', 'root-collection'],
@@ -843,5 +991,227 @@ describe('MerchantCatalogAccessService', () => {
             'store-a',
             { relations: ['channels'] },
         );
+    });
+});
+
+describe('direct API commerce mode boundaries', () => {
+    it.each([
+        ['Query', 'catalogInventoryOperations'],
+        ['Query', 'catalogPurchaseOrders'],
+        ['Query', 'stockLocations'],
+        ['Query', 'shippingTemplateManagement'],
+        ['Query', 'shippingMethods'],
+        ['Query', 'shippingMethod'],
+        ['Query', 'shippingEligibilityCheckers'],
+        ['Query', 'shippingCalculators'],
+        ['Mutation', 'saveCatalogInventoryLot'],
+        ['Mutation', 'createCatalogPurchaseOrder'],
+        ['Mutation', 'copyPlatformShippingTemplate'],
+    ])('rejects %s.%s for digital-only stores including SuperAdmin', async (parent, field) => {
+        const { service } = createService({ merchant: false, commerceMode: 'DIGITAL_ONLY' });
+        await expect(
+            service.assertRootFieldAccess(
+                {
+                    ...merchantContext,
+                    channel: { code: 'store-a', customFields: { commerceMode: 'DIGITAL_ONLY' } },
+                    userHasPermissions: () => true,
+                },
+                parent,
+                field,
+                {},
+            ),
+        ).rejects.toThrow('仅经营虚拟商品');
+    });
+    it('rejects forged native stock-level writes in digital-only context', async () => {
+        const { service } = createService({ merchant: false, commerceMode: 'DIGITAL_ONLY' });
+        await expect(
+            service.assertRootFieldAccess(
+                {
+                    ...merchantContext,
+                    channel: { code: 'store-a', customFields: { commerceMode: 'DIGITAL_ONLY' } },
+                    userHasPermissions: () => true,
+                },
+                'Mutation',
+                'updateProductVariant',
+                {
+                    input: {
+                        id: 'variant-a',
+                        stockLevels: [{ stockLocationId: 'warehouse-a', stockOnHand: 10 }],
+                    },
+                },
+            ),
+        ).rejects.toThrow('仅经营虚拟商品');
+    });
+    it.each(['updateAutoCardConfig', 'importAutoCardPoolItems'])(
+        'rejects new digital supply %s in physical-only stores',
+        async field => {
+            const { service } = createService({ merchant: false, commerceMode: 'PHYSICAL_ONLY' });
+            await expect(
+                service.assertRootFieldAccess(
+                    {
+                        ...merchantContext,
+                        channel: { code: 'store-a', customFields: { commerceMode: 'PHYSICAL_ONLY' } },
+                        userHasPermissions: () => true,
+                    },
+                    'Mutation',
+                    field,
+                    {},
+                ),
+            ).rejects.toThrow('仅经营实物商品');
+        },
+    );
+    it.each([
+        ['PHYSICAL_ONLY', 'Mutation', 'importAutoCardPoolItems'],
+        ['DIGITAL_ONLY', 'Mutation', 'createCatalogPurchaseOrder'],
+        ['DIGITAL_ONLY', 'Query', 'shippingMethods'],
+    ])('rejects newly restricted %s mode despite a stale HYBRID context', async (mode, parent, field) => {
+        const { service, connection } = createService({ merchant: false, commerceMode: mode });
+        await expect(service.assertRootFieldAccess(merchantContext, parent, field, {})).rejects.toThrow();
+        expect(connection.getRepository).toHaveBeenCalledWith(merchantContext, Channel);
+    });
+    it.each([null, 'UNKNOWN'])(
+        'fails closed for both supply types when persisted commerce mode is %s',
+        async mode => {
+            const { service } = createService({ merchant: false, commerceMode: mode });
+            for (const field of ['createCatalogPurchaseOrder', 'importAutoCardPoolItems']) {
+                await expect(
+                    service.assertRootFieldAccess(merchantContext, 'Mutation', field, {}),
+                ).rejects.toThrow('经营模式尚未确认');
+            }
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', 'retryAutoCardDelivery', {}),
+            ).resolves.toBeUndefined();
+        },
+    );
+    it.each(['createPlatformFreeShippingVersion', 'initializePlatformShippingTemplates'])(
+        'restricts %s to the platform context',
+        async field => {
+            const { service } = createService({ merchant: false });
+            await expect(
+                service.assertRootFieldAccess(merchantContext, 'Mutation', field, {}),
+            ).rejects.toThrow('平台管理中心');
+        },
+    );
+    it('restricts technical prompt release history while leaving published business choices available', async () => {
+        const { service } = createService({ merchant: false });
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Query', 'imagePromptSkillReleases', {}),
+        ).rejects.toThrow('平台管理中心');
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Query', 'catalogImageStudioConfig', {}),
+        ).resolves.toBeUndefined();
+    });
+    it.each([
+        'retryAutoCardDelivery',
+        'retryManualDigitalDelivery',
+        'appendManualDigitalDelivery',
+        'recordCatalogPurchasePayment',
+        'returnCatalogPurchaseOrder',
+    ])('leaves accepted recovery %s to its owner/state service checks', async field => {
+        const { service } = createService({ merchant: false });
+        await expect(
+            service.assertRootFieldAccess(
+                {
+                    ...merchantContext,
+                    channel: { code: 'store-a', customFields: { commerceMode: 'PHYSICAL_ONLY' } },
+                    userHasPermissions: () => true,
+                },
+                'Mutation',
+                field,
+                {},
+            ),
+        ).resolves.toBeUndefined();
+    });
+});
+
+describe('draft order immutable sale scope with real SQLjs membership', () => {
+    const channel = new EntitySchema<{ id: string }>({
+        name: 'DraftGuardChannel',
+        columns: { id: { type: String, primary: true } },
+    });
+    const order = new EntitySchema<{
+        id: string;
+        salesChannelId: string;
+        state: string;
+        channels: Array<{ id: string }>;
+    }>({
+        name: 'DraftGuardOrder',
+        columns: {
+            id: { type: String, primary: true },
+            salesChannelId: { type: String },
+            state: { type: String },
+        },
+        relations: { channels: { type: 'many-to-many', target: 'DraftGuardChannel', joinTable: true } },
+    });
+    const database = new DataSource({ type: 'sqljs', entities: [channel, order], synchronize: true });
+    const draftFields = [
+        'deleteDraftOrder',
+        'addItemToDraftOrder',
+        'adjustDraftOrderLine',
+        'removeDraftOrderLine',
+        'setDraftOrderCustomFields',
+        'setCustomerForDraftOrder',
+        'setDraftOrderShippingAddress',
+        'setDraftOrderBillingAddress',
+        'unsetDraftOrderShippingAddress',
+        'unsetDraftOrderBillingAddress',
+        'applyCouponCodeToDraftOrder',
+        'removeCouponCodeFromDraftOrder',
+        'setDraftOrderShippingMethod',
+    ];
+    beforeAll(async () => {
+        await database.initialize();
+        await database.getRepository(channel).save([{ id: 'store-a' }, { id: 'store-b' }]);
+        const channels = [{ id: 'store-a' }, { id: 'store-b' }];
+        await database.getRepository(order).save([
+            { id: 'own-draft', salesChannelId: 'store-a', state: 'Draft', channels },
+            { id: 'foreign-draft', salesChannelId: 'store-b', state: 'Draft', channels },
+            { id: 'own-placed', salesChannelId: 'store-a', state: 'PaymentSettled', channels },
+        ]);
+    });
+    afterAll(async () => {
+        if (database.isInitialized) await database.destroy();
+    });
+    function service() {
+        const fixture = createService({ merchant: false });
+        const fallback = fixture.connection.getRepository.getMockImplementation();
+        fixture.connection.getRepository.mockImplementation((ctx, entity) =>
+            entity === Order ? database.getRepository(order) : fallback?.(ctx, entity),
+        );
+        return fixture.service;
+    }
+    it.each(draftFields)(
+        'allows only own Draft state for %s even when memberships expose both shops',
+        async field => {
+            const guard = service();
+            const ctx = { ...merchantContext, userHasPermissions: () => true };
+            await expect(
+                guard.assertRootFieldAccess(ctx, 'Mutation', field, {
+                    orderId: 'own-draft',
+                    input: { orderLineId: 'line-own' },
+                }),
+            ).resolves.toBeUndefined();
+            for (const orderId of ['foreign-draft', 'own-placed']) {
+                await expect(
+                    guard.assertRootFieldAccess(ctx, 'Mutation', field, {
+                        orderId,
+                        input: { orderLineId: 'line-own' },
+                    }),
+                ).rejects.toBeInstanceOf(ForbiddenError);
+            }
+        },
+    );
+    it('checks draft quote ownership before returning from a Query guard', async () => {
+        const guard = service();
+        await expect(
+            guard.assertRootFieldAccess(merchantContext, 'Query', 'eligibleShippingMethodsForDraftOrder', {
+                orderId: 'own-draft',
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            guard.assertRootFieldAccess(merchantContext, 'Query', 'eligibleShippingMethodsForDraftOrder', {
+                orderId: 'foreign-draft',
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
     });
 });

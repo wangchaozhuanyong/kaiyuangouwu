@@ -80,9 +80,12 @@ export function StorefrontContentModule() {
     const { hasAnyPermission } = useAdminPermissions();
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
-    const canManageAnnouncements = hasAnyPermission(['SuperAdmin']);
+    const canManageAnnouncements = hasAnyPermission(['ReadStorefrontContent']);
+    const canCreateAnnouncement = hasAnyPermission(['CreateStorefrontContent']);
+    const canUpdateAnnouncement = hasAnyPermission(['UpdateStorefrontContent']);
+    const canDeleteAnnouncement = hasAnyPermission(['DeleteStorefrontContent']);
     const [requestedTab, setTab] = useUrlTab<ContentTab>(CONTENT_TABS, 'pages');
-    const tab = requestedTab === 'ANNOUNCEMENTS' && !canManageAnnouncements ? 'PAGES' : requestedTab;
+    const tab = requestedTab;
     const [searchParams, setSearchParams] = useSearchParams();
     const [editingBlock, setEditingBlock] = useState<StorefrontContentBlock | null>(null);
     const [editingAnnouncement, setEditingAnnouncement] = useState<SystemAnnouncementRecord | 'NEW' | null>(
@@ -92,15 +95,31 @@ export function StorefrontContentModule() {
     const [notice, setNotice] = useState('');
     const [actionError, setActionError] = useState('');
     const content = useQuery<StorefrontContentResult>(
-        standalonePage && tab !== 'PAGES'
+        tab !== 'PAGES'
             ? selectQueryFields(STOREFRONT_CONTENT_QUERY, ['activeChannel'])
             : STOREFRONT_CONTENT_QUERY,
         {},
     );
+    const channelId = content.data?.activeChannel.id;
+    const consistent = Boolean(
+        content.data &&
+        (!getActiveChannelToken() || content.data.activeChannel.token === getActiveChannelToken()),
+    );
+    const platformContext = consistent && isDefaultChannelCode(content.data?.activeChannel.code ?? '');
+    const canMaintainAnnouncement = (item: SystemAnnouncementRecord) =>
+        platformContext ||
+        Boolean(
+            consistent &&
+            item.ownerChannelId === channelId &&
+            item.targetMode === 'SINGLE' &&
+            item.channels.length === 1 &&
+            item.channels[0].id === channelId,
+        );
     const announcements = useQuery<{ systemAnnouncements: SystemAnnouncementRecord[] }>(
         SYSTEM_ANNOUNCEMENTS_QUERY,
         {
-            skip: tab !== 'ANNOUNCEMENTS' || !canManageAnnouncements,
+            skip: tab !== 'ANNOUNCEMENTS' || !canManageAnnouncements || !consistent,
+            ...(content.data ? { context: channelRequestContext(content.data.activeChannel.token) } : {}),
         },
     );
     const promotion = useQuery<{ storefrontPromotionPage: StorefrontPromotionRecord }>(
@@ -111,7 +130,7 @@ export function StorefrontContentModule() {
     );
     const requestedAnnouncementId = searchParams.get('announcementId');
     const requestedAnnouncement = announcements.data?.systemAnnouncements?.find(
-        item => item.id === requestedAnnouncementId,
+        item => item.id === requestedAnnouncementId && canMaintainAnnouncement(item) && canUpdateAnnouncement,
     );
     const activeAnnouncementEditor = editingAnnouncement ?? requestedAnnouncement ?? null;
     const closeAnnouncementEditor = () => {
@@ -137,15 +156,10 @@ export function StorefrontContentModule() {
     }>(UPDATE_STOREFRONT_BLOCK_MUTATION, mutationOptions);
     const [deleteAnnouncement, deleteAnnouncementState] = useMutation<{
         deleteSystemAnnouncement: { result: string; message?: string | null };
-    }>(DELETE_SYSTEM_ANNOUNCEMENT_MUTATION);
-    const channelId = content.data?.activeChannel.id;
+    }>(DELETE_SYSTEM_ANNOUNCEMENT_MUTATION, mutationOptions);
     const channelRef = useRef(channelId);
     const actionLock = useRef(false);
     const [actionPending, setActionPending] = useState(false);
-    const consistent = Boolean(
-        content.data &&
-        (!getActiveChannelToken() || content.data.activeChannel.token === getActiveChannelToken()),
-    );
     /* oxlint-disable react/set-state-in-effect -- A store switch invalidates the previous store's drafts and feedback. */
     useLayoutEffect(() => {
         channelRef.current = channelId;
@@ -257,7 +271,7 @@ export function StorefrontContentModule() {
     };
 
     const confirmDeleteAnnouncement = async () => {
-        if (!deletingAnnouncement) return;
+        if (!deletingAnnouncement || !canDeleteAnnouncement || !consistent) return;
         try {
             const response = await deleteAnnouncement({ variables: { id: deletingAnnouncement.id } });
             const deletion = response.data?.deleteSystemAnnouncement;
@@ -395,7 +409,12 @@ export function StorefrontContentModule() {
                 )}
                 {tab === 'ANNOUNCEMENTS' &&
                     canManageAnnouncements &&
-                    (announcements.loading && !announcements.data ? (
+                    (content.error && !consistent ? (
+                        <ErrorState
+                            message={toUserFacingError(content.error, '当前店铺读取失败')}
+                            onRetry={() => void content.refetch()}
+                        />
+                    ) : !consistent || (announcements.loading && !announcements.data) ? (
                         <LoadingState label="正在读取首页公告…" />
                     ) : announcements.error && !announcements.data ? (
                         <ErrorState
@@ -405,9 +424,22 @@ export function StorefrontContentModule() {
                     ) : (
                         <AnnouncementList
                             items={announcements.data?.systemAnnouncements ?? []}
-                            onCreate={() => setEditingAnnouncement('NEW')}
-                            onEdit={setEditingAnnouncement}
-                            onDelete={setDeletingAnnouncement}
+                            platformContext={platformContext}
+                            canMaintain={canMaintainAnnouncement}
+                            canCreate={canCreateAnnouncement}
+                            canUpdate={canUpdateAnnouncement}
+                            canDelete={canDeleteAnnouncement}
+                            onCreate={() => canCreateAnnouncement && setEditingAnnouncement('NEW')}
+                            onEdit={item =>
+                                canUpdateAnnouncement &&
+                                canMaintainAnnouncement(item) &&
+                                setEditingAnnouncement(item)
+                            }
+                            onDelete={item =>
+                                canDeleteAnnouncement &&
+                                canMaintainAnnouncement(item) &&
+                                setDeletingAnnouncement(item)
+                            }
                         />
                     ))}
                 {tab === 'LANDING' &&
@@ -444,28 +476,31 @@ export function StorefrontContentModule() {
                     onSave={saveBlock}
                 />
             )}
-            {activeAnnouncementEditor && canManageAnnouncements && (
-                <AnnouncementEditor
-                    key={`${channelId}-${activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}`}
-                    value={activeAnnouncementEditor === 'NEW' ? null : activeAnnouncementEditor}
-                    activeChannel={content.data?.activeChannel ?? null}
-                    onClose={closeAnnouncementEditor}
-                    onSaved={async expected => {
-                        if (channelRef.current !== channelId) return;
-                        const refreshed = await announcements.refetch();
-                        if (channelRef.current !== channelId) return;
-                        verifyAnnouncement(
-                            refreshed.data?.systemAnnouncements.find(item => item.id === expected.id),
-                            expected,
-                        );
-                        closeAnnouncementEditor();
-                        showNotice('中文公告已保存并重新读取核对，英文按翻译设置同步');
-                    }}
-                    onError={error => {
-                        if (channelRef.current === channelId) showError(error);
-                    }}
-                />
-            )}
+            {activeAnnouncementEditor &&
+                consistent &&
+                (activeAnnouncementEditor === 'NEW' ? canCreateAnnouncement : canUpdateAnnouncement) && (
+                    <AnnouncementEditor
+                        key={`${channelId}-${activeAnnouncementEditor === 'NEW' ? 'new' : activeAnnouncementEditor.id}`}
+                        value={activeAnnouncementEditor === 'NEW' ? null : activeAnnouncementEditor}
+                        activeChannel={content.data!.activeChannel}
+                        platformContext={platformContext}
+                        onClose={closeAnnouncementEditor}
+                        onSaved={async expected => {
+                            if (channelRef.current !== channelId) return;
+                            const refreshed = await announcements.refetch();
+                            if (channelRef.current !== channelId) return;
+                            verifyAnnouncement(
+                                refreshed.data?.systemAnnouncements.find(item => item.id === expected.id),
+                                expected,
+                            );
+                            closeAnnouncementEditor();
+                            showNotice('中文公告已保存并重新读取核对，英文按翻译设置同步');
+                        }}
+                        onError={error => {
+                            if (channelRef.current === channelId) showError(error);
+                        }}
+                    />
+                )}
             {deletingAnnouncement && (
                 <ConfirmDialog
                     title="删除首页公告"
@@ -587,11 +622,21 @@ function PageBlockList({
 
 function AnnouncementList({
     items,
+    platformContext,
+    canMaintain,
+    canCreate,
+    canUpdate,
+    canDelete,
     onCreate,
     onEdit,
     onDelete,
 }: {
     items: SystemAnnouncementRecord[];
+    platformContext: boolean;
+    canMaintain: (item: SystemAnnouncementRecord) => boolean;
+    canCreate: boolean;
+    canUpdate: boolean;
+    canDelete: boolean;
     onCreate: () => void;
     onEdit: (item: SystemAnnouncementRecord) => void;
     onDelete: (item: SystemAnnouncementRecord) => void;
@@ -609,15 +654,14 @@ function AnnouncementList({
                         <FeatureHelpButton
                             topic="storefront.announcements"
                             title="首页公告"
-                            description={
-                                '此处列出全部店铺的系统公告，后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近 30 天内的有效公告，与手动公告合计最多 5 条。'
-                            }
+                            description={`${platformContext ? '平台管理中心可管理全部店铺的公告。' : '这里只管理本店公告；平台公告由平台管理中心统一管理。'}后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近 30 天内的有效公告，与手动公告合计最多 5 条。`}
                         />
                     </h2>
                 </div>
                 <AdminButton
                     type="button"
                     onClick={onCreate}
+                    disabled={!canCreate}
                     className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"
                 >
                     <Plus className="h-3.5 w-3.5" />
@@ -634,6 +678,10 @@ function AnnouncementList({
                             <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <h3 className="text-xs font-bold text-slate-900">{item.titleZh}</h3>
+                                    <span className="text-xs text-slate-500">
+                                        {item.ownerChannelId ? '店铺发布' : '平台发布'}
+                                        {!canMaintain(item) ? ' · 平台维护' : ''}
+                                    </span>
                                     <span
                                         className={`rounded px-2 py-0.5 text-[9px] font-bold ${item.enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
                                     >
@@ -662,21 +710,27 @@ function AnnouncementList({
                                 </div>
                             </div>
                             <div className="flex shrink-0 gap-2">
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => onEdit(item)}
-                                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-700"
-                                >
-                                    编辑
-                                </AdminButton>
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => onDelete(item)}
-                                    className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
-                                    aria-label="删除公告"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </AdminButton>
+                                {canMaintain(item) && canUpdate && (
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => onEdit(item)}
+                                        disabled={!canUpdate}
+                                        className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-700"
+                                    >
+                                        编辑
+                                    </AdminButton>
+                                )}
+                                {canMaintain(item) && canDelete && (
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => onDelete(item)}
+                                        disabled={!canDelete}
+                                        className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                                        aria-label="删除公告"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </AdminButton>
+                                )}
                             </div>
                         </article>
                     ))}
@@ -686,8 +740,8 @@ function AnnouncementList({
                     icon={Megaphone}
                     title="还没有首页公告"
                     detail="新建后须符合上线排期；首页只显示近 30 天内的有效公告。"
-                    action="新建公告"
-                    onAction={onCreate}
+                    action={canCreate ? '新建公告' : undefined}
+                    onAction={canCreate ? onCreate : undefined}
                 />
             )}
         </section>
@@ -711,21 +765,23 @@ interface AnnouncementDraft {
 function AnnouncementEditor({
     value,
     activeChannel,
+    platformContext,
     onClose,
     onSaved,
     onError,
 }: {
     value: SystemAnnouncementRecord | null;
-    activeChannel: SystemAnnouncementChannel | null;
+    activeChannel: StorefrontContentResult['activeChannel'];
+    platformContext: boolean;
     onClose: () => void;
     onSaved: (expected: Parameters<typeof verifyAnnouncement>[1]) => Promise<void>;
     onError: (error: unknown) => void;
 }) {
     const channels = useQuery<{ channels: { items: SystemAnnouncementChannel[] } }>(
         SYSTEM_ANNOUNCEMENT_CHANNELS_QUERY,
-        {},
+        { skip: !platformContext, context: channelRequestContext(activeChannel.token) },
     );
-    const [allChannels, setAllChannels] = useState(value?.targetMode === 'ALL');
+    const [allChannels, setAllChannels] = useState(platformContext && value?.targetMode === 'ALL');
     const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>(
         () =>
             value?.channels.map(channel => channel.id) ??
@@ -762,22 +818,38 @@ function AnnouncementEditor({
     }));
     const [create, createState] = useMutation<{ createSystemAnnouncement: { id: string } }>(
         CREATE_SYSTEM_ANNOUNCEMENT_MUTATION,
+        { context: channelRequestContext(activeChannel.token) },
     );
     const [update, updateState] = useMutation<{ updateSystemAnnouncement: { id: string; enabled: boolean } }>(
         UPDATE_SYSTEM_ANNOUNCEMENT_MUTATION,
+        { context: channelRequestContext(activeChannel.token) },
     );
     const validation =
         (!allChannels && selectedChannelIds.length === 0 ? '请至少选择一个目标店铺' : null) ??
         announcementDraftError(draft);
+    const [savedInput, setSavedInput] = useState<Parameters<typeof verifyAnnouncement>[1] | null>(null);
     const submit = async () => {
-        if (verifying || createState.loading || updateState.loading || validation) return;
+        if (verifying || createState.loading || updateState.loading || (!savedInput && validation)) return;
+        if (savedInput) {
+            setVerifying(true);
+            try {
+                await onSaved(savedInput);
+            } catch (error) {
+                onError(error);
+            } finally {
+                setVerifying(false);
+            }
+            return;
+        }
         const input = {
-            targetMode: (allChannels
-                ? 'ALL'
-                : selectedChannelIds.length === 1
-                  ? 'SINGLE'
-                  : 'MULTIPLE') as SystemAnnouncementRecord['targetMode'],
-            channelIds: allChannels ? [] : selectedChannelIds,
+            targetMode: (!platformContext
+                ? 'SINGLE'
+                : allChannels
+                  ? 'ALL'
+                  : selectedChannelIds.length === 1
+                    ? 'SINGLE'
+                    : 'MULTIPLE') as SystemAnnouncementRecord['targetMode'],
+            channelIds: !platformContext ? [activeChannel.id] : allChannels ? [] : selectedChannelIds,
             enabled: draft.enabled,
             priority: Number.parseInt(draft.priority, 10) || 0,
             titleZh: draft.titleZh.trim(),
@@ -808,7 +880,9 @@ function AnnouncementEditor({
                 savedId = response.data?.createSystemAnnouncement.id;
             }
             if (!savedId) throw new Error('公告保存未返回对应结果');
-            await onSaved({ ...input, id: savedId });
+            const expected = { ...input, id: savedId };
+            setSavedInput(expected);
+            await onSaved(expected);
         } catch (error) {
             onError(error);
         } finally {
@@ -823,67 +897,82 @@ function AnnouncementEditor({
             description="中文是源内容；英文默认自动翻译，需要人工定稿时再锁定"
             onClose={onClose}
         >
-            <div className="grid gap-4 sm:grid-cols-2">
+            <fieldset disabled={pending || Boolean(savedInput)} className="grid min-w-0 gap-4 sm:grid-cols-2">
                 <fieldset className="rounded-lg border border-slate-200 p-3 sm:col-span-2">
                     <legend className="px-1 text-xs font-bold text-slate-700">公告展示范围 *</legend>
-                    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-700">
-                        <label className="flex items-center gap-2">
-                            <AdminInput
-                                type="radio"
-                                name="announcement-scope"
-                                checked={!allChannels}
-                                onChange={() => setAllChannels(false)}
-                            />
-                            指定店铺
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <AdminInput
-                                type="radio"
-                                name="announcement-scope"
-                                checked={allChannels}
-                                onChange={() => setAllChannels(true)}
-                            />
-                            全部店铺
-                        </label>
-                    </div>
-                    {!allChannels && (
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                            {availableChannels.map(channel => (
-                                <label
-                                    key={channel.id}
-                                    className="flex items-center gap-2 text-xs text-slate-700"
-                                >
+                    {!platformContext ? (
+                        <p className="text-xs text-slate-700">
+                            仅本店：{getChannelDisplayName(activeChannel, 'zh_Hans')}
+                            。公告不会展示到其他店铺。
+                        </p>
+                    ) : (
+                        <>
+                            <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-700">
+                                <label className="flex items-center gap-2">
                                     <AdminInput
-                                        type="checkbox"
-                                        checked={selectedChannelIds.includes(channel.id)}
-                                        onChange={event =>
-                                            setSelectedChannelIds(current =>
-                                                event.target.checked
-                                                    ? [...current, channel.id]
-                                                    : current.filter(id => id !== channel.id),
-                                            )
-                                        }
+                                        type="radio"
+                                        name="announcement-scope"
+                                        checked={!allChannels}
+                                        onChange={() => setAllChannels(false)}
                                     />
-                                    {getChannelDisplayName(channel, 'zh_Hans')}
+                                    指定店铺
                                 </label>
-                            ))}
-                        </div>
-                    )}
-                    {channels.error && !allChannels && (
-                        <p className="mt-2 text-xs text-amber-700">
-                            店铺列表读取失败，仅能选择当前或已保存的店铺。
-                        </p>
-                    )}
-                    {!value && !allChannels && activeChannel && !isDefaultChannelCode(activeChannel.code) && (
-                        <p className="mt-2 text-[11px] text-slate-500">
-                            新公告默认只展示在当前店铺：
-                            {getChannelDisplayName(activeChannel, 'zh_Hans')}。
-                        </p>
-                    )}
-                    {!value && !allChannels && activeChannel && isDefaultChannelCode(activeChannel.code) && (
-                        <p className="mt-2 text-[11px] text-amber-700">
-                            当前是平台管理频道，请手动选择经营店铺。
-                        </p>
+                                <label className="flex items-center gap-2">
+                                    <AdminInput
+                                        type="radio"
+                                        name="announcement-scope"
+                                        checked={allChannels}
+                                        onChange={() => setAllChannels(true)}
+                                    />
+                                    全部店铺
+                                </label>
+                            </div>
+                            {!allChannels && (
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    {availableChannels.map(channel => (
+                                        <label
+                                            key={channel.id}
+                                            className="flex items-center gap-2 text-xs text-slate-700"
+                                        >
+                                            <AdminInput
+                                                type="checkbox"
+                                                checked={selectedChannelIds.includes(channel.id)}
+                                                onChange={event =>
+                                                    setSelectedChannelIds(current =>
+                                                        event.target.checked
+                                                            ? [...current, channel.id]
+                                                            : current.filter(id => id !== channel.id),
+                                                    )
+                                                }
+                                            />
+                                            {getChannelDisplayName(channel, 'zh_Hans')}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                            {channels.error && !allChannels && (
+                                <p className="mt-2 text-xs text-amber-700">
+                                    店铺列表读取失败，仅能选择当前或已保存的店铺。
+                                </p>
+                            )}
+                            {!value &&
+                                !allChannels &&
+                                activeChannel &&
+                                !isDefaultChannelCode(activeChannel.code) && (
+                                    <p className="mt-2 text-[11px] text-slate-500">
+                                        新公告默认只展示在当前店铺：
+                                        {getChannelDisplayName(activeChannel, 'zh_Hans')}。
+                                    </p>
+                                )}
+                            {!value &&
+                                !allChannels &&
+                                activeChannel &&
+                                isDefaultChannelCode(activeChannel.code) && (
+                                    <p className="mt-2 text-[11px] text-amber-700">
+                                        当前是平台管理频道，请手动选择经营店铺。
+                                    </p>
+                                )}
+                        </>
                     )}
                 </fieldset>
                 <Field label="中文标题 *">
@@ -1004,20 +1093,26 @@ function AnnouncementEditor({
                         className={inputClass}
                     />
                 </Field>
-            </div>
+            </fieldset>
             <label className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-700">
                 <AdminInput
                     type="checkbox"
                     checked={draft.enabled}
+                    disabled={pending || Boolean(savedInput)}
                     onChange={event => setDraft({ ...draft, enabled: event.target.checked })}
                 />
                 保存后启用
             </label>
-            {validation && <p className="mt-3 text-xs text-rose-600">{validation}</p>}
+            {savedInput && (
+                <p role="status" className="mt-3 text-xs text-amber-700">
+                    公告已保存；正在核对读取结果，重试只会重新读取。
+                </p>
+            )}
+            {!savedInput && validation && <p className="mt-3 text-xs text-rose-600">{validation}</p>}
             <ModalFooter
                 pending={pending}
-                disabled={Boolean(validation)}
-                confirmLabel={value ? '保存公告' : '创建公告'}
+                disabled={!savedInput && Boolean(validation)}
+                confirmLabel={savedInput ? '重新读取公告' : value ? '保存公告' : '创建公告'}
                 onCancel={onClose}
                 onConfirm={() => void submit()}
             />
@@ -1468,21 +1563,23 @@ function EmptyState({
     icon: typeof Megaphone;
     title: string;
     detail: string;
-    action: string;
-    onAction: () => void;
+    action?: string;
+    onAction?: () => void;
 }) {
     return (
         <div className="flex min-h-80 flex-col items-center justify-center p-8 text-center">
             <Icon className="h-9 w-9 text-slate-300" />
             <h3 className="mt-3 text-sm font-bold text-slate-800">{title}</h3>
             <p className="mt-1 text-xs text-slate-400">{detail}</p>
-            <AdminButton
-                type="button"
-                onClick={onAction}
-                className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
-            >
-                {action}
-            </AdminButton>
+            {action && onAction && (
+                <AdminButton
+                    type="button"
+                    onClick={onAction}
+                    className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
+                >
+                    {action}
+                </AdminButton>
+            )}
         </div>
     );
 }

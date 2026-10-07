@@ -12,6 +12,9 @@ export interface UsdtPaymentProofPayload {
     receivingAddressFingerprint: string;
     expiresAt: number;
     paidAt?: number;
+    paymentMethodId?: string;
+    handlerCode?: string;
+    handlerArgumentsHash?: string;
 }
 
 let paymentProofSecret = 'development-usdt-payment-proof-secret';
@@ -56,6 +59,15 @@ export function verifyUsdtPaymentProof(proof: unknown): UsdtPaymentProofPayload 
         ) {
             return null;
         }
+        if (
+            (payload.paymentMethodId != null ||
+                payload.handlerCode != null ||
+                payload.handlerArgumentsHash != null) &&
+            (!isSafeId(payload.paymentMethodId) ||
+                !isSafeId(payload.handlerCode) ||
+                !/^[a-f0-9]{64}$/u.test(payload.handlerArgumentsHash ?? ''))
+        )
+            return null;
         return payload as UsdtPaymentProofPayload;
     } catch {
         return null;

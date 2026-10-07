@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash } from 'node:crypto';
@@ -465,10 +466,14 @@ export class ContentTranslationService {
                     channelId: String(ctx.channelId),
                     status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
                 },
-                {
-                    channelId: IsNull(),
-                    status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
-                },
+                ...(ctx.channel?.code === DEFAULT_CHANNEL_CODE
+                    ? [
+                          {
+                              channelId: IsNull(),
+                              status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
+                          },
+                      ]
+                    : []),
             ],
         });
     }
@@ -478,14 +483,23 @@ export class ContentTranslationService {
         channelId?: string | number | null,
         options?: ContentTranslationAuditOptions | null,
     ) {
+        const platform = ctx.channel?.code === DEFAULT_CHANNEL_CODE;
+        if (!platform && (channelId == null || String(channelId) !== String(ctx.channelId))) {
+            throw new UserInputError('跨店或平台翻译审计请切换到平台管理中心');
+        }
         const repository = this.connection.getRepository(ctx, ContentTranslationState);
         const scope = repository.createQueryBuilder('state');
         if (channelId === null) {
             scope.where('state.channelId IS NULL');
         } else if (channelId !== undefined) {
-            scope.where('(state.channelId = :channelId OR state.channelId IS NULL)', {
-                channelId: String(channelId),
-            });
+            scope.where(
+                platform
+                    ? '(state.channelId = :channelId OR state.channelId IS NULL)'
+                    : 'state.channelId = :channelId',
+                {
+                    channelId: String(channelId),
+                },
+            );
         }
         const records = scope.clone();
         if (options?.status) records.andWhere('state.status = :status', { status: options.status });

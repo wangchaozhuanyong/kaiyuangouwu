@@ -38,7 +38,7 @@ import { PaymentStateMachine } from '../helpers/payment-state-machine/payment-st
 import { RefundStateMachine } from '../helpers/refund-state-machine/refund-state-machine';
 import { effectiveRefundLines } from '../helpers/utils/refund-quantities';
 
-import { PaymentMethodService } from './payment-method.service';
+import { AcceptedPaymentIntent, PaymentMethodService } from './payment-method.service';
 
 /** Server-only evidence; GraphQL callers cannot supply this argument. */
 export interface VerifiedRefundSettlementEvidence {
@@ -236,11 +236,46 @@ export class PaymentService {
         metadata: any,
         beforeFinalize?: (ctx: RequestContext, payment: Payment) => Promise<void>,
     ): Promise<Payment | IneligiblePaymentMethodError> {
+        return this.createPaymentWithScope(ctx, order, amount, method, metadata, beforeFinalize);
+    }
+
+    /** Server-only entry point; the accepted scope cannot be supplied through payment metadata. */
+    async createPaymentFromAcceptedIntent(
+        ctx: RequestContext,
+        order: Order,
+        amount: number,
+        scope: AcceptedPaymentIntent,
+        metadata: any,
+        beforeFinalize?: (ctx: RequestContext, payment: Payment) => Promise<void>,
+    ): Promise<Payment | IneligiblePaymentMethodError> {
+        return this.createPaymentWithScope(ctx, order, amount, scope.method, metadata, beforeFinalize, scope);
+    }
+
+    private async createPaymentWithScope(
+        ctx: RequestContext,
+        order: Order,
+        amount: number,
+        method: string,
+        metadata: any,
+        beforeFinalize?: (ctx: RequestContext, payment: Payment) => Promise<void>,
+        acceptedIntent?: AcceptedPaymentIntent,
+    ): Promise<Payment | IneligiblePaymentMethodError> {
         assertOrderSalesChannel(ctx, order);
-        const { paymentMethod, handler, checker } = await this.paymentMethodService.getMethodAndOperations(
-            ctx,
-            method,
-        );
+        if (
+            acceptedIntent &&
+            (!idsAreEqual(ctx.channelId, acceptedIntent.channelId) ||
+                !idsAreEqual(order.id, acceptedIntent.orderId) ||
+                method !== acceptedIntent.method ||
+                !Number.isSafeInteger(acceptedIntent.amount) ||
+                acceptedIntent.amount <= 0 ||
+                amount !== acceptedIntent.amount ||
+                String(order.currencyCode) !== acceptedIntent.currencyCode)
+        ) {
+            throw new UserInputError('error.payment-method-not-found', { method });
+        }
+        const { paymentMethod, handler, checker } = acceptedIntent
+            ? await this.paymentMethodService.getOperationsForAcceptedIntent(ctx, acceptedIntent)
+            : await this.paymentMethodService.getMethodAndOperations(ctx, method);
         if (paymentMethod.checker && checker) {
             const eligible = await checker.check(ctx, order, paymentMethod.checker.args, paymentMethod);
             if (eligible === false || typeof eligible === 'string') {

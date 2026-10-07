@@ -5,6 +5,7 @@ import {
     physicalOrderSubtotalWithTax,
     physicalSubtotalShippingCalculator,
     splitConfigurationList,
+    storeShippingZoneEligibilityChecker,
     supportedDestinationEligibilityChecker,
 } from './commerce-shipping-options';
 
@@ -87,6 +88,121 @@ describe('physicalSubtotalShippingCalculator', () => {
             price: 720,
             metadata: { freeShippingThreshold: 6_000, freeShippingApplied: false },
         });
+    });
+
+    it('uses saved source currency even after default currency changes', async () => {
+        const quote = await physicalSubtotalShippingCalculator.calculate(
+            {
+                currencyCode: 'MYR',
+                channel: {
+                    defaultCurrencyCode: 'MYR',
+                    customFields: {
+                        cnyToMyrRate: 0.6,
+                        currencyRateMarkupBps: 0,
+                        currencyRoundingMode: 'CENT',
+                    },
+                },
+            } as any,
+            order,
+            [
+                ...calculatorArgs.filter(arg => arg.name !== 'currencyCode'),
+                { name: 'currencyCode', value: 'MYR' },
+                { name: 'sourceCurrencyCode', value: 'CNY' },
+            ],
+            {} as any,
+        );
+        expect(quote).toMatchObject({ price: 720, metadata: { freeShippingThreshold: 6000 } });
+    });
+
+    it('uses discounted tax-inclusive physical subtotal instead of undiscounted or digital totals', async () => {
+        const quote = await physicalSubtotalShippingCalculator.calculate(
+            ctx,
+            {
+                ...order,
+                lines: [{ ...line('physical', 1, 8000), linePriceWithTax: 20000 }, line('digital', 1, 50000)],
+            },
+            calculatorArgs,
+            ctx,
+        );
+        expect(quote).toMatchObject({
+            price: 1200,
+            metadata: { physicalSubtotalWithTax: 8000, freeShippingApplied: false },
+        });
+    });
+});
+
+describe('storeShippingZoneEligibilityChecker', () => {
+    const regionalContext = { channel: { defaultShippingZone: { id: 'store-zone' } } } as any;
+    const regionalArgs = [
+        { name: 'allowedCountryCodes', value: '' },
+        { name: 'blockedPostalPrefixes', value: '' },
+    ];
+    const init = async (
+        members = [
+            { code: 'MY', enabled: true },
+            { code: 'SG', enabled: false },
+        ],
+    ) => {
+        await storeShippingZoneEligibilityChecker.init({
+            get: () => ({ findOne: () => Promise.resolve({ id: 'store-zone', members }) }),
+        } as any);
+    };
+    it('free shipping remains inside enabled countries of this store zone', async () => {
+        await init();
+        await expect(
+            storeShippingZoneEligibilityChecker.check(regionalContext, order, regionalArgs, regionalContext),
+        ).resolves.toBe(true);
+        for (const countryCode of ['SG', 'US']) {
+            await expect(
+                storeShippingZoneEligibilityChecker.check(
+                    regionalContext,
+                    { ...order, shippingAddress: { countryCode } },
+                    regionalArgs,
+                    regionalContext,
+                ),
+            ).resolves.toBe(false);
+        }
+    });
+    it('country restrictions narrow rather than broaden the store zone', async () => {
+        await init();
+        const args = [
+            { name: 'allowedCountryCodes', value: 'MY,US' },
+            { name: 'blockedPostalPrefixes', value: '87' },
+        ];
+        await expect(
+            storeShippingZoneEligibilityChecker.check(regionalContext, order, args, regionalContext),
+        ).resolves.toBe(false);
+        await expect(
+            storeShippingZoneEligibilityChecker.check(
+                regionalContext,
+                { ...order, shippingAddress: { countryCode: 'US' } },
+                args,
+                regionalContext,
+            ),
+        ).resolves.toBe(false);
+    });
+    it('requires a configured nonempty zone and physical goods', async () => {
+        await init([]);
+        await expect(
+            storeShippingZoneEligibilityChecker.check(regionalContext, order, regionalArgs, regionalContext),
+        ).resolves.toBe(false);
+        await init();
+        await expect(
+            storeShippingZoneEligibilityChecker.check(
+                { channel: {} } as any,
+                order,
+                regionalArgs,
+                regionalContext,
+            ),
+        ).resolves.toBe(false);
+        await expect(
+            storeShippingZoneEligibilityChecker.check(
+                regionalContext,
+                { ...order, lines: [line('digital', 1, 8000)] },
+                regionalArgs,
+                regionalContext,
+            ),
+        ).resolves.toBe(false);
     });
 });
 

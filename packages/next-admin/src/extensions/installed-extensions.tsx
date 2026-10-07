@@ -215,6 +215,7 @@ defineNextAdminExtension({
     alerts: [
         {
             id: 'stale-content-translations',
+            capabilityId: 'dashboard.translations',
             component: StaleTranslationExtensionAlert,
             permissions: ['ReadSettings', 'ReadCatalog'],
             order: 10,
@@ -341,6 +342,7 @@ defineNextAdminExtension({
     actions: [
         {
             id: 'catalog-safe-import',
+            capabilityId: 'catalog.import',
             pageId: 'product-list',
             label: '批量导入',
             component: CatalogImportAction,
@@ -349,6 +351,8 @@ defineNextAdminExtension({
         },
         {
             id: 'catalog-standard-export',
+            capabilityId: 'catalog.export',
+            capabilityOperation: 'read',
             pageId: 'product-list',
             label: '导出报表',
             component: CatalogExportAction,
@@ -357,6 +361,7 @@ defineNextAdminExtension({
         },
         {
             id: 'catalog-bulk-channels',
+            capabilityId: 'catalog.bulk-sales',
             pageId: 'product-list',
             label: '批量店铺',
             component: CatalogBulkChannelAction,
@@ -367,6 +372,7 @@ defineNextAdminExtension({
     pageBlocks: [
         {
             id: 'catalog-product-operations',
+            capabilityId: 'catalog.operations',
             pageId: 'product-detail',
             component: CatalogOperationsBlock,
             permissions: ['ReadCatalogOperations'],
@@ -374,6 +380,7 @@ defineNextAdminExtension({
         },
         {
             id: 'product-packaging',
+            capabilityId: 'catalog.packaging',
             pageId: 'product-detail',
             component: ProductPackagingBlock,
             permissions: ['ReadProduct'],
@@ -381,6 +388,7 @@ defineNextAdminExtension({
         },
         {
             id: 'product-variant-multi-currency-prices',
+            capabilityId: '/catalog/products',
             pageId: 'product-detail',
             component: ProductVariantPricesBlock,
             permissions: ['ReadProduct'],
@@ -388,6 +396,7 @@ defineNextAdminExtension({
         },
         {
             id: 'product-variant-custom-fields',
+            capabilityId: '/catalog/products',
             pageId: 'product-detail',
             component: ProductVariantCustomFieldsBlock,
             permissions: ['ReadProduct'],
@@ -484,6 +493,7 @@ defineNextAdminExtension({
     pageBlocks: [
         {
             id: 'order-payment-coupons-sellers',
+            capabilityId: '/sales/orders',
             pageId: 'order-detail',
             component: OrderOperationsBlock,
             permissions: ['ReadOrder'],
@@ -558,6 +568,7 @@ defineNextAdminExtension({
     dashboardWidgets: [
         {
             id: 'storefront-traffic-widget',
+            capabilityId: 'dashboard.traffic',
             title: '网站访问统计',
             description: '真实访问记录；独立访客为估算，独立 IP 不等于人数',
             component: StorefrontTrafficPanel,
@@ -566,6 +577,7 @@ defineNextAdminExtension({
         },
         {
             id: 'referral-today-widget',
+            capabilityId: 'dashboard.referrals',
             title: '今日客户与邀请数据',
             description: '北京时间口径；独立访客为估算，— 表示无新版采集记录',
             component: ReferralTodayExtensionWidget,

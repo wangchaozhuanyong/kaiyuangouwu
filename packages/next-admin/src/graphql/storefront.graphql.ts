@@ -284,6 +284,7 @@ export const SYSTEM_ANNOUNCEMENTS_QUERY = gql`
     query NextAdminSystemAnnouncements {
         systemAnnouncements {
             id
+            ownerChannelId
             createdAt
             updatedAt
             enabled
@@ -546,6 +547,7 @@ export interface StorefrontAuthConfigurationRecord {
 
 export interface SystemAnnouncementRecord {
     id: string;
+    ownerChannelId: string | null;
     createdAt: string;
     updatedAt: string;
     enabled: boolean;

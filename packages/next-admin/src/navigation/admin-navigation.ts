@@ -297,7 +297,8 @@ export function localizeAdminNavigationTitle(title: string, language = getAdminD
 
 /** Frontend visibility follows existing server capabilities; no permission is created here. */
 export function standalonePagePermissions(page: StandaloneAdminPage): string[] | undefined {
-    if (page.sourcePath === '/storefront/content' && page.key === 'announcements') return ['SuperAdmin'];
+    if (page.sourcePath === '/storefront/content' && page.key === 'announcements')
+        return ['ReadStorefrontContent'];
     if (page.sourcePath === '/settings/governance-risk') return ['SuperAdmin'];
     if (page.sourcePath === '/settings/system-ops')
         return page.key === 'api-keys'
@@ -337,6 +338,8 @@ export function standalonePageScopeAllows(path: string, platformContext: boolean
     )
         return platformContext;
     if (
+        (page.sourcePath === '/settings/system-ops' &&
+            ['health', 'jobs', 'schedules', 'telegram'].includes(page.key)) ||
         page.sourcePath === '/settings/usdt-payments' ||
         page.sourcePath === '/settings/governance-risk' ||
         page.sourcePath === '/settings/data-management'

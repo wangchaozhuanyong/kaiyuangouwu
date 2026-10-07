@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import type { AdminCapabilitySnapshot } from '../../../common/src/admin-capabilities';
 
 export const COMPLETE_INITIAL_PASSWORD_CHANGE_MUTATION = gql`
     mutation NextAdminCompleteInitialPasswordChange($password: String!) {
@@ -77,6 +78,19 @@ export const ACTIVE_ADMINISTRATOR_PROFILE_QUERY = gql`
 
 export const APP_SHELL_BOOTSTRAP_QUERY = gql`
     query NextAdminAppShellBootstrap {
+        currentAdminCapabilities {
+            channelId
+            channelCode
+            scope
+            commerceMode
+            capabilities {
+                id
+                state
+                canRead
+                canWrite
+                canConfigure
+            }
+        }
         me {
             id
             identifier
@@ -257,6 +271,7 @@ export interface CurrentAdministratorUser {
 }
 
 export type AppShellBootstrapData = ActiveAdministratorProfileData & {
+    currentAdminCapabilities: AdminCapabilitySnapshot;
     me: CurrentAdministratorUser | null;
     activeChannel: AdministrationChannel;
     manageableChannels: AdministrationChannel[];

@@ -636,6 +636,7 @@ export class ImagePromptEngineService {
 
     private async consumeMinuteLimit(ctx: RequestContext, customer: Customer, requestKey: string) {
         await this.connection.withTransaction(ctx, async txCtx => {
+            await this.configService.assertStorefrontEntryEnabled(txCtx);
             if (supportsRateLimitLock(this.connection.rawConnection.options.type)) {
                 await this.connection
                     .getRepository(txCtx, Customer)

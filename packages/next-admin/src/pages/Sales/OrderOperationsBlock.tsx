@@ -26,6 +26,7 @@ import {
     type OrderOperationsData,
     type PaymentMethodsForManualData,
 } from '../../graphql/order-operations.graphql';
+import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getChannelDisplayName } from '../../utils/channel-display';
@@ -445,6 +446,11 @@ export function PaymentCard({
     onRetryRefund?: (refundId: string) => void;
     refundAnchorPrefix?: string;
 }) {
+    const { canAccessPath, snapshot } = useAdminCapabilities();
+    const refundPath =
+        snapshot?.scope === 'PLATFORM'
+            ? '/settings/usdt-payments/refunds'
+            : '/settings/store-profile/usdt-refunds';
     const canCancelPayment =
         canCancel && payment.state !== 'Settled' && payment.nextStates.includes('Cancelled');
     const simulated = isTestOrder || isSimulatedPayment(payment.method);
@@ -533,11 +539,9 @@ export function PaymentCard({
                                     )}
                                 {refund.state === 'Pending' &&
                                     !simulated &&
-                                    refundSettlementMode === 'verified-external' && (
-                                        <Link
-                                            to="/settings/usdt-payments"
-                                            className="ml-3 font-semibold underline"
-                                        >
+                                    refundSettlementMode === 'verified-external' &&
+                                    canAccessPath(refundPath) && (
+                                        <Link to={refundPath} className="ml-3 font-semibold underline">
                                             进入专用退款核验
                                         </Link>
                                     )}

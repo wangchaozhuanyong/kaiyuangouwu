@@ -22,6 +22,8 @@ import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { Like } from 'typeorm';
 
+import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
+import { AdminCapabilitiesService } from './admin-capabilities.service';
 import { AdministratorAccessInterceptor } from './administrator-access.interceptor';
 import { AdministratorAccessResolver } from './administrator-access.resolver';
 import { AdministratorAccessService } from './administrator-access.service';
@@ -184,6 +186,7 @@ import {
 } from './referral/referral.constants';
 import { ReferralAdminResolver, ReferralShopResolver } from './referral/referral.resolver';
 import { ReferralService } from './referral/referral.service';
+import { ShippingTemplateAdminResolver } from './shipping-template.resolver';
 import { StoreActivationReadinessService } from './store-activation-readiness.service';
 import { StoreCommerceSettingsResolver } from './store-commerce-settings.resolver';
 import { StoreCommerceSettingsService } from './store-commerce-settings.service';
@@ -213,6 +216,7 @@ import {
     StorefrontBrandingShopResolver,
 } from './storefront-branding.resolver';
 import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.interceptor';
+import { StorefrontClientPluginAccessService } from './storefront-client-plugin-access.service';
 import { StorefrontLcpPreloadController } from './storefront-lcp-preload.controller';
 import { StorefrontLcpPreloadService } from './storefront-lcp-preload.service';
 import { StorefrontPaymentCurrencyInterceptor } from './storefront-payment-currency.interceptor';
@@ -319,6 +323,7 @@ import {
         CatalogOwnershipSubscriber,
         CatalogGovernanceService,
         AdministratorAccessService,
+        AdminCapabilitiesService,
         AdministratorPermissionAuditService,
         PermissionPolicyRegistry,
         StoreGovernanceService,
@@ -334,6 +339,7 @@ import {
         StoreDeprovisionService,
         StoreProfileService,
         StorefrontActivationService,
+        StorefrontClientPluginAccessService,
         StoreCommerceSettingsService,
         StoreCurrencySettingsService,
         StorePaymentReportingService,
@@ -405,6 +411,8 @@ import {
         },
     ],
     exports: [
+        AdminCapabilitiesService,
+        StorefrontClientPluginAccessService,
         StorefrontMediaDeliveryService,
         StorefrontPublicCacheService,
         StorefrontMediaManifestService,
@@ -520,6 +528,7 @@ import {
     adminApiExtensions: {
         schema: adminApiExtensions,
         resolvers: [
+            AdminCapabilitiesResolver,
             AdministratorAccessResolver,
             StoreGovernanceResolver,
             StoreNotificationAdminResolver,
@@ -528,6 +537,7 @@ import {
             StoreProvisioningResolver,
             StoreProfileAdminResolver,
             StoreCommerceSettingsResolver,
+            ShippingTemplateAdminResolver,
             StoreCurrencySettingsAdminResolver,
             StorefrontPromotionAdminResolver,
             StorePromotionCampaignAdminResolver,

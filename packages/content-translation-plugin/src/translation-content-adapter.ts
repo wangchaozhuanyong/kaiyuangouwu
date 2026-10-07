@@ -43,6 +43,7 @@ export class TranslationContentAdapter {
         const active = metadata.deleteDateColumn
             ? { [metadata.deleteDateColumn.propertyName]: IsNull() }
             : {};
+        if (metadata.name === 'SystemAnnouncement') return { ...active, ownerChannelId: channelId };
         if (metadata.findColumnWithPropertyName('channelId')) return { ...active, channelId };
         if (metadata.name === 'StorefrontContentItem') return { ...active, block: { channelId } };
         if (metadata.relations.some(relation => relation.propertyName === 'channels'))
@@ -101,12 +102,22 @@ export class TranslationContentAdapter {
         const entity = await repository.findOne({ where: { id: state.entityId }, ...lockOptions });
         if (!entity || entity.deletedAt) return;
         if (
+            state.entityType === 'SystemAnnouncement' &&
+            (entity.ownerChannelId == null
+                ? state.channelId != null
+                : String(entity.ownerChannelId) !== state.channelId)
+        )
+            return;
+        if (
             metadata.findColumnWithPropertyName('channelId') &&
             entity.channelId != null &&
             String(entity.channelId) !== state.channelId
         )
             return;
-        if (metadata.relations.some(relation => relation.propertyName === 'channels')) {
+        if (
+            state.entityType !== 'SystemAnnouncement' &&
+            metadata.relations.some(relation => relation.propertyName === 'channels')
+        ) {
             const scoped = await repository.findOne({
                 where: { id: entity.id },
                 relations: { channels: true },

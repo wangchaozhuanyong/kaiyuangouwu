@@ -31,9 +31,68 @@ function profile(
 }
 
 describe('AdministratorAccessService hierarchy policy', () => {
+    it('projects a platform owner to the active store without changing the persisted account', async () => {
+        const access = service();
+        const owner = { ...profile('owner', 'PLATFORM', 'OWNER'), status: 'ACTIVE' };
+        access.current = vi.fn().mockResolvedValue(owner);
+        const ctx = { channelId: 'store-a', channel: { id: 'store-a', code: 'store-a' } };
+        const effective = await access.currentForChannel(ctx);
+        expect(effective).toMatchObject({
+            id: 'owner',
+            scope: 'STORE',
+            authority: 'ADMIN',
+            channelId: 'store-a',
+        });
+        expect(owner).toMatchObject({ scope: 'PLATFORM', authority: 'OWNER', channelId: null });
+        expect(await access.currentForChannel({ channel: { code: '__default_channel__' } })).toBe(owner);
+    });
+
+    it('rejects a store account using another store or the platform context', async () => {
+        const access = service();
+        access.current = vi
+            .fn()
+            .mockResolvedValue({ ...profile('primary', 'STORE', 'ADMIN', 'store-a'), status: 'ACTIVE' });
+        await expect(
+            access.currentForChannel({ channelId: 'store-b', channel: { code: 'store-b' } }),
+        ).rejects.toThrow();
+        await expect(
+            access.currentForChannel({ channelId: 'default', channel: { code: '__default_channel__' } }),
+        ).rejects.toThrow();
+    });
+
+    it('scopes a platform owner team directory and refuses cross-store or platform account creation in a store', async () => {
+        const access = service();
+        access.current = vi
+            .fn()
+            .mockResolvedValue({ ...profile('owner', 'PLATFORM', 'OWNER'), status: 'ACTIVE' });
+        const find = vi.fn().mockResolvedValue([profile('staff', 'STORE', 'STAFF', 'store-a')]);
+        access.connection = { getRepository: () => ({ find }) };
+        const ctx = { channelId: 'store-a', channel: { id: 'store-a', code: 'store-a' } };
+        await expect(access.manageableAdministrators(ctx)).resolves.toHaveLength(1);
+        expect(find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: {
+                    scope: 'STORE',
+                    channelId: 'store-a',
+                    authority: expect.anything(),
+                },
+            }),
+        );
+        await expect(
+            access.createManagedAdministrator(ctx, {
+                scope: 'STORE',
+                authority: 'STAFF',
+                channelId: 'store-b',
+            }),
+        ).rejects.toThrow();
+        await expect(
+            access.createManagedAdministrator(ctx, { scope: 'PLATFORM', authority: 'STAFF' }),
+        ).rejects.toThrow();
+    });
+
     it('creates the mailbox integration role only for the platform owner and default channel', async () => {
         const access = service();
-        access.current = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
+        access.currentForChannel = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
         access.connection = {
             getRepository: (_ctx: unknown, entity: unknown) => {
                 if (entity === Channel)
@@ -66,14 +125,14 @@ describe('AdministratorAccessService hierarchy policy', () => {
             expect.objectContaining({ action: 'CREATE_MAILBOX_INTEGRATION_ROLE', targetRoleId: 'mail-role' }),
         );
 
-        access.current.mockResolvedValue(profile('admin', 'PLATFORM', 'ADMIN'));
+        access.currentForChannel.mockResolvedValue(profile('admin', 'PLATFORM', 'ADMIN'));
         await expect(access.createMailboxIntegrationRole({} as any)).rejects.toThrow();
         expect(access.roleService.create).toHaveBeenCalledTimes(1);
     });
 
     it('refuses to replace an existing mailbox role', async () => {
         const access = service();
-        access.current = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
+        access.currentForChannel = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
         access.connection = {
             getRepository: (_ctx: unknown, entity: unknown) => ({
                 findOne: vi
@@ -541,7 +600,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
 
     it('automatically assigns the fixed platform administrator role on creation', async () => {
         const access = service();
-        access.current = vi.fn().mockResolvedValue({
+        access.currentForChannel = vi.fn().mockResolvedValue({
             ...profile('owner', 'PLATFORM', 'OWNER'),
             administratorId: 'owner-admin',
         });
@@ -574,7 +633,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
 
     it('requires replacement company roles when demoting a platform administrator', async () => {
         const access = service();
-        access.current = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
+        access.currentForChannel = vi.fn().mockResolvedValue(profile('owner', 'PLATFORM', 'OWNER'));
         access.requireByAdministratorId = vi.fn().mockResolvedValue({
             ...profile('admin', 'PLATFORM', 'ADMIN'),
             administratorId: 'admin',
@@ -593,7 +652,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
             storePrimarySlot: 'store-a',
             status: 'ACTIVE',
         };
-        access.current = vi.fn().mockResolvedValueOnce(owner).mockResolvedValueOnce(storePrimary);
+        access.currentForChannel = vi.fn().mockResolvedValueOnce(owner).mockResolvedValueOnce(storePrimary);
         access.requireByAdministratorId = vi
             .fn()
             .mockResolvedValueOnce(owner)
@@ -619,7 +678,7 @@ describe('AdministratorAccessService hierarchy policy', () => {
             administrator: { user: targetUser },
             status: 'ACTIVE',
         };
-        access.current = vi.fn().mockResolvedValue(profile('primary', 'STORE', 'ADMIN', 'store-a'));
+        access.currentForChannel = vi.fn().mockResolvedValue(profile('primary', 'STORE', 'ADMIN', 'store-a'));
         access.requireByAdministratorId = vi.fn().mockResolvedValue(target);
         access.administratorService = { update: vi.fn() };
         access.sessionService = { deleteSessionsByUser: vi.fn() };

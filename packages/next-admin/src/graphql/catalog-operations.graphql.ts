@@ -160,15 +160,15 @@ const CATALOG_ORDER_PROFIT_EXPENSE_FIELDS = gql`
 `;
 
 export const CATALOG_ORDER_PROFIT_EXPENSE_QUERY = gql`
-    query NextAdminCatalogOrderProfitExpense($orderId: ID!) {
-        catalogOrderProfitExpenseApplicability(orderId: $orderId) {
+    query NextAdminCatalogOrderProfitExpense($orderId: ID!, $targetChannelId: ID) {
+        catalogOrderProfitExpenseApplicability(orderId: $orderId, targetChannelId: $targetChannelId) {
             fulfillmentType
             carrierShippingCostApplicable
         }
-        catalogOrderProfitExpense(orderId: $orderId) {
+        catalogOrderProfitExpense(orderId: $orderId, targetChannelId: $targetChannelId) {
             ...NextAdminCatalogOrderProfitExpenseFields
         }
-        catalogOrderProfitExpenseEvents(orderId: $orderId) {
+        catalogOrderProfitExpenseEvents(orderId: $orderId, targetChannelId: $targetChannelId) {
             id
             createdAt
             eventType

@@ -1,3 +1,7 @@
+export {
+    AdminCapabilitiesService,
+    type AdminImageCapabilityReadiness,
+} from './admin-capabilities.service.js';
 export { AdministratorAccessService } from './administrator-access.service.js';
 export { AdministratorPermissionAuditService } from './administrator-permission-audit.service.js';
 export {
@@ -118,6 +122,7 @@ export { StoreProfileService } from './store-profile.service.js';
 export { StoreProvisioningService, storeAdministratorPermissions } from './store-provisioning.service.js';
 export { isOperationalStorefront } from './storefront-activation.service.js';
 export type { OperationalStorefrontInput } from './storefront-activation.service.js';
+export { StorefrontClientPluginAccessService } from './storefront-client-plugin-access.service.js';
 export { SystemAnnouncementService } from './system-announcement.service.js';
 export type {
     CreateStoreCouponCampaignInput,

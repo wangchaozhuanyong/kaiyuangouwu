@@ -448,16 +448,25 @@ export class StoreDomainService {
     }
 
     private assertSuperAdmin(ctx: RequestContext): void {
-        if (!ctx.userHasPermissions([Permission.SuperAdmin])) {
-            throw new UserInputError('只有超级管理员可以把域名转移到其他店铺');
+        if (
+            ctx.channel.code !== NATIVE_DEFAULT_CHANNEL_CODE ||
+            !ctx.userHasPermissions([Permission.SuperAdmin])
+        ) {
+            throw new UserInputError('只有平台管理中心的超级管理员可以把域名转移到其他店铺');
         }
     }
 
     private assertChannelAccess(ctx: RequestContext, channelId: ID, permissions: Permission[]): void {
-        if (ctx.userHasPermissions([Permission.SuperAdmin])) {
+        if (
+            ctx.channel.code === NATIVE_DEFAULT_CHANNEL_CODE &&
+            ctx.userHasPermissions([Permission.SuperAdmin])
+        ) {
             return;
         }
-        if (String(ctx.channelId) !== String(channelId) || !ctx.userHasPermissions(permissions)) {
+        if (
+            String(ctx.channelId) !== String(channelId) ||
+            !ctx.userHasPermissions([Permission.SuperAdmin, ...permissions])
+        ) {
             throw new UserInputError('无权管理该店铺的域名');
         }
     }

@@ -2,7 +2,6 @@ import { useMutation } from '@apollo/client/react';
 import {
     Activity,
     AlertCircle,
-    Braces,
     CalendarClock,
     CheckCircle2,
     ChevronLeft,
@@ -26,8 +25,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getSystemLabel } from '../../../../common/src/display-localization';
-import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { TechnicalDetails } from '../../components/TechnicalDetails';
 import type { CustomFieldDefinition, CustomFieldValueMap } from '../../custom-fields/custom-field-types';
@@ -59,14 +57,12 @@ import {
     MAILBOX_INTEGRATION_ACCESS_QUERY,
     ROTATE_API_KEY_MUTATION,
     RUN_SCHEDULED_TASK_MUTATION,
-    SET_SETTINGS_STORE_VALUE_MUTATION,
     SYSTEM_OPERATIONS_QUERY,
     UPDATE_API_KEY_MUTATION,
     UPDATE_SCHEDULED_TASK_MUTATION,
     type ApiKeyRecord,
     type MailboxIntegrationAccessResult,
     type ScheduledTaskRecord,
-    type SettingsStoreFieldRecord,
     type SystemJobRecord,
     type SystemOperationsResult,
 } from '../../graphql/management.graphql';
@@ -83,6 +79,7 @@ import { GovernanceRiskPanel } from './GovernanceRiskPanel';
 import { isMailboxIntegrationRole } from './mailbox-integration-role';
 import { SettingsContentSkeleton } from './settings-ui';
 import { getSystemWorkerHealth } from './system-worker-health';
+import { SystemSettingsPanel } from './SystemSettingsPanel';
 import { TelegramNotificationsPanel } from './TelegramNotificationsPanel';
 
 type Tab = 'HEALTH' | 'JOBS' | 'SCHEDULES' | 'SETTINGS' | 'API_KEYS' | 'TELEGRAM' | 'GOVERNANCE';
@@ -123,7 +120,7 @@ export function SystemOpsModule() {
                         : activeTab === 'SCHEDULES'
                           ? ['scheduledTasks']
                           : activeTab === 'SETTINGS'
-                            ? ['settingsStoreFieldDefinitions']
+                            ? ['settingsStoreFieldDefinitions', 'activeChannel']
                             : ['apiKeys', 'activeAdministrator'],
               )
             : systemOperationsDocument,
@@ -164,10 +161,16 @@ export function SystemOpsModule() {
                             <Terminal className="h-5 w-5 text-blue-600" />
                             {standalonePage?.title ?? '系统运维'}
                             <FeatureHelpButton
-                                topic="settings.system-ops"
-                                title="系统运维"
+                                topic={
+                                    activeTab === 'SETTINGS'
+                                        ? 'settings.dynamic-config'
+                                        : 'settings.system-ops'
+                                }
+                                title={activeTab === 'SETTINGS' ? '高级配置' : '系统运维'}
                                 description={
-                                    '查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥'
+                                    activeTab === 'SETTINGS'
+                                        ? '查看中文配置说明和对应设置入口；技术诊断按需展开'
+                                        : '查看服务健康、任务队列、治理审批、风险复核、定时调度、配置仓库和 API 密钥'
                                 }
                             />
                         </h1>
@@ -309,8 +312,9 @@ export function SystemOpsModule() {
                                 />
                             )}
                             {activeTab === 'SETTINGS' && (
-                                <SettingsStorePanel
+                                <SystemSettingsPanel
                                     fields={data.settingsStoreFieldDefinitions}
+                                    channelCode={data.activeChannel?.code}
                                     onChanged={completed}
                                     onError={setActionError}
                                 />
@@ -991,142 +995,6 @@ function SchedulesPanel({
     );
 }
 
-function SettingsStorePanel({
-    fields,
-    onChanged,
-    onError,
-}: {
-    fields: SettingsStoreFieldRecord[];
-    onChanged: (message: string) => Promise<void>;
-    onError: (message: string) => void;
-}) {
-    const [search, setSearch] = useState('');
-    const [scope, setScope] = useState('ALL');
-    const [editor, setEditor] = useState<SettingsStoreFieldRecord | null>(null);
-    const [save, state] = useMutation<{ setSettingsStoreValue: { result: boolean; error: string | null } }>(
-        SET_SETTINGS_STORE_VALUE_MUTATION,
-    );
-    const filtered = fields.filter(
-        field =>
-            (scope === 'ALL' || field.scopeType === scope) &&
-            (!search.trim() || field.key.toLowerCase().includes(search.trim().toLowerCase())),
-    );
-    const update = async (field: SettingsStoreFieldRecord, value: unknown) => {
-        try {
-            const response = await save({ variables: { input: { key: field.key, value } } });
-            const result = response.data?.setSettingsStoreValue;
-            if (!result?.result) throw new Error(result?.error || '保存失败');
-            setEditor(null);
-            await onChanged(`配置 ${field.key} 已更新`);
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    return (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-col gap-3 border-b border-slate-100 p-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                        动态配置仓库
-                        <FeatureHelpButton
-                            topic="settings.dynamic-config"
-                            title="动态配置仓库"
-                            description={'字段、作用域、只读状态和值全部由服务端注册；JSON 会保留原始类型'}
-                        />
-                    </h2>
-                </div>
-                <div className="flex gap-2">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-3.5 w-3.5 text-slate-400" />
-                        <AdminInput
-                            value={search}
-                            onChange={event => setSearch(event.target.value)}
-                            aria-label="搜索系统配置"
-                            placeholder="搜索配置键"
-                            className={`${inputClass} w-60 pl-8`}
-                        />
-                    </div>
-                    <AdminSelect
-                        value={scope}
-                        onChange={event => setScope(event.target.value)}
-                        className={inputClass}
-                    >
-                        <option value="ALL">全部作用域</option>
-                        {['GLOBAL', 'CHANNEL', 'USER', 'USER_AND_CHANNEL', 'CUSTOM'].map(value => (
-                            <option key={value} value={value}>
-                                {scopeLabel(value)}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </div>
-            </div>
-            <div className="divide-y divide-slate-100">
-                {filtered.map(field => (
-                    <div
-                        key={field.key}
-                        className="flex flex-col gap-3 p-4 xl:flex-row xl:items-center xl:justify-between"
-                    >
-                        <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <code className="font-mono text-xs font-bold text-slate-800">
-                                    {field.key}
-                                </code>
-                                <span className="rounded bg-slate-100 px-2 py-0.5 text-[9px] text-slate-600">
-                                    {scopeLabel(field.scopeType)}
-                                </span>
-                                {field.readonly && (
-                                    <span className="rounded bg-amber-50 px-2 py-0.5 text-[9px] font-bold text-amber-700">
-                                        只读
-                                    </span>
-                                )}
-                            </div>
-                            <code
-                                className="mt-2 block max-w-4xl truncate text-[10px] text-slate-500"
-                                title={formatJson(field.currentValue)}
-                            >
-                                {formatJson(field.currentValue)}
-                            </code>
-                        </div>
-                        {!field.readonly &&
-                            (typeof field.currentValue === 'boolean' ? (
-                                <label className="flex shrink-0 items-center gap-2 text-xs font-bold text-slate-600">
-                                    <AdminInput
-                                        type="checkbox"
-                                        checked={field.currentValue}
-                                        onChange={event => void update(field, event.target.checked)}
-                                        disabled={state.loading}
-                                    />
-                                    {field.currentValue ? '已开启' : '已关闭'}
-                                </label>
-                            ) : (
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => setEditor(field)}
-                                    className={secondaryButton}
-                                >
-                                    <Braces className="h-3.5 w-3.5" />
-                                    编辑值
-                                </AdminButton>
-                            ))}
-                    </div>
-                ))}
-                {!filtered.length && (
-                    <div className="p-12 text-center text-xs text-slate-400">当前条件下没有配置项</div>
-                )}
-            </div>
-            {editor && (
-                <SettingsValueEditor
-                    field={editor}
-                    saving={state.loading}
-                    onClose={() => setEditor(null)}
-                    onSave={value => void update(editor, value)}
-                    onError={onError}
-                />
-            )}
-        </section>
-    );
-}
-
 function ApiKeysPanel({
     pageSize,
     onPageSizeChange,
@@ -1725,57 +1593,6 @@ function SecretDialog({ title, value, onClose }: { title: string; value: string;
     );
 }
 
-function SettingsValueEditor({
-    field,
-    saving,
-    onClose,
-    onSave,
-    onError,
-}: {
-    field: SettingsStoreFieldRecord;
-    saving: boolean;
-    onClose: () => void;
-    onSave: (value: unknown) => void;
-    onError: (message: string) => void;
-}) {
-    const complex = typeof field.currentValue === 'object' && field.currentValue !== null;
-    const [draft, setDraft] = useState(
-        field.currentValue == null
-            ? ''
-            : typeof field.currentValue === 'object'
-              ? JSON.stringify(field.currentValue, null, 2)
-              : String(field.currentValue),
-    );
-    const submit = () => {
-        try {
-            if (complex) return onSave(JSON.parse(draft));
-            if (typeof field.currentValue === 'number') {
-                const value = Number(draft);
-                if (!Number.isFinite(value)) throw new Error('请输入有效数字');
-                return onSave(value);
-            }
-            onSave(draft);
-        } catch (error) {
-            onError(errorText(error));
-        }
-    };
-    return (
-        <Modal
-            title={`编辑 ${field.key}`}
-            description={`作用域：${scopeLabel(field.scopeType)}；将按 ${complex ? 'JSON' : typeof field.currentValue} 类型保存`}
-            onClose={onClose}
-        >
-            <AdminTextArea
-                rows={complex ? 16 : 5}
-                value={draft}
-                onChange={event => setDraft(event.target.value)}
-                className={`${inputClass} font-mono leading-5`}
-                spellCheck={false}
-            />
-            <ModalActions onClose={onClose} onSave={submit} saving={saving} saveLabel="保存配置" />
-        </Modal>
-    );
-}
 function JobStateBadge({ state }: { state: string }) {
     const classes = ['COMPLETED'].includes(state)
         ? 'bg-emerald-50 text-emerald-700'
@@ -1799,16 +1616,6 @@ function jobStateLabel(state: string) {
         CANCELLED: '已取消',
     };
     return labels[state] ?? getStatusLabel(state);
-}
-function scopeLabel(scope: string) {
-    const labels: Record<string, string> = {
-        GLOBAL: '全局',
-        CHANNEL: '当前渠道',
-        USER: '当前用户',
-        USER_AND_CHANNEL: '用户与渠道',
-        CUSTOM: '自定义',
-    };
-    return getSystemLabel(scope, labels, 'zh', 'scope');
 }
 function formatDuration(duration: number) {
     if (!duration) return '—';

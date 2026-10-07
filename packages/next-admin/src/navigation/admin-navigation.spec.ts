@@ -66,13 +66,13 @@ describe('standalone administration navigation', () => {
             '/storefront/content/announcements?announcementId=42',
         );
     });
-    it('retains SuperAdmin access for platform announcements', () => {
+    it('allows store content readers and platform administrators to access announcements', () => {
         const permissions = standalonePagePermissions(
             getStandaloneAdminPage('/storefront/content/announcements')!,
         )!;
-        expect(permissions).toEqual(['SuperAdmin']);
+        expect(permissions).toEqual(['ReadStorefrontContent']);
         expect(hasAnyAdminPermission(['SuperAdmin'], permissions)).toBe(true);
-        expect(hasAnyAdminPermission(['ReadStorefrontContent'], permissions)).toBe(false);
+        expect(hasAnyAdminPermission(['ReadStorefrontContent'], permissions)).toBe(true);
         expect(hasAnyAdminPermission([], permissions)).toBe(false);
     });
     it('separates platform review/data from merchant operations using existing capabilities', () => {

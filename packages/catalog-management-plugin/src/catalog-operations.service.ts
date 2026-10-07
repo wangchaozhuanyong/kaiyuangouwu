@@ -7,6 +7,7 @@ import {
     Permission,
     SortOrder,
 } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Collection,
@@ -1435,6 +1436,12 @@ export class CatalogOperationsService {
         ctx: RequestContext,
         allowUnassignedFallback = true,
     ): Promise<Array<{ id: string; name: string }>> {
+        if (allowUnassignedFallback && ctx.channel.code === DEFAULT_CHANNEL_CODE) {
+            const platformLocations = await this.connection
+                .getRepository(ctx, StockLocation)
+                .find({ order: { name: 'ASC' } });
+            return platformLocations.map(location => ({ id: String(location.id), name: location.name }));
+        }
         const locations = await this.connection
             .getRepository(ctx, StockLocation)
             .createQueryBuilder('location')
@@ -1446,11 +1453,7 @@ export class CatalogOperationsService {
         if (locations.length > 0) {
             return locations.map(location => ({ id: String(location.id), name: location.name }));
         }
-        if (!allowUnassignedFallback) return [];
-        const fallbackLocations = await this.connection
-            .getRepository(ctx, StockLocation)
-            .find({ order: { name: 'ASC' } });
-        return fallbackLocations.map(location => ({ id: String(location.id), name: location.name }));
+        return [];
     }
 
     async requireStockLocation(ctx: RequestContext, stockLocationId: ID): Promise<StockLocation> {
@@ -1462,12 +1465,12 @@ export class CatalogOperationsService {
             })
             .where('location.id = :stockLocationId', { stockLocationId })
             .getOne();
-        if (!found) {
+        if (!found && ctx.channel.code === DEFAULT_CHANNEL_CODE) {
             found = await this.connection
                 .getRepository(ctx, StockLocation)
                 .findOne({ where: { id: stockLocationId } });
         }
-        if (!found) throw new UserInputError('所选仓库不存在');
+        if (!found) throw new UserInputError('所选仓库不存在或不属于当前店铺');
         return found;
     }
 }

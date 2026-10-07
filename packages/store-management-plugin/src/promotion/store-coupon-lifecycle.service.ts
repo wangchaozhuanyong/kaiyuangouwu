@@ -1,5 +1,6 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { PaymentInput } from '@vendure/common/lib/generated-shop-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     CouponCodeEvent,
@@ -1470,6 +1471,11 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         if (config && !idsAreEqual(config.channelId, ctx.channelId))
             throw new UserInputError('该优惠券属于其他店铺');
         if (!config) {
+            const owned = await this.promotionService.findOne(ctx, promotion.id, ['channels']);
+            const stores = owned?.channels?.filter(channel => channel.code !== DEFAULT_CHANNEL_CODE) ?? [];
+            if (stores.length !== 1 || !idsAreEqual(stores[0].id, ctx.channelId)) {
+                throw new UserInputError('该优惠券尚未指定唯一经营店铺，请由平台管理中心配置后再领取');
+            }
             config = await this.connection.getRepository(ctx, StoreCouponCampaignConfig).save(
                 new StoreCouponCampaignConfig({
                     channelId: ctx.channelId,

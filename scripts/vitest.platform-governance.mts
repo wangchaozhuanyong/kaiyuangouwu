@@ -3,8 +3,12 @@ import { fileURLToPath } from 'node:url';
 import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
 
-import { nestTestAliases } from '../vitest.shared.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const nestTestAliases = {
+    '@vendure/core': path.join(root, 'packages/core/dist/index.js'),
+    '@vendure/testing': path.join(root, 'packages/testing/src/index.ts'),
+    '@vendure/common': path.join(root, 'packages/common/lib/index.js'),
+};
 const plugins = [
     'catalog-management-plugin',
     'store-management-plugin',
@@ -31,7 +35,10 @@ export default defineConfig({
                 find: new RegExp(`^@vendure/${p}$`),
                 replacement: path.join(root, `packages/${p}/src/index.ts`),
             })),
-            ...Object.entries(nestTestAliases).map(([find, replacement]) => ({ find, replacement })),
+            ...Object.entries(nestTestAliases).map(([name, replacement]) => ({
+                find: new RegExp(`^${name}$`),
+                replacement,
+            })),
         ],
         dedupe: ['react', 'react-dom'],
     },

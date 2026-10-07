@@ -1,3 +1,5 @@
+import { Permission, RequestContext } from '@vendure/core';
+import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SystemAnnouncementService } from './system-announcement.service';
@@ -30,7 +32,7 @@ describe('SystemAnnouncementService', () => {
         const repository = repositoryHarness();
         const service = serviceWith(repository);
 
-        await service.create({ languageCode: 'zh_Hans' } as any, {
+        await service.create(platformContext, {
             titleZh: '  系统维护  ',
             contentZh: '  周日凌晨维护  ',
             titleEn: '',
@@ -105,7 +107,7 @@ describe('SystemAnnouncementService', () => {
     it('rejects unsafe announcement links', async () => {
         const service = serviceWith(repositoryHarness());
         await expect(
-            service.create({ languageCode: 'zh_Hans' } as any, {
+            service.create(platformContext, {
                 titleZh: '测试',
                 contentZh: '测试内容',
                 linkUrl: 'javascript:alert(1)',
@@ -119,7 +121,7 @@ describe('SystemAnnouncementService', () => {
         const service = serviceWith(repository, channelRepository);
 
         await expect(
-            service.create({ languageCode: 'zh_Hans' } as any, {
+            service.create(platformContext, {
                 titleZh: '指定网店公告',
                 contentZh: '只有指定网店可见',
                 targetMode: 'MULTIPLE',
@@ -129,14 +131,14 @@ describe('SystemAnnouncementService', () => {
     });
 
     it('returns the persisted manual-lock state for each English field', async () => {
-        const service = serviceWith(repositoryHarness(), undefined, [
+        const repository = repositoryHarness();
+        repository.findOne.mockResolvedValue(storedAnnouncement('ALL', []));
+        const service = serviceWith(repository, undefined, [
             { fieldPath: 'content', locked: false },
             { fieldPath: 'title', locked: true },
         ]);
 
-        await expect(
-            service.translationLocks({ languageCode: 'zh_Hans' } as any, 'announcement-1'),
-        ).resolves.toEqual({
+        await expect(service.translationLocks(platformContext, 'announcement-1')).resolves.toEqual({
             titleEnLocked: true,
             contentEnLocked: false,
         });
@@ -163,7 +165,7 @@ describe('SystemAnnouncementService', () => {
             { fieldPath: 'content', locked: true },
         ]);
 
-        await service.update({ languageCode: 'zh_Hans' } as any, {
+        await service.update(platformContext, {
             id: 'announcement-1',
             titleZh: '系统维护',
             titleEn: 'Reviewed maintenance',
@@ -218,6 +220,8 @@ function serviceWith(
 function repositoryHarness(activeAnnouncements: any[] = []) {
     const queryBuilder = {
         leftJoin: vi.fn(),
+        innerJoin: vi.fn(),
+        leftJoinAndSelect: vi.fn(),
         where: vi.fn(),
         andWhere: vi.fn(),
         distinct: vi.fn(),
@@ -228,6 +232,8 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
     };
     for (const method of [
         'leftJoin',
+        'innerJoin',
+        'leftJoinAndSelect',
         'where',
         'andWhere',
         'distinct',
@@ -247,3 +253,310 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         remove: vi.fn(),
     };
 }
+
+const contentPermissions = [
+    storefrontContentPermission.Read,
+    storefrontContentPermission.Create,
+    storefrontContentPermission.Update,
+    storefrontContentPermission.Delete,
+];
+function adminContext(channelId: string, permissions = contentPermissions): RequestContext {
+    return {
+        apiType: 'admin',
+        activeUserId: 'admin-1',
+        channelId,
+        channel: { id: channelId, code: channelId },
+        languageCode: 'zh_Hans',
+        userHasPermissions: (required: Permission[]) =>
+            required.some(permission => permissions.includes(permission)),
+    } as any;
+}
+const platformContext = adminContext('__default_channel__', [Permission.SuperAdmin]);
+const storeContext = adminContext('store-a');
+const announcementInput = { titleZh: '店铺通知', contentZh: '本店配送安排已更新' };
+function storedAnnouncement(
+    targetMode: 'ALL' | 'SINGLE' | 'MULTIPLE',
+    channelIds: string[],
+    ownerChannelId: string | null = targetMode === 'SINGLE' && channelIds.length === 1 ? channelIds[0] : null,
+) {
+    return {
+        id: 'announcement-1',
+        ...announcementInput,
+        titleEn: 'Store notice',
+        contentEn: 'Store delivery arrangements have changed',
+        targetMode,
+        ownerChannelId,
+        channels: channelIds.map(id => ({ id, code: id })),
+        enabled: true,
+        priority: 0,
+        linkUrl: null,
+        startsAt: null,
+        endsAt: null,
+    };
+}
+
+describe('SystemAnnouncementService store scope', () => {
+    it('creates a store notice in its own single-store scope when scope is omitted', async () => {
+        const repository = repositoryHarness();
+        await serviceWith(repository).create(storeContext, announcementInput);
+        expect(repository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                targetMode: 'SINGLE',
+                ownerChannelId: 'store-a',
+                channels: [storeContext.channel],
+            }),
+        );
+    });
+
+    it.each([
+        { targetMode: 'ALL', channelIds: [] },
+        { targetMode: 'MULTIPLE', channelIds: ['store-a', 'store-b'] },
+        { targetMode: 'SINGLE', channelIds: ['store-b'] },
+        { targetMode: 'SINGLE', channelIds: [] },
+        { targetMode: 'SINGLE', channelIds: ['store-a', 'store-b'] },
+    ] as const)('rejects a forged publication scope $targetMode $channelIds', async scope => {
+        const repository = repositoryHarness();
+        await expect(
+            serviceWith(repository).create(storeContext, {
+                ...announcementInput,
+                ...scope,
+                channelIds: [...scope.channelIds],
+            }),
+        ).rejects.toThrow('只能发布到当前经营店铺');
+        expect(repository.create).not.toHaveBeenCalled();
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it('updates and deletes its own single-store notice and preserves omitted scope', async () => {
+        const repository = repositoryHarness();
+        repository.findOne.mockResolvedValue(storedAnnouncement('SINGLE', ['store-a']));
+        const service = serviceWith(repository);
+        await service.update(storeContext, { id: 'announcement-1', ...announcementInput });
+        expect(repository.save).toHaveBeenCalledWith(
+            expect.objectContaining({
+                targetMode: 'SINGLE',
+                channels: [storeContext.channel],
+            }),
+        );
+        await expect(service.delete(storeContext, 'announcement-1')).resolves.toEqual({ result: 'DELETED' });
+        expect(repository.remove).toHaveBeenCalledOnce();
+    });
+
+    it('rejects an attempt to widen the scope of an owned notice', async () => {
+        const repository = repositoryHarness();
+        repository.findOne.mockResolvedValue(storedAnnouncement('SINGLE', ['store-a']));
+        await expect(
+            serviceWith(repository).update(storeContext, {
+                id: 'announcement-1',
+                ...announcementInput,
+                targetMode: 'ALL',
+            }),
+        ).rejects.toThrow('只能发布到当前经营店铺');
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['ALL', []],
+        ['MULTIPLE', ['store-a', 'store-b']],
+        ['SINGLE', ['store-b']],
+        ['SINGLE', ['store-a', 'store-b']],
+    ] as const)(
+        'blocks editing and deleting %s notices outside the exclusive store scope',
+        async (mode, ids) => {
+            const repository = repositoryHarness();
+            repository.findOne.mockResolvedValue(storedAnnouncement(mode, [...ids]));
+            const service = serviceWith(repository);
+            // SuperAdmin must obey store scope after switching into a store.
+            const superAdminInStore = adminContext('store-a', [Permission.SuperAdmin]);
+            await expect(
+                service.update(superAdminInStore, {
+                    id: 'announcement-1',
+                    ...announcementInput,
+                }),
+            ).rejects.toThrow('只能管理当前经营店铺自行发布的单店公告');
+            await expect(service.delete(superAdminInStore, 'announcement-1')).rejects.toThrow(
+                '只能管理当前经营店铺自行发布的单店公告',
+            );
+            expect(repository.save).not.toHaveBeenCalled();
+            expect(repository.remove).not.toHaveBeenCalled();
+        },
+    );
+
+    it('lists its own and applicable platform notices, retaining the targets needed for ownership checks', async () => {
+        const own = storedAnnouncement('SINGLE', ['store-a']);
+        const all = storedAnnouncement('ALL', []);
+        const multiple = storedAnnouncement('MULTIPLE', ['store-a', 'store-b']);
+        const platformSingle = storedAnnouncement('SINGLE', ['store-a'], null);
+        const repository = repositoryHarness([
+            own,
+            storedAnnouncement('SINGLE', ['store-b']),
+            all,
+            multiple,
+            platformSingle,
+            storedAnnouncement('SINGLE', ['store-a', 'store-b']),
+        ]);
+        await expect(serviceWith(repository).findAll(storeContext)).resolves.toEqual([
+            own,
+            all,
+            multiple,
+            platformSingle,
+        ]);
+        expect(repository.queryBuilder.leftJoin).toHaveBeenCalledWith(
+            'announcement.channels',
+            'scopeChannel',
+            'scopeChannel.id = :channelId',
+            { channelId: 'store-a' },
+        );
+        expect(repository.queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+            'announcement.channels',
+            'targetChannel',
+        );
+        expect(repository.queryBuilder.where).toHaveBeenCalledWith(
+            '(announcement.ownerChannelId IS NULL OR announcement.ownerChannelId = :channelId)',
+            { channelId: 'store-a' },
+        );
+    });
+
+    it('prevents reading another store notice translation locks by ID', async () => {
+        const repository = repositoryHarness();
+        repository.findOne.mockResolvedValue(storedAnnouncement('SINGLE', ['store-b']));
+        await expect(
+            serviceWith(repository).translationLocks(storeContext, 'announcement-1'),
+        ).rejects.toThrow();
+    });
+
+    it.each([null, undefined])(
+        'treats platform and legacy targeted notices as read-only in the target store (%s)',
+        async owner => {
+            const repository = repositoryHarness();
+            const record = { ...storedAnnouncement('SINGLE', ['store-a']), ownerChannelId: owner };
+            repository.findOne.mockResolvedValue(record);
+            const service = serviceWith(repository);
+            await expect(service.translationLocks(storeContext, record.id)).resolves.toEqual({
+                titleEnLocked: false,
+                contentEnLocked: false,
+            });
+            await expect(
+                service.update(storeContext, { id: record.id, ...announcementInput }),
+            ).rejects.toThrow('平台公告只读');
+            await expect(service.delete(storeContext, record.id)).rejects.toThrow('平台公告只读');
+            expect(repository.save).not.toHaveBeenCalled();
+            expect(repository.remove).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not accept caller-supplied publication ownership', async () => {
+        const repository = repositoryHarness();
+        await serviceWith(repository).create(storeContext, {
+            ...announcementInput,
+            ownerChannelId: 'store-b',
+        } as any);
+        expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ ownerChannelId: 'store-a' }));
+    });
+
+    it('does not allow the platform to retarget a store-owned notice', async () => {
+        const repository = repositoryHarness();
+        repository.findOne.mockResolvedValue(storedAnnouncement('SINGLE', ['store-a']));
+        await expect(
+            serviceWith(repository).update(platformContext, {
+                id: 'announcement-1',
+                ...announcementInput,
+                targetMode: 'ALL',
+            }),
+        ).rejects.toThrow('原发布店铺');
+    });
+
+    it('preserves platform access to the complete admin list', async () => {
+        const announcements = [storedAnnouncement('ALL', []), storedAnnouncement('SINGLE', ['store-a'])];
+        const repository = repositoryHarness(announcements);
+        await expect(serviceWith(repository).findAll(platformContext)).resolves.toEqual(announcements);
+        expect(repository.find).toHaveBeenCalledWith(
+            expect.objectContaining({ relations: { channels: true } }),
+        );
+    });
+
+    it.each([
+        ['ALL', []],
+        ['SINGLE', ['store-a']],
+        ['MULTIPLE', ['store-a', 'store-b']],
+    ] as const)('preserves platform CRUD for %s publication scope', async (mode, ids) => {
+        const repository = repositoryHarness();
+        const channels = [...ids].map(id => ({ id, code: id }));
+        const service = serviceWith(repository, { find: vi.fn().mockResolvedValue(channels) });
+        await service.create(platformContext, {
+            ...announcementInput,
+            targetMode: mode,
+            channelIds: [...ids],
+        });
+        expect(repository.save).toHaveBeenCalledWith(expect.objectContaining({ targetMode: mode, channels }));
+        repository.findOne.mockResolvedValue(storedAnnouncement(mode, [...ids]));
+        await service.update(platformContext, { id: 'announcement-1', ...announcementInput });
+        await expect(service.delete(platformContext, 'announcement-1')).resolves.toEqual({
+            result: 'DELETED',
+        });
+    });
+
+    it('rejects using the platform management channel as an operating target', async () => {
+        const repository = repositoryHarness();
+        const service = serviceWith(repository, {
+            find: vi.fn().mockResolvedValue([platformContext.channel]),
+        });
+        await expect(
+            service.create(platformContext, {
+                ...announcementInput,
+                targetMode: 'SINGLE',
+                channelIds: [platformContext.channelId],
+            }),
+        ).rejects.toThrow('所选经营店铺不存在');
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['read', storefrontContentPermission.Read],
+        ['create', storefrontContentPermission.Create],
+        ['update', storefrontContentPermission.Update],
+        ['delete', storefrontContentPermission.Delete],
+    ] as const)(
+        'requires the corresponding %s permission before touching records',
+        async (action, permission) => {
+            const repository = repositoryHarness();
+            const service = serviceWith(repository);
+            const ctx = adminContext(
+                'store-a',
+                contentPermissions.filter(p => p !== permission),
+            );
+            const operation =
+                action === 'read'
+                    ? service.findAll(ctx)
+                    : action === 'create'
+                      ? service.create(ctx, announcementInput)
+                      : action === 'update'
+                        ? service.update(ctx, { id: 'announcement-1', ...announcementInput })
+                        : service.delete(ctx, 'announcement-1');
+            await expect(operation).rejects.toThrow();
+            expect(repository.findOne).not.toHaveBeenCalled();
+            expect(repository.createQueryBuilder).not.toHaveBeenCalled();
+            expect(repository.save).not.toHaveBeenCalled();
+            expect(repository.remove).not.toHaveBeenCalled();
+        },
+    );
+
+    it('requires SuperAdmin in the platform context despite delegated content permissions', async () => {
+        const service = serviceWith(repositoryHarness());
+        const delegatedPlatform = adminContext('__default_channel__');
+        await expect(service.findAll(delegatedPlatform)).rejects.toThrow();
+        await expect(service.create(delegatedPlatform, announcementInput)).rejects.toThrow();
+        await expect(
+            service.update(delegatedPlatform, { id: 'announcement-1', ...announcementInput }),
+        ).rejects.toThrow();
+        await expect(service.delete(delegatedPlatform, 'announcement-1')).rejects.toThrow();
+    });
+
+    it('rejects unauthenticated or Shop-context admin operations', async () => {
+        const service = serviceWith(repositoryHarness());
+        await expect(
+            service.create({ ...storeContext, activeUserId: undefined } as any, announcementInput),
+        ).rejects.toThrow();
+        await expect(service.findAll({ ...storeContext, apiType: 'shop' } as any)).rejects.toThrow();
+    });
+});

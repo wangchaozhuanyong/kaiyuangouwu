@@ -46,7 +46,7 @@ export class ShippingCalculator {
         shippingMethodId: ID,
     ): Promise<ShippingMethod | undefined> {
         const method = await this.shippingMethodService.findOne(ctx, shippingMethodId);
-        if (method) {
+        if (method && (await this.shippingMethodService.isShippingMethodEnabled(ctx, shippingMethodId))) {
             const eligible = await method.test(ctx, order);
             if (eligible) {
                 return method;

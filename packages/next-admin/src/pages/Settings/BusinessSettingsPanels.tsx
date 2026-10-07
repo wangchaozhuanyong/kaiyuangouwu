@@ -37,7 +37,7 @@ import {
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
 import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
-import { getChannelDisplayName } from '../../utils/channel-display';
+import { getChannelDisplayName, isDefaultChannelCode } from '../../utils/channel-display';
 import { mergeQueryLists } from '../../utils/merge-query-lists';
 import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
@@ -268,6 +268,7 @@ export function BusinessBasicsPanel({
                 </span>
             </div>
             {!storeScoped &&
+                isDefaultChannelCode(query.data.activeChannel.code) &&
                 (!standalonePage || ['global', 'language'].includes(standalonePage.detail ?? '')) && (
                     <GlobalBusinessSettings
                         settings={query.data.globalSettings}

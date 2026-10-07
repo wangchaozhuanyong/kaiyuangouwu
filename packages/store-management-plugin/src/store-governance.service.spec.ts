@@ -4,7 +4,7 @@ import { StoreGovernanceService } from './store-governance.service';
 
 function createService(scope: 'PLATFORM' | 'STORE' = 'PLATFORM') {
     const accessService = {
-        current: vi.fn().mockResolvedValue({ scope, authority: 'STAFF' }),
+        currentForChannel: vi.fn().mockResolvedValue({ scope, authority: 'STAFF' }),
     };
     const service = new StoreGovernanceService(
         {} as any,
@@ -37,7 +37,9 @@ describe('StoreGovernanceService', () => {
         const audit = { record: vi.fn().mockResolvedValue(undefined) };
         const service = new StoreGovernanceService(
             { getRepository: vi.fn().mockReturnValue(repository) } as any,
-            { current: vi.fn().mockResolvedValue({ scope: 'PLATFORM', userId: 'reviewer-1' }) } as any,
+            {
+                currentForChannel: vi.fn().mockResolvedValue({ scope: 'PLATFORM', userId: 'reviewer-1' }),
+            } as any,
             audit as any,
             { signingSecret: 'governance-test-secret' } as any,
         );
@@ -68,7 +70,9 @@ describe('StoreGovernanceService', () => {
         const audit = { record: vi.fn() };
         const service = new StoreGovernanceService(
             { getRepository: vi.fn().mockReturnValue(repository) } as any,
-            { current: vi.fn().mockResolvedValue({ scope: 'PLATFORM', userId: 'reviewer-1' }) } as any,
+            {
+                currentForChannel: vi.fn().mockResolvedValue({ scope: 'PLATFORM', userId: 'reviewer-1' }),
+            } as any,
             audit as any,
             { signingSecret: 'governance-test-secret' } as any,
         );

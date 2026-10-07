@@ -1,5 +1,6 @@
 import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
 import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendure/core';
+import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 
 import { SystemAnnouncementService } from './system-announcement.service';
 import { CreateSystemAnnouncementInput, UpdateSystemAnnouncementInput } from './types';
@@ -33,14 +34,14 @@ export class SystemAnnouncementAdminResolver {
     }
 
     @Query()
-    @Allow(Permission.SuperAdmin)
+    @Allow(Permission.SuperAdmin, storefrontContentPermission.Read)
     systemAnnouncements(@Ctx() ctx: RequestContext) {
         return this.announcementService.findAll(ctx);
     }
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(Permission.SuperAdmin, storefrontContentPermission.Create)
     createSystemAnnouncement(
         @Ctx() ctx: RequestContext,
         @Args('input') input: CreateSystemAnnouncementInput,
@@ -50,7 +51,7 @@ export class SystemAnnouncementAdminResolver {
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(Permission.SuperAdmin, storefrontContentPermission.Update)
     updateSystemAnnouncement(
         @Ctx() ctx: RequestContext,
         @Args('input') input: UpdateSystemAnnouncementInput,
@@ -60,7 +61,7 @@ export class SystemAnnouncementAdminResolver {
 
     @Transaction()
     @Mutation()
-    @Allow(Permission.SuperAdmin)
+    @Allow(Permission.SuperAdmin, storefrontContentPermission.Delete)
     deleteSystemAnnouncement(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
         return this.announcementService.delete(ctx, id);
     }

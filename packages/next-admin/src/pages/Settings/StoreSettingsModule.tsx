@@ -17,7 +17,7 @@ export function StoreSettingsModule() {
     if (!accessQuery.data && !accessQuery.error) {
         return <SettingsContentSkeleton label="正在识别管理账号范围" sections={2} />;
     }
-    if ((accessQuery.error && !accessQuery.data) || !accessQuery.data) {
+    if (accessQuery.error || !accessQuery.data?.activeChannel) {
         return (
             <ErrorState
                 message={toUserFacingError(accessQuery.error, '无法识别当前管理账号范围')}
@@ -25,7 +25,7 @@ export function StoreSettingsModule() {
             />
         );
     }
-    if (accessQuery.data.myAdministratorAccess.scope === 'STORE') return <MyStoreSettingsModule />;
+    if (accessQuery.data.activeChannel.code !== '__default_channel__') return <MyStoreSettingsModule />;
     if (hasAnyPermission(['ManageStoreLifecycle', 'SuperAdmin'])) {
         return (
             <PlatformGovernanceCenter

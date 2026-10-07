@@ -37,6 +37,7 @@ export class ImageGenerationReferences {
             throw new UserInputError('当前店铺的 AI 图片工坊不可用');
         const file = await upload;
         const asset = await this.dependencies.connection.withTransaction(ctx, async txCtx => {
+            await this.dependencies.configService.assertStorefrontEntryEnabled(txCtx);
             if (supportsGenerationLock(this.dependencies.connection.rawConnection.options.type)) {
                 await this.dependencies.connection
                     .getRepository(txCtx, Customer)

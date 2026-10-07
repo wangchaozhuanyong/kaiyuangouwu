@@ -562,6 +562,7 @@ export const adminApiExtensions = gql`
         currencyCode: CurrencyCode
         skip: Int
         take: Int
+        targetChannelId: ID
     }
 
     type CatalogProfitSummary {
@@ -1110,12 +1111,16 @@ export const adminApiExtensions = gql`
             take: Int
         ): CatalogProductSummaryList!
         catalogProductOperations(productIds: [ID!]!): [CatalogProductOperationsSummary!]!
-        catalogOrderProfitExpenseApplicability(orderId: ID!): CatalogOrderProfitExpenseApplicability!
+        catalogOrderProfitExpenseApplicability(
+            orderId: ID!
+            targetChannelId: ID
+        ): CatalogOrderProfitExpenseApplicability!
         validateCatalogOrderProfitExpenses(
             input: ImportCatalogOrderProfitExpensesInput!
+            targetChannelId: ID
         ): CatalogOrderProfitExpenseImportValidation!
-        catalogOrderProfitExpense(orderId: ID!): CatalogOrderProfitExpense
-        catalogOrderProfitExpenseEvents(orderId: ID!): [CatalogOrderProfitExpenseEvent!]!
+        catalogOrderProfitExpense(orderId: ID!, targetChannelId: ID): CatalogOrderProfitExpense
+        catalogOrderProfitExpenseEvents(orderId: ID!, targetChannelId: ID): [CatalogOrderProfitExpenseEvent!]!
         catalogProfitReport(input: CatalogProfitReportInput!): CatalogProfitReport!
         catalogProducts(filter: CatalogProductSummaryFilterInput, options: ProductListOptions): ProductList!
         catalogExportRows(skip: Int, take: Int): CatalogExportPage!

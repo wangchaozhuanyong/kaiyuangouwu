@@ -4,8 +4,11 @@ import {
     isControlledTestPaymentMethod,
 } from '@vendure/common/lib/controlled-test-payment';
 import { CurrencyCode, Permission } from '@vendure/common/lib/generated-types';
+import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import {
+    Channel,
     ForbiddenError,
+    ID,
     Order,
     PaymentMethod,
     RequestContext,
@@ -31,6 +34,7 @@ export interface CatalogProfitReportInput {
     currencyCode?: CurrencyCode | null;
     skip?: number | null;
     take?: number | null;
+    targetChannelId?: ID | null;
 }
 
 export interface SaveCatalogOrderProfitExpenseInput {
@@ -167,13 +171,19 @@ export interface OrderProfitExpenseSource {
 export class CatalogProfitService {
     constructor(private readonly connection: TransactionalConnection) {}
 
-    async orderExpenseApplicability(ctx: RequestContext, orderId: string) {
+    async orderExpenseApplicability(ctx: RequestContext, orderId: string, targetChannelId?: ID | null) {
         this.requireRead(ctx);
+        ctx = await this.readContext(ctx, targetChannelId);
         return orderProfitExpenseApplicability(await this.scopedOrderById(ctx, orderId));
     }
 
-    async validateOrderExpenseImport(ctx: RequestContext, input: ImportCatalogOrderProfitExpensesInput) {
+    async validateOrderExpenseImport(
+        ctx: RequestContext,
+        input: ImportCatalogOrderProfitExpensesInput,
+        targetChannelId?: ID | null,
+    ) {
         this.requireRead(ctx);
+        ctx = await this.readContext(ctx, targetChannelId);
         const rows = normalizeExpenseImport(input);
         const orders = await this.scopedExpenseImportOrders(ctx, input, rows);
         const ordersByCode = new Map(orders.map(order => [normalizeOrderCode(order.code), order]));
@@ -194,8 +204,9 @@ export class CatalogProfitService {
         };
     }
 
-    async orderExpense(ctx: RequestContext, orderId: string) {
+    async orderExpense(ctx: RequestContext, orderId: string, targetChannelId?: ID | null) {
         this.requireRead(ctx);
+        ctx = await this.readContext(ctx, targetChannelId);
         const order = await this.scopedOrderById(ctx, orderId);
         const expense = await this.connection.getRepository(ctx, OrderProfitExpense).findOne({
             where: {
@@ -207,8 +218,9 @@ export class CatalogProfitService {
         return expense ? expenseView(expense) : null;
     }
 
-    async orderExpenseEvents(ctx: RequestContext, orderId: string) {
+    async orderExpenseEvents(ctx: RequestContext, orderId: string, targetChannelId?: ID | null) {
         this.requireRead(ctx);
+        ctx = await this.readContext(ctx, targetChannelId);
         const order = await this.scopedOrderById(ctx, orderId);
         const events = await this.connection.getRepository(ctx, OrderProfitExpenseEvent).find({
             where: { orderId: order.id, channelId: ctx.channelId },
@@ -469,12 +481,13 @@ export class CatalogProfitService {
 
     async report(ctx: RequestContext, input: CatalogProfitReportInput) {
         this.requireRead(ctx);
+        ctx = await this.readContext(ctx, input.targetChannelId);
         const range = normalizeRange(input);
         const currencyCode = input.currencyCode ?? ctx.channel.defaultCurrencyCode;
         const baseQuery = this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
-            .innerJoin('order.channels', 'reportChannel', 'reportChannel.id = :channelId', {
+            .innerJoin('order.salesChannel', 'reportChannel', 'reportChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
             .innerJoin(
@@ -614,6 +627,25 @@ export class CatalogProfitService {
         };
     }
 
+    private async readContext(ctx: RequestContext, targetChannelId?: ID | null): Promise<RequestContext> {
+        if (ctx.channel?.code !== DEFAULT_CHANNEL_CODE) {
+            if (targetChannelId != null && String(targetChannelId) !== String(ctx.channelId)) {
+                throw new UserInputError('经营店铺只能查看本店利润和订单费用');
+            }
+            return ctx;
+        }
+        if (targetChannelId == null || !String(targetChannelId).trim()) {
+            throw new UserInputError('请先选择要监督的经营店铺');
+        }
+        const channel = await this.connection
+            .getRepository(ctx, Channel)
+            .findOne({ where: { id: targetChannelId } });
+        if (!channel || channel.code === DEFAULT_CHANNEL_CODE) {
+            throw new UserInputError('请选择有效的经营店铺，平台默认频道不能作为利润目标');
+        }
+        return ctx.copy({ channel, currencyCode: channel.defaultCurrencyCode });
+    }
+
     private requireRead(ctx: RequestContext): void {
         if (
             !ctx.userHasPermissions([Permission.ReadOrder]) ||
@@ -640,7 +672,7 @@ export class CatalogProfitService {
         return this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
-            .innerJoin('order.channels', 'expenseChannel', 'expenseChannel.id = :channelId', {
+            .innerJoin('order.salesChannel', 'expenseChannel', 'expenseChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
             .leftJoinAndSelect('order.lines', 'expenseLine')
@@ -658,7 +690,7 @@ export class CatalogProfitService {
         const order = await this.connection
             .getRepository(ctx, Order)
             .createQueryBuilder('order')
-            .innerJoin('order.channels', 'expenseChannel', 'expenseChannel.id = :channelId', {
+            .innerJoin('order.salesChannel', 'expenseChannel', 'expenseChannel.id = :channelId', {
                 channelId: ctx.channelId,
             })
             .leftJoinAndSelect('order.lines', 'expenseLine')
