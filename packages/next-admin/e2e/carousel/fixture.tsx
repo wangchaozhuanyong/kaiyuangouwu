@@ -32,9 +32,14 @@ import { StorefrontModule } from '../../src/pages/Storefront/StorefrontModule';
 import { newContentBlock, newContentItem } from '../../src/pages/Storefront/storefront-content-utils';
 import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 import { contentPublicationStatus } from '../../src/pages/Storefront/storefront-publication';
+import { EditorialHomeClient } from './editorial-home-client';
+import { editorialHomeBlocks } from './editorial-home-fixture';
 
 // Isolated browser fixture. No HTTP link, account, or store data is used.
 const params = new URLSearchParams(location.search);
+const blockStorageKey = params.has('editorialHome')
+    ? 'carousel-fixture-editorial-home-blocks'
+    : 'carousel-fixture-blocks';
 const asset = {
     __typename: 'Asset',
     id: 'fixture-asset',
@@ -75,6 +80,16 @@ let blocks = params.has('empty')
           imageAsset: type === 'HERO' ? asset : null,
           imageUrl: type === 'HERO' ? asset.preview : null,
       }));
+if (params.has('editorialHome')) {
+    const artworkBase = params.get('artworkBase');
+    if (!artworkBase || !/^http:\/\/127\.0\.0\.1:\d+(?:\/@fs\/[^?#]+\/assets)?$/u.test(artworkBase)) {
+        throw new Error('轮播设计夹具需要明确的本地素材地址');
+    }
+    blocks = editorialHomeBlocks(artworkBase).map(block => ({
+        ...block,
+        __typename: 'StorefrontContentBlock',
+    })) as typeof blocks;
+}
 if (params.has('auth')) {
     blocks = fixtureData('classic', false)
         .storefrontContent.filter(block => block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER')
@@ -320,8 +335,8 @@ if (params.has('notice-period')) {
         notice.settings = noticeSettings;
     }
 }
-if (params.has('persist') && sessionStorage.getItem('carousel-fixture-blocks')) {
-    blocks = JSON.parse(sessionStorage.getItem('carousel-fixture-blocks')!);
+if (params.has('persist') && sessionStorage.getItem(blockStorageKey)) {
+    blocks = JSON.parse(sessionStorage.getItem(blockStorageKey)!);
 }
 let interval = 6;
 let announcements = params.has('persist')
@@ -453,7 +468,7 @@ const channel = params.has('platform-channel')
       }
     : storeChannel;
 // Public Shop responses for isolated real-client previews. No real store is contacted.
-if (params.has('parity') || params.has('notice-period')) {
+if (params.has('parity') || params.has('notice-period') || params.has('editorialHome')) {
     asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';
     const periodAnnouncements = [35, 49, 65].map((daysAgo, index) => {
@@ -729,7 +744,7 @@ const client = new ApolloClient({
                                 ? blocks.map(block => (block.id === next.id ? next : block))
                                 : [...blocks, next];
                             if (params.has('persist')) {
-                                sessionStorage.setItem('carousel-fixture-blocks', JSON.stringify(blocks));
+                                sessionStorage.setItem(blockStorageKey, JSON.stringify(blocks));
                             }
                             data = {
                                 [previous ? 'updateStorefrontContentBlock' : 'createStorefrontContentBlock']:
@@ -890,7 +905,9 @@ export function ServicesClientFixture() {
 }
 
 createRoot(document.getElementById('root')!).render(
-    params.has('services-client') ? (
+    params.has('editorialHomeClient') ? (
+        <EditorialHomeClient blocks={blocks} />
+    ) : params.has('services-client') ? (
         <ServicesClientFixture />
     ) : (
         <React.Fragment>

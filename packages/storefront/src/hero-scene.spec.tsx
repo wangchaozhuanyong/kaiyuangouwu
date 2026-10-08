@@ -82,6 +82,7 @@ describe('shared hero content layout', () => {
             });
         try {
             await render(true, 2200, 715);
+            expect(host.firstElementChild?.getAttribute('data-hero-artwork-layout')).toBe('overlay');
             const region = host.querySelector<HTMLElement>('.hero-rich-copy-region');
             if (!region) throw new Error('Missing copy scroll region');
             for (const text of [content.title, content.subtitle, content.body, '权益', '统计说明保留']) {
@@ -130,6 +131,83 @@ describe('shared hero content layout', () => {
                 root.unmount();
                 await Promise.resolve();
             });
+            host.remove();
+        }
+    });
+
+    it('opts into editorial artwork without changing localized copy, image bindings or either action', () => {
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe = vi.fn();
+                disconnect = vi.fn();
+            },
+        );
+        const onImageOpen = vi.fn();
+        const onOpen = vi.fn();
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const content: HeroSceneData = {
+            imageUrl: '/assets/text-free-model.webp',
+            title: '完整保留的长标题'.repeat(12),
+            subtitle: '后台独立副标题',
+            body: '介绍仍保留完整原文用于语言切换。'.repeat(12),
+            ctaLabel: '开始使用',
+            targetType: 'URL',
+            settings: { heroArtworkLayout: 'editorial' },
+            items: [],
+        };
+        const render = () =>
+            act(() =>
+                root.render(
+                    <HeroScene
+                        content={{ ...content }}
+                        image={<img src={content.imageUrl ?? ''} alt="无文字底图" />}
+                        imageLabel="查看配置的活动"
+                        mediaOverlay={<button type="button">下一张</button>}
+                        onImageOpen={onImageOpen}
+                        onOpen={onOpen}
+                    />,
+                ),
+            );
+        try {
+            render();
+            expect(host.firstElementChild?.getAttribute('data-hero-artwork-layout')).toBe('editorial');
+            expect(host.querySelector('.hero-rich-title')?.textContent).toBe(content.title);
+            expect(host.querySelector('.hero-rich-desc')?.textContent).toBe(content.body);
+            const image = host.querySelector('.hero-rich-image-link img');
+            expect(image?.getAttribute('src')).toBe(content.imageUrl);
+            expect(host.querySelector('.hero-rich-media')?.textContent).toContain('下一张');
+            act(() => {
+                (host.querySelector('.hero-rich-image-link') as HTMLButtonElement).click();
+                (host.querySelector('.hero-rich-cta-btn') as HTMLButtonElement).click();
+            });
+            expect(onImageOpen).toHaveBeenCalledOnce();
+            expect(onOpen).toHaveBeenCalledOnce();
+
+            content.title = 'The complete localized title '.repeat(12);
+            content.body = 'The original service description stays available. '.repeat(12).trim();
+            content.ctaLabel = 'Get started';
+            render();
+            expect(host.querySelector('.hero-rich-title')?.textContent).toBe(content.title.trim());
+            expect(host.querySelector('.hero-rich-desc')?.textContent).toBe(content.body);
+            expect(host.querySelector('.hero-rich-cta-label')?.textContent).toBe('Get started');
+            expect(host.querySelector('.hero-rich-image-link img')).toBe(image);
+
+            for (const settings of [
+                null,
+                { heroArtworkLayout: 'overlay' },
+                { heroArtworkLayout: 'unknown' },
+            ]) {
+                content.settings = settings;
+                render();
+                expect(host.firstElementChild?.getAttribute('data-hero-artwork-layout')).toBe('overlay');
+                expect(host.querySelector('.hero-rich-image-link img')).toBe(image);
+                expect(host.querySelector('.hero-rich-desc')?.textContent).toBe(content.body);
+            }
+        } finally {
+            act(() => root.unmount());
             host.remove();
         }
     });

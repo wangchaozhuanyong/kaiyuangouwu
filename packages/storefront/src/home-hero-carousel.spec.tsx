@@ -386,6 +386,70 @@ describe('HomePage carousel pointer interactions', () => {
         expect(activeSlide().querySelector('.hero-rich-pill')).toBeNull();
     });
 
+    it.each([
+        { width: 390, language: 'zh' as const, title: '手机标题', body: '手机简短说明', action: '立即查看' },
+        {
+            width: 390,
+            language: 'en' as const,
+            title: 'Phone title',
+            body: 'Short phone copy',
+            action: 'View',
+        },
+        {
+            width: 1440,
+            language: 'zh' as const,
+            title: 'Desktop title',
+            body: 'Original desktop description',
+            action: 'Desktop action',
+        },
+        {
+            width: 1440,
+            language: 'en' as const,
+            title: 'Desktop title',
+            body: 'Original desktop description',
+            action: 'Desktop action',
+        },
+    ])('keeps editorial artwork on the existing $language media contract at $width px', async copy => {
+        viewportWidth = copy.width;
+        await render(
+            copy.width >= 1024,
+            [{ ...viewportHero, settings: { ...viewportHero.settings, heroArtworkLayout: 'editorial' } }],
+            copy.language,
+        );
+        expect(
+            requiredElement(activeSlide(), '.hero-scene-wrapper').getAttribute('data-hero-artwork-layout'),
+        ).toBe('editorial');
+        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe(copy.title);
+        expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(copy.body);
+        expect(activeButton('.hero-rich-cta-btn').textContent).toBe(copy.action);
+        expect(
+            requiredElement(
+                activeSlide(),
+                '.hero-rich-image-link img:not([aria-hidden="true"])',
+            ).getAttribute('src'),
+        ).toContain(copy.width <= 767 ? 'phone-hero.jpg' : 'desktop-hero.jpg');
+    });
+
+    it('allows editorial and original artwork to share manual navigation without changing their own targets', async () => {
+        viewportWidth = 1440;
+        await render(true, [{ ...heroes[0], settings: { heroArtworkLayout: 'editorial' } }, heroes[1]]);
+        expect(
+            requiredElement(activeSlide(), '.hero-scene-wrapper').getAttribute('data-hero-artwork-layout'),
+        ).toBe('editorial');
+        await interact(() => activeButton('.hero-rich-image-link').click());
+        expect(target).toHaveBeenLastCalledWith('URL', '/first');
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await advance();
+        expect(
+            requiredElement(activeSlide(), '.hero-scene-wrapper').getAttribute('data-hero-artwork-layout'),
+        ).toBe('overlay');
+        expect(requiredElement(activeSlide(), '.hero-rich-image-link img').getAttribute('src')).toContain(
+            'second.jpg',
+        );
+        await interact(() => activeButton('.hero-rich-cta-btn').click());
+        expect(target).toHaveBeenLastCalledWith('URL', '/second');
+    });
+
     it.each([false, true])(
         'tracks horizontal dragging and coordinates next-slide movement, desktop=%s',
         async desktop => {
