@@ -32,6 +32,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
+import { orderSummaryFields, productSummaryFields } from '../../storefront/src/api/fragments';
 import { StorefrontContentPlugin } from '../src/storefront-content.plugin';
 import { storefrontVisualPresets } from '../src/visual-presets';
 
@@ -138,6 +139,82 @@ const testOutput =
     process.env.STOREFRONT_TEST_OUTPUT ??
     fileURLToPath(new URL('../../storefront/artifacts/content-sync-audit/integration/', import.meta.url));
 
+// The content-only fixture does not install catalog, customer avatar, review, commerce or flash-sale plugins.
+// Match the current ancillary queries exactly; managed content, branding and skin always use SQL.js.
+const previewAuxiliaryQueries = {
+    StorefrontCatalog: `query StorefrontCatalog($input: StorefrontCatalogInput!) {
+        storefrontCatalog(input: $input) { totalItems items { ${productSummaryFields} } }
+    }`,
+    StorefrontCustomer: `query StorefrontCustomer {
+        activeCustomer {
+            id firstName lastName emailAddress phoneNumber
+            addresses {
+                id fullName phoneNumber streetLine1 streetLine2 city province postalCode
+                defaultShippingAddress defaultBillingAddress country { code name }
+            }
+            orders(options: { take: 5, sort: { orderPlacedAt: DESC } }) {
+                totalItems items { ${orderSummaryFields} }
+            }
+        }
+        myCustomerAvatar { id preview }
+    }`,
+    StorefrontReviewSettings: `query StorefrontReviewSettings { storefrontReviewSettings { enabled } }`,
+    ActiveStoreCommerceMode: `query ActiveStoreCommerceMode { activeStoreCommerceMode }`,
+    StorefrontFlashSales: `query StorefrontFlashSales {
+        activeStorefrontFlashSales {
+            id startsAt endsAt
+            items { productId productVariantId productName variantName originalPrice salePrice currencyCode imageUrl }
+        }
+    }`,
+    NextAdminStorefrontPreviewUrl: `query NextAdminStorefrontPreviewUrl {
+        activeChannel { id } storeProfiles { storefrontUrl channel { id } }
+    }`,
+};
+
+function previewAuxiliaryQueryData(
+    query: string,
+    store?: { id: string },
+): Record<string, unknown> | undefined {
+    const canonical = (source: string) =>
+        print(
+            visit(parse(source), {
+                Field: node => (node.name.value === '__typename' && !node.alias ? null : undefined),
+            }),
+        );
+    let normalized: string;
+    try {
+        normalized = canonical(query);
+    } catch {
+        return undefined;
+    }
+    const operation = Object.entries(previewAuxiliaryQueries).find(
+        ([, expected]) => canonical(expected) === normalized,
+    )?.[0];
+    if (operation === 'NextAdminStorefrontPreviewUrl') {
+        return store
+            ? {
+                  activeChannel: { id: store.id },
+                  storeProfiles: [{ storefrontUrl: 'http://127.0.0.1:5300', channel: { id: store.id } }],
+              }
+            : undefined;
+    }
+    if (store) return undefined;
+    switch (operation) {
+        case 'StorefrontCatalog':
+            return { storefrontCatalog: { totalItems: 0, items: [] } };
+        case 'StorefrontCustomer':
+            return { activeCustomer: null, myCustomerAvatar: null };
+        case 'StorefrontReviewSettings':
+            return { storefrontReviewSettings: { enabled: false } };
+        case 'ActiveStoreCommerceMode':
+            return { activeStoreCommerceMode: 'HYBRID' };
+        case 'StorefrontFlashSales':
+            return { activeStorefrontFlashSales: [] };
+        default:
+            return undefined;
+    }
+}
+
 async function prepareClientPreview(context: BrowserContext) {
     // This content-only SQL.js fixture has no currency, fulfillment or announcement
     // plugins. Keep branding, skin, channel and managed content on the real Shop API.
@@ -146,6 +223,12 @@ async function prepareClientPreview(context: BrowserContext) {
     // This is fixture wiring, not public domain acceptance or a production bypass.
     await context.route('http://127.0.0.1:5299/admin-api**', async route => {
         const body = route.request().postDataJSON() as { query: string; variables?: { channelId?: string } };
+        const currentStore = stores.find(value => value.token === route.request().headers()['vendure-token']);
+        const auxiliary = currentStore ? previewAuxiliaryQueryData(body.query, currentStore) : undefined;
+        if (auxiliary) {
+            await route.fulfill({ json: { data: auxiliary } });
+            return;
+        }
         if (!/query NextAdminStorefrontPreviewDomains\b/.test(body.query)) {
             await route.continue();
             return;
@@ -182,6 +265,11 @@ async function prepareClientPreview(context: BrowserContext) {
 
         const endpoint = 'http://127.0.0.1:5299/shop-api' + new URL(route.request().url()).search;
         const body = route.request().postDataJSON() as { query: string };
+        const auxiliary = previewAuxiliaryQueryData(body.query);
+        if (auxiliary) {
+            await route.fulfill({ headers, json: { data: auxiliary } });
+            return;
+        }
         if (/query StorefrontProducts\b/.test(body.query)) {
             await route.fulfill({ headers, json: { data: { products: { items: [] } } } });
             return;

@@ -3,6 +3,7 @@ import { ApolloProvider, useQuery } from '@apollo/client/react';
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
+import { setInitialActiveChannel } from '../../src/apollo';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { STOREFRONT_CONTENT_QUERY, type StorefrontContentResult } from '../../src/graphql/storefront.graphql';
 import { AdminPermissionsContext } from '../../src/hooks/use-admin-permissions';
@@ -44,7 +45,9 @@ export function AuthPreviewFixture() {
 }
 export function Fixture() {
     const stores = new URLSearchParams(location.search).get('stores')?.split(',') ?? [];
-    const [channel, setChannel] = useState(localStorage.getItem('vendure-active-channel-token') ?? stores[0]);
+    const [channel, setChannel] = useState(() =>
+        selectFixtureChannel(localStorage.getItem('vendure-active-channel-token') ?? stores[0]),
+    );
     return (
         <ApolloProvider client={client}>
             <AdminPermissionsContext.Provider
@@ -61,7 +64,7 @@ export function Fixture() {
                             value={channel}
                             onChange={event => {
                                 setChannel(event.target.value);
-                                localStorage.setItem('vendure-active-channel-token', event.target.value);
+                                selectFixtureChannel(event.target.value);
                                 void client.resetStore();
                             }}
                         >
@@ -95,6 +98,12 @@ export function Fixture() {
             </AdminPermissionsContext.Provider>
         </ApolloProvider>
     );
+}
+
+function selectFixtureChannel(channel: string) {
+    localStorage.setItem('vendure-active-channel-token', channel);
+    setInitialActiveChannel(channel);
+    return channel;
 }
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing local fixture root');

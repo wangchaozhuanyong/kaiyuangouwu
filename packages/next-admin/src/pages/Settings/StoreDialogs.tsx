@@ -42,11 +42,15 @@ import {
     secondaryButton,
 } from './settings-ui';
 import { saveStoreProfileWithBrandAssets, storeProfileBrandAssets } from './store-brand-assets';
+import type { StoreSellerOptionsState } from './use-store-seller-options';
 
 export function StoreEditor({
     profile,
     sellers = [],
     sellerOptionsReady = true,
+    sellerOptionsState,
+    sellerOptionsError,
+    onRetrySellers,
     onClose,
     onCompleted,
     onError,
@@ -54,12 +58,17 @@ export function StoreEditor({
     profile: StoreProfileRecord;
     sellers?: Array<{ id: string; name: string }>;
     sellerOptionsReady?: boolean;
+    sellerOptionsState?: StoreSellerOptionsState;
+    sellerOptionsError?: string;
+    onRetrySellers?: () => void;
     onClose: () => void;
     onCompleted: (message: string) => Promise<void>;
     onError: (message: string) => void;
 }) {
     const requestConfirmation = useConfirmDialog();
     const statusHelpId = useId();
+    const sellerState = sellerOptionsState ?? (sellerOptionsReady ? 'ready' : 'loading');
+    const sellersReady = sellerState === 'ready';
     const pendingChecks = profile.activationReadiness.checks.filter(check => !check.ready);
     const [sellerId, setSellerId] = useState(profile.channel.seller?.id ?? '');
     const [originalEnglish] = useState(() => ({
@@ -105,8 +114,8 @@ export function StoreEditor({
         const statusChanged = status !== profile.status;
         const sellerChanged = sellerId !== (profile.channel.seller?.id ?? '');
         const selectedSeller = sellers.find(seller => seller.id === sellerId);
-        if (sellerChanged && (!sellerOptionsReady || !selectedSeller))
-            return reportError('请选择有效的所属商家主体；列表不完整时请刷新后重试');
+        if (sellerChanged && (!sellersReady || !selectedSeller))
+            return reportError('请选择有效的所属商家主体；请先重试读取商家列表');
         if (!nameZh.trim()) return reportError('请填写中文店铺名称');
         if ([supportEmail, privacyEmail].some(value => value.trim() && !isValidEmail(value))) {
             return reportError('请填写有效的客服邮箱和隐私邮箱');
@@ -194,7 +203,7 @@ export function StoreEditor({
                         aria-describedby="store-seller-help"
                         value={sellerId}
                         onChange={event => setSellerId(event.target.value)}
-                        disabled={saving || !sellerOptionsReady}
+                        disabled={saving || !sellersReady || sellers.length === 0}
                         className={inputClass}
                     >
                         <option value="" disabled>
@@ -216,9 +225,36 @@ export function StoreEditor({
                 <p id="store-seller-help" className="mt-2 text-[10px] leading-4 text-slate-500">
                     决定本店归属哪个商家，商家主体列表的占用情况以此为准。选择后点击下方保存生效。
                 </p>
-                {!sellerOptionsReady && (
+                {sellerState === 'loading' && (
+                    <p role="status" className="mt-2 text-xs text-slate-500">
+                        正在读取商家列表…
+                    </p>
+                )}
+                {sellerState === 'forbidden' && (
                     <p role="alert" className="mt-2 text-xs text-amber-700">
-                        商家列表尚未加载完整，请刷新后再改绑。
+                        当前账号没有读取商家列表的权限，暂不能更改店铺归属。
+                    </p>
+                )}
+                {sellerState === 'error' && (
+                    <div className="mt-2 space-y-2">
+                        <p role="alert" className="text-xs text-amber-700">
+                            商家列表读取失败，请重试。{sellerOptionsError}
+                        </p>
+                        {onRetrySellers && (
+                            <AdminButton
+                                type="button"
+                                onClick={onRetrySellers}
+                                disabled={saving}
+                                className={secondaryButton}
+                            >
+                                重试读取商家列表
+                            </AdminButton>
+                        )}
+                    </div>
+                )}
+                {sellersReady && sellers.length === 0 && (
+                    <p role="status" className="mt-2 text-xs text-slate-500">
+                        暂无可选商家主体，当前店铺归属保持不变。
                     </p>
                 )}
             </div>

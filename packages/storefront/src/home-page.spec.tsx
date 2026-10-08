@@ -341,7 +341,8 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('只显示后台配置的内容');
         expect(markup).toMatch(/class="[^"]*\bhero-rich-backdrop\b[^"]*"/);
         const copyAttributes = markup.match(/<div class="hero-rich-copy-region"([^>]*)>/)?.[1] ?? '';
-        expect(copyAttributes.includes('tabindex="0"')).toBe(!desktop);
+        expect(copyAttributes).not.toContain('tabindex');
+        expect(copyAttributes).not.toContain('role="region"');
     });
 
     it('pairs the current store icon with a separate store name in the main header', () => {
@@ -448,11 +449,15 @@ describe('HomePage hero carousel', () => {
     });
 
     it('uses the on-image hero scene for both phone and desktop viewports', () => {
+        const actionableHero = { ...heroBlock, targetType: 'PAGE' as const, targetValue: 'category' };
         for (const desktop of [false, true]) {
-            const markup = renderHome({ contentBlocks: [heroBlock] }, desktop);
+            const markup = renderHome({ contentBlocks: [actionableHero] }, desktop);
             expect(markup).toContain('class="hero hero-image-overlay');
             expect(markup).toContain('class="hero-rich-copy-surface"');
             expect(markup).toContain(heroBlock.title);
+            expect(markup).toContain(heroBlock.body);
+            expect(markup).toContain(heroBlock.ctaLabel);
+            expect(markup).toContain('/assets/hero.jpg');
         }
     });
 
@@ -512,7 +517,7 @@ describe('HomePage localized trust bar layout', () => {
         [true, 'heroOverlay'],
         [true, 'belowHero'],
     ] as const)(
-        'keeps trust information inside the hero (desktop=%s, legacy placement=%s)',
+        'keeps one bottom overlay trust strip outside the swipe region (desktop=%s, legacy placement=%s)',
         (desktop, placement) => {
             const markup = renderHome(
                 {
@@ -520,9 +525,12 @@ describe('HomePage localized trust bar layout', () => {
                 },
                 desktop,
             );
-            expect(markup).toMatch(
-                /<section class="hero[\s\S]*?hero-service-overlay[\s\S]*?home-trust-label[\s\S]*?<\/section>/,
-            );
+            const heroMarkup = markup.match(/<section class="hero\b[\s\S]*?<\/section>/)?.[0];
+            expect(heroMarkup).toBeDefined();
+            // The sibling is positioned over the image while keeping its gestures outside the swipe region.
+            expect(heroMarkup).not.toContain('home-trust-bar');
+            expect(markup).toMatch(/<\/section><div class="home-hero-trust">[\s\S]*?home-trust-label/);
+            expect(markup).not.toContain('hero-service-overlay');
             expect(markup.match(/class="home-trust-bar"/g)).toHaveLength(1);
         },
     );
@@ -533,24 +541,53 @@ describe('HomePage localized trust bar layout', () => {
             desktop,
         );
         expect(markup).not.toContain('hero-service-overlay');
+        expect(markup).not.toContain('home-hero-trust');
         expect(markup.match(/class="home-trust-bar"/g)).toHaveLength(1);
     });
 
-    it('shows saved service descriptions on desktop while preserving compact mobile labels', () => {
-        const block = {
-            ...trustBarBlock,
-            items: trustBarBlock.items.map((item, index) => ({
-                ...item,
-                description: index === 0 ? '发货后可查看物流进度' : '',
-            })),
-        };
-        const desktopMarkup = renderHome({ contentBlocks: [block] }, true);
-        const mobileMarkup = renderHome({ contentBlocks: [block] });
+    it.each([
+        { desktop: false, language: 'zh' as const },
+        { desktop: true, language: 'zh' as const },
+        { desktop: false, language: 'en' as const },
+        { desktop: true, language: 'en' as const },
+    ])(
+        'keeps complete saved labels and descriptions in the single overlay strip ($desktop, $language)',
+        ({ desktop, language }) => {
+            const label = language === 'zh' ? '数字商品订单进度可查' : 'Review your digital product orders';
+            const description =
+                language === 'zh'
+                    ? '请在订单详情中查看当前进度与商品说明。'
+                    : 'Review the current progress and product details in your order.';
+            const block = {
+                ...trustBarBlock,
+                items: [{ ...trustBarBlock.items[0], label, description }],
+            };
+            const markup = renderHome({ contentBlocks: [heroBlock, block], language }, desktop);
 
-        expect(desktopMarkup).toContain('发货后可查看物流进度');
-        expect(desktopMarkup).not.toContain('查看规格、价格与库存');
-        expect(mobileMarkup).toContain('物流');
-        expect(mobileMarkup).not.toContain('发货后可查看物流进度');
+            expect(markup).toContain(`class="home-trust-label">${label}</span>`);
+            expect(markup).toContain(`class="home-trust-description">${description}</small>`);
+            expect(markup).toMatch(/<\/section><div class="home-hero-trust">[\s\S]*?home-trust-copy/);
+            expect(markup).not.toContain('查看规格、价格与库存');
+        },
+    );
+
+    it.each([false, true])('preserves description-only service information (desktop=%s)', desktop => {
+        const markup = renderHome(
+            {
+                contentBlocks: [
+                    {
+                        ...trustBarBlock,
+                        items: [
+                            { ...trustBarBlock.items[0], label: '', description: '后台填写的完整服务说明' },
+                        ],
+                    },
+                ],
+            },
+            desktop,
+        );
+
+        expect(markup.match(/class="home-trust-item"/g)).toHaveLength(1);
+        expect(markup).toContain('class="home-trust-description">后台填写的完整服务说明');
     });
 
     it('keeps every saved trust item beyond the old four-item limit', () => {
@@ -604,7 +641,7 @@ describe('HomePage localized trust bar layout', () => {
         );
     });
 
-    it('uses a wrapping layout for long merchant-managed labels in any language', () => {
+    it('keeps long merchant-managed labels in a complete scrollable single row', () => {
         const managedTrustBlock: StorefrontContentBlock = {
             ...trustBarBlock,
             items: [
@@ -620,15 +657,19 @@ describe('HomePage localized trust bar layout', () => {
                 },
             ],
         };
-        const markup = renderHome({ contentBlocks: [managedTrustBlock] });
+        const markup = renderHome({ contentBlocks: [heroBlock, managedTrustBlock] });
         const stylesheet = readStorefrontStylesheet();
 
-        expect(markup).toContain('class="home-trust-bar has-long-copy"');
+        expect(markup).toContain('数字商品订单交付进度可查');
         expect(stylesheet).toMatch(
-            /\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:\s*repeat\(2,/,
+            /\.home-trust-bar\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/,
         );
+        expect(stylesheet).toMatch(/\.home-trust-item\s*\{[^}]*flex:\s*0 0 auto;[^}]*white-space:\s*nowrap;/);
         expect(stylesheet).toMatch(
-            /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
+            /\.home-hero-trust \.home-trust-copy :is\(\.home-trust-label, \.home-trust-description\)\s*\{[^}]*white-space:\s*nowrap;/,
+        );
+        expect(stylesheet).not.toMatch(
+            /\.home-hero-trust \.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:/,
         );
     });
 
@@ -1383,50 +1424,47 @@ describe('HomePage desktop intro layout', () => {
         );
 
         expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
-        expect(markup).toContain('class="hero-service-overlay"');
+        expect(markup).toContain('class="home-hero-trust"');
         expect(markup).toContain('class="quick-grid quick-grid-4');
         for (const label of ['卧室', '餐厅', '客厅', '书房']) expect(markup).toContain(`<b>${label}</b>`);
     });
 
-    it.each([4, 5])(
-        'groups %i desktop shortcuts beside the hero across the overlaid service floor',
-        count => {
-            const shortcuts: StorefrontContentBlock = {
-                ...quickLinksBlock,
-                position: 3,
-                items: Array.from({ length: count }, (_, position) => ({
-                    id: `shortcut-${position}`,
-                    enabled: true,
-                    position,
-                    imageUrl: `/shortcut-${position}.webp`,
-                    targetType: 'PAGE',
-                    targetValue: 'category',
-                    label: `入口${position + 1}`,
-                    description: '',
-                })),
-            };
-            const contentBlocks = [positionedHeroBlock, positionedTrustBlock, shortcuts];
-            const markup = renderHome({ contentBlocks }, true);
+    it.each([4, 5])('groups %i desktop shortcuts beside the hero with its separate service strip', count => {
+        const shortcuts: StorefrontContentBlock = {
+            ...quickLinksBlock,
+            position: 3,
+            items: Array.from({ length: count }, (_, position) => ({
+                id: `shortcut-${position}`,
+                enabled: true,
+                position,
+                imageUrl: `/shortcut-${position}.webp`,
+                targetType: 'PAGE',
+                targetValue: 'category',
+                label: `入口${position + 1}`,
+                description: '',
+            })),
+        };
+        const contentBlocks = [positionedHeroBlock, positionedTrustBlock, shortcuts];
+        const markup = renderHome({ contentBlocks }, true);
 
-            expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
-            expect(markup).toContain('class="hero-service-overlay"');
-            expect(markup.match(/class="desktop-quick-row"/g)).toHaveLength(2);
-            expect(markup.match(/class="desktop-quick-tile"/g)).toHaveLength(count);
-            expect(markup).toContain(`grid-template-columns:repeat(${count - 2}, minmax(0, 1fr))`);
-            expect(renderHome({ contentBlocks })).not.toContain('is-grouped-intro');
+        expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
+        expect(markup).toContain('class="home-hero-trust"');
+        expect(markup.match(/class="desktop-quick-row"/g)).toHaveLength(2);
+        expect(markup.match(/class="desktop-quick-tile"/g)).toHaveLength(count);
+        expect(markup).toContain(`grid-template-columns:repeat(${count - 2}, minmax(0, 1fr))`);
+        expect(renderHome({ contentBlocks })).not.toContain('is-grouped-intro');
 
-            const separatedMarkup = renderHome(
-                {
-                    contentBlocks: [
-                        ...contentBlocks,
-                        { ...heroBlock, id: 'story-between', type: 'STORY', position: 2.5 },
-                    ],
-                },
-                true,
-            );
-            expect(separatedMarkup).not.toContain('is-grouped-intro');
-        },
-    );
+        const separatedMarkup = renderHome(
+            {
+                contentBlocks: [
+                    ...contentBlocks,
+                    { ...heroBlock, id: 'story-between', type: 'STORY', position: 2.5 },
+                ],
+            },
+            true,
+        );
+        expect(separatedMarkup).not.toContain('is-grouped-intro');
+    });
 
     it('renders all six managed Damatong category shortcuts in a balanced grid', () => {
         const labels = ['正品香烟', '正品白酒', '正品槟榔', '坦克咖啡', '商业服务', '软件订阅'];

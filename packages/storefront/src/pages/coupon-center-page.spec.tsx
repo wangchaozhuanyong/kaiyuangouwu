@@ -1,9 +1,145 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ShopApi } from '../api';
+import { DesktopLayoutContext } from '../desktop-layout';
+import { CouponCenterPageContext } from '../storefront-page-contexts';
 import { readStorefrontStylesheet } from '../test-stylesheet';
 
-import { CouponQueryBoundary, couponTabCountDisplay } from './coupon-center-page';
+import {
+    CouponCenterPage,
+    CouponQueryBoundary,
+    couponTabCountDisplay,
+    type CouponCenterPageProps,
+} from './coupon-center-page';
+
+vi.mock('@tanstack/react-router', async importOriginal => ({
+    ...(await importOriginal<typeof import('@tanstack/react-router')>()),
+    useNavigate: () => vi.fn(),
+    useRouter: () => ({ history: { canGoBack: () => false } }),
+}));
+
+describe('coupon center paginated navigation counts', () => {
+    const clients: QueryClient[] = [];
+    afterEach(() => {
+        clients.splice(0).forEach(client => client.clear());
+    });
+
+    function fixture() {
+        const client = new QueryClient({
+            defaultOptions: { queries: { retry: false, retryOnMount: false, staleTime: Infinity } },
+        });
+        clients.push(client);
+        const api = Object.assign(
+            new ShopApi({
+                code: 'coupon-counts-test',
+                defaultLanguageCode: 'zh_Hans',
+                currencyCode: 'MYR',
+                countryCode: 'MY',
+                locale: 'zh-MY',
+                label: 'Malaysia',
+            }),
+            {
+                myCouponsPage: vi
+                    .fn<ShopApi['myCouponsPage']>()
+                    .mockResolvedValue({ items: [], totalItems: 0 }),
+                myCouponUsageRecordsPage: vi
+                    .fn<ShopApi['myCouponUsageRecordsPage']>()
+                    .mockResolvedValue({ items: [], totalItems: 0 }),
+            },
+        );
+        const queryKey = ['coupon-counts', 'owned-page', 0] as const;
+        const props: CouponCenterPageProps = {
+            pagination: { api, queryKey: ['coupon-counts'] },
+            coupons: [],
+            myCoupons: [],
+            usageRecords: [],
+            currencyCode: 'MYR',
+            displayCurrencyCode: 'MYR',
+            language: 'zh',
+            loading: false,
+            campaignsLoading: false,
+            campaignsError: '',
+            myCouponsLoading: false,
+            myCouponsError: '',
+            usageRecordsLoading: false,
+            usageRecordsError: '',
+            onRetryCampaigns: vi.fn(),
+            onRetryMyCoupons: vi.fn(),
+            onRetryUsageRecords: vi.fn(),
+            onClaim: vi.fn().mockResolvedValue(null),
+        };
+        const render = () =>
+            renderToStaticMarkup(
+                <QueryClientProvider client={client}>
+                    <DesktopLayoutContext.Provider value={true}>
+                        <CouponCenterPageContext.Provider value={props}>
+                            <CouponCenterPage />
+                        </CouponCenterPageContext.Provider>
+                    </DesktopLayoutContext.Provider>
+                </QueryClientProvider>,
+            );
+        const readOwnedPage = () =>
+            client.fetchQuery({
+                queryKey,
+                queryFn: ({ signal }) =>
+                    api.myCouponsPage(
+                        { skip: 0, take: 20, statuses: ['AVAILABLE', 'RETURNED', 'LOCKED'] },
+                        signal,
+                    ),
+            });
+        return { client, api, queryKey, render, readOwnedPage };
+    }
+
+    function count(markup: string, label: string) {
+        return markup.match(new RegExp(`<span>${label}</span><small>([^<]*)</small>`))?.[1];
+    }
+
+    it('shows pending and then the total for unused coupons while Activities remains selected', async () => {
+        const { api, render, readOwnedPage } = fixture();
+        let resolvePage: (page: Awaited<ReturnType<ShopApi['myCouponsPage']>>) => void = () => undefined;
+        api.myCouponsPage.mockReturnValueOnce(
+            new Promise(resolve => {
+                resolvePage = resolve;
+            }),
+        );
+        const request = readOwnedPage();
+        const pendingMarkup = render();
+        resolvePage({ items: [], totalItems: 3 });
+        await request;
+
+        expect(count(pendingMarkup, '未使用')).toBe('…');
+        expect(count(pendingMarkup, '未领取')).toBe('0');
+        expect(pendingMarkup).toContain('aria-current="page"><span>当前活动</span>');
+        expect(count(render(), '未使用')).toBe('3');
+    });
+
+    it('shows an unknown unused total on initial failure without changing campaign ownership state', async () => {
+        const { api, render, readOwnedPage } = fixture();
+        api.myCouponsPage.mockRejectedValueOnce(new Error('读取失败'));
+        await readOwnedPage().catch(() => undefined);
+
+        const markup = render();
+        expect(count(markup, '未使用')).toBe('—');
+        expect(count(markup, '未领取')).toBe('0');
+    });
+
+    it('shows zero only after a successful empty unused page', async () => {
+        const { render, readOwnedPage } = fixture();
+        await readOwnedPage();
+        expect(count(render(), '未使用')).toBe('0');
+    });
+
+    it('retains a confirmed unused total after background failure', async () => {
+        const { client, api, queryKey, render, readOwnedPage } = fixture();
+        client.setQueryData(queryKey, { items: [], totalItems: 12 });
+        await client.invalidateQueries({ queryKey, refetchType: 'none' });
+        api.myCouponsPage.mockRejectedValueOnce(new Error('后台读取失败'));
+        await readOwnedPage().catch(() => undefined);
+        expect(count(render(), '未使用')).toBe('12');
+    });
+});
 
 describe('coupon center query states', () => {
     it('does not render a zero count when unused-coupon loading fails', () => {

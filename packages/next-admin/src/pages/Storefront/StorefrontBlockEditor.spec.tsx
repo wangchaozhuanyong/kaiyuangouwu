@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
+import { AdminOverlayHost } from '../../components/AdminOverlayHost';
+import { AdminOverlayContext } from '../../runtime/admin-overlay-context';
 import { newContentBlock, newContentItem, storefrontBlockInput } from './storefront-content-utils';
 import { verifySavedBlock } from './storefront-save-verification';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
@@ -35,10 +37,90 @@ vi.mock('./storefront-asset-picker', () => ({
 }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+function createFixtureRoot(host: HTMLElement) {
+    const mount = document.createElement('div');
+    host.append(mount);
+    const root = createRoot(mount);
+    return {
+        render: (children: ReactNode) =>
+            root.render(<AdminOverlayContext.Provider value={host}>{children}</AdminOverlayContext.Provider>),
+        unmount: () => root.unmount(),
+    };
+}
+
+it('owns the complete drawer in the body overlay host, preserves its draft while hidden, and restores focus', async () => {
+    const host = document.createElement('div');
+    host.className = 'relative isolate';
+    const trigger = document.createElement('button');
+    trigger.textContent = '编辑轮播';
+    const mount = document.createElement('div');
+    host.append(trigger, mount);
+    document.body.append(host);
+    trigger.focus();
+    const root = createRoot(mount);
+    const value = { ...newContentBlock('HERO', 0), id: 'hero-overlay' };
+    const onClose = vi.fn();
+    const onSave = vi.fn();
+    const render = async (active = true, open = true) =>
+        act(async () =>
+            root.render(
+                <AdminOverlayHost owner="/storefront" active={active}>
+                    {open && (
+                        <StorefrontBlockEditor
+                            value={value}
+                            saving={false}
+                            onClose={onClose}
+                            onSave={onSave}
+                        />
+                    )}
+                </AdminOverlayHost>,
+            ),
+        );
+    try {
+        await render();
+        const owner = document.querySelector<HTMLElement>('[data-admin-overlay-owner="/storefront"]');
+        const dialog = document.querySelector<HTMLElement>('[aria-label="编辑店铺楼层区块"]');
+        if (!owner || !dialog) throw new Error('Expected the owned drawer');
+        expect(owner.parentElement).toBe(document.body);
+        expect(owner.contains(dialog)).toBe(true);
+        expect(host.contains(dialog)).toBe(false);
+        expect(dialog.className).toContain('fixed inset-0 z-50');
+        expect(dialog.querySelector('header [aria-label="关闭编辑器"]')).not.toBeNull();
+        const title = dialog.querySelector<HTMLInputElement>('[data-translation-field="title"]');
+        if (!title) throw new Error('Expected the editable title');
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        if (!setter) throw new Error('Expected the native input value setter');
+        await act(async () => {
+            setter.call(title, '尚未保存的轮播标题');
+            title.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await render(false);
+        expect(owner.hidden).toBe(true);
+        expect(owner.hasAttribute('inert')).toBe(true);
+        await render();
+        expect(owner.hidden).toBe(false);
+        expect(title.value).toBe('尚未保存的轮播标题');
+        expect(onSave).not.toHaveBeenCalled();
+        await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="关闭编辑器"]')?.click());
+        expect(onClose).toHaveBeenCalledTimes(1);
+        onClose.mockClear();
+        const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+        await act(async () => document.dispatchEvent(escape));
+        expect(escape.defaultPrevented).toBe(true);
+        expect(onClose).toHaveBeenCalledTimes(1);
+        await render(true, false);
+        expect(owner.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.activeElement).toBe(trigger);
+    } finally {
+        await act(async () => root.unmount());
+        host.remove();
+    }
+});
+
 it('focuses the requested existing item field in English without changing content or image bindings', async () => {
     const host = document.createElement('div');
     document.body.append(host);
-    const root = createRoot(host);
+    const root = createFixtureRoot(host);
     const value = {
         ...newContentBlock('CUSTOM', 0),
         id: 'audit-block',
@@ -83,7 +165,7 @@ it.each([
     async (type, position, expected) => {
         const host = document.createElement('div');
         document.body.append(host);
-        const root = createRoot(host);
+        const root = createFixtureRoot(host);
         const onSave = vi.fn(async () => undefined);
         const value = {
             ...newContentBlock(type, 0),
@@ -124,7 +206,7 @@ it.each([
 it('requires image review, invalidates it after another image change, and preserves normal saves', async () => {
     const host = document.createElement('div');
     document.body.append(host);
-    const root = createRoot(host);
+    const root = createFixtureRoot(host);
     const onSave = vi.fn(async () => undefined);
     const value = {
         ...newContentBlock('STORY', 0),
@@ -186,7 +268,7 @@ it('requires image review, invalidates it after another image change, and preser
 it('saves shared auth presentation settings while retaining merchant artwork and bilingual copy', async () => {
     const host = document.createElement('div');
     document.body.append(host);
-    const root = createRoot(host);
+    const root = createFixtureRoot(host);
     const onSave = vi.fn(async () => undefined);
     const value = {
         ...newContentBlock('AUTH_LOGIN', 0),
@@ -260,7 +342,7 @@ it.each([false, true])(
     async existing => {
         const host = document.createElement('div');
         document.body.append(host);
-        const root = createRoot(host);
+        const root = createFixtureRoot(host);
         const onSave = vi.fn(() => Promise.resolve(undefined));
         const value = {
             ...newContentBlock('HERO', 0),
@@ -344,7 +426,7 @@ it.each([false, true])(
 it('switches phone draft language and restores only the selected language to desktop copy', async () => {
     const host = document.createElement('div');
     document.body.append(host);
-    const root = createRoot(host);
+    const root = createFixtureRoot(host);
     const onSave = vi.fn((_value: ReturnType<typeof newContentBlock>, _review?: boolean) =>
         Promise.resolve(undefined),
     );

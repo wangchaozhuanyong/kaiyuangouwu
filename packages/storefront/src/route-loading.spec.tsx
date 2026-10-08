@@ -126,9 +126,10 @@ describe('transition logo loading', () => {
         return image;
     }
 
-    it('renders a visible inline mark before the store configuration is available', async () => {
+    it('keeps a quiet pending state without inventing a brand before configuration arrives', async () => {
         await render();
-        expect(container.querySelector('svg.route-transition-placeholder')).not.toBeNull();
+        expect(container.querySelector('svg')).toBeNull();
+        expect(container.querySelector('.brand-loading-dots')).not.toBeNull();
         expect(container.querySelector('img')).toBeNull();
         expect(container.innerHTML).not.toContain('/storefront/neutral-store.png');
     });
@@ -163,7 +164,7 @@ describe('transition logo loading', () => {
         expect(container.textContent).not.toContain('First store');
     });
 
-    it('keeps the mark visible until the downloaded logo has decoded', async () => {
+    it('reserves logo space until decoding completes without flashing a generic shop icon', async () => {
         await render('/brand.svg');
         const image = logoImage();
         let finishDecode: () => void = () => undefined;
@@ -175,23 +176,33 @@ describe('transition logo loading', () => {
             decode: { value: () => decoding },
         });
         await interact(() => image.dispatchEvent(new Event('load')));
-        expect(container.querySelector('.route-transition-placeholder')).not.toBeNull();
+        expect(container.querySelector('.route-transition-placeholder')).toBeNull();
         expect(container.querySelector('.is-logo-ready')).toBeNull();
         await interact(() => finishDecode());
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
         expect(container.querySelector('.is-logo-ready')).not.toBeNull();
     });
 
-    it('loads a compact logo and retains the inline fallback after thumbnail and original failures', async () => {
-        await render('/assets/preview/brand.png');
+    it('tries the original logo once and retains the store name after image failures', async () => {
+        await interact(() =>
+            root.render(
+                <RouteTransitionLoader
+                    logoUrl="/assets/preview/brand.png"
+                    storefrontName="当前店铺"
+                    language="zh"
+                />,
+            ),
+        );
         expect(logoImage().src).toContain('preset=storefront-thumbnail-320');
         expect(logoImage().getAttribute('fetchpriority')).toBe('high');
         await interact(() => logoImage().dispatchEvent(new Event('error')));
         expect(logoImage().getAttribute('src')).toBe('/assets/preview/brand.png');
-        expect(container.querySelector('.route-transition-placeholder')).not.toBeNull();
+        expect(container.querySelector('.route-transition-placeholder')).toBeNull();
         await interact(() => logoImage().dispatchEvent(new Event('error')));
         expect(container.querySelector('img')).toBeNull();
-        expect(container.querySelector('.route-transition-placeholder')).not.toBeNull();
+        expect(container.textContent).toContain('当前店铺');
+        expect(container.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(container.querySelector('.route-transition-placeholder')).toBeNull();
     });
 
     it('recognizes a cached logo even when its load event has already fired', async () => {
@@ -218,6 +229,6 @@ describe('transition logo loading', () => {
         await interact(() => finishDecode());
         expect(logoImage().getAttribute('src')).toBe('/second-logo.svg');
         expect(container.querySelector('.is-logo-ready')).toBeNull();
-        expect(container.querySelector('.route-transition-placeholder')).not.toBeNull();
+        expect(container.querySelector('.route-transition-placeholder')).toBeNull();
     });
 });

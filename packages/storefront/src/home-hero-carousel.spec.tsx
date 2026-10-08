@@ -341,6 +341,9 @@ describe('HomePage carousel pointer interactions', () => {
             expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe(title);
             expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(body);
             expect(activeButton('.hero-rich-cta-btn').textContent).toBe(action);
+            const copy = requiredElement(activeSlide(), '.hero-rich-copy-region');
+            expect(copy.hasAttribute('role')).toBe(false);
+            expect(copy.hasAttribute('tabindex')).toBe(false);
             const artwork = requiredElement(
                 activeSlide(),
                 '.hero-rich-image-link img:not([aria-hidden="true"])',
@@ -570,10 +573,76 @@ describe('HomePage carousel pointer interactions', () => {
                     ],
                 },
             ]);
-            await interact(() => requiredElement(activeSlide(), selector).dispatchEvent(new Event('scroll')));
+            const readingSurface = requiredElement(
+                selector === '.home-trust-bar' ? host : activeSlide(),
+                selector,
+            );
+            if (selector === '.home-trust-bar') expect(readingSurface.closest('.hero')).toBeNull();
+            await interact(() => readingSurface.dispatchEvent(new Event('scroll')));
             await advance(10_000);
             expect(activeSlide().textContent).toContain('First slide');
             expect(host.querySelector('.is-neighbor')).toBeNull();
+        },
+    );
+    it.each([false, true])(
+        'keeps overlay trust gestures outside the swipe region and renders one strip during transitions (%s)',
+        async desktop => {
+            await render(desktop, [
+                heroes[0],
+                heroes[1],
+                {
+                    ...heroBlock,
+                    id: 'service-information',
+                    type: 'TRUST_BAR',
+                    items: [
+                        {
+                            id: 'support',
+                            enabled: true,
+                            position: 0,
+                            imageUrl: null,
+                            targetType: 'NONE',
+                            targetValue: null,
+                            label: 'Malaysia customer support',
+                            description: 'Read the complete service details before ordering.',
+                        },
+                    ],
+                },
+            ]);
+            const trust = requiredElement(host, '.home-hero-trust .home-trust-bar');
+            expect(trust.closest('.hero')).toBeNull();
+            expect(trust.getAttribute('tabindex')).toBe('0');
+            expect(trust.textContent).toContain('Read the complete service details before ordering.');
+            for (const [type, x] of [
+                ['pointerdown', 250],
+                ['pointermove', 100],
+                ['pointerup', 100],
+            ] as const) {
+                const event = new MouseEvent(type, {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: x,
+                    clientY: 40,
+                    button: 0,
+                });
+                Object.defineProperties(event, {
+                    pointerId: { value: 1 },
+                    pointerType: { value: 'touch' },
+                    isPrimary: { value: true },
+                });
+                await interact(() => trust.dispatchEvent(event));
+                expect(event.defaultPrevented).toBe(false);
+                expect(host.querySelector('.is-neighbor')).toBeNull();
+            }
+            expect(activeSlide().textContent).toContain('First slide');
+            await pointer('pointerdown', 250);
+            await pointer('pointermove', 100);
+            expect(host.querySelector('.is-neighbor')).not.toBeNull();
+            expect(host.querySelectorAll('.home-trust-bar')).toHaveLength(1);
+            await pointer('pointerup', 100);
+            await advance();
+            expect(activeSlide().textContent).toContain('Second slide');
+            expect(host.querySelectorAll('.home-trust-bar')).toHaveLength(1);
+            expect(target).not.toHaveBeenCalled();
         },
     );
     it('preserves numbered selection and recovers when decoding a slide fails', async () => {
@@ -661,13 +730,17 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.is-neighbor')).toBeNull();
     });
     it.each([
-        { desktop: false, expectedHeight: '' },
+        { desktop: false, expectedHeight: '726px' },
         { desktop: true, expectedHeight: '520px' },
     ])(
-        'lets the shared phone canvas own its height while desktop copy still grows ($desktop)',
+        'measures the full mobile scene and the desktop copy surface ($desktop)',
         async ({ desktop, expectedHeight }) => {
             boundsMock.mockImplementation(function (this: Element) {
-                const height = this.matches('.hero-rich-content') ? 520 : 206;
+                const height = this.matches('.hero-rich-content')
+                    ? 520
+                    : this.matches('.hero-scene-wrapper')
+                      ? 726
+                      : 206;
                 return {
                     x: 0,
                     y: 0,
@@ -685,53 +758,132 @@ describe('HomePage carousel pointer interactions', () => {
         },
     );
 
-    it('measures desktop copy before entrance, then shrinks after settling', async () => {
-        let tallHeight = 520;
-        boundsMock.mockImplementation(function (this: Element) {
-            const height =
-                this.matches('.hero-rich-content') && this.textContent?.includes('Tall copy')
-                    ? tallHeight
-                    : 320;
-            return {
-                x: 0,
-                y: 0,
-                top: 0,
-                left: 0,
-                right: 360,
-                bottom: height,
-                width: 360,
-                height,
-                toJSON: () => ({}),
+    it.each([false, true])(
+        'reserves measured trust height below copy and releases it when the strip is removed (%s)',
+        async desktop => {
+            let trustHeight = 40;
+            const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
+            boundsMock.mockImplementation(function (this: Element) {
+                // Model the bottom reservation and its 12px gap only while a trust strip is present.
+                const measuredHeight =
+                    this.closest<HTMLElement>('.hero')?.style.getPropertyValue('--home-hero-trust-height');
+                const reservedHeight =
+                    (Number.parseFloat(measuredHeight ?? '') || 0) + (measuredHeight ? 12 : 0);
+                const height = this.matches('.home-hero-trust')
+                    ? trustHeight
+                    : this.matches(heightSelector)
+                      ? 320 + reservedHeight
+                      : 320;
+                return {
+                    x: 0,
+                    y: 0,
+                    top: 0,
+                    left: 0,
+                    right: 360,
+                    bottom: height,
+                    width: 360,
+                    height,
+                    toJSON: () => ({}),
+                };
+            });
+            await render(desktop, [heroes[0]]);
+            const viewport = requiredElement(host, '.hero');
+            const stage = requiredElement(host, '.hero-carousel-stage');
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
+            expect(stage.style.height).toBe('320px');
+
+            const serviceBlock: StorefrontContentBlock = {
+                ...heroBlock,
+                id: 'service-information',
+                type: 'TRUST_BAR',
+                items: [
+                    {
+                        id: 'support',
+                        enabled: true,
+                        position: 0,
+                        imageUrl: null,
+                        targetType: 'NONE',
+                        targetValue: null,
+                        label: 'Customer support',
+                        description: 'Complete service details',
+                    },
+                ],
             };
-        });
-        await render(true, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
-        const stage = requiredElement(host, '.hero-carousel-stage');
-        expect(stage.style.height).toBe('320px');
-        await pointer('pointerdown', 250);
-        await pointer('pointermove', 150);
-        expect(stage.style.height).toBe('520px');
-        await pointer('pointerup', 150);
-        expect(host.querySelector('.is-settling')).toBeNull();
-        await advance(HERO_HEIGHT_TRANSITION_MS + 1);
-        expect(host.querySelector('.is-settling')).not.toBeNull();
-        await advance();
-        expect(activeSlide().textContent).toContain('Tall copy');
-        expect(stage.style.height).toBe('520px');
-        // Responsive desktop copy changes keep the existing scene observer behavior.
-        tallHeight = 580;
-        const scene = requiredElement(activeSlide(), '.hero-rich-content');
-        const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
-        expect(observer).toBeDefined();
-        if (!observer) throw new Error('Expected the current slide resize observer');
-        await interact(() => observer.notify());
-        expect(stage.style.height).toBe('580px');
-        await advance(HERO_HEIGHT_TRANSITION_MS);
-        await pointer('pointerdown', 100);
-        await pointer('pointermove', 180);
-        await pointer('pointerup', 180);
-        expect(stage.style.height).toBe('580px');
-        await advance();
-        expect(activeSlide().textContent).toContain('First slide');
-        expect(stage.style.height).toBe('320px');
-    });
+            await render(desktop, [heroes[0], serviceBlock]);
+            const trust = requiredElement(host, '.home-hero-trust');
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('40px');
+            expect(stage.style.height).toBe('372px');
+            const observer = resizeObservers.find(candidate => candidate.elements.has(trust));
+            expect(observer).toBeDefined();
+            if (!observer) throw new Error('Expected the shared hero observer to observe its trust strip');
+
+            trustHeight = 64;
+            await interact(() => observer.notify());
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('64px');
+            expect(stage.style.height).toBe('396px');
+
+            await render(desktop, [heroes[0]]);
+            expect(host.querySelector('.home-hero-trust')).toBeNull();
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
+            expect(stage.style.height).toBe('320px');
+            expect(observer.elements.has(trust)).toBe(false);
+            await interact(() => observer.notify());
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
+            expect(stage.style.height).toBe('320px');
+        },
+    );
+
+    it.each([false, true])(
+        'grows before entrance, observes content changes and shrinks after settling (desktop=%s)',
+        async desktop => {
+            let tallHeight = 520;
+            const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
+            boundsMock.mockImplementation(function (this: Element) {
+                const height =
+                    this.matches(heightSelector) && this.textContent?.includes('Tall copy')
+                        ? tallHeight
+                        : 320;
+                return {
+                    x: 0,
+                    y: 0,
+                    top: 0,
+                    left: 0,
+                    right: 360,
+                    bottom: height,
+                    width: 360,
+                    height,
+                    toJSON: () => ({}),
+                };
+            });
+            await render(desktop, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
+            const stage = requiredElement(host, '.hero-carousel-stage');
+            expect(stage.style.height).toBe('320px');
+            await pointer('pointerdown', 250);
+            await pointer('pointermove', 150);
+            expect(stage.style.height).toBe('520px');
+            await pointer('pointerup', 150);
+            expect(host.querySelector('.is-settling')).toBeNull();
+            await advance(HERO_HEIGHT_TRANSITION_MS + 1);
+            expect(host.querySelector('.is-settling')).not.toBeNull();
+            await advance();
+            expect(activeSlide().textContent).toContain('Tall copy');
+            expect(stage.style.height).toBe('520px');
+            // Font, copy and media changes update the currently measured surface.
+            tallHeight = 580;
+            const scene = requiredElement(activeSlide(), heightSelector);
+            const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
+            expect(observer).toBeDefined();
+            if (!observer) throw new Error('Expected the current slide resize observer');
+            await interact(() => observer.notify());
+            expect(stage.style.height).toBe('580px');
+            await advance(HERO_HEIGHT_TRANSITION_MS);
+            await pointer('pointerdown', 100);
+            await pointer('pointermove', 180);
+            await pointer('pointerup', 180);
+            expect(stage.style.height).toBe('580px');
+            await advance();
+            expect(activeSlide().textContent).toContain('First slide');
+            expect(stage.style.height).toBe('320px');
+        },
+    );
 });

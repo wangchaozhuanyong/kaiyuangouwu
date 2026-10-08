@@ -51,18 +51,23 @@ const profile: StoreProfileRecord = {
     },
 };
 
-function fixture(options: { staleProfile?: boolean } = {}) {
+function fixture(options: { staleProfile?: boolean; requirePlatformContext?: boolean } = {}) {
     const calls: Array<{ name: string; input: Record<string, unknown>; channel: string }> = [];
     const client = new ApolloClient({
         cache: new InMemoryCache(),
         link: new ApolloLink(
             operation =>
                 new Observable(observer => {
+                    const channel = operation.getContext().headers?.['vendure-token'] ?? 'platform-channel';
                     calls.push({
                         name: operation.operationName ?? '',
                         input: operation.variables.input,
-                        channel: operation.getContext().headers['vendure-token'],
+                        channel,
                     });
+                    if (options.requirePlatformContext && channel !== 'platform-channel') {
+                        observer.error(new Error('店铺治理请切换到平台管理中心'));
+                        return;
+                    }
                     if (options.staleProfile) {
                         observer.error(new Error('店铺档案已被其他管理员修改'));
                         return;
@@ -105,6 +110,22 @@ describe('store brand publication', () => {
         });
     });
 
+    it('keeps platform governance context when saving an operating store profile', async () => {
+        const { client, calls } = fixture({ requirePlatformContext: true });
+        await expect(
+            saveStoreProfileWithBrandAssets(client, profile, storeProfileBrandAssets(profile), {
+                legalEntityName: 'Registered Company',
+                descriptionZh: '已填写的店铺简介',
+            }),
+        ).resolves.toMatchObject({ id: profile.id });
+        expect(calls).toHaveLength(1);
+        expect(calls[0]).toMatchObject({
+            name: 'NextAdminUpdateStoreProfile',
+            channel: 'platform-channel',
+            input: { id: profile.id, legalEntityName: 'Registered Company' },
+        });
+    });
+
     it('clears only the requested binding without deleting assets', async () => {
         const { client, calls } = fixture();
         await saveStoreProfileWithBrandAssets(
@@ -121,7 +142,7 @@ describe('store brand publication', () => {
         });
     });
 
-    it('saves changed assets directly when every asset belongs to the current store', async () => {
+    it('saves store-owned assets without replacing platform governance context', async () => {
         const { client, calls } = fixture();
         const draft = sharedDraft();
         for (const asset of Object.values(draft)) {
@@ -131,7 +152,7 @@ describe('store brand publication', () => {
         expect(calls).toHaveLength(1);
         expect(calls[0]).toMatchObject({
             name: 'NextAdminUpdateStoreProfile',
-            channel: 'target-channel',
+            channel: 'platform-channel',
         });
         expect(calls[0].input).toMatchObject({
             logoAssetId: 'new-icon',

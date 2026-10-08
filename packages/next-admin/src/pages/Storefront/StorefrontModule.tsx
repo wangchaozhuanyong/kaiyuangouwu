@@ -27,6 +27,7 @@ import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -798,7 +799,7 @@ export function StorefrontModule() {
             >
                 {query.data?.storefrontAuthConfiguration ? (
                     <StorefrontAuthSettingsPanel
-                        key={query.data.activeChannel.id}
+                        key={`auth-settings:${query.data.activeChannel.id}`}
                         value={query.data.storefrontAuthConfiguration}
                         disabled={Boolean(query.error) || !canUpdate}
                         canEditPlatform={canEditPlatformGoogle}
@@ -862,7 +863,7 @@ export function StorefrontModule() {
                     )}
                 </section>
                 <StorefrontAccountRecommendationsPanel
-                    key={channelId}
+                    key={`account-recommendations:${channelId}`}
                     value={resolveAccountRecommendationSettings(
                         query.data?.storefrontContentSettings.accountRecommendations,
                     )}
@@ -1088,7 +1089,7 @@ function CarouselManager({
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const disabled = pending || Boolean(error) || interval === undefined;
-    return (
+    const dialog = (
         <AccessibleDialogSurface
             accessibleName="首页轮播图"
             onRequestClose={onClose}
@@ -1208,6 +1209,7 @@ function CarouselManager({
             </div>
         </AccessibleDialogSurface>
     );
+    return <AdminOverlayPortal>{dialog}</AdminOverlayPortal>;
 }
 
 function CarouselInterval({

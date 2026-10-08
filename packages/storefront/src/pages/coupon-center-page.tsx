@@ -141,13 +141,13 @@ export function CouponCenterPage() {
         staleTime: 0,
     });
     const usageRecords = pagination ? (historyPage.data?.items ?? []) : initialUsageRecords;
-    const myCouponsLoading =
-        pagination && activeTab === 'UNUSED' ? ownedPage.isLoading : initialMyCouponsLoading;
+    const unusedCouponsLoading = pagination ? ownedPage.isLoading : initialMyCouponsLoading;
+    const unusedCouponsError = pagination
+        ? storefrontInitialQueryError(ownedPage, language)
+        : initialMyCouponsError;
+    const myCouponsLoading = activeTab === 'UNUSED' ? unusedCouponsLoading : initialMyCouponsLoading;
     const usageRecordsLoading = pagination ? historyPage.isLoading : initialUsageRecordsLoading;
-    const myCouponsError =
-        pagination && activeTab === 'UNUSED'
-            ? storefrontInitialQueryError(ownedPage, language)
-            : initialMyCouponsError;
+    const myCouponsError = activeTab === 'UNUSED' ? unusedCouponsError : initialMyCouponsError;
     const usageRecordsError = pagination
         ? storefrontInitialQueryError(historyPage, language)
         : initialUsageRecordsError;
@@ -233,8 +233,8 @@ export function CouponCenterPage() {
                                                 ),
                                         campaignsLoading,
                                         campaignsError,
-                                        myCouponsLoading,
-                                        myCouponsError,
+                                        tab === 'UNUSED' ? unusedCouponsLoading : myCouponsLoading,
+                                        tab === 'UNUSED' ? unusedCouponsError : myCouponsError,
                                         usageRecordsLoading,
                                         usageRecordsError,
                                     )}
@@ -849,7 +849,7 @@ function tabLabel(tab: CouponCenterTab, language: StorefrontLanguage): string {
         ACTIVITIES: isZh ? '当前活动' : 'Activities',
         UNCLAIMED: isZh ? '未领取' : 'Unclaimed',
         UNUSED: isZh ? '未使用' : 'Unused',
-        HISTORY: isZh ? '记录' : 'History',
+        HISTORY: isZh ? '使用记录' : 'History',
     }[tab];
 }
 

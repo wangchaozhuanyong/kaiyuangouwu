@@ -1,10 +1,9 @@
 import {
-    isReusablePublicPageData,
     publicPageRequestFromUrl,
-    publicPageRequestKey,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 
+import { applyInitialLoadingBrand, initialLoadingBrandForSnapshot } from './brand-loading-bootstrap';
 import { startPublicPageBootstrap } from './public-page-transport';
 
 // This entry intentionally has no React/router/API imports. It runs while those chunks download.
@@ -27,17 +26,14 @@ if (
             const snapshot = JSON.parse(
                 document.getElementById(STOREFRONT_PAGE_DATA_ELEMENT_ID)?.textContent ?? 'null',
             );
-            const valid =
-                snapshot?.schemaVersion === 1 &&
-                isReusablePublicPageData(snapshot) &&
-                snapshot?.scope?.host === location.host &&
-                snapshot.requestKey === publicPageRequestKey(request) &&
-                snapshot.scope.priceContext === 'public' &&
-                (!language || snapshot.scope.languageCode === language) &&
-                (!currency || snapshot.scope.currencyCode === currency) &&
-                Date.now() - snapshot.generatedAt <= 30_000 &&
-                snapshot.generatedAt - Date.now() <= 5_000;
-            if (!valid) startPublicPageBootstrap(request, language, currency);
+            const brand = initialLoadingBrandForSnapshot(snapshot, {
+                host: location.host,
+                request,
+                languageCode: language,
+                currencyCode: currency,
+            });
+            if (brand) applyInitialLoadingBrand(brand);
+            else startPublicPageBootstrap(request, language, currency);
         }
     } catch {
         /* Invalid public URLs use the normal route validation and error UI. */

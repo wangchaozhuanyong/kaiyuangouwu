@@ -71,6 +71,67 @@ describe('content save and readback verification', () => {
         saved.translations[1].body = 'Generated body';
         expect(verifySavedBlock(saved, request)).toBe(saved);
     });
+    const phoneHero = {
+        ...newContentBlock('HERO', 0),
+        id: 'saved-hero',
+        settings: {
+            mobileImageAssetId: '1061',
+            mobileImageUrl: '/assets/source/15/moyao-1-mobile.webp',
+            mobileImageWidth: 1672,
+            mobileImageHeight: 941,
+            mobileHeroTranslations: [{ languageCode: 'zh_Hans' }, { languageCode: 'en' }],
+            mobileHeroHideStats: true,
+            secondaryTextColor: '#A9B6C8',
+            customSetting: 'preserved',
+        },
+    };
+    const normalizedPhoneHero = {
+        ...phoneHero,
+        settings: {
+            ...phoneHero.settings,
+            mobileImageAssetId: 1061,
+            mobileImageUrl: '/assets/preview/61/moyao-1-mobile__preview.webp',
+        },
+    };
+    it('accepts phone asset ID serialization and a resolved URL for the same nonempty asset', () => {
+        expect(verifySavedBlock(normalizedPhoneHero, storefrontBlockInput(phoneHero))).toBe(
+            normalizedPhoneHero,
+        );
+    });
+    it.each([
+        { mobileImageAssetId: 'other-asset' },
+        { mobileImageAssetId: null },
+        { mobileImageAssetId: undefined },
+        { mobileImageWidth: 1 },
+        { mobileImageHeight: 1 },
+        { mobileHeroHideStats: false },
+        { secondaryTextColor: '#FFFFFF' },
+        { customSetting: 'altered' },
+        { unexpectedSetting: true },
+        {
+            mobileHeroTranslations: [
+                { languageCode: 'zh_Hans', title: '旧手机短文案' },
+                { languageCode: 'en' },
+            ],
+        },
+    ])('rejects an altered phone binding or other settings: %j', change => {
+        const saved = {
+            ...normalizedPhoneHero,
+            settings: { ...normalizedPhoneHero.settings, ...change },
+        };
+        expect(() => verifySavedBlock(saved, storefrontBlockInput(phoneHero))).toThrow('settings');
+    });
+    it.each([undefined, null, '', '   '])('rejects phone URL changes without a nonempty asset ID: %j', id => {
+        const expected = {
+            ...phoneHero,
+            settings: { ...phoneHero.settings, mobileImageAssetId: id },
+        };
+        const saved = {
+            ...expected,
+            settings: { ...expected.settings, mobileImageUrl: '/assets/other.webp' },
+        };
+        expect(() => verifySavedBlock(saved, storefrontBlockInput(expected))).toThrow('settings');
+    });
     it('rejects cross-store readback and mismatched ordering', () => {
         const data = { activeChannel: { id: 'moyao' } } as StorefrontContentResult;
         expect(() => verifyContentChannel(data, 'damatong')).toThrow('店铺');

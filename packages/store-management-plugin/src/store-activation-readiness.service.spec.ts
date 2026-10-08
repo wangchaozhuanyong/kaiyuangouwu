@@ -1,13 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { Channel, ProductVariant } from '@vendure/core';
+import { StoreDomain } from '@vendure/store-domain-plugin';
+import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
+import { describe, expect, it, vi } from 'vitest';
 
 import { physicalSubtotalShippingCalculator } from '../../commerce-fulfillment-plugin/src/commerce-shipping-options';
 
+import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import {
     evaluateStoreActivationReadiness,
     hasCompleteStoreProfile,
     hasReadyShippingMethod,
     isProductionPaymentMethod,
     isUsableEnglishContent,
+    StoreActivationReadinessService,
+    storeProfileActivationCheck,
 } from './store-activation-readiness.service';
 
 const completeSnapshot = {
@@ -141,7 +147,7 @@ describe('store activation readiness', () => {
         const readiness = evaluateStoreActivationReadiness(completeSnapshot);
 
         expect(readiness.ready).toBe(true);
-        expect(readiness.checks).toHaveLength(9);
+        expect(readiness.checks).toHaveLength(8);
         expect(readiness.checks.every(check => check.ready)).toBe(true);
     });
 
@@ -157,7 +163,54 @@ describe('store activation readiness', () => {
         expect(readiness.checks.filter(check => !check.ready).map(check => check.code)).toEqual([
             'DOMAIN',
             'TERMS',
-            'PAYMENT',
+        ]);
+    });
+
+    it.each(['DIGITAL_ONLY', 'PHYSICAL_ONLY', 'HYBRID'] as const)(
+        'allows %s stores to activate without a production payment method',
+        commerceMode => {
+            const readiness = evaluateStoreActivationReadiness(
+                { ...completeSnapshot, payment: false },
+                commerceMode,
+            );
+
+            expect(readiness.ready).toBe(true);
+            expect(readiness.checks.some(check => check.code === 'PAYMENT')).toBe(false);
+        },
+    );
+
+    it('does not consult payment methods or currency settings when reading launch checks', async () => {
+        const channel = { id: 'store-1', customFields: { commerceMode: 'DIGITAL_ONLY' } };
+        const accessQuery = {
+            innerJoin: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getCount: vi.fn().mockResolvedValue(0),
+        };
+        const connection = {
+            getRepository: vi.fn((_ctx, entity) => {
+                if (entity === Channel) return { findOne: vi.fn().mockResolvedValue(channel) };
+                if (entity === StoreDomain) return { findOne: vi.fn().mockResolvedValue(null) };
+                if (entity === StoreAdministratorAccess) return { createQueryBuilder: () => accessQuery };
+                if (entity === ProductVariant || entity === StorefrontContentBlock)
+                    return { find: vi.fn().mockResolvedValue([]) };
+                throw new Error('Unexpected activation dependency');
+            }),
+        };
+        const shippingMethods = { getActiveShippingMethods: vi.fn().mockResolvedValue([]) };
+        const service = new StoreActivationReadinessService(connection as any, shippingMethods as any);
+        const ctx = { copy: vi.fn().mockReturnValue({ channel }) };
+
+        const readiness = await service.get(ctx as any, { channelId: channel.id } as any);
+
+        expect(readiness.ready).toBe(false);
+        expect(readiness.checks.filter(check => !check.ready).map(check => check.code)).toEqual([
+            'PROFILE',
+            'DOMAIN',
+            'CATALOG',
+            'SUPPORT',
+            'PRIVACY',
+            'TERMS',
         ]);
     });
 
@@ -224,5 +277,25 @@ describe('store activation readiness', () => {
 
         expect(hasCompleteStoreProfile(completeProfile)).toBe(true);
         expect(hasCompleteStoreProfile({ ...completeProfile, privacyEmail: null })).toBe(false);
+        expect(storeProfileActivationCheck(completeProfile)).toMatchObject({ code: 'PROFILE', ready: true });
+        expect(storeProfileActivationCheck({ ...completeProfile, privacyEmail: null })).toMatchObject({
+            ready: false,
+            message: '请在“编辑档案”补充：隐私邮箱',
+            messageEn: 'Complete in Edit profile: Privacy email',
+        });
+
+        const pendingTranslation = storeProfileActivationCheck({ ...completeProfile, descriptionEn: '' });
+        expect(pendingTranslation.ready).toBe(false);
+        expect(pendingTranslation.message).toContain('英文资料尚未生成或未通过校验：简介');
+        expect(pendingTranslation.message).not.toContain('补充');
+        expect(pendingTranslation.message).not.toContain('法定经营主体');
+        expect(pendingTranslation.messageEn).toContain('English content is missing or invalid: description');
+
+        const missingIcon = storeProfileActivationCheck({ ...completeProfile, logoAssetId: null });
+        expect(missingIcon.message).toBe('请在“编辑档案”补充：店铺图标');
+        expect(missingIcon.ready).toBe(false);
+        expect(storeProfileActivationCheck({ ...completeProfile, descriptionEn: 'AI 软件商城' }).ready).toBe(
+            false,
+        );
     });
 });

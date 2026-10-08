@@ -21,6 +21,7 @@ import {
 } from '../../../../storefront-content-plugin/src/shared/hero-image';
 import { authHeroCopyPosition } from '../../../../storefront/src/auth-visual';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
+import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     STOREFRONT_EDITOR_OPTIONS_QUERY,
@@ -182,7 +183,7 @@ export function StorefrontBlockEditor({
         updateSettings({ [productSettingKey]: next });
     };
 
-    return (
+    const dialog = (
         <AccessibleDialogSurface
             accessibleName={`${value.id ? '编辑' : '新建'}店铺楼层区块`}
             onRequestClose={() => {
@@ -1273,4 +1274,5 @@ export function StorefrontBlockEditor({
             </div>
         </AccessibleDialogSurface>
     );
+    return <AdminOverlayPortal>{dialog}</AdminOverlayPortal>;
 }

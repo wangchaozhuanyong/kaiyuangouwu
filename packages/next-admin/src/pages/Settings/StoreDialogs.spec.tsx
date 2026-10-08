@@ -95,7 +95,16 @@ describe('StoreEditor seller binding', () => {
         environment.IS_REACT_ACT_ENVIRONMENT = false;
     });
 
-    async function renderEditor(ready = true, overrides: Partial<StoreProfileRecord> = {}) {
+    async function renderEditor(
+        ready = true,
+        overrides: Partial<StoreProfileRecord> = {},
+        sellerOptions: {
+            sellers?: Array<{ id: string; name: string }>;
+            sellerOptionsState?: 'loading' | 'ready' | 'error' | 'forbidden';
+            sellerOptionsError?: string;
+            onRetrySellers?: () => void;
+        } = {},
+    ) {
         await act(async () =>
             root.render(
                 <FeatureHelpProvider>
@@ -104,6 +113,7 @@ describe('StoreEditor seller binding', () => {
                             profile={{ ...profile, ...overrides }}
                             sellers={ready ? sellers : []}
                             sellerOptionsReady={ready}
+                            {...sellerOptions}
                             onClose={() => undefined}
                             onCompleted={onCompleted}
                             onError={onError}
@@ -161,11 +171,9 @@ describe('StoreEditor seller binding', () => {
                         legalEntityName: null,
                     }),
                 },
-                context: expect.objectContaining({
-                    headers: expect.objectContaining({ 'vendure-token': 'test-store-channel' }),
-                }),
             }),
         );
+        expect(mutate.mock.calls[0][0]).not.toHaveProperty('context');
         expect(onCompleted).toHaveBeenCalledWith('店铺归属和档案已保存');
     });
 
@@ -222,7 +230,100 @@ describe('StoreEditor seller binding', () => {
         expect(sellerSelect().disabled).toBe(true);
         expect(sellerSelect().value).toBe('seller-1');
         expect(sellerSelect().textContent).toContain('大马仓库（当前绑定）');
-        expect(container.querySelector('[role="alert"]')?.textContent).toContain('商家列表尚未加载完整');
+    });
+
+    it('shows loading as a status while keeping the current seller binding', async () => {
+        await renderEditor(false, {}, { sellerOptionsState: 'loading' });
+        expect(sellerSelect().disabled).toBe(true);
+        expect(sellerSelect().value).toBe('seller-1');
+        expect(sellerSelect().textContent).toContain('大马仓库（当前绑定）');
+        expect(container.querySelector('[role="status"]')?.textContent).toContain('正在读取商家列表');
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+        expect(container.textContent).not.toContain('商家列表读取失败');
+    });
+
+    it('offers a retry after a seller read failure without losing the edited draft', async () => {
+        const retry = vi.fn();
+        await renderEditor(
+            false,
+            {},
+            {
+                sellerOptionsState: 'error',
+                sellerOptionsError: '本地模拟商家查询失败',
+                onRetrySellers: retry,
+            },
+        );
+        const legalName = container.querySelector<HTMLInputElement>(
+            'input[placeholder="营业执照或注册文件上的完整名称"]',
+        );
+        if (!legalName) throw new Error('Legal name input is missing');
+        await act(async () => setInputValue(legalName, '尚未保存的公司全称'));
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain('商家列表读取失败');
+        expect(container.textContent).toContain('本地模拟商家查询失败');
+        const retryButton = Array.from(container.querySelectorAll('button')).find(
+            button => button.textContent === '重试读取商家列表',
+        );
+        if (!retryButton) throw new Error('Seller retry button is missing');
+        await act(async () => retryButton.click());
+        expect(retry).toHaveBeenCalledOnce();
+        expect(legalName.value).toBe('尚未保存的公司全称');
+        expect(sellerSelect().value).toBe('seller-1');
+        await renderEditor(true, {}, { sellerOptionsState: 'ready', onRetrySellers: retry });
+        expect(
+            container.querySelector<HTMLInputElement>('input[placeholder="营业执照或注册文件上的完整名称"]')
+                ?.value,
+        ).toBe('尚未保存的公司全称');
+        expect(sellerSelect().disabled).toBe(false);
+        expect(sellerSelect().value).toBe('seller-1');
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+        expect(mutate).not.toHaveBeenCalled();
+        expect(requestConfirmation).not.toHaveBeenCalled();
+    });
+
+    it('explains missing seller permissions without offering a retry or changing the binding', async () => {
+        const retry = vi.fn();
+        await renderEditor(false, {}, { sellerOptionsState: 'forbidden', onRetrySellers: retry });
+        expect(container.textContent).toContain('当前账号没有读取商家列表的权限');
+        expect(container.textContent).toContain('暂不能更改店铺归属');
+        expect(sellerSelect().disabled).toBe(true);
+        expect(sellerSelect().value).toBe('seller-1');
+        expect(sellerSelect().textContent).toContain('大马仓库（当前绑定）');
+        expect(container.textContent).not.toContain('重试读取商家列表');
+        expect(retry).not.toHaveBeenCalled();
+    });
+
+    it('distinguishes an empty loaded seller directory and retains the current binding', async () => {
+        await renderEditor(true, {}, { sellers: [], sellerOptionsState: 'ready' });
+        expect(container.textContent).toContain('暂无可选商家主体，当前店铺归属保持不变');
+        expect(container.textContent).not.toContain('正在读取商家列表');
+        expect(container.textContent).not.toContain('商家列表读取失败');
+        expect(sellerSelect().value).toBe('seller-1');
+        expect(sellerSelect().textContent).toContain('大马仓库（当前绑定）');
+        expect(container.querySelector('[role="alert"]')).toBeNull();
+    });
+
+    it('saves unrelated profile edits during a seller read failure without rebinding or asking for a password', async () => {
+        await renderEditor(
+            false,
+            {},
+            {
+                sellerOptionsState: 'error',
+                sellerOptionsError: '本地模拟商家查询失败',
+            },
+        );
+        const legalName = container.querySelector<HTMLInputElement>(
+            'input[placeholder="营业执照或注册文件上的完整名称"]',
+        );
+        if (!legalName) throw new Error('Legal name input is missing');
+        await act(async () => setInputValue(legalName, '注册公司全称'));
+        await save();
+        expect(requestConfirmation).not.toHaveBeenCalled();
+        expect(mutate).toHaveBeenCalledOnce();
+        const input = mutate.mock.calls[0][0].variables.input;
+        expect(input.legalEntityName).toBe('注册公司全称');
+        expect(input).not.toHaveProperty('sellerId');
+        expect(input).not.toHaveProperty('currentPassword');
+        expect(onCompleted).toHaveBeenCalledWith('中文已保存，英文待同步');
     });
 
     it('explains locked activation and rejects a forced ACTIVE change before writing', async () => {

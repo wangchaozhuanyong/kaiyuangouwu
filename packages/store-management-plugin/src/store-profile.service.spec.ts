@@ -1,11 +1,12 @@
 import 'reflect-metadata';
 
 import { ContentTranslationService } from '@vendure/content-translation-plugin';
-import { Channel, EntityNotFoundError, Seller } from '@vendure/core';
+import { Asset, Channel, EntityNotFoundError, Seller } from '@vendure/core';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StoreProfile } from './entities/store-profile.entity';
+import { evaluateStoreActivationReadiness } from './store-activation-readiness.service';
 import { StoreProfileService } from './store-profile.service';
 import { StoreActivationReadiness } from './types';
 
@@ -553,9 +554,9 @@ describe('StoreProfileService', () => {
             checks: [
                 { code: 'DOMAIN', ready: false, message: '验证并设置主域名', messageEn: '' },
                 {
-                    code: 'PAYMENT',
+                    code: 'TERMS',
                     ready: false,
-                    message: '启用至少一种非测试支付方式',
+                    message: '发布使用条款（英文自动生成）',
                     messageEn: '',
                 },
             ],
@@ -568,8 +569,38 @@ describe('StoreProfileService', () => {
                 expectedUpdatedAt: current.updatedAt,
                 status: 'ACTIVE',
             }),
-        ).rejects.toThrow('验证并设置主域名；启用至少一种非测试支付方式');
+        ).rejects.toThrow('验证并设置主域名；发布使用条款（英文自动生成）');
         expect(profileRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('activates a store whose remaining launch checks pass without payment setup', async () => {
+        const current = profile({ status: 'DRAFT' });
+        const repository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const readiness = evaluateStoreActivationReadiness({
+            profile: true,
+            domain: true,
+            password: true,
+            catalog: true,
+            support: true,
+            privacy: true,
+            terms: true,
+            shipping: true,
+            payment: false,
+        });
+        const { service } = createService(repository, { find: vi.fn().mockResolvedValue([]) }, readiness);
+
+        const updated = await service.update(platformContext(), {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            status: 'ACTIVE',
+        });
+
+        expect(updated.status).toBe('ACTIVE');
+        expect(repository.save).toHaveBeenCalledOnce();
+        expect(updated.activationReadiness?.checks.some(check => check.code === 'PAYMENT')).toBe(false);
     });
 
     it('allows a SuperAdmin to update both storefront names', async () => {
@@ -725,6 +756,74 @@ describe('StoreProfileService', () => {
             }),
         );
         expect(updated.descriptionZh).toBe('新的中文简介');
+    });
+
+    it('saves all target-store brand slots from platform context without switching Channel', async () => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const assets = ['icon', 'light', 'dark'].map(slot => ({
+            id: `asset-${slot}`,
+            channelId: current.channelId,
+        }));
+        const { findOneInChannel, service } = createService(profileRepository, {
+            assets,
+            find: vi.fn().mockResolvedValue([]),
+        });
+        const ctx = platformContext();
+
+        const updated = await service.update(ctx, {
+            id: current.id,
+            expectedUpdatedAt: current.updatedAt,
+            logoAssetId: 'asset-icon',
+            logoOnLightAssetId: 'asset-light',
+            logoOnDarkAssetId: 'asset-dark',
+        });
+
+        expect(ctx.channelId).toBe('default');
+        for (const asset of assets) {
+            expect(findOneInChannel).toHaveBeenCalledWith(ctx, Asset, asset.id, current.channelId);
+        }
+        expect(updated).toMatchObject({
+            logoAssetId: 'asset-icon',
+            logoAsset: { id: 'asset-icon' },
+            logoOnLightAssetId: 'asset-light',
+            logoOnLightAsset: { id: 'asset-light' },
+            logoOnDarkAssetId: 'asset-dark',
+            logoOnDarkAsset: { id: 'asset-dark' },
+        });
+        expect(profileRepository.save).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        ['logoAssetId', 'channel-2'],
+        ['logoOnLightAssetId', 'channel-2'],
+        ['logoOnDarkAssetId', 'channel-2'],
+        ['logoAssetId', 'default'],
+        ['logoOnLightAssetId', 'default'],
+        ['logoOnDarkAssetId', 'default'],
+    ] as const)('rejects platform binding %s from non-target Channel %s', async (field, channelId) => {
+        const current = profile();
+        const profileRepository = {
+            findOne: vi.fn().mockResolvedValue(current),
+            save: vi.fn(value => Promise.resolve(value)),
+        };
+        const asset = { id: 'asset-non-target', channelId };
+        const { service } = createService(profileRepository, {
+            assets: [asset],
+            find: vi.fn().mockResolvedValue([]),
+        });
+
+        await expect(
+            service.update(platformContext(), {
+                id: current.id,
+                expectedUpdatedAt: current.updatedAt,
+                [field]: asset.id,
+            }),
+        ).rejects.toBeInstanceOf(EntityNotFoundError);
+        expect(profileRepository.save).not.toHaveBeenCalled();
     });
 
     it('only accepts branding assets assigned to the active Channel', async () => {

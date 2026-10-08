@@ -1,79 +1,73 @@
-/* Shared non-desktop overlays; phones use the proportions of the approved reference. */
+/* Full managed copy stays inside the photograph and determines the scene's natural height. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
-        min-height: 0;
-        aspect-ratio: 12 / 5;
+        min-height: 280px;
+        aspect-ratio: auto;
         background: var(--surface);
     }
 
     .hero.hero-image-overlay .hero-carousel-stage {
-        position: absolute;
-        inset: 0;
+        position: relative;
     }
 
     .hero.hero-image-overlay .hero-scene-wrapper {
-        position: absolute;
-        inset: 0;
+        position: relative;
         display: block;
         width: 100%;
-        height: 100%;
-        background: var(--surface);
+        height: auto;
+        background: var(--hero-copy-background);
     }
 
     .hero.hero-image-overlay .hero-rich-media {
-        position: relative;
-        inset: auto;
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
     }
 
     .hero.hero-image-overlay .hero-rich-image-link,
     .hero.hero-image-overlay .safe-image-frame {
-        position: relative;
-        inset: auto;
+        position: absolute;
+        inset: 0;
         display: block;
         width: 100%;
         height: 100%;
         border-radius: 0;
-        background: var(--surface);
+        background: var(--hero-copy-background);
     }
 
     .hero.hero-image-overlay .hero-rich-backdrop {
         display: block;
         width: 100%;
         height: 100%;
-        object-fit: contain;
+        object-fit: cover;
     }
 
     .hero.hero-image-overlay .safe-image-preview {
-        object-fit: contain;
+        object-fit: cover;
     }
 
     .hero.hero-image-overlay .hero-rich-content {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        min-height: 0;
+        position: relative;
+        inset: auto;
+        width: calc(200% / 3 - 20px);
+        height: auto;
+        min-height: 280px;
         max-height: none;
-        margin: 0;
-        padding: var(--space-8) var(--space-12) calc(var(--hero-overlay-height, 0px) + var(--space-12));
-        gap: var(--space-8);
+        margin: 0 0 0 20px;
+        padding: 24px 0 calc(var(--hero-overlay-height, 0px) + 32px);
+        gap: 18px;
         background: transparent;
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
-    /* Copy owns the available space; the left-aligned action and service strip remain outside scrolling. */
     .hero.hero-image-overlay .hero-rich-copy-region {
         display: block;
         width: 100%;
         min-width: 0;
         min-height: 0;
-        flex: 1;
-        overflow-y: auto;
-        overscroll-behavior-y: contain;
-        touch-action: pan-y;
-        scrollbar-width: thin;
-        pointer-events: auto;
+        flex: none;
+        overflow: visible;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {
@@ -82,34 +76,43 @@
         min-height: 0;
         grid-auto-rows: min-content;
         align-content: start;
-        gap: 6px;
+        gap: 12px;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-title {
-        order: -2;
         font-size: var(--type-hero-size);
         line-height: var(--type-hero-leading);
         text-wrap: pretty;
         overflow-wrap: anywhere;
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-desc {
-        order: -1;
-        font-size: var(--type-helper-size);
-        line-height: var(--type-helper-leading);
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
         font-weight: var(--font-weight-normal);
+        color: var(--hero-image-body-foreground, var(--hero-image-copy-foreground, var(--text)));
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-pill {
         font-size: var(--type-meta-size);
         line-height: var(--type-meta-leading);
         letter-spacing: var(--tracking-normal);
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
     .hero.hero-image-overlay .hero-rich-stats-row {
         min-height: 0;
         margin-top: var(--space-8);
         overflow: visible;
+    }
+
+    .hero.hero-image-overlay .hero-stat-badge .stat-num {
+        color: var(--hero-image-copy-foreground, var(--text));
+    }
+
+    .hero.hero-image-overlay .hero-stat-badge .stat-lbl {
+        color: var(--hero-image-body-foreground, var(--hero-image-copy-foreground, var(--text)));
     }
 
     .hero.hero-image-overlay .hero-rich-cta-btn {
@@ -120,13 +123,14 @@
         line-height: var(--type-action-leading);
         max-width: 100%;
         min-height: var(--experience-control-min, 44px);
-        white-space: nowrap;
+        white-space: normal;
+        text-align: left;
     }
 
     .hero.hero-image-overlay .hero-rich-cta-label {
         min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow: visible;
+        overflow-wrap: anywhere;
     }
 
     .hero.hero-image-overlay .hero-rich-cta-btn svg {
@@ -134,79 +138,20 @@
     }
 
     .home-page .hero.hero-image-overlay .hero-overlay-controls {
-        position: absolute;
-        bottom: var(--space-8);
-        left: 12px;
-        right: 12px;
-        transform: none;
-        width: auto;
-        max-width: none;
+        bottom: 12px;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: calc(100% - 32px);
         margin: 0;
         padding: 0;
-    }
-
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar,
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar.has-long-copy {
-        padding: 0;
-        border-radius: 0;
-        background: transparent;
-    }
-}
-
-@media (max-width: 767px) {
-    .hero.hero-image-overlay {
-        aspect-ratio: 16 / 9;
-    }
-
-    .hero.hero-image-overlay .hero-rich-copy-region {
-        width: 60%;
-    }
-
-    .hero.hero-image-overlay .hero-rich-cta-btn {
-        max-width: 60%;
-    }
-
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar,
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-bar.has-long-copy {
-        padding: var(--space-4);
-        border-radius: var(--skin-control-radius);
-        background: var(--surface);
-        color: var(--text);
-    }
-
-    .home-page .hero.hero-image-overlay .hero-service-overlay .home-trust-item {
-        color: var(--text);
     }
 }
 
 @media (max-width: 389px) {
     .hero.hero-image-overlay .hero-rich-content {
-        gap: var(--space-4);
-    }
-
-    .hero.hero-image-overlay .hero-rich-copy-surface {
-        gap: 4px;
-    }
-}
-
-/* Keep the same full artwork usable on narrow phones without shrinking its type or CTA. */
-@media (max-width: 359px) {
-    .hero.hero-image-overlay .hero-rich-content {
-        padding: var(--space-4) var(--space-4) calc(var(--hero-overlay-height, 0px) + 6px);
-        gap: 2px;
-    }
-
-    .hero.hero-image-overlay .hero-rich-copy-surface {
-        gap: 2px;
-    }
-
-    .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-title {
-        text-wrap: wrap;
-    }
-
-    .home-page .hero.hero-image-overlay .hero-overlay-controls {
-        bottom: var(--space-4);
-        left: var(--space-4);
-        right: var(--space-4);
+        width: calc(200% / 3 - 16px);
+        margin-left: 16px;
     }
 }

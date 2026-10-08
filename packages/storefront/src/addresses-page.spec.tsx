@@ -881,14 +881,15 @@ describe('AddressesPage asynchronous contact readiness', () => {
             if (failure === 'offline') onlineManager.setOnline(false);
             else readEmails.mockRejectedValueOnce(new Error('Synthetic email failure'));
             render();
-            await eventually(() =>
+            await eventually(() => {
                 expect(
                     failure === 'offline'
                         ? client.getQueryState(emailKey())?.fetchStatus
                         : client.getQueryState(emailKey())?.status,
-                ).toBe(failure === 'offline' ? 'paused' : 'error'),
-            );
-            expect(host.querySelector('[role="alert"]')).not.toBeNull();
+                ).toBe(failure === 'offline' ? 'paused' : 'error');
+                // Cache status changes before the batched React notification commits the alert.
+                expect(host.querySelector('[role="alert"]')).not.toBeNull();
+            });
             expect(host.textContent).not.toContain('还没有交付邮箱');
             expect(host.textContent).not.toContain('还没有收货地址');
             const retry = button('重试');
