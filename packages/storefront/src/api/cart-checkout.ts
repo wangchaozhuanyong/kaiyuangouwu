@@ -16,6 +16,11 @@ import type {
     StorefrontUsdtCheckoutQuote,
 } from '../types';
 
+import {
+    CartCommandAcknowledgedReadError,
+    CartCommandNotExecutedError,
+    CartScopeChangedError,
+} from '../cart/cart-repository';
 import { cartLineCanSelect } from '../product-availability';
 
 import { BaseDomainApi } from './base-domain-api';
@@ -26,10 +31,16 @@ import {
     customerCouponFields,
     orderFields,
 } from './fragments';
-import { ShopApiError, type ErrorResult } from './helpers';
+import { ShopApiError, ShopApiGraphQlError, type ErrorResult } from './helpers';
+
+type CommandReceipt = Omit<CartCommandResult, 'cart' | 'session'> & {
+    cart: Pick<StorefrontCart, 'id' | 'revision'>;
+    session: (Pick<StorefrontCheckoutSession, 'checkout'> & { order: Pick<Order, 'id'> }) | null;
+};
 
 export class CartCheckoutApi extends BaseDomainApi {
     controller?: CartController;
+    private readonly acknowledgedCommands = new Map<string, CommandReceipt>();
     private readonly paymentMethodRequests = new Map<
         string,
         { expiresAt: number; promise: Promise<PaymentMethod[]>; data?: PaymentMethod[] }
@@ -45,31 +56,87 @@ export class CartCheckoutApi extends BaseDomainApi {
     }
 
     private async applyCommand(input: CartCommand): Promise<CartCommandResult> {
-        const result = await this.request<{ applyStorefrontCartCommand: CartCommandResult }>(
-            `
+        let result: { applyStorefrontCartCommand: CommandReceipt };
+        try {
+            result = await this.request<{ applyStorefrontCartCommand: CommandReceipt }>(
+                `
             mutation ApplyStorefrontCartCommand($input: StorefrontCartCommandInput!) {
                 applyStorefrontCartCommand(input: $input) { ${commandResultFields} }
             }`,
-            { input },
-            undefined,
-            20_000,
-            true,
-        );
-        return hydrateCommandResult(result.applyStorefrontCartCommand);
+                { input },
+                undefined,
+                20_000,
+                true,
+            );
+        } catch (error) {
+            // Only a document rejected before execution can safely release the initial command.
+            if (error instanceof ShopApiGraphQlError && error.requestNotExecuted)
+                throw new CartCommandNotExecutedError(error.message, error);
+            throw error;
+        }
+        return this.readCommandResult(result.applyStorefrontCartCommand, input.commandId);
     }
 
     private async recoverCommand(commandId: string, cancel: boolean): Promise<CartCommandResult> {
-        const result = await this.request<{ recoverStorefrontCartCommand: CartCommandResult }>(
+        const cartId = this.controller?.repository.snapshot?.id;
+        const acknowledged = this.acknowledgedCommands.get(commandId);
+        if (acknowledged && acknowledged.cart.id === cartId)
+            return this.readCommandResult(acknowledged, commandId);
+        this.acknowledgedCommands.delete(commandId);
+        const result = await this.request<{ recoverStorefrontCartCommand: CommandReceipt }>(
             `
             mutation RecoverStorefrontCartCommand($cartId: ID!, $commandId: String!, $cancel: Boolean!) {
                 recoverStorefrontCartCommand(cartId: $cartId, commandId: $commandId, cancel: $cancel) { ${commandResultFields} }
             }`,
-            { cartId: this.controller?.repository.snapshot?.id, commandId, cancel },
+            { cartId, commandId, cancel },
             undefined,
             20_000,
             true,
         );
-        return hydrateCommandResult(result.recoverStorefrontCartCommand);
+        return this.readCommandResult(result.recoverStorefrontCartCommand, commandId);
+    }
+
+    private async readCommandResult(receipt: CommandReceipt, commandId: string): Promise<CartCommandResult> {
+        if (
+            !receipt ||
+            receipt.commandId !== commandId ||
+            !['APPLIED', 'REJECTED', 'CANCELLED', 'NOT_FOUND'].includes(receipt.status) ||
+            !receipt.cart?.id ||
+            !Number.isSafeInteger(receipt.cart.revision) ||
+            receipt.cart.revision < 0 ||
+            (receipt.appliedRevision != null &&
+                (!Number.isSafeInteger(receipt.appliedRevision) || receipt.appliedRevision < 0)) ||
+            (receipt.status === 'APPLIED' && receipt.appliedRevision == null)
+        )
+            throw new Error('The server did not return a valid cart receipt.');
+
+        const terminal = receipt.status !== 'NOT_FOUND';
+        // Keep the outcome separate from projections: their read can fail after the write committed.
+        if (terminal) this.acknowledgedCommands.set(commandId, receipt);
+        try {
+            const fetched = await this.readCart();
+            const confirmed = this.controller?.repository.snapshot;
+            if (fetched.id !== receipt.cart.id || (confirmed && fetched.id !== confirmed.id)) {
+                this.acknowledgedCommands.delete(commandId);
+                throw new CartScopeChangedError(fetched);
+            }
+            const cart = confirmed && confirmed.revision > fetched.revision ? confirmed : fetched;
+            if (
+                cart.revision < receipt.cart.revision ||
+                (receipt.appliedRevision != null && cart.revision < receipt.appliedRevision)
+            )
+                throw new Error('The cart read has not caught up with its confirmed receipt.');
+            const result = hydrateCommandResult(receipt, cart);
+            this.acknowledgedCommands.delete(commandId);
+            return result;
+        } catch (error) {
+            if (error instanceof CartScopeChangedError || !terminal) throw error;
+            throw new CartCommandAcknowledgedReadError(
+                commandId,
+                'The cart command was acknowledged, but its current details could not be read.',
+                error,
+            );
+        }
     }
 
     async cart(signal?: AbortSignal): Promise<StorefrontCart> {
@@ -861,6 +928,9 @@ export class CartCheckoutApi extends BaseDomainApi {
                 }
             `,
             { input: { method, metadata } },
+            undefined,
+            20_000,
+            true,
         );
         if (result.addPaymentToOrder.paymentErrorMessage?.startsWith('PAYMENT_REVIEW_REQUIRED:'))
             throw new ShopApiError('PAYMENT_REVIEW_REQUIRED', 'PAYMENT_REVIEW_REQUIRED');
@@ -869,8 +939,8 @@ export class CartCheckoutApi extends BaseDomainApi {
 }
 
 const commandResultFields = `commandId status appliedRevision errorCode message
-    cart { ${cartFields} }
-    session { checkout { id cartRevision state completedAt } }
+    cart { id revision }
+    session { order { id } checkout { id cartRevision state completedAt } }
     shippingMethods { id code name description priceWithTax metadata }
     selectedShippingMethodId`;
 function requiredOrder(result: CartCommandResult): Order {
@@ -899,12 +969,25 @@ function selectShippingMethod(
     );
 }
 
-function hydrateCommandResult(result: CartCommandResult): CartCommandResult {
+function hydrateCommandResult(result: CommandReceipt, cart: StorefrontCart): CartCommandResult {
+    const sameRevision = result.cart.revision === cart.revision;
+    const checkout = result.session?.checkout;
+    const sessionCurrent = checkout
+        ? cart.state === 'PAYMENT_PENDING' &&
+          checkout.state === 'PREPARED' &&
+          checkout.cartRevision === cart.revision
+        : cart.state === 'OPEN';
     return {
         ...result,
+        cart,
+        shippingMethods: sameRevision ? result.shippingMethods : null,
+        selectedShippingMethodId: sameRevision ? result.selectedShippingMethodId : null,
         session:
-            result.session && result.cart.checkoutOrder
-                ? { ...result.session, cart: result.cart, order: result.cart.checkoutOrder }
+            result.session &&
+            cart.checkoutOrder &&
+            result.session.order?.id === cart.checkoutOrder.id &&
+            sessionCurrent
+                ? { ...result.session, cart, order: cart.checkoutOrder }
                 : null,
     };
 }

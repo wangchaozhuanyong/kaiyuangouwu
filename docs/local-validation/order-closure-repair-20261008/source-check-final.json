@@ -1,0 +1,94 @@
+{
+  "ok": true,
+  "checked": "design-source-files-and-optional-local-server-directory",
+  "registry": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/design-preview-baselines.json",
+  "surface": "storefront-payment-recovery",
+  "baseline": {
+    "id": "storefront-payment-recovery-20261008",
+    "implementationCommit": "5d5aa0ee9149232351926db473710361094ff698",
+    "status": "local-verified-unpublished",
+    "decision": "按用户明确要求执行下单/后台审计修复方案。付款结果未知保留原尝试只读核对；普通付款与余额共用锁；原币种回执查询；USDT准备失败仅重试核对；刷新标记恢复及付款成功后同步父订单。沿用已确认皮肤、字体和实际 PaymentPage。",
+    "sourceFiles": [
+      "packages/storefront/src/payment-pages.tsx",
+      "packages/storefront/src/api.ts",
+      "packages/storefront/src/api/account.ts",
+      "packages/storefront/src/api/base-domain-api.ts",
+      "packages/storefront/src/api/client-context.ts",
+      "packages/storefront/src/api/cart-checkout.ts",
+      "packages/storefront/src/api/referrals.ts",
+      "packages/storefront/src/query-client.ts",
+      "packages/storefront/src/use-storefront-visual-preset.ts",
+      "packages/storefront/src/hooks/useStorefrontDocument.ts",
+      "packages/storefront-content-plugin/src/shared/storefront-semantic-palette.ts",
+      "packages/storefront-content-plugin/src/visual-presets.ts",
+      "packages/storefront/src/storefront-ui/page-shell.tsx",
+      "packages/storefront/src/styles.css",
+      "packages/storefront/src/styles/checkout-payment-surfaces.css",
+      "packages/storefront/src/styles/state-surfaces.css",
+      "packages/storefront/src/styles/desktop-commerce.css",
+      "packages/storefront/src/styles/desktop-pages.css",
+      "packages/storefront/src/styles/visual-presets.css"
+    ],
+    "sourceReconciliation": "核对 shared-feedback-and-coupon-center 与 storefront-typography-system 旧登记及主工作区/其他 worktree 的补款、数字交付、临时预览 WIP。本轮有授权的功能差异单独登记，不覆盖旧设计条目、不复制其他 WIP；保留候选已有购物车和三处排版修复。未把 main 或线上旧付款页作为最新来源。",
+    "currentEvidence": {
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "5d5aa0ee9149232351926db473710361094ff698",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/order-closure-repair-20261008/local-receipt.json",
+      "browserRecord": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/order-closure-repair-20261008/storefront-browser-summary.json",
+      "mobileScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/order-closure-repair-20261008/payment-confirmed-390.png",
+      "desktopScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/order-closure-repair-20261008/payment-currency-recovery-1440.png",
+      "dataSource": "实际候选 PaymentPage/ShopApi/QueryClient/共享样式，内存合成订单及响应；无真实身份、资金、凭据或生产请求。",
+      "acceptanceScope": "32个唯一前台浏览器场景，390/1440px、中英文、两套皮肤。两批各16，每批48来源指纹稳定；批次间仅 paid无token分支同步父订单一行及对应spec，受影响恢复场景在第二批验证。不是整个应用硬刷新或生产闭环。"
+    },
+    "verification": "本地193个前台唯一有效测试、32个前台浏览器场景通过，受影响TS/lint及完整前台构建通过；未推送或发布。并行交付后台及相关后端修复总计510测试、38浏览器场景。390英文USDT错误说明列偏窄的非阻塞观察保留在报告。"
+  },
+  "candidate": {
+    "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+    "branch": "fix/responsive-three-surfaces-20261008",
+    "head": "5d5aa0ee",
+    "changedFiles": []
+  },
+  "preview": {
+    "url": "http://127.0.0.1:5428/tmp/order-closure-browser/index.html?scenario=unknown&language=zh&preset=classic",
+    "processes": [
+      {
+        "pid": 94046,
+        "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008/packages/storefront",
+        "worktreeRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+        "matches": true
+      }
+    ],
+    "matches": true
+  },
+  "matchingWorktrees": [
+    {
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+      "head": "5d5aa0ee",
+      "matchesBaseline": true,
+      "relatedChanges": []
+    }
+  ],
+  "relatedWipWorktrees": [
+    {
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/order-mobile-mail-compat-20261005",
+      "head": "a9109e4c",
+      "matchesBaseline": false,
+      "relatedChanges": [
+        "MM packages/storefront/src/api.ts",
+        "M  packages/storefront/src/api/account.ts",
+        "M  packages/storefront/src/payment-pages.tsx"
+      ]
+    },
+    {
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/public-preview-closure-20261006",
+      "head": "71c63147",
+      "matchesBaseline": false,
+      "relatedChanges": [
+        "M packages/storefront/src/query-client.ts"
+      ]
+    }
+  ],
+  "issues": [],
+  "note": "源码一致不等于画面验收通过。仍须核对实际客户端、后台预览、配置和截图；文件差异需按本次授权核对，不能删掉新代码来通过检查。"
+}

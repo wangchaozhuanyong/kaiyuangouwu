@@ -260,7 +260,7 @@
         max-width: min(40%, 320px);
         display: flex;
         align-items: stretch;
-        min-height: calc(var(--type-meta-leading) + var(--space-16));
+        min-height: 44px;
         gap: 0;
         padding: 0 var(--space-4);
         overflow-x: auto;
@@ -268,10 +268,10 @@
         cursor: default;
     }
 
-    .hero-page-picker button {
-        flex: 0 0 36px;
-        width: 36px;
-        min-height: calc(var(--type-meta-leading) + var(--space-16));
+    .hero-page-picker :is(button, .hero-page-static-number) {
+        flex: 0 0 44px;
+        width: 44px;
+        min-height: 44px;
         padding: 0;
         display: grid;
         place-items: center;
@@ -287,6 +287,11 @@
         transition:
             background-color 150ms ease,
             color 150ms ease;
+    }
+
+    .hero-page-picker .hero-page-static-number {
+        font-weight: var(--font-weight-bold);
+        cursor: default;
     }
 
     .hero-page-picker button:hover {

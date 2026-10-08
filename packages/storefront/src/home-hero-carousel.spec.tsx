@@ -645,6 +645,19 @@ describe('HomePage carousel pointer interactions', () => {
             expect(target).not.toHaveBeenCalled();
         },
     );
+    it('shows a static current page for one desktop image without enabling slide navigation', async () => {
+        await render(true, [heroes[0]]);
+        const pager = requiredElement(activeSlide(), '.hero-page-picker');
+        expect(pager.textContent?.trim()).toBe('1');
+        expect(pager.querySelector('button')).toBeNull();
+        expect(pager.querySelector('[aria-current="true"]')?.getAttribute('aria-label')).toBe(
+            '当前第 1 张图片',
+        );
+        await advance(10_000);
+        expect(activeSlide().textContent).toContain('First slide');
+        expect(host.querySelector('.is-neighbor')).toBeNull();
+        expect(target).not.toHaveBeenCalled();
+    });
     it('preserves numbered selection and recovers when decoding a slide fails', async () => {
         await render(true);
         vi.mocked(productDisplay.decodeStorefrontImage).mockRejectedValue(new Error('Image unavailable'));
@@ -762,6 +775,7 @@ describe('HomePage carousel pointer interactions', () => {
         'reserves measured trust height below copy and releases it when the strip is removed (%s)',
         async desktop => {
             let trustHeight = 40;
+            let pagerWidth = 140;
             const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
             boundsMock.mockImplementation(function (this: Element) {
                 // Model the bottom reservation and its 12px gap only while a trust strip is present.
@@ -781,7 +795,7 @@ describe('HomePage carousel pointer interactions', () => {
                     left: 0,
                     right: 360,
                     bottom: height,
-                    width: 360,
+                    width: this.matches('.hero-overlay-controls') ? pagerWidth : 360,
                     height,
                     toJSON: () => ({}),
                 };
@@ -789,6 +803,7 @@ describe('HomePage carousel pointer interactions', () => {
             await render(desktop, [heroes[0]]);
             const viewport = requiredElement(host, '.hero');
             const stage = requiredElement(host, '.hero-carousel-stage');
+            const carousel = requiredElement(host, '.hero-carousel');
             expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
             expect(stage.style.height).toBe('320px');
 
@@ -813,14 +828,20 @@ describe('HomePage carousel pointer interactions', () => {
             const trust = requiredElement(host, '.home-hero-trust');
             expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('40px');
             expect(stage.style.height).toBe('372px');
+            if (desktop) {
+                expect(carousel.contains(trust)).toBe(true);
+                expect(carousel.style.getPropertyValue('--home-hero-pager-width')).toBe('140px');
+            }
             const observer = resizeObservers.find(candidate => candidate.elements.has(trust));
             expect(observer).toBeDefined();
             if (!observer) throw new Error('Expected the shared hero observer to observe its trust strip');
 
             trustHeight = 64;
+            pagerWidth = 52;
             await interact(() => observer.notify());
             expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('64px');
             expect(stage.style.height).toBe('396px');
+            if (desktop) expect(carousel.style.getPropertyValue('--home-hero-pager-width')).toBe('52px');
 
             await render(desktop, [heroes[0]]);
             expect(host.querySelector('.home-hero-trust')).toBeNull();

@@ -1,0 +1,93 @@
+{
+  "status": "local-verified-unpublished",
+  "codeCommit": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+  "branch": "fix/responsive-three-surfaces-20261008",
+  "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+  "base": "1ab589d7cd8c2aa41be5d014bc7f10a4df39c7f3",
+  "production": "NOT_PUBLISHED",
+  "remoteActions": [],
+  "changedFiles": [
+    "packages/storefront/DESKTOP_SKIN_DESIGN_CONTRACT.md",
+    "packages/storefront/src/home-hero-carousel.spec.tsx",
+    "packages/storefront/src/home-page.spec.tsx",
+    "packages/storefront/src/pages/home-page.tsx",
+    "packages/storefront/src/pages/logistics-page.tsx",
+    "packages/storefront/src/pages/referral-page.tsx",
+    "packages/storefront/src/referral-page.spec.tsx",
+    "packages/storefront/src/skin-system.spec.ts",
+    "packages/storefront/src/styles/desktop-home.css",
+    "packages/storefront/src/styles/home-showcase.css",
+    "packages/storefront/src/styles/logistics.css",
+    "packages/storefront/src/styles/referral.css"
+  ],
+  "checks": {
+    "targetedTests": {
+      "home-hero-carousel.spec.tsx": 39,
+      "home-page.spec.tsx": 102,
+      "skin-system.spec.ts": 45,
+      "order-pages.spec.tsx": 23,
+      "referral-page.spec.tsx": 8
+    },
+    "uniquePassingTests": 217,
+    "interaction": "PASS",
+    "typography": "PASS 347 source files / 91 tokens",
+    "storefrontUnification": "PASS 1023 runtime files",
+    "typescript": "PASS",
+    "storefrontProductionBuild": "PASS",
+    "twoFactorBuild": "PASS",
+    "productionBuildLocalizationAndBudgets": "PASS",
+    "preCommitLintAndFormatting": "PASS",
+    "diffCheck": "PASS"
+  },
+  "browser": {
+    "cases": 43,
+    "failures": 0,
+    "widths": [
+      320,
+      390,
+      768,
+      1024,
+      1280,
+      1440
+    ],
+    "skins": [
+      "classic",
+      "neo-minimalist"
+    ],
+    "languages": [
+      "zh",
+      "en"
+    ],
+    "actualSource": "Built candidate storefront and Admin same-origin actual-component iframe",
+    "data": "Local synthetic customer/CMS/orders, existing sample images. 12,345 loaded orders searched to 5 visible QA-SHOW rows; no production writes.",
+    "functions": [
+      "five logistics filters preserve search/URL",
+      "refresh",
+      "numbered slide selection",
+      "single-image static current page",
+      "copy success status",
+      "poster preview generation",
+      "search submit narrows visible QA-SHOW records to one"
+    ],
+    "clipboardNote": "Browser copy shows success. CUA clipboard payload read was empty; exact copy/share payload is verified by existing referral-page targeted tests. Native share was not sent."
+  },
+  "notes": [
+    "Only these three components were accepted; whole-site/production layout unverified.",
+    "Long English caught a pager/trust reservation inheritance bug; fixed by placing measured width on shared carousel ancestor and reverified.",
+    "Earlier speculative geometry while responsive height transitions were running is preserved in raw browser-results.json; finalResults explicitly uses settled final homepage state."
+  ],
+  "sourceSha256": {
+    "packages/storefront/DESKTOP_SKIN_DESIGN_CONTRACT.md": "1fea5dbe93c6fd98e295c46b4283532d824ff651807ac49d5d216e4ed17d9d64",
+    "packages/storefront/src/home-hero-carousel.spec.tsx": "a8d49bf6672d16f1ec7c4e2eef9eff89b7a776ffc1352dca93f9b6763eae56cc",
+    "packages/storefront/src/home-page.spec.tsx": "9e3d45bd67f22c5de08a3222cd95621535f0a63f6bdba19700e2b7be58ac0b40",
+    "packages/storefront/src/pages/home-page.tsx": "2880f7188851e9dcddde6a63fc228a9d40458f395aa977e87d8b9e524d4a0bc1",
+    "packages/storefront/src/pages/logistics-page.tsx": "65dc54b23411ba2851945bf8e67b25c8a138faa014f3761b7379503087880211",
+    "packages/storefront/src/pages/referral-page.tsx": "3e3f095af76180a6d04dfa426b57203393f99f9e42f853e7cfd45923af2ba6cf",
+    "packages/storefront/src/referral-page.spec.tsx": "f2dcc068aee516feaf0201c8ec0089a667ba46f54cf7b2ef90601bb8299492b2",
+    "packages/storefront/src/skin-system.spec.ts": "f086f65d339b73d3be28b15e3ad29c07d08457c6a3b56685d9a8c4c4d98c2222",
+    "packages/storefront/src/styles/desktop-home.css": "c67a0004a3949c7184b13e7b6924244ae42437f89a7b8b5d3dedc2dfd736dc6c",
+    "packages/storefront/src/styles/home-showcase.css": "2d2eb990bbc833acada7275389077a2f65e1d5b7f9ea1875ca639e6dddf8ef44",
+    "packages/storefront/src/styles/logistics.css": "1d03a14482883c7b79d4ba007d76d3c3e2f8bc93a976c485acc2be72a2e7f189",
+    "packages/storefront/src/styles/referral.css": "bd5f3f79778aa415c3c57d5e4d209339e2b56cf5b1de437de2821f2c68c0145f"
+  }
+}

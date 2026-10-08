@@ -118,7 +118,9 @@ describe('referral page reward summary', () => {
         const markup = renderReferralPage();
         expect(markup).toContain('我的邀请码');
         expect(markup).toContain('INVITE88');
-        expect(markup).toMatch(/<label[^>]*>.*邀请链接<\/label>/);
+        const linkLabel = markup.match(/<label class="sr-only" for="([^"]+)">邀请链接<\/label>/);
+        expect(linkLabel).not.toBeNull();
+        expect(markup).toContain(`<input id="${linkLabel?.[1]}" class="referral-invite-url"`);
         expect(markup).toMatch(/<input[^>]*value="https:\/\/storefront.example.com\/register\?ref=INVITE88/);
         expect(markup).toContain('readOnly=""');
         expect(markup).toContain('复制邀请链接');

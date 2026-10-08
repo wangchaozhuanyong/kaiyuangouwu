@@ -538,6 +538,55 @@
     text-decoration: underline;
     text-underline-offset: 3px;
 }
+.cart-recovery-panel {
+    margin: var(--space-12) var(--page-section-inset, var(--space-12));
+    padding: var(--space-16);
+    border-radius: var(--skin-card-radius);
+    background: var(--soft);
+    color: var(--text);
+}
+.cart-recovery-panel p {
+    margin: 0;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.cart-recovery-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    margin-top: var(--space-12);
+}
+.cart-recovery-actions button {
+    min-width: 0;
+    min-height: var(--experience-control-min);
+    padding: var(--space-8) var(--space-12);
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+}
+.cart-recovery-actions button:first-child {
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+.cart-recovery-actions button:hover:not(:disabled) {
+    background: var(--control-surface-hover);
+}
+.cart-recovery-actions button:first-child:hover:not(:disabled) {
+    background: var(--accent-hover);
+}
+.cart-recovery-actions button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+.cart-recovery-actions button:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
 .cart-stock-notice {
     margin: 0 0 12px;
     padding: 12px;

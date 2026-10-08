@@ -25,7 +25,7 @@ import {
     Truck,
     X,
 } from 'lucide-react';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -38,9 +38,12 @@ import {
     TRANSITION_SALES_FULFILLMENT,
 } from '../../graphql/sales.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { publishAdminFeedback } from '../../utils/admin-feedback';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -243,6 +246,18 @@ export function SalesModule() {
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
     const [batchProgress, setBatchProgress] = useState('');
+    const [batchOrders, setBatchOrders] = useState<SalesOrderItem[]>([]);
+    const [batchSummary, setBatchSummary] = useState('');
+    const [batchNeedsVerification, setBatchNeedsVerification] = useState(false);
+    const [batchPhase, setBatchPhase] = useState<'idle' | 'writing' | 'reading' | 'read-failed' | 'done'>(
+        'idle',
+    );
+    const batchRunning = useRef(false);
+    const batchReadRunning = useRef(false);
+    useUnsavedChangesWarning(
+        batchPhase === 'writing' || batchPhase === 'reading' || batchPhase === 'read-failed',
+        '批量发货结果尚未完成核对。离开后请勿重复提交，确定离开吗？',
+    );
 
     const queryVariables = useMemo(() => {
         return {
@@ -270,6 +285,12 @@ export function SalesModule() {
     const [transitionFulfillment, { loading: transitioning }] = useMutation<{
         transitionFulfillmentToState: FulfillmentMutationData['addFulfillmentToOrder'];
     }>(TRANSITION_SALES_FULFILLMENT);
+    const batchLocked =
+        fulfilling ||
+        transitioning ||
+        batchPhase === 'writing' ||
+        batchPhase === 'reading' ||
+        batchPhase === 'read-failed';
     const orders = data?.orders?.items ?? EMPTY_ORDERS;
     const totalItems = data?.orders?.totalItems ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -355,37 +376,73 @@ export function SalesModule() {
         setMobileFilterDraft(null);
     };
     const openBatchFulfillment = () => {
-        if (selectedOrders.length === 0) return;
+        if (!canUpdateOrder || batchRunning.current || selectedOrders.length === 0) return;
+        setBatchOrders(selectedOrders);
         setTrackingCodes(
             Object.fromEntries(selectedOrders.map(order => [order.id, trackingCodes[order.id] ?? ''])),
         );
         setActionError('');
         setBatchProgress('');
+        setBatchSummary('');
+        setBatchNeedsVerification(false);
+        setBatchPhase('idle');
         setIsBatchOpen(true);
     };
 
+    const readBatchResult = async (needsVerification = batchNeedsVerification) => {
+        if (batchReadRunning.current) return;
+        batchReadRunning.current = true;
+        setBatchPhase('reading');
+        setActionError('');
+        let failed = false;
+        try {
+            const onReadError = (message: string) => {
+                failed = true;
+                setActionError(message);
+            };
+            if (needsVerification) {
+                // Some responses are unknown: a failed read must not announce that all writes completed.
+                try {
+                    await refetch();
+                } catch {
+                    const message = '本次批量处理结果已保留，但最新履约读取失败。请核对后继续，勿重复提交。';
+                    onReadError(message);
+                    publishAdminFeedback({ kind: 'info', title: '批量处理结果需核对', message });
+                }
+            } else {
+                await refreshAfterAdminWrite(() => refetch(), onReadError);
+            }
+            setBatchPhase(failed ? 'read-failed' : 'done');
+        } finally {
+            batchReadRunning.current = false;
+        }
+    };
+
     const handleBatchFulfillment = async () => {
+        if (!canUpdateOrder || batchRunning.current || batchPhase !== 'idle') return;
         const normalizedCarrier = carrier.trim();
         if (!normalizedCarrier) {
             setActionError('请填写物流公司或配送方式');
             return;
         }
-        const missingTrackingOrder = selectedOrders.find(order => !trackingCodes[order.id]?.trim());
+        const missingTrackingOrder = batchOrders.find(order => !trackingCodes[order.id]?.trim());
         if (missingTrackingOrder) {
             setActionError(`订单 ${missingTrackingOrder.code} 尚未填写运单号`);
             return;
         }
 
         setActionError('');
+        batchRunning.current = true;
+        setBatchPhase('writing');
         const failures: string[] = [];
         let successCount = 0;
-        for (let index = 0; index < selectedOrders.length; index += 1) {
-            const order = selectedOrders[index];
+        for (let index = 0; index < batchOrders.length; index += 1) {
+            const order = batchOrders[index];
             if (!canCreatePhysicalFulfillment(order.state)) {
                 failures.push(`${order.code}：订单未付款或未授权，不能发货`);
                 continue;
             }
-            setBatchProgress(`正在处理 ${index + 1}/${selectedOrders.length}：${order.code}`);
+            setBatchProgress(`正在处理 ${index + 1}/${batchOrders.length}：${order.code}`);
             try {
                 const response = await addFulfillment({
                     variables: {
@@ -416,21 +473,23 @@ export function SalesModule() {
                         `${order.code}：履约已创建，但标记发货失败（${getMutationError(transitionResult)}）`,
                     );
             } catch (mutationError) {
-                failures.push(`${order.code}：${toUserFacingError(mutationError, '发货请求失败')}`);
+                failures.push(
+                    `${order.code}：${toUserFacingError(mutationError, '发货请求结果尚未确认')}；请核对履约记录，勿重复提交`,
+                );
             }
         }
 
         setBatchProgress('');
-        await refetch();
         setSelectedOrderIds([]);
-        if (failures.length) {
-            setActionError(`已成功 ${successCount} 笔，失败 ${failures.length} 笔。${failures.join('；')}`);
-            return;
+        setBatchNeedsVerification(failures.length > 0);
+        setBatchSummary(
+            `已确认发货 ${successCount} 笔，需核对/处理 ${failures.length} 笔。${failures.join('；')}`,
+        );
+        try {
+            await readBatchResult(failures.length > 0);
+        } finally {
+            batchRunning.current = false;
         }
-        setIsBatchOpen(false);
-        setCarrier('');
-        setTrackingCodes({});
-        showNotice(`已创建 ${successCount} 笔真实履约记录`);
     };
 
     const exportCurrentPage = () => {
@@ -1291,12 +1350,12 @@ export function SalesModule() {
             {canUpdateOrder && isBatchOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
-                    onClick={() => !fulfilling && !transitioning && setIsBatchOpen(false)}
+                    onClick={() => !batchLocked && setIsBatchOpen(false)}
                 >
                     <AccessibleDialogSurface
                         accessibleName="批量填写运单并创建履约"
                         onRequestClose={() => {
-                            if (!fulfilling && !transitioning) setIsBatchOpen(false);
+                            if (!batchLocked) setIsBatchOpen(false);
                         }}
                         className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
                         onClick={event => event.stopPropagation()}
@@ -1318,7 +1377,7 @@ export function SalesModule() {
                             <AdminButton
                                 type="button"
                                 onClick={() => setIsBatchOpen(false)}
-                                disabled={fulfilling || transitioning}
+                                disabled={batchLocked}
                                 className="text-slate-400 hover:text-slate-700"
                                 aria-label="关闭"
                             >
@@ -1335,6 +1394,7 @@ export function SalesModule() {
                             >
                                 <AdminInput
                                     value={carrier}
+                                    disabled={batchPhase !== 'idle'}
                                     onChange={event => setCarrier(event.target.value)}
                                     placeholder="例如：顺丰速运"
                                     className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -1342,7 +1402,7 @@ export function SalesModule() {
                             </AdminField>
                             <div className="space-y-2">
                                 <div className="text-xs font-semibold text-slate-700">订单与运单号</div>
-                                {selectedOrders.map(order => (
+                                {batchOrders.map(order => (
                                     <AdminField
                                         key={order.id}
                                         className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-[1fr_1.2fr] sm:items-center"
@@ -1366,6 +1426,7 @@ export function SalesModule() {
                                         {' '}
                                         <AdminInput
                                             value={trackingCodes[order.id] ?? ''}
+                                            disabled={batchPhase !== 'idle'}
                                             onChange={event =>
                                                 setTrackingCodes(current => ({
                                                     ...current,
@@ -1384,6 +1445,14 @@ export function SalesModule() {
                                     {batchProgress}
                                 </div>
                             )}
+                            {batchSummary && (
+                                <div
+                                    role="status"
+                                    className="rounded-lg bg-blue-50 p-3 text-xs leading-5 text-blue-700"
+                                >
+                                    {batchSummary}
+                                </div>
+                            )}
                             {actionError && (
                                 <div
                                     role="alert"
@@ -1397,22 +1466,32 @@ export function SalesModule() {
                             <AdminButton
                                 type="button"
                                 onClick={() => setIsBatchOpen(false)}
-                                disabled={fulfilling || transitioning}
+                                disabled={batchLocked}
                                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                             >
-                                取消
+                                {batchPhase === 'done' ? '完成' : '取消'}
                             </AdminButton>
-                            <AdminButton
-                                type="button"
-                                onClick={handleBatchFulfillment}
-                                disabled={fulfilling || transitioning}
-                                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                            >
-                                {(fulfilling || transitioning) && (
-                                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                )}
-                                确认创建履约
-                            </AdminButton>
+                            {batchPhase === 'read-failed' ? (
+                                <AdminButton
+                                    type="button"
+                                    onClick={() => void readBatchResult()}
+                                    className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
+                                >
+                                    核对最新履约
+                                </AdminButton>
+                            ) : (
+                                batchPhase !== 'done' && (
+                                    <AdminButton
+                                        type="button"
+                                        onClick={handleBatchFulfillment}
+                                        disabled={batchLocked}
+                                        className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                        {batchLocked && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                                        确认创建履约
+                                    </AdminButton>
+                                )
+                            )}
                         </footer>
                     </AccessibleDialogSurface>
                 </div>

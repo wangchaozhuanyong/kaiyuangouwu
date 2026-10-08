@@ -1,0 +1,74 @@
+{
+  "cart-desktop-heading": {
+    "id": "cart-desktop-heading-remove-20261002",
+    "implementationCommit": "0603c2bf3acad2c0fdd4944d6c5f4b1fbc5263a3",
+    "decision": "用户要求移除所有店铺电脑端购物车的购物车标题和继续选购入口；手机标题保留，全选操作移到桌面订单摘要。",
+    "sourceFiles": [
+      "packages/storefront/src/pages/cart-page.tsx",
+      "packages/storefront/src/styles/desktop-pages.css"
+    ],
+    "latestAuthorizedCandidate": {
+      "worktree": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/files",
+      "status": "published-and-archived",
+      "sourceSelection": "Current shared cart heading matches screenshot. Primary uncommitted cart work changes commerce body; preserved. No other active cart-source WIP found."
+    },
+    "currentEvidence": {
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/files/artifacts/cart-heading-remove-20261002/local-receipt.json",
+      "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/files/artifacts/cart-heading-remove-20261002/desktop-after.jpg",
+      "dataSource": "Production-built actual client with existing synthetic QA cart fixture. No production customer data or API writes.",
+      "publication": {
+        "pr": 583,
+        "head": "352e83a74ea8c08b73286fe2058ce289923c1760",
+        "mergeSha": "90749a34eaf32dfee010da900777ef5725023ed7",
+        "run": 36985611284,
+        "localReceipt": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-release-20261002/files/artifacts/cart-heading-release-20261002/final-local-release-receipt.json",
+        "liveReceipt": "backups/branch-cleanup-20260930/complete-cleanup-20261001/cart-583-live-browser-readback-20261002.json",
+        "populatedBuyerCart": "NOT_MEASURED; actual buyer cart empty; local populated fixture accepted",
+        "archiveManifests": [
+          "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/manifest.json",
+          "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-release-20261002/manifest.json"
+        ]
+      }
+    },
+    "status": "published-and-live-desktop-mobile-empty-cart-verified"
+  },
+  "cart-price-and-quantity": {
+    "id": "cart-price-and-compact-quantity-20261001",
+    "implementationCommit": "55020f866ca5a7cbc3857453e6ddd7a98a5d7487",
+    "decision": "按用户 2026-10-01 要求缩小手机购物车数量控件；共享 QuantityControl 提供紧凑规格，整体单数字宽约 74px。价格完整支持五位整数、两位小数（55,555.55），价格与数量同行，379px 以下整组延伸到图片与文字两列宽度。桌面同步扩大单价与小计列，保留共享皮肤、商品图片绑定、库存及数量事件。本地完成，未推送或部署。",
+    "sourceFiles": [
+      "packages/storefront/src/components/common/quantity-control.tsx",
+      "packages/storefront/src/storefront-ui/cart-ui.tsx",
+      "packages/storefront/src/styles/cart-layout.css",
+      "packages/storefront/src/styles/quantity-control.css",
+      "packages/storefront/src/styles/desktop-pages.css"
+    ],
+    "currentEvidence": {
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/files/artifacts/cart-compact-quantity-20261001/RESULT.txt",
+      "mobileScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/files/artifacts/cart-compact-quantity-20261001/after-390.png",
+      "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/files/artifacts/cart-compact-quantity-20261001/admin-neo-minimalist-1440.png",
+      "dataSource": "实际客户端与实际 Admin srcdoc 同源预览入口；合成 QA 商品与金额，仅本地模拟数量操作，所有外部请求拦截。",
+      "archivedFromWorktree": ".codex-worktrees/home-ad-config-subtitles-20261001",
+      "archiveManifest": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/manifest.json",
+      "publishedSourceCommit": "40f1d00f749797dbe0957243e65699ecb37be1ad",
+      "productionFrontendSha": "7302278ddadc1503a6dad6520e9b5a1eb70cb81c",
+      "productionReleaseRun": 36834372523,
+      "historicalLocalProofPreserved": true
+    },
+    "acceptance": [
+      "packages/storefront/src/cart-page.spec.tsx",
+      "packages/storefront/src/storefront-ui/cart-ui-interaction.spec.tsx",
+      "packages/storefront/src/skin-system.spec.ts",
+      "artifacts/cart-compact-quantity-20261001/results.json",
+      "artifacts/cart-compact-quantity-20261001/admin-results.json"
+    ],
+    "previousImplementationCommit": "7daa4376f6a26c7fb00c937f8dc67a0ad0f14440",
+    "publicationAlignment": {
+      "at": "2026-10-01T06:05:21.911825+00:00",
+      "previousImplementationCommit": "164ba1ec0ebe3e7f0a7b8dfe77987ab831abb25d",
+      "base": "0cd4a69937b5e7ded6da1e4042c7524d02118a6c",
+      "note": "Original eight confirmed commits aligned; only conflict removes approved pagination; combined targeted tests/builds and 4 client/2 Admin conflict QA cases passed",
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/home-aligned-local-receipt.json"
+    }
+  }
+}

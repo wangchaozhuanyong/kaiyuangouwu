@@ -89,7 +89,6 @@ export class ShopApi {
     readonly watchMailEvents: MailQueryApi['watchMailEvents'];
     private readonly cartCheckoutApi: CartCheckoutApi;
     private readonly createRealtimeApi: () => Promise<RealtimeApi>;
-
     constructor(
         private readonly market: MarketConfig,
         private readonly languageCode: VendureLanguageCode = market.defaultLanguageCode,
@@ -101,7 +100,7 @@ export class ShopApi {
             getAuthToken: () => this.authTokens.value,
             createAuthTokenCapture: () => this.authTokens.createCapture(),
             clearAuthToken: () => this.authTokens.clear(),
-            request: (q, v, s, t, r) => this.request(q, v, s, t, r),
+            request: (q, v, s, t, r, c) => this.request(q, v, s, t, r, false, c),
             authenticationRequest: (q, v) => this.request(q, v, undefined, undefined, false, true),
             assertCart: res => this.assertCart(res),
             assertCheckoutSession: res => this.assertCheckoutSession(res),
@@ -629,6 +628,7 @@ export class ShopApi {
         timeoutMs?: number,
         resultUnknownOnTimeout = false,
         authenticates = false,
+        readCurrencyCode?: string,
     ): Promise<T> {
         const captureAuthToken = this.authTokens.createCapture(authenticates);
         const headers: Record<string, string> = {
@@ -644,7 +644,7 @@ export class ShopApi {
         const languageSeparator = API_URL.includes('?') ? '&' : '?';
         const requestUrl =
             `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}` +
-            `&currencyCode=${encodeURIComponent(this.market.currencyCode)}`;
+            `&currencyCode=${encodeURIComponent(readCurrencyCode ?? this.market.currencyCode)}`;
         const effectiveTimeoutMs =
             timeoutMs ?? (isStorefrontQuery(query) ? SHOP_API_QUERY_TIMEOUT_MS : undefined);
         const timeout = createRequestSignal(signal, effectiveTimeoutMs);

@@ -1,6 +1,8 @@
+import { CurrencyCode, ProductVariantPrice } from '@vendure/core';
+import { StoreDefaultCurrencyPriceSelectionStrategy } from '@vendure/store-management-plugin/currency-conversion';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { commerceOrderProcess } from './commerce-order-process';
+import { commerceOrderProcess, fulfillDigitalOrder } from './commerce-order-process';
 
 describe('commerceOrderProcess digital fulfillment', () => {
     let hydratedOrder: any;
@@ -57,6 +59,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
     const autoCardService = {
         availabilityError: vi.fn().mockResolvedValue(undefined),
         allocateSettledOrder: vi.fn().mockResolvedValue([]),
+        completeAvailableDeliveries: vi.fn(),
     };
     const productPackagingService = {
         rulesForVariantIds: vi.fn().mockResolvedValue([]),
@@ -72,11 +75,19 @@ describe('commerceOrderProcess digital fulfillment', () => {
         createSettledOrderTasks: vi.fn().mockResolvedValue([]),
         cancelOrder: vi.fn().mockResolvedValue(undefined),
     };
+    const digitalProducts = {
+        config: vi.fn().mockResolvedValue(null),
+        reservation: vi.fn(),
+        reserveOrder: vi.fn(),
+    };
 
     beforeEach(async () => {
         vi.clearAllMocks();
         checkoutResources.hold.mockReset().mockResolvedValue(null);
         checkoutResources.isConfirmedSimulation.mockResolvedValue(false);
+        checkoutResources.canDeliver.mockResolvedValue(false);
+        digitalProducts.reservation.mockReset();
+        digitalProducts.reserveOrder.mockReset();
         orderService.createFulfillment.mockResolvedValue({ id: 'fulfillment-1' });
         productVariantService.getSaleableStockLevel.mockResolvedValue(10);
         stockQueryBuilder.getMany.mockResolvedValue([]);
@@ -93,7 +104,7 @@ describe('commerceOrderProcess digital fulfillment', () => {
             productPackagingService,
             commerceModeService,
             manualDigitalDeliveryService,
-            { config: vi.fn().mockResolvedValue(null) },
+            digitalProducts,
             checkoutResources,
         ];
         await commerceOrderProcess.init?.({ get: vi.fn(() => services.shift()) } as any);
@@ -265,4 +276,190 @@ describe('commerceOrderProcess digital fulfillment', () => {
 
         expect(orderService.createFulfillment).not.toHaveBeenCalled();
     });
+
+    it('does not restore refunded digital quantities during the delivery retry continuation', async () => {
+        checkoutResources.canDeliver.mockResolvedValue(true);
+        const digitalLine = (id: string, quantity: number) => ({
+            id,
+            quantity,
+            orderPlacedQuantity: quantity,
+            customFields: {
+                fulfillmentTypeSnapshot: 'digital',
+                digitalDeliveryModeSnapshot: 'manual_service',
+            },
+            productVariant: { customFields: { fulfillmentType: 'digital' } },
+        });
+        hydratedOrder = {
+            id: 'paid-order',
+            active: false,
+            state: 'PaymentSettled',
+            totalWithTax: 1000,
+            lines: [digitalLine('fully-refunded', 1), digitalLine('partially-refunded', 3)],
+            payments: [
+                {
+                    state: 'Settled',
+                    amount: 1000,
+                    method: 'real-payment',
+                    refunds: [
+                        {
+                            state: 'Settled',
+                            lines: [
+                                { orderLineId: 'fully-refunded', quantity: 1 },
+                                { orderLineId: 'partially-refunded', quantity: 1 },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+        digitalProducts.reservation.mockResolvedValue({ state: 'CONSUMED' });
+        const reserved: Array<{ id: string; quantity: number }> = [];
+        digitalProducts.reserveOrder.mockImplementation((_ctx, order) => {
+            reserved.push(...order.lines.map(({ id, quantity }: any) => ({ id, quantity })));
+        });
+        await fulfillDigitalOrder({ channelId: 'store' } as any, hydratedOrder.id);
+        expect(reserved).toEqual([{ id: 'partially-refunded', quantity: 2 }]);
+        expect(hydratedOrder.lines.map((line: any) => line.quantity)).toEqual([1, 3]);
+        expect(orderService.createFulfillment).not.toHaveBeenCalled();
+    });
+});
+
+describe('checkout price selection', () => {
+    function fixture(defaultCurrency: CurrencyCode, currency = defaultCurrency) {
+        const ctx = {
+            channelId: 'store',
+            currencyCode: currency,
+            channel: {
+                id: 'store',
+                code: 'operating-store',
+                defaultCurrencyCode: defaultCurrency,
+                customFields: { cnyToMyrRate: 0.6 },
+            },
+            copy: vi.fn((options: Record<string, unknown>) => ({ ...ctx, ...options })),
+        };
+        const variant = {
+            id: 'variant',
+            productId: 'product',
+            enabled: true,
+            product: {
+                enabled: true,
+                channels: [ctx.channel],
+                customFields: { pricingMode: 'FIXED' },
+            },
+            customFields: { fulfillmentType: 'digital', digitalStockPolicy: 'unlimited' },
+        };
+        const order = {
+            id: 'order',
+            currencyCode: currency,
+            customFields: { deliveryEmail: 'buyer@example.com' },
+            lines: [
+                {
+                    id: 'line',
+                    productVariantId: variant.id,
+                    productVariant: variant,
+                    quantity: 1,
+                    customFields: { fulfillmentTypeSnapshot: 'digital' },
+                },
+            ],
+        };
+        const prices = [
+            new ProductVariantPrice({
+                channelId: ctx.channelId,
+                currencyCode: defaultCurrency,
+                price: 10000,
+            }),
+        ];
+        const priceRepository = {
+            find: vi.fn(() => Promise.resolve(prices.filter(price => price.channelId === ctx.channelId))),
+            findOne: vi.fn(({ where }: any) =>
+                Promise.resolve(
+                    prices.find(
+                        price =>
+                            price.channelId === where.channelId && price.currencyCode === where.currencyCode,
+                    ),
+                ),
+            ),
+        };
+        const strategy = new StoreDefaultCurrencyPriceSelectionStrategy();
+        const selectPrice = vi.fn(strategy.selectPrice.bind(strategy));
+        const services: Record<string, unknown> = {
+            TransactionalConnection: {
+                getRepository: (_ctx: unknown, entity: { name: string }) =>
+                    entity.name === 'ProductVariantPrice'
+                        ? priceRepository
+                        : {
+                              find: vi.fn().mockResolvedValue([variant]),
+                              findOne: vi
+                                  .fn()
+                                  .mockResolvedValue(entity.name === 'ProductVariant' ? variant : null),
+                          },
+            },
+            ConfigService: { catalogOptions: { productVariantPriceSelectionStrategy: { selectPrice } } },
+            AutoCardService: { availabilityError: vi.fn() },
+            CommerceModeService: {
+                activeMode: vi.fn().mockResolvedValue('HYBRID'),
+                assertProductTypeAllowed: vi.fn(),
+            },
+            DigitalProductService: { config: vi.fn().mockResolvedValue(null) },
+        };
+        const run = async () => {
+            await commerceOrderProcess.init?.({
+                get: (token: { name: string }) => services[token.name] ?? {},
+            } as any);
+            return commerceOrderProcess.onTransitionStart?.('AddingItems', 'ArrangingPayment', {
+                ctx,
+                order,
+            } as any);
+        };
+        return { ctx, order, prices, priceRepository, selectPrice, run };
+    }
+
+    it.each([
+        [CurrencyCode.CNY, CurrencyCode.MYR, 6000],
+        [CurrencyCode.MYR, CurrencyCode.CNY, 16667],
+    ])(
+        'accepts %s source prices for %s checkout without persisted derived prices',
+        async (base, target, value) => {
+            const test = fixture(base, target);
+            await expect(test.run()).resolves.toBeUndefined();
+            expect(test.selectPrice.mock.results[0].value).toMatchObject({
+                currencyCode: target,
+                price: value,
+            });
+            expect(test.priceRepository.find).toHaveBeenCalledWith({
+                where: { variant: { id: 'variant' }, channelId: 'store' },
+            });
+        },
+    );
+
+    it('selects the persisted order currency while preserving the request store', async () => {
+        const test = fixture(CurrencyCode.CNY, CurrencyCode.CNY);
+        test.order.currencyCode = CurrencyCode.MYR;
+        await expect(test.run()).resolves.toBeUndefined();
+        expect(test.selectPrice).toHaveBeenCalledWith(
+            expect.objectContaining({ channel: test.ctx.channel, currencyCode: CurrencyCode.MYR }),
+            test.prices,
+        );
+        expect(test.ctx.currencyCode).toBe(CurrencyCode.CNY);
+    });
+
+    it.each(['missing-source', 'foreign-store', 'invalid-rate'])(
+        'rejects %s before reserving payment',
+        async reason => {
+            const test = fixture(CurrencyCode.CNY, CurrencyCode.MYR);
+            if (reason === 'missing-source') test.prices.length = 0;
+            if (reason === 'foreign-store') test.prices[0].channelId = 'other-store';
+            if (reason === 'invalid-rate') test.ctx.channel.customFields.cnyToMyrRate = 0;
+            await expect(test.run()).resolves.toBe('本店售价未配置，请刷新购物车');
+        },
+    );
+
+    it.each([CurrencyCode.CNY, CurrencyCode.USD])(
+        'keeps configured same-currency selection for %s',
+        async currency => {
+            const test = fixture(currency);
+            await expect(test.run()).resolves.toBeUndefined();
+            expect(test.selectPrice).toHaveBeenCalled();
+        },
+    );
 });

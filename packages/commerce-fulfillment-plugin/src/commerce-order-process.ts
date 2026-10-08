@@ -104,6 +104,10 @@ export const commerceOrderProcess: OrderProcess<string> = {
         }
 
         if (entersPayment) {
+            const priceCtx =
+                order.currencyCode && ctx.currencyCode !== order.currencyCode
+                    ? ctx.copy({ channel: ctx.channel, currencyCode: order.currencyCode })
+                    : ctx;
             for (const line of order.lines) {
                 const variant = await connection.getRepository(ctx, ProductVariant).findOne({
                     where: { id: line.productVariantId, channels: { id: ctx.channelId } },
@@ -129,13 +133,18 @@ export const commerceOrderProcess: OrderProcess<string> = {
                         : !legacyOwned && String(owner?.ownerChannelId) !== String(ctx.channelId))
                 )
                     return '本店销售授权未启用，请刷新购物车';
-                const price = await connection.getRepository(ctx, ProductVariantPrice).findOne({
+                const prices = await connection.getRepository(ctx, ProductVariantPrice).find({
                     where: {
                         variant: { id: variant.id },
                         channelId: ctx.channelId,
-                        currencyCode: ctx.currencyCode,
                     },
                 });
+                // The configured catalog strategy may derive the order currency from a stored source price.
+                const price =
+                    await configService.catalogOptions.productVariantPriceSelectionStrategy.selectPrice(
+                        priceCtx,
+                        prices,
+                    );
                 if (!price) return '本店售价未配置，请刷新购物车';
                 if (isFileDownloadOrderLine(line)) {
                     const reservation = await digitalProducts.reservation(ctx, line.id);
@@ -328,6 +337,8 @@ export async function fulfillDigitalOrder(ctx: RequestContext, orderId: Order['i
     const linesToReserve: Order['lines'] = [];
     for (const line of settledOrder.lines) {
         if (getOrderLineFulfillmentType(line) !== 'digital') continue;
+        const quantity = digitalDeliverableQuantity(settledOrder, line);
+        if (!quantity) continue;
         const reservation = await digitalProducts.reservation(ctx, line.id);
         const history = await connection
             .getRepository(ctx, FulfillmentLine)
@@ -335,8 +346,7 @@ export async function fulfillDigitalOrder(ctx: RequestContext, orderId: Order['i
         const delivered = history
             .filter(item => item.fulfillment.state === 'Delivered')
             .reduce((sum, item) => sum + item.quantity, 0);
-        if (reservation || delivered < digitalDeliverableQuantity(settledOrder, line))
-            linesToReserve.push(line);
+        if (reservation || delivered < quantity) linesToReserve.push(new OrderLine({ ...line, quantity }));
     }
     try {
         const originalLines = settledOrder.lines;

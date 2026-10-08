@@ -1,0 +1,165 @@
+{
+  "task": "cart-recovery-and-order-shipping-currency-20261008",
+  "state": "LOCAL_VALIDATED_NOT_PUBLISHED",
+  "sourceCommit": "6b206f0e2922005e00d3401a5e528575132303a3",
+  "branch": "fix/responsive-three-surfaces-20261008",
+  "worktree": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+  "sources": [
+    {
+      "file": "packages/commerce-fulfillment-plugin/src/commerce-shipping-options.spec.ts",
+      "sha256": "69d17213c810124ea97a88bf56e138823a255bf785f33ab9feade725e384abb8"
+    },
+    {
+      "file": "packages/commerce-fulfillment-plugin/src/commerce-shipping-options.ts",
+      "sha256": "cf598e8ccf221547c26efa838278118aca9567b3ba6c91c805ef77b618c9aa5b"
+    },
+    {
+      "file": "packages/commerce-fulfillment-plugin/src/order-fulfillment.resolver.spec.ts",
+      "sha256": "0723b3a3717ebfce8f6f56b4d6c09422748f0276aa0235c0a27557b58c97234a"
+    },
+    {
+      "file": "packages/commerce-fulfillment-plugin/src/order-fulfillment.resolver.ts",
+      "sha256": "079f8f6f6649002f873b4a29f2258b27cfd63ca94f550d0515d655e721e25c7c"
+    },
+    {
+      "file": "packages/storefront/e2e/cart-commands/verify-recovery.mjs",
+      "sha256": "ec994cdbfd9ea94494caf67691fd613ace987fa0c52843ecd10f241645685617"
+    },
+    {
+      "file": "packages/storefront/e2e/cart-commands/verify.mjs",
+      "sha256": "1e9d0812a30ef052432cce298e2a0d797a3a76a16a0deb43cc3b652286739f2c"
+    },
+    {
+      "file": "packages/storefront/src/api.spec.ts",
+      "sha256": "0255fc327d1331a77accc12d300b44a6638a256f63cdbd327d4c9d40675ad520"
+    },
+    {
+      "file": "packages/storefront/src/api/cart-checkout.ts",
+      "sha256": "c19c6a63058f0f13aad40ba99072205f62be9460b866b3b60d5b2592f599f103"
+    },
+    {
+      "file": "packages/storefront/src/api/helpers.ts",
+      "sha256": "b697020e1dc3de5409d38f473a9bd09a8728dc0caf6b825cfca651d3345c2e44"
+    },
+    {
+      "file": "packages/storefront/src/cart-page.spec.tsx",
+      "sha256": "8c92a2361702f56f20f7ca80b3479fb1807bef59547bb81986f245a4cf0c123d"
+    },
+    {
+      "file": "packages/storefront/src/cart/cart-controller.spec.ts",
+      "sha256": "8bee24a9ec0d1c9eac17effd2db2056062d1492c5451e50448aaa3ee3dcc0609"
+    },
+    {
+      "file": "packages/storefront/src/cart/cart-controller.ts",
+      "sha256": "5357cebb0126b0eb45714e6384cd294f869dd93697d4639151284e14afaba588"
+    },
+    {
+      "file": "packages/storefront/src/cart/cart-repository.ts",
+      "sha256": "257ebb6e3bbf120954aea53e04346bd82b9e3c81c1aebd4360c8cce631318f1c"
+    },
+    {
+      "file": "packages/storefront/src/hooks/useStorefrontAppState.ts",
+      "sha256": "95282bec498546cbf813a4a110995221243264e47298c9eef1b9679d0032d2f0"
+    },
+    {
+      "file": "packages/storefront/src/hooks/useStorefrontCartActions.spec.tsx",
+      "sha256": "b094e10b733832b96ea3b99e1768247c0d9d59da9762b0d9bfb9814ac2447d18"
+    },
+    {
+      "file": "packages/storefront/src/hooks/useStorefrontCartActions.ts",
+      "sha256": "fb0c848c7efca4f7fb1adbe53a817e888aa915a11d5763560b233c788b0202f0"
+    },
+    {
+      "file": "packages/storefront/src/pages/cart-page.tsx",
+      "sha256": "1ef3fa5991e01adc963e0cefa53d3ad0b263adfd5888f0c3fe9a6ffd7acca424"
+    },
+    {
+      "file": "packages/storefront/src/route-pages/cart-route-page.tsx",
+      "sha256": "683c8d6b14ae3798c214f4c90b50415c3c21095a74764c8b78fd0498f7090d67"
+    },
+    {
+      "file": "packages/storefront/src/shop-api-errors.ts",
+      "sha256": "732c32f2eccab423185f5cc9216653d2f6dcfc5a3f3bb0be7ba9c4eca4649dc4"
+    },
+    {
+      "file": "packages/storefront/src/storefront-errors.spec.ts",
+      "sha256": "2cd9cfcde8a3afca817708404e5c41a0359cea55ee1d763bea1acd0f99c96469"
+    },
+    {
+      "file": "packages/storefront/src/styles/cart-layout.css",
+      "sha256": "1569d1c13da85a6bfd24d32fd88adfbae06d5b64733dc47f1061771351d17947"
+    }
+  ],
+  "checks": {
+    "storefrontTargetedTests": {
+      "passed": 318,
+      "finalChangedSuites": 207,
+      "reusedUnchangedSuites": 111
+    },
+    "fulfillmentTargetedTests": {
+      "passed": 23,
+      "resolver": 4,
+      "shippingOptions": 19
+    },
+    "totalUniqueTargetedTests": 341,
+    "storefrontBuild": "PASS: TypeScript, typography source guard, router toolchain, production client, localization/performance budgets, two-factor companion",
+    "fulfillmentBuildAndTypes": "PASS",
+    "scopedEslintAndPrettier": "PASS",
+    "interactionStandard": "PASS",
+    "sharedStorefrontRuntime": "PASS",
+    "commitHooks": "PASS: lint-check and commit-msg"
+  },
+  "browser": {
+    "recovery": {
+      "passed": 12,
+      "widths": [
+        320,
+        390,
+        1440
+      ],
+      "scenarios": [
+        "lost-response",
+        "cancel-not-found",
+        "acknowledged-read-failure",
+        "direct-purchase"
+      ],
+      "pageErrors": 0,
+      "chargeRequests": 0
+    },
+    "rapidCart": {
+      "passed": 4,
+      "engines": [
+        "Chromium",
+        "WebKit"
+      ],
+      "latencyMs": [
+        1200,
+        3000
+      ],
+      "width": 390,
+      "maxConcurrentMutations": 1,
+      "pageErrors": 0
+    },
+    "totalPassed": 16,
+    "environment": "local production client; synthetic GraphQL fixtures; external calls intercepted",
+    "earlierHarnessIssues": "Development server timing exceeded limit once; test interception and selectors corrected; final browser acceptance uses built production preview."
+  },
+  "publication": {
+    "pushed": false,
+    "merged": false,
+    "deployed": false,
+    "productionBrowserAcceptance": "NOT_MEASURED",
+    "productionOrdersOrCharges": "NOT_MEASURED"
+  },
+  "remaining": {
+    "paymentRecovery": "WAITING_USER_CONFIRMATION: user-provided AGENTS instructions require confirmation before payment logic changes",
+    "testPaymentConfiguration": "EXCLUDED_BY_USER",
+    "storeActivation": "NOT_EXECUTED",
+    "wholeSiteResponsiveAudit": "NOT_MEASURED"
+  },
+  "previousLayoutWork": {
+    "sourceCommit": "3aee7a422ddf75966e57ebaf6a9488715903a905",
+    "report": "docs/local-validation/responsive-three-surfaces-20261008/README.md",
+    "preserved": true
+  }
+}

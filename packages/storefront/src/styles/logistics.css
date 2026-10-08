@@ -16,18 +16,17 @@
     border: var(--skin-card-outline, 0);
 }
 .delivery-toolbar {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     padding: 16px 20px;
 }
 .delivery-toolbar-actions {
     display: flex;
-    flex: 0 1 400px;
     align-items: center;
     gap: 8px;
+    width: 100%;
     min-width: 0;
     max-width: 100%;
     margin-left: auto;
@@ -63,16 +62,21 @@
     background: var(--control-surface-hover);
 }
 .delivery-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--space-4);
+    width: 100%;
+    min-width: 0;
 }
 .delivery-filters button {
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
-    min-height: 44px;
-    padding: 8px 12px;
+    justify-content: center;
+    gap: var(--space-4);
+    min-width: 0;
+    min-height: var(--experience-control-min);
+    padding: var(--space-8) 0;
     border: 0;
     border-radius: var(--skin-control-radius);
     background: transparent;
@@ -80,12 +84,21 @@
     font: inherit;
     font-size: var(--type-label-size);
     line-height: var(--type-label-leading);
+    text-align: center;
     cursor: pointer;
 }
-.delivery-filters button span {
+.delivery-filter-label {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.delivery-filter-count {
     font-family: var(--font-numeric);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
     font-variant-numeric: tabular-nums;
 }
 .delivery-filters button[aria-pressed='true'] {
@@ -705,23 +718,15 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+@media (min-width: 1024px) {
+    .delivery-toolbar-actions {
+        width: 400px;
+    }
+}
 @media (max-width: 767px), (min-width: 1024px) and (max-width: 1279px) {
     .delivery-toolbar {
         padding: 12px;
         gap: 12px;
-    }
-    .delivery-filters {
-        width: 100%;
-        gap: 2px;
-    }
-    .delivery-filters button {
-        padding: 8px;
-        gap: 5px;
-        font-size: var(--type-label-size);
-        line-height: var(--type-label-leading);
-    }
-    .delivery-toolbar-actions {
-        flex-basis: 100%;
     }
     .delivery-list-caption {
         padding: 12px;

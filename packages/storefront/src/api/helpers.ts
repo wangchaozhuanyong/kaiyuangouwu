@@ -300,6 +300,12 @@ export function parseShopApiResponse<T>(rawBody: string, status: number, ok: boo
             body.errors.map(error => error.message),
             status,
             body.errors[0].extensions?.code,
+            !Object.hasOwn(body, 'data') &&
+                body.errors.every(error =>
+                    ['GRAPHQL_PARSE_FAILED', 'GRAPHQL_VALIDATION_FAILED'].includes(
+                        error.extensions?.code ?? '',
+                    ),
+                ),
         );
     }
     if (!ok || !body.data) {

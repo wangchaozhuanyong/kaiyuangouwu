@@ -6,6 +6,44 @@ import { parseShopApiResponse, ShopApiError, ShopApiTimeoutError } from './api/h
 import { storefrontErrorCopy, storefrontErrorMessage } from './storefront-errors';
 
 describe('customer-facing error language boundary', () => {
+    it.each([
+        {
+            body: {
+                errors: [{ message: 'Invalid document', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }],
+            },
+            expected: true,
+        },
+        {
+            body: { errors: [{ message: 'Parse error', extensions: { code: 'GRAPHQL_PARSE_FAILED' } }] },
+            expected: true,
+        },
+        {
+            body: {
+                data: null,
+                errors: [
+                    { message: 'Failed after execution', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } },
+                ],
+            },
+            expected: false,
+        },
+        {
+            body: {
+                errors: [
+                    { message: 'Invalid document', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } },
+                    { message: 'Other failure', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+                ],
+            },
+            expected: false,
+        },
+        { body: { errors: [{ message: 'Failed without execution evidence' }] }, expected: false },
+    ])(
+        'classifies definite pre-execution rejection without weakening unknown-result safety ($expected)',
+        ({ body, expected }) => {
+            expect(() => parseShopApiResponse(JSON.stringify(body), 400, false)).toThrowError(
+                expect.objectContaining({ requestNotExecuted: expected }),
+            );
+        },
+    );
     it('covers every supported error in both storefront languages', () => {
         for (const [errorCode, text] of Object.entries(storefrontErrorCopy)) {
             expect(storefrontErrorMessage({ errorCode, message: 'INTERNAL_SERVER_DETAILS' }, 'zh')).toBe(

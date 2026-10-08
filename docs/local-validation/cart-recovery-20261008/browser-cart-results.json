@@ -1,0 +1,62 @@
+[
+  {
+    "engine": "chromium",
+    "viewport": "390x844",
+    "simulatedApiLatencyMs": 1200,
+    "feedbackP95Ms": 36,
+    "feedbackP99Ms": 73,
+    "quantityFeedbackMs": 10,
+    "deletionFeedbackMs": 26,
+    "maxConcurrent": 1,
+    "commandCount": 7,
+    "continuousClicks": 20,
+    "pageErrors": [],
+    "injectedNetworkErrors": []
+  },
+  {
+    "engine": "chromium",
+    "viewport": "390x844",
+    "simulatedApiLatencyMs": 3000,
+    "feedbackP95Ms": 42,
+    "feedbackP99Ms": 52,
+    "quantityFeedbackMs": 17,
+    "deletionFeedbackMs": 26,
+    "maxConcurrent": 1,
+    "commandCount": 7,
+    "continuousClicks": 20,
+    "pageErrors": [],
+    "injectedNetworkErrors": []
+  },
+  {
+    "engine": "webkit",
+    "viewport": "390x844",
+    "simulatedApiLatencyMs": 1200,
+    "feedbackP95Ms": 63,
+    "feedbackP99Ms": 66,
+    "quantityFeedbackMs": 60,
+    "deletionFeedbackMs": 34,
+    "maxConcurrent": 1,
+    "commandCount": 7,
+    "continuousClicks": 20,
+    "pageErrors": [],
+    "injectedNetworkErrors": [
+      "/127.0.0.1:5198/shop-api?languageCode=zh_Hans&currencyCode=MYR due to access control checks."
+    ]
+  },
+  {
+    "engine": "webkit",
+    "viewport": "390x844",
+    "simulatedApiLatencyMs": 3000,
+    "feedbackP95Ms": 37,
+    "feedbackP99Ms": 46,
+    "quantityFeedbackMs": 21,
+    "deletionFeedbackMs": 25,
+    "maxConcurrent": 1,
+    "commandCount": 7,
+    "continuousClicks": 20,
+    "pageErrors": [],
+    "injectedNetworkErrors": [
+      "/127.0.0.1:5198/shop-api?languageCode=zh_Hans&currencyCode=MYR due to access control checks."
+    ]
+  }
+]

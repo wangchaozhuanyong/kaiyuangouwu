@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -15,6 +15,7 @@ type Options = Parameters<typeof useStorefrontCartActions>[0];
 describe('storefront cart action boundaries', () => {
     let root: ReturnType<typeof createRoot>;
     let controller: CartController;
+    let recoverPendingSpy: MockInstance<CartController['recoverPending']>;
     let options: Options;
     let value: ReturnType<typeof useStorefrontCartActions>;
     const cart: StorefrontCart = {
@@ -49,7 +50,7 @@ describe('storefront cart action boundaries', () => {
         root = createRoot(document.createElement('div'));
         controller = new CartController('fixture-store');
         vi.spyOn(controller, 'getSnapshot').mockReturnValue({ ...controller.getSnapshot(), cart });
-        vi.spyOn(controller, 'recoverPending').mockResolvedValue(undefined);
+        recoverPendingSpy = vi.spyOn(controller, 'recoverPending').mockResolvedValue(true);
         api.cart.mockResolvedValue(cart);
         api.addItem.mockResolvedValue(cart);
         options = {
@@ -163,12 +164,124 @@ describe('storefront cart action boundaries', () => {
             .fn()
             .mockRejectedValue(new ShopApiError('CART_REVISION_CONFLICT_ERROR', 'Conflict'));
         render();
-        expect(await value.mutateCart(mutate)).toBeNull();
+        await act(async () => {
+            expect(await value.mutateCart(mutate)).toBeNull();
+        });
         expect(mutate).toHaveBeenCalledTimes(1);
         expect(recovery).toHaveBeenCalledOnce();
         expect(api.cart).toHaveBeenCalledOnce();
         expect(options.setCartError).toHaveBeenLastCalledWith('购物车已更新，请重新操作');
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
+    });
+
+    it.each([true, false])(
+        'refreshes the server snapshot but preserves the warning when recovery is unresolved: zh=%s',
+        async isZh => {
+            options.isZh = isZh;
+            const latest = { ...cart, revision: 8 };
+            recoverPendingSpy.mockResolvedValue(false);
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: 'unknown',
+                editingBlocked: true,
+            });
+            api.cart.mockResolvedValue(latest);
+            render();
+            await act(async () => {
+                expect(await value.refreshCart()).toEqual(latest);
+            });
+            expect(api.cart).toHaveBeenCalledOnce();
+            expect(options.setCart).toHaveBeenCalledWith(latest);
+            expect(options.setCartError).toHaveBeenLastCalledWith(
+                isZh ? '结果待确认，请核对购物车。' : 'Result unconfirmed. Review your cart.',
+            );
+            expect(options.setCartError).not.toHaveBeenCalledWith(null);
+            expect(value.cartRecoveryPending).toBe(false);
+            expect(value.cartActionsBlocked()).toBe(true);
+        },
+    );
+
+    it('clears the warning only after recovery and a fresh snapshot complete', async () => {
+        render();
+        await act(async () => {
+            await value.refreshCart();
+        });
+        expect(options.setCartError).toHaveBeenLastCalledWith(null);
+        expect(value.cartRecoveryPending).toBe(false);
+        expect(value.cartActionsBlocked()).toBe(false);
+        const mutation = vi.fn().mockResolvedValue(cart);
+        expect(await value.mutateCart(mutation)).toEqual(cart);
+        expect(mutation).toHaveBeenCalledOnce();
+    });
+
+    it('retains the unknown warning and confirmed contents when the recovery refresh fails', async () => {
+        recoverPendingSpy.mockResolvedValue(false);
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            phase: 'unknown',
+            editingBlocked: true,
+        });
+        api.cart.mockRejectedValue(new Error('Network unavailable'));
+        render();
+        await act(async () => {
+            await expect(value.refreshCart()).rejects.toThrow('Network unavailable');
+        });
+        expect(options.setCart).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+        expect(options.setCartError).toHaveBeenLastCalledWith('结果待确认，请核对购物车。');
+        expect(value.cartRecoveryPending).toBe(false);
+    });
+
+    it('coalesces review and cancellation requests while blocking mutations and direct purchase', async () => {
+        let finishRecovery!: (recovered: boolean) => void;
+        recoverPendingSpy.mockReturnValue(
+            new Promise(resolve => {
+                finishRecovery = resolve;
+            }),
+        );
+        const execute = vi.spyOn(controller, 'execute');
+        render();
+        let pending!: Promise<StorefrontCart>;
+        act(() => {
+            pending = value.refreshCart();
+        });
+        expect(value.cartRecoveryPending).toBe(true);
+        expect(value.cancelPendingCartCommand()).toBe(pending);
+        const mutation = vi.fn();
+        expect(await value.mutateCart(mutation)).toBeNull();
+        await value.startDirectPurchase({ id: 'variant-a' } as ProductVariant);
+        expect(mutation).not.toHaveBeenCalled();
+        expect(execute).not.toHaveBeenCalled();
+        expect(recoverPendingSpy).toHaveBeenCalledExactlyOnceWith(false);
+        await act(async () => {
+            finishRecovery(true);
+            await pending;
+        });
+        expect(api.cart).toHaveBeenCalledOnce();
+        expect(value.cartRecoveryPending).toBe(false);
+    });
+
+    it('uses cancellation recovery and refreshes its confirmed server outcome', async () => {
+        render();
+        await act(async () => {
+            expect(await value.cancelPendingCartCommand()).toEqual(cart);
+        });
+        expect(recoverPendingSpy).toHaveBeenCalledExactlyOnceWith(true);
+        expect(api.cart).toHaveBeenCalledOnce();
+        expect(options.setCartError).toHaveBeenLastCalledWith(null);
+    });
+
+    it('does not run review or cart writes while checkout is starting', async () => {
+        options.checkoutStartingRef = { current: true };
+        const execute = vi.spyOn(controller, 'execute');
+        render();
+        await expect(value.refreshCart()).rejects.toThrow('购物车正在更新');
+        expect(await value.mutateCart(vi.fn())).toBeNull();
+        await value.startDirectPurchase({ id: 'variant-a' } as ProductVariant);
+        expect(recoverPendingSpy).not.toHaveBeenCalled();
+        expect(api.cart).not.toHaveBeenCalled();
+        expect(execute).not.toHaveBeenCalled();
+        expect(options.setCartError).not.toHaveBeenCalled();
     });
 
     it('keeps navigation unchanged when buy-now has no confirmed checkout session', async () => {

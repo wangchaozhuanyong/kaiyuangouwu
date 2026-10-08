@@ -336,7 +336,9 @@ describe('HomePage hero carousel', () => {
 
     it.each([false, true])('keeps managed artwork and copy in the shared scene with desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [heroBlock] }, desktop);
-        expect(markup).toContain('class="hero hero-image-overlay"');
+        expect(markup).toContain(
+            desktop ? 'class="hero hero-image-overlay has-page-picker"' : 'class="hero hero-image-overlay"',
+        );
         expect(markup).toContain('后台配置的首页轮播');
         expect(markup).toContain('只显示后台配置的内容');
         expect(markup).toMatch(/class="[^"]*\bhero-rich-backdrop\b[^"]*"/);

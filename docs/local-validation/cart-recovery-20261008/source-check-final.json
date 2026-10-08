@@ -1,0 +1,265 @@
+[
+  {
+    "ok": true,
+    "checked": "design-source-files-and-optional-local-server-directory",
+    "registry": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/design-preview-baselines.json",
+    "surface": "cart-command-recovery",
+    "baseline": {
+      "id": "cart-command-recovery-20261008",
+      "implementationCommit": "6b206f0e2922005e00d3401a5e528575132303a3",
+      "decision": "继续修复购物车提交结果未知、刷新/取消无效和金额计算卡住；保留原操作身份，核对后才解锁；确认成功但读取失败时只重读，避免重复提交。保留所有店铺共享皮肤与购物车设计。支付收费及支付结果核对逻辑尚未修改。",
+      "sourceFiles": [
+        "packages/storefront/src/pages/cart-page.tsx",
+        "packages/storefront/src/styles/cart-layout.css",
+        "packages/storefront/src/hooks/useStorefrontCartActions.ts",
+        "packages/storefront/src/hooks/useStorefrontAppState.ts",
+        "packages/storefront/src/route-pages/cart-route-page.tsx",
+        "packages/storefront/src/cart/cart-controller.ts",
+        "packages/storefront/src/cart/cart-repository.ts",
+        "packages/storefront/src/api/cart-checkout.ts"
+      ],
+      "latestAuthorizedCandidate": {
+        "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+        "status": "local-validated-not-pushed-not-deployed"
+      },
+      "currentEvidence": {
+        "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/local-receipt.json",
+        "dataSource": "本地实际客户端＋合成服务回复，0 次真实支付请求。"
+      },
+      "status": "local-validated-not-pushed-not-deployed"
+    },
+    "candidate": {
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "6b206f0e",
+      "changedFiles": []
+    },
+    "preview": {
+      "url": "http://127.0.0.1:5198/cart",
+      "processes": [
+        {
+          "pid": 45506,
+          "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008/packages/storefront",
+          "worktreeRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+          "matches": true
+        }
+      ],
+      "matches": true
+    },
+    "matchingWorktrees": [
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+        "head": "6b206f0e",
+        "matchesBaseline": true,
+        "relatedChanges": []
+      }
+    ],
+    "relatedWipWorktrees": [
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master",
+        "head": "96d8b5d0",
+        "matchesBaseline": false,
+        "relatedChanges": [
+          "M packages/storefront/src/pages/cart-page.tsx",
+          " M packages/storefront/src/styles/cart-layout.css"
+        ]
+      },
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/public-preview-closure-20261006",
+        "head": "71c63147",
+        "matchesBaseline": false,
+        "relatedChanges": [
+          "M packages/storefront/src/hooks/useStorefrontAppState.ts"
+        ]
+      }
+    ],
+    "issues": [],
+    "note": "源码一致不等于画面验收通过。仍须核对实际客户端、后台预览、配置和截图；文件差异需按本次授权核对，不能删掉新代码来通过检查。"
+  },
+  {
+    "ok": true,
+    "checked": "design-source-files-and-optional-local-server-directory",
+    "registry": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/design-preview-baselines.json",
+    "surface": "cart-desktop-heading",
+    "baseline": {
+      "id": "cart-desktop-heading-remove-20261002",
+      "implementationCommit": "6b206f0e2922005e00d3401a5e528575132303a3",
+      "decision": "用户要求移除所有店铺电脑端购物车的购物车标题和继续选购入口；手机标题保留，全选操作移到桌面订单摘要。",
+      "sourceFiles": [
+        "packages/storefront/src/pages/cart-page.tsx",
+        "packages/storefront/src/styles/desktop-pages.css"
+      ],
+      "latestAuthorizedCandidate": {
+        "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+        "status": "local-validated-not-pushed-not-deployed",
+        "sourceSelection": "2026-10-08 用户授权继续修复未完成问题；使用当前隔离候选，保留已确认的桌面无标题、订单摘要全选、紧凑数量控件。主工作区购物车 WIP 未复制、覆盖或提交。"
+      },
+      "currentEvidence": {
+        "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/local-receipt.json",
+        "dataSource": "本地产物和合成 GraphQL 顾客/商品/购物车回复；外部请求拦截，无真实下单或收费。",
+        "compatibilityScreenshots": [
+          ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/cart-pending-320.png",
+          ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/cart-pending-1440.png"
+        ],
+        "previousEvidence": {
+          "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/files/artifacts/cart-heading-remove-20261002/local-receipt.json",
+          "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/files/artifacts/cart-heading-remove-20261002/desktop-after.jpg",
+          "dataSource": "Production-built actual client with existing synthetic QA cart fixture. No production customer data or API writes.",
+          "publication": {
+            "pr": 583,
+            "head": "352e83a74ea8c08b73286fe2058ce289923c1760",
+            "mergeSha": "90749a34eaf32dfee010da900777ef5725023ed7",
+            "run": 36985611284,
+            "localReceipt": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-release-20261002/files/artifacts/cart-heading-release-20261002/final-local-release-receipt.json",
+            "liveReceipt": "backups/branch-cleanup-20260930/complete-cleanup-20261001/cart-583-live-browser-readback-20261002.json",
+            "populatedBuyerCart": "NOT_MEASURED; actual buyer cart empty; local populated fixture accepted",
+            "archiveManifests": [
+              "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-remove-20261002/manifest.json",
+              "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/cart-heading-release-20261002/manifest.json"
+            ]
+          }
+        }
+      },
+      "status": "local-compatible-with-authorized-recovery-not-published",
+      "previousImplementationCommit": "0603c2bf3acad2c0fdd4944d6c5f4b1fbc5263a3"
+    },
+    "candidate": {
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "6b206f0e",
+      "changedFiles": []
+    },
+    "preview": {
+      "url": "http://127.0.0.1:5198/cart",
+      "processes": [
+        {
+          "pid": 45506,
+          "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008/packages/storefront",
+          "worktreeRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+          "matches": true
+        }
+      ],
+      "matches": true
+    },
+    "matchingWorktrees": [
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+        "head": "6b206f0e",
+        "matchesBaseline": true,
+        "relatedChanges": []
+      }
+    ],
+    "relatedWipWorktrees": [
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master",
+        "head": "96d8b5d0",
+        "matchesBaseline": false,
+        "relatedChanges": [
+          "M packages/storefront/src/pages/cart-page.tsx",
+          " M packages/storefront/src/styles/desktop-pages.css"
+        ]
+      }
+    ],
+    "issues": [],
+    "note": "源码一致不等于画面验收通过。仍须核对实际客户端、后台预览、配置和截图；文件差异需按本次授权核对，不能删掉新代码来通过检查。"
+  },
+  {
+    "ok": true,
+    "checked": "design-source-files-and-optional-local-server-directory",
+    "registry": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/design-preview-baselines.json",
+    "surface": "cart-price-and-quantity",
+    "baseline": {
+      "id": "cart-price-and-compact-quantity-20261001",
+      "implementationCommit": "6b206f0e2922005e00d3401a5e528575132303a3",
+      "decision": "按用户 2026-10-01 要求缩小手机购物车数量控件；共享 QuantityControl 提供紧凑规格，整体单数字宽约 74px。价格完整支持五位整数、两位小数（55,555.55），价格与数量同行，379px 以下整组延伸到图片与文字两列宽度。桌面同步扩大单价与小计列，保留共享皮肤、商品图片绑定、库存及数量事件。本地完成，未推送或部署。",
+      "sourceFiles": [
+        "packages/storefront/src/components/common/quantity-control.tsx",
+        "packages/storefront/src/storefront-ui/cart-ui.tsx",
+        "packages/storefront/src/styles/cart-layout.css",
+        "packages/storefront/src/styles/quantity-control.css",
+        "packages/storefront/src/styles/desktop-pages.css"
+      ],
+      "currentEvidence": {
+        "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/local-receipt.json",
+        "dataSource": "本地产物和合成 GraphQL 顾客/商品/购物车回复；外部请求拦截，无真实下单或收费。",
+        "compatibilityScreenshots": [
+          ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/cart-pending-320.png",
+          ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/cart-recovery-20261008/cart-pending-1440.png"
+        ],
+        "previousEvidence": {
+          "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/files/artifacts/cart-compact-quantity-20261001/RESULT.txt",
+          "mobileScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/files/artifacts/cart-compact-quantity-20261001/after-390.png",
+          "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/files/artifacts/cart-compact-quantity-20261001/admin-neo-minimalist-1440.png",
+          "dataSource": "实际客户端与实际 Admin srcdoc 同源预览入口；合成 QA 商品与金额，仅本地模拟数量操作，所有外部请求拦截。",
+          "archivedFromWorktree": ".codex-worktrees/home-ad-config-subtitles-20261001",
+          "archiveManifest": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/home-ad-config-subtitles-20261001-width-final-20261001/manifest.json",
+          "publishedSourceCommit": "40f1d00f749797dbe0957243e65699ecb37be1ad",
+          "productionFrontendSha": "7302278ddadc1503a6dad6520e9b5a1eb70cb81c",
+          "productionReleaseRun": 36834372523,
+          "historicalLocalProofPreserved": true
+        }
+      },
+      "acceptance": [
+        "packages/storefront/src/cart-page.spec.tsx",
+        "packages/storefront/src/storefront-ui/cart-ui-interaction.spec.tsx",
+        "packages/storefront/src/skin-system.spec.ts",
+        "artifacts/cart-compact-quantity-20261001/results.json",
+        "artifacts/cart-compact-quantity-20261001/admin-results.json"
+      ],
+      "previousImplementationCommit": "55020f866ca5a7cbc3857453e6ddd7a98a5d7487",
+      "publicationAlignment": {
+        "at": "2026-10-01T06:05:21.911825+00:00",
+        "previousImplementationCommit": "164ba1ec0ebe3e7f0a7b8dfe77987ab831abb25d",
+        "base": "0cd4a69937b5e7ded6da1e4042c7524d02118a6c",
+        "note": "Original eight confirmed commits aligned; only conflict removes approved pagination; combined targeted tests/builds and 4 client/2 Admin conflict QA cases passed",
+        "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/home-aligned-local-receipt.json"
+      },
+      "latestAuthorizedCandidate": {
+        "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+        "status": "local-validated-not-pushed-not-deployed",
+        "sourceSelection": "2026-10-08 用户授权继续修复未完成问题；使用当前隔离候选，保留已确认的桌面无标题、订单摘要全选、紧凑数量控件。主工作区购物车 WIP 未复制、覆盖或提交。"
+      },
+      "status": "local-compatible-with-authorized-recovery-not-published"
+    },
+    "candidate": {
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "6b206f0e",
+      "changedFiles": []
+    },
+    "preview": {
+      "url": "http://127.0.0.1:5198/cart",
+      "processes": [
+        {
+          "pid": 45506,
+          "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008/packages/storefront",
+          "worktreeRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+          "matches": true
+        }
+      ],
+      "matches": true
+    },
+    "matchingWorktrees": [
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+        "head": "6b206f0e",
+        "matchesBaseline": true,
+        "relatedChanges": []
+      }
+    ],
+    "relatedWipWorktrees": [
+      {
+        "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master",
+        "head": "96d8b5d0",
+        "matchesBaseline": false,
+        "relatedChanges": [
+          "M packages/storefront/src/storefront-ui/cart-ui.tsx",
+          " M packages/storefront/src/styles/cart-layout.css",
+          " M packages/storefront/src/styles/desktop-pages.css"
+        ]
+      }
+    ],
+    "issues": [],
+    "note": "源码一致不等于画面验收通过。仍须核对实际客户端、后台预览、配置和截图；文件差异需按本次授权核对，不能删掉新代码来通过检查。"
+  }
+]
