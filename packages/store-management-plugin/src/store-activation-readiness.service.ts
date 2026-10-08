@@ -38,17 +38,15 @@ export function storeProfileActivationCheck(profile: StoreProfile): StoreActivat
         { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
     const manual = [
         [customFields?.storefrontNameZh, '中文店铺名称', 'Chinese store name'],
-        [profile.descriptionZh, '中文简介', 'Chinese description'],
         [profile.logoAssetId, '店铺图标', 'Store icon'],
         [profile.legalEntityName, '法定经营主体', 'Legal entity'],
         [profile.legalRegistrationCountry, '注册国家/地区', 'Registration country/region'],
         [profile.supportEmail, '客服邮箱', 'Support email'],
         [profile.privacyEmail, '隐私邮箱', 'Privacy email'],
     ].filter(([value]) => !String(value ?? '').trim());
-    const automatic = [
-        [customFields?.storefrontNameEn, '店铺名称', 'store name'],
-        [profile.descriptionEn, '简介', 'description'],
-    ].filter(([value]) => !isUsableEnglishContent(value));
+    const automatic = [[customFields?.storefrontNameEn, '店铺名称', 'store name']].filter(
+        ([value]) => !isUsableEnglishContent(value),
+    );
     const ready = manual.length === 0 && automatic.length === 0;
     return {
         code: 'PROFILE',
@@ -130,8 +128,8 @@ export interface StoreActivationSnapshot {
 
 const checkMessages: Record<Exclude<StoreActivationCheckCode, 'PAYMENT'>, { zh: string; en: string }> = {
     PROFILE: {
-        zh: '在“编辑档案”填写中文店铺名称、中文简介、店铺图标，以及法定经营主体、注册国家/地区和客服/隐私邮箱（英文自动生成）',
-        en: 'In Edit profile, fill in the store name, description, icon, legal entity, country and support/privacy emails (English auto-generated)',
+        zh: '在“编辑档案”填写中文店铺名称、店铺图标，以及法定经营主体、注册国家/地区和客服/隐私邮箱（英文自动生成）',
+        en: 'In Edit profile, fill in the store name, icon, legal entity, registration country/region and support/privacy emails (English auto-generated)',
     },
     DOMAIN: { zh: '验证并设置主域名', en: 'Verify and select a primary domain' },
     PASSWORD: {

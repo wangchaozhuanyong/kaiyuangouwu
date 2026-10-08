@@ -266,7 +266,7 @@ export function StoreEditor({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="中文简介">
+                <Field label="中文简介（选填）">
                     <AdminTextArea
                         rows={4}
                         value={descriptionZh}
@@ -274,7 +274,7 @@ export function StoreEditor({
                         className={inputClass}
                     />
                 </Field>
-                <Field label="品牌口号">
+                <Field label="品牌口号（选填）">
                     <AdminInput
                         value={taglineZh}
                         maxLength={160}
@@ -306,7 +306,7 @@ export function StoreEditor({
                                 className={inputClass}
                             />
                         </Field>
-                        <Field label="英文简介（人工覆盖）">
+                        <Field label="英文简介（选填，人工覆盖）">
                             <AdminTextArea
                                 rows={4}
                                 value={descriptionEn}
@@ -314,7 +314,7 @@ export function StoreEditor({
                                 className={inputClass}
                             />
                         </Field>
-                        <Field label="英文品牌口号（人工覆盖）">
+                        <Field label="英文品牌口号（选填，人工覆盖）">
                             <AdminInput
                                 value={taglineEn}
                                 maxLength={160}

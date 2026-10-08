@@ -28,6 +28,22 @@ const completeSnapshot = {
     payment: true,
 };
 
+const completeProfile = {
+    channel: {
+        customFields: {
+            storefrontNameZh: 'MOYAO AI｜模钥',
+            storefrontNameEn: 'MOYAO AI',
+        },
+    },
+    descriptionZh: 'AI 软件商城',
+    descriptionEn: 'AI software marketplace',
+    logoAssetId: 'asset-logo',
+    legalEntityName: 'MOYAO AI Example Limited',
+    legalRegistrationCountry: 'Malaysia',
+    supportEmail: 'support@moyaoai.com',
+    privacyEmail: 'privacy@moyaoai.com',
+} as any;
+
 describe('shipping activation readiness', () => {
     const channel = {
         code: 'store-a',
@@ -258,23 +274,64 @@ describe('store activation readiness', () => {
         expect(isUsableEnglishContent('')).toBe(false);
     });
 
-    it('requires legal identity and both contact emails in the store profile check', () => {
-        const completeProfile = {
-            channel: {
-                customFields: {
-                    storefrontNameZh: 'MOYAO AI｜模钥',
-                    storefrontNameEn: 'MOYAO AI',
-                },
-            },
-            descriptionZh: 'AI 软件商城',
-            descriptionEn: 'AI software marketplace',
-            logoAssetId: 'asset-logo',
-            legalEntityName: 'MOYAO AI Example Limited',
-            legalRegistrationCountry: 'Malaysia',
-            supportEmail: 'support@moyaoai.com',
-            privacyEmail: 'privacy@moyaoai.com',
-        } as any;
+    it.each([
+        { description: '', tagline: null },
+        { description: ' \n\t ', tagline: '' },
+    ])('allows blank descriptions and no tagline ($description)', ({ description, tagline }) => {
+        const profile = {
+            ...completeProfile,
+            descriptionZh: description,
+            descriptionEn: description,
+            taglineZh: tagline,
+            taglineEn: tagline,
+        };
+        const profileCheck = storeProfileActivationCheck(profile);
+        const readiness = evaluateStoreActivationReadiness({
+            ...completeSnapshot,
+            profile: profileCheck.ready,
+        });
 
+        expect(hasCompleteStoreProfile(profile)).toBe(true);
+        expect(profileCheck).toMatchObject({ code: 'PROFILE', ready: true });
+        expect(readiness.ready).toBe(true);
+        expect(profileCheck.message).not.toContain('简介');
+        expect(profileCheck.messageEn).not.toContain('description');
+        expect(readiness.checks.find(check => check.code === 'PROFILE')?.message).not.toContain('简介');
+        expect(readiness.checks.find(check => check.code === 'PROFILE')?.messageEn).not.toContain(
+            'description',
+        );
+    });
+
+    it.each([
+        ['storefrontNameZh', '中文店铺名称', 'Chinese store name'],
+        ['logoAssetId', '店铺图标', 'Store icon'],
+        ['legalEntityName', '法定经营主体', 'Legal entity'],
+        ['legalRegistrationCountry', '注册国家/地区', 'Registration country/region'],
+        ['supportEmail', '客服邮箱', 'Support email'],
+        ['privacyEmail', '隐私邮箱', 'Privacy email'],
+    ])('still requires %s and reports only that field', (field, labelZh, labelEn) => {
+        const profile = {
+            ...completeProfile,
+            descriptionZh: '',
+            descriptionEn: '',
+            [field]: '',
+            ...(field === 'storefrontNameZh'
+                ? { channel: { customFields: { ...completeProfile.channel.customFields, [field]: '' } } }
+                : {}),
+        };
+        const profileCheck = storeProfileActivationCheck(profile);
+
+        expect(hasCompleteStoreProfile(profile)).toBe(false);
+        expect(profileCheck).toMatchObject({
+            ready: false,
+            message: `请在“编辑档案”补充：${labelZh}`,
+            messageEn: `Complete in Edit profile: ${labelEn}`,
+        });
+        expect(profileCheck.message).not.toContain('简介');
+        expect(profileCheck.messageEn).not.toContain('description');
+    });
+
+    it('requires legal identity and both contact emails in the store profile check', () => {
         expect(hasCompleteStoreProfile(completeProfile)).toBe(true);
         expect(hasCompleteStoreProfile({ ...completeProfile, privacyEmail: null })).toBe(false);
         expect(storeProfileActivationCheck(completeProfile)).toMatchObject({ code: 'PROFILE', ready: true });
@@ -284,18 +341,33 @@ describe('store activation readiness', () => {
             messageEn: 'Complete in Edit profile: Privacy email',
         });
 
-        const pendingTranslation = storeProfileActivationCheck({ ...completeProfile, descriptionEn: '' });
+        const pendingTranslation = storeProfileActivationCheck({
+            ...completeProfile,
+            descriptionZh: '',
+            descriptionEn: '',
+            channel: { customFields: { ...completeProfile.channel.customFields, storefrontNameEn: '' } },
+        });
         expect(pendingTranslation.ready).toBe(false);
-        expect(pendingTranslation.message).toContain('英文资料尚未生成或未通过校验：简介');
+        expect(pendingTranslation.message).toContain('英文资料尚未生成或未通过校验：店铺名称');
         expect(pendingTranslation.message).not.toContain('补充');
         expect(pendingTranslation.message).not.toContain('法定经营主体');
-        expect(pendingTranslation.messageEn).toContain('English content is missing or invalid: description');
+        expect(pendingTranslation.message).not.toContain('简介');
+        expect(pendingTranslation.messageEn).toContain('English content is missing or invalid: store name');
+        expect(pendingTranslation.messageEn).not.toContain('description');
 
         const missingIcon = storeProfileActivationCheck({ ...completeProfile, logoAssetId: null });
         expect(missingIcon.message).toBe('请在“编辑档案”补充：店铺图标');
         expect(missingIcon.ready).toBe(false);
-        expect(storeProfileActivationCheck({ ...completeProfile, descriptionEn: 'AI 软件商城' }).ready).toBe(
-            false,
-        );
+        expect(
+            storeProfileActivationCheck({
+                ...completeProfile,
+                channel: {
+                    customFields: {
+                        ...completeProfile.channel.customFields,
+                        storefrontNameEn: 'AI 软件商城',
+                    },
+                },
+            }).ready,
+        ).toBe(false);
     });
 });

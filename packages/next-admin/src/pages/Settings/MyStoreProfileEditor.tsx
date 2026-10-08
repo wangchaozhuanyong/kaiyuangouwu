@@ -183,12 +183,12 @@ export function MyStoreProfileEditor({
                             onChange={value => change('storefrontNameEn', value)}
                         />
                         <FieldInput
-                            label="品牌口号"
+                            label="品牌口号（选填）"
                             value={draft.taglineZh}
                             onChange={value => change('taglineZh', value)}
                         />
                         <FieldInput
-                            label="英文品牌口号"
+                            label="英文品牌口号（选填）"
                             value={draft.taglineEn}
                             onChange={value => change('taglineEn', value)}
                         />
@@ -207,12 +207,12 @@ export function MyStoreProfileEditor({
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                         <FieldArea
-                            label="公开简介"
+                            label="公开简介（选填）"
                             value={draft.descriptionZh}
                             onChange={value => change('descriptionZh', value)}
                         />
                         <FieldArea
-                            label="英文公开简介"
+                            label="英文公开简介（选填）"
                             value={draft.descriptionEn}
                             onChange={value => change('descriptionEn', value)}
                         />
