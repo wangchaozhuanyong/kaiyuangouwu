@@ -1,5 +1,4 @@
 import type { ApolloClient } from '@apollo/client';
-import { channelRequestContext } from '../../apollo';
 import { UPDATE_STORE_PROFILE_MUTATION, type StoreProfileRecord } from '../../graphql/management.graphql';
 
 export type BrandChannel = Pick<StoreProfileRecord['channel'], 'id' | 'code' | 'token'>;
@@ -32,7 +31,6 @@ export async function saveStoreProfileWithBrandAssets(
     draft: BrandAssetsDraft,
     input: Record<string, unknown>,
 ) {
-    const targetContext = channelRequestContext(profile.channel.token);
     const changedInput: Partial<Record<`${BrandAssetField}Id`, string | null>> = {};
     for (const { field } of BRAND_ASSET_SLOTS) {
         const asset = draft[field];
@@ -42,12 +40,12 @@ export async function saveStoreProfileWithBrandAssets(
         }
         changedInput[`${field}Id`] = asset?.id ?? null;
     }
+    // Governance writes retain platform context; asset ownership is checked against the edited store.
     const result = await client.mutate<{ updateStoreProfile: StoreProfileRecord }>({
         mutation: UPDATE_STORE_PROFILE_MUTATION,
         variables: {
             input: { ...input, ...changedInput, id: profile.id, expectedUpdatedAt: profile.updatedAt },
         },
-        context: targetContext,
     });
     if (!result.data?.updateStoreProfile?.id) throw new Error('店铺档案未返回保存结果，请刷新后核对');
     return result.data.updateStoreProfile;

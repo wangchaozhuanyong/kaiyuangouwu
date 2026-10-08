@@ -171,11 +171,9 @@ describe('StoreEditor seller binding', () => {
                         legalEntityName: null,
                     }),
                 },
-                context: expect.objectContaining({
-                    headers: expect.objectContaining({ 'vendure-token': 'test-store-channel' }),
-                }),
             }),
         );
+        expect(mutate.mock.calls[0][0]).not.toHaveProperty('context');
         expect(onCompleted).toHaveBeenCalledWith('店铺归属和档案已保存');
     });
 

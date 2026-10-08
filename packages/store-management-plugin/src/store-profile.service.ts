@@ -186,7 +186,10 @@ export class StoreProfileService {
         );
 
         if (input.logoAssetId !== undefined) {
-            const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
+            const asset =
+                input.logoAssetId == null
+                    ? null
+                    : await this.findAsset(ctx, input.logoAssetId, profile.channelId);
             profile.logoAsset = asset;
             profile.logoAssetId = asset?.id ?? null;
         }
@@ -250,7 +253,10 @@ export class StoreProfileService {
         this.updateBrandColors(profile, input);
         this.updateContactEmails(profile, input);
         if (input.logoAssetId !== undefined) {
-            const asset = input.logoAssetId == null ? null : await this.findAsset(ctx, input.logoAssetId);
+            const asset =
+                input.logoAssetId == null
+                    ? null
+                    : await this.findAsset(ctx, input.logoAssetId, profile.channelId);
             profile.logoAsset = asset;
             profile.logoAssetId = asset?.id ?? null;
         }
@@ -465,8 +471,8 @@ export class StoreProfileService {
         }
     }
 
-    private async findAsset(ctx: RequestContext, id: ID): Promise<Asset> {
-        const asset = await this.connection.findOneInChannel(ctx, Asset, id, ctx.channelId);
+    private async findAsset(ctx: RequestContext, id: ID, channelId: ID): Promise<Asset> {
+        const asset = await this.connection.findOneInChannel(ctx, Asset, id, channelId);
         if (!asset) {
             throw new EntityNotFoundError(Asset.name, id);
         }
@@ -636,13 +642,17 @@ export class StoreProfileService {
     ): Promise<void> {
         if (input.logoOnLightAssetId !== undefined) {
             const asset =
-                input.logoOnLightAssetId == null ? null : await this.findAsset(ctx, input.logoOnLightAssetId);
+                input.logoOnLightAssetId == null
+                    ? null
+                    : await this.findAsset(ctx, input.logoOnLightAssetId, profile.channelId);
             profile.logoOnLightAsset = asset;
             profile.logoOnLightAssetId = asset?.id ?? null;
         }
         if (input.logoOnDarkAssetId !== undefined) {
             const asset =
-                input.logoOnDarkAssetId == null ? null : await this.findAsset(ctx, input.logoOnDarkAssetId);
+                input.logoOnDarkAssetId == null
+                    ? null
+                    : await this.findAsset(ctx, input.logoOnDarkAssetId, profile.channelId);
             profile.logoOnDarkAsset = asset;
             profile.logoOnDarkAssetId = asset?.id ?? null;
         }
