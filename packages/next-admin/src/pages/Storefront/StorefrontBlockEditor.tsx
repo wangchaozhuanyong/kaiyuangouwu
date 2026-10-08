@@ -253,7 +253,7 @@ export function StorefrontBlockEditor({
                         </div>
                     )}
                     <div className="mx-auto grid max-w-6xl gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                        <div className="space-y-5">
+                        <div className="min-w-0 space-y-5">
                             <section className="rounded-xl border border-slate-200 bg-white p-5">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                     <div>
@@ -997,27 +997,51 @@ export function StorefrontBlockEditor({
                                                 </p>
                                             </>
                                         ) : draft.type === 'NOTICE' ? (
-                                            <Field label="公告轮播间隔（秒）">
-                                                <AdminInput
-                                                    type="number"
-                                                    min={3}
-                                                    max={30}
-                                                    value={numberSetting(
-                                                        draft.settings?.scrollIntervalSeconds,
-                                                        5,
-                                                    )}
-                                                    onChange={event =>
-                                                        updateSettings({
-                                                            scrollIntervalSeconds: clamp(
-                                                                Number(event.target.value),
-                                                                3,
-                                                                30,
-                                                            ),
-                                                        })
-                                                    }
-                                                    className={inputClass}
-                                                />
-                                            </Field>
+                                            <>
+                                                <Field
+                                                    label="公告展示期限"
+                                                    helpText="按上线时间（未设置则按创建时间）筛选有效公告，首页最多展示 5 条。"
+                                                >
+                                                    <AdminSelect
+                                                        value={
+                                                            draft.settings?.announcementDisplayPeriod ===
+                                                            '2_YEARS'
+                                                                ? '2_YEARS'
+                                                                : '30_DAYS'
+                                                        }
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                announcementDisplayPeriod: event.target.value,
+                                                            })
+                                                        }
+                                                        className={inputClass}
+                                                    >
+                                                        <option value="30_DAYS">最近30天</option>
+                                                        <option value="2_YEARS">最近2年</option>
+                                                    </AdminSelect>
+                                                </Field>
+                                                <Field label="公告轮播间隔（秒）">
+                                                    <AdminInput
+                                                        type="number"
+                                                        min={3}
+                                                        max={30}
+                                                        value={numberSetting(
+                                                            draft.settings?.scrollIntervalSeconds,
+                                                            5,
+                                                        )}
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                scrollIntervalSeconds: clamp(
+                                                                    Number(event.target.value),
+                                                                    3,
+                                                                    30,
+                                                                ),
+                                                            })
+                                                        }
+                                                        className={inputClass}
+                                                    />
+                                                </Field>
+                                            </>
                                         ) : (
                                             <Field label="展示商品总数（非每行列数）">
                                                 <AdminInput
@@ -1210,7 +1234,7 @@ export function StorefrontBlockEditor({
                             )}
                         </div>
 
-                        <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
+                        <aside className="min-w-0 space-y-4 xl:sticky xl:top-0 xl:self-start">
                             <BlockPreview block={draft} language={language} />
                             <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
                                 <div className="font-bold text-slate-900">生效方式</div>

@@ -11,6 +11,17 @@ import {
 } from './storefront-decoration-model';
 
 describe('decoration drafts follow the Shop publication contract', () => {
+    it('passes the notice display period to the client preview with existing settings', () => {
+        const block = newContentBlock('NOTICE', 0);
+        block.enabled = true;
+        block.settings = {
+            announcementDisplayPeriod: '2_YEARS',
+            scrollIntervalSeconds: 8,
+            merchantSetting: 'retain',
+        };
+        expect(decorationDraft(block, 'zh_Hans').block?.settings).toEqual(block.settings);
+    });
+
     it('opens the homepage with the configured asset and preserves neighbouring content', () => {
         const block = newContentBlock('HERO', 0, '主视觉');
         block.enabled = true;

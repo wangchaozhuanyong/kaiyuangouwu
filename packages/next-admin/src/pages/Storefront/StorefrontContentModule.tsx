@@ -665,7 +665,7 @@ function AnnouncementList({
                         <FeatureHelpButton
                             topic="storefront.announcements"
                             title="首页公告"
-                            description={`${platformContext ? '平台管理中心可管理全部店铺的公告。' : '这里只管理本店公告；平台公告由平台管理中心统一管理。'}后台按优先级排序；首页按上线时间（未设置则按创建时间）展示近 30 天内的有效公告，与手动公告合计最多 5 条。`}
+                            description={`${platformContext ? '平台管理中心可管理全部店铺的公告。' : '这里只管理本店公告；平台公告由平台管理中心统一管理。'}后台按优先级排序；首页按上线时间（未设置则按创建时间）和当前店铺公告条的展示期限筛选有效公告，默认最近 30 天，可在首页装修中选择最近 2 年，与手动公告合计最多 5 条。`}
                         />
                     </h2>
                     <p className="text-xs text-slate-500">{sorted.length} 条公告</p>
@@ -804,7 +804,7 @@ function AnnouncementList({
                 <EmptyState
                     icon={Megaphone}
                     title="还没有首页公告"
-                    detail="新建后须符合上线排期；首页只显示近 30 天内的有效公告。"
+                    detail="新建后须符合上线排期；首页遵循当前店铺公告条的展示期限，默认最近 30 天，可在首页装修中选择最近 2 年，最多展示 5 条。"
                     action={canCreate ? '新建公告' : undefined}
                     onAction={canCreate ? onCreate : undefined}
                 />
