@@ -20,11 +20,11 @@ import { CommerceModeService } from '../../commerce-fulfillment-plugin/src/comme
 import { PackagingUnpackEvent } from '../../commerce-fulfillment-plugin/src/entities/packaging-unpack-event.entity';
 import { ProductPackagingRule } from '../../commerce-fulfillment-plugin/src/entities/product-packaging-rule.entity';
 import { FulfillmentModelService } from '../../commerce-fulfillment-plugin/src/fulfillment-model.service';
+import { catalogImportTemplateCsv } from '../src/browser/catalog-import-template';
+import { parseCatalogArrayBuffer, rowsForCatalogTransport } from '../src/browser/catalog-local-file';
 import { CatalogImportService } from '../src/catalog-import.service';
 import { CatalogManagementPlugin } from '../src/catalog-management.plugin';
 import { CatalogOperationsService } from '../src/catalog-operations.service';
-import { catalogImportTemplateCsv } from '../src/dashboard/catalog-import-template';
-import { parseCatalogArrayBuffer, rowsForCatalogTransport } from '../src/dashboard/catalog-local-file';
 import { CatalogImportRow } from '../src/entities/catalog-import-row.entity';
 
 @VendurePlugin({

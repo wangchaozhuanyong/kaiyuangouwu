@@ -8,7 +8,6 @@ import {
     icloudAdminSchema,
 } from '../../../../scripts/codegen/icloud-admin-contract';
 import * as next from '../../../next-admin/src/graphql/icloud-relay.graphql';
-import * as legacy from '../dashboard/icloud-relay.graphql';
 
 import {
     BatchCreateIcloudVirtualEmailsDocument,
@@ -18,20 +17,14 @@ import {
 
 // Validate the real schema/document boundary; mock mutation handlers would accept the broken arguments.
 describe('iCloud admin API contract', () => {
-    it('keeps both admin clients valid against the current server schema', async () => {
+    it('keeps the active admin client valid against the current server schema', async () => {
         const schema = await icloudAdminSchema();
-        for (const documents of [next, legacy])
-            for (const [name, document] of Object.entries(documents)) {
-                expect(
-                    validate(schema, document).map(error => error.message),
-                    name,
-                ).toEqual([]);
-            }
-        expect(next.UPDATE_ICLOUD_VIRTUAL_EMAIL_MUTATION).toBe(legacy.updateIcloudVirtualEmailMutation);
-        expect(next.UPDATE_ICLOUD_PRIMARY_ACCOUNT_MUTATION).toBe(legacy.updateIcloudPrimaryAccountMutation);
-        expect(next.BATCH_CREATE_ICLOUD_VIRTUAL_EMAILS_MUTATION).toBe(
-            legacy.batchCreateIcloudVirtualEmailsMutation,
-        );
+        for (const [name, document] of Object.entries(next)) {
+            expect(
+                validate(schema, document).map(error => error.message),
+                name,
+            ).toEqual([]);
+        }
     });
 
     it('requires generated documents and variable types to match the checked-in server schema', async () => {

@@ -2,6 +2,10 @@ import { CurrencyCode } from '@vendure/common/lib/generated-types';
 import { type RequestContext } from '@vendure/core';
 import { describe, expect, it } from 'vitest';
 
+import { type CatalogExportRowRecord } from './browser/catalog-export-types';
+import { buildCatalogExport } from './browser/catalog-export-workbook';
+import { catalogImportTemplateCsv } from './browser/catalog-import-template';
+import { parseCatalogArrayBuffer } from './browser/catalog-local-file';
 import { CatalogFileParserService, catalogProductKey } from './catalog-file-parser.service';
 import {
     catalogCollectionPath,
@@ -10,10 +14,6 @@ import {
 } from './catalog-import-classification';
 import { sanitizeCatalogRow, validateImportSource } from './catalog-import-helpers';
 import { CatalogImportService } from './catalog-import.service';
-import { buildCatalogExport } from './dashboard/catalog-export-workbook';
-import { catalogImportTemplateCsv } from './dashboard/catalog-import-template';
-import { parseCatalogArrayBuffer } from './dashboard/catalog-local-file';
-import { type CatalogExportRowRecord } from './dashboard/catalog-management.graphql';
 import { type BeginCatalogImportInput, type NormalizedCatalogRow } from './types';
 
 const encode = (csv: string) => new TextEncoder().encode(csv).buffer;

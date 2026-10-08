@@ -13,14 +13,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localeDir = path.resolve(__dirname, '../../src/i18n/locales');
 const workspaceRoot = path.resolve(__dirname, '../../../..');
 const packagesRoot = path.join(workspaceRoot, 'packages');
-const operationsDashboardRoot = path.join(
-    workspaceRoot,
-    'packages/operations-dashboard-plugin/src/dashboard',
-);
-const operationsLocaleDir = path.join(operationsDashboardRoot, 'i18n');
 const manualBilingualDashboardRoots = fs
     .readdirSync(packagesRoot, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && entry.name !== 'operations-dashboard-plugin')
+    .filter(entry => entry.isDirectory())
     .map(entry => path.join(packagesRoot, entry.name, 'src', 'dashboard'))
     .filter(root => fs.existsSync(root));
 const enEntries = parsePOFile(path.join(localeDir, 'en.po'));
@@ -63,34 +58,6 @@ function collectTypeScriptFiles(root) {
             ? [filePath]
             : [];
     });
-}
-
-function collectExplicitMessageIds(root) {
-    const ids = new Set();
-    for (const filePath of collectTypeScriptFiles(root)) {
-        const sourceText = fs.readFileSync(filePath, 'utf8');
-        const sourceFile = ts.createSourceFile(
-            filePath,
-            sourceText,
-            ts.ScriptTarget.Latest,
-            true,
-            filePath.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-        );
-        function visit(node) {
-            if (
-                ts.isPropertyAssignment(node) &&
-                ((ts.isIdentifier(node.name) && node.name.text === 'id') ||
-                    (ts.isStringLiteral(node.name) && node.name.text === 'id')) &&
-                ts.isStringLiteral(node.initializer) &&
-                node.initializer.text.startsWith('operations.')
-            ) {
-                ids.add(node.initializer.text);
-            }
-            ts.forEachChild(node, visit);
-        }
-        visit(sourceFile);
-    }
-    return ids;
 }
 
 function staticStringValue(node) {
@@ -180,47 +147,6 @@ function collectManualBilingualCopyIssues() {
     return { issues, pairCount };
 }
 
-function checkCatalogPair(label, englishFile, chineseFile, sourceMessageIds = new Set()) {
-    const englishEntries = parsePOFile(englishFile);
-    const chineseEntries = parsePOFile(chineseFile);
-    const englishById = new Map(englishEntries.map(entry => [entry.msgid, entry]));
-    const chineseById = new Map(chineseEntries.map(entry => [entry.msgid, entry]));
-    const catalogIssues = [];
-
-    for (const id of new Set([...englishById.keys(), ...chineseById.keys(), ...sourceMessageIds])) {
-        const english = englishById.get(id);
-        const chinese = chineseById.get(id);
-        if (!english) catalogIssues.push(`${label} English catalog is missing: ${id}`);
-        if (!chinese) catalogIssues.push(`${label} Chinese catalog is missing: ${id}`);
-        if (!english || !chinese) continue;
-        if (!english.msgstr) catalogIssues.push(`${label} English translation is empty: ${id}`);
-        if (!chinese.msgstr) catalogIssues.push(`${label} Chinese translation is empty: ${id}`);
-        if (/[一-鿿]/u.test(english.msgstr)) {
-            catalogIssues.push(`${label} English translation contains Chinese text: ${id}`);
-        }
-        if (
-            !looksTrivial(chinese.msgstr) &&
-            !/[一-鿿]/u.test(chinese.msgstr) &&
-            !chineseAllowlist.has(chinese.msgstr)
-        ) {
-            catalogIssues.push(`${label} Chinese translation is not localized: ${id}`);
-        }
-        if (
-            getIcuArgumentNames(english.msgstr).join('\0') !== getIcuArgumentNames(chinese.msgstr).join('\0')
-        ) {
-            catalogIssues.push(`${label} ICU arguments do not match: ${id}`);
-        }
-    }
-    return catalogIssues;
-}
-
-const operationsSourceMessageIds = collectExplicitMessageIds(operationsDashboardRoot);
-const operationsIssues = checkCatalogPair(
-    'Operations plugin',
-    path.join(operationsLocaleDir, 'en.po'),
-    path.join(operationsLocaleDir, 'zh_Hans.po'),
-    operationsSourceMessageIds,
-);
 const manualBilingualCopyAudit = collectManualBilingualCopyIssues();
 
 const issues = [
@@ -233,7 +159,6 @@ const issues = [
     ...unresolvedMessageIds.map(entry => `Internal message id is shown to users: ${entry.msgid}`),
     ...invalidEnglishArguments.map(entry => `English ICU arguments do not match source: ${entry.msgid}`),
     ...invalidChineseArguments.map(entry => `Chinese ICU arguments do not match source: ${entry.msgid}`),
-    ...operationsIssues,
     ...manualBilingualCopyAudit.issues,
 ];
 
@@ -245,5 +170,5 @@ if (issues.length > 0) {
 }
 
 console.log(
-    `Bilingual content check passed (${enEntries.length} dashboard messages / ${operationsSourceMessageIds.size} operations-plugin messages / ${manualBilingualCopyAudit.pairCount} manual copy pairs).`,
+    `Bilingual content check passed (${enEntries.length} dashboard messages / ${manualBilingualCopyAudit.pairCount} manual copy pairs).`,
 );

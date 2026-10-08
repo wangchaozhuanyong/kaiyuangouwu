@@ -35,13 +35,13 @@ import { PackagingUnpackEvent } from '../../commerce-fulfillment-plugin/src/enti
 import { ProductPackagingRule } from '../../commerce-fulfillment-plugin/src/entities/product-packaging-rule.entity';
 import { FulfillmentModelService } from '../../commerce-fulfillment-plugin/src/fulfillment-model.service';
 import { awaitRunningJobs } from '../../core/e2e/utils/await-running-jobs';
+import { type CatalogExportRowRecord } from '../src/browser/catalog-export-types';
+import { buildCatalogExport } from '../src/browser/catalog-export-workbook';
+import { catalogImportTemplateCsv } from '../src/browser/catalog-import-template';
+import { parseCatalogArrayBuffer, rowsForCatalogTransport } from '../src/browser/catalog-local-file';
 import { CatalogImportService } from '../src/catalog-import.service';
 import { CatalogManagementPlugin } from '../src/catalog-management.plugin';
 import { CatalogOperationsService } from '../src/catalog-operations.service';
-import { buildCatalogExport } from '../src/dashboard/catalog-export-workbook';
-import { catalogImportTemplateCsv } from '../src/dashboard/catalog-import-template';
-import { parseCatalogArrayBuffer, rowsForCatalogTransport } from '../src/dashboard/catalog-local-file';
-import { type CatalogExportRowRecord } from '../src/dashboard/catalog-management.graphql';
 
 // Reuse the actual fulfillment event handlers with only the fields/entities needed by import tests.
 @VendurePlugin({

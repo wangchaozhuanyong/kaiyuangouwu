@@ -4,6 +4,7 @@ export default defineConfig({
     test: {
         include: [
             'catalog-asset-access-strategy.spec.ts',
+            'legacy-dashboard-retirement.spec.ts',
             'storefront-cache-config.spec.ts',
             'storefront-media-jobs.plugin.spec.ts',
             'email-templates.spec.ts',

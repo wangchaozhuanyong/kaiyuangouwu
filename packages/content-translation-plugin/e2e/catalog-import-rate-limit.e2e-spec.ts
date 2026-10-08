@@ -35,13 +35,13 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
-import { CatalogImportService } from '../../catalog-management-plugin/src/catalog-import.service';
-import { CatalogManagementPlugin } from '../../catalog-management-plugin/src/catalog-management.plugin';
-import { CatalogOperationsService } from '../../catalog-management-plugin/src/catalog-operations.service';
 import {
     parseCatalogArrayBuffer,
     rowsForCatalogTransport,
-} from '../../catalog-management-plugin/src/dashboard/catalog-local-file';
+} from '../../catalog-management-plugin/src/browser/catalog-local-file';
+import { CatalogImportService } from '../../catalog-management-plugin/src/catalog-import.service';
+import { CatalogManagementPlugin } from '../../catalog-management-plugin/src/catalog-management.plugin';
+import { CatalogOperationsService } from '../../catalog-management-plugin/src/catalog-operations.service';
 import { translationResultCacheKey } from '../src/translation-result-cache.service';
 
 const directory = mkdtempSync(join(tmpdir(), 'catalog-translation-'));
