@@ -21,14 +21,12 @@ describe('iCloud relay permissions', () => {
     });
 
     it('preserves scoped API reads while NextAdmin reserves the private page for the platform owner', () => {
-        const dashboardRoute = readFileSync(resolve(__dirname, 'dashboard/index.tsx'), 'utf8');
         const nextAdminExtensions = readFileSync(
             resolve(__dirname, '../../next-admin/src/extensions/installed-extensions.tsx'),
             'utf8',
         );
         const resolver = readFileSync(resolve(__dirname, 'api/icloud-admin.resolver.ts'), 'utf8');
 
-        expect(dashboardRoute).toContain("requiresPermission: ['ReadIcloudRelay']");
         // Platform governance reserves this private UI for the owner; API-key CRUD stays scoped.
         expect(nextAdminExtensions).toMatch(/id: 'icloud-relay'[\s\S]*?permissions: \['SuperAdmin'\]/);
         expect(resolver).toContain('@Allow(manageIcloudRelayPermission.Read)');

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { CatalogManagementPlugin } from '../catalog-management-plugin/src/catalog-management.plugin';
@@ -6,6 +8,14 @@ import { IcloudRelayPlugin } from '../icloud-relay-plugin/src/icloud-relay.plugi
 import { OperationsDashboardPlugin } from '../operations-dashboard-plugin/src/operations-dashboard.plugin';
 
 describe('retired Dashboard registration', () => {
+    it.each(['catalog-management-plugin', 'icloud-relay-plugin', 'operations-dashboard-plugin'])(
+        'keeps the retired %s UI source absent',
+        name => {
+            expect(existsSync(fileURLToPath(new URL(`../${name}/src/dashboard/`, import.meta.url)))).toBe(
+                false,
+            );
+        },
+    );
     it.each([
         ['catalog management', CatalogManagementPlugin],
         ['mailbox portal', IcloudRelayPlugin],

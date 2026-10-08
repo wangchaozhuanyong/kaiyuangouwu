@@ -81,9 +81,7 @@
             "paths": [
                 "packages/store-management-plugin/src/dashboard",
                 "packages/image-generation-plugin/src/dashboard",
-                "packages/catalog-management-plugin/src/dashboard",
                 "packages/content-translation-plugin/src/dashboard",
-                "packages/operations-dashboard-plugin/src/dashboard",
                 "packages/two-factor-dashboard-plugin/src/dashboard",
                 "packages/storefront-content-plugin/src/dashboard",
                 "packages/store-domain-plugin/src/dashboard"

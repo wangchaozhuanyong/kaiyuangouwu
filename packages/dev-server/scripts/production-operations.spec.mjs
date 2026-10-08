@@ -1094,6 +1094,7 @@ void test('reviewed archived-log cleanup excludes active logs and rejects a chan
     const inspect = () =>
         operations.inspectArchivedLogCleanup(sourceSha, {
             journalRoot,
+            hasOpenDescriptor: () => false,
             ssmRoot,
             inspectScope: () => ({ repositorySha: 'c'.repeat(40), runtimeSha: 'b'.repeat(40) }),
         });
@@ -1147,9 +1148,46 @@ void test('archived-log plan rejects a symlinked rotated log', t => {
     assert.throws(() =>
         operations.inspectArchivedLogCleanup(sourceSha, {
             journalRoot: path.join(root, 'absent'),
+            hasOpenDescriptor: () => false,
             ssmRoot,
             inspectScope: () => ({ repositorySha: sourceSha, runtimeSha: 'b'.repeat(40) }),
         }),
+    );
+});
+
+void test('archived-log plan preserves numbered logs with open descriptors and open journal groups', t => {
+    const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'vendure-open-logs-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const procRoot = path.join(root, 'proc');
+    const descriptorRoot = path.join(procRoot, '123', 'fd');
+    const journalRoot = path.join(root, 'journal');
+    const machine = path.join(journalRoot, 'a'.repeat(32));
+    const ssmRoot = path.join(root, 'ssm');
+    mkdirSync(descriptorRoot, { recursive: true });
+    mkdirSync(machine, { recursive: true });
+    mkdirSync(ssmRoot);
+    const openLog = path.join(ssmRoot, 'amazon-ssm-agent.log.5');
+    const closedLog = path.join(ssmRoot, 'amazon-ssm-agent.log.4');
+    const openJournal = path.join(machine, 'system@open.journal');
+    const closedJournal = path.join(machine, 'system@closed.journal');
+    for (const file of [openLog, closedLog, openJournal, closedJournal]) writeFileSync(file, 'fixture');
+    symlinkSync(openLog, path.join(descriptorRoot, '5'));
+    symlinkSync(openJournal, path.join(descriptorRoot, '6'));
+    assert.equal(operations.hasOpenFileDescriptor(openLog, procRoot), true);
+    assert.equal(operations.hasOpenFileDescriptor(closedLog, procRoot), false);
+    assert.throws(
+        () => operations.hasOpenFileDescriptor(openLog, path.join(root, 'missing')),
+        /Cannot verify/u,
+    );
+    const plan = operations.inspectArchivedLogCleanup(sourceSha, {
+        journalRoot,
+        ssmRoot,
+        hasOpenDescriptor: file => operations.hasOpenFileDescriptor(file, procRoot),
+        inspectScope: () => ({ repositorySha: sourceSha, runtimeSha: sourceSha }),
+    });
+    assert.deepEqual(
+        plan.candidates.map(item => item.file),
+        [closedLog],
     );
 });
 
@@ -2083,4 +2121,11 @@ void test('notification operation guards preserve settings, deduplicate delivery
     );
     assert.match(workflow, /prepare-notification-secret-transfer/u);
     assert.match(workflow, /OPS_NOTIFICATION_PUBLIC_KEY=\{notification_public_key\}/u);
+});
+
+void test('retired custom Dashboard UI sources stay absent from the managed release tree', () => {
+    for (const name of ['catalog-management-plugin', 'icloud-relay-plugin', 'operations-dashboard-plugin']) {
+        assert.equal(existsSync(path.join(repositoryRoot, 'packages', name, 'src/dashboard')), false);
+        assert.ok(existsSync(path.join(repositoryRoot, 'packages', name, 'src/index.ts')));
+    }
 });

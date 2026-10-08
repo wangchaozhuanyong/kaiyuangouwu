@@ -1,12 +1,12 @@
 import { type RequestContext } from '@vendure/core';
 import { describe, expect, it } from 'vitest';
 
+import { catalogImportTemplateCsv } from './browser/catalog-import-template';
+import { parseCatalogArrayBuffer } from './browser/catalog-local-file';
 import { CatalogFileParserService } from './catalog-file-parser.service';
 import { sanitizeCatalogRow } from './catalog-import-helpers';
 import { catalogImportStoreError } from './catalog-import-store';
 import { CatalogImportWriter } from './catalog-import-writer';
-import { catalogImportTemplateCsv } from './dashboard/catalog-import-template';
-import { parseCatalogArrayBuffer } from './dashboard/catalog-local-file';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 

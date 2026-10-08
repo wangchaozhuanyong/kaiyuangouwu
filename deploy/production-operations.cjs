@@ -850,11 +850,40 @@ function inspectFixedLogInventory() {
     };
 }
 
+function hasOpenFileDescriptor(file, procRoot = '/proc') {
+    // Numbered SSM logs can still be the writer's active inode after rotation.
+    // Read descriptor metadata only; never inspect process environment or log contents.
+    assert.ok(existsSync(procRoot), 'Cannot verify active log descriptors');
+    const target = statSync(file);
+    for (const processEntry of readdirSync(procRoot, { withFileTypes: true })) {
+        if (!processEntry.isDirectory() || !/^[0-9]+$/u.test(processEntry.name)) continue;
+        const descriptorRoot = path.join(procRoot, processEntry.name, 'fd');
+        let descriptors;
+        try {
+            descriptors = readdirSync(descriptorRoot);
+        } catch (error) {
+            if (error.code === 'ENOENT' || error.code === 'ESRCH') continue;
+            throw error;
+        }
+        for (const descriptor of descriptors) {
+            if (!/^[0-9]+$/u.test(descriptor)) continue;
+            try {
+                const opened = statSync(path.join(descriptorRoot, descriptor));
+                if (opened.dev === target.dev && opened.ino === target.ino) return true;
+            } catch (error) {
+                if (error.code !== 'ENOENT' && error.code !== 'ESRCH') throw error;
+            }
+        }
+    }
+    return false;
+}
+
 function inspectArchivedLogCleanup(
     sourceSha,
     {
         journalRoot = '/var/log/journal',
         ssmRoot = '/var/log/amazon/ssm',
+        hasOpenDescriptor = file => hasOpenFileDescriptor(file),
         inspectScope = revision => inspectDeploymentCacheCleanup(revision, { directories: [] }),
     } = {},
 ) {
@@ -862,6 +891,7 @@ function inspectArchivedLogCleanup(
     // The server checkout can still be the verified ancestor while a new operations-only commit awaits deployment.
     // inspectDeploymentCacheCleanup already proves that relationship and pins the plan to both revisions.
     const candidates = [];
+    const journalCandidates = [];
     if (existsSync(journalRoot)) {
         for (const machine of readdirSync(journalRoot, { withFileTypes: true })) {
             assert.ok(machine.isDirectory() && !machine.isSymbolicLink(), 'Unexpected journal entry');
@@ -871,15 +901,24 @@ function inspectArchivedLogCleanup(
                 if (!entry.name.includes('@')) continue;
                 assert.ok(entry.isFile() && !entry.isSymbolicLink(), 'Archived journal must be a file');
                 assert.match(entry.name, /^[^/@]+@[^/@]+\.journal~?$/u, 'Unexpected archived journal');
-                candidates.push({ kind: 'journal', ...archivedLogFile(path.join(directory, entry.name)) });
+                journalCandidates.push({
+                    kind: 'journal',
+                    ...archivedLogFile(path.join(directory, entry.name)),
+                });
             }
         }
+    }
+    // journalctl vacuums the archive as a group. Preserve the whole group if any archive is open.
+    if (journalCandidates.every(item => !hasOpenDescriptor(item.file))) {
+        candidates.push(...journalCandidates);
     }
     if (existsSync(ssmRoot)) {
         for (const entry of readdirSync(ssmRoot, { withFileTypes: true })) {
             if (!/^amazon-ssm-agent\.log\.[1-9][0-9]*$/u.test(entry.name)) continue;
             assert.ok(entry.isFile() && !entry.isSymbolicLink(), 'Rotated SSM log must be a file');
-            candidates.push({ kind: 'ssm-rotated', ...archivedLogFile(path.join(ssmRoot, entry.name)) });
+            const file = path.join(ssmRoot, entry.name);
+            const metadata = archivedLogFile(file);
+            if (!hasOpenDescriptor(file)) candidates.push({ kind: 'ssm-rotated', ...metadata });
         }
     }
     candidates.sort((a, b) => a.file.localeCompare(b.file));
@@ -2959,6 +2998,7 @@ module.exports = {
     inspectAptMetadataCleanup,
     inspectAptListsCleanup,
     inspectSnapCacheCleanup,
+    hasOpenFileDescriptor,
     inspectArchivedLogCleanup,
     applyArchivedLogCleanup,
     inspectFileBackupCleanup,

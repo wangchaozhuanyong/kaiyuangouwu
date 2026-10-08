@@ -36,4 +36,4 @@ export {
     type OrderExpenseImportRow,
 } from './order-expense-local-file.js';
 
-export { catalogImportTemplateCsv } from './dashboard/catalog-import-template.js';
+export { catalogImportTemplateCsv } from './browser/catalog-import-template.js';
