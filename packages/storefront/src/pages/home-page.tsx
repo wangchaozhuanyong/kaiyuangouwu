@@ -770,6 +770,7 @@ export function HomePage() {
         );
         const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
         const trust = heroTrustRef.current;
+        const carousel = viewport.closest<HTMLElement>('.hero-carousel');
         const pager = desktop ? stage.querySelector<HTMLElement>('.hero-overlay-controls') : null;
         let measuredPagerWidth: number | undefined;
         let measuredTrustHeight: number | undefined;
@@ -779,8 +780,8 @@ export function HomePage() {
             const pagerWidth = pager ? Math.ceil(pager.getBoundingClientRect().width) : 0;
             if (pagerWidth !== measuredPagerWidth) {
                 measuredPagerWidth = pagerWidth;
-                if (pager) viewport.style.setProperty('--home-hero-pager-width', `${pagerWidth}px`);
-                else viewport.style.removeProperty('--home-hero-pager-width');
+                if (pager) carousel?.style.setProperty('--home-hero-pager-width', `${pagerWidth}px`);
+                else carousel?.style.removeProperty('--home-hero-pager-width');
             }
             const trustHeight = trust ? Math.ceil(trust.getBoundingClientRect().height) : 0;
             if (trustHeight !== measuredTrustHeight) {
@@ -819,7 +820,7 @@ export function HomePage() {
             observer.disconnect();
             window.removeEventListener('resize', measure);
             viewport.style.removeProperty('--home-hero-trust-height');
-            viewport.style.removeProperty('--home-hero-pager-width');
+            carousel?.style.removeProperty('--home-hero-pager-width');
         };
     }, [desktop, heroIndex, heroMotion?.nextIndex, heroTrustBar, managedHeroes]);
 
