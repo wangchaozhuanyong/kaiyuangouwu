@@ -72,9 +72,29 @@
     "deployment": "NOT_REQUESTED_NOT_EXECUTED"
   },
   "knownPresentationObservation": "English USDT error text has a narrow column at 390px beside the retry action; no clipping/overflow; no shared error layout redesign in scope.",
-  "sourceGuard": "Pending local focused commit and appended primary registry entry; tracked separately",
+  "sourceGuard": {
+    "status": "PASS",
+    "surface": "storefront-payment-recovery",
+    "sourceFiles": 19,
+    "record": "source-check-final.json",
+    "primaryRegistryOldEntriesPreserved": 83,
+    "previewCwdMatched": true
+  },
   "rawEvidence": {
     "storefront": "packages/storefront/tmp/order-closure-browser/outputs",
     "admin": "packages/next-admin/tmp/order-recovery-browser/outputs"
+  },
+  "implementationCommit": "5d5aa0ee9149232351926db473710361094ff698",
+  "localCommitHooks": {
+    "status": "PASS",
+    "sourceFiles": 34,
+    "mode": "Existing CI_PLAN.lintFiles selected all staged production/test files; no hook disabled",
+    "preparationFailure": "Default hook initially included untracked temporary QA code not in TS projects; these files stay untracked and are not product source."
+  },
+  "ownPreviewServer": {
+    "port": 5428,
+    "pid": 94046,
+    "status": "SIGTERM_SENT_AFTER_SOURCE_GUARD",
+    "otherUserProcesses": "UNTOUCHED"
   }
 }

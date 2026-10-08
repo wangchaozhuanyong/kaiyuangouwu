@@ -85,3 +85,9 @@
 - `packages/storefront/src/payment-currency-page.spec.tsx`
 - `packages/storefront/src/payment-pages.tsx`
 - `packages/next-admin/src/pages/Sales/AfterSalesModule.spec.tsx`
+
+## 本地保存与来源核对
+
+代码提交：`5d5aa0ee9149232351926db473710361094ff698`，未推送。提交钩子使用已有 lintFiles 范围，覆盖全部34个暂存源码/测试文件，未关闭钩子；默认准备轮次扫描了不属 TypeScript 项目的未暂存浏览器夹具而失败，该失败未冒充产品检查通过。
+
+新增 storefront-payment-recovery 来源登记，旧83条完整保留；19个生产源文件与登记提交一致，5428预览服务实际目录为当前候选，来源检查通过。源码指纹与验收输入一致。检查结束后仅关闭自有预览服务，原始样本和记录保留。
