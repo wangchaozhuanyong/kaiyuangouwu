@@ -143,7 +143,8 @@ export function newContentBlock(
         textColor: ['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'].includes(type) ? '#ffffff' : null,
         targetType: 'NONE',
         targetValue: null,
-        settings: type === 'NOTICE' ? { scrollIntervalSeconds: 5 } : null,
+        settings:
+            type === 'NOTICE' ? { scrollIntervalSeconds: 5, announcementDisplayPeriod: '2_YEARS' } : null,
         translations: [
             { ...emptyBlockTranslation('zh_Hans'), title: displayName },
             { ...emptyBlockTranslation('en'), title: englishDefaultTitle(type) },

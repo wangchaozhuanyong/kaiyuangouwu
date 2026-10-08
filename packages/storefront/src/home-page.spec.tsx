@@ -1492,7 +1492,172 @@ describe('HomePage desktop intro layout', () => {
 });
 
 describe('HomePage notices', () => {
-    it('rotates only the five newest announcements from the last thirty days', () => {
+    it('uses the current store two-year window while preserving publication dates and the five-item limit', () => {
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-08T01:00:00Z'));
+        try {
+            const announcements = [
+                ['launch', '2026-09-01T01:00:00Z'],
+                ['purchase', '2026-09-08T01:00:00Z'],
+                ['delivery', '2026-09-18T01:00:00Z'],
+                ['last-year', '2025-10-08T01:00:00Z'],
+                ['boundary', '2024-10-08T01:00:00Z'],
+                ['too-old', '2024-10-08T00:59:59Z'],
+                ['future', '2026-10-09T01:00:00Z'],
+                ['invalid', 'invalid-date'],
+            ].map(([id, startsAt]) => ({
+                id,
+                createdAt: '2026-10-08T01:00:00Z',
+                startsAt,
+                endsAt: null,
+                title: `公告 ${id}`,
+                content: '有效公告内容',
+                linkUrl: null,
+            }));
+            const noticeBlock: StorefrontContentBlock = {
+                ...heroBlock,
+                type: 'NOTICE',
+                title: '',
+                subtitle: '',
+                body: '',
+                settings: { announcementDisplayPeriod: '2_YEARS', scrollIntervalSeconds: 5 },
+            };
+
+            expect(buildHomeNoticeItems(announcements, noticeBlock, 'zh').map(item => item.id)).toEqual([
+                'system-delivery',
+                'system-purchase',
+                'system-launch',
+                'system-last-year',
+                'system-boundary',
+            ]);
+            expect(
+                buildHomeNoticeItems(
+                    [
+                        ...announcements,
+                        { ...announcements[0], id: 'extra', startsAt: '2024-10-09T01:00:00Z' },
+                    ],
+                    noticeBlock,
+                    'zh',
+                ).map(item => item.id),
+            ).toEqual([
+                'system-delivery',
+                'system-purchase',
+                'system-launch',
+                'system-last-year',
+                'system-extra',
+            ]);
+            expect(
+                buildHomeNoticeItems(announcements, { ...noticeBlock, settings: null }, 'zh').map(
+                    item => item.id,
+                ),
+            ).toEqual([
+                'system-delivery',
+                'system-purchase',
+                'system-launch',
+                'system-last-year',
+                'system-boundary',
+            ]);
+            expect(
+                buildHomeNoticeItems(
+                    announcements,
+                    { ...noticeBlock, settings: { announcementDisplayPeriod: '30_DAYS' } },
+                    'zh',
+                ).map(item => item.id),
+            ).toEqual(['system-delivery', 'system-purchase']);
+            expect(announcements[0].startsAt).toBe('2026-09-01T01:00:00Z');
+        } finally {
+            clock.mockRestore();
+        }
+    });
+
+    it.each([undefined, null, '2_YEARS', 'unknown'])('uses the two-year default for period %s', period => {
+        const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+        const announcements = [20, 40, 800].map(days => ({
+            id: String(days),
+            createdAt: daysAgo(days),
+            title: `公告 ${days}`,
+            content: '有效公告内容',
+            linkUrl: null,
+            startsAt: null,
+            endsAt: null,
+        }));
+        const noticeBlock: StorefrontContentBlock = {
+            ...heroBlock,
+            type: 'NOTICE',
+            title: '',
+            subtitle: '',
+            body: '',
+            settings: { announcementDisplayPeriod: period },
+        };
+
+        expect(buildHomeNoticeItems(announcements, noticeBlock, 'en').map(item => item.id)).toEqual([
+            'system-20',
+            'system-40',
+        ]);
+    });
+
+    it('uses the two-year default without a notice block and preserves an explicit thirty-day choice', () => {
+        const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+        const announcements = [20, 400, 800].map(days => ({
+            id: String(days),
+            createdAt: daysAgo(days),
+            title: `公告 ${days}`,
+            content: '有效公告内容',
+            linkUrl: null,
+            startsAt: null,
+            endsAt: null,
+        }));
+        expect(buildHomeNoticeItems(announcements, undefined, 'zh').map(item => item.id)).toEqual([
+            'system-20',
+            'system-400',
+        ]);
+        const noticeBlock: StorefrontContentBlock = {
+            ...heroBlock,
+            type: 'NOTICE',
+            title: '',
+            subtitle: '',
+            body: '',
+            settings: { announcementDisplayPeriod: '30_DAYS' },
+        };
+        expect(buildHomeNoticeItems(announcements, noticeBlock, 'zh').map(item => item.id)).toEqual([
+            'system-20',
+        ]);
+    });
+
+    it('uses calendar years and includes the clamped February boundary on a leap day', () => {
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2024-02-29T12:00:00Z'));
+        try {
+            const announcements = [
+                ['boundary', '2022-02-28T12:00:00Z'],
+                ['before-boundary', '2022-02-28T11:59:59Z'],
+                ['march', '2022-03-01T00:00:00Z'],
+            ].map(([id, createdAt]) => ({
+                id,
+                createdAt,
+                title: `公告 ${id}`,
+                content: '有效公告内容',
+                linkUrl: null,
+                startsAt: null,
+                endsAt: null,
+            }));
+            const noticeBlock: StorefrontContentBlock = {
+                ...heroBlock,
+                type: 'NOTICE',
+                title: '',
+                subtitle: '',
+                body: '',
+                settings: { announcementDisplayPeriod: '2_YEARS' },
+            };
+
+            expect(buildHomeNoticeItems(announcements, noticeBlock, 'zh').map(item => item.id)).toEqual([
+                'system-march',
+                'system-boundary',
+            ]);
+        } finally {
+            clock.mockRestore();
+        }
+    });
+
+    it('rotates only the five newest announcements within the default window', () => {
         const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
         const announcements = [35, 4, 2, 7, 1, 3, 5].map(days => ({
             id: String(days),

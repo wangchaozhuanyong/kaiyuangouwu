@@ -132,7 +132,15 @@ export function buildHomeNoticeItems(
     language: StorefrontLanguage,
 ): HomeNoticeItem[] {
     const now = Date.now();
-    const recentCutoff = now - 30 * 24 * 60 * 60 * 1000;
+    let recentCutoff = now - 30 * 24 * 60 * 60 * 1000;
+    if (noticeBlock?.settings?.announcementDisplayPeriod !== '30_DAYS') {
+        const cutoff = new Date(now);
+        const month = cutoff.getUTCMonth();
+        cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 2);
+        // Keep February 29 within February when the cutoff year is not a leap year.
+        if (cutoff.getUTCMonth() !== month) cutoff.setUTCDate(0);
+        recentCutoff = cutoff.getTime();
+    }
     const recentAnnouncements = systemAnnouncements
         .filter(announcement => {
             const publishedAt = announcement.startsAt ?? announcement.createdAt;

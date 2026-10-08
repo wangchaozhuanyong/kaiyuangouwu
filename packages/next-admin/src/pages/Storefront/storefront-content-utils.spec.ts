@@ -22,6 +22,15 @@ function validSupportBlock() {
     return block;
 }
 
+it('defaults a new notice block to two years and submits that setting', () => {
+    const block = newContentBlock('NOTICE', 0);
+    expect(block.settings).toEqual({
+        scrollIntervalSeconds: 5,
+        announcementDisplayPeriod: '2_YEARS',
+    });
+    expect(storefrontBlockInput(block).settings).toEqual(block.settings);
+});
+
 describe('storefront support content editor', () => {
     it('omits unchanged image bindings during ordinary saves, including reordered items', () => {
         const original = { ...validSupportBlock(), id: 'saved', imageAssetId: 'hero' };

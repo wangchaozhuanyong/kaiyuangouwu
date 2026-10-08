@@ -285,6 +285,16 @@ if (params.has('recommendations')) {
         ],
     });
 }
+if (params.has('notice-period')) {
+    const notice = blocks.find(block => block.type === 'NOTICE');
+    if (notice) {
+        const noticeSettings = { ...notice.settings };
+        const period = params.get('notice-period');
+        if (period === 'legacy') delete noticeSettings.announcementDisplayPeriod;
+        else noticeSettings.announcementDisplayPeriod = period;
+        notice.settings = noticeSettings;
+    }
+}
 if (params.has('persist') && sessionStorage.getItem('carousel-fixture-blocks')) {
     blocks = JSON.parse(sessionStorage.getItem('carousel-fixture-blocks')!);
 }
@@ -417,14 +427,36 @@ const channel = params.has('platform-channel')
           customFields: null,
       }
     : storeChannel;
-// Public Shop responses for the isolated parity exercise. No real store is contacted.
-if (params.has('parity')) {
+// Public Shop responses for isolated real-client previews. No real store is contacted.
+if (params.has('parity') || params.has('notice-period')) {
     asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';
+    const periodAnnouncements = [35, 49, 65].map((daysAgo, index) => {
+        const startsAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+        return {
+            id: `notice-period-${index + 1}`,
+            createdAt: startsAt,
+            startsAt,
+            endsAt: null,
+            linkUrl: null,
+            titleZh: ['示例商城上线公告', '示例选购与询价说明', '示例配送与收货须知'][index],
+            titleEn: ['Sample store launch', 'Sample buying and enquiries', 'Sample delivery information'][
+                index
+            ],
+            contentZh: `本地样例公告，发布日期为 ${daysAgo} 天前。`,
+            contentEn: `Local sample notice published ${daysAgo} days ago.`,
+        };
+    });
     const nativeFetch = window.fetch.bind(window);
     window.fetch = async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : String(input), location.href);
         if (url.pathname === '/shop-api') {
+            if (
+                params.has('notice-period') &&
+                url.hostname !== 'fixture.invalid' &&
+                url.origin !== location.origin
+            )
+                throw new Error('公告期限样例仅允许本地夹具接口');
             const data = fixtureData(
                 params.get('preset') ?? 'classic',
                 false,
@@ -444,6 +476,18 @@ if (params.has('parity')) {
                 )
                 .filter(draft => draft.visible)
                 .map(draft => draft.block);
+            if (params.has('notice-period')) {
+                const english = url.searchParams.get('languageCode') === 'en';
+                data.activeSystemAnnouncements = periodAnnouncements.map(announcement => ({
+                    id: announcement.id,
+                    createdAt: announcement.createdAt,
+                    startsAt: announcement.startsAt,
+                    endsAt: announcement.endsAt,
+                    linkUrl: announcement.linkUrl,
+                    title: english ? announcement.titleEn : announcement.titleZh,
+                    content: english ? announcement.contentEn : announcement.contentZh,
+                }));
+            }
             return new Response(JSON.stringify({ data }), {
                 status: 200,
                 headers: { 'content-type': 'application/json' },
