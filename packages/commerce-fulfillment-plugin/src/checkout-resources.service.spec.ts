@@ -1,3 +1,5 @@
+import { OrderLine } from '@vendure/core';
+import { CalculatedPropertySubscriber } from '@vendure/core/dist/entity/subscribers';
 import assert from 'node:assert/strict';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -415,6 +417,47 @@ describe('refunded checkout resource quantities', () => {
             refunds: [{ state, lines: [{ orderLineId: id, quantity }] }],
         });
     }
+
+    it('retries physical resources with a hydrated OrderLine without flattening calculated getters', async () => {
+        const test = resourceFixture();
+        const hydratedLine = new OrderLine({
+            ...line('physical', 5),
+            listPrice: 1000,
+            initialListPrice: 1000,
+            listPriceIncludesTax: false,
+            taxLines: [],
+            adjustments: [],
+            linesReferences: [],
+        });
+        new CalculatedPropertySubscriber().afterLoad(hydratedLine);
+        expect(Object.getOwnPropertyDescriptor(hydratedLine, 'unitPrice')).toMatchObject({
+            get: expect.any(Function),
+            set: undefined,
+            enumerable: true,
+        });
+        test.order.lines = [hydratedLine] as any;
+        test.allocations.set('physical', 1);
+        test.sales.set('physical', 1);
+        refund(test, 'physical', 2);
+        const reserved: OrderLine[] = [];
+        test.digital.reserveOrder.mockImplementation((_ctx, order) => {
+            reserved.push(...order.lines);
+        });
+
+        await test.service.retryDelivery(test.ctx, test.order.id);
+
+        expect(reserved).toHaveLength(1);
+        expect(reserved[0]).toBeInstanceOf(OrderLine);
+        expect(reserved[0]).not.toBe(hydratedLine);
+        expect(reserved[0]).toMatchObject({ id: 'physical', quantity: 3, unitPrice: 1000, linePrice: 3000 });
+        expect(test.createAllocationsForOrderLines).toHaveBeenCalledExactlyOnceWith(test.ctx, [
+            { orderLineId: 'physical', quantity: 1 },
+        ]);
+        expect(test.order.lines[0]).toBe(hydratedLine);
+        expect(hydratedLine.quantity).toBe(5);
+        expect(hydratedLine.linePrice).toBe(5000);
+        expect(test.hold.state).toBe('CONFIRMED');
+    });
 
     it.each(['Pending', 'Settled', 'Failed'])(
         'allocates only currently owed physical units with a %s refund',

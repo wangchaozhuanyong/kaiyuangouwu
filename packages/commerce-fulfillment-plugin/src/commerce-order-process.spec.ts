@@ -1,4 +1,5 @@
-import { CurrencyCode, ProductVariantPrice } from '@vendure/core';
+import { CurrencyCode, OrderLine, ProductVariantPrice } from '@vendure/core';
+import { CalculatedPropertySubscriber } from '@vendure/core/dist/entity/subscribers';
 import { StoreDefaultCurrencyPriceSelectionStrategy } from '@vendure/store-management-plugin/currency-conversion';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -275,6 +276,68 @@ describe('commerceOrderProcess digital fulfillment', () => {
         } as any);
 
         expect(orderService.createFulfillment).not.toHaveBeenCalled();
+    });
+
+    it('reserves a hydrated OrderLine without flattening calculated getters during digital delivery', async () => {
+        checkoutResources.canDeliver.mockResolvedValue(true);
+        const hydratedLine = new OrderLine({
+            id: 'digital-line',
+            quantity: 3,
+            orderPlacedQuantity: 3,
+            listPrice: 1000,
+            initialListPrice: 1000,
+            listPriceIncludesTax: false,
+            taxLines: [],
+            adjustments: [],
+            linesReferences: [],
+            customFields: {
+                fulfillmentTypeSnapshot: 'digital',
+                digitalDeliveryModeSnapshot: 'manual_service',
+            } as any,
+            productVariant: { customFields: { fulfillmentType: 'digital' } } as any,
+        });
+        new CalculatedPropertySubscriber().afterLoad(hydratedLine);
+        expect(Object.getOwnPropertyDescriptor(hydratedLine, 'unitPrice')).toMatchObject({
+            get: expect.any(Function),
+            set: undefined,
+            enumerable: true,
+        });
+        hydratedOrder = {
+            id: 'paid-order',
+            active: false,
+            state: 'PaymentSettled',
+            totalWithTax: 1000,
+            lines: [hydratedLine],
+            payments: [
+                {
+                    state: 'Settled',
+                    amount: 1000,
+                    method: 'real-payment',
+                    refunds: [{ state: 'Settled', lines: [{ orderLineId: hydratedLine.id, quantity: 1 }] }],
+                },
+            ],
+        };
+        digitalProducts.reservation.mockResolvedValue({ state: 'CONSUMED' });
+        const reserved: OrderLine[] = [];
+        digitalProducts.reserveOrder.mockImplementation((_ctx, order) => {
+            reserved.push(...order.lines);
+        });
+
+        await fulfillDigitalOrder({ channelId: 'store' } as any, hydratedOrder.id);
+
+        expect(reserved).toHaveLength(1);
+        expect(reserved[0]).toBeInstanceOf(OrderLine);
+        expect(reserved[0]).not.toBe(hydratedLine);
+        expect(reserved[0]).toMatchObject({
+            id: 'digital-line',
+            quantity: 2,
+            unitPrice: 1000,
+            linePrice: 2000,
+        });
+        expect(hydratedOrder.lines[0]).toBe(hydratedLine);
+        expect(hydratedLine.quantity).toBe(3);
+        expect(hydratedLine.linePrice).toBe(3000);
+        expect(checkoutResources.markReview).not.toHaveBeenCalled();
     });
 
     it('does not restore refunded digital quantities during the delivery retry continuation', async () => {

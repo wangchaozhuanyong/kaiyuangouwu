@@ -356,20 +356,17 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
             refunded.set(key, (refunded.get(key) ?? 0) + item.quantity);
         }
         return order.lines
-            .map(
-                line =>
-                    new OrderLine({
-                        ...line,
-                        quantity: Math.max(
-                            0,
-                            Math.min(
-                                line.quantity,
-                                (line.orderPlacedQuantity || line.quantity) -
-                                    (refunded.get(String(line.id)) ?? 0),
-                            ),
-                        ),
-                    }),
-            )
+            .map(line => {
+                const resourceLine = new OrderLine(line);
+                resourceLine.quantity = Math.max(
+                    0,
+                    Math.min(
+                        line.quantity,
+                        (line.orderPlacedQuantity || line.quantity) - (refunded.get(String(line.id)) ?? 0),
+                    ),
+                );
+                return resourceLine;
+            })
             .filter(line => line.quantity > 0);
     }
 

@@ -346,7 +346,11 @@ export async function fulfillDigitalOrder(ctx: RequestContext, orderId: Order['i
         const delivered = history
             .filter(item => item.fulfillment.state === 'Delivered')
             .reduce((sum, item) => sum + item.quantity, 0);
-        if (reservation || delivered < quantity) linesToReserve.push(new OrderLine({ ...line, quantity }));
+        if (reservation || delivered < quantity) {
+            const lineToReserve = new OrderLine(line);
+            lineToReserve.quantity = quantity;
+            linesToReserve.push(lineToReserve);
+        }
     }
     try {
         const originalLines = settledOrder.lines;
