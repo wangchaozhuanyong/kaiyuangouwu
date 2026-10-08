@@ -70,7 +70,9 @@ for (const [engine, browserType] of [
             });
             await page.route('**/*', async route => {
                 const url = new URL(route.request().url());
-                if (url.pathname.includes('shop-api')) {
+                if (url.pathname === '/_storefront/page-data')
+                    return route.fulfill({ status: 404, json: {} });
+                if (url.pathname === '/shop-api') {
                     const { query, variables } = route.request().postDataJSON() ?? {};
                     if (query?.includes('mutation ApplyStorefrontCartCommand')) {
                         const input = variables.input;

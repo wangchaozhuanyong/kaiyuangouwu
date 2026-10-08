@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultAccountRecommendationSettings } from '../../storefront-content-plugin/src/shared/account-recommendation-settings';
 
 import { SHOP_API_QUERY_TIMEOUT_MS, ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
-import { MarketConfig } from './types';
+import { CartController as RecoveryCartController } from './cart/cart-controller';
+import { type CartCommand } from './cart/cart-intents';
+import { MarketConfig, StorefrontCart } from './types';
 
 const market: MarketConfig = {
     code: 'cn-mainland',
@@ -2756,6 +2758,265 @@ describe('account recommendation settings API', () => {
         vi.stubGlobal('fetch', fetchMock);
         await expect(new ShopApi(market).storefrontContent()).rejects.toThrow('Permission denied');
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('cart command acknowledgement recovery', () => {
+    const confirmed: StorefrontCart = {
+        id: 'recovery-cart',
+        revision: 2,
+        projectedRevision: 2,
+        state: 'OPEN',
+        totalQuantity: 1,
+        selectedQuantity: 1,
+        selectedLineCount: 1,
+        selectionState: 'ALL',
+        lines: [],
+        checkoutOrder: null,
+    };
+    const command: CartCommand = {
+        commandId: 'acknowledged-command-1234',
+        cartId: confirmed.id,
+        expectedRevision: 1,
+        changes: { add: [{ productVariantId: 'variant-1', quantity: 1 }] },
+    };
+    function connect() {
+        const controller = new RecoveryCartController();
+        const api = new ShopApi(market);
+        api.enableCartCommands(controller);
+        controller.repository.accept({ ...confirmed, revision: 1 });
+        return controller.repository;
+    }
+    function response(data: Record<string, unknown>) {
+        return new Response(JSON.stringify({ data }), { status: 200 });
+    }
+    function receipt(status: 'APPLIED' | 'REJECTED' | 'CANCELLED' = 'APPLIED') {
+        return {
+            commandId: command.commandId,
+            status,
+            appliedRevision: 2,
+            errorCode: status === 'APPLIED' ? null : 'CART_COMMAND_CANCELLED',
+            message: null,
+            cart: { id: confirmed.id, revision: 2 },
+            session: null,
+        };
+    }
+
+    it.each(['APPLIED', 'REJECTED', 'CANCELLED'] as const)(
+        'retains a %s receipt and retries only the read when cart hydration fails',
+        async status => {
+            const fetchMock = vi
+                .fn()
+                .mockResolvedValueOnce(response({ applyStorefrontCartCommand: receipt(status) }))
+                .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+                .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+                .mockResolvedValueOnce(response({ storefrontCart: confirmed }));
+            vi.stubGlobal('fetch', fetchMock);
+            const repository = connect();
+            await expect(repository.apply(command)).rejects.toMatchObject({
+                name: 'CartCommandAcknowledgedReadError',
+                commandId: command.commandId,
+            });
+            await expect(repository.recover(command.commandId, true)).rejects.toMatchObject({
+                name: 'CartCommandAcknowledgedReadError',
+            });
+            const result = await repository.recover(command.commandId);
+            expect(result).toMatchObject({ status, cart: confirmed });
+            const queries = fetchMock.mock.calls.map(call => JSON.parse(jsonRequestBody(call[1])).query);
+            expect(queries.filter(query => query.includes('mutation '))).toHaveLength(1);
+            expect(queries[0]).not.toContain('productVariant');
+            expect(queries[0]).not.toContain('checkoutFulfillment');
+            expect(queries.slice(1).every(query => query.includes('query StorefrontCart'))).toBe(true);
+        },
+    );
+
+    it('rebuilds the checkout session and keeps shipping preparation results after reading the cart', async () => {
+        const order = { id: 'order-1', code: 'T-1', currencyCode: 'CNY' } as StorefrontCart['checkoutOrder'];
+        const checkout = { id: 'checkout-1', cartRevision: 2, state: 'PREPARED', completedAt: null };
+        const shippingMethods = [{ id: 'method-1', code: 'delivery', name: 'Delivery', priceWithTax: 800 }];
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                response({
+                    applyStorefrontCartCommand: {
+                        ...receipt(),
+                        session: { checkout, order: { id: 'order-1' } },
+                        shippingMethods,
+                        selectedShippingMethodId: 'method-1',
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(
+                response({
+                    storefrontCart: { ...confirmed, state: 'PAYMENT_PENDING', checkoutOrder: order },
+                }),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const result = await connect().apply({
+            ...command,
+            changes: undefined,
+            preparePayment: true,
+        });
+        expect(result.session).toEqual({ cart: result.cart, order, checkout });
+        expect(result.shippingMethods).toEqual(shippingMethods);
+        expect(result.selectedShippingMethodId).toBe('method-1');
+    });
+
+    it.each([null, { id: 'replacement-order' } as StorefrontCart['checkoutOrder']])(
+        'admits a newer cart when another tab has cleared or replaced the old checkout order: %j',
+        async checkoutOrder => {
+            const latest = { ...confirmed, revision: 3, checkoutOrder };
+            const fetchMock = vi
+                .fn()
+                .mockResolvedValueOnce(
+                    response({
+                        applyStorefrontCartCommand: {
+                            ...receipt(),
+                            session: { order: { id: 'old-order' }, checkout: null },
+                        },
+                    }),
+                )
+                .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+                .mockResolvedValueOnce(response({ storefrontCart: latest }));
+            vi.stubGlobal('fetch', fetchMock);
+            const repository = connect();
+            await expect(repository.apply(command)).rejects.toMatchObject({
+                name: 'CartCommandAcknowledgedReadError',
+            });
+            expect(await repository.recover(command.commandId)).toMatchObject({
+                status: 'APPLIED',
+                cart: latest,
+                session: null,
+            });
+            expect(fetchMock).toHaveBeenCalledTimes(3);
+        },
+    );
+
+    it('does not admit a stale read after a newer applied receipt', async () => {
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(response({ applyStorefrontCartCommand: receipt() }))
+            .mockResolvedValueOnce(response({ storefrontCart: { ...confirmed, revision: 1 } }))
+            .mockResolvedValueOnce(response({ storefrontCart: confirmed }));
+        vi.stubGlobal('fetch', fetchMock);
+        const repository = connect();
+        await expect(repository.apply(command)).rejects.toMatchObject({
+            name: 'CartCommandAcknowledgedReadError',
+        });
+        expect((await repository.recover(command.commandId)).cart.revision).toBe(2);
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('uses a newer already-confirmed snapshot for session handoff and drops older shipping quotes', async () => {
+        const order = {
+            id: 'order-1',
+            currencyCode: 'MYR',
+            totalWithTax: 4000,
+        } as StorefrontCart['checkoutOrder'];
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(
+                response({
+                    applyStorefrontCartCommand: {
+                        ...receipt(),
+                        session: { order: { id: 'order-1' }, checkout: null },
+                        shippingMethods: [{ id: 'method-old', priceWithTax: 720 }],
+                        selectedShippingMethodId: 'method-old',
+                    },
+                }),
+            )
+            .mockResolvedValueOnce(
+                response({
+                    storefrontCart: {
+                        ...confirmed,
+                        revision: 3,
+                        checkoutOrder: { ...order, totalWithTax: 3000 },
+                    },
+                }),
+            );
+        vi.stubGlobal('fetch', fetchMock);
+        const repository = connect();
+        repository.accept({ ...confirmed, revision: 4, checkoutOrder: order });
+        const result = await repository.apply(command);
+        expect(result.cart.revision).toBe(4);
+        expect(result.session?.order?.totalWithTax).toBe(4000);
+        expect(result.shippingMethods).toBeNull();
+        expect(result.selectedShippingMethodId).toBeNull();
+    });
+
+    it.each(['OPEN', 'PAYMENT_PENDING'] as const)(
+        'does not reuse an earlier prepared checkout after its cart revision or state changed: %s',
+        async state => {
+            const order = {
+                id: 'order-1',
+                state: state === 'OPEN' ? 'AddingItems' : 'ArrangingPayment',
+            } as StorefrontCart['checkoutOrder'];
+            const fetchMock = vi
+                .fn()
+                .mockResolvedValueOnce(
+                    response({
+                        applyStorefrontCartCommand: {
+                            ...receipt(),
+                            session: {
+                                order: { id: 'order-1' },
+                                checkout: {
+                                    id: 'checkout-old',
+                                    cartRevision: 2,
+                                    state: 'PREPARED',
+                                    completedAt: null,
+                                },
+                            },
+                        },
+                    }),
+                )
+                .mockResolvedValueOnce(
+                    response({ storefrontCart: { ...confirmed, revision: 3, state, checkoutOrder: order } }),
+                );
+            vi.stubGlobal('fetch', fetchMock);
+            const result = await connect().apply(command);
+            expect(result.cart.revision).toBe(3);
+            expect(result.session).toBeNull();
+        },
+    );
+
+    it.each(['GRAPHQL_PARSE_FAILED', 'GRAPHQL_VALIDATION_FAILED'])(
+        'reports %s on the initial submission as definitely not executed',
+        async code => {
+            const fetchMock = vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        errors: [{ message: 'Invalid cart command document', extensions: { code } }],
+                    }),
+                    { status: 400 },
+                ),
+            );
+            vi.stubGlobal('fetch', fetchMock);
+            await expect(connect().apply(command)).rejects.toMatchObject({
+                name: 'CartCommandNotExecutedError',
+            });
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('keeps runtime failures distinct from definite execution rejection', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue(
+                new Response(
+                    JSON.stringify({
+                        data: null,
+                        errors: [
+                            { message: 'Runtime failed', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } },
+                        ],
+                    }),
+                    { status: 200 },
+                ),
+            ),
+        );
+        await expect(connect().apply(command)).rejects.toMatchObject({
+            name: 'ShopApiGraphQlError',
+            requestNotExecuted: false,
+        });
     });
 });
 

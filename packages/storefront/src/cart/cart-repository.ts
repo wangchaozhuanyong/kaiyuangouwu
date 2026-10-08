@@ -7,6 +7,28 @@ export class CartScopeChangedError extends Error {
     }
 }
 
+/** Only the first apply may prove that execution never started. */
+export class CartCommandNotExecutedError extends Error {
+    constructor(message: string, cause?: unknown) {
+        super(message);
+        this.name = 'CartCommandNotExecutedError';
+        if (cause !== undefined) Object.defineProperty(this, 'cause', { value: cause });
+    }
+}
+
+/** A terminal receipt is known; only its complete display data still needs reading. */
+export class CartCommandAcknowledgedReadError extends Error {
+    constructor(
+        readonly commandId: string,
+        message: string,
+        cause?: unknown,
+    ) {
+        super(message);
+        this.name = 'CartCommandAcknowledgedReadError';
+        if (cause !== undefined) Object.defineProperty(this, 'cause', { value: cause });
+    }
+}
+
 export interface CartTransport {
     read(signal?: AbortSignal): Promise<StorefrontCart>;
     apply(command: CartCommand): Promise<CartCommandResult>;

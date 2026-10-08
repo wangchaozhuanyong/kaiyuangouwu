@@ -15,6 +15,7 @@ export function CartRoutePage() {
                 value={{
                     isActive: true,
                     cart: runtime.cart,
+                    confirmedCart: runtime.cartConfirmed,
                     customer: runtime.customer,
                     products: runtime.products,
                     market: runtime.market,
@@ -23,9 +24,11 @@ export function CartRoutePage() {
                     loading: runtime.cartLoading,
                     selectionPending: runtime.cartTotalsPending,
                     checkoutPending: runtime.checkoutStarting,
-                    editingBlocked: runtime.cartEditingBlocked,
+                    recoveryPending: runtime.cartRecoveryPending,
+                    editingBlocked: runtime.cartEditingBlocked || runtime.cartRecoveryPending,
                     commandUnknown: runtime.cartCommandUnknown,
-                    onCancelPending: runtime.cancelPendingCartCommand,
+                    commandAcknowledged: runtime.cartCommandAcknowledged,
+                    onCancelPending: () => void runtime.cancelPendingCartCommand().catch(() => undefined),
                     error: runtime.cartError,
                     favoriteProductIds: runtime.favoriteProductIds,
                     coupons: runtime.myCoupons,
@@ -41,13 +44,14 @@ export function CartRoutePage() {
                         void runtime.mutateCart((revision: number) =>
                             runtime.api.removeLines([lineId], revision),
                         ),
-                    onFavorite: runtime.toggleFavoriteProduct,
+                    onFavorite: productId =>
+                        void runtime.toggleFavoriteProduct(productId).catch(() => undefined),
                     onCheckout: () => void runtime.beginCheckout(),
                     onReopen: () =>
                         runtime.cart?.checkoutOrder &&
                         void runtime.reopenPendingOrder(runtime.cart.checkoutOrder),
                     onNotify: runtime.notify,
-                    onRetry: () => void runtime.refreshCart(),
+                    onRetry: () => void runtime.refreshCart().catch(() => undefined),
                     onApplyCoupon: runtime.applyCoupon,
                     onRemoveCoupon: runtime.removeCoupon,
                 }}

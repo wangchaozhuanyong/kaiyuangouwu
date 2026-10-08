@@ -9,12 +9,18 @@ import {
     type CartCommandResult,
     type CartOperation,
 } from './cart-intents';
-import { CartRepository, CartScopeChangedError } from './cart-repository';
+import {
+    CartCommandAcknowledgedReadError,
+    CartCommandNotExecutedError,
+    CartRepository,
+    CartScopeChangedError,
+} from './cart-repository';
 
 type Phase = 'idle' | 'queued' | 'saving' | 'recovering' | 'unknown' | 'locked';
 interface Pending {
     operation: CartOperation;
     recoveryOnly?: boolean;
+    cancelRequested?: boolean;
     command?: CartCommand;
     waiters: Array<{ resolve(value: CartCommandResult): void; reject(error: Error): void }>;
 }
@@ -39,6 +45,7 @@ export class CartController {
     private epoch = 0;
     private restored = false;
     private restoring: Promise<void> | null = null;
+    private recovering: Promise<boolean> | null = null;
     constructor(private readonly scope?: string) {}
 
     private remember(commandId: string | null): void {
@@ -122,6 +129,7 @@ export class CartController {
         if (clearRecovery) this.remember(null);
         this.restored = false;
         this.restoring = null;
+        this.recovering = null;
         this.epoch++;
         clearTimeout(this.timer);
         this.timer = undefined;
@@ -136,8 +144,7 @@ export class CartController {
     }
 
     async read(): Promise<StorefrontCart> {
-        if (this.queue.length) {
-            if (this.phase === 'unknown') return this.repository.snapshot ?? this.repository.read();
+        if (this.queue.length && this.phase !== 'unknown' && this.phase !== 'recovering') {
             await this.drain();
         }
         const epoch = this.epoch;
@@ -145,6 +152,7 @@ export class CartController {
         try {
             cart = await this.repository.read();
         } catch (error) {
+            if (epoch !== this.epoch) throw new Error('Cart session changed.');
             if (error instanceof CartScopeChangedError) {
                 this.reset();
                 this.repository.accept(error.cart);
@@ -155,6 +163,7 @@ export class CartController {
         }
         if (epoch !== this.epoch) throw new Error('Cart session changed.');
         await this.restore();
+        if (epoch !== this.epoch) throw new Error('Cart session changed.');
         if (!this.queue.length && this.phase !== 'unknown') this.error = null;
         this.publish();
         return this.repository.snapshot ?? cart;
@@ -202,49 +211,98 @@ export class CartController {
         if (this.phase === 'unknown') throw new Error('购物车操作结果尚未确认。');
         clearTimeout(this.timer);
         this.timer = undefined;
-        void this.flush();
         await new Promise<void>((resolve, reject) => {
-            const unsubscribe = this.subscribe(() => {
+            const complete = () => {
                 if (this.phase === 'unknown' || !this.queue.length) {
                     unsubscribe();
                     if (this.error) reject(this.error);
                     else resolve();
                 }
-            });
+            };
+            const unsubscribe = this.subscribe(complete);
+            complete();
+            void this.flush();
         });
     }
 
-    async recoverPending(cancel = false): Promise<void> {
+    recoverPending(cancel = false): Promise<boolean> {
         const pending = this.queue[0];
-        if (this.phase !== 'unknown' || !pending?.command) return;
+        if (cancel && pending) pending.cancelRequested = true;
+        if (this.recovering) return this.recovering;
+        if (!pending) return Promise.resolve(true);
         const epoch = this.epoch;
-        this.phase = 'recovering';
-        this.publish();
+        const recoverUnknown = this.phase === 'unknown' && !!pending.command;
+        const recovery =
+            this.running && this.phase !== 'unknown'
+                ? this.drain().then(
+                      () => epoch === this.epoch && !this.queue.length,
+                      () => epoch === this.epoch && !this.queue.length,
+                  )
+                : recoverUnknown
+                  ? Promise.resolve().then(() => this.recoverUnknown(pending, epoch))
+                  : Promise.resolve(false);
+        const tracked = recovery.finally(() => {
+            if (this.recovering === tracked) this.recovering = null;
+        });
+        this.recovering = tracked;
+        if (recoverUnknown) {
+            this.phase = 'recovering';
+            this.publish();
+        }
+        return tracked;
+    }
+
+    private async recoverUnknown(pending: Pending, epoch: number): Promise<boolean> {
+        if (epoch !== this.epoch || this.queue[0] !== pending) return false;
         try {
-            let result = await this.repository.recover(pending.command.commandId, cancel);
-            if (epoch !== this.epoch) return;
-            if (result.status === 'NOT_FOUND') {
-                if (cancel || pending.recoveryOnly)
-                    throw new Error('尚未找到操作回执，请继续核对或取消待确认操作。');
-                result = await this.repository.apply(pending.command);
-            }
-            if (epoch !== this.epoch) return;
+            const result = await this.recoverResult(pending, epoch);
+            if (epoch !== this.epoch) return false;
             this.finish(pending, result);
-            this.phase = 'idle';
+            this.phase = this.repository.snapshot?.state === 'PAYMENT_PENDING' ? 'locked' : 'idle';
             this.publish();
             void this.flush();
+            return true;
         } catch (error) {
-            if (epoch !== this.epoch) return;
+            if (epoch !== this.epoch) return false;
             if (error instanceof CartScopeChangedError) {
                 this.reset();
                 this.repository.accept(error.cart);
                 this.publish();
-                return;
+                return false;
             }
+            this.preserveAcknowledgement(pending, error);
             this.phase = 'unknown';
             this.error = message(error);
             this.publish();
+            return false;
         }
+    }
+
+    private preserveAcknowledgement(pending: Pending, error: unknown): void {
+        if (
+            error instanceof CartCommandAcknowledgedReadError &&
+            error.commandId === pending.command?.commandId
+        )
+            pending.recoveryOnly = true;
+    }
+
+    private async recoverResult(pending: Pending, epoch: number): Promise<CartCommandResult> {
+        if (!pending.command) throw new Error('Cart acknowledgement is missing.');
+        const cancelling = !!pending.cancelRequested;
+        let result = await this.repository.recover(pending.command.commandId, cancelling);
+        if (epoch !== this.epoch) return result;
+        // A cancellation joining an in-flight lookup must establish its tombstone
+        // before any original payload is allowed to be sent again.
+        if (result.status === 'NOT_FOUND' && pending.cancelRequested && !cancelling) {
+            result = await this.repository.recover(pending.command.commandId, true);
+            if (epoch !== this.epoch) return result;
+        }
+        if (result.status === 'NOT_FOUND') {
+            if (pending.cancelRequested || pending.recoveryOnly)
+                throw new Error('尚未找到操作回执，请继续核对或取消待确认操作。');
+            result = await this.repository.apply(pending.command);
+        }
+        return result;
     }
 
     private async flush(): Promise<void> {
@@ -260,6 +318,7 @@ export class CartController {
         const epoch = this.epoch;
         while (this.queue.length && epoch === this.epoch) {
             const pending = this.queue[0];
+            let notExecuted = false;
             try {
                 const cart = this.repository.snapshot ?? (await this.repository.read());
                 if (epoch !== this.epoch) return;
@@ -285,14 +344,17 @@ export class CartController {
                         result =
                             attempt === 0
                                 ? await this.repository.apply(pending.command)
-                                : await this.repository.recover(pending.command.commandId);
+                                : await this.recoverResult(pending, epoch);
                         if (epoch !== this.epoch) return;
-                        if (result.status === 'NOT_FOUND')
-                            result = await this.repository.apply(pending.command);
                         break;
                     } catch (error) {
                         if (epoch !== this.epoch) return;
                         if (error instanceof CartScopeChangedError) throw error;
+                        if (attempt === 0 && error instanceof CartCommandNotExecutedError) {
+                            notExecuted = true;
+                            throw error;
+                        }
+                        this.preserveAcknowledgement(pending, error);
                         this.phase = 'recovering';
                         this.publish();
                         if (attempt === 2) throw error;
@@ -309,24 +371,28 @@ export class CartController {
                     this.publish();
                     return;
                 }
-                this.error = pending.command
-                    ? new ShopApiError('UNKNOWN_RESULT', '保存结果尚未确认，请重试核对后再结算。')
-                    : message(error);
-                if (pending.command) {
-                    Object.defineProperty(this.error, 'cause', {
-                        value: error,
-                    });
+                const unresolved = !!pending.command && !notExecuted;
+                this.error =
+                    unresolved && !(error instanceof CartCommandAcknowledgedReadError)
+                        ? new ShopApiError('UNKNOWN_RESULT', '保存结果尚未确认，请重试核对后再结算。')
+                        : message(error);
+                if (unresolved) {
+                    if (this.error !== error)
+                        Object.defineProperty(this.error, 'cause', {
+                            value: error,
+                        });
                     this.phase = 'unknown';
                 } else {
+                    this.remember(null);
                     this.queue.shift();
                     this.phase = 'idle';
                 }
                 for (const waiter of pending.waiters) waiter.reject(this.error);
                 pending.waiters = [];
                 // Later operations must not pass a failed or uncertain prerequisite.
-                for (const later of this.queue.slice(pending.command ? 1 : 0))
+                for (const later of this.queue.slice(unresolved ? 1 : 0))
                     for (const waiter of later.waiters) waiter.reject(this.error);
-                this.queue = pending.command ? [pending] : [];
+                this.queue = unresolved ? [pending] : [];
                 break;
             }
         }
@@ -366,21 +432,26 @@ export class CartController {
     private publish(): void {
         const confirmed = this.repository.snapshot;
         const pending = this.queue.length > 0;
-        const totalsPending = this.queue.some(item => {
-            const operation = item.operation;
-            if ('changes' in operation || 'coupon' in operation || 'buyNow' in operation) return true;
-            if ('prepareShipping' in operation) return true;
-            return (
-                'order' in operation &&
-                ('currencyCode' in operation.order || 'shippingMethodId' in operation.order)
-            );
-        });
+        const uncertain = this.phase === 'unknown' || this.phase === 'recovering';
+        const totalsPending =
+            !uncertain &&
+            this.queue.some(item => {
+                const operation = item.operation;
+                if ('changes' in operation || 'coupon' in operation || 'buyNow' in operation) return true;
+                if ('prepareShipping' in operation) return true;
+                return (
+                    'order' in operation &&
+                    ('currencyCode' in operation.order || 'shippingMethodId' in operation.order)
+                );
+            });
         this.state = {
             confirmed,
-            cart: cartView(
-                confirmed,
-                this.queue.map(item => item.operation),
-            ),
+            cart: uncertain
+                ? confirmed
+                : cartView(
+                      confirmed,
+                      this.queue.map(item => item.operation),
+                  ),
             phase: this.phase,
             pending,
             totalsPending,

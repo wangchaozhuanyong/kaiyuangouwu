@@ -11,8 +11,8 @@ import {
 } from '@vendure/core';
 
 import { CustomerOrderCancellationService } from './customer-order-cancellation.service';
-import { summarizeOrderFulfillment } from './fulfillment-classification';
 import { DigitalDeliveryService } from './digital-delivery.service';
+import { summarizeOrderFulfillment } from './fulfillment-classification';
 
 @Resolver('Order')
 export class OrderFulfillmentResolver {
@@ -44,7 +44,13 @@ export class OrderFulfillmentResolver {
         if (!shippingLine?.shippingMethod) {
             return null;
         }
-        const calculation = await shippingLine.shippingMethod.apply(ctx, orderWithShipping);
+        // Shipping amounts and physical subtotals are stored in the order's currency,
+        // which can differ from the current request's selected/default currency.
+        const orderCtx =
+            ctx.currencyCode !== orderWithShipping.currencyCode
+                ? ctx.copy({ channel: ctx.channel, currencyCode: orderWithShipping.currencyCode })
+                : ctx;
+        const calculation = await shippingLine.shippingMethod.apply(orderCtx, orderWithShipping);
         const metadata = (calculation?.metadata ?? {}) as Record<string, unknown>;
         const estimateMinDays = optionalNonNegativeInteger(metadata.estimateMinDays);
         const estimateMaxDays = optionalNonNegativeInteger(metadata.estimateMaxDays);

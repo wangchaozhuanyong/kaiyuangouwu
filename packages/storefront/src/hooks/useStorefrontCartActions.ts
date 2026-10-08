@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -14,6 +14,7 @@ interface StorefrontCartActionOptions {
     cart: StorefrontCart | null;
     customer: ActiveCustomer | null;
     cartController: CartController;
+    checkoutStartingRef?: { current: boolean };
     isZh: boolean;
     text: { loadError: string };
     notify: (message: string) => void;
@@ -30,6 +31,7 @@ export function useStorefrontCartActions({
     cart,
     customer,
     cartController,
+    checkoutStartingRef,
     isZh,
     text,
     notify,
@@ -40,23 +42,82 @@ export function useStorefrontCartActions({
     setCartError,
     setAddingVariantId,
 }: StorefrontCartActionOptions) {
-    const cartErrorMessage = (error: unknown, fallback = text.loadError) =>
-        storefrontErrorCode(error) === 'UNKNOWN_RESULT'
-            ? isZh
-                ? '结果待确认，请核对购物车。'
-                : 'Result unconfirmed. Review your cart.'
-            : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback);
-    const refreshCart = useCallback(async () => {
-        await cartController.recoverPending();
-        const latest = await api.cart();
-        setCart(latest);
-        setCheckoutOrder(latest.checkoutOrder);
-        setCartError(null);
-        return latest;
-    }, [api]);
+    const recoveryRequestRef = useRef<Promise<StorefrontCart> | null>(null);
+    const [cartRecoveryPending, setCartRecoveryPending] = useState(false);
+    const pendingResultMessage = isZh
+        ? '结果待确认，请核对购物车。'
+        : 'Result unconfirmed. Review your cart.';
+    const cartErrorMessage = useCallback(
+        (error: unknown, fallback = text.loadError) =>
+            storefrontErrorCode(error) === 'UNKNOWN_RESULT'
+                ? pendingResultMessage
+                : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback),
+        [isZh, pendingResultMessage, text.loadError],
+    );
+    const cartActionsBlocked = useCallback(
+        () =>
+            !!recoveryRequestRef.current ||
+            !!checkoutStartingRef?.current ||
+            cartController.getSnapshot().editingBlocked,
+        [cartController, checkoutStartingRef],
+    );
+    const refreshCart = useCallback(
+        (cancelPending = false): Promise<StorefrontCart> => {
+            if (recoveryRequestRef.current) return recoveryRequestRef.current;
+            const phase = cartController.getSnapshot().phase;
+            if (checkoutStartingRef?.current || phase === 'queued' || phase === 'saving') {
+                return Promise.reject(
+                    new Error(
+                        isZh ? '购物车正在更新，请稍后再核对。' : 'Cart is updating. Review it shortly.',
+                    ),
+                );
+            }
+            setCartRecoveryPending(true);
+            const request = (async () => {
+                const recovered = await cartController.recoverPending(cancelPending);
+                const latest = await api.cart();
+                setCart(latest);
+                setCheckoutOrder(latest.checkoutOrder);
+                const currentPhase = cartController.getSnapshot().phase;
+                setCartError(
+                    !recovered || currentPhase === 'unknown' || currentPhase === 'recovering'
+                        ? pendingResultMessage
+                        : null,
+                );
+                return latest;
+            })()
+                .catch(requestError => {
+                    const failedPhase = cartController.getSnapshot().phase;
+                    setCartError(
+                        failedPhase === 'unknown' || failedPhase === 'recovering'
+                            ? pendingResultMessage
+                            : cartErrorMessage(requestError),
+                    );
+                    throw requestError;
+                })
+                .finally(() => {
+                    recoveryRequestRef.current = null;
+                    setCartRecoveryPending(false);
+                });
+            recoveryRequestRef.current = request;
+            return request;
+        },
+        [
+            api,
+            cartController,
+            cartErrorMessage,
+            checkoutStartingRef,
+            isZh,
+            pendingResultMessage,
+            setCart,
+            setCartError,
+            setCheckoutOrder,
+        ],
+    );
 
     const mutateCart = useCallback(
         async (mutation: (revision: number) => Promise<StorefrontCart>) => {
+            if (cartActionsBlocked()) return null;
             setCartLoading(true);
             setCartError(null);
             try {
@@ -84,11 +145,12 @@ export function useStorefrontCartActions({
                 setCartLoading(false);
             }
         },
-        [api, cart, isZh, refreshCart, text.loadError],
+        [api, cart, cartActionsBlocked, cartErrorMessage, isZh, refreshCart, text.loadError],
     );
 
     const addToCart = useCallback(
         async (variant: ProductVariant, quantity = 1) => {
+            if (cartActionsBlocked()) return null;
             if (!Number.isSafeInteger(quantity) || quantity < 1) return null;
             const current = cartController.getSnapshot().cart ?? cart;
             const existing = current?.lines.find(line => line.productVariant?.id === variant.id);
@@ -111,11 +173,12 @@ export function useStorefrontCartActions({
             }
             return updated;
         },
-        [api, cart, cartController, isZh, mutateCart, notify],
+        [api, cart, cartActionsBlocked, cartController, isZh, mutateCart, notify],
     );
 
     const startDirectPurchase = useCallback(
         async (variant: ProductVariant, quantity = 1) => {
+            if (cartActionsBlocked()) return;
             if (!Number.isSafeInteger(quantity) || quantity < 1) return;
             const stockError = quantityStockMessage(variant, quantity, isZh ? 'zh' : 'en');
             if (stockError) {
@@ -163,11 +226,24 @@ export function useStorefrontCartActions({
                 setCartLoading(false);
             }
         },
-        [api, cart, customer, isZh, navigate, notify, refreshCart, setCart, text.loadError],
+        [
+            api,
+            cart,
+            cartActionsBlocked,
+            cartErrorMessage,
+            customer,
+            isZh,
+            navigate,
+            notify,
+            refreshCart,
+            setCart,
+            text.loadError,
+        ],
     );
 
     const addOrderToCart = useCallback(
         async (order: OrderSummary) => {
+            if (cartActionsBlocked()) return;
             setCartLoading(true);
             setCartError(null);
             try {
@@ -196,8 +272,17 @@ export function useStorefrontCartActions({
                 setCartLoading(false);
             }
         },
-        [api, cart, isZh, navigate, notify, text.loadError],
+        [api, cart, cartActionsBlocked, isZh, navigate, notify, text.loadError],
     );
 
-    return { refreshCart, mutateCart, addToCart, startDirectPurchase, addOrderToCart };
+    return {
+        refreshCart,
+        cancelPendingCartCommand: () => refreshCart(true),
+        cartRecoveryPending,
+        cartActionsBlocked,
+        mutateCart,
+        addToCart,
+        startDirectPurchase,
+        addOrderToCart,
+    };
 }

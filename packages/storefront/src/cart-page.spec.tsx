@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CartPage } from './pages/cart-page';
+import { CartCommandAcknowledgedReadError } from './cart/cart-repository';
+import { CartPage, type CartPageProps } from './pages/cart-page';
 import { CartPageContext } from './storefront-page-contexts';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Order, Product, StoreCustomerCoupon, StorefrontCart } from './types';
@@ -76,6 +77,7 @@ const callbacks = {
     onReopen: vi.fn(),
     onNotify: vi.fn(),
     onRetry: vi.fn(),
+    onCancelPending: vi.fn(),
     onApplyCoupon: vi.fn().mockResolvedValue(null),
     onRemoveCoupon: vi.fn().mockResolvedValue(null),
 };
@@ -128,6 +130,7 @@ function renderCart(
     coupons: StoreCustomerCoupon[] = [],
     selectionPending = false,
     checkoutPending = false,
+    overrides: Partial<CartPageProps> = {},
 ) {
     return renderToStaticMarkup(
         createElement(
@@ -147,6 +150,7 @@ function renderCart(
                     favoriteProductIds: [],
                     coupons,
                     ...callbacks,
+                    ...overrides,
                 },
             },
             createElement(CartPage),
@@ -155,6 +159,180 @@ function renderCart(
 }
 
 describe('CartPage guest cart', () => {
+    it.each(['zh', 'en'] as const)(
+        'explains an acknowledged result with a failed display read and offers review without cancellation: %s',
+        language => {
+            const error = new CartCommandAcknowledgedReadError(
+                'confirmed-command-1234',
+                'Display read failed',
+            );
+            const markup = renderCart({ ...cart, checkoutOrder }, [], [], true, false, {
+                language,
+                commandUnknown: true,
+                commandAcknowledged: error instanceof CartCommandAcknowledgedReadError,
+                error: error.message,
+            });
+            expect(markup).toContain(language === 'zh' ? '操作结果已确认' : 'The result is confirmed');
+            expect(markup).toContain(language === 'zh' ? '勿重复提交' : 'Do not submit again');
+            expect(markup).toContain('MYR 313.81');
+            expect(markup).not.toContain('提交结果尚未确认');
+            expect(markup).not.toContain('取消待确认操作');
+            expect(markup).not.toContain('Cancel pending operation');
+            expect(markup).not.toContain('计算中…');
+            const host = document.createElement('div');
+            host.innerHTML = markup;
+            const actions = host.querySelectorAll<HTMLButtonElement>('.cart-recovery-actions button');
+            expect(actions).toHaveLength(1);
+            expect(actions[0].disabled).toBe(false);
+            expect(host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(true);
+        },
+    );
+
+    it.each(['zh', 'en'] as const)(
+        'keeps the last confirmed amount and recovery actions visible for an unknown result: %s',
+        language => {
+            const markup = renderCart(
+                { ...cart, checkoutOrder: { ...checkoutOrder, subTotalWithTax: 99999 } },
+                [],
+                [],
+                true,
+                false,
+                {
+                    language,
+                    commandUnknown: true,
+                    editingBlocked: true,
+                    confirmedCart: { ...cart, checkoutOrder },
+                    error: 'UNKNOWN_RESULT',
+                },
+            );
+            expect(markup).toContain('MYR 313.81');
+            expect(markup).not.toContain('999.99');
+            expect(markup).not.toContain('计算中…');
+            expect(markup).not.toContain('Updating…');
+            expect(markup).toContain(language === 'zh' ? '上次已确认金额' : 'Last confirmed amount');
+            const recovery = document.createElement('div');
+            recovery.innerHTML = markup;
+            const actions = recovery.querySelectorAll<HTMLButtonElement>('.cart-recovery-actions button');
+            expect(actions).toHaveLength(2);
+            expect([...actions].every(button => !button.disabled)).toBe(true);
+            expect(recovery.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
+            expect(recovery.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(
+                true,
+            );
+            expect(recovery.querySelector('strong[aria-busy="true"]')).toBeNull();
+        },
+    );
+
+    it('disables both recovery actions while reconciliation is running without hiding the amount', () => {
+        const markup = renderCart({ ...cart, checkoutOrder }, [], [], true, false, {
+            commandUnknown: true,
+            recoveryPending: true,
+        });
+        const host = document.createElement('div');
+        host.innerHTML = markup;
+        expect(markup).toContain('MYR 313.81');
+        expect(markup).toContain('正在核对…');
+        expect(markup).not.toContain('计算中…');
+        expect(
+            [...host.querySelectorAll<HTMLButtonElement>('.cart-recovery-actions button')].every(
+                button => button.disabled,
+            ),
+        ).toBe(true);
+        expect(host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(true);
+    });
+
+    it('restores quantity and checkout controls after the pending result is resolved', () => {
+        const host = document.createElement('div');
+        host.innerHTML = renderCart({ ...cart, checkoutOrder });
+        expect(host.querySelector('.cart-recovery-panel')).toBeNull();
+        expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(false);
+        expect(
+            host.querySelector<HTMLButtonElement>('[aria-label="增加 32 英寸显示器 数量"]')?.disabled,
+        ).toBe(false);
+        expect(host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(false);
+    });
+
+    it('preserves the ability to reopen a confirmed order that is waiting for payment', () => {
+        const host = document.createElement('div');
+        host.innerHTML = renderCart(
+            { ...cart, state: 'PAYMENT_PENDING', checkoutOrder },
+            [],
+            [],
+            false,
+            false,
+            { editingBlocked: true },
+        );
+        const reopen = host.querySelector<HTMLButtonElement>('.cart-pending-actions > button');
+        expect(reopen?.textContent).toBe('返回修改订单');
+        expect(reopen?.disabled).toBe(false);
+        expect(host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(true);
+    });
+
+    it('lets users reconcile an unknown result and resumes editing only after the resolved state arrives', () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const onRetry = vi.fn();
+        const onCancelPending = vi.fn();
+        const onQuantity = vi.fn();
+        const onCheckout = vi.fn();
+        const render = (overrides: Partial<CartPageProps>) =>
+            act(() => {
+                root.render(
+                    createElement(
+                        CartPageContext.Provider,
+                        {
+                            value: {
+                                cart: { ...cart, checkoutOrder },
+                                customer: null,
+                                products: [],
+                                market,
+                                locale: market.locale,
+                                language: 'zh',
+                                loading: true,
+                                commandUnknown: true,
+                                editingBlocked: true,
+                                error: '结果待确认',
+                                favoriteProductIds: [],
+                                coupons: [],
+                                ...callbacks,
+                                onRetry,
+                                onCancelPending,
+                                onQuantity,
+                                onCheckout,
+                                ...overrides,
+                            },
+                        },
+                        createElement(CartPage),
+                    ),
+                );
+            });
+        render({});
+        act(() => {
+            host.querySelector<HTMLButtonElement>('.cart-recovery-actions button')?.click();
+        });
+        expect(onRetry).toHaveBeenCalledOnce();
+        render({ recoveryPending: true });
+        act(() => {
+            for (const button of host.querySelectorAll<HTMLButtonElement>('.cart-recovery-actions button')) {
+                button.click();
+            }
+            host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.click();
+        });
+        expect(onRetry).toHaveBeenCalledOnce();
+        expect(onCancelPending).not.toHaveBeenCalled();
+        expect(onCheckout).not.toHaveBeenCalled();
+        render({ commandUnknown: false, editingBlocked: false, loading: false, error: null });
+        act(() => {
+            host.querySelector<HTMLButtonElement>('[aria-label="增加 32 英寸显示器 数量"]')?.click();
+            host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.click();
+        });
+        expect(onQuantity).toHaveBeenCalledExactlyOnceWith('line-1', 2);
+        expect(onCheckout).toHaveBeenCalledOnce();
+        act(() => root.unmount());
+        host.remove();
+    });
+
     it('keeps selection responsive while totals are pending and blocks checkout until confirmed', () => {
         const markup = renderCart({ ...cart, checkoutOrder }, [], [], true);
         expect(markup).toContain('计算中…');
