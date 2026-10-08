@@ -1,0 +1,365 @@
+{
+  "homepage-intro": {
+    "id": "homepage-responsive-corners-20261008",
+    "implementationCommit": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+    "decision": "2026-10-08 用户明确要求实施：电脑信任区在图片左下，数字分页在右下；单图显示 1，多图按实际图片数可点击。手机信任区继续居中。保留当前主线原图、叠图文案、分类拼版、动画与高度量测。",
+    "requirements": [
+      "电脑信任区在图片左下，数字分页在右下；单图显示 1，多图按实际图片数可点击",
+      "手机信任区继续居中",
+      "保留当前主线原图、叠图文案、分类拼版、动画与高度量测"
+    ],
+    "sourceFiles": [
+      "packages/storefront/src/pages/home-page.tsx",
+      "packages/storefront/src/styles/desktop-home.css",
+      "packages/storefront/src/styles/hero-mobile-overlay.css",
+      "packages/storefront-content-plugin/src/shared/hero-scene.css",
+      "packages/storefront-content-plugin/src/shared/hero-scene.tsx",
+      "packages/storefront/src/styles/home-showcase.css",
+      "packages/storefront-content-plugin/src/shared/hero-theme.ts",
+      "packages/storefront/src/hero-carousel.ts",
+      "packages/storefront/src/desktop-layout.tsx",
+      "packages/storefront/src/route-media-preload.ts"
+    ],
+    "originalEvidence": {
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/hero-image-fill-20260926/files/packages/storefront/artifacts/category-gallery/approved-design.json",
+      "archivedFromWorktree": ".codex-worktrees/hero-image-fill-20260926",
+      "archiveManifest": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/hero-image-fill-20260926/manifest.json"
+    },
+    "currentEvidence": {
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json",
+      "browserRecord": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/browser-results-final.json",
+      "desktopScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/home-classic-1440.jpg",
+      "mobileScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/home-classic-390.jpg",
+      "dataSource": "实际候选客户端构建与后台同源预览；本地合成顾客、CMS、物流数据及项目样本图片；无真实商家内容或生产数据写入。",
+      "acceptanceScope": "三处组件，320/390/768/1024/1280/1440，中英与两套皮肤；未进行全站或线上验收。"
+    },
+    "latestAuthorizedCandidate": {
+      "date": "2026-10-08",
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "status": "local-verified-unpublished",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json"
+    },
+    "acceptance": [
+      "packages/storefront/src/home-page.spec.tsx",
+      "packages/storefront/src/skin-system.spec.ts",
+      "packages/storefront/e2e/visual-presets/verify.mjs",
+      "packages/next-admin/e2e/carousel/verify-hero-preview.mjs",
+      "packages/storefront/src/hero-theme.spec.ts",
+      "packages/storefront/src/hero-scene.spec.tsx",
+      "packages/storefront/src/home-hero-carousel.spec.tsx",
+      "packages/storefront/src/category-navigation-motion.spec.tsx"
+    ],
+    "galleryGroupingRepair": {
+      "date": "2026-09-30",
+      "branch": "fix/home-intro-visible-order-20260930",
+      "implementationCommit": "7d795e464361c316aa37cbd78c6d42b02fe86486",
+      "scope": "Restore existing right-side 2+2/2+3 grouping when the overlaid TRUST_BAR is saved between HERO and QUICK_LINKS. No change to hero media or mobile design candidates.",
+      "evidence": "backups/branch-cleanup-20260930/qa-evidence-20260930/pr547-navigation-worktree-20260930/files/artifacts/global-skin-auth-ready-20260930/release/gallery-layout-cases.json",
+      "status": "released-verified",
+      "releaseCommit": "8675f62f186037b37a49d82fbf49594900975d95",
+      "releaseRun": 36722322442,
+      "liveScreenshot": "backups/branch-cleanup-20260930/qa-evidence-20260930/pr547-navigation-worktree-20260930/files/artifacts/global-skin-auth-ready-20260930/release/gallery-live-damatong.png",
+      "archivedFromWorktree": ".codex-worktrees/navigation-color-state-20260930",
+      "archiveManifest": "backups/branch-cleanup-20260930/qa-evidence-20260930/pr547-navigation-worktree-20260930/manifest.json"
+    },
+    "trustOverlayRepair": {
+      "date": "2026-10-02",
+      "surface": "homepage-trust-overlay",
+      "implementationCommit": "98384987a518ecea1a8ecba98f420987c9a3a549",
+      "scope": "All skins/stores/viewports render published trust content in the carousel lower-left. Legacy belowHero ignored. No-hero fallback preserves standalone content. Admin position selector removed.",
+      "status": "local-verified-unpublished"
+    },
+    "status": "local-verified-unpublished",
+    "sourceReconciliation": "最新用户计划覆盖本次三处组件相关旧排列。保留当前 origin/main 1ab589d7 的已提交实现；主工作区其他轮播方案及数字交付、补款 WIP 已核对且未复制或修改。历史完整登记保存在 previous-design-baselines.json。",
+    "previousBaselineRecord": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/previous-baseline-before-overlay-correction.json",
+    "verification": "Local affected tests, isolated next-admin timeout recheck, lint, normal hooks and both production builds passed. One CI run 37474566157 succeeded; PR621 squash merged as 71c63147; one frontend Production Release37475297706 succeeded using verified CI artifacts. Public manifests for 3 storefronts and Admin match71c63147; backend remainsa535. Actual production browser 390px/320px wide and 1440px desktop verified. Public hero/trust/quick content readback unchanged. Local keyboard reading passed; production PageDown probe inconclusive. No physical-device or checkout/payment acceptance.",
+    "quickLinkSingleLineFollowUp": {
+      "date": "2026-10-04",
+      "request": "首页快捷入口标题与展开分类菜单采用同一规则：只显示一行，超出部分直接隐藏，不显示省略号。",
+      "status": "local-verified-unpublished",
+      "branch": "fix/desktop-catalog-css-class-20260921",
+      "headBeforeChanges": "96d8b5d0ce4824d282524f27024b66aa9fb1faa6",
+      "scope": "Only quick-link label wrapping/clipping and obsolete multi-line English label space; existing hero, images, content, link targets and other WIP preserved.",
+      "dataSource": "Actual local storefront production build with synthetic CMS fixtures and existing QA artwork; external traffic blocked. Not production store data.",
+      "checks": {
+        "targetedTests": "76 passed in 3 files: homepage-spacing, home-page, category-navigation",
+        "build": "bun run build passed: TypeScript, storefront build and two-factor build",
+        "browser": "12 cases passed across classic/neo-minimalist, zh/en, 320/390/1440px; labels single line; overflowing mobile label clipped without ellipsis; no horizontal page overflow; quick-link navigation passed",
+        "gitDiffCheck": "passed"
+      },
+      "browserRecord": "tmp/quick-link-single-line-20261004/browser-results.json",
+      "screenshot": "tmp/quick-link-single-line-20261004/quick-labels-classic-zh-390.png",
+      "recoveryPatch": "tmp/quick-link-single-line-20261004/change.patch",
+      "worktree": ".",
+      "sourceFiles": [
+        "packages/storefront/src/styles/home-showcase.css",
+        "packages/storefront/src/styles/desktop-home.css",
+        "packages/storefront/src/homepage-spacing.spec.ts"
+      ],
+      "record": "tmp/quick-link-single-line-20261004/local-receipt.json"
+    },
+    "fixedLabelWidthFollowUp": {
+      "surface": "five-han-label-width",
+      "implementationCommit": "0c4564b6b6239b2ec1be6e3f22ada1c02269679a",
+      "record": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/featured-collection-flat-surface-20261004/artifacts/five-han-label-width-20261004/local-receipt.json",
+      "decision": "首页快捷入口与展开分类菜单文字区固定为五个汉字宽度（5em），保留完整 DOM 文案，不按字符数截断。中英文单行，超出直接隐藏，无省略号。",
+      "status": "local-verified-unpublished"
+    },
+    "transparentControlsImplementation": {
+      "recordedAt": "2026-10-04T10:52:35.334245+00:00",
+      "previousBaselineRecord": "backups/ready-deliveries-cleanup-20261004/worktrees/hero-transparent-controls-20261004/files/artifacts/hero-transparent-controls-20261004/previous-homepage-intro-baseline.json",
+      "reconciliationRecord": "backups/ready-deliveries-cleanup-20261004/worktrees/hero-transparent-controls-20261004/files/artifacts/hero-transparent-controls-20261004/source-reconciliation.json",
+      "approvedReference": "design-proposals/glass-controls-20261004/revision-02/selected-pager-optical-centering-closeup.png",
+      "scope": "Supersedes controls only; existing gallery/mobile layout remains. Concurrent multiline content WIP is not incorporated.",
+      "head": "181f7fd224982f79cd61d9eb2d8b025eced38076"
+    },
+    "release": {
+      "status": "RELEASED_RESPONSIVE_BROWSER_VERIFIED",
+      "candidate": "a739f0c4736e666ddadab3a009632ecfec2f75ca",
+      "mainSha": "71c63147ca77ea687b33ea82c5b30ef12897fbe3",
+      "pr": 621,
+      "ciRunId": 37474566157,
+      "productionRunId": 37475297706,
+      "components": [
+        "storefront",
+        "next-admin"
+      ],
+      "backendShaUnchanged": "a535b99d937858b3907372bad77429aad809d8dd",
+      "publicManifestVerification": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/release-public-after.json",
+      "publicBrowserVerification": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/release-online-browser-results.json",
+      "cmsContentUnchanged": true,
+      "copyColorPlan": "DRAFT_ONLY_NOT_APPLIED"
+    },
+    "previousPublishedRelease": {
+      "pr": 613,
+      "mainSha": "2b61e7d38b09f18bbcd812fa7b880ffba7ff52d6",
+      "runId": 37215087618,
+      "publicBrowserAcceptance": "PASS"
+    },
+    "categoryNavigationMotionFollowUp": {
+      "date": "2026-10-05",
+      "implementationCommit": "49d1b1d876279f938bb9bfab05b17a5bb0a6bac7",
+      "status": "local-verified-unpublished",
+      "decision": "点击分类导航从当前位置以480ms缓动滑向所选项；路由确认不跳到终点，连续点击以最后一次为准，手势中断恢复原滚动规则。",
+      "sourceFiles": [
+        "packages/storefront/src/category-navigation.ts",
+        "packages/storefront/src/pages/category-page.tsx"
+      ],
+      "evidence": ".codex-worktrees/storefront-hero-clear-swipe-20261005/artifacts/storefront-hero-clear-swipe-20261005/category-motion-samples.json",
+      "screenshot": ".codex-worktrees/storefront-hero-clear-swipe-20261005/artifacts/storefront-hero-clear-swipe-20261005/category-motion-end.png"
+    },
+    "previousImplementationCommit": "1382243abcf368d8dcebcc5dd4bfc18c4b6f6610",
+    "supersededPhoneArtworkCandidate": {
+      "date": "2026-10-06",
+      "request": "另做与手机容器比例匹配的专用图片，保持铺满",
+      "commit": "b4f03e33d6f904b24d4f9f29c37a5ccaa6bfe607",
+      "settings": [
+        "mobileImageUrl",
+        "mobileImageAssetId",
+        "mobileImageWidth",
+        "mobileImageHeight"
+      ],
+      "mediaBreakpointPx": 600,
+      "layoutBreakpointPx": 1024,
+      "artwork": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/flashcast-hero-mobile-final-20261006.png",
+      "phoneScreenshot": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/after-mobile-390.png",
+      "desktopScreenshot": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/after-desktop-1440.png",
+      "browserRecord": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/browser-results.json",
+      "record": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/local-result.json",
+      "status": "WITHDRAWN_BY_LATEST_USER_INSTRUCTION"
+    },
+    "sameImageMobileContainer": {
+      "date": "2026-10-06",
+      "commit": "1382243abcf368d8dcebcc5dd4bfc18c4b6f6610",
+      "record": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/container-result.json",
+      "phoneScreenshot": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/same-image-mobile-390.png",
+      "desktopScreenshot": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/same-image-desktop-1440.png",
+      "browserRecord": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/same-image-browser-results.json",
+      "status": "SUPERSEDED_BY_USER_OVERLAY_INSTRUCTION",
+      "supersededBy": "75326259ae4cc460dc648057a49e28594f6ebbc5"
+    },
+    "sameImageMobileOverlay": {
+      "date": "2026-10-06",
+      "commit": "75326259ae4cc460dc648057a49e28594f6ebbc5",
+      "record": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/overlay-result.json",
+      "phoneScreenshot": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/overlay-mobile-context.png",
+      "desktopScreenshot": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/overlay-desktop-1440.png",
+      "browserRecord": ".codex-worktrees/unified-completed-20261006/artifacts/hero-mobile-full-image-20261006/overlay-browser-results.json"
+    },
+    "previousBaseline": {
+      "id": "homepage-intro-same-art-mobile-overlay-20261006",
+      "implementationCommit": "a739f0c4736e666ddadab3a009632ecfec2f75ca",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/previous-design-baselines.json"
+    }
+  },
+  "homepage-trust-overlay": {
+    "id": "homepage-trust-pager-corners-20261008",
+    "implementationCommit": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+    "decision": "2026-10-08 用户明确要求实施：按用户授权恢复电脑图片内左下信任区、右下数字页码；以实际页码宽度预留空间，长信任文案在条内单行横滑；手机底部居中。",
+    "sourceFiles": [
+      "packages/storefront/src/pages/home-page.tsx",
+      "packages/storefront/src/styles/home-showcase.css",
+      "packages/storefront/src/styles/desktop-home.css",
+      "packages/next-admin/src/pages/Storefront/StorefrontBlockEditor.tsx"
+    ],
+    "currentEvidence": {
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json",
+      "browserRecord": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/browser-results-final.json",
+      "desktopScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/home-classic-1440.jpg",
+      "mobileScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/home-classic-390.jpg",
+      "dataSource": "实际候选客户端构建与后台同源预览；本地合成顾客、CMS、物流数据及项目样本图片；无真实商家内容或生产数据写入。",
+      "acceptanceScope": "三处组件，320/390/768/1024/1280/1440，中英与两套皮肤；未进行全站或线上验收。"
+    },
+    "latestAuthorizedCandidate": {
+      "date": "2026-10-08",
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "status": "local-verified-unpublished",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json"
+    },
+    "sourceReconciliation": "最新用户计划覆盖本次三处组件相关旧排列。保留当前 origin/main 1ab589d7 的已提交实现；主工作区其他轮播方案及数字交付、补款 WIP 已核对且未复制或修改。历史完整登记保存在 previous-design-baselines.json。",
+    "previousBaseline": {
+      "id": "homepage-trust-desktop-left-mobile-centered-20261002",
+      "implementationCommit": "252ee64767909ff15772f2073f70096c86ea5907",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/previous-design-baselines.json"
+    },
+    "status": "local-verified-unpublished",
+    "previousBaselineRecord": "backups/ready-deliveries-cleanup-20261004/worktrees/featured-copy-order-20261003/files/artifacts/hero-restored-pagination-20261003/previous-trust-baseline.json"
+  },
+  "referral-center": {
+    "id": "referral-heading-code-centered-20261008",
+    "implementationCommit": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+    "status": "local-verified-unpublished",
+    "decision": "2026-10-08 用户明确要求实施：邀请奖励标题左上、分享有礼右上；说明左对齐，邀请码标签与代码上下居中。移除可见邀请链接标题和图标，保留隐藏标签、网址及既有操作。",
+    "sourceFiles": [
+      "packages/storefront/src/pages/referral-page.tsx",
+      "packages/storefront/src/styles/referral.css"
+    ],
+    "sourceReconciliation": "最新用户计划覆盖本次三处组件相关旧排列。保留当前 origin/main 1ab589d7 的已提交实现；主工作区其他轮播方案及数字交付、补款 WIP 已核对且未复制或修改。历史完整登记保存在 previous-design-baselines.json。",
+    "previousBaselineRecord": "artifacts/referral-skin-link-20261004/previous-baselines.json",
+    "currentEvidence": {
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json",
+      "browserRecord": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/browser-results-final.json",
+      "desktopScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/referral-classic-1440.jpg",
+      "mobileScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/referral-neo-en-long-320.jpg",
+      "dataSource": "实际候选客户端构建与后台同源预览；本地合成顾客、CMS、物流数据及项目样本图片；无真实商家内容或生产数据写入。",
+      "acceptanceScope": "三处组件，320/390/768/1024/1280/1440，中英与两套皮肤；未进行全站或线上验收。"
+    },
+    "previousBaseline": {
+      "id": "referral-skin-link-20261004",
+      "implementationCommit": "fefdd5559965558576177b8357f160b093477488",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/previous-design-baselines.json"
+    },
+    "latestAuthorizedCandidate": {
+      "date": "2026-10-08",
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "status": "local-verified-unpublished",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json"
+    }
+  },
+  "logistics-workspace": {
+    "id": "logistics-five-column-status-count-20261008",
+    "implementationCommit": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+    "decision": "2026-10-08 用户明确要求实施：物流五个状态采用五等分一行，状态上数量下并居中。搜索刷新放下一行，电脑靠右，手机铺满；长译文单行省略且保留可访问完整名称。",
+    "requirements": [
+      "物流列表使用对齐的数据表，手机使用完整可读的配送记录",
+      "物流详情按包裹展示实际状态和配送事件，不生成虚构轨迹",
+      "关联订单按来源返回列表或详情，并保留筛选和关键词",
+      "所有页面沿用共享语义样式和现有订单接口",
+      "用户追加要求表格整齐：加宽商品列、两行名称、固定数量列、统一单元格留白及垂直对齐"
+    ],
+    "sourceFiles": [
+      "packages/storefront/src/pages/logistics-page.tsx",
+      "packages/storefront/src/storefront-ui/delivery-details.tsx",
+      "packages/storefront/src/order-pages.tsx",
+      "packages/storefront/src/styles/logistics.css",
+      "packages/storefront/src/components/common/desktop-account-navigation.tsx",
+      "packages/storefront/src/route-pages/order-route-pages.tsx",
+      "packages/storefront/src/storefront-router.ts",
+      "packages/storefront/src/routes/logistics.tsx",
+      "packages/storefront/src/styles/order-aftercare.css",
+      "packages/storefront/src/styles/order-detail-drawer.css",
+      "packages/storefront/src/storefront-ui/page-shell.tsx",
+      "packages/storefront/src/styles/right-drawer.css"
+    ],
+    "currentEvidence": {
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json",
+      "browserRecord": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/browser-results-final.json",
+      "desktopScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/logistics-classic-1440.jpg",
+      "mobileScreenshot": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/logistics-neo-en-320.jpg",
+      "dataSource": "实际候选客户端构建与后台同源预览；本地合成顾客、CMS、物流数据及项目样本图片；无真实商家内容或生产数据写入。",
+      "acceptanceScope": "三处组件，320/390/768/1024/1280/1440，中英与两套皮肤；未进行全站或线上验收。"
+    },
+    "acceptance": [
+      "artifacts/logistics-redesign/result.json",
+      "artifacts/logistics-redesign/build.log",
+      "artifacts/logistics-redesign/commit.log",
+      "artifacts/logistics-redesign/alignment-build.log",
+      "artifacts/logistics-redesign/alignment-commit.log"
+    ],
+    "releaseReadiness": {
+      "previousImplementationCommit": "79b508ee19116a6671bf019c647a90c31b85733e",
+      "codeCommit": "da16cf883398b812cff741e02b5e425e8558f013",
+      "base": "95e59c7769d9b1824c674c6f535bcbdbd7d4a844",
+      "record": "docs/WINDOW_RELEASE_READINESS_20260928.md",
+      "reason": "在物流改版上保留 main 已合并的订单状态和历史币种修复；本地浏览器与相关规格验收通过。"
+    },
+    "priorEvidenceBeforeToolbarRefinement": {
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/logistics-redesign-20260928/files/docs/LOGISTICS_REDESIGN.md",
+      "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/logistics-redesign-20260928/files/artifacts/logistics-redesign/aligned-desktop-list.png",
+      "mobileScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/logistics-redesign-20260928/files/artifacts/logistics-redesign/aligned-mobile-list.png",
+      "dataSource": "实际客户端组件与合成只读样本；本地实现结果，尚待用户视觉确认与真实店铺验收",
+      "alignmentRecord": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/logistics-redesign-20260928/files/artifacts/logistics-redesign/alignment-measurements.jsonl",
+      "releaseReadiness": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/logistics-redesign-20260928/files/artifacts/window-release-readiness-20260928/receipt.json",
+      "archivedFromWorktree": ".codex-worktrees/logistics-redesign-20260928",
+      "archiveManifest": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/logistics-redesign-20260928/manifest.json"
+    },
+    "previousImplementationCommit": "6d3f509eaab42dffb6d1f1039c1736e01b8163f8",
+    "followUpDecision": "2026-10-02 消息详情复用右侧抽屉，通用定位/动画样式迁入 right-drawer.css，通过 Sheet side=right 明确启用。已有订单、物流及售后抽屉两套皮肤桌面/手机回归通过，保留原功能。",
+    "latestAuthorizedCandidate": {
+      "date": "2026-10-08",
+      "worktree": ".codex-worktrees/responsive-three-surfaces-20261008",
+      "branch": "fix/responsive-three-surfaces-20261008",
+      "head": "fa55bb3fbb78b17a0122997f97faf8fca3d5f5c1",
+      "status": "local-verified-unpublished",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/local-receipt.json"
+    },
+    "priorEvidenceBeforeLogisticsActionDrawers": {
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-toolbar-20261002/local-receipt.json",
+      "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-toolbar-20261002/classic-1440-zh-page.png",
+      "mobileScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-toolbar-20261002/classic-390-zh-page.png",
+      "toolbarScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-toolbar-20261002/classic-1440-zh-toolbar.png",
+      "dataSource": "Actual production-built client with synthetic local delivery orders. External requests blocked. Not production acceptance."
+    },
+    "priorEvidenceBeforeNotificationDrawer": {
+      "record": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-drawers-20261002/local-receipt.json",
+      "desktopScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-drawers-20261002/classic-1440-zh-delivery-open.png",
+      "mobileScreenshot": "backups/branch-cleanup-20260930/complete-cleanup-20261001/worktrees/coupon-completed-577-20261002/files/artifacts/logistics-drawers-20261002/classic-390-zh-delivery-drawer.png",
+      "dataSource": "Actual production-built client with synthetic local orders, packages and recorded events. External requests blocked; no production changes. Analytics necessary-only choice and after-sales regression actions mocked locally."
+    },
+    "previousBaseline": {
+      "id": "logistics-action-drawers-20261002",
+      "implementationCommit": "0cf59d1c5332480a5a5619fc080d6d6cafeb3001",
+      "record": ".codex-worktrees/responsive-three-surfaces-20261008/docs/local-validation/responsive-three-surfaces-20261008/previous-design-baselines.json"
+    },
+    "status": "local-verified-unpublished",
+    "sourceReconciliation": "最新用户计划覆盖本次三处组件相关旧排列。保留当前 origin/main 1ab589d7 的已提交实现；主工作区其他轮播方案及数字交付、补款 WIP 已核对且未复制或修改。历史完整登记保存在 previous-design-baselines.json。"
+  }
+}
