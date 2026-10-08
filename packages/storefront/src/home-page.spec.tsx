@@ -1549,6 +1549,19 @@ describe('HomePage notices', () => {
                 buildHomeNoticeItems(announcements, { ...noticeBlock, settings: null }, 'zh').map(
                     item => item.id,
                 ),
+            ).toEqual([
+                'system-delivery',
+                'system-purchase',
+                'system-launch',
+                'system-last-year',
+                'system-boundary',
+            ]);
+            expect(
+                buildHomeNoticeItems(
+                    announcements,
+                    { ...noticeBlock, settings: { announcementDisplayPeriod: '30_DAYS' } },
+                    'zh',
+                ).map(item => item.id),
             ).toEqual(['system-delivery', 'system-purchase']);
             expect(announcements[0].startsAt).toBe('2026-09-01T01:00:00Z');
         } finally {
@@ -1556,9 +1569,9 @@ describe('HomePage notices', () => {
         }
     });
 
-    it.each([undefined, null, '30_DAYS', 'unknown'])('keeps the thirty-day default for period %s', period => {
+    it.each([undefined, null, '2_YEARS', 'unknown'])('uses the two-year default for period %s', period => {
         const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
-        const announcements = [20, 40].map(days => ({
+        const announcements = [20, 40, 800].map(days => ({
             id: String(days),
             createdAt: daysAgo(days),
             title: `公告 ${days}`,
@@ -1577,6 +1590,35 @@ describe('HomePage notices', () => {
         };
 
         expect(buildHomeNoticeItems(announcements, noticeBlock, 'en').map(item => item.id)).toEqual([
+            'system-20',
+            'system-40',
+        ]);
+    });
+
+    it('uses the two-year default without a notice block and preserves an explicit thirty-day choice', () => {
+        const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+        const announcements = [20, 400, 800].map(days => ({
+            id: String(days),
+            createdAt: daysAgo(days),
+            title: `公告 ${days}`,
+            content: '有效公告内容',
+            linkUrl: null,
+            startsAt: null,
+            endsAt: null,
+        }));
+        expect(buildHomeNoticeItems(announcements, undefined, 'zh').map(item => item.id)).toEqual([
+            'system-20',
+            'system-400',
+        ]);
+        const noticeBlock: StorefrontContentBlock = {
+            ...heroBlock,
+            type: 'NOTICE',
+            title: '',
+            subtitle: '',
+            body: '',
+            settings: { announcementDisplayPeriod: '30_DAYS' },
+        };
+        expect(buildHomeNoticeItems(announcements, noticeBlock, 'zh').map(item => item.id)).toEqual([
             'system-20',
         ]);
     });
@@ -1615,7 +1657,7 @@ describe('HomePage notices', () => {
         }
     });
 
-    it('rotates only the five newest announcements from the last thirty days', () => {
+    it('rotates only the five newest announcements within the default window', () => {
         const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
         const announcements = [35, 4, 2, 7, 1, 3, 5].map(days => ({
             id: String(days),

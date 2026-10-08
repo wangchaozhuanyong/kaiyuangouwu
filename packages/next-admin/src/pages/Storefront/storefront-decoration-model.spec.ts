@@ -24,6 +24,7 @@ describe('decoration drafts follow the Shop publication contract', () => {
 
     it('opens the homepage with the configured asset and preserves neighbouring content', () => {
         const block = newContentBlock('HERO', 0, '主视觉');
+        block.code = 'homepage-hero-under-test';
         block.enabled = true;
         block.imageAsset = {
             id: 'homepage-art',
@@ -42,6 +43,7 @@ describe('decoration drafts follow the Shop publication contract', () => {
             imageAsset: { width: 1200, height: 600 },
         });
         const neighbouringBlock = newContentBlock('HERO', 1, '首页');
+        neighbouringBlock.code = 'homepage-hero-neighbour';
         neighbouringBlock.enabled = true;
         const neighbour = decorationDraft(neighbouringBlock, 'zh_Hans').block;
         if (!neighbour) throw new Error('Missing homepage fixture');

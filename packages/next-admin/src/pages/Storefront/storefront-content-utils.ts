@@ -144,7 +144,7 @@ export function newContentBlock(
         targetType: 'NONE',
         targetValue: null,
         settings:
-            type === 'NOTICE' ? { scrollIntervalSeconds: 5, announcementDisplayPeriod: '30_DAYS' } : null,
+            type === 'NOTICE' ? { scrollIntervalSeconds: 5, announcementDisplayPeriod: '2_YEARS' } : null,
         translations: [
             { ...emptyBlockTranslation('zh_Hans'), title: displayName },
             { ...emptyBlockTranslation('en'), title: englishDefaultTitle(type) },

@@ -1000,14 +1000,14 @@ export function StorefrontBlockEditor({
                                             <>
                                                 <Field
                                                     label="公告展示期限"
-                                                    helpText="按上线时间（未设置则按创建时间）筛选有效公告，首页最多展示 5 条。"
+                                                    helpText="默认最近2年，可选最近30天；按上线时间（未设置则按创建时间）筛选有效公告，首页最多展示 5 条。"
                                                 >
                                                     <AdminSelect
                                                         value={
                                                             draft.settings?.announcementDisplayPeriod ===
-                                                            '2_YEARS'
-                                                                ? '2_YEARS'
-                                                                : '30_DAYS'
+                                                            '30_DAYS'
+                                                                ? '30_DAYS'
+                                                                : '2_YEARS'
                                                         }
                                                         onChange={event =>
                                                             updateSettings({
@@ -1016,8 +1016,8 @@ export function StorefrontBlockEditor({
                                                         }
                                                         className={inputClass}
                                                     >
-                                                        <option value="30_DAYS">最近30天</option>
                                                         <option value="2_YEARS">最近2年</option>
+                                                        <option value="30_DAYS">最近30天</option>
                                                     </AdminSelect>
                                                 </Field>
                                                 <Field label="公告轮播间隔（秒）">

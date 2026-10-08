@@ -133,7 +133,7 @@ export function buildHomeNoticeItems(
 ): HomeNoticeItem[] {
     const now = Date.now();
     let recentCutoff = now - 30 * 24 * 60 * 60 * 1000;
-    if (noticeBlock?.settings?.announcementDisplayPeriod === '2_YEARS') {
+    if (noticeBlock?.settings?.announcementDisplayPeriod !== '30_DAYS') {
         const cutoff = new Date(now);
         const month = cutoff.getUTCMonth();
         cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 2);

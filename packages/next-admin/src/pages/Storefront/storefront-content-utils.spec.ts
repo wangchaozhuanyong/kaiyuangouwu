@@ -22,11 +22,11 @@ function validSupportBlock() {
     return block;
 }
 
-it('defaults a new notice block to thirty days and submits that setting', () => {
+it('defaults a new notice block to two years and submits that setting', () => {
     const block = newContentBlock('NOTICE', 0);
     expect(block.settings).toEqual({
         scrollIntervalSeconds: 5,
-        announcementDisplayPeriod: '30_DAYS',
+        announcementDisplayPeriod: '2_YEARS',
     });
     expect(storefrontBlockInput(block).settings).toEqual(block.settings);
 });

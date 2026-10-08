@@ -204,8 +204,10 @@ it.each([
 );
 
 it.each([
-    [undefined, '30_DAYS'],
-    ['UNKNOWN_PERIOD', '30_DAYS'],
+    [undefined, '2_YEARS'],
+    [null, '2_YEARS'],
+    ['UNKNOWN_PERIOD', '2_YEARS'],
+    ['30_DAYS', '30_DAYS'],
     ['2_YEARS', '2_YEARS'],
 ])('shows the notice period for %s without overwriting existing settings', async (period, expected) => {
     const host = document.createElement('div');
@@ -215,7 +217,7 @@ it.each([
         ...newContentBlock('NOTICE', 0),
         settings: {
             scrollIntervalSeconds: 8,
-            ...(period ? { announcementDisplayPeriod: period } : {}),
+            ...(period !== undefined ? { announcementDisplayPeriod: period } : {}),
         },
     };
     const before = structuredClone(value);
@@ -243,74 +245,84 @@ it.each([
     }
 });
 
-it('saves a two-year notice period while preserving other settings and merchant images', async () => {
-    const host = document.createElement('div');
-    document.body.append(host);
-    const root = createFixtureRoot(host);
-    const value = {
-        ...newContentBlock('NOTICE', 0),
-        id: 'saved-notice',
-        imageAssetId: 'merchant-banner',
-        imageUrl: '/assets/merchant-banner.webp',
-        settings: { scrollIntervalSeconds: 8, merchantSetting: 'retain' },
-        items: [
-            {
-                ...newContentItem(0),
-                id: 'manual-notice',
-                imageAssetId: 'merchant-item',
-                imageUrl: '/assets/merchant-item.webp',
+it.each([
+    ['30_DAYS', '2_YEARS'],
+    ['2_YEARS', '30_DAYS'],
+])(
+    'saves the notice period from %s to %s while preserving other settings and merchant images',
+    async (initialPeriod, selectedPeriod) => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createFixtureRoot(host);
+        const value = {
+            ...newContentBlock('NOTICE', 0),
+            id: 'saved-notice',
+            imageAssetId: 'merchant-banner',
+            imageUrl: '/assets/merchant-banner.webp',
+            settings: {
+                announcementDisplayPeriod: initialPeriod,
+                scrollIntervalSeconds: 8,
+                merchantSetting: 'retain',
             },
-        ],
-    };
-    value.items[0].translations[0].label = '手动公告';
-    const before = structuredClone(value);
-    const onSave = vi.fn(async (_draft: ReturnType<typeof newContentBlock>) => undefined);
-    try {
-        await act(async () =>
-            root.render(
-                <StorefrontBlockEditor
-                    value={value}
-                    saving={false}
-                    onClose={() => undefined}
-                    onSave={onSave}
-                />,
-            ),
-        );
-        const select = Array.from(host.querySelectorAll('label'))
-            .find(label => label.textContent?.includes('公告展示期限'))!
-            .querySelector('select')!;
-        await act(async () => {
-            select.value = '2_YEARS';
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-        });
-        expect(select.value).toBe('2_YEARS');
-        await act(async () =>
-            Array.from(host.querySelectorAll('button'))
-                .find(button => button.textContent === '保存并核对')!
-                .click(),
-        );
-        expect(onSave).toHaveBeenCalledTimes(1);
-        const draft = onSave.mock.calls[0][0];
-        const expectedSettings = {
-            ...value.settings,
-            announcementDisplayPeriod: '2_YEARS',
+            items: [
+                {
+                    ...newContentItem(0),
+                    id: 'manual-notice',
+                    imageAssetId: 'merchant-item',
+                    imageUrl: '/assets/merchant-item.webp',
+                },
+            ],
         };
-        expect(draft.settings).toEqual(expectedSettings);
-        expect(draft.imageAssetId).toBe(value.imageAssetId);
-        expect(draft.items[0].imageAssetId).toBe(value.items[0].imageAssetId);
-        const input = storefrontBlockInput(draft, value);
-        expect(input.settings).toEqual(expectedSettings);
-        expect(input).not.toHaveProperty('imageAssetId');
-        expect(input).not.toHaveProperty('imageUrl');
-        expect(input).not.toHaveProperty('allowImageReplacement');
-        expect(input.items[0]).not.toHaveProperty('imageAssetId');
-        expect(input.items[0]).not.toHaveProperty('imageUrl');
-        expect(value).toEqual(before);
-    } finally {
-        await act(async () => root.unmount());
-        host.remove();
-    }
-});
+        value.items[0].translations[0].label = '手动公告';
+        const before = structuredClone(value);
+        const onSave = vi.fn(async (_draft: ReturnType<typeof newContentBlock>) => undefined);
+        try {
+            await act(async () =>
+                root.render(
+                    <StorefrontBlockEditor
+                        value={value}
+                        saving={false}
+                        onClose={() => undefined}
+                        onSave={onSave}
+                    />,
+                ),
+            );
+            const select = Array.from(host.querySelectorAll('label'))
+                .find(label => label.textContent?.includes('公告展示期限'))!
+                .querySelector('select')!;
+            await act(async () => {
+                select.value = selectedPeriod;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            expect(select.value).toBe(selectedPeriod);
+            await act(async () =>
+                Array.from(host.querySelectorAll('button'))
+                    .find(button => button.textContent === '保存并核对')!
+                    .click(),
+            );
+            expect(onSave).toHaveBeenCalledTimes(1);
+            const draft = onSave.mock.calls[0][0];
+            const expectedSettings = {
+                ...value.settings,
+                announcementDisplayPeriod: selectedPeriod,
+            };
+            expect(draft.settings).toEqual(expectedSettings);
+            expect(draft.imageAssetId).toBe(value.imageAssetId);
+            expect(draft.items[0].imageAssetId).toBe(value.items[0].imageAssetId);
+            const input = storefrontBlockInput(draft, value);
+            expect(input.settings).toEqual(expectedSettings);
+            expect(input).not.toHaveProperty('imageAssetId');
+            expect(input).not.toHaveProperty('imageUrl');
+            expect(input).not.toHaveProperty('allowImageReplacement');
+            expect(input.items[0]).not.toHaveProperty('imageAssetId');
+            expect(input.items[0]).not.toHaveProperty('imageUrl');
+            expect(value).toEqual(before);
+        } finally {
+            await act(async () => root.unmount());
+            host.remove();
+        }
+    },
+);
 
 it('requires image review, invalidates it after another image change, and preserves normal saves', async () => {
     const host = document.createElement('div');
