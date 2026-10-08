@@ -20,6 +20,7 @@ export interface ShopApiContext {
         signal?: AbortSignal,
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
+        readCurrencyCode?: string,
     ) => Promise<T>;
     assertCart: (result: StorefrontCart & ErrorResult) => StorefrontCart;
     assertCheckoutSession: (result: StorefrontCheckoutSession & ErrorResult) => StorefrontCheckoutSession;

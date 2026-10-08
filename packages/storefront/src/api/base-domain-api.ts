@@ -49,8 +49,16 @@ export abstract class BaseDomainApi {
         signal?: AbortSignal,
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
+        readCurrencyCode?: string,
     ): Promise<T> {
-        return this.ctx.request<T>(query, variables, signal, timeoutMs, resultUnknownOnTimeout);
+        return this.ctx.request<T>(
+            query,
+            variables,
+            signal,
+            timeoutMs,
+            resultUnknownOnTimeout,
+            readCurrencyCode,
+        );
     }
 
     protected async upload<T>(

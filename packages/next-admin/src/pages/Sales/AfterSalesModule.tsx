@@ -13,7 +13,7 @@ import {
     X,
     XCircle,
 } from 'lucide-react';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getSystemLabel } from '../../../../common/src/display-localization';
 import { ADMIN_API_URL } from '../../apollo';
@@ -30,9 +30,12 @@ import {
     TRANSITION_AFTER_SALES_REQUEST,
     UPDATE_AFTER_SALES_REPLACEMENT,
 } from '../../graphql/sales.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { PhysicalReturnPanel } from './PhysicalReturnPanel';
 import {
@@ -201,6 +204,8 @@ const reasonLabels: Record<string, string> = {
 };
 
 export function AfterSalesModule() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canUpdateOrder = hasAnyPermission(['UpdateOrder']);
     const location = useLocation();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useUrlTab<AfterSalesTab>(AFTER_SALES_TABS, 'all');
@@ -224,6 +229,14 @@ export function AfterSalesModule() {
     >({});
     const [notification, setNotification] = useState('');
     const [actionError, setActionError] = useState('');
+    const [readbackError, setReadbackError] = useState('');
+    const [readingBack, setReadingBack] = useState(false);
+    const actionRunning = useRef(false);
+    const readRunning = useRef(false);
+    useUnsavedChangesWarning(
+        readingBack || !!readbackError,
+        '售后操作已完成，最新工单尚未核对。离开后请勿重复提交，确定离开吗？',
+    );
 
     const { data, loading, error, refetch } = useQuery<AfterSalesData>(GET_AFTER_SALES_REQUESTS, {
         variables: {
@@ -253,7 +266,9 @@ export function AfterSalesModule() {
     const { data: stockLocationData } = useQuery<{
         stockLocations: { items: Array<{ id: string; name: string }> };
     }>(GET_STOCK_LOCATIONS, { variables: { options: { take: 200 } } });
-    const workflowBusy = transitioning || receivingReturn || inspectingReturn || updatingReplacement;
+    const workflowBusy =
+        transitioning || receivingReturn || inspectingReturn || updatingReplacement || readingBack;
+    const workflowBlocked = workflowBusy || !!readbackError || !canUpdateOrder;
 
     const requests = data?.afterSalesRequests.items ?? EMPTY_REQUESTS;
     const totalItems = data?.afterSalesRequests.totalItems ?? 0;
@@ -310,10 +325,24 @@ export function AfterSalesModule() {
             ),
         );
         setActionError('');
+        setReadbackError('');
+    };
+
+    const readAcceptedResult = async () => {
+        if (readRunning.current) return;
+        readRunning.current = true;
+        setReadingBack(true);
+        setReadbackError('');
+        try {
+            await refreshAfterAdminWrite(() => refetch(), setReadbackError);
+        } finally {
+            readRunning.current = false;
+            setReadingBack(false);
+        }
     };
 
     const handleTransition = async (nextState: 'APPROVED' | 'REJECTED' | 'COMPLETED') => {
-        if (!selectedRequest) return;
+        if (!selectedRequest || workflowBlocked || actionRunning.current) return;
         if (!resolution.trim()) {
             setActionError(nextState === 'REJECTED' ? '请填写驳回原因' : '请填写处理说明');
             return;
@@ -349,6 +378,7 @@ export function AfterSalesModule() {
             if (refundId) input.refundId = refundId;
         }
 
+        actionRunning.current = true;
         try {
             const response = await transitionRequest({ variables: { input } });
             const updated = response.data?.transitionAfterSalesRequest;
@@ -358,7 +388,6 @@ export function AfterSalesModule() {
             }
             setSelectedRequest(updated);
             setActionError('');
-            await refetch();
             showNotice(
                 nextState === 'APPROVED'
                     ? '售后申请已审核通过'
@@ -368,8 +397,11 @@ export function AfterSalesModule() {
                         ? '售后工单已关联真实退款并完成'
                         : '售后工单已完成，无需资金退款',
             );
+            await readAcceptedResult();
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '售后状态更新失败，请稍后重试'));
+        } finally {
+            actionRunning.current = false;
         }
     };
 
@@ -377,15 +409,17 @@ export function AfterSalesModule() {
         if (!updated) throw new Error('后端未返回更新后的售后工单');
         setSelectedRequest(updated);
         setActionError('');
-        await refetch();
         showNotice(message);
+        await readAcceptedResult();
     };
 
     const handleReceiveReturn = async () => {
+        if (workflowBlocked || actionRunning.current) return;
         if (!selectedRequest || !workflowNote.trim()) {
             setActionError('请填写退货签收说明');
             return;
         }
+        actionRunning.current = true;
         try {
             const response = await receiveReturn({
                 variables: {
@@ -399,10 +433,13 @@ export function AfterSalesModule() {
             await applyWorkflowResult(response.data?.receiveAfterSalesReturn, '退货已签收，等待质检');
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '退货签收失败'));
+        } finally {
+            actionRunning.current = false;
         }
     };
 
     const handleInspectReturn = async () => {
+        if (workflowBlocked || actionRunning.current) return;
         if (!selectedRequest || !workflowNote.trim()) {
             setActionError('请填写质检说明');
             return;
@@ -420,6 +457,7 @@ export function AfterSalesModule() {
             setActionError(`商品 ${invalid.item.productName} 的验收/拒收数量或入库信息不完整`);
             return;
         }
+        actionRunning.current = true;
         try {
             const response = await inspectReturn({
                 variables: {
@@ -447,10 +485,13 @@ export function AfterSalesModule() {
             );
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '退货质检入库失败'));
+        } finally {
+            actionRunning.current = false;
         }
     };
 
     const handleReplacement = async (status: 'SHIPPED' | 'EXCEPTION' | 'DELIVERED') => {
+        if (workflowBlocked || actionRunning.current) return;
         if (!selectedRequest || !workflowNote.trim()) {
             setActionError('请填写换货/补发处理说明');
             return;
@@ -463,6 +504,7 @@ export function AfterSalesModule() {
             setActionError('确认送达时必须填写送达凭证引用');
             return;
         }
+        actionRunning.current = true;
         try {
             const response = await updateReplacement({
                 variables: {
@@ -491,6 +533,8 @@ export function AfterSalesModule() {
             );
         } catch (mutationError) {
             setActionError(toUserFacingError(mutationError, '换货/补发状态更新失败'));
+        } finally {
+            actionRunning.current = false;
         }
     };
 
@@ -858,12 +902,12 @@ export function AfterSalesModule() {
             {selectedRequest && (
                 <div
                     className="fixed inset-0 z-50 flex justify-end bg-slate-950/40 backdrop-blur-xs"
-                    onClick={() => !workflowBusy && setSelectedRequest(null)}
+                    onClick={() => !workflowBusy && !readbackError && setSelectedRequest(null)}
                 >
                     <AccessibleDialogSurface
                         accessibleName="售后工单详情"
                         onRequestClose={() => {
-                            if (!workflowBusy) setSelectedRequest(null);
+                            if (!workflowBusy && !readbackError) setSelectedRequest(null);
                         }}
                         className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl"
                         onClick={event => event.stopPropagation()}
@@ -890,7 +934,7 @@ export function AfterSalesModule() {
                             <AdminButton
                                 type="button"
                                 onClick={() => setSelectedRequest(null)}
-                                disabled={workflowBusy}
+                                disabled={workflowBusy || !!readbackError}
                                 className="text-slate-400 hover:text-slate-700"
                                 aria-label="关闭"
                             >
@@ -904,7 +948,20 @@ export function AfterSalesModule() {
                                         key={selectedRequest.id}
                                         requestId={selectedRequest.id}
                                         items={selectedRequest.items}
+                                        canOperate={
+                                            canUpdateOrder &&
+                                            !workflowBlocked &&
+                                            (!selectedRequest.returnStatus ||
+                                                selectedRequest.returnStatus === 'NOT_REQUIRED')
+                                        }
                                     />
+                                )}
+                            {selectedRequest.type === 'RETURN_AND_REFUND' &&
+                                selectedRequest.returnStatus &&
+                                selectedRequest.returnStatus !== 'NOT_REQUIRED' && (
+                                    <p className="text-xs leading-5 text-slate-600">
+                                        历史退货验收记录供核对；本工单请使用下方统一签收与质检流程。
+                                    </p>
                                 )}
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -1103,24 +1160,26 @@ export function AfterSalesModule() {
                                             当前节点已超过处理时限，请优先处理并记录原因。
                                         </div>
                                     )}
-                                    {['AWAITING_SHIPMENT', 'IN_TRANSIT'].includes(
-                                        selectedRequest.returnStatus,
-                                    ) && (
-                                        <WorkflowTextArea
-                                            value={workflowNote}
-                                            onChange={setWorkflowNote}
-                                            placeholder="填写仓库签收结果、包裹外观和签收人"
-                                        >
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() => void handleReceiveReturn()}
-                                                disabled={workflowBusy}
-                                                className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                    {afterSalesRequiresReturn(selectedRequest.type) &&
+                                        (!selectedRequest.returnStatus ||
+                                            ['NOT_REQUIRED', 'AWAITING_SHIPMENT', 'IN_TRANSIT'].includes(
+                                                selectedRequest.returnStatus,
+                                            )) && (
+                                            <WorkflowTextArea
+                                                value={workflowNote}
+                                                onChange={setWorkflowNote}
+                                                placeholder="填写仓库签收结果、包裹外观和签收人"
                                             >
-                                                确认退货已签收
-                                            </AdminButton>
-                                        </WorkflowTextArea>
-                                    )}
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() => void handleReceiveReturn()}
+                                                    disabled={workflowBlocked}
+                                                    className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                                                >
+                                                    确认退货已签收
+                                                </AdminButton>
+                                            </WorkflowTextArea>
+                                        )}
                                     {selectedRequest.returnStatus === 'RECEIVED' && (
                                         <div className="space-y-3 rounded-lg border border-violet-100 bg-white p-3">
                                             {selectedRequest.items.map(item => {
@@ -1245,7 +1304,7 @@ export function AfterSalesModule() {
                                                 <AdminButton
                                                     type="button"
                                                     onClick={() => void handleInspectReturn()}
-                                                    disabled={workflowBusy}
+                                                    disabled={workflowBlocked}
                                                     className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                                 >
                                                     提交质检并审计入库
@@ -1264,10 +1323,13 @@ export function AfterSalesModule() {
                                                 onTrackingChange={setWorkflowTrackingCode}
                                                 onNoteChange={setWorkflowNote}
                                             >
+                                                <p className="text-xs leading-5 text-slate-600">
+                                                    登记发出时会按本店可用仓库与未过期批次扣减库存，并保留出库流水。
+                                                </p>
                                                 <AdminButton
                                                     type="button"
                                                     onClick={() => void handleReplacement('SHIPPED')}
-                                                    disabled={workflowBusy}
+                                                    disabled={workflowBlocked}
                                                     className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                                 >
                                                     登记换货/补发发出
@@ -1285,7 +1347,7 @@ export function AfterSalesModule() {
                                                     <AdminButton
                                                         type="button"
                                                         onClick={() => void handleReplacement('EXCEPTION')}
-                                                        disabled={workflowBusy}
+                                                        disabled={workflowBlocked}
                                                         className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-semibold text-rose-700 disabled:opacity-50"
                                                     >
                                                         登记配送异常
@@ -1306,7 +1368,7 @@ export function AfterSalesModule() {
                                             <AdminButton
                                                 type="button"
                                                 onClick={() => void handleReplacement('DELIVERED')}
-                                                disabled={workflowBusy}
+                                                disabled={workflowBlocked}
                                                 className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
                                             >
                                                 确认换货/补发已送达
@@ -1448,6 +1510,22 @@ export function AfterSalesModule() {
                                     ))}
                                 </div>
                             </section>
+                            {readbackError && (
+                                <div
+                                    role="alert"
+                                    className="rounded-xl bg-amber-50 p-3.5 text-xs leading-5 text-amber-800"
+                                >
+                                    <p>{readbackError}</p>
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => void readAcceptedResult()}
+                                        disabled={readingBack}
+                                        className="mt-2 font-semibold text-blue-700"
+                                    >
+                                        核对最新工单
+                                    </AdminButton>
+                                </div>
+                            )}
                             {actionError && (
                                 <div
                                     role="alert"
@@ -1462,18 +1540,18 @@ export function AfterSalesModule() {
                             <AdminButton
                                 type="button"
                                 onClick={() => setSelectedRequest(null)}
-                                disabled={workflowBusy}
+                                disabled={workflowBusy || !!readbackError}
                                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700"
                             >
                                 关闭
                             </AdminButton>
                             <div className="flex gap-2">
-                                {selectedRequest.state === 'PENDING' && (
+                                {canUpdateOrder && selectedRequest.state === 'PENDING' && (
                                     <>
                                         <AdminButton
                                             type="button"
                                             onClick={() => handleTransition('REJECTED')}
-                                            disabled={workflowBusy}
+                                            disabled={workflowBlocked}
                                             className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-4 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                                         >
                                             <XCircle className="h-3.5 w-3.5" />
@@ -1482,7 +1560,7 @@ export function AfterSalesModule() {
                                         <AdminButton
                                             type="button"
                                             onClick={() => handleTransition('APPROVED')}
-                                            disabled={workflowBusy}
+                                            disabled={workflowBlocked}
                                             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
                                         >
                                             {transitioning ? (
@@ -1494,11 +1572,11 @@ export function AfterSalesModule() {
                                         </AdminButton>
                                     </>
                                 )}
-                                {selectedRequest.state === 'APPROVED' && (
+                                {canUpdateOrder && selectedRequest.state === 'APPROVED' && (
                                     <AdminButton
                                         type="button"
                                         onClick={() => handleTransition('COMPLETED')}
-                                        disabled={workflowBusy || !completionReady}
+                                        disabled={workflowBlocked || !completionReady}
                                         className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                                     >
                                         {transitioning ? (

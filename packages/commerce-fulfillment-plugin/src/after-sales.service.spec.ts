@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AfterSalesService } from './after-sales.service';
+import { PhysicalReturnService } from './physical-return.service';
 
 function orderLine(
     type: 'physical' | 'digital' = 'physical',
@@ -46,7 +47,11 @@ function createHarness(
         code: 'T001',
         salesChannelId: 'channel-1',
         state: 'PaymentSettled',
+        active: false,
+        orderPlacedAt: new Date(),
         currencyCode: 'MYR',
+        totalWithTax: 9800,
+        payments: [{ state: 'Settled', amount: 9800, method: 'synthetic-provider', metadata: {} }],
         customer,
         lines: [line],
     } as any;
@@ -54,6 +59,11 @@ function createHarness(
     const savedEvents: any[] = [];
     let savedRequest: any;
     const requestQueryBuilder = {
+        select: vi.fn().mockReturnThis(),
+        getQuery: vi
+            .fn()
+            .mockReturnValue('SELECT ownerRequest.orderId FROM after_sales_request ownerRequest'),
+        getParameters: vi.fn().mockReturnValue({}),
         setLock: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
@@ -100,6 +110,10 @@ function createHarness(
         }),
     };
     const orderQueryBuilder = {
+        setParameters: vi.fn().mockReturnThis(),
+        update: vi.fn().mockReturnThis(),
+        set: vi.fn().mockReturnThis(),
+        execute: vi.fn().mockResolvedValue({ affected: 1 }),
         setLock: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         getOne: vi.fn().mockResolvedValue(order),
@@ -117,15 +131,17 @@ function createHarness(
             payment: { order },
         }),
     };
+    const receiptRepository = { find: vi.fn().mockResolvedValue([]) };
     const connection = {
         rawConnection: { options: { type: overrides.databaseType ?? 'mysql' } },
         getEntityOrThrow: vi.fn().mockResolvedValue(order),
-        getRepository: vi.fn((_ctx: any, entity: any) => {
+        getRepository: vi.fn((_ctx: any, entity: any): any => {
             if (entity.name === 'AfterSalesRequest') return requestRepository;
             if (entity.name === 'AfterSalesItem') return itemRepository;
             if (entity.name === 'AfterSalesEvent') return eventRepository;
             if (entity.name === 'Order') return orderRepository;
             if (entity.name === 'Refund') return refundRepository;
+            if (entity.name === 'PhysicalReturnReceipt') return receiptRepository;
             throw new Error(`Unexpected entity ${String(entity.name)}`);
         }),
     };
@@ -147,6 +163,7 @@ function createHarness(
     };
     const inventoryControl = {
         receiveCustomerReturn: vi.fn().mockResolvedValue({ id: 'inventory-operation-1' }),
+        dispatchAfterSalesReplacement: vi.fn().mockResolvedValue({ id: 'inventory-outbound-1' }),
     };
     const service = new AfterSalesService(
         connection as any,
@@ -173,6 +190,8 @@ function createHarness(
         orderRepository,
         inventoryControl,
         requestQueryBuilder,
+        receiptRepository,
+        connection,
     };
 }
 
@@ -420,6 +439,7 @@ describe('AfterSalesService', () => {
         test.requestRepository.findOne
             .mockResolvedValueOnce({
                 id: 'request-1',
+                type: 'REFUND_ONLY',
                 state: 'APPROVED',
                 approvedAmount: 4_900,
                 requestedAmount: 4_900,
@@ -465,6 +485,7 @@ describe('AfterSalesService', () => {
             const test = createHarness({ requestState: 'APPROVED', requestApprovedAmount: 4900 });
             const request = {
                 id: 'request-1',
+                type: 'REFUND_ONLY',
                 state: 'APPROVED',
                 approvedAmount: 4900,
                 requestedAmount: 4900,
@@ -526,6 +547,418 @@ describe('AfterSalesService', () => {
             (test.service as any).normalizeRelations(request, { languageCode: 'en' }).resolution,
         ).toBeNull();
     });
+
+    it.each([
+        { lines: [{ orderLineId: 'line-2', quantity: 1 }], expected: 'reject' },
+        { lines: [{ orderLineId: 'line-1', quantity: 2 }], expected: 'reject' },
+        { lines: [{ orderLineId: 'line-1', quantity: 1 }], expected: 'complete' },
+    ])('matches refund items and quantities before closing ($expected)', async ({ lines, expected }) => {
+        const test = createHarness();
+        const request = {
+            id: 'request-1',
+            type: 'REFUND_ONLY',
+            state: 'APPROVED',
+            orderId: test.order.id,
+            order: test.order,
+            approvedAmount: 4900,
+            requestedAmount: 4900,
+            items: [{ orderLineId: 'line-1', quantity: 1 }],
+            events: [],
+        };
+        test.requestRepository.findOne.mockResolvedValueOnce(request).mockResolvedValueOnce(null);
+        test.refundRepository.findOne.mockResolvedValue({
+            id: 'refund-1',
+            state: 'Settled',
+            total: 4900,
+            lines,
+            payment: { order: test.order },
+        });
+        const operation = test.service.transitionForAdmin(test.ctx, {
+            id: 'request-1',
+            state: 'COMPLETED',
+            refundId: 'refund-1',
+            resolution: 'Reviewed refund.',
+        });
+        if (expected === 'reject') {
+            await expect(operation).rejects.toThrow('商品或数量与当前售后申请不一致');
+            expect(test.requestRepository.update).not.toHaveBeenCalled();
+        } else {
+            await operation;
+            expect(test.requestRepository.update).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({ state: 'COMPLETED' }),
+            );
+        }
+    });
+
+    it('keeps amount-only compensation for refund-only requests but rejects it for physical returns', async () => {
+        const test = createHarness();
+        const request = {
+            id: 'request-1',
+            type: 'RETURN_AND_REFUND',
+            state: 'APPROVED',
+            returnStatus: 'INSPECTED',
+            orderId: test.order.id,
+            order: test.order,
+            approvedAmount: 4900,
+            requestedAmount: 4900,
+            items: [{ orderLineId: 'line-1', quantity: 1 }],
+            events: [],
+        };
+        test.requestRepository.findOne.mockResolvedValue(request);
+        await expect(
+            test.service.transitionForAdmin(test.ctx, {
+                id: 'request-1',
+                state: 'COMPLETED',
+                refundId: 'refund-1',
+                resolution: 'Reviewed return.',
+            }),
+        ).rejects.toThrow('商品或数量与当前售后申请不一致');
+        expect(test.requestRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('matches a split refund group once rather than counting the money sources as extra returned items', async () => {
+        const test = createHarness();
+        const request = {
+            id: 'request-1',
+            type: 'REFUND_ONLY',
+            state: 'APPROVED',
+            orderId: test.order.id,
+            order: test.order,
+            approvedAmount: 4900,
+            requestedAmount: 4900,
+            items: [{ orderLineId: 'line-1', quantity: 1 }],
+            events: [],
+        };
+        test.requestRepository.findOne.mockResolvedValueOnce(request).mockResolvedValueOnce(null);
+        const anchor = {
+            id: 'refund-1',
+            state: 'Settled',
+            total: 2450,
+            payment: { order: test.order },
+            lines: [{ orderLineId: 'line-1', quantity: 1 }],
+            metadata: { refundRequest: { quantityGroup: { key: 'group-1' } } },
+        };
+        test.refundRepository.findOne.mockResolvedValue(anchor);
+        test.refundRepository.find.mockResolvedValue([anchor, { ...anchor, id: 'refund-2', lines: [] }]);
+        await test.service.transitionForAdmin(test.ctx, {
+            id: 'request-1',
+            state: 'COMPLETED',
+            refundId: 'refund-1',
+            resolution: 'Original money sources returned.',
+        });
+        expect(test.requestRepository.update).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ state: 'COMPLETED' }),
+        );
+    });
+
+    it('does not mark a replacement shipped when outbound inventory fails', async () => {
+        const test = createHarness();
+        test.requestRepository.findOne.mockResolvedValue({
+            id: 'request-1',
+            code: 'AS-1',
+            type: 'RESHIP',
+            state: 'APPROVED',
+            replacementStatus: 'PENDING',
+            orderId: test.order.id,
+            order: test.order,
+            events: [],
+            items: [{ fulfillmentType: 'physical', quantity: 1, orderLine: test.line }],
+        });
+        test.inventoryControl.dispatchAfterSalesReplacement.mockRejectedValue(new Error('本店可用库存不足'));
+        await expect(
+            test.service.updateReplacementForAdmin(test.ctx, {
+                id: 'request-1',
+                status: 'SHIPPED',
+                carrier: 'Carrier',
+                trackingCode: 'TRACK-1',
+                note: 'Ship replacement.',
+                idempotencyKey: 'ship-replacement-001',
+            }),
+        ).rejects.toThrow('可用库存不足');
+        expect(test.requestRepository.update).not.toHaveBeenCalled();
+        expect(test.savedEvents).toHaveLength(0);
+    });
+
+    it('uses one outbound identity when exception tracking is registered again', async () => {
+        const test = createHarness();
+        const request = {
+            id: 'request-1',
+            code: 'AS-1',
+            type: 'RESHIP',
+            state: 'APPROVED',
+            replacementStatus: 'PENDING',
+            orderId: test.order.id,
+            order: test.order,
+            events: [],
+            items: [{ fulfillmentType: 'physical', quantity: 1, orderLine: test.line }],
+        };
+        test.requestRepository.findOne.mockResolvedValue(request);
+        const input = {
+            id: 'request-1',
+            status: 'SHIPPED' as const,
+            carrier: 'Carrier',
+            trackingCode: 'TRACK-1',
+            note: 'Ship replacement.',
+            idempotencyKey: 'ship-replacement-001',
+        };
+        await test.service.updateReplacementForAdmin(test.ctx, input);
+        request.replacementStatus = 'EXCEPTION';
+        await test.service.updateReplacementForAdmin(test.ctx, {
+            ...input,
+            trackingCode: 'TRACK-2',
+            idempotencyKey: 'ship-replacement-002',
+        });
+        expect(test.inventoryControl.dispatchAfterSalesReplacement).toHaveBeenCalledTimes(2);
+        const [first, second] = test.inventoryControl.dispatchAfterSalesReplacement.mock.calls;
+        expect(first[1].idempotencyKey).toBe(second[1].idempotencyKey);
+        expect(first[1].lines).toEqual(second[1].lines);
+    });
+
+    it('does not consume real stock for a simulated-payment replacement request', async () => {
+        const test = createHarness();
+        test.order.payments[0].metadata = { public: { testPayment: true } };
+        test.requestRepository.findOne.mockResolvedValue({
+            id: 'request-1',
+            code: 'AS-1',
+            type: 'RESHIP',
+            state: 'APPROVED',
+            replacementStatus: 'PENDING',
+            orderId: test.order.id,
+            order: test.order,
+            events: [],
+            items: [{ fulfillmentType: 'physical', quantity: 1, orderLine: test.line }],
+        });
+        await expect(
+            test.service.updateReplacementForAdmin(test.ctx, {
+                id: 'request-1',
+                status: 'SHIPPED',
+                carrier: 'Carrier',
+                trackingCode: 'TRACK-1',
+                note: 'Replacement.',
+                idempotencyKey: 'simulated-shipment-001',
+            }),
+        ).rejects.toThrow('真实换货补发出库');
+        expect(test.inventoryControl.dispatchAfterSalesReplacement).not.toHaveBeenCalled();
+        expect(test.requestRepository.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        'mixed-test',
+        'manual-review',
+        'unknown-payment',
+        'active',
+        'unplaced',
+        'Cancelled',
+        'Modifying',
+        'ArrangingAdditionalPayment',
+    ])('blocks replacement inventory while original-order evidence is %s', async reason => {
+        const test = createHarness();
+        if (reason === 'mixed-test')
+            test.order.payments.push({
+                state: 'Settled',
+                amount: 9800,
+                method: 'controlled-test-payment-1',
+                metadata: {},
+            });
+        else if (reason === 'manual-review')
+            test.order.payments[0].metadata = { manualReview: { required: true } };
+        else if (reason === 'unknown-payment')
+            test.order.payments.push({
+                state: 'Created',
+                amount: 9800,
+                method: 'synthetic-provider',
+                metadata: {},
+            });
+        else if (reason === 'active') test.order.active = true;
+        else if (reason === 'unplaced') test.order.orderPlacedAt = null;
+        else test.order.state = reason;
+        test.requestRepository.findOne.mockResolvedValue({
+            id: 'request-1',
+            code: 'AS-1',
+            type: 'RESHIP',
+            state: 'APPROVED',
+            replacementStatus: 'PENDING',
+            orderId: test.order.id,
+            order: test.order,
+            events: [],
+            items: [{ fulfillmentType: 'physical', quantity: 1, orderLine: test.line }],
+        });
+        await expect(
+            test.service.updateReplacementForAdmin(test.ctx, {
+                id: 'request-1',
+                status: 'SHIPPED',
+                carrier: 'Carrier',
+                trackingCode: 'TRACK-1',
+                note: 'Replacement.',
+                idempotencyKey: 'blocked-shipment-001',
+            }),
+        ).rejects.toThrow();
+        expect(test.inventoryControl.dispatchAfterSalesReplacement).not.toHaveBeenCalled();
+        expect(test.requestRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('completes inspection of legacy returns from multiple warehouses without another stock write', async () => {
+        const test = createHarness();
+        await test.service.create(test.ctx, {
+            orderId: 'order-1',
+            type: 'RETURN_AND_REFUND',
+            reason: 'DAMAGED',
+            description: 'Historical multi-warehouse return.',
+            items: [{ orderLineId: 'line-1', quantity: 2 }],
+        });
+        await test.service.transitionForAdmin(test.ctx, {
+            id: 'request-1',
+            state: 'APPROVED',
+            resolution: 'Approved.',
+            returnInstructions: 'Return to sales warehouses.',
+        });
+        await test.service.receiveReturnForAdmin(test.ctx, {
+            id: 'request-1',
+            note: 'Received.',
+            idempotencyKey: 'multi-receive-001',
+        });
+        test.receiptRepository.find.mockResolvedValue([
+            { orderLineId: 'line-1', quality: 'GOOD', quantity: 1, stockLocationId: 'warehouse-1' },
+            { orderLineId: 'line-1', quality: 'GOOD', quantity: 1, stockLocationId: 'warehouse-2' },
+        ]);
+        await test.service.inspectReturnForAdmin(test.ctx, {
+            id: 'request-1',
+            note: 'History verified.',
+            idempotencyKey: 'multi-inspect-001',
+            items: [{ itemId: 'item-1', acceptedQuantity: 2, rejectedQuantity: 0 }],
+        });
+        expect(test.inventoryControl.receiveCustomerReturn).not.toHaveBeenCalled();
+        expect(test.savedItems[0]).toMatchObject({
+            acceptedReturnQuantity: 2,
+            returnStockLocationId: null,
+            returnLotCode: null,
+        });
+    });
+
+    it.each([1, 2])(
+        'does not restock a legacy receipt twice when inspecting %i returned units',
+        async quantity => {
+            const test = createHarness();
+            await test.service.create(test.ctx, {
+                orderId: 'order-1',
+                type: 'RETURN_AND_REFUND',
+                reason: 'DAMAGED',
+                description: 'Synthetic historical return.',
+                items: [{ orderLineId: 'line-1', quantity }],
+            });
+            await test.service.transitionForAdmin(test.ctx, {
+                id: 'request-1',
+                state: 'APPROVED',
+                resolution: 'Approved return.',
+                returnInstructions: 'Return to the warehouse.',
+            });
+            await test.requestRepository.update({ id: 'request-1' }, { returnStatus: 'NOT_REQUIRED' });
+            const level = {
+                id: 'stock-1',
+                stockOnHand: 5,
+                stockLocation: { channels: [{ id: 'channel-1' }] },
+            };
+            const receipts: any[] = [];
+            const receiptQuery = {
+                where: vi.fn().mockReturnThis(),
+                setLock: vi.fn().mockReturnThis(),
+                getOne: vi.fn(() => Promise.resolve(receipts[0] ?? null)),
+                getMany: vi.fn(() => Promise.resolve(receipts)),
+            };
+            const receiptRepository = {
+                manager: {
+                    queryRunner: { isTransactionActive: true },
+                    connection: { options: { type: 'mysql' } },
+                },
+                createQueryBuilder: vi.fn(() => receiptQuery),
+                find: vi.fn(() => Promise.resolve(receipts)),
+                save: vi.fn((receipt: any) => {
+                    if (!receipt.id) {
+                        receipt.id = 'receipt-1';
+                        receipts.push(receipt);
+                    }
+                    return Promise.resolve(receipt);
+                }),
+            };
+            const originalRepository = test.connection.getRepository.getMockImplementation();
+            if (!originalRepository) throw new Error('Missing test repository');
+            test.connection.getRepository.mockImplementation((ctx, entity) => {
+                if (entity.name === 'PhysicalReturnReceipt') return receiptRepository;
+                if (entity.name === 'StockLevel') return { findOne: vi.fn().mockResolvedValue(level) };
+                if (entity.name === 'Sale')
+                    return { find: vi.fn().mockResolvedValue([{ quantity: -quantity }]) };
+                if (['InventoryLot', 'InventoryLotMovement'].includes(entity.name))
+                    return { exists: vi.fn().mockResolvedValue(false) };
+                return originalRepository(ctx, entity);
+            });
+            test.connection.getEntityOrThrow.mockImplementation((_ctx, entity) => {
+                if (entity.name === 'AfterSalesRequest') return test.requestRepository.findOne();
+                if (entity.name === 'OrderLine') return Promise.resolve(test.line);
+                return Promise.resolve(test.order);
+            });
+            const stock = {
+                createCancellationsForOrderLines: vi.fn((_ctx, lines) => {
+                    level.stockOnHand += lines[0].quantity;
+                    return Promise.resolve();
+                }),
+            };
+            const locks = {
+                lock: vi.fn((_ctx, entity) =>
+                    entity.name === 'AfterSalesRequest'
+                        ? test.requestRepository.findOne()
+                        : Promise.resolve(level),
+                ),
+            };
+            const legacy = new PhysicalReturnService(test.connection as any, locks as any, stock as any);
+            const input = {
+                requestId: 'request-1',
+                orderLineId: 'line-1',
+                stockLocationId: 'warehouse-1',
+                quantity: 1,
+                quality: 'GOOD' as const,
+                idempotencyKey: 'legacy-return-001',
+            };
+            await legacy.receive(test.ctx, input);
+            expect(level.stockOnHand).toBe(6);
+            test.inventoryControl.receiveCustomerReturn.mockImplementation((_ctx, operation) => {
+                level.stockOnHand += operation.lines.reduce(
+                    (sum: number, line: { quantity: number }) => sum + line.quantity,
+                    0,
+                );
+                return Promise.resolve({ id: 'inventory-operation-1' });
+            });
+            await test.service.receiveReturnForAdmin(test.ctx, {
+                id: 'request-1',
+                note: 'Received.',
+                idempotencyKey: 'unified-receive-001',
+            });
+            await test.service.inspectReturnForAdmin(test.ctx, {
+                id: 'request-1',
+                note: 'Inspected.',
+                idempotencyKey: 'unified-inspect-001',
+                items: [
+                    {
+                        itemId: 'item-1',
+                        acceptedQuantity: quantity,
+                        rejectedQuantity: 0,
+                        stockLocationId: 'warehouse-1',
+                        lotCode: 'RETURN-LOT',
+                    },
+                ],
+            });
+            expect(level.stockOnHand).toBe(5 + quantity);
+            expect(test.savedItems[0].acceptedReturnQuantity).toBe(quantity);
+            await legacy.receive(test.ctx, input);
+            expect(level.stockOnHand).toBe(5 + quantity);
+            receiptQuery.getOne.mockResolvedValue(null);
+            await expect(
+                legacy.receive(test.ctx, { ...input, idempotencyKey: 'second-receipt-002' }),
+            ).rejects.toThrow('统一退货签收和质检');
+            expect(level.stockOnHand).toBe(5 + quantity);
+        },
+    );
 
     it('closes the exchange loop from approval through audited restock and delivery confirmation', async () => {
         const test = createHarness();
@@ -603,6 +1036,13 @@ describe('AfterSalesService', () => {
                         quantity: 1,
                     }),
                 ],
+            }),
+        );
+        expect(test.inventoryControl.dispatchAfterSalesReplacement).toHaveBeenCalledWith(
+            test.ctx,
+            expect.objectContaining({
+                reference: completed.code,
+                lines: [{ productVariantId: 'variant-1', quantity: 1 }],
             }),
         );
         expect(test.savedEvents.map(event => event.eventType)).toEqual(

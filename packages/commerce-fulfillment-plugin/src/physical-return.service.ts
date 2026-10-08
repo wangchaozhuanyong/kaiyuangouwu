@@ -64,6 +64,10 @@ export class PhysicalReturnService {
             throw new UserInputError('仅当前店铺已通过审核的实物退货工单可以验收');
         assertOrderSalesChannel(ctx, request.order);
         await this.locks.lock(ctx, Order, request.orderId);
+        const lockedRequest = await this.locks.lock(ctx, AfterSalesRequest, request.id);
+        if (!lockedRequest) throw new UserInputError('售后工单已变化，请重新核对');
+        Object.assign(request, lockedRequest);
+        assertOrderSalesChannel(ctx, request.order);
         const repository = this.connection.getRepository(ctx, PhysicalReturnReceipt);
         const previousQuery = repository
             .createQueryBuilder('receipt')
@@ -87,6 +91,16 @@ export class PhysicalReturnService {
             )
                 throw new UserInputError('同一验收操作不能修改内容');
             return previous;
+        }
+        // Historical receipts remain replayable. New workflow requests have one
+        // receipt/inspection ledger, so the legacy writer must not restock them.
+        if (
+            String(request.channelId) !== String(ctx.channelId) ||
+            request.type !== 'RETURN_AND_REFUND' ||
+            !['APPROVED', 'COMPLETED'].includes(request.state) ||
+            (request.returnStatus && request.returnStatus !== 'NOT_REQUIRED')
+        ) {
+            throw new UserInputError('请使用售后工单的统一退货签收和质检入口，历史验收记录仍可查看');
         }
         const item = request.items.find(
             requestItem =>

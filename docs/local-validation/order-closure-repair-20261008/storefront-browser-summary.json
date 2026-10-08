@@ -1,0 +1,1347 @@
+{
+  "round": "FINAL_UNIQUE_32_TWO_BOUNDED_SOURCE_BATCHES",
+  "cases": 32,
+  "passed": 32,
+  "failed": 0,
+  "matrix": "classic/neo-minimalist × 1440/390px × zh/en × unknown/usdt/balance/currency",
+  "sourceContract": "Each batch and each case stable; cross-batch production PaymentPage differs by one onOrderChange(latest) line, plus its matching regression spec. Not one shared source fingerprint for all 32.",
+  "sourceBatches": [
+    {
+      "name": "usdt-balance",
+      "cases": 16,
+      "passed": 16,
+      "fingerprintedFiles": 48,
+      "stable": true,
+      "paymentPageSha256": "6ec77461ccb2c1b1c318ffb7818fa98b346d3405e52c4ea38d249d223001bf17"
+    },
+    {
+      "name": "unknown-currency",
+      "cases": 16,
+      "passed": 16,
+      "fingerprintedFiles": 48,
+      "stable": true,
+      "paymentPageSha256": "7ed5c8fa0a3b61ea2140f078860c6d228e85f0df349222c48a9a452d43a98a8f"
+    }
+  ],
+  "sourceBetweenBatches": {
+    "changedFiles": [
+      "src/payment-pages.tsx",
+      "src/payment-balance-completion.spec.tsx"
+    ],
+    "firstPaymentPage": "6ec77461ccb2c1b1c318ffb7818fa98b346d3405e52c4ea38d249d223001bf17",
+    "secondPaymentPage": "7ed5c8fa0a3b61ea2140f078860c6d228e85f0df349222c48a9a452d43a98a8f",
+    "diff": "--- first-batch/payment-pages.tsx\n+++ second-batch/payment-pages.tsx\n@@ -485,6 +485,7 @@\n         }\n         if (isPaymentCompletedOrderState(latest.state)) {\n             if (!attempt.token) {\n+                onOrderChange(latest);\n                 forgetAttempt(attempt);\n                 setRecoveredReceipt({ ownerScope, order: latest });\n                 return true;\n"
+  },
+  "counts": {
+    "screenshots": 80,
+    "layoutChecks": 80,
+    "horizontalOverflows": 0,
+    "pageErrors": 0,
+    "consoleWarningsOrErrors": 0,
+    "actualBusinessOrExternalRequests": 0,
+    "syntheticTransportRequests": 264,
+    "syntheticRequestKinds": {
+      "read": 192,
+      "control-mutation": 48,
+      "money-mutation": 24
+    },
+    "syntheticOperations": {
+      "AddStorefrontPayment": 16,
+      "CreateStorefrontOrderConfirmationToken": 40,
+      "CreateStorefrontUsdtCheckoutQuote": 8,
+      "EligibleStorefrontPaymentMethods": 48,
+      "MyStorefrontReferralOverview": 16,
+      "StorefrontOrder": 24,
+      "StorefrontOrderByConfirmationToken": 56,
+      "StorefrontReferralProgram": 48,
+      "UseStorefrontReferralBalance": 8
+    }
+  },
+  "preview": {
+    "url": "http://127.0.0.1:5428/tmp/order-closure-browser/index.html?scenario=unknown&language=zh&preset=classic",
+    "port": 5428,
+    "pid": 94046,
+    "execSession": 59086,
+    "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008/packages/storefront",
+    "status": "Kept running for final source guard; stop only this process after coordination confirms."
+  },
+  "productionOrBuild": {
+    "upstreamWrites": false,
+    "payments": false,
+    "credentials": false,
+    "buildRunByThisAgent": false,
+    "commit": false,
+    "push": false,
+    "deploy": false
+  },
+  "boundaries": [
+    "Not a real payment, login, server ownership/security validation, production test or deployment.",
+    "PaymentPage, ShopApi, QueryClient, Router and shared CSS are actual source imports.",
+    "Owner orders destination is an auxiliary local route; the actual PaymentPage navigation entry is tested.",
+    "Cache clear + unmount/remount + empty checkout preserves sessionStorage to simulate refresh; not a full application bootstrap.",
+    "Control mutations and money mutations are distinguished; all are memory transport, never upstream writes."
+  ],
+  "priorPreparation": "outputs/preparation-* were calibration failures, excluded from unique final 32 results.",
+  "visualObservations": [
+    {
+      "severity": "non-blocking",
+      "case": "neo-minimalist-390-en-usdt",
+      "state": "token-readiness-failed",
+      "observation": "非阻塞可读性观察（root 已亲看，暂不修改源码）：neo-minimalist、390px、英文 USDT token 失败时，共享 InlineError 的长说明与 Retry payment tracking 并排，说明约每行两个词、共约九行。没有裁切、重叠或横向溢出，重试按钮可用；功能通过不等同于没有视觉瑕疵。",
+      "sourceChange": false,
+      "rerun": false,
+      "rootReviewed": true,
+      "screenshot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008/packages/storefront/tmp/order-closure-browser/outputs/usdt-balance/neo-minimalist-390-en-usdt-token-readiness-failed.png"
+    }
+  ],
+  "results": [
+    {
+      "id": "classic-1440-zh-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "classic-1440-zh-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-1440-en-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "classic-1440-en-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-390-zh-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "classic-390-zh-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-390-en-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "classic-390-en-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-1440-zh-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "neo-minimalist-1440-zh-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-1440-en-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "neo-minimalist-1440-en-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-390-zh-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "neo-minimalist-390-zh-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-390-en-usdt",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "token-readiness-failed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "tracking-ready",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 2,
+      "orderChanges": 0
+    },
+    {
+      "id": "neo-minimalist-390-en-balance",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "same-tick-one-balance-write",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 1,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-1440-zh-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-1440-zh-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-1440-en-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-1440-en-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-390-zh-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-390-zh-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-390-en-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "classic-390-en-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#f1f5f9",
+            "surface": "#ffffff",
+            "text": "#25292d"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-1440-zh-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-1440-zh-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-1440-en-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-1440-en-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 1440,
+          "document": 1440,
+          "body": 1440,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-390-zh-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-390-zh-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-390-en-unknown",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "unknown",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "empty-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "retained-checkout-marker-read-failure",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "owner-read-confirmed",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "return-keeps-paid-order",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    },
+    {
+      "id": "neo-minimalist-390-en-currency",
+      "status": "PASS",
+      "layouts": [
+        {
+          "stage": "myr-switch-original-cny-read",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        },
+        {
+          "stage": "currency-recovered",
+          "viewport": 390,
+          "document": 390,
+          "body": 390,
+          "overflowing": [],
+          "palette": {
+            "page": "#070b14",
+            "surface": "#0e1421",
+            "text": "#f4f7fb"
+          }
+        }
+      ],
+      "balancePostings": 0,
+      "tokenAttempts": 1,
+      "orderChanges": 1
+    }
+  ]
+}

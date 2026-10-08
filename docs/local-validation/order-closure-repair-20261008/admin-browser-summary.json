@@ -1,0 +1,102 @@
+{
+  "passed": true,
+  "scenarios": 6,
+  "round": "FINAL_STRICT_GRAPHQL_INPUT",
+  "sourceUnchangedDuringRun": true,
+  "pageErrors": 0,
+  "consoleWarningOrErrorCount": 0,
+  "blockedRequests": 0,
+  "results": [
+    {
+      "mode": "sales",
+      "width": 1440,
+      "passed": true,
+      "geometry": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "bodyWidth": 1440
+      },
+      "writes": 2,
+      "reads": 5,
+      "rejectedReads": 3,
+      "transferPostings": 0,
+      "transferRetryPayloadEqual": null
+    },
+    {
+      "mode": "after-sales",
+      "width": 1440,
+      "passed": true,
+      "geometry": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "bodyWidth": 1440
+      },
+      "writes": 1,
+      "reads": 6,
+      "rejectedReads": 3,
+      "transferPostings": 0,
+      "transferRetryPayloadEqual": null
+    },
+    {
+      "mode": "inventory",
+      "width": 1440,
+      "passed": true,
+      "geometry": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "bodyWidth": 1440
+      },
+      "writes": 2,
+      "reads": 8,
+      "rejectedReads": 1,
+      "transferPostings": 1,
+      "transferRetryPayloadEqual": true
+    },
+    {
+      "mode": "sales",
+      "width": 390,
+      "passed": true,
+      "geometry": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "bodyWidth": 390
+      },
+      "writes": 2,
+      "reads": 5,
+      "rejectedReads": 3,
+      "transferPostings": 0,
+      "transferRetryPayloadEqual": null
+    },
+    {
+      "mode": "after-sales",
+      "width": 390,
+      "passed": true,
+      "geometry": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "bodyWidth": 390
+      },
+      "writes": 1,
+      "reads": 6,
+      "rejectedReads": 3,
+      "transferPostings": 0,
+      "transferRetryPayloadEqual": null
+    },
+    {
+      "mode": "inventory",
+      "width": 390,
+      "passed": true,
+      "geometry": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "bodyWidth": 390
+      },
+      "writes": 2,
+      "reads": 7,
+      "rejectedReads": 1,
+      "transferPostings": 1,
+      "transferRetryPayloadEqual": true
+    }
+  ],
+  "boundary": "真实页面、真实 Apollo/Runtime/资源失效 Link，GraphQL OrderLineInput 实际 coercion；运输、业务状态与库存回执为内存夹具。未连接真实API、凭据、资金、生产库存；未证明服务端幂等或真实事务闭环。初轮宽松运输结果只作为定位过程，不用作最终验收。"
+}

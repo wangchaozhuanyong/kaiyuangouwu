@@ -726,6 +726,53 @@ describe('ShopApi storefront mutations', () => {
         vi.useRealTimers();
     });
 
+    it.each(['ordinary', 'balance'])(
+        'marks a timed-out %s payment as an unknown result without retrying',
+        async kind => {
+            vi.useFakeTimers();
+            const fetchMock = vi.fn(
+                (_url: string, init?: RequestInit) =>
+                    new Promise<Response>((_resolve, reject) => {
+                        init?.signal?.addEventListener('abort', () =>
+                            reject(new DOMException('Aborted', 'AbortError')),
+                        );
+                    }),
+            );
+            vi.stubGlobal('fetch', fetchMock);
+            const api = new ShopApi(market);
+            const request =
+                kind === 'ordinary' ? api.addPaymentToOrder('synthetic-method') : api.useReferralBalance(50);
+            const rejection = expect(request).rejects.toEqual(
+                expect.objectContaining<Partial<ShopApiTimeoutError>>({
+                    name: 'ShopApiTimeoutError',
+                    resultUnknown: true,
+                }),
+            );
+            await vi.dynamicImportSettled();
+            await vi.advanceTimersByTimeAsync(20_000);
+            await rejection;
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('propagates cancellation to confirmation-token preparation', async () => {
+        const fetchMock = vi.fn(
+            (_url: string, init?: RequestInit) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('Aborted', 'AbortError')),
+                    );
+                }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const controller = new AbortController();
+        const request = new ShopApi(market).createOrderConfirmationToken(controller.signal);
+        const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+        controller.abort();
+        await rejection;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('times out an unresolved storefront query without retrying it', async () => {
         vi.useFakeTimers();
         const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
@@ -2299,6 +2346,41 @@ describe('ShopApi storefront mutations', () => {
             filter: {
                 _and: [{ state: { in: ['Shipped'] } }, { code: { contains: 'AB-123' } }],
             },
+        });
+    });
+
+    it('keeps payment outcome reads in the original currency without changing the client default', async () => {
+        const fetchMock = mockGraphQlResponse({
+            order: { id: 'synthetic-order' },
+            storefrontOrderByConfirmationToken: { id: 'synthetic-order' },
+        });
+        fetchMock.mockImplementation(() =>
+            Promise.resolve(
+                new Response(
+                    JSON.stringify({
+                        data: {
+                            order: { id: 'synthetic-order' },
+                            storefrontOrderByConfirmationToken: { id: 'synthetic-order' },
+                        },
+                    }),
+                    { status: 200 },
+                ),
+            ),
+        );
+        const api = new ShopApi({ ...market, currencyCode: 'USD' });
+        await api.order('synthetic-order', undefined, 'CNY');
+        await api.orderByConfirmationToken('synthetic-confirmation', undefined, 'CNY');
+        await api.order('new-synthetic-order');
+        expect(
+            fetchMock.mock.calls.map(([url]) =>
+                new URL(url, 'https://synthetic.invalid').searchParams.get('currencyCode'),
+            ),
+        ).toEqual(['CNY', 'CNY', 'USD']);
+        expect(JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1])).variables).toEqual({
+            id: 'synthetic-order',
+        });
+        expect(JSON.parse(jsonRequestBody(fetchMock.mock.calls[1][1])).variables).toEqual({
+            token: 'synthetic-confirmation',
         });
     });
 

@@ -170,7 +170,10 @@ export interface OrderProcessingSummary {
 }
 
 export const getProcessingPhysicalLines = (order: { processingSummary?: OrderProcessingSummary | null }) =>
-    order.processingSummary?.remainingPhysicalLines ?? [];
+    (order.processingSummary?.remainingPhysicalLines ?? []).map(({ orderLineId, quantity }) => ({
+        orderLineId,
+        quantity,
+    }));
 
 export const isSimulatedPayment = (method: string) =>
     /^(?:controlled-test-payment(?:-\d+)?|internal-test-payment)$/u.test(method);

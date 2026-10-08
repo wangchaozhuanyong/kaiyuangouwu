@@ -34,6 +34,40 @@ function execute(link: ApolloLink, document = mutation, context = {}) {
 afterEach(() => vi.useRealTimers());
 
 describe('accepted writes and bounded reads', () => {
+    it.each(['inspectAfterSalesReturn', 'updateAfterSalesReplacement'])(
+        'invalidates both order and inventory reads after an accepted %s',
+        field => {
+            const events = vi.fn();
+            window.addEventListener(RESOURCE_INVALIDATION_EVENT, events);
+            try {
+                const document = gql(`mutation AfterSalesStock { ${field} { id } }`);
+                const link = createResourceInvalidationLink(() => 'store-a').concat(
+                    new ApolloLink(
+                        () =>
+                            new Observable(observer => {
+                                observer.next({ data: { [field]: { id: 'request-1' } } });
+                                observer.complete();
+                            }),
+                    ),
+                );
+                const subscription = execute(link, document).subscribe({});
+                expect(events).toHaveBeenCalledTimes(1);
+                const domains = (events.mock.calls[0][0] as CustomEvent).detail.domains;
+                expect(domains).toEqual(['catalog', 'orders']);
+                expect(
+                    resourceMatchesDomains(
+                        'query Inventory { productVariants { stockLevels { stockOnHand } } }',
+                        domains,
+                    ),
+                ).toBe(true);
+                expect(resourceMatchesDomains('query Order { order { id } }', domains)).toBe(true);
+                subscription.unsubscribe();
+            } finally {
+                window.removeEventListener(RESOURCE_INVALIDATION_EVENT, events);
+            }
+        },
+    );
+
     it.each([
         ['updateManagedAdministrator', 'activeAdministrator', 'settings'],
         ['updateMyStoreCommerceConfiguration', 'myStoreCommerceMode', 'settings'],

@@ -1,11 +1,14 @@
+import { QueryClient } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { PaymentPage } from './payment-pages';
+const queryClient = new QueryClient();
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('@tanstack/react-query', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+    useQueryClient: () => queryClient,
     useQuery: (options: { queryKey: unknown[] }) => {
         const key = options.queryKey;
         const data = key.includes('payment-methods')

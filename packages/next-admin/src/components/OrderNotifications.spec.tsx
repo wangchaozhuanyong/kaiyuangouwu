@@ -2,6 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RESOURCE_INVALIDATION_EVENT, type ResourceDomain } from '../runtime/admin-resource-events';
 import { subscribeAdminFeedback, type AdminFeedback } from '../utils/admin-feedback';
 import { OrderNotifications } from './OrderNotifications';
 
@@ -14,6 +15,10 @@ let events: AdminFeedback[];
 let unsubscribe: () => void;
 let play: ReturnType<typeof vi.spyOn>;
 let streams: ReturnType<typeof stream>[];
+let invalidations: Array<{ domains: ResourceDomain[]; reason: 'write' | 'event' }>;
+const recordInvalidation = (event: Event) => {
+    invalidations.push((event as CustomEvent<(typeof invalidations)[number]>).detail);
+};
 
 function stream() {
     let control!: ReadableStreamDefaultController<Uint8Array>;
@@ -65,6 +70,8 @@ beforeEach(() => {
     root = createRoot(container);
     events = [];
     streams = [];
+    invalidations = [];
+    window.addEventListener(RESOURCE_INVALIDATION_EVENT, recordInvalidation);
     unsubscribe = subscribeAdminFeedback(event => events.push(event));
     openStream.mockReset().mockImplementation(() => {
         const next = stream();
@@ -78,6 +85,7 @@ afterEach(() => {
     act(() => root.unmount());
     container.remove();
     unsubscribe();
+    window.removeEventListener(RESOURCE_INVALIDATION_EVENT, recordInvalidation);
     vi.restoreAllMocks();
     vi.useRealTimers();
     environment.IS_REACT_ACT_ENVIRONMENT = false;
@@ -93,6 +101,7 @@ describe('event-driven order announcements', () => {
         expect(openStream).toHaveBeenCalledTimes(1);
         expect(openStream).toHaveBeenCalledWith('channel-1', expect.any(AbortSignal), undefined);
         expect(play).not.toHaveBeenCalled();
+        expect(invalidations).toEqual([]);
     });
     it('plays Chinese only for a new placement and deduplicates replayed orders', async () => {
         await render();
@@ -153,6 +162,63 @@ describe('event-driven order announcements', () => {
         expect(play).toHaveBeenCalledTimes(1);
         expect(events.some(event => event.title === '订单提醒连接已恢复')).toBe(true);
     });
+    it.each(['server:0', 'restarted-server:0'])(
+        'invalidates orders and catalog once on recovered readiness without replay (%s)',
+        async cursor => {
+            await render();
+            await send('event: ready\ndata: {"version":1,"cursor":"server:0"}\n\n');
+            expect(invalidations).toEqual([]);
+            await act(async () => {
+                streams[0].end();
+            });
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(1000);
+            });
+            await send(`event: ready\ndata: ${JSON.stringify({ version: 1, cursor })}\n\n`);
+            expect(invalidations).toEqual([{ domains: ['orders', 'catalog'], reason: 'event' }]);
+            expect(play).not.toHaveBeenCalled();
+            expect(events.some(event => event.title === '订单提醒连接已恢复')).toBe(true);
+            await send(`event: ready\ndata: ${JSON.stringify({ version: 1, cursor })}\n\n: heartbeat\n\n`);
+            expect(invalidations).toHaveLength(1);
+        },
+    );
+    it('refreshes resources after the initial connection attempt failed', async () => {
+        openStream.mockRejectedValueOnce(new TypeError('Connection unavailable'));
+        await render();
+        expect(invalidations).toEqual([]);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+        await send('event: ready\ndata: {"version":1,"cursor":"server:0"}\n\n');
+        expect(invalidations).toEqual([{ domains: ['orders', 'catalog'], reason: 'event' }]);
+        expect(play).not.toHaveBeenCalled();
+    });
+    it('ignores a late reconnect response from a previous channel', async () => {
+        await render();
+        await send('event: ready\ndata: {"version":1,"cursor":"server:0"}\n\n');
+        await act(async () => {
+            streams[0].end();
+        });
+        let resolveReconnect!: (response: Response) => void;
+        openStream.mockImplementationOnce(
+            () => new Promise<Response>(resolve => (resolveReconnect = resolve)),
+        );
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1000);
+        });
+        const previousSignal = openStream.mock.calls.at(-1)![1] as AbortSignal;
+        const lateStream = stream();
+        lateStream.send('event: ready\ndata: {"version":1,"cursor":"restarted-server:0"}\n\n');
+        await render('2');
+        await act(async () => {
+            resolveReconnect(lateStream.response);
+        });
+        expect(previousSignal.aborted).toBe(true);
+        expect(lateStream.cancel).toHaveBeenCalledTimes(1);
+        await send('event: ready\ndata: {"version":1,"cursor":"channel-2-server:0"}\n\n');
+        expect(invalidations).toEqual([]);
+        expect(events.some(event => event.title === '订单提醒连接已恢复')).toBe(false);
+    });
     it('stops a previous channel stream and resets its cursor on channel change', async () => {
         await render();
         await send(frame());
@@ -211,6 +277,7 @@ describe('event-driven order announcements', () => {
         });
         expect(openStream).toHaveBeenCalledTimes(1);
         expect(openStream.mock.calls[0][1].aborted).toBe(true);
+        expect(invalidations).toEqual([]);
     });
     it('keeps a visible order notification if audio fails', async () => {
         await render();

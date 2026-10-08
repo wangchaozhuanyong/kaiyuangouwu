@@ -1,11 +1,13 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { InventoryControlService } from '@vendure/catalog-management-plugin';
+import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
     assertOrderSalesChannel,
     Customer,
     CustomerService,
+    effectiveRefundLines,
     EntityNotFoundError,
     Order,
     Refund,
@@ -28,6 +30,7 @@ import {
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
+import { PhysicalReturnReceipt } from './entities/physical-return-receipt.entity';
 import { getOrderLineFulfillmentType } from './fulfillment-classification';
 import { orderLineProductName } from './order-line-snapshot';
 import {
@@ -394,7 +397,7 @@ export class AfterSalesService {
                     state: 'Settled',
                     payment: { order: { id: request.orderId, salesChannelId: ctx.channelId } },
                 },
-                relations: { payment: { order: true } },
+                relations: { payment: { order: true }, lines: true },
             });
             if (!linkedRefund) {
                 throw new UserInputError('退款不存在、尚未成功或不属于当前售后订单');
@@ -408,6 +411,7 @@ export class AfterSalesService {
                           where: {
                               payment: { order: { id: request.orderId, salesChannelId: ctx.channelId } },
                           },
+                          relations: { lines: true },
                       })
                   ).filter(
                       refund =>
@@ -419,6 +423,29 @@ export class AfterSalesService {
                 throw new UserInputError('同一退款的各来源款项尚未全部退回，请处理原退款记录后再结束售后');
             if (group.reduce((sum, refund) => sum + refund.total, 0) < approvedAmount) {
                 throw new UserInputError('所选成功退款金额小于售后通过金额');
+            }
+            const refundedQuantities = new Map<string, number>();
+            for (const line of effectiveRefundLines(group)) {
+                if (!Number.isSafeInteger(line.quantity) || line.quantity < 0) {
+                    throw new UserInputError('退款商品数量记录无效，请核对原退款');
+                }
+                if (line.quantity > 0) {
+                    const lineId = String(line.orderLineId);
+                    refundedQuantities.set(lineId, (refundedQuantities.get(lineId) ?? 0) + line.quantity);
+                }
+            }
+            // Amount-only compensation is supported for refund-only requests;
+            // a return/refund must prove the exact returned items and quantities.
+            if (refundedQuantities.size || request.type !== 'REFUND_ONLY') {
+                const requestedQuantities = new Map(
+                    request.items.map(item => [String(item.orderLineId), item.quantity]),
+                );
+                if (
+                    requestedQuantities.size !== refundedQuantities.size ||
+                    [...requestedQuantities].some(([id, quantity]) => refundedQuantities.get(id) !== quantity)
+                ) {
+                    throw new UserInputError('所选退款的商品或数量与当前售后申请不一致');
+                }
             }
             const alreadyLinked = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
                 where: { refundId: In(group.map(refund => refund.id)) },
@@ -552,7 +579,8 @@ export class AfterSalesService {
         if (await this.eventExists(ctx, request.id, key)) return request;
         if (
             request.state !== 'APPROVED' ||
-            !['AWAITING_SHIPMENT', 'IN_TRANSIT'].includes(request.returnStatus)
+            !requiresReturn(request.type) ||
+            !['NOT_REQUIRED', 'AWAITING_SHIPMENT', 'IN_TRANSIT'].includes(request.returnStatus)
         ) {
             throw new UserInputError('当前售后不在可签收退货的状态');
         }
@@ -597,6 +625,9 @@ export class AfterSalesService {
         }
         const submitted = new Map(input.items.map(item => [String(item.itemId), item]));
         if (submitted.size !== input.items.length) throw new UserInputError('同一售后商品不能重复质检');
+        const legacyReceipts = await this.connection.getRepository(ctx, PhysicalReturnReceipt).find({
+            where: { channelId: ctx.channelId, requestId: request.id, state: 'RECEIVED' },
+        });
         const inventoryLines = new Map<
             string,
             {
@@ -627,9 +658,25 @@ export class AfterSalesService {
             ) {
                 throw new UserInputError(`商品 ${item.productName} 的验收与拒收数量必须等于退货数量`);
             }
+            const previousReceipts = legacyReceipts.filter(
+                receipt => String(receipt.orderLineId) === String(item.orderLineId),
+            );
+            const previouslyAccepted = previousReceipts
+                .filter(receipt => receipt.quality === 'GOOD')
+                .reduce((sum, receipt) => sum + receipt.quantity, 0);
+            const previouslyRejected = previousReceipts
+                .filter(receipt => receipt.quality !== 'GOOD')
+                .reduce((sum, receipt) => sum + receipt.quantity, 0);
+            if (
+                inspection.acceptedQuantity < previouslyAccepted ||
+                inspection.rejectedQuantity < previouslyRejected
+            ) {
+                throw new UserInputError('质检结果不能撤销历史已验收数量，请先核对原退货回执');
+            }
+            const quantityToRestock = inspection.acceptedQuantity - previouslyAccepted;
             let stockLocationId: ID | null = null;
             let lotCode: string | null = null;
-            if (inspection.acceptedQuantity > 0) {
+            if (quantityToRestock > 0) {
                 stockLocationId = inspection.stockLocationId ?? null;
                 lotCode = inspection.lotCode?.trim().slice(0, 80) || null;
                 const variantId = item.orderLine?.productVariantId;
@@ -638,17 +685,28 @@ export class AfterSalesService {
                 }
                 const scope = `${String(variantId)}:${String(stockLocationId)}:${lotCode}`;
                 const existing = inventoryLines.get(scope);
-                if (existing) existing.quantity += inspection.acceptedQuantity;
-                else {
+                if (existing) existing.quantity += quantityToRestock;
+                else if (quantityToRestock > 0) {
                     inventoryLines.set(scope, {
                         productVariantId: variantId,
                         stockLocationId,
                         lotCode,
-                        quantity: inspection.acceptedQuantity,
+                        quantity: quantityToRestock,
                         currencyCode: request.currencyCode,
                         purchaseCostMicrounits: null,
                     });
                 }
+            } else if (previouslyAccepted) {
+                const previousLocations = [
+                    ...new Set(
+                        previousReceipts
+                            .filter(receipt => receipt.quality === 'GOOD')
+                            .map(receipt => String(receipt.stockLocationId)),
+                    ),
+                ];
+                // The legacy receipts retain their exact warehouses/batches.
+                // Do not invent a new single batch for stock already returned.
+                stockLocationId = previousLocations.length === 1 ? previousLocations[0] : null;
             }
             plans.push({
                 item,
@@ -729,6 +787,57 @@ export class AfterSalesService {
             patch.replacementShippedAt = now;
             patch.replacementException = null;
             patch.nextActionDueAt = addDays(now, REPLACEMENT_DELIVERY_SLA_DAYS);
+            const order = await this.connection.getEntityOrThrow(ctx, Order, request.orderId, {
+                relations: ['payments'],
+            });
+            assertOrderSalesChannel(ctx, order);
+            if (
+                order.active ||
+                !order.orderPlacedAt ||
+                !['PaymentAuthorized', ...afterSalesEligibleOrderStates].includes(order.state)
+            ) {
+                throw new UserInputError('订单尚未落单、已取消或正在修改，请核对后再登记换货补发');
+            }
+            if (
+                (order.payments ?? []).some(
+                    payment =>
+                        isControlledTestPaymentMethod(payment.method) ||
+                        payment.metadata?.public?.testPayment === true ||
+                        payment.metadata?.manualReview?.required ||
+                        !['Settled', 'Authorized', 'Declined', 'Cancelled'].includes(payment.state),
+                )
+            ) {
+                throw new UserInputError('订单含模拟付款或付款结果待核验，不能登记真实换货补发出库');
+            }
+            const funding = (order.payments ?? []).filter(
+                payment =>
+                    ['Settled', 'Authorized'].includes(payment.state) &&
+                    !isControlledTestPaymentMethod(payment.method) &&
+                    payment.metadata?.public?.testPayment !== true,
+            );
+            if (
+                !Number.isSafeInteger(order.totalWithTax) ||
+                order.totalWithTax < 0 ||
+                !funding.length ||
+                funding.some(payment => !Number.isSafeInteger(payment.amount) || payment.amount < 0) ||
+                funding.reduce((sum, payment) => sum + payment.amount, 0) < order.totalWithTax
+            ) {
+                throw new UserInputError('订单缺少足额真实收款或有效支付授权，不能登记换货补发出库');
+            }
+            const physicalItems = request.items.filter(item => item.fulfillmentType === 'physical');
+            const replacementLines = physicalItems.map(item => {
+                const productVariantId = item.orderLine?.productVariantId;
+                if (!productVariantId) {
+                    throw new UserInputError('换货或补发商品已失去库存关联，请核对原订单');
+                }
+                return { productVariantId, quantity: item.quantity };
+            });
+            await this.inventoryControl.dispatchAfterSalesReplacement(ctx, {
+                idempotencyKey: inventoryIdempotencyKey(request.id, 'replacement-outbound'),
+                reference: request.code,
+                reason: note.slice(0, 500),
+                lines: replacementLines,
+            });
             eventType = 'REPLACEMENT_SHIPPED';
         } else if (input.status === 'EXCEPTION') {
             if (request.replacementStatus !== 'SHIPPED') {
@@ -872,6 +981,30 @@ export class AfterSalesService {
     private async lockRequestForAdmin(ctx: RequestContext, id: ID): Promise<AfterSalesRequest> {
         const repository = this.connection.getRepository(ctx, AfterSalesRequest);
         const databaseType = String(this.connection.rawConnection.options.type);
+        // Resolve the immutable owner in the locking query, without opening a
+        // stale repeatable-read snapshot before waiting for order -> request locks.
+        const owner = repository
+            .createQueryBuilder('ownerRequest')
+            .select('ownerRequest.orderId')
+            .where('ownerRequest.id = :requestId AND ownerRequest.channelId = :requestChannelId', {
+                requestId: id,
+                requestChannelId: ctx.channelId,
+            });
+        const orderLock = this.connection
+            .getRepository(ctx, Order)
+            .createQueryBuilder('order')
+            .where(`order.id IN (${owner.getQuery()})`)
+            .setParameters(owner.getParameters());
+        if (['sqlite', 'better-sqlite3', 'sqljs'].includes(databaseType)) {
+            await orderLock
+                .update()
+                .set({ updatedAt: () => 'updatedAt' })
+                .execute();
+        } else {
+            const order = await orderLock.setLock('pessimistic_write').getOne();
+            if (!order) throw new EntityNotFoundError(AfterSalesRequest.name, id);
+            assertOrderSalesChannel(ctx, order);
+        }
         if (['sqlite', 'better-sqlite3', 'sqljs'].includes(databaseType)) {
             const result = await repository.update({ id, channelId: ctx.channelId }, { id });
             if (result.affected !== 1) throw new EntityNotFoundError(AfterSalesRequest.name, id);

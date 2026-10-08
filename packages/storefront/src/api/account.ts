@@ -343,7 +343,7 @@ export class AccountApi extends BaseDomainApi {
         };
     }
 
-    async order(id: string, signal?: AbortSignal): Promise<Order | null> {
+    async order(id: string, signal?: AbortSignal, readCurrencyCode?: string): Promise<Order | null> {
         const result = await this.request<{ order: Order | null }>(
             `
                 query StorefrontOrder($id: ID!) {
@@ -352,6 +352,9 @@ export class AccountApi extends BaseDomainApi {
             `,
             { id },
             signal,
+            undefined,
+            undefined,
+            readCurrencyCode,
         );
         return result.order;
     }
@@ -547,7 +550,11 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
         return response.useModifiedOrderReferralBalance;
     }
 
-    async orderByConfirmationToken(token: string, signal?: AbortSignal): Promise<Order | null> {
+    async orderByConfirmationToken(
+        token: string,
+        signal?: AbortSignal,
+        readCurrencyCode?: string,
+    ): Promise<Order | null> {
         const result = await this.request<{ storefrontOrderByConfirmationToken: Order | null }>(
             `
                 query StorefrontOrderByConfirmationToken($token: String!) {
@@ -556,21 +563,29 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
             `,
             { token },
             signal,
+            undefined,
+            undefined,
+            readCurrencyCode,
         );
         return result.storefrontOrderByConfirmationToken;
     }
 
-    async createOrderConfirmationToken(): Promise<OrderConfirmationToken> {
+    async createOrderConfirmationToken(signal?: AbortSignal): Promise<OrderConfirmationToken> {
         const result = await this.request<{
             createStorefrontOrderConfirmationToken: OrderConfirmationToken;
-        }>(`
+        }>(
+            `
             mutation CreateStorefrontOrderConfirmationToken {
                 createStorefrontOrderConfirmationToken {
                     token
                     expiresAt
                 }
             }
-        `);
+        `,
+            undefined,
+            signal,
+            20_000,
+        );
         return result.createStorefrontOrderConfirmationToken;
     }
 

@@ -1,3 +1,6 @@
+import { gql, InMemoryCache } from '@apollo/client';
+import { buildSchema, coerceInputValue, type GraphQLInputObjectType } from 'graphql';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { OrderListSummaryInput } from './sales-utils';
 import {
@@ -6,8 +9,61 @@ import {
     getClaimStatusLabel,
     getOrderProductDisplayName,
     getPaymentMethodLabel,
+    getProcessingPhysicalLines,
     summarizeOrderListItem,
 } from './sales-utils';
+
+it('projects real Apollo summary rows to the actual OrderLineInput without cache metadata', () => {
+    const query = gql`
+        query CachedPhysicalSummary {
+            order {
+                id
+                processingSummary {
+                    remainingPhysicalLines {
+                        orderLineId
+                        quantity
+                    }
+                }
+            }
+        }
+    `;
+    const cache = new InMemoryCache();
+    cache.writeQuery({
+        query,
+        data: {
+            order: {
+                __typename: 'Order',
+                id: 'order-1',
+                processingSummary: {
+                    __typename: 'OrderProcessingSummary',
+                    remainingPhysicalLines: [
+                        { __typename: 'OrderProcessingPhysicalLine', orderLineId: 'line-1', quantity: 2 },
+                    ],
+                },
+            },
+        },
+    });
+    const cached = cache.readQuery<any>({ query })!.order;
+    const original = cached.processingSummary.remainingPhysicalLines[0];
+    const schemaSource = readFileSync(
+        new URL('../../../../core/src/api/schema/admin-api/order.api.graphql', import.meta.url),
+        'utf8',
+    );
+    const definition = schemaSource.match(/input OrderLineInput\s*\{[^}]+\}/u)?.[0];
+    if (!definition) throw new Error('Expected the real Vendure OrderLineInput');
+    const type = buildSchema(`${definition}\ntype Query { unused: Boolean }`).getType(
+        'OrderLineInput',
+    ) as GraphQLInputObjectType;
+    const beforeErrors: string[] = [];
+    coerceInputValue(original, type, (_path, _value, error) => beforeErrors.push(error.message));
+    expect(beforeErrors).toEqual([expect.stringContaining('__typename')]);
+    const input = getProcessingPhysicalLines(cached);
+    expect(input).toEqual([{ orderLineId: 'line-1', quantity: 2 }]);
+    const errors: string[] = [];
+    coerceInputValue(input[0], type, (_path, _value, error) => errors.push(error.message));
+    expect(errors).toEqual([]);
+    expect(original.__typename).toBe('OrderProcessingPhysicalLine');
+});
 
 it('distinguishes partial claim from claimed and preserves unknown claim history', () => {
     expect(getClaimStatusLabel('PARTIAL')).toBe('客户部分领取');

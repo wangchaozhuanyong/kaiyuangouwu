@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowLeft,
@@ -14,6 +14,7 @@ import {
 import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { ShopApi } from './api';
+import { ShopApiError } from './api/helpers';
 import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { languageCodeFor } from './i18n';
 import { offlineLoadError } from './loading-state';
@@ -25,6 +26,7 @@ import { isPaymentCompletedOrderState, isTestPaymentMethod, paymentAvailability 
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton } from './route-loading';
+import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { customerOrderStateLabel } from './storefront-ui/order-ui';
@@ -44,6 +46,125 @@ import {
 type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' | 'pending' };
 const referralCurrencyBadgeClassName =
     'payment-balance-currency grid min-h-11 place-items-center px-3 type-body weight-bold';
+
+type PaymentAttempt = {
+    scope: string;
+    orderId: string;
+    orderCode: string;
+    currencyCode: string;
+    token?: string;
+    kind: 'payment' | 'balance';
+    method: string;
+    amount: number;
+    balanceBefore: number;
+    paymentIds: string[];
+    acknowledged?: boolean;
+};
+type PaymentAttemptMarker = Omit<PaymentAttempt, 'token' | 'acknowledged'>;
+
+class PaymentAttemptStorageError extends Error {}
+
+function paymentMarkerKey(marketScope: string, customerId: string): string {
+    return `vendure-storefront:payment-attempt:v1:${JSON.stringify([marketScope, customerId])}`;
+}
+
+function readPaymentMarkers(marketScope: string, customerId: string): PaymentAttemptMarker[] {
+    if (!customerId || typeof sessionStorage === 'undefined') return [];
+    try {
+        const stored: unknown = JSON.parse(
+            sessionStorage.getItem(paymentMarkerKey(marketScope, customerId)) ?? '[]',
+        );
+        if (!Array.isArray(stored)) return [];
+        return stored
+            .filter((value): value is PaymentAttemptMarker => {
+                if (!value || typeof value !== 'object') return false;
+                const marker = value as Partial<PaymentAttemptMarker>;
+                return (
+                    typeof marker.orderId === 'string' &&
+                    marker.orderId.length > 0 &&
+                    typeof marker.orderCode === 'string' &&
+                    marker.orderCode.length > 0 &&
+                    typeof marker.currencyCode === 'string' &&
+                    marker.scope === JSON.stringify([marketScope, customerId, marker.orderId]) &&
+                    (marker.kind === 'payment' || marker.kind === 'balance') &&
+                    typeof marker.method === 'string' &&
+                    Number.isSafeInteger(marker.amount) &&
+                    (marker.amount ?? -1) >= 0 &&
+                    Number.isSafeInteger(marker.balanceBefore) &&
+                    (marker.balanceBefore ?? -1) >= 0 &&
+                    Array.isArray(marker.paymentIds) &&
+                    marker.paymentIds.every(id => typeof id === 'string')
+                );
+            })
+            .map(marker => ({
+                // Explicit fields prevent a stored token or unrelated data from entering this recovery path.
+                scope: marker.scope,
+                orderId: marker.orderId,
+                orderCode: marker.orderCode,
+                currencyCode: marker.currencyCode,
+                kind: marker.kind,
+                method: marker.method,
+                amount: marker.amount,
+                balanceBefore: marker.balanceBefore,
+                paymentIds: marker.paymentIds,
+            }));
+    } catch {
+        return [];
+    }
+}
+
+function savePaymentMarker(marketScope: string, customerId: string, attempt: PaymentAttempt): void {
+    if (!customerId) return;
+    const marker: PaymentAttemptMarker = {
+        scope: attempt.scope,
+        orderId: attempt.orderId,
+        orderCode: attempt.orderCode,
+        currencyCode: attempt.currencyCode,
+        kind: attempt.kind,
+        method: attempt.method,
+        amount: attempt.amount,
+        balanceBefore: attempt.balanceBefore,
+        paymentIds: attempt.paymentIds,
+    };
+    try {
+        const markers = readPaymentMarkers(marketScope, customerId).filter(
+            value => value.orderId !== attempt.orderId,
+        );
+        sessionStorage.setItem(
+            paymentMarkerKey(marketScope, customerId),
+            JSON.stringify([...markers, marker]),
+        );
+    } catch {
+        throw new PaymentAttemptStorageError();
+    }
+}
+
+function removePaymentMarker(marketScope: string, customerId: string, attempt: PaymentAttempt): void {
+    if (!customerId) return;
+    try {
+        const key = paymentMarkerKey(marketScope, customerId);
+        const markers = readPaymentMarkers(marketScope, customerId).filter(
+            value => value.orderId !== attempt.orderId,
+        );
+        if (markers.length) sessionStorage.setItem(key, JSON.stringify(markers));
+        else sessionStorage.removeItem(key);
+    } catch {
+        // A stale marker only requires another read; it never authorizes another payment.
+    }
+}
+
+function paymentDefinitelyRejected(error: unknown): boolean {
+    if (error instanceof ShopApiGraphQlError) return error.requestNotExecuted;
+    return (
+        error instanceof ShopApiError &&
+        [
+            'PAYMENT_DECLINED_ERROR',
+            'INELIGIBLE_PAYMENT_METHOD_ERROR',
+            'COUPON_REMOVED_DURING_CHECKOUT_ERROR',
+            'INSUFFICIENT_STOCK_ERROR',
+        ].includes(error.errorCode)
+    );
+}
 
 export function PaymentPage({
     api,
@@ -70,6 +191,7 @@ export function PaymentPage({
     onComplete: (order: Order, confirmationToken: string) => Promise<void>;
     onOrderChange: (order: Order) => void;
 }) {
+    const queryClient = useQueryClient();
     const navigate = useNavigate();
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
@@ -79,9 +201,79 @@ export function PaymentPage({
     const [referralAmount, setReferralAmount] = useState('');
     const [applyingReferral, setApplyingReferral] = useState(false);
     const [copiedUsdtAddress, setCopiedUsdtAddress] = useState(false);
-    const submissionLock = useRef(false);
+    const [recoveredReceipt, setRecoveredReceipt] = useState<{ ownerScope: string; order: Order } | null>(
+        null,
+    );
+    const ownerScope = JSON.stringify([market.code, customer?.id ?? '']);
+    const cachedAttempts = queryClient
+        .getQueriesData<PaymentAttempt>({ queryKey: ['storefront'] })
+        .flatMap(([key, value]) =>
+            key.includes('payment-attempt') &&
+            value &&
+            value.scope === JSON.stringify([market.code, customer?.id ?? '', value.orderId])
+                ? [value]
+                : [],
+        );
+    const markerAttempts = readPaymentMarkers(market.code, customer?.id ?? '');
+    const allAttempts = [
+        ...markerAttempts.filter(
+            marker => !cachedAttempts.some(attempt => attempt.orderId === marker.orderId),
+        ),
+        ...cachedAttempts,
+    ];
+    const restoredAttempt =
+        allAttempts.find(attempt => attempt.orderId === order?.id) ??
+        (!order ? (allAttempts[allAttempts.length - 1] ?? null) : null);
+    const recoveredOrder =
+        recoveredReceipt?.ownerScope === ownerScope && (!order || recoveredReceipt.order.id === order.id)
+            ? recoveredReceipt.order
+            : null;
+    const paymentScope = JSON.stringify([
+        market.code,
+        customer?.id ?? '',
+        order?.id ?? restoredAttempt?.orderId ?? '',
+    ]);
+    const paymentQueryScope = storefrontQueryKeys.customerScope(
+        storefrontQueryKeys.market(market),
+        languageCodeFor(language),
+        customer?.id ?? '',
+    );
+    const attemptQueryKey = [
+        ...paymentQueryScope,
+        'payment-attempt',
+        order?.id ?? restoredAttempt?.orderId ?? '',
+    ];
+    // Keep an unresolved attempt in the existing private cache when this route is left and revisited.
+    // It is never persisted with public data and is removed by the existing authentication reset.
+    const attemptRef = useRef<PaymentAttempt | null>(restoredAttempt);
+    const [pendingAttempt, setPendingAttempt] = useState(attemptRef.current);
+    const scopeRef = useRef(paymentScope);
+    const mountedRef = useRef(true);
+    const submissionLock = useRef<{ scope: string; busy: boolean }>({ scope: paymentScope, busy: false });
+    if (scopeRef.current !== paymentScope) {
+        scopeRef.current = paymentScope;
+        attemptRef.current = restoredAttempt;
+        submissionLock.current = { scope: paymentScope, busy: false };
+    }
+    const paymentOutcomePending = Boolean(
+        attemptRef.current?.scope === paymentScope || pendingAttempt?.scope === paymentScope,
+    );
     const usdtCompletionLock = useRef(false);
     const confirmationTokenRef = useRef('');
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
+    useEffect(() => {
+        setPendingAttempt(attemptRef.current);
+        confirmationTokenRef.current = attemptRef.current?.token ?? '';
+        usdtCompletionLock.current = false;
+        setSubmitting(false);
+        setApplyingReferral(false);
+        setPaymentError('');
+    }, [paymentScope]);
     const paymentCurrencyCode = order?.customFields.paymentCurrencyCode || displayCurrencyCode;
     const isPending = cart?.state === 'PAYMENT_PENDING' && order?.state === 'ArrangingPayment';
     const methodsQuery = useQuery({
@@ -145,23 +337,22 @@ export function PaymentPage({
         appliedReferralAmount === 0;
     const isUsdtPayment = paymentCurrencyCode === 'USDT';
     const usdtQuoteQuery = useQuery({
-        queryKey: ['storefront', market.code, 'usdt-checkout-quote', order?.id ?? '', outstandingAmount],
+        queryKey: [...paymentQueryScope, 'usdt-checkout-quote', order?.id ?? '', outstandingAmount],
         queryFn: ({ signal }) => api.createUsdtCheckoutQuote(signal),
-        enabled: isUsdtPayment && isPending && outstandingAmount > 0,
+        enabled: isUsdtPayment && isPending && !paymentOutcomePending && outstandingAmount > 0,
         staleTime: 30_000,
         refetchInterval: 60_000,
     });
     const usdtConfirmationTokenQuery = useQuery({
-        queryKey: ['storefront', market.code, 'usdt-order-confirmation-token', order?.id ?? ''],
-        queryFn: () => api.createOrderConfirmationToken(),
-        enabled: Boolean(isUsdtPayment && isPending && usdtQuoteQuery.data),
+        queryKey: [...paymentQueryScope, 'usdt-order-confirmation-token', order?.id ?? ''],
+        queryFn: ({ signal }) => api.createOrderConfirmationToken(signal),
+        enabled: Boolean(isUsdtPayment && isPending && !paymentOutcomePending && usdtQuoteQuery.data),
         staleTime: Number.POSITIVE_INFINITY,
         retry: false,
     });
     const usdtPaidOrderQuery = useQuery({
         queryKey: [
-            'storefront',
-            market.code,
+            ...paymentQueryScope,
             'usdt-paid-order',
             order?.id ?? '',
             usdtConfirmationTokenQuery.data?.token ?? '',
@@ -191,6 +382,14 @@ export function PaymentPage({
                     ? '支付方式加载失败'
                     : 'Could not load payment methods'
                 : '';
+    const usdtTokenError =
+        usdtConfirmationTokenQuery.isPaused && !usdtConfirmationTokenQuery.data
+            ? offlineLoadError(language)
+            : usdtConfirmationTokenQuery.error
+              ? isZh
+                  ? '到账查询准备失败，请重试。已有报价和付款不会重新提交。'
+                  : 'Payment tracking could not be prepared. Retry without submitting another payment.'
+              : '';
 
     useEffect(() => {
         if (!isPending) {
@@ -248,9 +447,172 @@ export function PaymentPage({
         }
     };
 
+    const isCurrentAttempt = (attempt: PaymentAttempt) =>
+        mountedRef.current && scopeRef.current === attempt.scope;
+    const rememberAttempt = (attempt: PaymentAttempt) => {
+        // This marker contains no confirmation capability or authentication material.
+        // Store it before sending money so a hard reload cannot silently authorize another write.
+        savePaymentMarker(market.code, customer?.id ?? '', attempt);
+        queryClient.setQueryDefaults(attemptQueryKey, { gcTime: Number.POSITIVE_INFINITY });
+        queryClient.setQueryData(attemptQueryKey, attempt);
+        attemptRef.current = attempt;
+        setPendingAttempt(attempt);
+    };
+    const forgetAttempt = (attempt: PaymentAttempt) => {
+        removePaymentMarker(market.code, customer?.id ?? '', attempt);
+        for (const [key, value] of queryClient.getQueriesData<PaymentAttempt>({
+            queryKey: ['storefront'],
+        })) {
+            if (key.includes('payment-attempt') && value === attempt)
+                queryClient.removeQueries({ queryKey: key, exact: true });
+        }
+        if (attemptRef.current === attempt) attemptRef.current = null;
+        if (isCurrentAttempt(attempt)) setPendingAttempt(null);
+    };
+    const unknownPaymentMessage = isZh
+        ? '付款结果尚未确认，请核对原订单，勿再次付款。也可从我的订单查看或联系客服。'
+        : 'The payment result is not confirmed. Check the original order without paying again, or view your orders and contact support.';
+    const acceptAttemptOutcome = async (attempt: PaymentAttempt, latest: Order | null): Promise<boolean> => {
+        if (!isCurrentAttempt(attempt)) return false;
+        if (
+            !latest ||
+            latest.id !== attempt.orderId ||
+            latest.code !== attempt.orderCode ||
+            latest.currencyCode !== attempt.currencyCode
+        ) {
+            setPaymentError(unknownPaymentMessage);
+            return false;
+        }
+        if (isPaymentCompletedOrderState(latest.state)) {
+            if (!attempt.token) {
+                onOrderChange(latest);
+                forgetAttempt(attempt);
+                setRecoveredReceipt({ ownerScope, order: latest });
+                return true;
+            }
+            onOrderChange(latest);
+            await onComplete(latest, attempt.token);
+            forgetAttempt(attempt);
+            return true;
+        }
+        if (latest.state === 'Cancelled') {
+            forgetAttempt(attempt);
+            onOrderChange(latest);
+            setPaymentError(
+                isZh
+                    ? '订单已取消，请在我的订单查看处理状态。'
+                    : 'The order was cancelled. View its status in your orders.',
+            );
+            return true;
+        }
+        const coveredBalance = (latest.payments ?? [])
+            .filter(
+                payment =>
+                    payment.method === 'referral-balance' &&
+                    ['Authorized', 'Settled'].includes(payment.state),
+            )
+            .reduce((total, payment) => total + payment.amount, 0);
+        if (attempt.kind === 'balance' && coveredBalance >= attempt.balanceBefore + attempt.amount) {
+            forgetAttempt(attempt);
+            onOrderChange(latest);
+            setPaymentError('');
+            // The balance write is confirmed; a wallet refresh failure must not replay it.
+            void referralOverviewQuery.refetch({ cancelRefetch: false }).catch(() => undefined);
+            return true;
+        }
+        const declined = latest.payments?.some(
+            payment =>
+                !attempt.paymentIds.includes(payment.id) &&
+                payment.method === attempt.method &&
+                payment.state === 'Declined',
+        );
+        if (declined) {
+            forgetAttempt(attempt);
+            onOrderChange(latest);
+            setPaymentError(
+                isZh
+                    ? '付款已明确被拒绝，可重新选择支付方式。'
+                    : 'Payment was declined. You can choose a payment method again.',
+            );
+            return true;
+        }
+        onOrderChange(latest);
+        setPaymentError(unknownPaymentMessage);
+        return false;
+    };
+    const readAttemptOutcome = async (attempt: PaymentAttempt) => {
+        try {
+            const latest = attempt.token
+                ? await api.orderByConfirmationToken(attempt.token, undefined, attempt.currencyCode)
+                : await api.order(attempt.orderId, undefined, attempt.currencyCode);
+            return await acceptAttemptOutcome(attempt, latest);
+        } catch {
+            if (isCurrentAttempt(attempt)) setPaymentError(unknownPaymentMessage);
+            return false;
+        }
+    };
+    const checkPendingPayment = async () => {
+        const attempt = attemptRef.current;
+        const lock = submissionLock.current;
+        if (!attempt || attempt.scope !== paymentScope || lock.busy) return;
+        lock.busy = true;
+        setSubmitting(true);
+        try {
+            await readAttemptOutcome(attempt);
+        } finally {
+            lock.busy = false;
+            if (isCurrentAttempt(attempt)) setSubmitting(false);
+        }
+    };
+    const createAttempt = async (kind: PaymentAttempt['kind'], amount: number): Promise<PaymentAttempt> => {
+        if (!order) throw new Error('No checkout order');
+        const token = confirmationTokenRef.current || (await api.createOrderConfirmationToken()).token;
+        if (!token) throw new Error('Missing order confirmation token');
+        if (mountedRef.current && scopeRef.current === paymentScope) confirmationTokenRef.current = token;
+        return {
+            scope: paymentScope,
+            orderId: order.id,
+            orderCode: order.code,
+            currencyCode: order.currencyCode,
+            token,
+            kind,
+            method: kind === 'balance' ? 'referral-balance' : selectedMethod,
+            amount,
+            balanceBefore: appliedReferralAmount,
+            paymentIds: order.payments?.map(payment => payment.id) ?? [],
+        };
+    };
+    const handleAttemptError = async (attempt: PaymentAttempt | undefined, requestError: unknown) => {
+        if (!mountedRef.current || scopeRef.current !== paymentScope) return;
+        if (
+            !attempt ||
+            (!attempt.acknowledged &&
+                (paymentDefinitelyRejected(requestError) ||
+                    requestError instanceof PaymentAttemptStorageError))
+        ) {
+            if (attempt) forgetAttempt(attempt);
+            setPaymentError(
+                requestError instanceof PaymentAttemptStorageError
+                    ? isZh
+                        ? '浏览器无法保存付款核对记录，请恢复本站会话存储后再试。'
+                        : 'The browser could not keep the payment-check record. Enable session storage before paying.'
+                    : storefrontErrorMessage(requestError, language),
+            );
+            if (storefrontErrorCode(requestError) === 'COUPON_REMOVED_DURING_CHECKOUT_ERROR') {
+                const refreshed = await api.cart().catch(() => null);
+                if (refreshed?.checkoutOrder && scopeRef.current === paymentScope && mountedRef.current)
+                    onOrderChange(refreshed.checkoutOrder);
+            }
+            return;
+        }
+        setPaymentError(unknownPaymentMessage);
+        await readAttemptOutcome(attempt);
+    };
     const applyReferralBalance = async () => {
+        const lock = submissionLock.current;
+        if (lock.busy || attemptRef.current || !isPending) return;
         const amount = Math.round(Number(referralAmount) * 100);
-        if (!Number.isInteger(amount) || amount <= 0 || amount > maximumReferralAmount || applyingReferral) {
+        if (!Number.isInteger(amount) || amount <= 0 || amount > maximumReferralAmount) {
             setPaymentError(
                 isZh
                     ? '请输入不超过可用余额和待支付金额的有效金额'
@@ -258,83 +620,114 @@ export function PaymentPage({
             );
             return;
         }
+        lock.busy = true;
         setApplyingReferral(true);
         setPaymentError('');
+        let attempt: PaymentAttempt | undefined;
         try {
-            if (!confirmationTokenRef.current) {
-                confirmationTokenRef.current = (await api.createOrderConfirmationToken()).token;
-            }
+            attempt = await createAttempt('balance', amount);
+            if (!isCurrentAttempt(attempt)) return;
+            rememberAttempt(attempt);
             const result = await api.useReferralBalance(amount);
-            onOrderChange(result.order);
-            await referralOverviewQuery.refetch({ cancelRefetch: false });
-            if (isPaymentCompletedOrderState(result.order.state)) {
-                await onComplete(result.order, confirmationTokenRef.current);
-            }
+            if (!isCurrentAttempt(attempt)) return;
+            attempt.acknowledged = true;
+            if (!(await acceptAttemptOutcome(attempt, result.order))) await readAttemptOutcome(attempt);
         } catch (requestError) {
-            setPaymentError(
-                requestError instanceof Error
-                    ? storefrontErrorMessage(requestError, language)
-                    : isZh
-                      ? '返利余额抵扣失败，请重试'
-                      : 'Could not apply the referral balance',
-            );
+            await handleAttemptError(attempt, requestError);
         } finally {
-            setApplyingReferral(false);
+            lock.busy = false;
+            if (mountedRef.current && scopeRef.current === paymentScope) setApplyingReferral(false);
         }
     };
 
     const submitPayment = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (
-            availability.status !== 'READY' ||
-            !isPending ||
-            !selectedMethod ||
-            submitting ||
-            submissionLock.current
-        )
+        if (attemptRef.current?.scope === paymentScope) {
+            await checkPendingPayment();
             return;
-        submissionLock.current = true;
+        }
+        const lock = submissionLock.current;
+        if (availability.status !== 'READY' || !isPending || !selectedMethod || lock.busy) return;
+        lock.busy = true;
         setSubmitting(true);
         setPaymentError('');
-        const confirmationRouteRequest = preloadStorefrontRouteComponent('order-confirmation');
+        let attempt: PaymentAttempt | undefined;
         try {
-            const confirmationToken =
-                confirmationTokenRef.current || (await api.createOrderConfirmationToken()).token;
+            attempt = await createAttempt('payment', outstandingAmount);
+            if (!isCurrentAttempt(attempt)) return;
+            rememberAttempt(attempt);
+            // Preload failures are display failures, never proof that payment did not execute.
+            void preloadStorefrontRouteComponent('order-confirmation').catch(() => undefined);
             const paidOrder = await api.addPaymentToOrder(selectedMethod);
-            await confirmationRouteRequest;
-            await onComplete(paidOrder, confirmationToken);
+            if (!isCurrentAttempt(attempt)) return;
+            attempt.acknowledged = true;
+            if (!(await acceptAttemptOutcome(attempt, paidOrder))) await readAttemptOutcome(attempt);
         } catch (requestError) {
-            if (storefrontErrorCode(requestError) === 'COUPON_REMOVED_DURING_CHECKOUT_ERROR') {
-                const refreshed = await api.cart().catch(() => null);
-                if (refreshed?.checkoutOrder) onOrderChange(refreshed.checkoutOrder);
-            }
-            setPaymentError(
-                requestError instanceof Error
-                    ? storefrontErrorMessage(requestError, language)
-                    : isZh
-                      ? '支付提交失败，请重试'
-                      : 'Payment failed. Please try again.',
-            );
+            await handleAttemptError(attempt, requestError);
         } finally {
-            submissionLock.current = false;
-            setSubmitting(false);
+            lock.busy = false;
+            if (mountedRef.current && scopeRef.current === paymentScope) setSubmitting(false);
         }
     };
 
-    if (!order || !cart || !isPending) {
+    if (!order || !cart || !isPending || recoveredOrder) {
+        const hasUnresolvedPayment = allAttempts.length > 0;
         return (
             <Subpage
                 title={isZh ? '选择支付方式' : 'Choose payment'}
                 language={language}
-                onBack={() => navigateTo({ name: 'cart' })}
+                onBack={() => navigateTo({ name: hasUnresolvedPayment ? 'orders' : 'cart' })}
             >
                 <EmptyState
                     icon={<WalletCards />}
-                    title={isZh ? '没有待支付订单' : 'No order awaiting payment'}
-                    detail={isZh ? '请返回购物车重新结算' : 'Return to your cart and start checkout again.'}
-                    action={isZh ? '返回购物车' : 'Back to cart'}
-                    onAction={() => navigateTo({ name: 'cart' })}
+                    title={
+                        recoveredOrder
+                            ? isZh
+                                ? '付款已确认'
+                                : 'Payment confirmed'
+                            : hasUnresolvedPayment
+                              ? isZh
+                                  ? '请核对原付款结果'
+                                  : 'Check your original payment'
+                              : isZh
+                                ? '没有待支付订单'
+                                : 'No order awaiting payment'
+                    }
+                    detail={
+                        recoveredOrder
+                            ? isZh
+                                ? `订单 ${recoveredOrder.code} 的付款已确认，请从我的订单查看最新状态。`
+                                : `Payment for ${recoveredOrder.code} is confirmed. View the latest status in your orders.`
+                            : hasUnresolvedPayment
+                              ? unknownPaymentMessage
+                              : isZh
+                                ? '请从我的订单查看最新状态，或返回购物车结算。'
+                                : 'View the latest status in your orders, or return to checkout.'
+                    }
+                    action={
+                        paymentOutcomePending && !recoveredOrder
+                            ? isZh
+                                ? '核对付款结果'
+                                : 'Check payment result'
+                            : isZh
+                              ? '查看我的订单'
+                              : 'View my orders'
+                    }
+                    onAction={() =>
+                        paymentOutcomePending && !recoveredOrder
+                            ? void checkPendingPayment()
+                            : navigateTo({ name: 'orders' })
+                    }
                 />
+                {paymentOutcomePending && !recoveredOrder ? (
+                    <button
+                        type="button"
+                        className="payment-secondary-action min-h-11 px-4 type-action"
+                        onClick={() => navigateTo({ name: 'orders' })}
+                    >
+                        {isZh ? '查看我的订单' : 'View my orders'}
+                    </button>
+                ) : null}
             </Subpage>
         );
     }
@@ -344,7 +737,11 @@ export function PaymentPage({
             <SubHeader
                 title={isZh ? '选择支付方式' : 'Choose payment'}
                 language={language}
-                onBack={() => onCancel(order)}
+                onBack={() =>
+                    paymentOutcomePending || submitting || applyingReferral
+                        ? navigateTo({ name: 'orders' })
+                        : onCancel(order)
+                }
             />
             <form className="payment-layout" onSubmit={event => void submitPayment(event)}>
                 <div className="payment-main">
@@ -445,6 +842,21 @@ export function PaymentPage({
                             </div>
                         </section>
                     ) : null}
+                    {isUsdtPayment && usdtQuoteQuery.data && usdtTokenError ? (
+                        <InlineError
+                            message={usdtTokenError}
+                            action={
+                                usdtConfirmationTokenQuery.isFetching
+                                    ? isZh
+                                        ? '正在准备…'
+                                        : 'Preparing…'
+                                    : isZh
+                                      ? '重试到账查询'
+                                      : 'Retry payment tracking'
+                            }
+                            onAction={() => void usdtConfirmationTokenQuery.refetch({ cancelRefetch: false })}
+                        />
+                    ) : null}
                     <section
                         className={`payment-test-notice${isTestMode ? '' : ' is-production'}`}
                         role="note"
@@ -529,13 +941,13 @@ export function PaymentPage({
                                             max={(maximumReferralAmount / 100).toFixed(2)}
                                             step="0.01"
                                             value={referralAmount}
-                                            disabled={applyingReferral || submitting}
+                                            disabled={applyingReferral || submitting || paymentOutcomePending}
                                             onChange={event => setReferralAmount(event.currentTarget.value)}
                                         />
                                         <button
                                             type="button"
                                             className="payment-secondary-action min-h-11 px-4 weight-bold"
-                                            disabled={applyingReferral || submitting}
+                                            disabled={applyingReferral || submitting || paymentOutcomePending}
                                             onClick={() => void applyReferralBalance()}
                                         >
                                             {applyingReferral
@@ -586,7 +998,12 @@ export function PaymentPage({
                                             name="paymentMethod"
                                             value={method.code}
                                             checked={selectedMethod === method.code}
-                                            disabled={!method.isEligible || submitting}
+                                            disabled={
+                                                !method.isEligible ||
+                                                submitting ||
+                                                applyingReferral ||
+                                                paymentOutcomePending
+                                            }
                                             onChange={event => setSelectedMethod(event.currentTarget.value)}
                                         />
                                         <WalletCards aria-hidden="true" />
@@ -640,9 +1057,18 @@ export function PaymentPage({
                                 )}
                             />
                         )}
-                        {paymentError && methods.length > 0 && <InlineError message={paymentError} />}
+                        {paymentError && !paymentOutcomePending && methods.length > 0 && (
+                            <InlineError message={paymentError} />
+                        )}
                     </section>
                     {isUsdtPayment && paymentError ? <InlineError message={paymentError} /> : null}
+                    {paymentOutcomePending ? (
+                        <InlineError
+                            message={unknownPaymentMessage}
+                            action={isZh ? '查看我的订单' : 'View my orders'}
+                            onAction={() => navigateTo({ name: 'orders' })}
+                        />
+                    ) : null}
                 </div>
                 <aside className="payment-summary" aria-label={isZh ? '订单摘要' : 'Order summary'}>
                     <header>
@@ -722,7 +1148,7 @@ export function PaymentPage({
                             </div>
                         )}
                     </dl>
-                    {isUsdtPayment ? (
+                    {isUsdtPayment && !paymentOutcomePending ? (
                         <button
                             type="button"
                             disabled={
@@ -740,29 +1166,49 @@ export function PaymentPage({
                                   : 'Check payment now'}
                         </button>
                     ) : (
-                        <button type="submit" disabled={!selectedMethod || submitting || loading}>
+                        <button
+                            type="submit"
+                            disabled={
+                                submitting ||
+                                applyingReferral ||
+                                (!paymentOutcomePending && (!selectedMethod || loading))
+                            }
+                        >
                             <WalletCards aria-hidden="true" />
-                            {submitting
-                                ? isTestMode
+                            {paymentOutcomePending
+                                ? submitting || applyingReferral
                                     ? isZh
-                                        ? '正在完成测试支付'
-                                        : 'Completing test payment'
+                                        ? '正在核对付款结果'
+                                        : 'Checking payment result'
                                     : isZh
-                                      ? '正在提交支付'
-                                      : 'Submitting payment'
-                                : isTestMode
-                                  ? isZh
-                                      ? '确认测试支付'
-                                      : 'Confirm test payment'
-                                  : isZh
-                                    ? '确认支付'
-                                    : 'Confirm payment'}
+                                      ? '核对付款结果'
+                                      : 'Check payment result'
+                                : submitting
+                                  ? isTestMode
+                                      ? isZh
+                                          ? '正在完成测试支付'
+                                          : 'Completing test payment'
+                                      : isZh
+                                        ? '正在提交支付'
+                                        : 'Submitting payment'
+                                  : isTestMode
+                                    ? isZh
+                                        ? '确认测试支付'
+                                        : 'Confirm test payment'
+                                    : isZh
+                                      ? '确认支付'
+                                      : 'Confirm payment'}
                         </button>
                     )}
                     <button
                         type="button"
                         className="payment-edit-order"
-                        disabled={submitting || applyingReferral || appliedReferralAmount > 0}
+                        disabled={
+                            submitting ||
+                            applyingReferral ||
+                            paymentOutcomePending ||
+                            appliedReferralAmount > 0
+                        }
                         onClick={() => onCancel(order)}
                     >
                         {appliedReferralAmount === 0 && <ArrowLeft aria-hidden="true" />}

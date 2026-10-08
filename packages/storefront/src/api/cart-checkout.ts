@@ -928,6 +928,9 @@ export class CartCheckoutApi extends BaseDomainApi {
                 }
             `,
             { input: { method, metadata } },
+            undefined,
+            20_000,
+            true,
         );
         if (result.addPaymentToOrder.paymentErrorMessage?.startsWith('PAYMENT_REVIEW_REQUIRED:'))
             throw new ShopApiError('PAYMENT_REVIEW_REQUIRED', 'PAYMENT_REVIEW_REQUIRED');
