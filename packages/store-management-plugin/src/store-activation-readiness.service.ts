@@ -11,6 +11,7 @@ import {
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
+import { IsNull } from 'typeorm';
 
 import { StoreAdministratorAccess } from './entities/store-administrator-access.entity';
 import { StoreProfile } from './entities/store-profile.entity';
@@ -213,8 +214,13 @@ export class StoreActivationReadinessService {
                 this.temporaryPasswordCount(ctx, profile.channelId),
                 this.connection.getRepository(ctx, ProductVariant).find({
                     where: {
+                        deletedAt: IsNull(),
                         enabled: true,
-                        product: { enabled: true },
+                        product: {
+                            deletedAt: IsNull(),
+                            enabled: true,
+                            channels: { id: profile.channelId },
+                        },
                         channels: { id: profile.channelId },
                     },
                     relations: { translations: true, product: { translations: true } },

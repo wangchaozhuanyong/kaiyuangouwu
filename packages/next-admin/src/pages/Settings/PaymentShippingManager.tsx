@@ -42,6 +42,7 @@ import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warnin
 import { getAdminDisplayLanguage } from '../../utils/admin-language';
 import {
     configurableArgumentLabel,
+    configurableArgumentRequiresValue,
     configurableOperationLabel,
     serializeConfigurableListValue,
 } from '../../utils/configurable-operation-localization';
@@ -678,6 +679,9 @@ function MethodEditorDialog({
             calculatorArgs.currencyCode ||
             data.activeChannel.defaultCurrencyCode,
     );
+    const calculatorInputValues = storeShipping
+        ? { ...calculatorArgs, sourceCurrencyCode: amountCurrency }
+        : calculatorArgs;
     const currentShippingItem =
         state.kind === 'shipping' && item
             ? data.shippingMethods.items.find(method => method.id === item.id)
@@ -954,7 +958,11 @@ function MethodEditorDialog({
                     code: code.trim(),
                     fulfillmentHandler,
                     checker: operationInput(checkerCode, checkerArgs, data.shippingEligibilityCheckers),
-                    calculator: operationInput(calculatorCode, calculatorArgs, data.shippingCalculators),
+                    calculator: operationInput(
+                        calculatorCode,
+                        calculatorInputValues,
+                        data.shippingCalculators,
+                    ),
                     translations,
                     customFields,
                 };
@@ -1183,7 +1191,7 @@ function MethodEditorDialog({
                                 checkerCode={checkerCode}
                                 checkerArgs={checkerArgs}
                                 calculatorCode={calculatorCode}
-                                calculatorArgs={calculatorArgs}
+                                calculatorArgs={calculatorInputValues}
                                 checkerDefinitions={data.shippingEligibilityCheckers}
                                 calculatorDefinitions={data.shippingCalculators}
                                 currencyCode={data.activeChannel.defaultCurrencyCode}
@@ -1531,7 +1539,8 @@ function operationInput(
     const argumentsInput = definition.args.map(arg => {
         const raw = values[arg.name] ?? '';
         const label = configurableArgumentLabel(arg, definition.code);
-        if (arg.required && !raw.trim()) throw new Error(`${label}为必填参数`);
+        if (configurableArgumentRequiresValue(arg, code) && !raw.trim())
+            throw new Error(`${label}为必填参数`);
         if (arg.list) {
             try {
                 return { name: arg.name, value: serializeConfigurableListValue(raw, arg.type) };
@@ -1546,6 +1555,8 @@ function operationInput(
 
 function serializeValue(raw: string, type: string) {
     const normalizedType = type.toLowerCase();
+    // Vendure's scalar text coercion preserves the input verbatim; only list values use JSON arrays.
+    if (['string', 'id', 'datetime'].includes(normalizedType)) return raw;
     if (normalizedType.includes('boolean')) return raw === 'true' ? 'true' : 'false';
     if (
         normalizedType.includes('int') ||

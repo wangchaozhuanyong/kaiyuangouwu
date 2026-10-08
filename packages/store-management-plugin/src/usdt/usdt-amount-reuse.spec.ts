@@ -70,6 +70,21 @@ const intentSchema = new EntitySchema({
         },
     },
 });
+// Match the entity's fixed-scale decimal string contract in the SQL.js test driver.
+const sqljsIntentColumns = { ...columns };
+for (const name of ['baseUsdtAmount', 'expectedUsdtAmount', 'receivedUsdtAmount']) {
+    sqljsIntentColumns[name] = {
+        ...columns[name],
+        transformer: {
+            to: (value: string | number | null) => value,
+            from: (value: string | number | null) => (value == null ? value : Number(value).toFixed(6)),
+        },
+    };
+}
+const sqljsIntentSchema = new EntitySchema({
+    ...intentSchema.options,
+    columns: sqljsIntentColumns,
+});
 const quoteSchema = new EntitySchema({
     name: 'StorefrontUsdtCheckoutQuote',
     target: StorefrontUsdtCheckoutQuote,
@@ -221,7 +236,7 @@ describe('USDT amount lifecycle on a real database', () => {
                       database: await isolatedMysqlDatabase(),
                   }),
             entities: [
-                intentSchema,
+                driver === 'sqljs' ? sqljsIntentSchema : intentSchema,
                 quoteSchema,
                 channelSchema,
                 orderSchema,
@@ -347,7 +362,10 @@ describe('USDT amount lifecycle on a real database', () => {
     );
 
     it('persists a real USDT payment from the accepted snapshot after both switches close', async () => {
-        const accepted = await intent();
+        const expectedUsdtAmount = '13.850010';
+        const matchKey = createMatchKey('TRC20', fingerprint, expectedUsdtAmount);
+        const accepted = await intent({ expectedUsdtAmount, matchKey, activeMatchKey: matchKey });
+        expect(accepted.expectedUsdtAmount).toBe(expectedUsdtAmount);
         expect(accepted.acceptedHandlerSnapshot).toMatchObject({
             version: 1,
             methodId: '1',

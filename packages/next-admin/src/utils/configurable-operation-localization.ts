@@ -15,6 +15,25 @@ export interface ConfigurableOperationDefinitionLike {
     args: ConfigurableArgumentDefinitionLike[];
 }
 
+/** These shipping arguments explicitly define an empty string as an unrestricted/legacy value. */
+const emptyShippingArguments: Record<string, readonly string[]> = {
+    'store-shipping-zone-eligibility-checker': ['allowedCountryCodes', 'blockedPostalPrefixes'],
+    'supported-destination-eligibility-checker': ['allowedCountryCodes', 'blockedPostalPrefixes'],
+    'physical-subtotal-shipping-calculator': ['currencyCode'],
+};
+
+export function configurableArgumentRequiresValue(
+    definition: ConfigurableArgumentDefinitionLike,
+    operationCode?: string,
+): boolean {
+    const acceptsEmptyString =
+        Boolean(operationCode && emptyShippingArguments[operationCode]?.includes(definition.name)) &&
+        definition.type.toLowerCase() === 'string' &&
+        !definition.list &&
+        (definition.defaultValue === '' || definition.defaultValue === '""');
+    return Boolean(definition.required) && !acceptsEmptyString;
+}
+
 interface SelectOption {
     value: string;
     label: string;

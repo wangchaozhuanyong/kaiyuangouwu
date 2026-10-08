@@ -4,6 +4,7 @@ import {
     configurableArgumentDescription,
     configurableArgumentLabel,
     configurableArgumentOptions,
+    configurableArgumentRequiresValue,
     configurableListValueForDisplay,
     configurableOperationLabel,
     serializeConfigurableListValue,
@@ -19,6 +20,50 @@ const argument = (
 });
 
 describe('ConfigurableOperationFields localization', () => {
+    it('accepts only approved shipping empty-string defaults without relaxing other required arguments', () => {
+        for (const code of [
+            'store-shipping-zone-eligibility-checker',
+            'supported-destination-eligibility-checker',
+        ]) {
+            for (const name of ['allowedCountryCodes', 'blockedPostalPrefixes']) {
+                expect(configurableArgumentRequiresValue(argument({ name, defaultValue: '' }), code)).toBe(
+                    false,
+                );
+            }
+        }
+        expect(
+            configurableArgumentRequiresValue(
+                argument({ name: 'currencyCode', defaultValue: '""' }),
+                'physical-subtotal-shipping-calculator',
+            ),
+        ).toBe(false);
+        expect(
+            configurableArgumentRequiresValue(
+                argument({ name: 'sourceCurrencyCode', defaultValue: '' }),
+                'physical-subtotal-shipping-calculator',
+            ),
+        ).toBe(true);
+        expect(
+            configurableArgumentRequiresValue(argument({ name: 'blockedPostalPrefixes', defaultValue: '' })),
+        ).toBe(true);
+        expect(
+            configurableArgumentRequiresValue(
+                argument({ name: 'currencyCode', defaultValue: '' }),
+                'payment-gateway',
+            ),
+        ).toBe(true);
+        for (const definition of [
+            argument({ name: 'providerKey' }),
+            argument({ name: 'providerKey', defaultValue: null }),
+            argument({ name: 'providerKey', defaultValue: 'required-value' }),
+            argument({ name: 'ids', list: true, defaultValue: '' }),
+            argument({ name: 'baseRate', type: 'int', defaultValue: 0 }),
+            argument({ name: 'enabled', type: 'boolean', defaultValue: false }),
+        ]) {
+            expect(configurableArgumentRequiresValue(definition)).toBe(true);
+        }
+    });
+
     it('replaces raw promotion argument names and placeholders with Chinese business copy', () => {
         const amount = argument({ name: 'amount', type: 'int' });
         const currency = argument({ name: 'currencyCode' });
