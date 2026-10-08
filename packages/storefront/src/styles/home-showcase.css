@@ -5,6 +5,7 @@
 
 .hero-carousel {
     min-width: 0;
+    position: relative;
     display: flex;
     flex-direction: column;
 }
@@ -145,6 +146,9 @@
     color: var(--hero-image-body-foreground, var(--hero-image-copy-foreground, var(--text)));
     text-shadow: var(--hero-body-shadow);
 }
+.home-page .hero.hero-image-overlay .hero-rich-content {
+    padding-top: calc(24px + var(--home-hero-trust-height, 0px));
+}
 .home-page .hero .hero-overlay-controls {
     position: absolute;
     z-index: 2;
@@ -170,13 +174,20 @@
     backdrop-filter: blur(4px);
 }
 
-/* Service information stays on one centered line below the scene, with its own scroll owner. */
+/* Keep one service row at the image's top center, outside the carousel's gesture region. */
 .home-page .home-hero-trust {
+    position: absolute;
+    z-index: 3;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     justify-content: center;
+    width: 100%;
     min-width: 0;
     max-width: 100%;
-    padding: 12px 12px 0;
+    padding: 0;
+    pointer-events: none;
 }
 .home-page .home-hero-trust .home-trust-bar {
     display: flex;
@@ -186,7 +197,7 @@
     flex: 0 1 auto;
     width: max-content;
     min-width: 0;
-    max-width: 100%;
+    max-width: calc(100% - 40px);
     gap: 20px;
     margin: 0;
     padding: 10px 16px;
@@ -200,6 +211,7 @@
     box-shadow: none;
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
+    pointer-events: auto;
 }
 .home-page .home-hero-trust .home-trust-item {
     display: flex;
@@ -237,14 +249,14 @@
     color: inherit;
 }
 @media (max-width: 1023px) {
-    .home-page .home-hero-trust .home-trust-bar {
-        gap: 8px;
-        padding-inline: 10px;
-    }
-}
-@media (min-width: 1024px) {
     .home-page .home-hero-trust {
-        padding-inline: 0;
+        /* Match the image's 12px page gutters before applying the strip's inner inset. */
+        width: calc(100% - 24px);
+    }
+    .home-page .home-hero-trust .home-trust-bar {
+        max-width: calc(100% - 16px);
+        gap: 4px;
+        padding-inline: 6px;
     }
 }
 

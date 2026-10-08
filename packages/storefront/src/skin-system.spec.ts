@@ -1131,13 +1131,28 @@ describe('storefront skin system', () => {
         expect(services).not.toMatch(/\.hero-rich-content\s*\{[^}]*width:\s*40%;/);
     });
 
-    it('centers the external trust strip and keeps all its content on one scrollable row', () => {
+    it('centers a single trust overlay at the image top and reserves its measured height for copy', () => {
         const services = stylesheet('./styles/home-showcase.css');
+        const overlay = services.match(/\.home-page \.home-hero-trust\s*\{([^}]+)\}/)?.[1];
+        expect(services).toMatch(/\.hero-carousel\s*\{[^}]*position:\s*relative;/);
+        expect(overlay).toContain('position: absolute;');
+        expect(overlay).toContain('top: 12px;');
+        expect(overlay).toContain('left: 50%;');
+        expect(overlay).toContain('transform: translateX(-50%);');
+        expect(overlay).toContain('pointer-events: none;');
         expect(services).toMatch(
-            /\.home-page \.home-hero-trust\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*center;/,
+            /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*padding-top:\s*calc\(24px \+ var\(--home-hero-trust-height, 0px\)\);/,
         );
+        expect(overlay).toContain('justify-content: center;');
         expect(services).toMatch(
-            /\.home-hero-trust \.home-trust-bar\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
+            new RegExp(
+                '\\.home-hero-trust \\.home-trust-bar\\s*\\{[^}]*display:\\s*flex;[^}]*flex-wrap:\\s*nowrap;' +
+                    '[^}]*max-width:\\s*calc\\(100% - 40px\\);[^}]*overflow-x:\\s*auto;',
+            ),
+        );
+        expect(services).toMatch(/\.home-hero-trust \.home-trust-bar\s*\{[^}]*pointer-events:\s*auto;/);
+        expect(services).toMatch(
+            /\.home-hero-trust \.home-trust-bar\s*\{[^}]*max-width:\s*calc\(100% - 16px\);[^}]*gap:\s*4px;[^}]*padding-inline:\s*6px;/,
         );
         expect(services).toMatch(
             new RegExp(

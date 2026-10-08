@@ -585,7 +585,7 @@ describe('HomePage carousel pointer interactions', () => {
         },
     );
     it.each([false, true])(
-        'keeps trust-strip gestures outside the carousel and renders one strip during transitions (%s)',
+        'keeps overlay trust gestures outside the swipe region and renders one strip during transitions (%s)',
         async desktop => {
             await render(desktop, [
                 heroes[0],
@@ -755,6 +755,83 @@ describe('HomePage carousel pointer interactions', () => {
             });
             await render(desktop, [heroes[0]]);
             expect(requiredElement(host, '.hero-carousel-stage').style.height).toBe(expectedHeight);
+        },
+    );
+
+    it.each([false, true])(
+        'reserves measured trust height before measuring copy and releases it when the strip is removed (%s)',
+        async desktop => {
+            let trustHeight = 40;
+            const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
+            boundsMock.mockImplementation(function (this: Element) {
+                // Model the content height after its real CSS reservation has been written.
+                const reservedHeight =
+                    Number.parseFloat(
+                        this.closest<HTMLElement>('.hero')?.style.getPropertyValue(
+                            '--home-hero-trust-height',
+                        ) ?? '',
+                    ) || 0;
+                const height = this.matches('.home-hero-trust')
+                    ? trustHeight
+                    : this.matches(heightSelector)
+                      ? 320 + reservedHeight
+                      : 320;
+                return {
+                    x: 0,
+                    y: 0,
+                    top: 0,
+                    left: 0,
+                    right: 360,
+                    bottom: height,
+                    width: 360,
+                    height,
+                    toJSON: () => ({}),
+                };
+            });
+            await render(desktop, [heroes[0]]);
+            const viewport = requiredElement(host, '.hero');
+            const stage = requiredElement(host, '.hero-carousel-stage');
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
+            expect(stage.style.height).toBe('320px');
+
+            const serviceBlock: StorefrontContentBlock = {
+                ...heroBlock,
+                id: 'service-information',
+                type: 'TRUST_BAR',
+                items: [
+                    {
+                        id: 'support',
+                        enabled: true,
+                        position: 0,
+                        imageUrl: null,
+                        targetType: 'NONE',
+                        targetValue: null,
+                        label: 'Customer support',
+                        description: 'Complete service details',
+                    },
+                ],
+            };
+            await render(desktop, [heroes[0], serviceBlock]);
+            const trust = requiredElement(host, '.home-hero-trust');
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('40px');
+            expect(stage.style.height).toBe('360px');
+            const observer = resizeObservers.find(candidate => candidate.elements.has(trust));
+            expect(observer).toBeDefined();
+            if (!observer) throw new Error('Expected the shared hero observer to observe its trust strip');
+
+            trustHeight = 64;
+            await interact(() => observer.notify());
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('64px');
+            expect(stage.style.height).toBe('384px');
+
+            await render(desktop, [heroes[0]]);
+            expect(host.querySelector('.home-hero-trust')).toBeNull();
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
+            expect(stage.style.height).toBe('320px');
+            expect(observer.elements.has(trust)).toBe(false);
+            await interact(() => observer.notify());
+            expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('');
+            expect(stage.style.height).toBe('320px');
         },
     );
 

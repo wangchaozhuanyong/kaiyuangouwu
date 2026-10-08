@@ -517,7 +517,7 @@ describe('HomePage localized trust bar layout', () => {
         [true, 'heroOverlay'],
         [true, 'belowHero'],
     ] as const)(
-        'keeps one trust strip below the hero image (desktop=%s, legacy placement=%s)',
+        'keeps one overlay trust strip outside the swipe region (desktop=%s, legacy placement=%s)',
         (desktop, placement) => {
             const markup = renderHome(
                 {
@@ -527,6 +527,7 @@ describe('HomePage localized trust bar layout', () => {
             );
             const heroMarkup = markup.match(/<section class="hero\b[\s\S]*?<\/section>/)?.[0];
             expect(heroMarkup).toBeDefined();
+            // The sibling is positioned over the image while keeping its gestures outside the swipe region.
             expect(heroMarkup).not.toContain('home-trust-bar');
             expect(markup).toMatch(/<\/section><div class="home-hero-trust">[\s\S]*?home-trust-label/);
             expect(markup).not.toContain('hero-service-overlay');
@@ -550,7 +551,7 @@ describe('HomePage localized trust bar layout', () => {
         { desktop: false, language: 'en' as const },
         { desktop: true, language: 'en' as const },
     ])(
-        'keeps complete saved labels and descriptions below the hero ($desktop, $language)',
+        'keeps complete saved labels and descriptions in the single overlay strip ($desktop, $language)',
         ({ desktop, language }) => {
             const label = language === 'zh' ? '数字商品订单进度可查' : 'Review your digital product orders';
             const description =

@@ -538,6 +538,13 @@ export function HomePage() {
             entry => entry.type === type && (blockId === undefined || entry.block?.id === blockId),
         );
     const hasHomepageModule = (type: StorefrontContentBlock['type']) => homepageModuleOrder(type) >= 0;
+    const heroTrustBar =
+        hasHomepageModule('HERO') &&
+        managedHeroes.length > 0 &&
+        hasHomepageModule('TRUST_BAR') &&
+        Boolean(
+            trustBlock?.items.some(item => item.enabled && (item.label.trim() || item.description.trim())),
+        );
     const managedSections = homepageModules.flatMap(entry =>
         entry.block && ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'CUSTOM'].includes(entry.type)
             ? [entry.block]
@@ -567,6 +574,7 @@ export function HomePage() {
     const heroMotionFrameRef = useRef<number | null>(null);
     const heroViewportRef = useRef<HTMLElement>(null);
     const heroStageRef = useRef<HTMLDivElement>(null);
+    const heroTrustRef = useRef<HTMLDivElement>(null);
     const [heroStageHeight, setHeroStageHeight] = useState<number>();
     const heroStageHeightRef = useRef<number | undefined>(undefined);
     const heroHeightGrowthDeadlineRef = useRef(0);
@@ -761,7 +769,17 @@ export function HomePage() {
             stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
         );
         const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
+        const trust = heroTrustRef.current;
+        let measuredTrustHeight: number | undefined;
+        let active = true;
         const measure = () => {
+            if (!active) return;
+            const trustHeight = trust ? Math.ceil(trust.getBoundingClientRect().height) : 0;
+            if (trustHeight !== measuredTrustHeight) {
+                measuredTrustHeight = trustHeight;
+                if (trust) viewport.style.setProperty('--home-hero-trust-height', `${trustHeight}px`);
+                else viewport.style.removeProperty('--home-hero-trust-height');
+            }
             const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
             const height = Math.ceil(
                 Math.max(
@@ -784,13 +802,16 @@ export function HomePage() {
         heightSurfaces.forEach(surface => observer.observe(surface));
         observer.observe(viewport);
         if (gallery) observer.observe(gallery);
+        if (trust) observer.observe(trust);
         window.addEventListener('resize', measure);
         measure();
         return () => {
+            active = false;
             observer.disconnect();
             window.removeEventListener('resize', measure);
+            viewport.style.removeProperty('--home-hero-trust-height');
         };
-    }, [desktop, heroIndex, heroMotion?.nextIndex, managedHeroes]);
+    }, [desktop, heroIndex, heroMotion?.nextIndex, heroTrustBar, managedHeroes]);
 
     useEffect(() => {
         const queued = heroQueuedSelectionRef.current;
@@ -1098,8 +1119,7 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    const heroTrustBar = hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
-    // The service row follows the image for every store and viewport. A standalone
+    // The service row shares the image's top center for every store and viewport. A standalone
     // service floor is only needed when the merchant has no published hero.
     const introOrders = (heroTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
@@ -1414,7 +1434,11 @@ export function HomePage() {
                                                 : ''}
                                         </span>
                                     </section>
-                                    {heroTrustBar && <div className="home-hero-trust">{trustBar}</div>}
+                                    {heroTrustBar && (
+                                        <div ref={heroTrustRef} className="home-hero-trust">
+                                            {trustBar}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
