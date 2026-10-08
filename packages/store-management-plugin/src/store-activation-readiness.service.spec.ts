@@ -1,7 +1,8 @@
 import { Channel, ProductVariant } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
-import { describe, expect, it, vi } from 'vitest';
+import { DataSource, EntitySchema, FindManyOptions } from 'typeorm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { physicalSubtotalShippingCalculator } from '../../commerce-fulfillment-plugin/src/commerce-shipping-options';
 
@@ -43,6 +44,193 @@ const completeProfile = {
     supportEmail: 'support@moyaoai.com',
     privacyEmail: 'privacy@moyaoai.com',
 } as any;
+
+describe('catalog activation readiness with real SQLjs membership', () => {
+    interface CatalogProduct {
+        id: string;
+        enabled: boolean;
+        deletedAt: Date | null;
+        translations: Array<Record<string, string>>;
+        channels: Array<{ id: string }>;
+    }
+    interface CatalogVariant extends CatalogProduct {
+        sku: string;
+        product: CatalogProduct;
+    }
+    const channel = new EntitySchema<{ id: string }>({
+        name: 'CatalogReadinessChannel',
+        columns: { id: { type: String, primary: true } },
+    });
+    const columns = {
+        id: { type: String, primary: true },
+        enabled: { type: Boolean },
+        // Production uses ordinary nullable columns, so TypeORM does not hide deleted rows.
+        deletedAt: { type: Date, nullable: true },
+        translations: { type: 'simple-json' as const },
+    };
+    const product = new EntitySchema<CatalogProduct>({
+        name: 'CatalogReadinessProduct',
+        columns,
+        relations: { channels: { type: 'many-to-many', target: channel.options.name, joinTable: true } },
+    });
+    const variant = new EntitySchema<CatalogVariant>({
+        name: 'CatalogReadinessVariant',
+        columns: { ...columns, sku: { type: String } },
+        relations: {
+            product: { type: 'many-to-one', target: product.options.name },
+            channels: { type: 'many-to-many', target: channel.options.name, joinTable: true },
+        },
+    });
+    const database = new DataSource({
+        type: 'sqljs',
+        entities: [channel, product, variant],
+        synchronize: true,
+    });
+    const productTranslations = [
+        { languageCode: 'zh_Hans', name: '正式商品', slug: 'production-zh', description: '商品描述' },
+        {
+            languageCode: 'en',
+            name: 'Production product',
+            slug: 'production',
+            description: 'Product details',
+        },
+    ];
+    const variantTranslations = [
+        { languageCode: 'zh_Hans', name: '标准版' },
+        { languageCode: 'en', name: 'Standard' },
+    ];
+    beforeAll(async () => {
+        await database.initialize();
+        await database.getRepository(channel).save([{ id: 'store-a' }, { id: 'store-b' }]);
+        await database.getRepository(product).save([
+            {
+                id: 'live',
+                enabled: true,
+                deletedAt: null,
+                translations: productTranslations,
+                channels: [{ id: 'store-a' }],
+            },
+            {
+                id: 'deleted',
+                enabled: true,
+                deletedAt: new Date(),
+                translations: [],
+                channels: [{ id: 'store-a' }],
+            },
+            {
+                id: 'removed',
+                enabled: true,
+                deletedAt: null,
+                translations: [],
+                channels: [{ id: 'store-b' }],
+            },
+        ]);
+        await database.getRepository(variant).save([
+            {
+                id: 'live',
+                sku: 'LIVE',
+                enabled: true,
+                deletedAt: null,
+                translations: variantTranslations,
+                product: { id: 'live' },
+                channels: [{ id: 'store-a' }],
+            },
+            {
+                id: 'deleted-variant',
+                sku: 'DELETED-VARIANT',
+                enabled: true,
+                deletedAt: new Date(),
+                translations: [],
+                product: { id: 'live' },
+                channels: [{ id: 'store-a' }],
+            },
+            {
+                id: 'deleted-product',
+                sku: 'DELETED-PRODUCT',
+                enabled: true,
+                deletedAt: null,
+                translations: [],
+                product: { id: 'deleted' },
+                channels: [{ id: 'store-a' }],
+            },
+            {
+                id: 'removed-product',
+                sku: 'REMOVED-PRODUCT',
+                enabled: true,
+                deletedAt: null,
+                translations: [],
+                product: { id: 'removed' },
+                channels: [{ id: 'store-a' }],
+            },
+        ]);
+    });
+    afterAll(async () => {
+        if (database.isInitialized) await database.destroy();
+    });
+    async function catalogReady(): Promise<boolean> {
+        const activeChannel = { id: 'store-a', customFields: { commerceMode: 'DIGITAL_ONLY' } };
+        const accessQuery = {
+            innerJoin: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            getCount: vi.fn().mockResolvedValue(0),
+        };
+        const connection = {
+            getRepository: (_ctx: unknown, entity: unknown) => {
+                if (entity === Channel) return { findOne: vi.fn().mockResolvedValue(activeChannel) };
+                if (entity === StoreDomain) return { findOne: vi.fn().mockResolvedValue(null) };
+                if (entity === StoreAdministratorAccess) return { createQueryBuilder: () => accessQuery };
+                if (entity === StorefrontContentBlock) return { find: vi.fn().mockResolvedValue([]) };
+                if (entity === ProductVariant) {
+                    return {
+                        find: (options: FindManyOptions<CatalogVariant>) =>
+                            // JSON translations keep this SQL fixture small; membership and deletion
+                            // predicates still run through the real TypeORM repository unchanged.
+                            database
+                                .getRepository(variant)
+                                .find({ ...options, relations: { product: true } }),
+                    };
+                }
+                throw new Error('Unexpected activation dependency');
+            },
+        };
+        const shipping = { getActiveShippingMethods: vi.fn().mockResolvedValue([]) };
+        const service = new StoreActivationReadinessService(connection as any, shipping as any);
+        const readiness = await service.get({ copy: () => ({ channel: activeChannel }) } as any, {
+            ...completeProfile,
+            channelId: activeChannel.id,
+        });
+        return readiness.checks.find(check => check.code === 'CATALOG')?.ready ?? false;
+    }
+    it('ignores deleted variants, deleted products and products removed from the store', async () => {
+        expect(await catalogReady()).toBe(true);
+    });
+    it.each(['name', 'slug', 'description'])(
+        'still rejects an in-store product missing its English %s',
+        async field => {
+            const incomplete = productTranslations.map(translation =>
+                translation.languageCode === 'en' ? { ...translation, [field]: '' } : translation,
+            );
+            await database.getRepository(product).update('live', { translations: incomplete });
+            try {
+                expect(await catalogReady()).toBe(false);
+            } finally {
+                await database.getRepository(product).update('live', { translations: productTranslations });
+            }
+        },
+    );
+    it.each(['zh_Hans', 'en'])('still rejects an in-store variant missing its %s name', async language => {
+        const incomplete = variantTranslations.map(translation =>
+            translation.languageCode === language ? { ...translation, name: '' } : translation,
+        );
+        await database.getRepository(variant).update('live', { translations: incomplete });
+        try {
+            expect(await catalogReady()).toBe(false);
+        } finally {
+            await database.getRepository(variant).update('live', { translations: variantTranslations });
+        }
+    });
+});
 
 describe('shipping activation readiness', () => {
     const channel = {

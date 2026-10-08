@@ -7,6 +7,7 @@ import {
     configurableArgumentDescription,
     configurableArgumentLabel,
     configurableArgumentOptions,
+    configurableArgumentRequiresValue,
     configurableListValueForDisplay,
     configurableUiRecord,
     type ConfigurableArgumentDefinitionLike,
@@ -30,17 +31,18 @@ export function ConfigurableOperationField({
     const options = configurableArgumentOptions(definition);
     const type = definition.type.toLowerCase();
     const ui = configurableUiRecord(definition.ui);
+    const required = configurableArgumentRequiresValue(definition, operationCode);
     const describedBy = description ? descriptionId : undefined;
     const commonProps = {
         'aria-describedby': describedBy,
-        required: Boolean(definition.required),
+        required,
         className:
             'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100',
     };
 
     return (
         <AdminField
-            label={`${label}${definition.required ? ' *' : ''}`}
+            label={`${label}${required ? ' *' : ''}`}
             description={description && <small id={descriptionId}>{description}</small>}
             className="text-xs font-bold text-slate-600"
         >
