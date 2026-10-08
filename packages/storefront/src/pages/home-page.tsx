@@ -1119,7 +1119,7 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    // The service row shares the image's top center for every store and viewport. A standalone
+    // The service row shares the image's bottom center for every store and viewport. A standalone
     // service floor is only needed when the merchant has no published hero.
     const introOrders = (heroTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))

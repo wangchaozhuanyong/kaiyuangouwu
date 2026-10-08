@@ -1131,18 +1131,33 @@ describe('storefront skin system', () => {
         expect(services).not.toMatch(/\.hero-rich-content\s*\{[^}]*width:\s*40%;/);
     });
 
-    it('centers a single trust overlay at the image top and reserves its measured height for copy', () => {
+    it('centers one trust overlay at the image bottom and clears space for copy and the pager', () => {
         const services = stylesheet('./styles/home-showcase.css');
         const overlay = services.match(/\.home-page \.home-hero-trust\s*\{([^}]+)\}/)?.[1];
         expect(services).toMatch(/\.hero-carousel\s*\{[^}]*position:\s*relative;/);
         expect(overlay).toContain('position: absolute;');
-        expect(overlay).toContain('top: 12px;');
+        expect(overlay).toContain('bottom: 12px;');
+        expect([undefined, 'auto']).toContain(overlay?.match(/\btop:\s*([^;]+);/)?.[1]);
         expect(overlay).toContain('left: 50%;');
         expect(overlay).toContain('transform: translateX(-50%);');
         expect(overlay).toContain('pointer-events: none;');
         expect(services).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*padding-top:\s*calc\(24px \+ var\(--home-hero-trust-height, 0px\)\);/,
+            /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*padding-top:\s*24px;/,
         );
+        const reservedCopy = services.match(
+            new RegExp(
+                '\\.hero-carousel:has\\(> \\.home-hero-trust\\) ' +
+                    '\\.hero\\.hero-image-overlay \\.hero-rich-content\\s*\\{([^}]+)\\}',
+            ),
+        )?.[1];
+        expect(reservedCopy).toContain(
+            'padding-bottom: calc(var(--hero-overlay-height, 0px) + var(--home-hero-trust-height, 0px) + 44px);',
+        );
+        const shiftedPager = services.match(
+            /\.hero-carousel:has\(> \.home-hero-trust\) \.hero \.hero-overlay-controls\s*\{([^}]+)\}/,
+        )?.[1];
+        expect(shiftedPager).toContain('bottom: calc(var(--home-hero-trust-height, 0px) + 24px);');
+        expect(services).toMatch(/\.home-page \.hero \.hero-overlay-controls\s*\{[^}]*bottom:\s*12px;/);
         expect(overlay).toContain('justify-content: center;');
         expect(services).toMatch(
             new RegExp(

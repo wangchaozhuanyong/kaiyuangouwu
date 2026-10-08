@@ -517,7 +517,7 @@ describe('HomePage localized trust bar layout', () => {
         [true, 'heroOverlay'],
         [true, 'belowHero'],
     ] as const)(
-        'keeps one overlay trust strip outside the swipe region (desktop=%s, legacy placement=%s)',
+        'keeps one bottom overlay trust strip outside the swipe region (desktop=%s, legacy placement=%s)',
         (desktop, placement) => {
             const markup = renderHome(
                 {

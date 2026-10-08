@@ -759,18 +759,16 @@ describe('HomePage carousel pointer interactions', () => {
     );
 
     it.each([false, true])(
-        'reserves measured trust height before measuring copy and releases it when the strip is removed (%s)',
+        'reserves measured trust height below copy and releases it when the strip is removed (%s)',
         async desktop => {
             let trustHeight = 40;
             const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
             boundsMock.mockImplementation(function (this: Element) {
-                // Model the content height after its real CSS reservation has been written.
+                // Model the bottom reservation and its 12px gap only while a trust strip is present.
+                const measuredHeight =
+                    this.closest<HTMLElement>('.hero')?.style.getPropertyValue('--home-hero-trust-height');
                 const reservedHeight =
-                    Number.parseFloat(
-                        this.closest<HTMLElement>('.hero')?.style.getPropertyValue(
-                            '--home-hero-trust-height',
-                        ) ?? '',
-                    ) || 0;
+                    (Number.parseFloat(measuredHeight ?? '') || 0) + (measuredHeight ? 12 : 0);
                 const height = this.matches('.home-hero-trust')
                     ? trustHeight
                     : this.matches(heightSelector)
@@ -814,7 +812,7 @@ describe('HomePage carousel pointer interactions', () => {
             await render(desktop, [heroes[0], serviceBlock]);
             const trust = requiredElement(host, '.home-hero-trust');
             expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('40px');
-            expect(stage.style.height).toBe('360px');
+            expect(stage.style.height).toBe('372px');
             const observer = resizeObservers.find(candidate => candidate.elements.has(trust));
             expect(observer).toBeDefined();
             if (!observer) throw new Error('Expected the shared hero observer to observe its trust strip');
@@ -822,7 +820,7 @@ describe('HomePage carousel pointer interactions', () => {
             trustHeight = 64;
             await interact(() => observer.notify());
             expect(viewport.style.getPropertyValue('--home-hero-trust-height')).toBe('64px');
-            expect(stage.style.height).toBe('384px');
+            expect(stage.style.height).toBe('396px');
 
             await render(desktop, [heroes[0]]);
             expect(host.querySelector('.home-hero-trust')).toBeNull();

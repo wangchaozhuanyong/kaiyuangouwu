@@ -107,7 +107,7 @@
     color: #2f6feb;
 }
 
-/* Managed copy overlays the full photograph; only the pager remains inside it. */
+/* Managed copy, pager and service information share the full photograph. */
 .home-page .home-intro-grid .hero-carousel > .hero.hero-image-overlay {
     height: auto;
     flex: 0 0 auto;
@@ -147,7 +147,10 @@
     text-shadow: var(--hero-body-shadow);
 }
 .home-page .hero.hero-image-overlay .hero-rich-content {
-    padding-top: calc(24px + var(--home-hero-trust-height, 0px));
+    padding-top: 24px;
+}
+.home-page .hero-carousel:has(> .home-hero-trust) .hero.hero-image-overlay .hero-rich-content {
+    padding-bottom: calc(var(--hero-overlay-height, 0px) + var(--home-hero-trust-height, 0px) + 44px);
 }
 .home-page .hero .hero-overlay-controls {
     position: absolute;
@@ -162,6 +165,9 @@
     align-items: center;
     justify-content: center;
 }
+.home-page .hero-carousel:has(> .home-hero-trust) .hero .hero-overlay-controls {
+    bottom: calc(var(--home-hero-trust-height, 0px) + 24px);
+}
 .home-page .hero .hero-page-picker {
     max-width: 100%;
     margin: 0;
@@ -174,11 +180,11 @@
     backdrop-filter: blur(4px);
 }
 
-/* Keep one service row at the image's top center, outside the carousel's gesture region. */
+/* Keep one service row at the image's bottom center, outside the carousel's gesture region. */
 .home-page .home-hero-trust {
     position: absolute;
     z-index: 3;
-    top: 12px;
+    bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
