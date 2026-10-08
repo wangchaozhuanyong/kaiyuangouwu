@@ -573,10 +573,76 @@ describe('HomePage carousel pointer interactions', () => {
                     ],
                 },
             ]);
-            await interact(() => requiredElement(activeSlide(), selector).dispatchEvent(new Event('scroll')));
+            const readingSurface = requiredElement(
+                selector === '.home-trust-bar' ? host : activeSlide(),
+                selector,
+            );
+            if (selector === '.home-trust-bar') expect(readingSurface.closest('.hero')).toBeNull();
+            await interact(() => readingSurface.dispatchEvent(new Event('scroll')));
             await advance(10_000);
             expect(activeSlide().textContent).toContain('First slide');
             expect(host.querySelector('.is-neighbor')).toBeNull();
+        },
+    );
+    it.each([false, true])(
+        'keeps trust-strip gestures outside the carousel and renders one strip during transitions (%s)',
+        async desktop => {
+            await render(desktop, [
+                heroes[0],
+                heroes[1],
+                {
+                    ...heroBlock,
+                    id: 'service-information',
+                    type: 'TRUST_BAR',
+                    items: [
+                        {
+                            id: 'support',
+                            enabled: true,
+                            position: 0,
+                            imageUrl: null,
+                            targetType: 'NONE',
+                            targetValue: null,
+                            label: 'Malaysia customer support',
+                            description: 'Read the complete service details before ordering.',
+                        },
+                    ],
+                },
+            ]);
+            const trust = requiredElement(host, '.home-hero-trust .home-trust-bar');
+            expect(trust.closest('.hero')).toBeNull();
+            expect(trust.getAttribute('tabindex')).toBe('0');
+            expect(trust.textContent).toContain('Read the complete service details before ordering.');
+            for (const [type, x] of [
+                ['pointerdown', 250],
+                ['pointermove', 100],
+                ['pointerup', 100],
+            ] as const) {
+                const event = new MouseEvent(type, {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: x,
+                    clientY: 40,
+                    button: 0,
+                });
+                Object.defineProperties(event, {
+                    pointerId: { value: 1 },
+                    pointerType: { value: 'touch' },
+                    isPrimary: { value: true },
+                });
+                await interact(() => trust.dispatchEvent(event));
+                expect(event.defaultPrevented).toBe(false);
+                expect(host.querySelector('.is-neighbor')).toBeNull();
+            }
+            expect(activeSlide().textContent).toContain('First slide');
+            await pointer('pointerdown', 250);
+            await pointer('pointermove', 100);
+            expect(host.querySelector('.is-neighbor')).not.toBeNull();
+            expect(host.querySelectorAll('.home-trust-bar')).toHaveLength(1);
+            await pointer('pointerup', 100);
+            await advance();
+            expect(activeSlide().textContent).toContain('Second slide');
+            expect(host.querySelectorAll('.home-trust-bar')).toHaveLength(1);
+            expect(target).not.toHaveBeenCalled();
         },
     );
     it('preserves numbered selection and recovers when decoding a slide fails', async () => {

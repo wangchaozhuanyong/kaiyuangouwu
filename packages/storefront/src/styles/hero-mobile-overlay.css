@@ -1,7 +1,7 @@
-/* Full managed copy precedes the original-ratio artwork on non-desktop screens. */
+/* Full managed copy stays inside the photograph and determines the scene's natural height. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
-        min-height: 0;
+        min-height: 280px;
         aspect-ratio: auto;
         background: var(--surface);
     }
@@ -12,30 +12,26 @@
 
     .hero.hero-image-overlay .hero-scene-wrapper {
         position: relative;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
+        display: block;
         width: 100%;
         height: auto;
         background: var(--hero-copy-background);
     }
 
     .hero.hero-image-overlay .hero-rich-media {
-        position: relative;
-        grid-row: 2;
-        inset: auto;
+        position: absolute;
+        inset: 0;
         width: 100%;
-        height: auto;
-        /* Long service descriptions must also fit when the uploaded image is very wide. */
-        min-height: calc(var(--hero-overlay-height, 0px) + 24px);
+        height: 100%;
     }
 
     .hero.hero-image-overlay .hero-rich-image-link,
     .hero.hero-image-overlay .safe-image-frame {
-        position: relative;
-        inset: auto;
+        position: absolute;
+        inset: 0;
         display: block;
         width: 100%;
-        height: auto;
+        height: 100%;
         border-radius: 0;
         background: var(--hero-copy-background);
     }
@@ -43,26 +39,26 @@
     .hero.hero-image-overlay .hero-rich-backdrop {
         display: block;
         width: 100%;
-        height: auto;
-        object-fit: contain;
+        height: 100%;
+        object-fit: cover;
     }
 
     .hero.hero-image-overlay .safe-image-preview {
-        object-fit: contain;
+        object-fit: cover;
     }
 
     .hero.hero-image-overlay .hero-rich-content {
         position: relative;
-        grid-row: 1;
         inset: auto;
-        width: 100%;
+        width: calc(200% / 3 - 20px);
         height: auto;
-        min-height: 0;
+        min-height: 280px;
         max-height: none;
-        margin: 0;
-        padding: 24px 20px;
+        margin: 0 0 0 20px;
+        padding: 24px 0 calc(var(--hero-overlay-height, 0px) + 32px);
         gap: 18px;
-        background: var(--hero-copy-background);
+        background: transparent;
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
     .hero.hero-image-overlay .hero-rich-copy-region {
@@ -88,21 +84,21 @@
         line-height: var(--type-hero-leading);
         text-wrap: pretty;
         overflow-wrap: anywhere;
-        color: var(--hero-copy-foreground);
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-desc {
         font-size: var(--type-body-size);
         line-height: var(--type-body-leading);
         font-weight: var(--font-weight-normal);
-        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+        color: var(--hero-image-body-foreground, var(--hero-image-copy-foreground, var(--text)));
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface .hero-rich-pill {
         font-size: var(--type-meta-size);
         line-height: var(--type-meta-leading);
         letter-spacing: var(--tracking-normal);
-        color: var(--hero-copy-foreground);
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
     .hero.hero-image-overlay .hero-rich-stats-row {
@@ -112,11 +108,11 @@
     }
 
     .hero.hero-image-overlay .hero-stat-badge .stat-num {
-        color: var(--hero-copy-foreground);
+        color: var(--hero-image-copy-foreground, var(--text));
     }
 
     .hero.hero-image-overlay .hero-stat-badge .stat-lbl {
-        color: var(--hero-copy-body-foreground, var(--hero-copy-foreground));
+        color: var(--hero-image-body-foreground, var(--hero-image-copy-foreground, var(--text)));
     }
 
     .hero.hero-image-overlay .hero-rich-cta-btn {
@@ -155,6 +151,7 @@
 
 @media (max-width: 389px) {
     .hero.hero-image-overlay .hero-rich-content {
-        padding-inline: 16px;
+        width: calc(200% / 3 - 16px);
+        margin-left: 16px;
     }
 }

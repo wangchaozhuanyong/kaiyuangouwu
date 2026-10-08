@@ -1086,7 +1086,7 @@ describe('storefront skin system', () => {
         expect(source).not.toMatch(/#[0-9a-f]{3,8}\b|background:\s*white|backdrop-filter|transition:\s*all/i);
     });
 
-    it('preserves the desktop canvas and lets full mobile copy precede original-ratio artwork', () => {
+    it('overlays complete copy on the image in both viewports without a separate copy panel', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         expect(source).toMatch(
             /\.hero\.hero-image-overlay \.hero-rich-backdrop\s*\{[^}]*object-fit:\s*cover;/,
@@ -1099,10 +1099,12 @@ describe('storefront skin system', () => {
         expect(mobile).toContain('@media (max-width: 1023px)');
         expect(mobile).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*auto;/);
         expect(mobile).toMatch(/\.hero-carousel-stage[^}]*position:\s*relative;/);
-        expect(mobile).toMatch(/\.hero-scene-wrapper[^}]*display:\s*grid;[^}]*height:\s*auto;/);
-        expect(mobile).toMatch(/\.hero-rich-media[^}]*grid-row:\s*2;[^}]*height:\s*auto;/);
-        expect(mobile).toMatch(/\.hero-rich-backdrop[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/);
-        expect(mobile).toMatch(/\.hero-rich-content[^}]*position:\s*relative;[^}]*grid-row:\s*1;/);
+        expect(mobile).toMatch(/\.hero-scene-wrapper[^}]*display:\s*block;[^}]*height:\s*auto;/);
+        expect(mobile).toMatch(/\.hero-rich-media[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
+        expect(mobile).toMatch(/\.hero-rich-backdrop[^}]*height:\s*100%;[^}]*object-fit:\s*cover;/);
+        expect(mobile).toMatch(
+            /\.hero-rich-content[^}]*position:\s*relative;[^}]*height:\s*auto;[^}]*background:\s*transparent;/,
+        );
         expect(mobile).toMatch(
             /\.hero-rich-copy-region[^}]*width:\s*100%;[^}]*flex:\s*none;[^}]*overflow:\s*visible;/,
         );
@@ -1112,22 +1114,49 @@ describe('storefront skin system', () => {
         );
         expect(mobile).toMatch(/\.hero-rich-cta-label\s*\{[^}]*overflow:\s*visible;/);
         expect(mobile).toMatch(/\.hero-overlay-controls[^}]*left:\s*50%;[^}]*translateX\(-50%\)/);
-        // The new request supersedes the fixed 16:9 copy frame and separate white mobile strip.
-        expect(mobile).not.toMatch(/60%|text-overflow:\s*ellipsis|overflow-[xy]:\s*auto|16\s*\/\s*9/);
+        // Complete copy grows the scene; it is neither a separate row nor an internal reading scroller.
+        expect(mobile).not.toMatch(
+            /grid-row:\s*[12]|60%|text-overflow:\s*ellipsis|overflow-[xy]:\s*auto|16\s*\/\s*9/,
+        );
         expect(mobile).not.toMatch(/home-trust-bar|home-trust-item/);
-        expect(mobile).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl|object-fit:\s*cover/i);
+        expect(mobile).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl/i);
         const services = stylesheet('./styles/home-showcase.css');
         expect(services).toMatch(
-            /\.home-page \.hero \.hero-service-overlay \.home-trust-item \.trust-icon\s*\{[^}]*color:\s*inherit;/,
+            /\.hero\.hero-image-overlay \.hero-scene-wrapper\s*\{[^}]*position:\s*static;[^}]*display:\s*block;/,
         );
         expect(services).toMatch(
-            /\.home-page \.hero \.hero-service-overlay \.home-trust-bar\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--text\) 76%, transparent\);/,
+            /\.hero\.hero-image-overlay \.safe-image-preview\s*\{[^}]*object-fit:\s*cover;/,
+        );
+        expect(services).not.toMatch(/\.hero-rich-image-link\s*\{[^}]*width:\s*56%;/);
+        expect(services).not.toMatch(/\.hero-rich-content\s*\{[^}]*width:\s*40%;/);
+    });
+
+    it('centers the external trust strip and keeps all its content on one scrollable row', () => {
+        const services = stylesheet('./styles/home-showcase.css');
+        expect(services).toMatch(
+            /\.home-page \.home-hero-trust\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*center;/,
+        );
+        expect(services).toMatch(
+            /\.home-hero-trust \.home-trust-bar\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto;/,
         );
         expect(services).toMatch(
             new RegExp(
-                '\\.home-page \\.hero \\.hero-service-overlay \\.home-trust-bar\\.has-long-copy\\s*\\{[^}]*' +
-                    'display:\\s*grid;[^}]*grid-template-columns:\\s*repeat\\(2,[^}]*overflow:\\s*visible;',
+                '\\.home-hero-trust \\.home-trust-item\\s*\\{[^}]*flex:\\s*0 0 auto;' +
+                    '[^}]*font-size:\\s*var\\(--type-helper-size\\);' +
+                    '[^}]*line-height:\\s*var\\(--type-helper-leading\\);[^}]*white-space:\\s*nowrap;',
             ),
+        );
+        expect(services).toMatch(
+            /\.home-hero-trust \.home-trust-copy\s*\{[^}]*display:\s*inline-flex;[^}]*white-space:\s*nowrap;/,
+        );
+        expect(services).toMatch(
+            /\.home-hero-trust \.home-trust-copy :is\(\.home-trust-label, \.home-trust-description\)\s*\{[^}]*display:\s*inline;[^}]*white-space:\s*nowrap;/,
+        );
+        expect(services).toMatch(
+            /\.home-hero-trust \.home-trust-bar \.home-trust-item \.trust-icon\s*\{[^}]*color:\s*inherit;/,
+        );
+        expect(services).not.toMatch(
+            /\.home-hero-trust[^}]*text-overflow:\s*ellipsis|\.hero-service-overlay/,
         );
     });
 

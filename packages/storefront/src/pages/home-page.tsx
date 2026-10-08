@@ -1069,7 +1069,7 @@ export function HomePage() {
                 className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                 style={{ order: homepageModuleOrder('TRUST_BAR') }}
                 aria-label={isZh ? '服务信息' : 'Service information'}
-                tabIndex={!desktop && (trustBarHasLongCopy || heroCount > 0) ? 0 : undefined}
+                tabIndex={heroCount > 0 || (!desktop && trustBarHasLongCopy) ? 0 : undefined}
             >
                 {trustItems.map((item, index) => {
                     const { label, description, icon: TrustIcon } = item;
@@ -1098,10 +1098,10 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    const overlayTrustBar = hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
-    // All stores and viewports share the hero overlay. A standalone service
-    // floor is only needed when the merchant has no published hero.
-    const introOrders = (overlayTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
+    const heroTrustBar = hasHomepageModule('HERO') && heroCount > 0 && Boolean(trustBar);
+    // The service row follows the image for every store and viewport. A standalone
+    // service floor is only needed when the merchant has no published hero.
+    const introOrders = (heroTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
     const groupedIntro =
@@ -1213,6 +1213,13 @@ export function HomePage() {
                                             setHeroInteractionPaused(false);
                                         }
                                     }}
+                                    onScrollCapture={event => {
+                                        if (
+                                            event.target instanceof HTMLElement &&
+                                            event.target.matches('.home-trust-bar')
+                                        )
+                                            setHeroAutoplayStopped(true);
+                                    }}
                                 >
                                     <section
                                         ref={heroViewportRef}
@@ -1220,7 +1227,6 @@ export function HomePage() {
                                             'hero hero-image-overlay',
                                             heroCount > 1 ? 'is-swipeable' : '',
                                             heroMotion?.phase === 'dragging' ? 'is-dragging' : '',
-                                            overlayTrustBar ? 'has-service-overlay' : '',
                                             desktop && heroCount > 1 ? 'has-page-picker' : '',
                                         ]
                                             .filter(Boolean)
@@ -1236,7 +1242,7 @@ export function HomePage() {
                                                 !desktop &&
                                                 event.target instanceof HTMLElement &&
                                                 event.target.matches(
-                                                    '.hero-rich-copy-region, .hero-rich-copy-surface, .hero-rich-stats-row, .home-trust-bar',
+                                                    '.hero-rich-copy-region, .hero-rich-copy-surface, .hero-rich-stats-row',
                                                 )
                                             )
                                                 setHeroAutoplayStopped(true);
@@ -1314,13 +1320,8 @@ export function HomePage() {
                                                             <HeroScene
                                                                 content={slide}
                                                                 mediaOverlay={
-                                                                    <div className="hero-overlay-controls">
-                                                                        {overlayTrustBar && (
-                                                                            <div className="hero-service-overlay">
-                                                                                {trustBar}
-                                                                            </div>
-                                                                        )}
-                                                                        {desktop && heroCount > 1 && (
+                                                                    desktop && heroCount > 1 ? (
+                                                                        <div className="hero-overlay-controls">
                                                                             <div
                                                                                 className="hero-page-picker"
                                                                                 role="group"
@@ -1359,8 +1360,8 @@ export function HomePage() {
                                                                                     ),
                                                                                 )}
                                                                             </div>
-                                                                        )}
-                                                                    </div>
+                                                                        </div>
+                                                                    ) : undefined
                                                                 }
                                                                 imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${slide.title || storefrontName}`}
                                                                 onImageOpen={() => handleHeroImageOpen(slide)}
@@ -1413,10 +1414,11 @@ export function HomePage() {
                                                 : ''}
                                         </span>
                                     </section>
+                                    {heroTrustBar && <div className="home-hero-trust">{trustBar}</div>}
                                 </div>
                             )}
 
-                            {!overlayTrustBar && trustBar}
+                            {!heroTrustBar && trustBar}
 
                             {hasHomepageModule('QUICK_LINKS') && quickLinks.length > 0 ? (
                                 <nav
