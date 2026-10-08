@@ -3,6 +3,7 @@ import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultAccountRecommendationSettings } from '../../../../storefront-content-plugin/src/shared/account-recommendation-settings';
+import { AdminOverlayHost } from '../../components/AdminOverlayHost';
 import type { StorefrontContentBlock, StorefrontContentResult } from '../../graphql/storefront.graphql';
 import { newContentBlock, newContentItem } from './storefront-content-utils';
 import { StorefrontContentModule } from './StorefrontContentModule';
@@ -179,6 +180,72 @@ beforeEach(() => {
 afterEach(() => {
     act(() => root.unmount());
     host.remove();
+});
+
+it('portals the actual carousel manager outside the isolated page and preserves its close and draft lifecycle', async () => {
+    host.style.isolation = 'isolate';
+    const renderPage = async (active = true) => {
+        await act(async () => {
+            root.render(
+                <AdminOverlayHost owner="/storefront" active={active}>
+                    <StorefrontModule />
+                </AdminOverlayHost>,
+            );
+        });
+    };
+    await renderPage();
+    const opener = Array.from(host.querySelectorAll('button')).find(
+        node => node.textContent?.trim() === '首页轮播图',
+    );
+    if (!opener) throw new Error('Missing carousel manager opener');
+    const manager = () => {
+        const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="首页轮播图"]');
+        if (!dialog) throw new Error('Missing carousel manager');
+        return dialog;
+    };
+    const interval = () => {
+        const input = manager().querySelector<HTMLInputElement>('input[type="number"]');
+        if (!input) throw new Error('Missing carousel interval');
+        return input;
+    };
+    await act(async () => {
+        opener.focus();
+        opener.click();
+    });
+    const overlay = document.querySelector<HTMLElement>('[data-admin-overlay-owner="/storefront"]');
+    expect(overlay?.parentElement).toBe(document.body);
+    expect(overlay?.contains(manager())).toBe(true);
+    expect(host.contains(manager())).toBe(false);
+    expect(manager().classList.contains('fixed')).toBe(true);
+    expect(manager().classList.contains('inset-0')).toBe(true);
+    expect(manager().classList.contains('z-40')).toBe(true);
+    expect(document.activeElement).toBe(manager());
+    await act(async () => {
+        const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        if (!setValue) throw new Error('Missing native input setter');
+        setValue.call(interval(), '9');
+        interval().dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await renderPage(false);
+    expect(overlay?.hidden).toBe(true);
+    expect(overlay?.hasAttribute('inert')).toBe(true);
+    await renderPage();
+    expect(overlay?.hidden).toBe(false);
+    expect(interval().value).toBe('9');
+    const close = manager().querySelector<HTMLButtonElement>('button[aria-label="关闭轮播图管理"]');
+    if (!close) throw new Error('Missing carousel manager close button');
+    await act(async () => close.click());
+    expect(document.querySelector('[role="dialog"][aria-label="首页轮播图"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    await act(async () => opener.click());
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    await act(async () => document.dispatchEvent(escape));
+    expect(escape.defaultPrevented).toBe(true);
+    expect(document.querySelector('[role="dialog"][aria-label="首页轮播图"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    expect(mocks.update).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.other).not.toHaveBeenCalled();
 });
 
 describe('store scoped verified content writes', () => {

@@ -30,6 +30,28 @@ function canonical(value: unknown): string {
     return JSON.stringify(value ?? null);
 }
 
+function heroSettingsMatch(
+    expected: Record<string, unknown> | null | undefined,
+    received: Record<string, unknown> | null | undefined,
+): boolean {
+    const assetId = (value: unknown) =>
+        (typeof value === 'string' && value.trim()) || (typeof value === 'number' && Number.isFinite(value))
+            ? String(value)
+            : null;
+    const expectedAssetId = assetId(expected?.mobileImageAssetId);
+    if (expectedAssetId && expectedAssetId === assetId(received?.mobileImageAssetId)) {
+        // The server resolves the URL from this asset and may serialize its ID as a number.
+        // All copy, dimensions and other settings still require an exact match.
+        const normalized = (settings: Record<string, unknown> | null | undefined) => ({
+            ...settings,
+            mobileImageAssetId: expectedAssetId,
+            mobileImageUrl: null,
+        });
+        return canonical(normalized(expected)) === canonical(normalized(received));
+    }
+    return canonical(expected) === canonical(received);
+}
+
 /** Check submitted fields only: server generated English and image URLs may differ. */
 export function verifySavedBlock(
     saved: StorefrontContentBlock | null | undefined,
@@ -72,7 +94,11 @@ export function verifySavedBlock(
             (field === 'startsAt' || field === 'endsAt') && value
                 ? new Date(String(value)).toISOString()
                 : value;
-        if (canonical(normalize(expected)) !== canonical(normalize(received))) {
+        const matches =
+            field === 'settings' && saved.type === 'HERO'
+                ? heroSettingsMatch(input.settings, actual.settings)
+                : canonical(normalize(expected)) === canonical(normalize(received));
+        if (!matches) {
             throw new Error(`保存结果与提交内容不一致（${field}），请重新读取确认`);
         }
     }

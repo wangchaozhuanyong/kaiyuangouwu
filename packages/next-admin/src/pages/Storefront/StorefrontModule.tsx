@@ -27,6 +27,7 @@ import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
@@ -1088,7 +1089,7 @@ function CarouselManager({
     const canCreate = hasAnyPermission(['CreateStorefrontContent']);
     const canUpdate = hasAnyPermission(['UpdateStorefrontContent']);
     const disabled = pending || Boolean(error) || interval === undefined;
-    return (
+    const dialog = (
         <AccessibleDialogSurface
             accessibleName="首页轮播图"
             onRequestClose={onClose}
@@ -1208,6 +1209,7 @@ function CarouselManager({
             </div>
         </AccessibleDialogSurface>
     );
+    return <AdminOverlayPortal>{dialog}</AdminOverlayPortal>;
 }
 
 function CarouselInterval({

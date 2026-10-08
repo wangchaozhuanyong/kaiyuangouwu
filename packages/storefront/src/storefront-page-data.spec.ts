@@ -225,6 +225,73 @@ describe('public page fetch boundary', () => {
         vi.resetModules();
     });
 
+    it('keeps srcdoc preview reads on the Shop API bridge when the document URL has no preview parameters', async () => {
+        vi.stubGlobal('window', {
+            location: { host: '', origin: 'null', pathname: 'srcdoc', search: '' },
+        });
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        const { setStorefrontPreviewParameters } = await import('./storefront-preview-parameters');
+        setStorefrontPreviewParameters(
+            new URLSearchParams({
+                storefrontPreviewEmbedded: '1',
+                storefrontPreviewLanguage: 'en',
+                storefrontPreviewDocumentUrl: 'https://admin.example.test/',
+            }),
+        );
+        const { fetchPublicPage, readInitialPublicPage } = await import('./storefront-page-data');
+        await expect(fetchPublicPage('en', 'MYR')).resolves.toBeUndefined();
+        expect(readInitialPublicPage()).toBeUndefined();
+        const { CatalogApi } = await import('./api/catalog');
+        const request = vi.fn().mockResolvedValue({ storefrontCatalog: { totalItems: 0, items: [] } });
+        const api = new CatalogApi({
+            market: {
+                code: 'store-a',
+                defaultLanguageCode: 'en',
+                currencyCode: 'MYR',
+                countryCode: 'MY',
+                locale: 'en-MY',
+                label: 'Store A',
+            },
+            languageCode: 'en',
+            request,
+            getAuthToken: () => null,
+            createAuthTokenCapture: () => () => undefined,
+            clearAuthToken: () => undefined,
+            authenticationRequest: vi.fn(),
+            assertCart: value => value,
+            assertCheckoutSession: value => value,
+            assertOrder: value => value,
+            assertNoError: () => undefined,
+            getStorefrontCatalogAvailable: () => null,
+            setStorefrontCatalogAvailable: () => undefined,
+        });
+        await expect(api.catalog({ take: 12 })).resolves.toEqual({ totalItems: 0, items: [] });
+        expect(request).toHaveBeenCalledWith(
+            expect.stringContaining('query StorefrontCatalog'),
+            expect.objectContaining({ input: expect.objectContaining({ take: 12 }) }),
+            undefined,
+            undefined,
+            undefined,
+        );
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps standalone URL previews off the public aggregate endpoint', async () => {
+        vi.stubGlobal('window', {
+            location: {
+                host: 'store.test',
+                origin: 'https://store.test',
+                search: '?storefrontPreviewEmbedded=1',
+            },
+        });
+        const fetchMock = vi.fn();
+        vi.stubGlobal('fetch', fetchMock);
+        const { fetchPublicPage } = await import('./storefront-page-data');
+        await expect(fetchPublicPage('en', 'MYR')).resolves.toBeUndefined();
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
     it.each([
         [Response.json({ errorCode: 'STOREFRONT_CLOSED' }, { status: 403 }), 'STOREFRONT_CLOSED'],
         [new Response('legacy access denied', { status: 403 }), undefined],

@@ -30,6 +30,7 @@ import {
     storefrontQueryKeys,
 } from './query-client';
 import { ShopApiGraphQlError } from './shop-api-errors';
+import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { readStoredLanguage, readStoredSettlementCurrency } from './storefront-utils';
 
 export type PublicPageData = StorefrontPageData<
@@ -71,7 +72,7 @@ export function validatePublicPageData(
 
 export function readInitialPublicPage(): PublicPageData | undefined {
     if (typeof document === 'undefined' || SEND_CLIENT_CHANNEL_TOKEN) return;
-    if (new URLSearchParams(window.location.search).get('storefrontPreviewEmbedded') === '1') return;
+    if (storefrontPreviewParameters().get('storefrontPreviewEmbedded') === '1') return;
     try {
         const value: unknown = JSON.parse(
             document.getElementById(STOREFRONT_PAGE_DATA_ELEMENT_ID)?.textContent ?? 'null',
@@ -156,7 +157,7 @@ export async function fetchPublicPage(
     expectedChannelCode?: string,
 ): Promise<PublicPageData | undefined> {
     if (SEND_CLIENT_CHANNEL_TOKEN || typeof window === 'undefined') return;
-    if (new URLSearchParams(window.location.search).get('storefrontPreviewEmbedded') === '1') return;
+    if (storefrontPreviewParameters().get('storefrontPreviewEmbedded') === '1') return;
     const normalized = canonicalPublicPageRequest(request);
     const url = publicPageUrl(normalized, languageCode, currencyCode);
     const generation = publicPageReadGeneration();
