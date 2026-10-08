@@ -1,6 +1,7 @@
 /* SERVICES_SCALABLE_DESKTOP_20261003: introduction above the growing tool directory on desktop.
    Mobile retains directory B geometry; all viewports inherit the active skin.
-   Page layout: this file; directory rows: service-entries.css; icon frames: semantic-icons.css. */
+   Page layout: this file; introduction: shared/business-services-hero.css;
+   directory rows: service-entries.css; icon frames: semantic-icons.css. */
 .business-services-page {
     --services-tool-icon-size: 44px;
     --page-surface: var(--bg);
@@ -33,44 +34,6 @@
     margin: var(--space-section) 0 0;
 }
 
-.business-services-heading {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    min-width: 0;
-    overflow: hidden;
-    gap: 24px;
-    padding: 24px 20px;
-    border: 1px solid var(--line);
-    border-radius: var(--skin-card-radius);
-    background: linear-gradient(125deg, var(--soft), var(--surface));
-}
-
-.business-services-heading:has(.business-services-hero-media) {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
-    padding: 0;
-}
-
-.business-services-heading:has(.business-services-hero-media) .business-services-heading-copy {
-    padding: 24px 20px;
-}
-
-.business-services-heading-copy {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: var(--space-12);
-}
-
-.business-services-heading-copy:has(.business-services-heading-link) {
-    grid-template-columns: minmax(0, 1fr) fit-content(45%);
-}
-
 .business-services-architecture {
     position: absolute;
     right: -24px;
@@ -81,79 +44,6 @@
     stroke-width: 0.7;
     opacity: 0.38;
     pointer-events: none;
-}
-
-.business-services-page .business-services-page-title {
-    min-width: 0;
-    margin: 0;
-    color: var(--text);
-    font-family: var(--skin-display-font, var(--font-ui));
-    font-size: var(--type-page-size);
-    font-weight: var(--font-weight-bold);
-    letter-spacing: var(--tracking-normal);
-    line-height: var(--type-page-leading);
-    overflow-wrap: anywhere;
-}
-
-.business-services-heading p {
-    grid-column: 1 / -1;
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
-    overflow-wrap: anywhere;
-}
-
-.business-services-heading-link {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    max-width: 100%;
-    min-height: 44px;
-    padding: 10px 16px;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    background: var(--accent);
-    color: var(--accent-foreground);
-    font: inherit;
-    font-size: var(--type-body-size);
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--type-body-leading);
-    overflow-wrap: anywhere;
-    cursor: pointer;
-    transition: background-color 150ms ease;
-}
-
-.business-services-heading-link:hover {
-    background: var(--accent-hover);
-}
-
-.business-services-heading-link:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 4px;
-}
-
-.business-services-heading-link svg {
-    width: 16px;
-    height: 16px;
-    flex: none;
-}
-
-.business-services-hero-media {
-    min-width: 0;
-}
-
-.business-services-hero-media :is(.safe-image-frame, img) {
-    display: block;
-    width: 100%;
-    aspect-ratio: 16 / 10;
-    border-radius: 0;
-    object-fit: cover;
-    object-position: center;
 }
 
 .business-services-empty {
@@ -171,37 +61,6 @@
         margin: 0;
     }
 
-    .business-services-heading {
-        grid-column: 1;
-        grid-row: 1;
-        flex-direction: row;
-        align-items: center;
-        padding: 32px;
-    }
-
-    .business-services-heading-copy {
-        flex: 1;
-        min-width: 0;
-    }
-
-    .business-services-heading-link {
-        grid-row: 1 / span 2;
-        align-self: center;
-    }
-
-    .business-services-heading p {
-        grid-column: 1;
-        max-width: 75ch;
-    }
-
-    .business-services-heading:has(.business-services-hero-media) .business-services-heading-copy {
-        padding: 32px;
-    }
-
-    .business-services-hero-media :is(.safe-image-frame, img) {
-        aspect-ratio: 5 / 2;
-    }
-
     .business-services-page {
         --services-tool-icon-size: 64px;
     }
@@ -212,18 +71,7 @@
         bottom: -20px;
     }
 
-    .business-services-heading p {
-        font-size: var(--type-body-size);
-        line-height: var(--type-body-leading);
-    }
-
     .business-services-empty {
         margin-top: 24px;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .business-services-heading-link {
-        transition: none;
     }
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { storefrontClientPluginCatalog } from '../../../../storefront-content-plugin/src/client-plugin-manifest';
 import { ClientPluginsModule } from '../Plugins/ClientPluginsModule';
 import { BusinessServicesCopyModule } from './BusinessServicesCopyModule';
+import { newContentBlock, newContentItem } from './storefront-content-utils';
 
 const mocks = vi.hoisted(() => ({
     data: {} as Record<string, unknown>,
@@ -34,6 +35,8 @@ beforeEach(() => {
     mocks.mutate.mockRejectedValue(new Error('Local fixture: no remote writes'));
     mocks.data = {
         activeChannel: { id: 'local', token: 'local-fixture', code: 'local' },
+        storefrontVisualPreset: { channelId: 'local', presetId: 'classic', revision: 'fixture' },
+        storefrontPreviewBranding: { channelId: 'local', name: 'Local fixture' },
         storefrontContentBlocks: [],
         collections: { items: [{ id: 'category-1', name: '测试分类', parentId: null }], totalItems: 1 },
         selectedCollections: { items: [], totalItems: 0 },
@@ -60,6 +63,65 @@ async function select(input: HTMLSelectElement, value: string) {
 }
 
 describe('compact editors retain drafts', () => {
+    it('opts into shared overlay without changing the image, link, or installed items', async () => {
+        const block = newContentBlock('CLIENT_PLUGINS', 10_001, 'Existing services');
+        block.id = 'services';
+        block.code = 'storefront-client-plugins';
+        block.updatedAt = '2026-10-09T00:00:00Z';
+        block.imageAssetId = 'retained-image';
+        block.imageAsset = {
+            id: 'retained-image',
+            preview: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',
+            source: '',
+            name: 'Existing image',
+            mimeType: 'image/svg+xml',
+        };
+        block.targetType = 'URL';
+        block.targetValue = 'https://example.com/services';
+        block.settings = { businessServicesCopyVersion: 1, preservedSetting: true };
+        block.translations = [
+            { languageCode: 'zh_Hans', title: '服务标题', subtitle: '', body: '服务说明', ctaLabel: '' },
+        ];
+        block.items = [newContentItem(0)];
+        mocks.data.storefrontContentBlocks = [block];
+        await act(async () => root.render(<BusinessServicesCopyModule />));
+        const layout = host.querySelector<HTMLSelectElement>('[aria-label="页首图文布局"]')!;
+        const preview = host.querySelector('[data-services-hero-layout]')!;
+        const originalImage = preview.querySelector('img')!.getAttribute('src');
+        expect(layout.value).toBe('stacked');
+        expect(preview.getAttribute('data-services-hero-layout')).toBe('stacked');
+        await select(layout, 'image-overlay');
+        expect(preview.getAttribute('data-services-hero-layout')).toBe('image-overlay');
+        expect(preview.querySelector('img')!.getAttribute('src')).toBe(originalImage);
+        const save = [...host.querySelectorAll('button')].find(button =>
+            button.textContent?.includes('保存并发布'),
+        )!;
+        await act(async () => save.click());
+        const input = mocks.mutate.mock.calls[0][0].variables.input;
+        expect(input).toMatchObject({
+            id: 'services',
+            expectedUpdatedAt: block.updatedAt,
+            targetType: 'URL',
+            targetValue: 'https://example.com/services',
+            settings: { preservedSetting: true, businessServicesHeroLayout: 'image-overlay' },
+        });
+        expect(input.items).toHaveLength(1);
+        expect(input).not.toHaveProperty('imageAssetId');
+        expect(input).not.toHaveProperty('imageUrl');
+        expect(input.allowImageReplacement).not.toBe(true);
+    });
+
+    it('keeps editing available when the current store preview theme is unavailable', async () => {
+        mocks.data.storefrontVisualPreset = { channelId: 'another-store', presetId: 'neo-minimalist' };
+        await act(async () => root.render(<BusinessServicesCopyModule />));
+        expect(host.querySelector('[data-business-services-preview]')).toBeNull();
+        expect(host.textContent).toContain('店铺预览主题读取失败，编辑内容已保留');
+        const chinese = host.querySelector<HTMLInputElement>('input[maxlength="40"]')!;
+        expect(chinese.disabled).toBe(false);
+        await fill(chinese, '主题读取失败时保留的草稿');
+        expect(chinese.value).toBe('主题读取失败时保留的草稿');
+    });
+
     it('retains both language drafts and submits both after switching the visible editor', async () => {
         await act(async () => root.render(<BusinessServicesCopyModule />));
         const language = host.querySelector<HTMLSelectElement>('[aria-label="编辑语言"]')!;

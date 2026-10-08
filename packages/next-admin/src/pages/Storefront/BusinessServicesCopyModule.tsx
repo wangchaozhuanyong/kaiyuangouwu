@@ -1,7 +1,18 @@
 import { useMutation } from '@apollo/client/react';
 import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
-import { useLayoutEffect, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
+import {
+    BusinessServicesHero,
+    resolveBusinessServicesHeroLayout,
+} from '../../../../storefront-content-plugin/src/shared/business-services-hero';
+import {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
+} from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
+import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
+import previewFoundationStyles from '../../../../storefront/src/styles/experience-foundations.css?inline';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
@@ -12,6 +23,10 @@ import { StorefrontMobileViewSwitch, type StorefrontMobileView } from './Storefr
 
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import {
+    STOREFRONT_VISUAL_PRESET_QUERY,
+    type StorefrontVisualPresetResult,
+} from '../../graphql/storefront-visual-preset.graphql';
+import {
     CREATE_STOREFRONT_BLOCK_MUTATION,
     STOREFRONT_CONTENT_QUERY,
     UPDATE_STOREFRONT_BLOCK_MUTATION,
@@ -20,6 +35,7 @@ import {
 } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useServerDraft } from '../../hooks/use-server-draft';
+import { AdminImage } from '../../utils/admin-image';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -33,6 +49,7 @@ import { verifyContentChannel, verifySavedBlock } from './storefront-save-verifi
 const BLOCK_CODE = 'storefront-client-plugins';
 const COPY_VERSION = 1;
 type Language = 'zh_Hans' | 'en';
+const previewStyles = previewFoundationStyles.replaceAll(':root', '[data-business-services-preview]');
 
 const defaults: Record<Language, { title: string; body: string; subtitle?: string; ctaLabel?: string }> = {
     zh_Hans: {
@@ -53,6 +70,23 @@ export function BusinessServicesCopyModule() {
     );
     const channel = query.data?.activeChannel;
     const consistent = channel && (!getActiveChannelToken() || channel.token === getActiveChannelToken());
+    const themeQuery = useQuery<StorefrontVisualPresetResult>(STOREFRONT_VISUAL_PRESET_QUERY, {
+        skip: !consistent,
+    });
+    const theme = themeQuery.data;
+    const previewThemeReady = Boolean(
+        consistent &&
+        theme?.activeChannel?.id === channel?.id &&
+        theme?.activeChannel?.token === channel?.token &&
+        theme?.storefrontVisualPreset?.channelId === channel?.id &&
+        theme?.storefrontPreviewBranding?.channelId === channel?.id,
+    );
+    const presetId = normalizeStorefrontVisualPreset(theme?.storefrontVisualPreset?.presetId);
+    const palette = resolveStorefrontSemanticPalette(presetId, theme?.storefrontPreviewBranding);
+    const previewStyle = {
+        ...semanticPaletteCssVariables(palette),
+        ...storefrontSkinCssVariables(presetId, palette),
+    } as CSSProperties;
     const canEdit = Boolean(
         consistent &&
         !query.loading &&
@@ -183,6 +217,7 @@ export function BusinessServicesCopyModule() {
     };
     const preview = draft ? getTranslation(draft, previewLanguage) : defaults[previewLanguage];
     const previewImage = draft?.imageAsset?.preview || draft?.imageUrl;
+    const heroLayout = resolveBusinessServicesHeroLayout(draft?.settings);
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -327,6 +362,34 @@ export function BusinessServicesCopyModule() {
                                     </div>
                                 );
                             })}
+                            <AdminField
+                                label="页首图文布局"
+                                description="图下模式保留现有配图；叠加模式将后台文字显示在图片上，建议使用不含广告文字、左侧留空且主体在右侧的底图。"
+                                className="text-xs font-bold text-slate-700"
+                            >
+                                <AdminSelect
+                                    aria-label="页首图文布局"
+                                    value={heroLayout}
+                                    disabled={!canEdit || pending}
+                                    onChange={event =>
+                                        setDraft(current =>
+                                            current
+                                                ? {
+                                                      ...current,
+                                                      settings: {
+                                                          ...(current.settings ?? {}),
+                                                          businessServicesHeroLayout: event.target.value,
+                                                      },
+                                                  }
+                                                : current,
+                                        )
+                                    }
+                                    className={inputClass}
+                                >
+                                    <option value="stacked">图片在上，文字在下</option>
+                                    <option value="image-overlay">无文字底图，文字叠加</option>
+                                </AdminSelect>
+                            </AdminField>
                         </section>
                         <div className="min-w-0 space-y-3 lg:sticky lg:top-0">
                             <section
@@ -341,6 +404,7 @@ export function BusinessServicesCopyModule() {
                                         />
                                     </h2>
                                     <AdminSelect
+                                        aria-label="预览语言"
                                         value={previewLanguage}
                                         onChange={event => setPreviewLanguage(event.target.value as Language)}
                                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -349,34 +413,50 @@ export function BusinessServicesCopyModule() {
                                         <option value="en">英文</option>
                                     </AdminSelect>
                                 </div>
-                                <div
-                                    className={`relative isolate mt-5 grid gap-5 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 to-violet-950 p-7 text-white shadow-lg ${previewImage ? 'sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center' : ''}`}
-                                >
-                                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_fit-content(45%)] items-start gap-3 [overflow-wrap:anywhere]">
-                                        <h3 className="text-2xl font-bold leading-tight">
-                                            {preview.title || '—'}
-                                        </h3>
-                                        {linkValue.trim() && linkIsValid ? (
-                                            <span className="col-start-2 row-start-1 inline-flex min-h-11 items-center justify-self-end gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-bold text-white">
-                                                {preview.ctaLabel?.trim() ||
-                                                    (previewLanguage === 'zh_Hans'
-                                                        ? '打开服务网站'
-                                                        : 'Open service website')}
-                                                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-                                            </span>
-                                        ) : null}
-                                        <p className="col-span-full text-sm leading-6 text-slate-300">
-                                            {preview.body || '—'}
-                                        </p>
-                                    </div>
-                                    {previewImage && (
-                                        <img
-                                            src={previewImage}
-                                            alt="商业服务页首配图预览"
-                                            className="h-40 w-full rounded-xl object-contain sm:h-[200px]"
+                                <style>{previewStyles}</style>
+                                {themeQuery.error || (!themeQuery.loading && !previewThemeReady) ? (
+                                    <State
+                                        tone="error"
+                                        label="店铺预览主题读取失败，编辑内容已保留"
+                                        action={() => void themeQuery.refetch()}
+                                    />
+                                ) : !previewThemeReady ? (
+                                    <State label="正在读取店铺预览主题…" />
+                                ) : (
+                                    <div
+                                        className="mt-5"
+                                        data-business-services-preview
+                                        data-storefront-preset={presetId}
+                                        style={previewStyle}
+                                    >
+                                        <BusinessServicesHero
+                                            headingLevel="h3"
+                                            title={preview.title || '—'}
+                                            body={preview.body || '—'}
+                                            layout={heroLayout}
+                                            image={
+                                                previewImage ? (
+                                                    <AdminImage
+                                                        src={previewImage}
+                                                        mediaKind="hero"
+                                                        alt="商业服务页首配图预览"
+                                                    />
+                                                ) : undefined
+                                            }
+                                            action={
+                                                linkValue.trim() && linkIsValid ? (
+                                                    <span className="business-services-heading-link">
+                                                        {preview.ctaLabel?.trim() ||
+                                                            (previewLanguage === 'zh_Hans'
+                                                                ? '打开服务网站'
+                                                                : 'Open service website')}
+                                                        <ExternalLink aria-hidden="true" />
+                                                    </span>
+                                                ) : undefined
+                                            }
                                         />
-                                    )}
-                                </div>
+                                    </div>
+                                )}
                             </section>
                             <section
                                 className={`min-w-0 space-y-3 rounded-xl border border-slate-200 bg-white p-4 ${mobileView === 'edit' ? '' : 'hidden xl:block'}`}
@@ -401,7 +481,9 @@ export function BusinessServicesCopyModule() {
                                         }
                                     />
                                     <p className="text-xs leading-5 text-slate-500">
-                                        图片显示在电脑端卡片右侧，手机端沿用原布局。建议选用主体清晰的横图。
+                                        {heroLayout === 'image-overlay'
+                                            ? '叠加模式建议使用无广告文字、左侧留空且主体在右侧的横向底图；中文与英文文字都由后台实时叠加。切换布局不会替换图片。'
+                                            : '图下模式将图片与文字分开显示，可继续使用已有配图。切换布局不会替换图片。'}
                                     </p>
                                     {imageChanges.length > 0 && (
                                         <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">

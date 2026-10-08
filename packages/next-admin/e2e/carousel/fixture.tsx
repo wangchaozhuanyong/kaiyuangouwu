@@ -1,14 +1,26 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
+import {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
+} from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
+import { normalizeStorefrontVisualPreset } from '../../../storefront-content-plugin/src/visual-presets';
 import { fixtureData } from '../../../storefront/e2e/visual-presets/fixtures.mjs';
 import type { ShopApi } from '../../../storefront/src/api';
+import { DesktopLayoutContext, useDesktopViewport } from '../../../storefront/src/desktop-layout';
 import { useStorefrontPublicData } from '../../../storefront/src/hooks/useStorefrontPublicData';
+import { BusinessServicesPage } from '../../../storefront/src/pages/business-services-page';
+import { BusinessServicesPageContext } from '../../../storefront/src/storefront-page-contexts';
 import { HomeDualCategoryShowcase } from '../../../storefront/src/storefront-ui/content-ui';
+import clientStyles from '../../../storefront/src/styles.css?inline';
+import desktopStyles from '../../../storefront/src/styles/desktop-layout.css?inline';
+import presetStyles from '../../../storefront/src/styles/visual-presets.css?inline';
 import type { StorefrontContentBlock as ClientBlock } from '../../../storefront/src/types';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
@@ -42,6 +54,7 @@ const replacementAsset = {
     preview: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520"><rect width="1600" height="520" fill="#445a78"/><rect x="1040" y="70" width="350" height="390" fill="#f3c99a"/></svg>')}`,
     source: '/assets/replacement-carousel.svg',
 };
+let servicesAsset = asset;
 let blocks = params.has('empty')
     ? []
     : [
@@ -199,7 +212,19 @@ if (params.has('plugins')) {
             },
         });
 }
-if (params.has('services')) {
+if (params.has('services') || params.has('services-client')) {
+    // Optional review artwork stays local to this synthetic fixture, never in merchant content.
+    const artworkUrl = params.get('artwork');
+    servicesAsset = artworkUrl
+        ? {
+              ...asset,
+              mimeType: 'image/png',
+              preview: artworkUrl,
+              source: artworkUrl,
+              width: 1983,
+              height: 793,
+          }
+        : asset;
     blocks.push({
         ...newContentBlock('CLIENT_PLUGINS', 10_001, '客户端插件配置'),
         __typename: 'StorefrontContentBlock',
@@ -208,8 +233,8 @@ if (params.has('services')) {
         createdAt: '2026-09-01T00:00:00Z',
         updatedAt: '2026-09-01T00:00:00Z',
         enabled: !params.has('services-disabled'),
-        imageAsset: asset,
-        imageUrl: asset.preview,
+        imageAsset: servicesAsset,
+        imageUrl: servicesAsset.preview,
         settings: { version: 1, page: 'category', businessServicesCopyVersion: 1 },
         translations: [
             {
@@ -367,7 +392,7 @@ const guestApi = {
         systemAnnouncements: [],
     }),
 } as unknown as ShopApi;
-function GuestPreview() {
+export function GuestPreview() {
     const result = useStorefrontPublicData({
         api: guestApi,
         market: {
@@ -558,6 +583,14 @@ const client = new ApolloClient({
                                     presetId: params.get('preset') ?? 'classic',
                                     revision: 'default',
                                 },
+                                storefrontPreviewBranding: {
+                                    channelId: channel.id,
+                                    name: '预览测试店铺',
+                                    backgroundColor: null,
+                                    primaryColor: null,
+                                    accentColor: null,
+                                    highlightColor: null,
+                                },
                             };
                         } else if (name === 'StorefrontPreviewBranding') {
                             data = {
@@ -575,7 +608,7 @@ const client = new ApolloClient({
                         } else if (name === 'NextAdminStorefrontEditorOptions') {
                             data = { products: { items: [], totalItems: 0 } };
                         } else if (name === 'GetAssets') {
-                            data = { assets: { items: [asset, replacementAsset], totalItems: 2 } };
+                            data = { assets: { items: [servicesAsset, replacementAsset], totalItems: 2 } };
                         } else if (name === 'NextAdminBannerCollections') {
                             data = { collections: { items: [], totalItems: 0 } };
                         } else if (name === 'NextAdminSystemAnnouncements') {
@@ -665,11 +698,31 @@ const client = new ApolloClient({
                                 createdAt: previous?.createdAt ?? '2026-09-06T00:00:00Z',
                                 updatedAt: String(++revision),
                             };
+                            if (previous && Array.isArray(input.translations)) {
+                                // Match the server's locale merge: untouched English is omitted from writes.
+                                next.translations = [
+                                    ...previous.translations.map(translation => ({
+                                        ...translation,
+                                        ...input.translations.find(
+                                            update => update.languageCode === translation.languageCode,
+                                        ),
+                                    })),
+                                    ...input.translations.filter(
+                                        update =>
+                                            !previous.translations.some(
+                                                translation =>
+                                                    translation.languageCode === update.languageCode,
+                                            ),
+                                    ),
+                                ];
+                            }
                             if ('imageAssetId' in input) {
                                 next.imageAsset = input.imageAssetId
-                                    ? input.imageAssetId === replacementAsset.id
-                                        ? replacementAsset
-                                        : asset
+                                    ? previous?.imageAsset?.id === input.imageAssetId
+                                        ? previous.imageAsset
+                                        : input.imageAssetId === replacementAsset.id
+                                          ? replacementAsset
+                                          : servicesAsset
                                     : null;
                             }
                             blocks = previous
@@ -717,54 +770,179 @@ const client = new ApolloClient({
             }),
     ),
 });
-createRoot(document.getElementById('root')!).render(
-    <React.Fragment>
-        <FeatureHelpProvider>
-            <ApolloProvider client={client}>
-                <AdminPermissionsProvider
-                    permissions={
-                        params.has('readonly')
-                            ? ['ReadStorefrontContent']
-                            : params.has('editor')
-                              ? [
-                                    'ReadStorefrontContent',
-                                    'UpdateStorefrontContent',
-                                    'CreateStorefrontContent',
-                                ]
-                              : ['SuperAdmin']
-                    }
+
+/** Uses the actual services page and typed providers with this fixture's saved blocks only. */
+export function ServicesClientFixture() {
+    const [language, setLanguage] = useState<'zh_Hans' | 'en'>(
+        params.get('language') === 'en' ? 'en' : 'zh_Hans',
+    );
+    const [preset, setPreset] = useState(normalizeStorefrontVisualPreset(params.get('preset')));
+    const [copy, setCopy] = useState('saved');
+    const desktop = useDesktopViewport();
+    const palette = resolveStorefrontSemanticPalette(preset);
+    const variables = {
+        ...semanticPaletteCssVariables(palette),
+        ...storefrontSkinCssVariables(preset, palette),
+    };
+    const variableStyles = Object.entries(variables)
+        .map(([key, value]) => `${key}:${value}`)
+        .join(';');
+    useLayoutEffect(() => {
+        const previous = document.documentElement.dataset.storefrontPreset;
+        document.documentElement.dataset.storefrontPreset = preset;
+        return () => {
+            if (previous === undefined) delete document.documentElement.dataset.storefrontPreset;
+            else document.documentElement.dataset.storefrontPreset = previous;
+        };
+    }, [preset]);
+    const contentBlocks = blocks
+        .filter(block => block.enabled)
+        .map(block => {
+            const converted = decorationDraft(block, language).block!;
+            if (block.type !== 'CLIENT_PLUGINS') return converted;
+            // Review artwork is a loopback URL, so it is deliberately outside the real public Asset path.
+            converted.imageUrl = block.imageAsset?.preview || block.imageUrl;
+            if (copy === 'long') {
+                converted.title =
+                    language === 'en'
+                        ? 'Explore shared business tools, services, and benefits with editable store content'.slice(
+                              0,
+                              80,
+                          )
+                        : '智能服务帮助店铺连接工具权益与商业能力，中文标题可随时编辑并实时显示在图文预览中'.slice(
+                              0,
+                              40,
+                          );
+                converted.body = (
+                    language === 'en'
+                        ? 'Store-managed text remains editable and readable. Shared layouts preserve image bindings and support both languages. '
+                        : '后台文字保持可编辑，布局由所有店铺共用，切换语言和布局都不会替换已有图片。'
+                )
+                    .repeat(6)
+                    .slice(0, 200);
+            }
+            return converted;
+        });
+    return (
+        <>
+            <style>{`${clientStyles}\n${desktopStyles}\n${presetStyles}\n:root{${variableStyles}}`}</style>
+            <div className="flex flex-wrap items-center gap-3 p-3" data-services-client-controls>
+                <strong>本地客户端验收 · 示例数据</strong>
+                <label>
+                    语言{' '}
+                    <select
+                        aria-label="客户端验收语言"
+                        value={language}
+                        onChange={event => setLanguage(event.target.value as 'zh_Hans' | 'en')}
+                    >
+                        <option value="zh_Hans">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </label>
+                <label>
+                    皮肤{' '}
+                    <select
+                        aria-label="客户端验收皮肤"
+                        value={preset}
+                        onChange={event => setPreset(normalizeStorefrontVisualPreset(event.target.value))}
+                    >
+                        <option value="classic">经典</option>
+                        <option value="neo-minimalist">新锐科技极简</option>
+                    </select>
+                </label>
+                <label>
+                    文案{' '}
+                    <select
+                        aria-label="客户端验收文案"
+                        value={copy}
+                        onChange={event => setCopy(event.target.value)}
+                    >
+                        <option value="saved">保存的文案</option>
+                        <option value="long">长度上限示例</option>
+                    </select>
+                </label>
+            </div>
+            <div className={`storefront-app ${desktop ? 'desktop-store-layout' : ''}`}>
+                <BusinessServicesPageContext.Provider
+                    value={{
+                        contentBlocks,
+                        language: language === 'en' ? 'en' : 'zh',
+                        storefrontName: '预览测试店铺',
+                        logoUrl: null,
+                        marketLabel: '马来西亚',
+                        displayCurrencyCode: 'MYR',
+                        availableCurrencyCodes: ['MYR'],
+                        currencyLoading: false,
+                        onToggleLanguage: () => setLanguage(value => (value === 'en' ? 'zh_Hans' : 'en')),
+                        onCurrencyChange: () => undefined,
+                        onNotifications: () => undefined,
+                        onNavigate: () => undefined,
+                        onContentTarget: () => undefined,
+                    }}
                 >
-                    <div className="bg-slate-900 px-4 py-2 text-xs text-white">
-                        本地轮播管理验收 · 示例数据
-                    </div>
-                    <MemoryRouter
-                        initialEntries={
-                            params.has('announcements')
-                                ? ['/?tab=announcements']
-                                : params.has('banner')
-                                  ? ['/storefront/decoration?panel=desktop-category-banners']
-                                  : ['/']
+                    <DesktopLayoutContext.Provider value={desktop}>
+                        <BusinessServicesPage />
+                    </DesktopLayoutContext.Provider>
+                </BusinessServicesPageContext.Provider>
+            </div>
+        </>
+    );
+}
+
+createRoot(document.getElementById('root')!).render(
+    params.has('services-client') ? (
+        <ServicesClientFixture />
+    ) : (
+        <React.Fragment>
+            <FeatureHelpProvider>
+                <ApolloProvider client={client}>
+                    <AdminPermissionsProvider
+                        permissions={
+                            params.has('readonly')
+                                ? ['ReadStorefrontContent']
+                                : params.has('editor')
+                                  ? [
+                                        'ReadStorefrontContent',
+                                        'UpdateStorefrontContent',
+                                        'CreateStorefrontContent',
+                                    ]
+                                  : ['SuperAdmin']
                         }
                     >
-                        <div style={{ height: 'calc(100dvh - 32px)' }}>
-                            {params.has('plugins') ? (
-                                <ClientPluginsModule />
-                            ) : params.has('services') ? (
-                                <BusinessServicesCopyModule />
-                            ) : params.has('support') || params.has('announcements') || params.has('auth') ? (
-                                <StorefrontContentModule />
-                            ) : (
-                                <StorefrontModule />
-                            )}
+                        <div className="bg-slate-900 px-4 py-2 text-xs text-white">
+                            本地轮播管理验收 · 示例数据
                         </div>
-                    </MemoryRouter>
-                    {params.has('content-sync') && (
-                        <QueryClientProvider client={guestClient}>
-                            <GuestPreview />
-                        </QueryClientProvider>
-                    )}
-                </AdminPermissionsProvider>
-            </ApolloProvider>
-        </FeatureHelpProvider>
-    </React.Fragment>,
+                        <MemoryRouter
+                            initialEntries={
+                                params.has('announcements')
+                                    ? ['/?tab=announcements']
+                                    : params.has('banner')
+                                      ? ['/storefront/decoration?panel=desktop-category-banners']
+                                      : ['/']
+                            }
+                        >
+                            <div style={{ height: 'calc(100dvh - 32px)' }}>
+                                {params.has('plugins') ? (
+                                    <ClientPluginsModule />
+                                ) : params.has('services') ? (
+                                    <BusinessServicesCopyModule />
+                                ) : params.has('support') ||
+                                  params.has('announcements') ||
+                                  params.has('auth') ? (
+                                    <StorefrontContentModule />
+                                ) : (
+                                    <StorefrontModule />
+                                )}
+                            </div>
+                        </MemoryRouter>
+                        {params.has('content-sync') && (
+                            <QueryClientProvider client={guestClient}>
+                                <GuestPreview />
+                            </QueryClientProvider>
+                        )}
+                    </AdminPermissionsProvider>
+                </ApolloProvider>
+            </FeatureHelpProvider>
+        </React.Fragment>
+    ),
 );

@@ -1,7 +1,10 @@
 import { ExternalLink, Puzzle } from 'lucide-react';
 import './business-services-page.css';
 
-import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
+import {
+    BusinessServicesHero,
+    resolveBusinessServicesHeroLayout,
+} from '../../../storefront-content-plugin/src/shared/business-services-hero';
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -93,18 +96,16 @@ export function BusinessServicesPage() {
                 />
             )}
             <div className="business-services-workspace">
-                <header className="business-services-heading">
-                    {heroImageUrl ? (
-                        <div className="business-services-hero-media">
-                            <SafeImage src={heroImageUrl} alt="" imageKind="hero" />
-                        </div>
-                    ) : (
-                        <ServiceArchitectureMotif />
-                    )}
-                    <div className="business-services-heading-copy">
-                        {/* Both viewports render the same Admin-managed title, description and action. */}
-                        <h1 className="business-services-page-title">{heroTitle}</h1>
-                        {heroLinkTarget ? (
+                <BusinessServicesHero
+                    title={heroTitle}
+                    body={heroDescription}
+                    layout={resolveBusinessServicesHeroLayout(clientPluginBlock?.settings)}
+                    image={
+                        heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined
+                    }
+                    decoration={<ServiceArchitectureMotif />}
+                    action={
+                        heroLinkTarget ? (
                             <button
                                 type="button"
                                 className="business-services-heading-link"
@@ -114,10 +115,9 @@ export function BusinessServicesPage() {
                                     (isZh ? '打开服务网站' : 'Open service website')}
                                 <ExternalLink aria-hidden="true" />
                             </button>
-                        ) : null}
-                        <ContentText>{heroDescription}</ContentText>
-                    </div>
-                </header>
+                        ) : undefined
+                    }
+                />
                 <ClientPluginSlot
                     block={clientPluginBlock}
                     placement="BUSINESS_SERVICES_MAIN"
