@@ -1,0 +1,221 @@
+[
+  {
+    "scenario": "lost-response",
+    "width": 320,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ],
+      [
+        "prepareShipping"
+      ]
+    ],
+    "recoveryCalls": 5,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "cancel-not-found",
+    "width": 320,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ],
+      [
+        "prepareShipping"
+      ]
+    ],
+    "recoveryCalls": 3,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "acknowledged-read-failure",
+    "width": 320,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ]
+    ],
+    "recoveryCalls": 0,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "direct-purchase",
+    "width": 320,
+    "commands": [
+      [
+        "buyNow"
+      ],
+      [
+        "prepareShipping"
+      ],
+      [
+        "preparePayment"
+      ]
+    ],
+    "recoveryCalls": 0,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "lost-response",
+    "width": 390,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ]
+    ],
+    "recoveryCalls": 5,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "cancel-not-found",
+    "width": 390,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ],
+      [
+        "prepareShipping"
+      ]
+    ],
+    "recoveryCalls": 3,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "acknowledged-read-failure",
+    "width": 390,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ]
+    ],
+    "recoveryCalls": 0,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "direct-purchase",
+    "width": 390,
+    "commands": [
+      [
+        "buyNow"
+      ],
+      [
+        "prepareShipping"
+      ],
+      [
+        "preparePayment"
+      ]
+    ],
+    "recoveryCalls": 0,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "lost-response",
+    "width": 1440,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ],
+      [
+        "prepareShipping"
+      ]
+    ],
+    "recoveryCalls": 5,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "cancel-not-found",
+    "width": 1440,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ],
+      [
+        "prepareShipping"
+      ]
+    ],
+    "recoveryCalls": 3,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "acknowledged-read-failure",
+    "width": 1440,
+    "commands": [
+      [
+        "changes"
+      ],
+      [
+        "beginCheckout"
+      ],
+      [
+        "prepareShipping"
+      ]
+    ],
+    "recoveryCalls": 0,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  },
+  {
+    "scenario": "direct-purchase",
+    "width": 1440,
+    "commands": [
+      [
+        "buyNow"
+      ],
+      [
+        "prepareShipping"
+      ],
+      [
+        "preparePayment"
+      ]
+    ],
+    "recoveryCalls": 0,
+    "chargeRequests": 0,
+    "pageErrors": [],
+    "passed": true
+  }
+]
