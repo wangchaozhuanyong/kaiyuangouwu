@@ -273,6 +273,7 @@ describe('public page fetch boundary', () => {
             undefined,
             undefined,
             undefined,
+            undefined,
         );
         expect(fetchMock).not.toHaveBeenCalled();
     });

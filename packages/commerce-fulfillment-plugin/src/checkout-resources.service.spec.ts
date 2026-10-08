@@ -1,7 +1,12 @@
+import { OrderLine } from '@vendure/core';
+import { CalculatedPropertySubscriber } from '@vendure/core/dist/entity/subscribers';
 import assert from 'node:assert/strict';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CheckoutResourcesService } from './checkout-resources.service';
+import * as commerceOrder from './commerce-order-process';
+
+afterEach(() => vi.restoreAllMocks());
 function fixture(databaseType = 'sqljs') {
     const handlers = new Map<string, (event: any) => Promise<void>>();
     const order = {
@@ -39,7 +44,7 @@ function fixture(databaseType = 'sqljs') {
     const stock = { createReleasesForOrderLines: vi.fn() };
     const connection = {
         rawConnection: { getRepository: vi.fn(() => repository), options: { type: databaseType } },
-        getRepository: vi.fn(() => repository),
+        getRepository: vi.fn((_ctx: unknown, _entity: { name: string }) => repository),
         getEntityOrThrow: vi.fn().mockResolvedValue(order),
         withTransaction: vi.fn(async (ctx, work) => {
             const result = await work(ctx);
@@ -322,6 +327,251 @@ describe('checkout resource payment and retry boundaries', () => {
         };
         expect(await test.service.canDeliver(test.ctx, test.order.id)).toBe(true);
         expect(await test.service.canDeliver(test.ctx, test.order.id, fresh as any)).toBe(false);
+    });
+});
+
+describe('refunded checkout resource quantities', () => {
+    function resourceFixture() {
+        const test = fixture('mysql');
+        const allocations = new Map<string, number>();
+        const sales = new Map<string, number>();
+        const reservations = new Map<string, { state: string; quantity: number; releasedQuantity: number }>();
+        const query = {
+            leftJoinAndSelect: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            orderBy: vi.fn().mockReturnThis(),
+            addOrderBy: vi.fn().mockReturnThis(),
+            setLock: vi.fn().mockReturnThis(),
+            getMany: vi.fn().mockResolvedValue([]),
+        };
+        test.connection.getRepository.mockImplementation((_ctx: unknown, entity: { name: string }) => {
+            if (entity.name === 'Sale')
+                return {
+                    find: vi.fn(({ where }: any) =>
+                        Promise.resolve(
+                            sales.has(where.orderLine.id)
+                                ? [{ quantity: sales.get(where.orderLine.id) }]
+                                : [],
+                        ),
+                    ),
+                } as any;
+            if (entity.name === 'StockLevel')
+                return {
+                    manager: { connection: { options: { type: 'mysql' } } },
+                    createQueryBuilder: () => query,
+                } as any;
+            return test.repository;
+        });
+        vi.spyOn(test.service, 'outstandingAllocation').mockImplementation((_ctx, id) =>
+            Promise.resolve(allocations.get(String(id)) ?? 0),
+        );
+        const createAllocationsForOrderLines = vi.fn(
+            (_ctx, lines: Array<{ orderLineId: string; quantity: number }>) => {
+                for (const allocation of lines)
+                    allocations.set(
+                        allocation.orderLineId,
+                        (allocations.get(allocation.orderLineId) ?? 0) + allocation.quantity,
+                    );
+                return Promise.resolve();
+            },
+        );
+        Object.assign(test.stock, { createAllocationsForOrderLines });
+        Object.assign(test.digital, {
+            config: vi.fn().mockResolvedValue({}),
+            reservation: vi.fn((_ctx, id) => Promise.resolve(reservations.get(String(id)))),
+        });
+        const packaging = {
+            rulesForVariantIds: vi.fn().mockResolvedValue([]),
+            ensureStockLevelPairs: vi.fn(),
+            variantIdsForLock: vi.fn(ids => ids),
+            autoUnpackForOrder: vi.fn(),
+        };
+        Object.assign((test.service as any).packaging, packaging);
+        const deliver = vi.spyOn(commerceOrder, 'fulfillDigitalOrder').mockResolvedValue(undefined);
+        return {
+            ...test,
+            allocations,
+            sales,
+            reservations,
+            createAllocationsForOrderLines,
+            packaging,
+            deliver,
+        };
+    }
+    function line(id: string, quantity: number, type = 'physical', placed = quantity) {
+        return {
+            id,
+            quantity,
+            orderPlacedQuantity: placed,
+            productVariantId: `variant-${id}`,
+            customFields: { fulfillmentTypeSnapshot: type },
+        } as any;
+    }
+    function refund(
+        test: ReturnType<typeof resourceFixture>,
+        id: string,
+        quantity: number,
+        state = 'Settled',
+    ) {
+        Object.assign(test.order.payments[0], {
+            refunds: [{ state, lines: [{ orderLineId: id, quantity }] }],
+        });
+    }
+
+    it('retries physical resources with a hydrated OrderLine without flattening calculated getters', async () => {
+        const test = resourceFixture();
+        const hydratedLine = new OrderLine({
+            ...line('physical', 5),
+            listPrice: 1000,
+            initialListPrice: 1000,
+            listPriceIncludesTax: false,
+            taxLines: [],
+            adjustments: [],
+            linesReferences: [],
+        });
+        new CalculatedPropertySubscriber().afterLoad(hydratedLine);
+        expect(Object.getOwnPropertyDescriptor(hydratedLine, 'unitPrice')).toMatchObject({
+            get: expect.any(Function),
+            set: undefined,
+            enumerable: true,
+        });
+        test.order.lines = [hydratedLine] as any;
+        test.allocations.set('physical', 1);
+        test.sales.set('physical', 1);
+        refund(test, 'physical', 2);
+        const reserved: OrderLine[] = [];
+        test.digital.reserveOrder.mockImplementation((_ctx, order) => {
+            reserved.push(...order.lines);
+        });
+
+        await test.service.retryDelivery(test.ctx, test.order.id);
+
+        expect(reserved).toHaveLength(1);
+        expect(reserved[0]).toBeInstanceOf(OrderLine);
+        expect(reserved[0]).not.toBe(hydratedLine);
+        expect(reserved[0]).toMatchObject({ id: 'physical', quantity: 3, unitPrice: 1000, linePrice: 3000 });
+        expect(test.createAllocationsForOrderLines).toHaveBeenCalledExactlyOnceWith(test.ctx, [
+            { orderLineId: 'physical', quantity: 1 },
+        ]);
+        expect(test.order.lines[0]).toBe(hydratedLine);
+        expect(hydratedLine.quantity).toBe(5);
+        expect(hydratedLine.linePrice).toBe(5000);
+        expect(test.hold.state).toBe('CONFIRMED');
+    });
+
+    it.each(['Pending', 'Settled', 'Failed'])(
+        'allocates only currently owed physical units with a %s refund',
+        async state => {
+            const test = resourceFixture();
+            test.order.lines = [line('physical', 5)] as any;
+            test.allocations.set('physical', 1);
+            test.sales.set('physical', 1);
+            refund(test, 'physical', 2, state);
+            await test.service.retryDelivery(test.ctx, test.order.id);
+            const expected = state === 'Failed' ? 3 : 1;
+            expect(test.packaging.autoUnpackForOrder.mock.calls[0][2]).toEqual([
+                { productVariantId: 'variant-physical', quantity: expected },
+            ]);
+            expect(test.createAllocationsForOrderLines).toHaveBeenCalledExactlyOnceWith(test.ctx, [
+                { orderLineId: 'physical', quantity: expected },
+            ]);
+            expect(test.hold.state).toBe('CONFIRMED');
+        },
+    );
+
+    it.each(['amount-only', 'multi-payment-group'])(
+        'uses effective item quantities for %s refunds',
+        async scenario => {
+            const test = resourceFixture();
+            test.order.lines = [line('physical', 5)] as any;
+            test.allocations.set('physical', 1);
+            test.sales.set('physical', 1);
+            Object.assign(test.order.payments[0], {
+                refunds:
+                    scenario === 'amount-only'
+                        ? [{ state: 'Settled', total: 1000, lines: [] }]
+                        : [
+                              {
+                                  state: 'Failed',
+                                  lines: [{ orderLineId: 'physical', quantity: 2 }],
+                                  metadata: { refundRequest: { quantityGroup: { key: 'original-refund' } } },
+                              },
+                              {
+                                  state: 'Pending',
+                                  lines: [],
+                                  metadata: { refundRequest: { quantityGroup: { key: 'original-refund' } } },
+                              },
+                          ],
+            });
+            await test.service.retryDelivery(test.ctx, test.order.id);
+            expect(test.createAllocationsForOrderLines).toHaveBeenCalledExactlyOnceWith(test.ctx, [
+                { orderLineId: 'physical', quantity: scenario === 'amount-only' ? 3 : 1 },
+            ]);
+        },
+    );
+
+    it.each(['physical', 'digital'])(
+        'keeps fully item-refunded %s orders under review without reserving again',
+        async type => {
+            const test = resourceFixture();
+            test.order.lines = [line('refunded', 1, type)] as any;
+            refund(test, 'refunded', 1);
+            await expect(test.service.retryDelivery(test.ctx, test.order.id)).rejects.toThrow('已全部退款');
+            expect(test.hold.state).toBe('REVIEW');
+            expect(test.createAllocationsForOrderLines).not.toHaveBeenCalled();
+            expect(test.digital.reserveOrder).not.toHaveBeenCalled();
+            expect(test.deliver).not.toHaveBeenCalled();
+        },
+    );
+
+    it('omits fully refunded lines and reserves only remaining digital quantities in a mixed order', async () => {
+        const test = resourceFixture();
+        test.order.lines = [line('physical', 1), line('digital', 3, 'digital')] as any;
+        Object.assign(test.order.payments[0], {
+            refunds: [
+                {
+                    state: 'Settled',
+                    lines: [
+                        { orderLineId: 'physical', quantity: 1 },
+                        { orderLineId: 'digital', quantity: 1 },
+                    ],
+                },
+            ],
+        });
+        test.reservations.set('digital', { state: 'CONSUMED', quantity: 3, releasedQuantity: 1 });
+        const reserved: Array<{ id: string; quantity: number }> = [];
+        test.digital.reserveOrder.mockImplementation((_ctx, order) =>
+            reserved.push(...order.lines.map(({ id, quantity }: any) => ({ id, quantity }))),
+        );
+        await test.service.retryDelivery(test.ctx, test.order.id);
+        expect(reserved).toEqual([{ id: 'digital', quantity: 2 }]);
+        expect(test.order.lines.map((item: any) => item.quantity)).toEqual([1, 3]);
+        expect(test.createAllocationsForOrderLines).not.toHaveBeenCalled();
+        expect(test.hold.state).toBe('CONFIRMED');
+    });
+
+    it('recognizes remaining physical resources using the placed quantity cap after item refunds', async () => {
+        const test = resourceFixture();
+        test.order.lines = [line('physical', 6, 'physical', 4)] as any;
+        refund(test, 'physical', 1);
+        test.allocations.set('physical', 3);
+        test.hold.state = 'HELD';
+        await test.service.confirm(test.ctx, test.order as any);
+        expect(test.hold.state).toBe('CONFIRMED');
+    });
+
+    it('keeps a digital shortage under review while preserving consumed, unrefunded entitlements', async () => {
+        const test = resourceFixture();
+        test.order.lines = [line('digital', 3, 'digital')] as any;
+        refund(test, 'digital', 1);
+        test.hold.state = 'HELD';
+        test.reservations.set('digital', { state: 'CONSUMED', quantity: 3, releasedQuantity: 1 });
+        await test.service.confirm(test.ctx, test.order as any);
+        expect(test.hold.state).toBe('CONFIRMED');
+        test.hold.state = 'HELD';
+        test.reservations.set('digital', { state: 'HELD', quantity: 1, releasedQuantity: 0 });
+        await test.service.confirm(test.ctx, test.order as any);
+        expect(test.hold.state).toBe('REVIEW');
     });
 });
 

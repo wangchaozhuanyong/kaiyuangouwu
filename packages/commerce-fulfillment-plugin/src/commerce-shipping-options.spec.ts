@@ -66,7 +66,7 @@ describe('physicalSubtotalShippingCalculator', () => {
         expect(quote).toMatchObject({ price: 0, metadata: { freeShippingApplied: true } });
     });
 
-    it('converts the configured rate and threshold into the order currency', async () => {
+    it('falls back to the request currency when the calculator caller has no order currency', async () => {
         const quote = await physicalSubtotalShippingCalculator.calculate(
             {
                 currencyCode: 'MYR',
@@ -88,6 +88,85 @@ describe('physicalSubtotalShippingCalculator', () => {
             price: 720,
             metadata: { freeShippingThreshold: 6_000, freeShippingApplied: false },
         });
+    });
+
+    it.each([
+        {
+            requestCurrency: 'CNY',
+            orderCurrency: 'MYR',
+            subtotal: 6500,
+            threshold: 6000,
+            price: 0,
+            free: true,
+        },
+        {
+            requestCurrency: 'MYR',
+            orderCurrency: 'CNY',
+            subtotal: 8000,
+            threshold: 10000,
+            price: 1200,
+            free: false,
+        },
+        {
+            requestCurrency: 'USD',
+            orderCurrency: 'MYR',
+            subtotal: 6500,
+            threshold: 6000,
+            price: 0,
+            free: true,
+        },
+    ])(
+        'quotes $orderCurrency orders in their saved currency despite a $requestCurrency request',
+        async fixture => {
+            const quote = await physicalSubtotalShippingCalculator.calculate(
+                {
+                    ...ctx,
+                    currencyCode: fixture.requestCurrency,
+                    channel: {
+                        ...ctx.channel,
+                        customFields: {
+                            cnyToMyrRate: 0.6,
+                            currencyRateMarkupBps: 0,
+                            currencyRoundingMode: 'CENT',
+                        },
+                    },
+                },
+                {
+                    ...order,
+                    currencyCode: fixture.orderCurrency,
+                    lines: [line('physical', 1, fixture.subtotal), line('digital', 1, 20000)],
+                },
+                calculatorArgs,
+                {} as any,
+            );
+            expect(quote).toMatchObject({
+                price: fixture.price,
+                metadata: {
+                    physicalSubtotalWithTax: fixture.subtotal,
+                    freeShippingThreshold: fixture.threshold,
+                    freeShippingApplied: fixture.free,
+                },
+            });
+        },
+    );
+
+    it('does not bypass the order exchange requirements when the request uses the source currency', () => {
+        expect(() =>
+            physicalSubtotalShippingCalculator.calculate(
+                ctx,
+                { ...order, currencyCode: 'MYR' },
+                calculatorArgs,
+                {} as any,
+            ),
+        ).toThrow('运费币种汇率配置无效');
+        expect(() =>
+            physicalSubtotalShippingCalculator.calculate(
+                ctx,
+                { ...order, currencyCode: 'USD' },
+                calculatorArgs,
+                {} as any,
+            ),
+        ).toThrow('运费币种汇率配置无效');
     });
 
     it('uses saved source currency even after default currency changes', async () => {

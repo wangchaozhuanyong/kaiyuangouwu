@@ -21,7 +21,7 @@ function publishWriteState(delta: number) {
 const domainRules: Array<[ResourceDomain, RegExp]> = [
     [
         'catalog',
-        /product|catalog|stock|inventory|supplier|purchase|asset|collection|facet|optiongroup|digitalvariant|physicalvariant|physicalreturn/iu,
+        /product|catalog|stock|inventory|supplier|purchase|asset|collection|facet|optiongroup|digitalvariant|physicalvariant|physicalreturn|inspectaftersalesreturn|updateaftersalesreplacement/iu,
     ],
     [
         'orders',

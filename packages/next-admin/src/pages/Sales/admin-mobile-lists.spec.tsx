@@ -89,6 +89,7 @@ beforeEach(() => {
     sessionStorage.clear();
     mocks.query.mockReset().mockReturnValue({ data: response, loading: false, refetch: mocks.refetch });
     mocks.mutate.mockReset();
+    mocks.refetch.mockReset().mockResolvedValue({ data: response });
     host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
@@ -209,6 +210,132 @@ describe('mobile lists preserve shared business behavior', () => {
         );
         expect(host.querySelector('[aria-label="订单摘要列表"]')!.querySelectorAll('input')).toHaveLength(0);
         expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+    it('keeps an accepted batch summary locked after readback fails and retries only reads', async () => {
+        mocks.mutate.mockResolvedValue({
+            data: {
+                addFulfillmentToOrder: { __typename: 'Fulfillment', id: 'fulfillment-1' },
+                transitionFulfillmentToState: { __typename: 'Fulfillment', id: 'fulfillment-1' },
+            },
+        });
+        mocks.refetch.mockRejectedValueOnce(new Error('fixture readback failure'));
+        await renderPage('sales');
+        await act(async () =>
+            host
+                .querySelector<HTMLInputElement>(
+                    '.admin-desktop-table [aria-label="选择订单 MOBILE-order-1"]',
+                )!
+                .click(),
+        );
+        await act(async () => button('批量填写运单并发货').click());
+        const dialog = host.querySelector('[role="dialog"]')!;
+        await act(async () => {
+            for (const input of dialog.querySelectorAll('input')) {
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+                    input,
+                    'fixture-tracking',
+                );
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        await act(async () => button('确认创建履约', dialog).click());
+        expect(mocks.mutate).toHaveBeenCalledTimes(2);
+        expect(dialog.textContent).toContain('已确认发货 1 笔');
+        expect(dialog.textContent).toContain('操作已完成，但最新数据读取失败');
+        expect(button('取消', dialog).disabled).toBe(true);
+        expect(
+            [...dialog.querySelectorAll('button')].some(item => item.textContent?.trim() === '确认创建履约'),
+        ).toBe(false);
+        await act(async () => button('核对最新履约', dialog).click());
+        expect(mocks.refetch).toHaveBeenCalledTimes(2);
+        expect(mocks.mutate).toHaveBeenCalledTimes(2);
+        expect(dialog.textContent).toContain('已确认发货 1 笔');
+        expect(button('完成', dialog).disabled).toBe(false);
+    });
+    it('does not claim that an unknown batch write completed when its reconciliation read fails', async () => {
+        mocks.mutate.mockRejectedValue(new Error('Failed to fetch'));
+        mocks.refetch.mockRejectedValueOnce(new Error('fixture readback failure'));
+        await renderPage('sales');
+        await act(async () =>
+            host
+                .querySelector<HTMLInputElement>(
+                    '.admin-desktop-table [aria-label="选择订单 MOBILE-order-1"]',
+                )!
+                .click(),
+        );
+        await act(async () => button('批量填写运单并发货').click());
+        const dialog = host.querySelector('[role="dialog"]')!;
+        await act(async () => {
+            for (const input of dialog.querySelectorAll('input')) {
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+                    input,
+                    'fixture-tracking',
+                );
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        await act(async () => button('确认创建履约', dialog).click());
+        expect(dialog.textContent).toContain('已确认发货 0 笔，需核对/处理 1 笔');
+        expect(dialog.textContent).toContain('本次批量处理结果已保留，但最新履约读取失败');
+        expect(dialog.textContent).not.toContain('操作已完成');
+        await act(async () => button('核对最新履约', dialog).click());
+        expect(mocks.mutate).toHaveBeenCalledTimes(1);
+        expect(button('完成', dialog).disabled).toBe(false);
+    });
+    it('locks the whole batch between mutation calls and throughout readback', async () => {
+        let releaseWrite!: (value: unknown) => void;
+        let releaseRead!: (value: unknown) => void;
+        mocks.mutate
+            .mockImplementationOnce(
+                () =>
+                    new Promise(resolve => {
+                        releaseWrite = resolve;
+                    }),
+            )
+            .mockResolvedValue({
+                data: { transitionFulfillmentToState: { __typename: 'Fulfillment', id: 'fulfillment-1' } },
+            });
+        mocks.refetch.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    releaseRead = resolve;
+                }),
+        );
+        await renderPage('sales');
+        await act(async () =>
+            host
+                .querySelector<HTMLInputElement>(
+                    '.admin-desktop-table [aria-label="选择订单 MOBILE-order-1"]',
+                )!
+                .click(),
+        );
+        await act(async () => button('批量填写运单并发货').click());
+        const dialog = host.querySelector('[role="dialog"]')!;
+        await act(async () => {
+            for (const input of dialog.querySelectorAll('input')) {
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+                    input,
+                    'fixture-tracking',
+                );
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        });
+        await act(async () => {
+            button('确认创建履约', dialog).click();
+            button('确认创建履约', dialog).click();
+        });
+        expect(mocks.mutate).toHaveBeenCalledTimes(1);
+        expect(button('取消', dialog).disabled).toBe(true);
+        await act(async () =>
+            releaseWrite({
+                data: { addFulfillmentToOrder: { __typename: 'Fulfillment', id: 'fulfillment-1' } },
+            }),
+        );
+        expect(mocks.mutate).toHaveBeenCalledTimes(2);
+        expect(button('确认创建履约', dialog).disabled).toBe(true);
+        expect(button('取消', dialog).disabled).toBe(true);
+        await act(async () => releaseRead({ data: response }));
+        expect(button('完成', dialog).disabled).toBe(false);
     });
     it('shares customer bulk selection, sorting and group filters with existing controls', async () => {
         await renderPage('customers');

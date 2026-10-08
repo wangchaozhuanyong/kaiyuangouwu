@@ -4,6 +4,7 @@ export class ShopApiGraphQlError extends Error {
         readonly messages: string[],
         readonly status: number,
         readonly errorCode?: string,
+        readonly requestNotExecuted = false,
     ) {
         super(messages[0] ?? `Shop API request failed (${status})`);
         this.name = 'ShopApiGraphQlError';

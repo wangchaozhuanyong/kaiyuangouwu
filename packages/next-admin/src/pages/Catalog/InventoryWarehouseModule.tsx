@@ -1,3 +1,4 @@
+import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import { useMutation } from '@apollo/client/react';
 import type { CatalogExportRowRecord } from '@vendure/catalog-management-plugin/browser';
 import { visit } from 'graphql';
@@ -46,16 +47,20 @@ import {
     ADJUST_CATALOG_LEGACY_INVENTORY_MUTATION,
     CATALOG_EXPORT_ROWS_QUERY,
     CATALOG_INVENTORY_ALERT_OVERVIEW_QUERY,
+    CATALOG_INVENTORY_OPERATIONS_QUERY,
     SAVE_CATALOG_INVENTORY_LOT_MUTATION,
     TRANSFER_CATALOG_INVENTORY_LOT_MUTATION,
     UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION,
+    type CatalogInventoryOperationRecord,
 } from '../../graphql/catalog-operations.graphql';
 import { UPDATE_PRODUCT_VARIANTS } from '../../graphql/catalog.graphql';
-import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useAdminLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
-import { type SortDirection, useUrlSortState } from '../../hooks/use-url-sort-state';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { useUrlSortState, type SortDirection } from '../../hooks/use-url-sort-state';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
@@ -304,6 +309,18 @@ interface InventoryLotTransferDraft {
     reason: string;
 }
 
+interface InventoryLotTransferAttempt {
+    input: {
+        inventoryLotId: string;
+        targetStockLocationId: string;
+        quantity: number;
+        idempotencyKey: string;
+        reason: string;
+        reference: string;
+    };
+    acknowledged: boolean;
+}
+
 const EMPTY_VARIANTS: ProductVariantItem[] = [];
 const EMPTY_LOCATIONS: StockLocationItem[] = [];
 const EMPTY_CATALOG_EXPORT_ROWS: CatalogExportRowRecord[] = [];
@@ -374,6 +391,13 @@ export function InventoryWarehouseModule() {
     const [bulkUpdating, setBulkUpdating] = useState(false);
     const [lotDraft, setLotDraft] = useState<InventoryLotDraft | null>(null);
     const [lotTransferDraft, setLotTransferDraft] = useState<InventoryLotTransferDraft | null>(null);
+    const [lotTransferAttempt, setLotTransferAttempt] = useState<InventoryLotTransferAttempt | null>(null);
+    const [checkingLotTransfer, setCheckingLotTransfer] = useState(false);
+    const lotTransferRunning = useRef(false);
+    useUnsavedChangesWarning(
+        !!lotTransferAttempt,
+        '原转仓请求尚未完成核对。离开后请勿新建相同转仓，确定离开吗？',
+    );
     const [expandedAlertSkuIds, setExpandedAlertSkuIds] = useState<Set<string>>(() => new Set());
     const [expandedStockSkuIds, setExpandedStockSkuIds] = useState<Set<string>>(() => new Set());
     const [thresholdDrafts, setThresholdDrafts] = useState<Record<string, string>>({});
@@ -490,9 +514,12 @@ export function InventoryWarehouseModule() {
         updateProductVariants: Array<{ id: string } | null>;
     }>(UPDATE_PRODUCT_VARIANTS);
     const [saveInventoryLot, saveInventoryLotState] = useMutation(SAVE_CATALOG_INVENTORY_LOT_MUTATION);
-    const [transferInventoryLot, transferInventoryLotState] = useMutation(
-        TRANSFER_CATALOG_INVENTORY_LOT_MUTATION,
-    );
+    const [transferInventoryLot, transferInventoryLotState] = useMutation<{
+        transferCatalogInventoryLot: CatalogInventoryOperationRecord;
+    }>(TRANSFER_CATALOG_INVENTORY_LOT_MUTATION);
+    const [readInventoryOperations] = useAdminLazyQuery<{
+        catalogInventoryOperations: { items: CatalogInventoryOperationRecord[]; totalItems: number };
+    }>(CATALOG_INVENTORY_OPERATIONS_QUERY, { fetchPolicy: 'network-only' });
     const [updateInventoryThreshold] = useMutation(UPDATE_CATALOG_INVENTORY_THRESHOLD_MUTATION);
 
     const variants = data?.productVariants?.items ?? EMPTY_VARIANTS;
@@ -789,8 +816,64 @@ export function InventoryWarehouseModule() {
         }
     };
 
+    const readAcceptedLotTransfer = async () => {
+        let failed = false;
+        await refreshAfterAdminWrite(
+            () => Promise.all([lotQuery.refetch(), refetch()]),
+            message => {
+                failed = true;
+                showError(message);
+            },
+        );
+        if (!failed) {
+            setLotTransferDraft(null);
+            setLotTransferAttempt(null);
+            showNotice('批次转仓已入账，来源与去向流水已保留');
+        }
+    };
+
+    const verifyLotTransfer = async () => {
+        if (!lotTransferAttempt || lotTransferRunning.current) return;
+        lotTransferRunning.current = true;
+        setCheckingLotTransfer(true);
+        setActionError('');
+        try {
+            if (lotTransferAttempt.acknowledged) {
+                await readAcceptedLotTransfer();
+                return;
+            }
+            let skip = 0;
+            let total = 1;
+            while (skip < total) {
+                const result = await readInventoryOperations({ variables: { skip, take: 200 } });
+                const operations = result.data?.catalogInventoryOperations;
+                if (!operations) throw new Error('未取得库存操作记录');
+                if (skip === 0) total = operations.totalItems;
+                const receipt = operations.items.find(
+                    item =>
+                        item.reference === lotTransferAttempt.input.reference &&
+                        item.type === 'LOT_TRANSFER' &&
+                        item.status === 'POSTED',
+                );
+                if (receipt) {
+                    setLotTransferAttempt({ ...lotTransferAttempt, acknowledged: true });
+                    await readAcceptedLotTransfer();
+                    return;
+                }
+                if (!operations.items.length) break;
+                skip += operations.items.length;
+            }
+            showError('尚未找到原转仓的入账回执，结果仍待核对。可继续核对，或使用原请求重试，勿新建转仓。');
+        } catch (cause) {
+            showError(toUserFacingError(cause, '转仓结果核对失败，原请求已保留，勿新建转仓'));
+        } finally {
+            lotTransferRunning.current = false;
+            setCheckingLotTransfer(false);
+        }
+    };
+
     const saveLotTransfer = async () => {
-        if (!lotTransferDraft) return;
+        if (!lotTransferDraft || lotTransferRunning.current || lotTransferAttempt?.acknowledged) return;
         const quantity = Number(lotTransferDraft.quantity);
         if (!Number.isSafeInteger(quantity) || quantity <= 0 || quantity > lotTransferDraft.maximumQuantity) {
             showError(`转仓数量必须是 1 到 ${lotTransferDraft.maximumQuantity} 的整数`);
@@ -801,24 +884,52 @@ export function InventoryWarehouseModule() {
             return;
         }
         setActionError('');
+        const idempotencyKey = lotTransferAttempt?.input.idempotencyKey ?? crypto.randomUUID();
+        const attempt = lotTransferAttempt ?? {
+            input: {
+                inventoryLotId: lotTransferDraft.inventoryLotId,
+                targetStockLocationId: lotTransferDraft.targetStockLocationId,
+                quantity,
+                idempotencyKey,
+                reason: lotTransferDraft.reason.trim(),
+                reference: `NEXT_ADMIN_INVENTORY:${idempotencyKey}`,
+            },
+            acknowledged: false,
+        };
+        setLotTransferAttempt(attempt);
+        lotTransferRunning.current = true;
+        setCheckingLotTransfer(true);
         try {
-            await transferInventoryLot({
-                variables: {
-                    input: {
-                        inventoryLotId: lotTransferDraft.inventoryLotId,
-                        targetStockLocationId: lotTransferDraft.targetStockLocationId,
-                        quantity,
-                        idempotencyKey: crypto.randomUUID(),
-                        reason: lotTransferDraft.reason.trim(),
-                        reference: 'NEXT_ADMIN_INVENTORY',
-                    },
-                },
+            const result = await transferInventoryLot({
+                variables: { input: attempt.input },
             });
-            setLotTransferDraft(null);
-            await Promise.all([lotQuery.refetch(), refetch()]);
-            showNotice('批次转仓已入账，来源与去向流水已保留');
+            if (!result.data?.transferCatalogInventoryLot?.id) throw new Error('未取得原转仓入账回执');
+            setLotTransferAttempt({ ...attempt, acknowledged: true });
+            await readAcceptedLotTransfer();
         } catch (cause) {
-            showError(toUserFacingError(cause, '批次转仓失败'));
+            const rejectedBeforeUnknown =
+                !lotTransferAttempt &&
+                CombinedGraphQLErrors.is(cause) &&
+                cause.errors.every(item =>
+                    [
+                        'USER_INPUT_ERROR',
+                        'BAD_USER_INPUT',
+                        'FORBIDDEN',
+                        'UNAUTHENTICATED',
+                        'GRAPHQL_VALIDATION_FAILED',
+                    ].includes(String(item.extensions?.code)),
+                );
+            if (rejectedBeforeUnknown) {
+                setLotTransferAttempt(null);
+                showError(toUserFacingError(cause, '原转仓请求未通过校验，请检查输入后重试'));
+            } else {
+                showError(
+                    `转仓结果尚未确认，原请求已保留。${toUserFacingError(cause, '请核对后继续，勿新建转仓')}`,
+                );
+            }
+        } finally {
+            lotTransferRunning.current = false;
+            setCheckingLotTransfer(false);
         }
     };
 
@@ -2268,15 +2379,25 @@ export function InventoryWarehouseModule() {
                 <InventoryLotTransferDialog
                     draft={lotTransferDraft}
                     locations={locations}
-                    saving={transferInventoryLotState.loading}
+                    saving={transferInventoryLotState.loading || checkingLotTransfer}
+                    pending={!!lotTransferAttempt}
+                    acknowledged={lotTransferAttempt?.acknowledged ?? false}
                     error={actionError}
-                    onChange={setLotTransferDraft}
+                    onChange={draft => {
+                        if (!lotTransferAttempt) setLotTransferDraft(draft);
+                    }}
                     onClose={() => {
-                        if (transferInventoryLotState.loading) return;
+                        if (
+                            transferInventoryLotState.loading ||
+                            lotTransferRunning.current ||
+                            lotTransferAttempt
+                        )
+                            return;
                         setLotTransferDraft(null);
                         setActionError('');
                     }}
                     onSave={() => void saveLotTransfer()}
+                    onVerify={() => void verifyLotTransfer()}
                 />
             )}
         </div>
@@ -3003,18 +3124,24 @@ function InventoryLotTransferDialog({
     draft,
     locations,
     saving,
+    pending,
+    acknowledged,
     error,
     onChange,
     onClose,
     onSave,
+    onVerify,
 }: {
     draft: InventoryLotTransferDraft;
     locations: StockLocationItem[];
     saving: boolean;
+    pending: boolean;
+    acknowledged: boolean;
     error?: string;
     onChange: (draft: InventoryLotTransferDraft) => void;
     onClose: () => void;
     onSave: () => void;
+    onVerify: () => void;
 }) {
     return (
         <div
@@ -3037,36 +3164,52 @@ function InventoryLotTransferDialog({
                             {draft.sku} · {draft.lotCode}，最多可转 {draft.maximumQuantity}
                         </p>
                     </div>
-                    <AdminButton type="button" onClick={onClose} disabled={saving} aria-label="关闭转仓">
+                    <AdminButton
+                        type="button"
+                        onClick={onClose}
+                        disabled={saving || pending}
+                        aria-label="关闭转仓"
+                    >
                         <X className="h-5 w-5 text-slate-400" />
                     </AdminButton>
                 </div>
-                <AdminField className="block font-bold text-slate-600" label="目标仓库 *">
-                    <AdminSelect
-                        value={draft.targetStockLocationId}
-                        onChange={event => onChange({ ...draft, targetStockLocationId: event.target.value })}
-                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
-                    >
-                        {locations
-                            .filter(location => location.id !== draft.sourceLocationId)
-                            .map(location => (
-                                <option key={location.id} value={location.id}>
-                                    {location.name}
-                                </option>
-                            ))}
-                    </AdminSelect>
-                </AdminField>
-                <InventoryLotField
-                    label="转仓数量 *"
-                    type="number"
-                    value={draft.quantity}
-                    onChange={quantity => onChange({ ...draft, quantity })}
-                />
-                <InventoryLotField
-                    label="转仓原因 *"
-                    value={draft.reason}
-                    onChange={reason => onChange({ ...draft, reason })}
-                />
+                <fieldset disabled={saving || pending} className="space-y-4">
+                    <AdminField className="block font-bold text-slate-600" label="目标仓库 *">
+                        <AdminSelect
+                            value={draft.targetStockLocationId}
+                            onChange={event =>
+                                onChange({ ...draft, targetStockLocationId: event.target.value })
+                            }
+                            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+                        >
+                            {locations
+                                .filter(location => location.id !== draft.sourceLocationId)
+                                .map(location => (
+                                    <option key={location.id} value={location.id}>
+                                        {location.name}
+                                    </option>
+                                ))}
+                        </AdminSelect>
+                    </AdminField>
+                    <InventoryLotField
+                        label="转仓数量 *"
+                        type="number"
+                        value={draft.quantity}
+                        onChange={quantity => onChange({ ...draft, quantity })}
+                    />
+                    <InventoryLotField
+                        label="转仓原因 *"
+                        value={draft.reason}
+                        onChange={reason => onChange({ ...draft, reason })}
+                    />
+                </fieldset>
+                {pending && (
+                    <p role="status" className="text-amber-700">
+                        {acknowledged
+                            ? '原转仓已入账，最新库存待核对。勿重复提交。'
+                            : '原转仓结果待核对，输入与请求已保留。勿新建转仓。'}
+                    </p>
+                )}
                 {error && (
                     <div role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-700">
                         {error}
@@ -3076,19 +3219,31 @@ function InventoryLotTransferDialog({
                     <AdminButton
                         type="button"
                         onClick={onClose}
-                        disabled={saving}
+                        disabled={saving || pending}
                         className="rounded-lg bg-slate-100 px-4 py-2 font-bold"
                     >
                         取消
                     </AdminButton>
-                    <AdminButton
-                        type="button"
-                        onClick={onSave}
-                        disabled={saving || !draft.reason.trim()}
-                        className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
-                    >
-                        {saving ? '转仓中…' : '确认转仓'}
-                    </AdminButton>
+                    {pending && (
+                        <AdminButton
+                            type="button"
+                            onClick={onVerify}
+                            disabled={saving}
+                            className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
+                        >
+                            核对转仓结果
+                        </AdminButton>
+                    )}
+                    {!acknowledged && (
+                        <AdminButton
+                            type="button"
+                            onClick={onSave}
+                            disabled={saving || !draft.reason.trim()}
+                            className="rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-40"
+                        >
+                            {saving ? '转仓中…' : pending ? '重试原转仓请求' : '确认转仓'}
+                        </AdminButton>
+                    )}
                 </div>
             </AccessibleDialogSurface>
         </div>

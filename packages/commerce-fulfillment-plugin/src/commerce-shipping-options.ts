@@ -118,8 +118,11 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
         const sourceCurrency = (args.sourceCurrencyCode ||
             args.currencyCode ||
             ctx.channel.defaultCurrencyCode) as typeof ctx.currencyCode;
-        const baseRate = convertChannelAmount(ctx, args.baseRate, sourceCurrency, ctx.currencyCode);
-        const freeAbove = convertChannelAmount(ctx, args.freeAbove, sourceCurrency, ctx.currencyCode);
+        // Native eligible-shipping queries may retain the request/default currency.
+        // Quotes must match the persisted order subtotal they are compared against.
+        const orderCurrency = order.currencyCode ?? ctx.currencyCode;
+        const baseRate = convertChannelAmount(ctx, args.baseRate, sourceCurrency, orderCurrency);
+        const freeAbove = convertChannelAmount(ctx, args.freeAbove, sourceCurrency, orderCurrency);
         if (baseRate == null || freeAbove == null) {
             throw new Error('运费币种汇率配置无效');
         }

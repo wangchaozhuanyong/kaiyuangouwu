@@ -288,6 +288,9 @@ export class ReferralsApi extends BaseDomainApi {
                 }
             `,
             { amount },
+            undefined,
+            20_000,
+            true,
         );
         return result.useMyReferralBalance;
     }

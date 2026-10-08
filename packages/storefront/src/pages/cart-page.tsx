@@ -26,6 +26,7 @@ import {
 export interface CartPageProps {
     isActive?: boolean;
     cart: StorefrontCart | null;
+    confirmedCart?: StorefrontCart | null;
     customer: ActiveCustomer | null;
     products: Product[];
     market: MarketConfig;
@@ -34,8 +35,10 @@ export interface CartPageProps {
     loading: boolean;
     selectionPending?: boolean;
     checkoutPending?: boolean;
+    recoveryPending?: boolean;
     editingBlocked?: boolean;
     commandUnknown?: boolean;
+    commandAcknowledged?: boolean;
     onCancelPending?: () => void;
     error: string | null;
     favoriteProductIds: string[];
@@ -60,6 +63,7 @@ export function CartPage() {
     const {
         isActive = true,
         cart,
+        confirmedCart,
         customer,
         products,
         market,
@@ -68,8 +72,10 @@ export function CartPage() {
         loading,
         selectionPending = false,
         checkoutPending = false,
+        recoveryPending = false,
         editingBlocked = false,
         commandUnknown = false,
+        commandAcknowledged = false,
         onCancelPending,
         error,
         favoriteProductIds,
@@ -109,10 +115,14 @@ export function CartPage() {
     );
     const digitalOnly = digital.length > 0 && physical.length === 0;
     const order = cart?.checkoutOrder;
+    const resultNeedsReview = commandUnknown || commandAcknowledged;
+    const amountOrder =
+        resultNeedsReview && confirmedCart !== undefined ? confirmedCart?.checkoutOrder : order;
+    const interactionBlocked = editingBlocked || resultNeedsReview || recoveryPending || checkoutPending;
     const selectedCouponLabel = order ? appliedCouponLabel(coupons, order.id, language) : null;
     const locked = cart?.state === 'PAYMENT_PENDING';
     const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
-    const amount = locked && order ? order.totalWithTax : (order?.subTotalWithTax ?? 0);
+    const amount = locked && amountOrder ? amountOrder.totalWithTax : (amountOrder?.subTotalWithTax ?? 0);
 
     useEffect(() => {
         const currentLineIds = new Set(lines.map(line => line.id));
@@ -196,7 +206,7 @@ export function CartPage() {
             type="button"
             onClick={onToggleAll}
             disabled={
-                editingBlocked ||
+                interactionBlocked ||
                 (loading && !selectionPending) ||
                 locked ||
                 (!selectableQuantity && !cart?.selectedQuantity)
@@ -233,12 +243,65 @@ export function CartPage() {
                 </header>
             )}
 
-            {commandUnknown && (
-                <button type="button" className="secondary-button" onClick={onCancelPending}>
-                    {isZh ? '取消待确认操作并核对购物车' : 'Cancel pending operation and reconcile cart'}
-                </button>
+            {resultNeedsReview && (
+                <section className="cart-recovery-panel" aria-label={isZh ? '核对购物车' : 'Review cart'}>
+                    <p role="status">
+                        {commandAcknowledged
+                            ? recoveryPending
+                                ? isZh
+                                    ? '正在读取最新购物车。操作结果已确认，请勿重复提交。'
+                                    : 'Loading the latest cart. The result is confirmed; do not submit again.'
+                                : isZh
+                                  ? '操作结果已确认，暂时无法读取最新购物车，请核对后继续，勿重复提交。'
+                                  : 'The result is confirmed, but the latest cart could not be loaded. Review it before continuing. Do not submit again.'
+                            : recoveryPending
+                              ? isZh
+                                  ? '正在核对提交结果，请稍候。已确认金额保留显示。'
+                                  : 'Checking the submitted result. Your last confirmed amount remains visible.'
+                              : isZh
+                                ? '提交结果尚未确认，请先核对购物车，再修改商品或结算。'
+                                : 'The submitted result is unconfirmed. Review your cart before editing or checking out.'}
+                    </p>
+                    <div className="cart-recovery-actions">
+                        <button
+                            type="button"
+                            onClick={onRetry}
+                            disabled={recoveryPending || checkoutPending}
+                            aria-busy={recoveryPending || undefined}
+                        >
+                            {recoveryPending
+                                ? isZh
+                                    ? '正在核对…'
+                                    : 'Checking…'
+                                : isZh
+                                  ? '核对购物车'
+                                  : 'Review cart'}
+                        </button>
+                        {onCancelPending && !commandAcknowledged && (
+                            <button
+                                type="button"
+                                onClick={onCancelPending}
+                                disabled={recoveryPending || checkoutPending}
+                            >
+                                {isZh ? '取消待确认操作' : 'Cancel pending operation'}
+                            </button>
+                        )}
+                    </div>
+                </section>
             )}
-            {error && <InlineError message={error} action={isZh ? '刷新' : 'Refresh'} onAction={onRetry} />}
+            {error && !resultNeedsReview && (
+                <InlineError
+                    message={error}
+                    action={
+                        !loading && !recoveryPending && !checkoutPending
+                            ? isZh
+                                ? '刷新'
+                                : 'Refresh'
+                            : undefined
+                    }
+                    onAction={onRetry}
+                />
+            )}
             {!locked && activeLines.some(line => !cartLineCanSelect(line)) && (
                 <p className="cart-stock-notice" role="status">
                     {isZh
@@ -246,7 +309,7 @@ export function CartPage() {
                         : 'Items without enough stock cannot be selected. Reduce their quantity or remove them. Select all includes only items with enough stock.'}
                 </p>
             )}
-            {locked && (
+            {locked && !resultNeedsReview && (
                 <div className="cart-pending-actions">
                     <InlineError
                         message={
@@ -254,10 +317,20 @@ export function CartPage() {
                                 ? '订单正在等待支付，购物车内容已锁定。可以继续支付，或返回修改商品与优惠。'
                                 : 'This cart is locked while its order awaits payment. Continue payment or reopen it to make changes.'
                         }
-                        action={isZh ? '继续支付' : 'Continue payment'}
+                        action={
+                            !recoveryPending && !checkoutPending
+                                ? isZh
+                                    ? '继续支付'
+                                    : 'Continue payment'
+                                : undefined
+                        }
                         onAction={() => navigateTo({ name: 'payment' })}
                     />
-                    <button type="button" onClick={onReopen} disabled={loading}>
+                    <button
+                        type="button"
+                        onClick={onReopen}
+                        disabled={loading || recoveryPending || checkoutPending}
+                    >
                         {isZh ? '返回修改订单' : 'Return to edit order'}
                     </button>
                 </div>
@@ -310,9 +383,11 @@ export function CartPage() {
                                         market={market}
                                         locale={locale}
                                         language={language}
-                                        loading={editingBlocked || (loading && !selectionPending) || locked}
+                                        loading={
+                                            interactionBlocked || (loading && !selectionPending) || locked
+                                        }
                                         selectionDisabled={
-                                            editingBlocked || (loading && !selectionPending) || locked
+                                            interactionBlocked || (loading && !selectionPending) || locked
                                         }
                                         favoriteProductIds={favoriteProductIds}
                                         pinnedLineIds={pinnedLineIds}
@@ -339,9 +414,11 @@ export function CartPage() {
                                         market={market}
                                         locale={locale}
                                         language={language}
-                                        loading={editingBlocked || (loading && !selectionPending) || locked}
+                                        loading={
+                                            interactionBlocked || (loading && !selectionPending) || locked
+                                        }
                                         selectionDisabled={
-                                            editingBlocked || (loading && !selectionPending) || locked
+                                            interactionBlocked || (loading && !selectionPending) || locked
                                         }
                                         favoriteProductIds={favoriteProductIds}
                                         pinnedLineIds={pinnedLineIds}
@@ -399,7 +476,7 @@ export function CartPage() {
                                                     <button
                                                         type="button"
                                                         onClick={() => onRemove(line.id)}
-                                                        disabled={loading || locked}
+                                                        disabled={loading || interactionBlocked || locked}
                                                     >
                                                         {isZh ? '删除' : 'Remove'}
                                                     </button>
@@ -453,7 +530,7 @@ export function CartPage() {
                                     className="coupon-row"
                                     type="button"
                                     onClick={() => setCouponOpen(true)}
-                                    disabled={!order || loading || locked}
+                                    disabled={!order || loading || interactionBlocked || locked}
                                 >
                                     <span>
                                         <TicketPercent />
@@ -482,47 +559,55 @@ export function CartPage() {
                                             {isZh ? '合计' : 'Total'}{' '}
                                             <strong
                                                 aria-live="polite"
-                                                aria-busy={selectionPending || commandUnknown}
+                                                aria-busy={selectionPending && !resultNeedsReview}
                                             >
-                                                {selectionPending || commandUnknown
+                                                {selectionPending && !resultNeedsReview
                                                     ? isZh
                                                         ? '计算中…'
                                                         : 'Updating…'
                                                     : formatMoney(
                                                           amount,
-                                                          order?.currencyCode ?? market.currencyCode,
+                                                          amountOrder?.currencyCode ?? market.currencyCode,
                                                           locale,
                                                       )}
                                             </strong>
                                         </span>
                                         <small>
-                                            {selectionPending || commandUnknown
+                                            {commandAcknowledged
                                                 ? isZh
-                                                    ? '正在更新所选商品和优惠'
-                                                    : 'Updating selected items and offers'
-                                                : locked && order
-                                                  ? digitalOnly
-                                                      ? isZh
-                                                          ? '无需配送'
-                                                          : 'No shipping required'
-                                                      : order.shippingWithTax > 0
-                                                        ? isZh
-                                                            ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
-                                                            : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
-                                                        : isZh
-                                                          ? '配送费已确认'
-                                                          : 'Delivery confirmed'
-                                                  : discount
+                                                    ? '上次已确认金额，最新购物车待读取'
+                                                    : 'Last confirmed amount; latest cart awaiting refresh'
+                                                : commandUnknown
+                                                  ? isZh
+                                                      ? '上次已确认金额，操作仍待核对'
+                                                      : 'Last confirmed amount; operation unconfirmed'
+                                                  : selectionPending
                                                     ? isZh
-                                                        ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                                        : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
-                                                    : digitalOnly
-                                                      ? isZh
-                                                          ? '无需配送'
-                                                          : 'No shipping required'
-                                                      : isZh
-                                                        ? '不含待计算运费'
-                                                        : 'Shipping not included'}
+                                                        ? '正在更新所选商品和优惠'
+                                                        : 'Updating selected items and offers'
+                                                    : locked && order
+                                                      ? digitalOnly
+                                                          ? isZh
+                                                              ? '无需配送'
+                                                              : 'No shipping required'
+                                                          : order.shippingWithTax > 0
+                                                            ? isZh
+                                                                ? `已含配送费 ${formatMoney(order.shippingWithTax, order.currencyCode, locale)}`
+                                                                : `Includes ${formatMoney(order.shippingWithTax, order.currencyCode, locale)} delivery`
+                                                            : isZh
+                                                              ? '配送费已确认'
+                                                              : 'Delivery confirmed'
+                                                      : discount
+                                                        ? isZh
+                                                            ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
+                                                            : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                                        : digitalOnly
+                                                          ? isZh
+                                                              ? '无需配送'
+                                                              : 'No shipping required'
+                                                          : isZh
+                                                            ? '不含待计算运费'
+                                                            : 'Shipping not included'}
                                         </small>
                                     </div>
                                     <button
@@ -536,23 +621,28 @@ export function CartPage() {
                                         aria-busy={checkoutPending || undefined}
                                         disabled={
                                             loading ||
+                                            interactionBlocked ||
                                             checkoutPending ||
                                             locked ||
                                             !cart?.selectedQuantity ||
                                             selectedStockInvalid
                                         }
                                     >
-                                        {checkoutPending
+                                        {resultNeedsReview
                                             ? isZh
-                                                ? '正在进入结算…'
-                                                : 'Opening checkout…'
-                                            : locked
+                                                ? '核对后可结算'
+                                                : 'Review before checkout'
+                                            : checkoutPending
                                               ? isZh
-                                                  ? '订单待支付'
-                                                  : 'Payment pending'
-                                              : isZh
-                                                ? `结算（${cart?.selectedQuantity ?? 0}）`
-                                                : `Checkout (${cart?.selectedQuantity ?? 0})`}
+                                                  ? '正在进入结算…'
+                                                  : 'Opening checkout…'
+                                              : locked
+                                                ? isZh
+                                                    ? '订单待支付'
+                                                    : 'Payment pending'
+                                                : isZh
+                                                  ? `结算（${cart?.selectedQuantity ?? 0}）`
+                                                  : `Checkout (${cart?.selectedQuantity ?? 0})`}
                                     </button>
                                 </div>
                             )}

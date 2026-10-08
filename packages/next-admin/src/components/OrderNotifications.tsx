@@ -115,6 +115,8 @@ export function OrderNotifications({
                             retryDelay = 1000;
                             if (connectionFailed) {
                                 connectionFailed = false;
+                                // A restarted server may have no replay, so readiness must recover missed reads.
+                                invalidateAdminResources(['orders', 'catalog'], 'event');
                                 setDisconnected(false);
                                 publishAdminFeedback({
                                     id: 'order-notifications-connection',

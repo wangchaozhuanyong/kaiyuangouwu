@@ -5,6 +5,7 @@ import { StorefrontCart } from '../types';
 
 import { CartController } from './cart-controller';
 import { cartView, type CartCommand, type CartCommandResult } from './cart-intents';
+import { CartCommandAcknowledgedReadError, CartCommandNotExecutedError } from './cart-repository';
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
@@ -50,8 +51,8 @@ function result(command: CartCommand, cart: StorefrontCart): CartCommandResult {
         session: null,
     };
 }
-async function setup() {
-    const controller = new CartController();
+async function setup(scope?: string) {
+    const controller = new CartController(scope);
     let cart = snapshot();
     const apply = vi.fn(async (command: CartCommand) => {
         const response = result(command, cart);
@@ -63,6 +64,26 @@ async function setup() {
     controller.repository.setTransport({ read, apply, recover });
     await controller.read();
     return { controller, apply, read, recover };
+}
+function recoveryStorage() {
+    const stored = new Map<string, string>();
+    vi.stubGlobal('sessionStorage', {
+        getItem: (key: string) => stored.get(key) ?? null,
+        setItem: (key: string, value: string) => stored.set(key, value),
+        removeItem: (key: string) => stored.delete(key),
+    });
+    return stored;
+}
+async function unknownCart(scope?: string) {
+    const state = await setup(scope);
+    state.apply.mockRejectedValueOnce(new Error('Response lost'));
+    state.recover.mockRejectedValue(new Error('Recovery unavailable'));
+    const submitted = state.controller
+        .execute({ changes: { lines: [{ lineId: '1', quantity: 4 }] } })
+        .catch(error => error);
+    await vi.advanceTimersByTimeAsync(80);
+    await submitted;
+    return state;
 }
 afterEach(() => {
     vi.useRealTimers();
@@ -364,6 +385,268 @@ describe('unified cart controller', () => {
         await expect(controller.execute({ beginCheckout: true })).rejects.toThrow();
     });
 
+    it('reports unresolved recovery and reads newer confirmed data without losing its pending identity', async () => {
+        vi.useFakeTimers();
+        const stored = recoveryStorage();
+        const { controller, apply, read, recover } = await unknownCart('qa');
+        const identity = stored.get('storefront:cart-recovery:qa');
+
+        expect(await controller.recoverPending()).toBe(false);
+        const recoveryError = controller.getSnapshot().error;
+        const latest = snapshot(8);
+        latest.lines[0].quantity = 2;
+        read.mockResolvedValueOnce(latest);
+
+        expect(await controller.read()).toBe(latest);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(stored.get('storefront:cart-recovery:qa')).toBe(identity);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'unknown',
+            pending: true,
+            totalsPending: false,
+            editingBlocked: true,
+            checkoutReady: false,
+            confirmed: { revision: 8 },
+            cart: {
+                revision: 8,
+                lines: [
+                    { id: '1', quantity: 2 },
+                    { id: '2', quantity: 1 },
+                ],
+            },
+        });
+        expect(controller.getSnapshot().error).toBe(recoveryError);
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(recover).toHaveBeenLastCalledWith(apply.mock.calls[0][0].commandId, false);
+        await expect(controller.drain()).rejects.toThrow('购物车操作结果尚未确认');
+    });
+
+    it('shares a manual recovery request and lets drain finish after its acknowledgement', async () => {
+        vi.useFakeTimers();
+        const { controller, apply, recover } = await unknownCart();
+        const late = deferred<CartCommandResult>();
+        recover.mockImplementationOnce(() => late.promise);
+        const calls = recover.mock.calls.length;
+        const first = controller.recoverPending();
+        const second = controller.recoverPending();
+        expect(second).toBe(first);
+        await Promise.resolve();
+        const draining = controller.drain();
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'recovering', totalsPending: false });
+        expect(recover).toHaveBeenCalledTimes(calls + 1);
+
+        late.resolve(result(apply.mock.calls[0][0], snapshot()));
+
+        expect(await first).toBe(true);
+        expect(await second).toBe(true);
+        await expect(draining).resolves.toBeUndefined();
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'idle', pending: false });
+        expect(apply).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects drain when an in-flight manual recovery remains unresolved', async () => {
+        vi.useFakeTimers();
+        const { controller, recover } = await unknownCart();
+        const late = deferred<CartCommandResult>();
+        recover.mockImplementationOnce(() => late.promise);
+        const recovering = controller.recoverPending();
+        await Promise.resolve();
+        const draining = controller.drain().catch(error => error);
+        late.reject(new Error('Still offline'));
+
+        expect(await recovering).toBe(false);
+        expect(await draining).toMatchObject({ message: 'Still offline' });
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'unknown', pending: true });
+    });
+
+    it('joins the automatic recovery already in flight without issuing a second lookup', async () => {
+        vi.useFakeTimers();
+        const { controller, apply, recover } = await setup();
+        const late = deferred<CartCommandResult>();
+        apply.mockRejectedValueOnce(new Error('Response lost'));
+        recover.mockImplementationOnce(() => late.promise);
+        const edit = controller.execute({ changes: { remove: ['1'] } });
+        await vi.advanceTimersByTimeAsync(80);
+        expect(controller.getSnapshot().phase).toBe('recovering');
+        const first = controller.recoverPending();
+        const second = controller.recoverPending();
+        expect(first).toBe(second);
+        expect(recover).toHaveBeenCalledTimes(1);
+        late.resolve(result(apply.mock.calls[0][0], snapshot()));
+
+        expect(await first).toBe(true);
+        await edit;
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(recover).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports resolved cancellation joining automatic recovery even though the original edit is rejected', async () => {
+        vi.useFakeTimers();
+        const { controller, apply, recover } = await setup();
+        const late = deferred<CartCommandResult>();
+        apply.mockRejectedValueOnce(new Error('Response lost'));
+        recover.mockImplementationOnce(() => late.promise);
+        const edit = controller.execute({ changes: { remove: ['1'] } }).catch(error => error);
+        await vi.advanceTimersByTimeAsync(80);
+        const command = apply.mock.calls[0][0];
+        recover.mockResolvedValueOnce({
+            ...result(command, snapshot()),
+            status: 'CANCELLED',
+            cart: snapshot(),
+        });
+        const cancellation = controller.recoverPending(true);
+        late.resolve({ ...result(command, snapshot()), status: 'NOT_FOUND', cart: snapshot() });
+
+        expect(await cancellation).toBe(true);
+        expect(await edit).toMatchObject({ errorCode: 'CART_COMMAND_CANCELLED' });
+        expect(recover).toHaveBeenLastCalledWith(command.commandId, true);
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(controller.getSnapshot().pending).toBe(false);
+    });
+
+    it('ignores a late recovery after an unknown-state read detects a different authenticated cart', async () => {
+        vi.useFakeTimers();
+        const stored = recoveryStorage();
+        const { controller, apply, read, recover } = await unknownCart('qa');
+        const late = deferred<CartCommandResult>();
+        recover.mockImplementationOnce(() => late.promise);
+        const recovery = controller.recoverPending();
+        await Promise.resolve();
+        const otherCart = { ...snapshot(), id: 'cart-b' };
+        read.mockResolvedValueOnce(otherCart);
+        expect(await controller.read()).toBe(otherCart);
+        late.resolve(result(apply.mock.calls[0][0], snapshot()));
+
+        expect(await recovery).toBe(false);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'idle',
+            pending: false,
+            confirmed: { id: 'cart-b' },
+        });
+        expect(stored.size).toBe(0);
+        expect(apply).toHaveBeenCalledTimes(1);
+    });
+
+    it('honours cancellation joining a missing-receipt lookup before replaying the original command', async () => {
+        vi.useFakeTimers();
+        const { controller, apply, recover } = await unknownCart();
+        const command = apply.mock.calls[0][0];
+        const late = deferred<CartCommandResult>();
+        recover.mockImplementationOnce(() => late.promise);
+        recover.mockResolvedValueOnce({
+            ...result(command, snapshot()),
+            status: 'CANCELLED',
+            cart: snapshot(),
+        });
+        const lookup = controller.recoverPending();
+        await Promise.resolve();
+        const cancellation = controller.recoverPending(true);
+        expect(cancellation).toBe(lookup);
+        late.resolve({
+            ...result(command, snapshot()),
+            status: 'NOT_FOUND',
+            appliedRevision: null,
+            cart: snapshot(),
+        });
+
+        expect(await cancellation).toBe(true);
+        expect(recover).toHaveBeenLastCalledWith(command.commandId, true);
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'idle', pending: false });
+    });
+
+    it('releases a first apply proven not executed and rejects dependent checkout without recovering or replaying', async () => {
+        vi.useFakeTimers();
+        const stored = recoveryStorage();
+        const { controller, apply, recover } = await setup('qa');
+        const cause = new Error('GraphQL validation failed before execution');
+        const notExecutedError = new CartCommandNotExecutedError('Invalid command query', cause);
+        apply.mockRejectedValueOnce(notExecutedError);
+        const edit = controller.execute({ changes: { remove: ['1'] } }).catch(error => error);
+        const checkout = controller.execute({ beginCheckout: true }).catch(error => error);
+        const draining = controller.drain().catch(error => error);
+        await vi.advanceTimersByTimeAsync(80);
+
+        expect(await edit).toBe(notExecutedError);
+        expect(await checkout).toBe(notExecutedError);
+        expect(await draining).toBe(notExecutedError);
+        expect(notExecutedError.cause).toBe(cause);
+        expect(stored.size).toBe(0);
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(recover).not.toHaveBeenCalled();
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'idle',
+            pending: false,
+            editingBlocked: false,
+            totalsPending: false,
+            confirmed: { revision: 0 },
+            cart: { lines: [{ id: '1' }, { id: '2' }] },
+        });
+        await controller.read();
+        expect(controller.getSnapshot().error).toBeNull();
+        await expect(
+            controller.execute({ buyNow: { productVariantId: '1', quantity: 1 } }),
+        ).resolves.toMatchObject({ status: 'APPLIED' });
+    });
+
+    it('does not unlock an uncertain write when only its recovery request is proven not executed', async () => {
+        vi.useFakeTimers();
+        const stored = recoveryStorage();
+        const { controller, apply, recover } = await setup('qa');
+        apply.mockRejectedValueOnce(new Error('Original response lost'));
+        recover.mockRejectedValue(new CartCommandNotExecutedError('Recovery query validation failed'));
+        const pending = controller.execute({ changes: { remove: ['1'] } }).catch(error => error);
+        await vi.advanceTimersByTimeAsync(80);
+        expect(await pending).toMatchObject({ errorCode: 'UNKNOWN_RESULT' });
+        const identity = stored.get('storefront:cart-recovery:qa');
+
+        expect(await controller.recoverPending()).toBe(false);
+        expect(stored.get('storefront:cart-recovery:qa')).toBe(identity);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'unknown',
+            pending: true,
+            editingBlocked: true,
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['APPLIED', 'REJECTED', 'CANCELLED'] as const)(
+        'never replays an acknowledged %s write while its complete cart read is failing',
+        async status => {
+            vi.useFakeTimers();
+            const { controller, apply, recover } = await setup();
+            apply.mockImplementationOnce(async submittedCommand => {
+                throw new CartCommandAcknowledgedReadError(
+                    submittedCommand.commandId,
+                    'Acknowledged, display read failed',
+                    new Error('Read offline'),
+                );
+            });
+            recover.mockImplementation(async id => ({
+                ...result({ commandId: id, cartId: 'cart-a', expectedRevision: 0, changes: {} }, snapshot()),
+                status: 'NOT_FOUND',
+                appliedRevision: null,
+                cart: snapshot(),
+            }));
+            const edit = controller.execute({ changes: { remove: ['1'] } }).catch(error => error);
+            await vi.advanceTimersByTimeAsync(80);
+            await edit;
+            expect(controller.getSnapshot()).toMatchObject({
+                phase: 'unknown',
+                pending: true,
+                editingBlocked: true,
+            });
+            expect(await controller.recoverPending()).toBe(false);
+            expect(apply).toHaveBeenCalledTimes(1);
+
+            const command = apply.mock.calls[0][0];
+            recover.mockResolvedValueOnce({ ...result(command, snapshot()), status });
+            expect(await controller.recoverPending()).toBe(true);
+            expect(controller.getSnapshot()).toMatchObject({ phase: 'idle', pending: false });
+            expect(apply).toHaveBeenCalledTimes(1);
+        },
+    );
+
     it.each(['automatic', 'manual'] as const)(
         'does not replay a late missing receipt after reset during %s recovery',
         async recoveryMode => {
@@ -377,7 +660,7 @@ describe('unified cart controller', () => {
                 .execute({ changes: { remove: ['1'] } })
                 .catch(caughtError => caughtError);
             await vi.advanceTimersByTimeAsync(80);
-            let recovery: Promise<void> | undefined;
+            let recovery: Promise<boolean> | undefined;
             if (recoveryMode === 'manual') {
                 await pending;
                 recover.mockImplementationOnce(() => late.promise);

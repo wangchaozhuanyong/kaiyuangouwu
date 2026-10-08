@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApiError } from '../api';
 import { subscribeAuthSessionChanges } from '../auth-session-sync';
+import { CartCommandAcknowledgedReadError } from '../cart/cart-repository';
 import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
@@ -373,22 +374,31 @@ export function useStorefrontAppState() {
         if (cartState.confirmed) setCheckoutOrder(cartState.confirmed.checkoutOrder);
     }, [cartState.confirmed]);
 
-    const { refreshCart, mutateCart, addToCart, startDirectPurchase, addOrderToCart } =
-        useStorefrontCartActions({
-            api,
-            cart,
-            customer,
-            cartController,
-            isZh,
-            text,
-            notify,
-            navigate,
-            setCart,
-            setCheckoutOrder,
-            setCartLoading,
-            setCartError,
-            setAddingVariantId,
-        });
+    const {
+        refreshCart,
+        cancelPendingCartCommand,
+        cartRecoveryPending,
+        cartActionsBlocked,
+        mutateCart,
+        addToCart,
+        startDirectPurchase,
+        addOrderToCart,
+    } = useStorefrontCartActions({
+        api,
+        cart,
+        customer,
+        cartController,
+        checkoutStartingRef,
+        isZh,
+        text,
+        notify,
+        navigate,
+        setCart,
+        setCheckoutOrder,
+        setCartLoading,
+        setCartError,
+        setAddingVariantId,
+    });
     const { applyCoupon, claimCoupon, removeCoupon } = useStorefrontCoupons({
         ...queryContext,
         cart,
@@ -516,6 +526,7 @@ export function useStorefrontAppState() {
 
     const beginCheckout = useCallback(async () => {
         if (!cart || cart.selectedQuantity === 0) return;
+        if (cartActionsBlocked() || cartController.getSnapshot().pending) return;
         if (!customer) {
             navigate({ name: 'login', returnTo: 'checkout' });
             return;
@@ -535,6 +546,7 @@ export function useStorefrontAppState() {
                 requestError instanceof ShopApiError &&
                 requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
             ) {
+                checkoutStartingRef.current = false;
                 await refreshCart().catch(() => undefined);
                 setCartError(
                     isZh
@@ -548,7 +560,17 @@ export function useStorefrontAppState() {
             checkoutStartingRef.current = false;
             setCheckoutStarting(false);
         }
-    }, [api, cart, customer, isZh, navigate, refreshCart, text.loadError]);
+    }, [
+        api,
+        cart,
+        cartActionsBlocked,
+        cartController,
+        customer,
+        isZh,
+        navigate,
+        refreshCart,
+        text.loadError,
+    ]);
 
     const completeAuthentication = useCallback(async () => {
         cartController.reset();
@@ -747,13 +769,16 @@ export function useStorefrontAppState() {
         displayCurrencyCode,
         addingVariantId,
         cart,
+        cartConfirmed: cartState.confirmed,
         cartLoading: cartLoading || cartState.pending,
         cartPending: cartState.pending,
         cartTotalsPending: cartState.totalsPending,
         checkoutStarting,
+        cartRecoveryPending: cartRecoveryPending || cartState.phase === 'recovering',
         cartEditingBlocked: cartState.editingBlocked,
-        cartCommandUnknown: cartState.phase === 'unknown',
-        cancelPendingCartCommand: () => void cartController.recoverPending(true),
+        cartCommandUnknown: cartState.phase === 'unknown' || cartState.phase === 'recovering',
+        cartCommandAcknowledged: cartState.error instanceof CartCommandAcknowledgedReadError,
+        cancelPendingCartCommand,
         selectCartLines: (ids: string[], selected: boolean) => {
             void api.setLinesSelected(ids, selected, cart?.revision ?? 0).catch(() => undefined);
         },

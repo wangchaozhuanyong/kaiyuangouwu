@@ -778,10 +778,19 @@ export function HomePage() {
         );
         const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
         const trust = heroTrustRef.current;
+        const carousel = viewport.closest<HTMLElement>('.hero-carousel');
+        const pager = desktop ? stage.querySelector<HTMLElement>('.hero-overlay-controls') : null;
+        let measuredPagerWidth: number | undefined;
         let measuredTrustHeight: number | undefined;
         let active = true;
         const measure = () => {
             if (!active) return;
+            const pagerWidth = pager ? Math.ceil(pager.getBoundingClientRect().width) : 0;
+            if (pagerWidth !== measuredPagerWidth) {
+                measuredPagerWidth = pagerWidth;
+                if (pager) carousel?.style.setProperty('--home-hero-pager-width', `${pagerWidth}px`);
+                else carousel?.style.removeProperty('--home-hero-pager-width');
+            }
             const trustHeight = trust ? Math.ceil(trust.getBoundingClientRect().height) : 0;
             if (trustHeight !== measuredTrustHeight) {
                 measuredTrustHeight = trustHeight;
@@ -811,6 +820,7 @@ export function HomePage() {
         observer.observe(viewport);
         if (gallery) observer.observe(gallery);
         if (trust) observer.observe(trust);
+        if (pager) observer.observe(pager);
         window.addEventListener('resize', measure);
         measure();
         return () => {
@@ -818,6 +828,7 @@ export function HomePage() {
             observer.disconnect();
             window.removeEventListener('resize', measure);
             viewport.style.removeProperty('--home-hero-trust-height');
+            carousel?.style.removeProperty('--home-hero-pager-width');
         };
     }, [desktop, heroIndex, heroMotion?.nextIndex, heroTrustBar, managedHeroes]);
 
@@ -1127,7 +1138,7 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    // The service row shares the image's bottom center for every store and viewport. A standalone
+    // Services stay outside the swipe region: bottom-left on desktop, bottom-center on mobile. A standalone
     // service floor is only needed when the merchant has no published hero.
     const introOrders = (heroTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
@@ -1255,7 +1266,7 @@ export function HomePage() {
                                             'hero hero-image-overlay',
                                             heroCount > 1 ? 'is-swipeable' : '',
                                             heroMotion?.phase === 'dragging' ? 'is-dragging' : '',
-                                            desktop && heroCount > 1 ? 'has-page-picker' : '',
+                                            desktop && heroCount > 0 ? 'has-page-picker' : '',
                                         ]
                                             .filter(Boolean)
                                             .join(' ')}
@@ -1348,7 +1359,7 @@ export function HomePage() {
                                                             <HeroScene
                                                                 content={slide}
                                                                 mediaOverlay={
-                                                                    desktop && heroCount > 1 ? (
+                                                                    desktop && heroCount > 0 ? (
                                                                         <div className="hero-overlay-controls">
                                                                             <div
                                                                                 className="hero-page-picker"
@@ -1359,33 +1370,48 @@ export function HomePage() {
                                                                                         : 'Choose a slide'
                                                                                 }
                                                                             >
-                                                                                {managedHeroes.map(
-                                                                                    (item, index) => (
-                                                                                        <button
-                                                                                            key={item.id}
-                                                                                            type="button"
-                                                                                            aria-label={
-                                                                                                isZh
-                                                                                                    ? `切换到第 ${index + 1} 张图片`
-                                                                                                    : `Show slide ${index + 1}`
-                                                                                            }
-                                                                                            aria-current={
-                                                                                                index ===
-                                                                                                heroInteractiveIndex
-                                                                                                    ? 'true'
-                                                                                                    : undefined
-                                                                                            }
-                                                                                            onClick={() =>
-                                                                                                selectHeroManually(
-                                                                                                    index,
-                                                                                                )
-                                                                                            }
-                                                                                        >
-                                                                                            <span className="hero-page-number">
-                                                                                                {index + 1}
-                                                                                            </span>
-                                                                                        </button>
-                                                                                    ),
+                                                                                {heroCount === 1 ? (
+                                                                                    <span
+                                                                                        className="hero-page-static-number"
+                                                                                        aria-current="true"
+                                                                                        aria-label={
+                                                                                            isZh
+                                                                                                ? '当前第 1 张图片'
+                                                                                                : 'Current slide 1'
+                                                                                        }
+                                                                                    >
+                                                                                        1
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    managedHeroes.map(
+                                                                                        (item, index) => (
+                                                                                            <button
+                                                                                                key={item.id}
+                                                                                                type="button"
+                                                                                                aria-label={
+                                                                                                    isZh
+                                                                                                        ? `切换到第 ${index + 1} 张图片`
+                                                                                                        : `Show slide ${index + 1}`
+                                                                                                }
+                                                                                                aria-current={
+                                                                                                    index ===
+                                                                                                    heroInteractiveIndex
+                                                                                                        ? 'true'
+                                                                                                        : undefined
+                                                                                                }
+                                                                                                onClick={() =>
+                                                                                                    selectHeroManually(
+                                                                                                        index,
+                                                                                                    )
+                                                                                                }
+                                                                                            >
+                                                                                                <span className="hero-page-number">
+                                                                                                    {index +
+                                                                                                        1}
+                                                                                                </span>
+                                                                                            </button>
+                                                                                        ),
+                                                                                    )
                                                                                 )}
                                                                             </div>
                                                                         </div>

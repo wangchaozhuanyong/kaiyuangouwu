@@ -22,6 +22,7 @@ const operationLabels: Record<string, string> = {
     MANUAL_LOT_COUNT: '批次盘点',
     LEGACY_STOCK_ADJUSTMENT: '总库存盘点',
     LOT_TRANSFER: '批次转仓',
+    AFTER_SALES_REPLACEMENT: '换货／补发出库',
     RECONCILIATION: '差异处理',
 };
 

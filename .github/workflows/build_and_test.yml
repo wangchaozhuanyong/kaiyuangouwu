@@ -253,7 +253,7 @@ jobs:
                 node: ${{ inputs.full && fromJSON('["20.x", "22.x", "24.x"]') || fromJSON('["22.x"]') }}
         services:
             icloud-mysql:
-                image: ${{ needs.detect-changes.outputs.icloud == 'true' && 'mysql:8.4' || '' }}
+                image: ${{ (needs.detect-changes.outputs.icloud == 'true' || needs.detect-changes.outputs.migration == 'true') && 'mysql:8.4' || '' }}
                 env:
                     MYSQL_ROOT_PASSWORD: password
                 ports:

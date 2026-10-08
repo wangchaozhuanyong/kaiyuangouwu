@@ -296,6 +296,186 @@ export class InventoryControlService {
         });
     }
 
+    /** Replacement stock is separate from the original order's fulfilled quantities. */
+    async dispatchAfterSalesReplacement(
+        ctx: RequestContext,
+        input: {
+            idempotencyKey: string;
+            reference: string;
+            reason: string;
+            lines: Array<{ productVariantId: ID; quantity: number }>;
+        },
+    ) {
+        const key = requiredText(input.idempotencyKey, 80, '幂等键');
+        const reference = requiredText(input.reference, 160, '售后引用');
+        const reason = requiredText(input.reason, 500, '换货补发出库原因');
+        if (!input.lines.length || input.lines.length > 100) {
+            throw new UserInputError('换货补发出库必须包含 1 到 100 个商品');
+        }
+        const quantities = new Map<string, { productVariantId: ID; quantity: number }>();
+        for (const line of input.lines) {
+            validatePositiveInteger(line.quantity, '换货补发数量');
+            const previous = quantities.get(String(line.productVariantId));
+            quantities.set(String(line.productVariantId), {
+                productVariantId: line.productVariantId,
+                quantity: (previous?.quantity ?? 0) + line.quantity,
+            });
+        }
+        const checkDuplicate = (operation: InventoryOperation) => {
+            requireOperationType(operation, 'AFTER_SALES_REPLACEMENT');
+            const posted = new Map<string, number>();
+            for (const line of operation.lines ?? []) {
+                posted.set(
+                    String(line.variantId),
+                    (posted.get(String(line.variantId)) ?? 0) - line.quantityDelta,
+                );
+            }
+            if (
+                operation.reference !== reference ||
+                posted.size !== quantities.size ||
+                [...quantities].some(([id, line]) => posted.get(id) !== line.quantity)
+            ) {
+                throw new UserInputError('原换货补发出库内容与本次不一致，请核对原流水');
+            }
+            return operation;
+        };
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const duplicate = await this.findOperationByKey(txCtx, key);
+            if (duplicate) return checkDuplicate(duplicate);
+            const plans: Array<{
+                variantId: ID;
+                stockLocationId: ID;
+                lot: InventoryLot | null;
+                quantity: number;
+                stockBefore: number;
+            }> = [];
+            for (const line of [...quantities.values()].sort((a, b) =>
+                String(a.productVariantId).localeCompare(String(b.productVariantId)),
+            )) {
+                await this.operations.requirePhysicalVariant(txCtx, line.productVariantId);
+                const levels = await this.connection.getRepository(txCtx, StockLevel).find({
+                    where: {
+                        productVariantId: line.productVariantId,
+                        stockLocation: { channels: { id: txCtx.channelId } },
+                    },
+                    order: { stockLocationId: 'ASC' },
+                });
+                let remaining = line.quantity;
+                for (const level of levels) {
+                    if (!remaining) break;
+                    const current = await this.lockStockLevel(
+                        txCtx,
+                        line.productVariantId,
+                        level.stockLocationId,
+                    );
+                    if (!current) throw new UserInputError('换货补发仓库库存已变化，请重新核对');
+                    const stockBefore = current.stockOnHand;
+                    const allocated = current.stockAllocated;
+                    if (
+                        !Number.isSafeInteger(stockBefore) ||
+                        !Number.isSafeInteger(allocated) ||
+                        allocated < 0
+                    ) {
+                        throw new UserInputError('仓库库存记录无效，请核对后再登记补发');
+                    }
+                    let available = Math.max(0, stockBefore - allocated);
+                    if (!available) continue;
+                    const lots = await this.lockLotsInScope(
+                        txCtx,
+                        line.productVariantId,
+                        level.stockLocationId,
+                    );
+                    if (
+                        lots.some(lot => !Number.isSafeInteger(lot.quantityOnHand) || lot.quantityOnHand < 0)
+                    ) {
+                        throw new UserInputError('库存批次数量无效，请先完成对账');
+                    }
+                    if (
+                        lots.length &&
+                        lots.reduce((sum, lot) => sum + lot.quantityOnHand, 0) !== stockBefore
+                    ) {
+                        throw new UserInputError('换货补发商品存在批次差异，请先完成库存对账');
+                    }
+                    const candidates = lots.length
+                        ? lots
+                              .filter(
+                                  lot =>
+                                      lot.state === 'ACTIVE' &&
+                                      (!lot.expiresAt || lot.expiresAt.getTime() > Date.now()),
+                              )
+                              .sort(
+                                  (a, b) =>
+                                      (a.expiresAt?.getTime() ?? Infinity) -
+                                          (b.expiresAt?.getTime() ?? Infinity) ||
+                                      String(a.id).localeCompare(String(b.id)),
+                              )
+                        : [null];
+                    let consumed = 0;
+                    for (const lot of candidates) {
+                        const quantity = Math.min(remaining, available, lot?.quantityOnHand ?? available);
+                        if (!quantity) continue;
+                        plans.push({
+                            variantId: line.productVariantId,
+                            stockLocationId: level.stockLocationId,
+                            lot,
+                            quantity,
+                            stockBefore: stockBefore - consumed,
+                        });
+                        remaining -= quantity;
+                        available -= quantity;
+                        consumed += quantity;
+                        if (!remaining || !available) break;
+                    }
+                }
+                if (remaining) throw new UserInputError('本店可用库存不足，不能登记换货或补发出库');
+            }
+            // Another same-key operation may have completed while we waited for stock locks.
+            const completed = await this.findOperationByKey(txCtx, key);
+            if (completed) return checkDuplicate(completed);
+            for (const plan of plans) {
+                if (plan.lot) {
+                    await this.operations.changeLotQuantity(txCtx, {
+                        ...lotInput(plan.lot, plan.lot.quantityOnHand - plan.quantity),
+                        quantityDelta: -plan.quantity,
+                    });
+                } else {
+                    await this.stockMovements.adjustProductVariantStock(txCtx, plan.variantId, [
+                        {
+                            stockLocationId: plan.stockLocationId,
+                            stockOnHand: plan.stockBefore - plan.quantity,
+                        },
+                    ]);
+                }
+            }
+            const operation = await this.createOperation(
+                txCtx,
+                'AFTER_SALES_REPLACEMENT',
+                key,
+                reason,
+                reference,
+            );
+            await this.connection.getRepository(txCtx, InventoryOperationLine).save(
+                plans.map(
+                    plan =>
+                        new InventoryOperationLine({
+                            operationId: operation.id,
+                            variantId: plan.variantId,
+                            stockLocationId: plan.stockLocationId,
+                            inventoryLotId: plan.lot?.id ?? null,
+                            quantityDelta: -plan.quantity,
+                            previousLotQuantity: plan.lot?.quantityOnHand ?? plan.stockBefore,
+                            resultingLotQuantity:
+                                (plan.lot?.quantityOnHand ?? plan.stockBefore) - plan.quantity,
+                            previousStockOnHand: plan.stockBefore,
+                            resultingStockOnHand: plan.stockBefore - plan.quantity,
+                            reconciliationMode: null,
+                        }),
+                ),
+            );
+            return this.operationById(txCtx, operation.id);
+        });
+    }
+
     async reconciliationOverview(ctx: RequestContext) {
         const locations = await this.operations.stockLocations(ctx, false);
         if (!locations.length) return { items: [], totalItems: 0 };
@@ -546,6 +726,14 @@ export class InventoryControlService {
     }
 
     private async lockStockOnHand(ctx: RequestContext, variantId: ID, stockLocationId: ID): Promise<number> {
+        return (await this.lockStockLevel(ctx, variantId, stockLocationId))?.stockOnHand ?? 0;
+    }
+
+    private async lockStockLevel(
+        ctx: RequestContext,
+        variantId: ID,
+        stockLocationId: ID,
+    ): Promise<StockLevel | null> {
         const repository = this.connection.getRepository(ctx, StockLevel);
         const query = repository
             .createQueryBuilder('stock')
@@ -558,7 +746,7 @@ export class InventoryControlService {
         ) {
             query.setLock('pessimistic_write');
         }
-        return (await query.getOne())?.stockOnHand ?? 0;
+        return query.getOne();
     }
 
     private async requireReconciledScope(

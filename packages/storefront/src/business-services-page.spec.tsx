@@ -1,10 +1,17 @@
+// @vitest-environment jsdom
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DesktopLayoutContext } from './desktop-layout';
 import { BusinessServicesPage } from './pages/business-services-page';
 import { BusinessServicesPageContext } from './storefront-page-contexts';
-import { type StorefrontContentBlock, type StorefrontContentItem } from './types';
+import {
+    type StorefrontContentBlock,
+    type StorefrontContentItem,
+    type StorefrontContentTargetType,
+} from './types';
 
 function businessPluginBlock(): StorefrontContentBlock {
     const item: StorefrontContentItem = {
@@ -81,8 +88,13 @@ function navigationBlock(servicesLabel: string): StorefrontContentBlock {
     };
 }
 
-function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh', desktop = false) {
-    return renderToStaticMarkup(
+function pageElement(
+    contentBlocks: StorefrontContentBlock[],
+    language: 'zh' | 'en' = 'zh',
+    desktop = false,
+    onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void = vi.fn(),
+) {
+    return (
         <BusinessServicesPageContext.Provider
             value={{
                 contentBlocks,
@@ -97,14 +109,18 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
                 onCurrencyChange: vi.fn(),
                 onNotifications: vi.fn(),
                 onNavigate: () => undefined,
-                onContentTarget: vi.fn(),
+                onContentTarget,
             }}
         >
             <DesktopLayoutContext.Provider value={desktop}>
                 <BusinessServicesPage />
             </DesktopLayoutContext.Provider>
-        </BusinessServicesPageContext.Provider>,
+        </BusinessServicesPageContext.Provider>
     );
+}
+
+function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh', desktop = false) {
+    return renderToStaticMarkup(pageElement(contentBlocks, language, desktop));
 }
 
 describe('business services page', () => {
@@ -253,6 +269,156 @@ describe('business services page', () => {
             expect(markup.match(/category-client-plugin-two-factor/g)).toHaveLength(1);
             expect(markup).not.toContain('business-services-hero-shortcuts');
             expect(markup).not.toContain('直通服务');
+        }
+    });
+
+    it('retains the existing stacked image and copy until a merchant explicitly selects the new layout', () => {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1 };
+        block.imageUrl = '/assets/existing-artwork-with-copy.webp';
+        for (const desktop of [false, true]) {
+            const markup = renderPage([block], 'zh', desktop);
+            expect(markup).toContain('data-services-hero-layout="stacked"');
+            expect(markup).toContain('/assets/existing-artwork-with-copy.webp');
+            expect(markup.indexOf('business-services-hero-media')).toBeLessThan(
+                markup.indexOf('business-services-heading-copy'),
+            );
+            expect(
+                renderPage(
+                    [{ ...block, settings: { ...block.settings, businessServicesHeroLayout: 'unknown' } }],
+                    'zh',
+                    desktop,
+                ),
+            ).toContain('data-services-hero-layout="stacked"');
+        }
+    });
+
+    it('falls back to a readable introduction when the selected artwork layout has no enabled image', () => {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1, businessServicesHeroLayout: 'image-overlay' };
+        block.title = '无图片也能查看服务';
+        block.body = '完整保留介绍和店铺工具。';
+        for (const desktop of [false, true]) {
+            for (const imageBlock of [block, { ...block, enabled: false, imageUrl: '/assets/hidden.webp' }]) {
+                const markup = renderPage([imageBlock], 'zh', desktop);
+                expect(markup).toContain('data-services-hero-layout="stacked"');
+                expect(markup).toContain('无图片也能查看服务');
+                expect(markup).toContain('完整保留介绍和店铺工具。');
+                expect(markup).toContain('business-services-architecture');
+                expect(markup).not.toContain('business-services-hero-media');
+            }
+        }
+    });
+
+    it('keeps long localized copy literal and complete in the optional artwork layout', () => {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1, businessServicesHeroLayout: 'image-overlay' };
+        block.imageUrl = '/assets/text-free-services.webp';
+        const copies = [
+            { language: 'zh' as const, title: '智能服务与专属权益'.repeat(8), body: '完整说明\n'.repeat(30) },
+            {
+                language: 'en' as const,
+                title: 'Tools and services for your business '.repeat(8),
+                body: 'All of the service details remain readable.\n'.repeat(30),
+            },
+        ];
+        for (const copy of copies) {
+            for (const desktop of [false, true]) {
+                const host = document.createElement('div');
+                host.innerHTML = renderPage(
+                    [{ ...block, title: `${copy.title}<script>literal</script>`, body: copy.body }],
+                    copy.language,
+                    desktop,
+                );
+                expect(
+                    host
+                        .querySelector('.business-services-heading')
+                        ?.getAttribute('data-services-hero-layout'),
+                ).toBe('image-overlay');
+                expect(host.querySelector('.business-services-page-title')?.textContent).toBe(
+                    `${copy.title}<script>literal</script>`,
+                );
+                expect(host.querySelector('.business-services-heading-copy p')?.textContent).toBe(
+                    copy.body.trim(),
+                );
+                expect(host.querySelector('script')).toBeNull();
+                expect(
+                    host.querySelector('.business-services-hero-media img')?.getAttribute('src'),
+                ).toContain('/assets/text-free-services.webp');
+            }
+        }
+    });
+
+    it('updates localized copy and the selected layout without losing the configured action or image', async () => {
+        vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1, businessServicesHeroLayout: 'image-overlay' };
+        block.imageUrl = '/assets/text-free-services.webp';
+        block.title = '智能服务';
+        block.body = '中文服务说明';
+        block.ctaLabel = '了解详情';
+        block.targetType = 'URL';
+        block.targetValue = '/promotions';
+        const onContentTarget = vi.fn();
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const flushAction = async (action: () => void) => {
+            await act(async () => {
+                action();
+                await Promise.resolve();
+            });
+        };
+        try {
+            await flushAction(() => root.render(pageElement([block], 'zh', true, onContentTarget)));
+            const hero = () => host.querySelector('.business-services-heading');
+            expect(hero()?.getAttribute('data-services-hero-layout')).toBe('image-overlay');
+            expect(hero()?.textContent).toContain('中文服务说明');
+            await flushAction(() => {
+                (host.querySelector('.business-services-heading-link') as HTMLButtonElement).click();
+            });
+            expect(onContentTarget).toHaveBeenLastCalledWith('URL', '/promotions');
+
+            const englishBlock = {
+                ...block,
+                title: 'Intelligent services',
+                body: 'Service details in English',
+                ctaLabel: 'Learn more',
+            };
+            await flushAction(() => root.render(pageElement([englishBlock], 'en', true, onContentTarget)));
+            expect(hero()?.textContent).toContain('Intelligent services');
+            expect(hero()?.textContent).toContain('Service details in English');
+            expect(hero()?.textContent).not.toContain('中文服务说明');
+            expect(hero()?.getAttribute('data-services-hero-layout')).toBe('image-overlay');
+
+            await flushAction(() =>
+                root.render(
+                    pageElement(
+                        [
+                            {
+                                ...englishBlock,
+                                settings: { ...block.settings, businessServicesHeroLayout: 'stacked' },
+                            },
+                        ],
+                        'en',
+                        true,
+                        onContentTarget,
+                    ),
+                ),
+            );
+            expect(hero()?.getAttribute('data-services-hero-layout')).toBe('stacked');
+            expect(host.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
+                '/assets/text-free-services.webp',
+            );
+            await flushAction(() => {
+                (host.querySelector('.business-services-heading-link') as HTMLButtonElement).click();
+            });
+            expect(onContentTarget).toHaveBeenCalledTimes(2);
+            expect(onContentTarget).toHaveBeenLastCalledWith('URL', '/promotions');
+        } finally {
+            await flushAction(() => root.unmount());
+            host.remove();
+            vi.unstubAllGlobals();
         }
     });
 });

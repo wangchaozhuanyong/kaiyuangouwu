@@ -10,6 +10,7 @@ import {
     EventBus,
     Order,
     OrderEvent,
+    OrderLine,
     OrderLineEvent,
     PaymentAttemptEvent,
     PaymentStateTransitionEvent,
@@ -348,13 +349,36 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         await this.events.publish(new OrderProcessingChangedEvent(ctx, order.id));
     }
 
+    private resourceLines(order: Order): OrderLine[] {
+        const refunded = new Map<string, number>();
+        for (const item of effectiveRefundLines(order.payments.flatMap(payment => payment.refunds ?? []))) {
+            const key = String(item.orderLineId);
+            refunded.set(key, (refunded.get(key) ?? 0) + item.quantity);
+        }
+        return order.lines
+            .map(line => {
+                const resourceLine = new OrderLine(line);
+                resourceLine.quantity = Math.max(
+                    0,
+                    Math.min(
+                        line.quantity,
+                        (line.orderPlacedQuantity || line.quantity) - (refunded.get(String(line.id)) ?? 0),
+                    ),
+                );
+                return resourceLine;
+            })
+            .filter(line => line.quantity > 0);
+    }
+
     private async resourcesIntact(ctx: RequestContext, order: Order) {
-        for (const line of order.lines) {
+        for (const line of this.resourceLines(order)) {
             if (getOrderLineFulfillmentType(line) === 'digital') {
                 const reservation = await this.digital.reservation(ctx, line.id);
                 if (
                     (await this.digital.config(ctx, line.productVariantId)) &&
-                    (!reservation || reservation.state === 'RELEASED')
+                    (!reservation ||
+                        reservation.state === 'RELEASED' ||
+                        reservation.quantity - reservation.releasedQuantity < line.quantity)
                 )
                     return false;
             } else if (line.quantity > (await this.outstandingAllocation(ctx, line.id))) {
@@ -409,7 +433,10 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
             throw new UserInputError('实际付款尚未确认或订单已取消，暂不能补交付');
         const held = await this.hold(ctx, order.id);
         if (!held || held.state !== 'REVIEW') throw new UserInputError('该订单没有待处理的交付异常');
-        const physical = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
+        const resourceLines = this.resourceLines(order);
+        if (order.lines.length && !resourceLines.length)
+            throw new UserInputError('订单商品已全部退款或正在退款，暂不能补交付');
+        const physical = resourceLines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
         const rules = await this.packaging.rulesForVariantIds(
             ctx,
             physical.map(line => line.productVariantId),
@@ -450,7 +477,13 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
             const error = await this.packaging.autoUnpackForOrder(ctx, order, remaining, rules, locked);
             if (error) throw new UserInputError(error);
         }
-        await this.digital.reserveOrder(ctx, order, held.expiresAt);
+        const originalLines = order.lines;
+        try {
+            order.lines = resourceLines;
+            await this.digital.reserveOrder(ctx, order, held.expiresAt);
+        } finally {
+            order.lines = originalLines;
+        }
         for (const line of physical) {
             const sales = await this.connection
                 .getRepository(ctx, Sale)

@@ -1,0 +1,100 @@
+{
+  "status": "LOCAL_CODE_AND_VERIFICATION_COMPLETE_NOT_PUBLISHED",
+  "projectRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/responsive-three-surfaces-20261008",
+  "branch": "fix/responsive-three-surfaces-20261008",
+  "baseHead": "aed52cc975e1144496256d4519904ecc4f9df65d",
+  "dataSource": "Actual components/API clients + local in-memory synthetic responses, no upstream orders/payments/inventory",
+  "authorization": "User authorized named checkout/Admin repair; no push or deployment",
+  "uniqueTests": {
+    "storefront": 193,
+    "fulfillmentResources": 167,
+    "admin": 94,
+    "afterSalesAndReplacementStock": 56,
+    "total": 510
+  },
+  "browser": {
+    "storefront": 32,
+    "admin": 6,
+    "total": 38,
+    "storefrontLayouts": 80,
+    "storefrontTwoStableBatches": true
+  },
+  "checks": {
+    "storefrontBuild": "PASS",
+    "nextAdminBuild": "PASS",
+    "catalogBuild": "PASS",
+    "fulfillmentBuild": "PASS",
+    "affectedTypeChecks": "PASS",
+    "affectedLint": "PASS_NO_ERRORS",
+    "diffCheck": "PASS"
+  },
+  "sourceFiles": {
+    "packages/catalog-management-plugin/src/entities/inventory-operation.entity.ts": "6d01a046fea1bd40dc75ccc3e71ce5fcabf1b146714d81315db15abd3fa23fb3",
+    "packages/catalog-management-plugin/src/inventory-control.service.spec.ts": "1c7fc3e94ffae797a46d5a2939f8ca4e87db0c9e834e3bcf0d4e39fe8b6ee35b",
+    "packages/catalog-management-plugin/src/inventory-control.service.ts": "317c8f9fdc1fefa7a8a18c84658a87a3428c34184d9a02175936403ab76b25bf",
+    "packages/commerce-fulfillment-plugin/src/after-sales.service.spec.ts": "0e5f5c7db834d3e837f2803f716761eb45e375982d20a3868fc4f8017eb5ba13",
+    "packages/commerce-fulfillment-plugin/src/after-sales.service.ts": "a3e1575b61f7f28b488c94b7ffc2d4b300bde2d35dbc6ea7f88bf6f6a5625871",
+    "packages/commerce-fulfillment-plugin/src/checkout-resources.service.spec.ts": "26f031ce6b866417ff594648a771c426540362f9d5478f625718045e687aa039",
+    "packages/commerce-fulfillment-plugin/src/checkout-resources.service.ts": "8134fa25671bd70e7588e8ca866648eb3ab7722bfba018c82479a2e6556c4fa3",
+    "packages/commerce-fulfillment-plugin/src/commerce-order-process.spec.ts": "8a1dd6d1f45dda27de6203faf4df4ad2f6343357fa9319b2cb4d41b25321c734",
+    "packages/commerce-fulfillment-plugin/src/commerce-order-process.ts": "d1000b60e7f6b69238fac3daa985d85952a112e9e722e191d7c81992bada1015",
+    "packages/commerce-fulfillment-plugin/src/physical-return.service.ts": "544fc9da3638e81c45e1a9396bba7cafceddbbffe82d623326ad0a168975db7d",
+    "packages/next-admin/src/components/OrderNotifications.spec.tsx": "ede3ef7a0be13af532e8d49aefbaadeea3ac2c24ba3ceabbcd5b5a08bcdf4f88",
+    "packages/next-admin/src/components/OrderNotifications.tsx": "fe748386cdca548e713dac0ee4064319b08c2fd3c0dfc9dae9926874ba92589a",
+    "packages/next-admin/src/pages/Catalog/InventoryControlModule.tsx": "6e9ec4d2dd452b675b062aa8bd530ba530c0d72859104e4fdf496c6023e8f5bd",
+    "packages/next-admin/src/pages/Catalog/InventoryLotDialog.spec.tsx": "55cd34c4383ce5e7ba237b701377e173d867a27dd51b188f9f4e197fee0a4553",
+    "packages/next-admin/src/pages/Catalog/InventoryWarehouseModule.tsx": "e537e9de217b278ad0851890fb224601fbe281ddd0d2085ce39b6c0846b713b3",
+    "packages/next-admin/src/pages/Sales/AfterSalesModule.tsx": "0780a0fdba863dbc14aa7c1d771e2944d612fc29b275e9b6ff5fe16a9a964977",
+    "packages/next-admin/src/pages/Sales/PhysicalReturnPanel.tsx": "ad816db3f00dd3a0cb39366796d1b296f9599729c95c73b86ab54ef3c35c4679",
+    "packages/next-admin/src/pages/Sales/SalesModule.tsx": "2bfec7de85f528237561e7d05f9a18123efd485aaf6c6507f5619822647ba2e8",
+    "packages/next-admin/src/pages/Sales/admin-mobile-lists.spec.tsx": "c7a45155ee117ab1e34b9fddfb5306f2849510ea914eeae3d4cf91870f3b8305",
+    "packages/next-admin/src/pages/Sales/sales-utils.spec.ts": "0b58a03417fe425993479a52e8b0e39aa8a26d94bf804cbb367d6650b4740661",
+    "packages/next-admin/src/pages/Sales/sales-utils.ts": "0322a37b63a44c9b6a976be887973b11fd7fff2f9e1cdb99f7ac42e71934b8bb",
+    "packages/next-admin/src/runtime/admin-resource-events.spec.ts": "4aaf69457f2c91e9ab1b9d69c15edc693df2024ab35f14386206951c78ced29c",
+    "packages/next-admin/src/runtime/admin-resource-events.ts": "2626e6e660cad5f98fbc12321b3c7f94d7fa4a44712d5bfaf8434205f80b6d84",
+    "packages/storefront/src/api.spec.ts": "0950ae26a10911209ffc203dcca2dd24a058af3eb69f1ccf8139502d1a8c7428",
+    "packages/storefront/src/api.ts": "94a1b800cce092f1180093ee02f418caed5cd9b8b408d97d8f4860e806d0cd76",
+    "packages/storefront/src/api/account.ts": "7b9a4f1b6c349d30110db9071aa3c5331a3487ed1359b8eb7cde2584bb4390a4",
+    "packages/storefront/src/api/base-domain-api.ts": "f2c90d22aba18410308e0b79f755f5732e9a8284f971c94b0ceb35bb39d411a3",
+    "packages/storefront/src/api/cart-checkout.ts": "d2bad1fe9191b16876e7152bd086e57ee22e5bd7cd0d279ea55ddf928255442f",
+    "packages/storefront/src/api/client-context.ts": "99f4047ce7db29893190a409c8536c2d450c52ab94fbc21223bdb1f170b59bb7",
+    "packages/storefront/src/api/referrals.ts": "51d78d9ad84b475cfdd7348b83380f147ecd6901d5675449b5c7f1148407f7dc",
+    "packages/storefront/src/payment-balance-completion.spec.tsx": "532a88a02ccd479747b7f2cd0d01bbe4a40a41a8705810352bd57ff4c8a77610",
+    "packages/storefront/src/payment-currency-page.spec.tsx": "bb28fcf3db85b1ef19de2992f37d0dcdb92ff625704c02a98a85ab7422cdd024",
+    "packages/storefront/src/payment-pages.tsx": "7ed5c8fa0a3b61ea2140f078860c6d228e85f0df349222c48a9a452d43a98a8f",
+    "packages/next-admin/src/pages/Sales/AfterSalesModule.spec.tsx": "0854622c7a06717ffe5b58d8cdf6e50833bd8b3463a58b5c571f11c0669cad33"
+  },
+  "runtimeProof": {
+    "realPayments": "NOT_MEASURED",
+    "realRefunds": "NOT_MEASURED",
+    "realDatabaseConcurrency": "NOT_MEASURED",
+    "fullApplicationHardReload": "NOT_MEASURED",
+    "deployment": "NOT_REQUESTED_NOT_EXECUTED"
+  },
+  "knownPresentationObservation": "English USDT error text has a narrow column at 390px beside the retry action; no clipping/overflow; no shared error layout redesign in scope.",
+  "sourceGuard": {
+    "status": "PASS",
+    "surface": "storefront-payment-recovery",
+    "sourceFiles": 19,
+    "record": "source-check-final.json",
+    "primaryRegistryOldEntriesPreserved": 83,
+    "previewCwdMatched": true
+  },
+  "rawEvidence": {
+    "storefront": "packages/storefront/tmp/order-closure-browser/outputs",
+    "admin": "packages/next-admin/tmp/order-recovery-browser/outputs"
+  },
+  "implementationCommit": "5d5aa0ee9149232351926db473710361094ff698",
+  "localCommitHooks": {
+    "status": "PASS",
+    "sourceFiles": 34,
+    "mode": "Existing CI_PLAN.lintFiles selected all staged production/test files; no hook disabled",
+    "preparationFailure": "Default hook initially included untracked temporary QA code not in TS projects; these files stay untracked and are not product source."
+  },
+  "ownPreviewServer": {
+    "port": 5428,
+    "pid": 94046,
+    "status": "SIGTERM_SENT_AFTER_SOURCE_GUARD",
+    "otherUserProcesses": "UNTOUCHED"
+  }
+}
