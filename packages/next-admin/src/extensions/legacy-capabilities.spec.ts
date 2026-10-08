@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -20,16 +20,32 @@ import {
 
 const packagesRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const legacyDashboardPackages = [
-    'catalog-management-plugin',
     'content-translation-plugin',
     'image-generation-plugin',
-    'operations-dashboard-plugin',
     'store-domain-plugin',
     'store-management-plugin',
     'storefront-content-plugin',
     'two-factor-dashboard-plugin',
 ];
 const migratedRouteSourceDirectories = [join(packagesRoot, 'store-management-plugin', 'src/admin')];
+// Frozen from the retired UI source at 1ab589d7. The current Next Admin must keep
+// these exact redirects after the unused source is removed.
+const retiredDashboardRoutes = {
+    'catalog-management-plugin': [
+        '/catalog-inventory-control',
+        '/catalog-purchase-orders',
+        '/catalog-suppliers',
+    ],
+    'operations-dashboard-plugin': [
+        '/after-sales',
+        '/auto-card',
+        '/governance-risk',
+        '/incident-response',
+        '/manual-digital-delivery',
+        '/marketing-attribution',
+        '/review-moderation',
+    ],
+};
 
 function sourceFiles(directory: string): string[] {
     return readdirSync(directory).flatMap(name => {
@@ -45,10 +61,13 @@ function legacyRoutePathsFromSource() {
         ...legacyDashboardPackages.map(packageName => join(packagesRoot, packageName, 'src/dashboard')),
         ...migratedRouteSourceDirectories,
     ];
-    return sourceDirectories
+    const remainingRoutes = sourceDirectories
         .flatMap(sourceFiles)
-        .flatMap(file => [...readFileSync(file, 'utf8').matchAll(pattern)].map(match => match[1]))
-        .sort();
+        .flatMap(file => [...readFileSync(file, 'utf8').matchAll(pattern)].map(match => match[1]));
+    for (const packageName of Object.keys(retiredDashboardRoutes)) {
+        expect(existsSync(join(packagesRoot, packageName, 'src/dashboard'))).toBe(false);
+    }
+    return [...remainingRoutes, ...Object.values(retiredDashboardRoutes).flat()].sort();
 }
 
 describe('legacy capability parity contract', () => {
