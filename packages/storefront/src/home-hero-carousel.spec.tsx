@@ -645,6 +645,19 @@ describe('HomePage carousel pointer interactions', () => {
             expect(target).not.toHaveBeenCalled();
         },
     );
+    it('shows a static current page for one desktop image without enabling slide navigation', async () => {
+        await render(true, [heroes[0]]);
+        const pager = requiredElement(activeSlide(), '.hero-page-picker');
+        expect(pager.textContent?.trim()).toBe('1');
+        expect(pager.querySelector('button')).toBeNull();
+        expect(pager.querySelector('[aria-current="true"]')?.getAttribute('aria-label')).toBe(
+            '当前第 1 张图片',
+        );
+        await advance(10_000);
+        expect(activeSlide().textContent).toContain('First slide');
+        expect(host.querySelector('.is-neighbor')).toBeNull();
+        expect(target).not.toHaveBeenCalled();
+    });
     it('preserves numbered selection and recovers when decoding a slide fails', async () => {
         await render(true);
         vi.mocked(productDisplay.decodeStorefrontImage).mockRejectedValue(new Error('Image unavailable'));

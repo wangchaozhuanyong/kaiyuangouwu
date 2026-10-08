@@ -8,7 +8,6 @@ import {
     Gift,
     Image,
     Info,
-    Link2,
     Share2,
     ShoppingBag,
     Users,
@@ -196,13 +195,15 @@ export function ReferralPage() {
             ) : (
                 <SubpageBody className="desktop-referral-content">
                     <section className="referral-invite">
-                        <div className="referral-invite-kicker">
-                            <Gift aria-hidden="true" />
-                            <span>{isZh ? '分享有礼' : 'SHARE & EARN'}</span>
+                        <div className="referral-invite-heading">
+                            <h1 className="referral-invite-title">
+                                {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
+                            </h1>
+                            <div className="referral-invite-kicker">
+                                <Gift aria-hidden="true" />
+                                <span>{isZh ? '分享有礼' : 'SHARE & EARN'}</span>
+                            </div>
                         </div>
-                        <h1 className="referral-invite-title">
-                            {isZh ? '邀请好友，获得奖励' : 'Invite friends, earn rewards'}
-                        </h1>
                         <p className="referral-invite-description">
                             {isZh
                                 ? `好友成功消费，你可获得 ${overview.rewardRate}% 奖励用于消费抵扣。`
@@ -215,8 +216,7 @@ export function ReferralPage() {
                             <strong className="referral-invite-code-value">{overview.inviteCode}</strong>
                         </div>
                         <div className="referral-invite-link">
-                            <label className="referral-invite-link-label" htmlFor={`${recordId}-link`}>
-                                <Link2 aria-hidden="true" className="size-4" />
+                            <label className="sr-only" htmlFor={`${recordId}-link`}>
                                 {isZh ? '邀请链接' : 'Invitation link'}
                             </label>
                             <input

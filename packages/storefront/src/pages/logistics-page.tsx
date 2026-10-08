@@ -247,29 +247,34 @@ export function LogisticsPage({
                                     className="delivery-filters"
                                     aria-label={zh ? '物流状态筛选' : 'Delivery status'}
                                 >
-                                    {filters.map(value => (
-                                        <button
-                                            type="button"
-                                            key={value}
-                                            aria-pressed={filter === value}
-                                            onClick={() => go({ ...listRoute, deliveryStatus: value }, true)}
-                                        >
-                                            {value === 'all'
+                                    {filters.map(value => {
+                                        const label =
+                                            value === 'all'
                                                 ? zh
                                                     ? '全部'
                                                     : 'All'
-                                                : deliveryLabel(value, language)}
-                                            <span>
-                                                {list.data
-                                                    ? orders.filter(
-                                                          item =>
-                                                              value === 'all' ||
-                                                              deliveryStatus(item) === value,
-                                                      ).length
-                                                    : '—'}
-                                            </span>
-                                        </button>
-                                    ))}
+                                                : deliveryLabel(value, language);
+                                        const count = list.data
+                                            ? orders.filter(
+                                                  item => value === 'all' || deliveryStatus(item) === value,
+                                              ).length
+                                            : '—';
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={value}
+                                                aria-label={`${label} ${count}`}
+                                                aria-pressed={filter === value}
+                                                title={label}
+                                                onClick={() =>
+                                                    go({ ...listRoute, deliveryStatus: value }, true)
+                                                }
+                                            >
+                                                <span className="delivery-filter-label">{label}</span>
+                                                <span className="delivery-filter-count">{count}</span>
+                                            </button>
+                                        );
+                                    })}
                                 </nav>
                                 <div className="delivery-toolbar-actions">
                                     <form

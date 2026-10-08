@@ -180,7 +180,7 @@
     backdrop-filter: blur(4px);
 }
 
-/* Keep one service row at the image's bottom center, outside the carousel's gesture region. */
+/* The shared strip remains outside the carousel's gesture region. */
 .home-page .home-hero-trust {
     position: absolute;
     z-index: 3;
@@ -3538,6 +3538,31 @@ html[lang='en'] .primary-category-image {
         height: auto;
         min-height: 0;
         gap: 6px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .home-page .hero .hero-overlay-controls,
+    .home-page .hero-carousel:has(> .home-hero-trust) .hero .hero-overlay-controls {
+        bottom: 12px;
+        left: auto;
+        right: clamp(28px, 3vw, 44px);
+        transform: none;
+        max-width: 35%;
+    }
+
+    .home-page .home-hero-trust {
+        left: clamp(28px, 3vw, 44px);
+        transform: none;
+        justify-content: flex-start;
+        width: calc(
+            100% - clamp(28px, 3vw, 44px) - clamp(28px, 3vw, 44px) - var(--home-hero-pager-width, 0px) - 12px
+        );
+    }
+
+    .home-page .home-hero-trust .home-trust-bar {
+        max-width: 100%;
+        min-height: 44px;
     }
 }
 

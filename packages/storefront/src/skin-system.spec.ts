@@ -1131,7 +1131,7 @@ describe('storefront skin system', () => {
         expect(services).not.toMatch(/\.hero-rich-content\s*\{[^}]*width:\s*40%;/);
     });
 
-    it('centers one trust overlay at the image bottom and clears space for copy and the pager', () => {
+    it('centers mobile trust and reserves separate desktop corners for trust and the pager', () => {
         const services = stylesheet('./styles/home-showcase.css');
         const overlay = services.match(/\.home-page \.home-hero-trust\s*\{([^}]+)\}/)?.[1];
         expect(services).toMatch(/\.hero-carousel\s*\{[^}]*position:\s*relative;/);
@@ -1158,6 +1158,13 @@ describe('storefront skin system', () => {
         )?.[1];
         expect(shiftedPager).toContain('bottom: calc(var(--home-hero-trust-height, 0px) + 24px);');
         expect(services).toMatch(/\.home-page \.hero \.hero-overlay-controls\s*\{[^}]*bottom:\s*12px;/);
+        const desktopOverlay = services.match(
+            /@media \(min-width: 1024px\)\s*\{[\s\S]*?\.home-page \.home-hero-trust\s*\{([^}]+)\}/,
+        )?.[1];
+        expect(desktopOverlay).toContain('left: clamp(28px, 3vw, 44px);');
+        expect(desktopOverlay).toContain('transform: none;');
+        expect(desktopOverlay).toContain('var(--home-hero-pager-width, 0px)');
+        expect(services).toMatch(/right: clamp\(28px, 3vw, 44px\);/);
         expect(overlay).toContain('justify-content: center;');
         expect(services).toMatch(
             new RegExp(
