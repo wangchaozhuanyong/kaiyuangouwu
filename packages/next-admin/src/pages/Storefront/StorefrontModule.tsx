@@ -799,7 +799,7 @@ export function StorefrontModule() {
             >
                 {query.data?.storefrontAuthConfiguration ? (
                     <StorefrontAuthSettingsPanel
-                        key={query.data.activeChannel.id}
+                        key={`auth-settings:${query.data.activeChannel.id}`}
                         value={query.data.storefrontAuthConfiguration}
                         disabled={Boolean(query.error) || !canUpdate}
                         canEditPlatform={canEditPlatformGoogle}
@@ -863,7 +863,7 @@ export function StorefrontModule() {
                     )}
                 </section>
                 <StorefrontAccountRecommendationsPanel
-                    key={channelId}
+                    key={`account-recommendations:${channelId}`}
                     value={resolveAccountRecommendationSettings(
                         query.data?.storefrontContentSettings.accountRecommendations,
                     )}

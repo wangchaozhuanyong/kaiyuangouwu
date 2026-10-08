@@ -623,6 +623,24 @@ describe('account recommendation settings', () => {
     async function save() {
         await act(async () => form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
     }
+    it('keeps settings sibling identities distinct during drawer and channel transitions', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            await openSettings();
+            await click('关闭装修设置');
+            current = data('b');
+            mocks.token = 'store-b';
+            await openSettings();
+            expect(host.querySelectorAll('form[aria-label="账户推荐设置"]')).toHaveLength(1);
+            expect(
+                consoleError.mock.calls.filter(([message]) =>
+                    String(message).includes('Encountered two children with the same key'),
+                ),
+            ).toEqual([]);
+        } finally {
+            consoleError.mockRestore();
+        }
+    });
     it('defaults to eight and verifies saved values against the selected store', async () => {
         mocks.other.mockImplementation(async ({ variables }) => ({
             data: { updateStorefrontAccountRecommendations: variables.input },
