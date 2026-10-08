@@ -19,6 +19,7 @@ import {
     mobileHeroTranslation,
     type MobileHeroTranslation,
 } from '../../../../storefront-content-plugin/src/shared/hero-image';
+import { resolveHeroArtworkLayout } from '../../../../storefront-content-plugin/src/shared/hero-scene';
 import { authHeroCopyPosition } from '../../../../storefront/src/auth-visual';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
@@ -161,6 +162,7 @@ export function StorefrontBlockEditor({
             settings: { ...(current.settings ?? {}), ...patch },
         }));
     const phoneTranslation = mobileHeroTranslation(draft.settings, language);
+    const editorialHero = draft.type === 'HERO' && resolveHeroArtworkLayout(draft.settings) === 'editorial';
     const updatePhoneTranslation = (patch: Partial<MobileHeroTranslation>) => {
         const translations = (['zh_Hans', 'en'] as const).map(code => {
             const translation = {
@@ -370,6 +372,15 @@ export function StorefrontBlockEditor({
                                             />
                                         )}
                                     </Field>
+                                    {draft.type === 'HERO' && (
+                                        <HeroCopyHint
+                                            language={language}
+                                            viewport="desktop"
+                                            field="title"
+                                            value={translation.title}
+                                            editorial={editorialHero}
+                                        />
+                                    )}
                                     <Field label={isAuth ? '电脑左侧副标题' : '副标题'}>
                                         <AdminInput
                                             data-translation-field="subtitle"
@@ -445,6 +456,15 @@ export function StorefrontBlockEditor({
                                             className={`${inputClass} resize-y leading-6`}
                                         />
                                     </Field>
+                                    {draft.type === 'HERO' && (
+                                        <HeroCopyHint
+                                            language={language}
+                                            viewport="desktop"
+                                            field="body"
+                                            value={translation.body}
+                                            editorial={editorialHero}
+                                        />
+                                    )}
                                     {!isSupport && (
                                         <Field label={isAuth ? '图片上的引导短句' : '按钮文案'}>
                                             <AdminInput
@@ -471,6 +491,14 @@ export function StorefrontBlockEditor({
                                                     className={inputClass}
                                                 />
                                             </Field>
+                                            <HeroCopyHint
+                                                language={language}
+                                                viewport="mobile"
+                                                field="title"
+                                                value={phoneTranslation.title}
+                                                inheritedValue={translation.title}
+                                                editorial={editorialHero}
+                                            />
                                             <Field label="手机副标题（选填）">
                                                 <AdminInput
                                                     value={phoneTranslation.subtitle ?? ''}
@@ -492,6 +520,14 @@ export function StorefrontBlockEditor({
                                                     className={`${inputClass} resize-y`}
                                                 />
                                             </Field>
+                                            <HeroCopyHint
+                                                language={language}
+                                                viewport="mobile"
+                                                field="body"
+                                                value={phoneTranslation.body}
+                                                inheritedValue={translation.body}
+                                                editorial={editorialHero}
+                                            />
                                             <Field label="手机按钮文案（选填）">
                                                 <AdminInput
                                                     value={phoneTranslation.ctaLabel ?? ''}
@@ -559,6 +595,12 @@ export function StorefrontBlockEditor({
                                                     })
                                                 }
                                             />
+                                            {draft.type === 'HERO' && (
+                                                <p className="mt-2 text-xs leading-5 text-slate-500">
+                                                    底图不写广告标题、说明和按钮；中英文文字在前台文案中分别编辑。
+                                                    切换图文布局不会替换主图或手机图。
+                                                </p>
+                                            )}
                                         </div>
                                     )}
                                     {draft.type === 'HERO' && (
@@ -581,7 +623,9 @@ export function StorefrontBlockEditor({
                                                 }
                                             />
                                             <p className="mt-2 text-xs text-slate-500">
-                                                使用与手机容器比例匹配的专用图片；留空沿用主图。电脑端继续使用主图。
+                                                {editorialHero
+                                                    ? '手机文字在上、图片主体在下。建议使用 4:3 或 1:1 的紧凑主体构图，无需顶部文字留白；未单独设置手机图时沿用主图。'
+                                                    : '使用与手机容器比例匹配的专用图片；留空沿用主图。电脑端继续使用主图。'}
                                             </p>
                                         </div>
                                     )}
@@ -626,6 +670,29 @@ export function StorefrontBlockEditor({
                                     )}
                                     {draft.type === 'HERO' && (
                                         <>
+                                            <Field
+                                                label="轮播图文布局"
+                                                helpText={
+                                                    editorialHero
+                                                        ? '电脑左侧约 45% 显示网页文字，右侧保留完整 3D 主体，底图左侧请留空；手机文字在上、图片在下。'
+                                                        : '保留现有图片上的网页文字布局；选择左右构图后，电脑与手机会使用共用的图文分离布局。'
+                                                }
+                                            >
+                                                <AdminSelect
+                                                    aria-label="轮播图文布局"
+                                                    className={inputClass}
+                                                    value={resolveHeroArtworkLayout(draft.settings)}
+                                                    disabled={saving}
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            heroArtworkLayout: event.target.value,
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="overlay">原图文叠加</option>
+                                                    <option value="editorial">无文字底图·左右构图</option>
+                                                </AdminSelect>
+                                            </Field>
                                             <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
                                                 <AdminInput
                                                     type="checkbox"
@@ -1299,4 +1366,55 @@ export function StorefrontBlockEditor({
         </AccessibleDialogSurface>
     );
     return <AdminOverlayPortal>{dialog}</AdminOverlayPortal>;
+}
+
+const heroCopyRecommendations = {
+    zh_Hans: { desktop: { title: 20, body: 60 }, mobile: { title: 16, body: 36 } },
+    en: { desktop: { title: 56, body: 130 }, mobile: { title: 36, body: 85 } },
+} as const;
+
+function HeroCopyHint({
+    language,
+    viewport,
+    field,
+    value,
+    inheritedValue,
+    editorial,
+}: {
+    language: StorefrontLanguageCode;
+    viewport: 'desktop' | 'mobile';
+    field: 'title' | 'body';
+    value: string | undefined;
+    inheritedValue?: string;
+    editorial: boolean;
+}) {
+    const count = Array.from((value ?? inheritedValue ?? '').trim()).length;
+    const recommended = heroCopyRecommendations[language][viewport][field];
+    const exceedsRecommendation = editorial && count > recommended;
+    const phoneState =
+        viewport === 'mobile'
+            ? value === undefined
+                ? '未单独设置，沿用当前语言电脑版文案；'
+                : value.trim() === ''
+                  ? '已明确隐藏手机该文字；'
+                  : ''
+            : '';
+    return (
+        <p
+            data-hero-copy-hint={`${viewport}-${field}`}
+            data-copy-language={language}
+            className={`text-xs leading-5 ${exceedsRecommendation ? 'text-amber-700' : 'text-slate-500'}`}
+        >
+            {phoneState}当前 {count} 个字符。
+            {editorial && (
+                <>
+                    建议不超过 {recommended} 个字符；
+                    {exceedsRecommendation
+                        ? '文案可能超出两行，请看前台预览。'
+                        : '实际行数请看前台预览，字符数不保证两行。'}
+                    此提示不影响保存。
+                </>
+            )}
+        </p>
+    );
 }

@@ -15,6 +15,19 @@ import { ContentText } from './content-text';
 import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 import { sampleImageTone, type ImageTone } from './image-tone';
 
+export const heroArtworkLayouts = [
+    { value: 'overlay', label: '原图文字覆盖' },
+    { value: 'editorial', label: '图文分离' },
+] as const;
+
+export type HeroArtworkLayout = (typeof heroArtworkLayouts)[number]['value'];
+
+export function resolveHeroArtworkLayout(
+    settings: Record<string, unknown> | null | undefined,
+): HeroArtworkLayout {
+    return settings?.heroArtworkLayout === 'editorial' ? 'editorial' : 'overlay';
+}
+
 export interface HeroSceneData extends HeroThemeData {
     title: string;
     subtitle: string;
@@ -98,6 +111,7 @@ export function HeroScene({
             className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
             style={{ ...adaptiveStyle, '--hero-overlay-height': `${overlayHeight}px` } as CSSProperties}
             data-copy-layout="overlay"
+            data-hero-artwork-layout={resolveHeroArtworkLayout(content.settings)}
         >
             <div
                 className="hero-rich-media"

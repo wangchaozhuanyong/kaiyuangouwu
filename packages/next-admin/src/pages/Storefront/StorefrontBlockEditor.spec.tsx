@@ -641,5 +641,137 @@ it('switches phone draft language and restores only the selected language to des
     }
 });
 
+it('selects editorial artwork with advisory bilingual counts while preserving phone inheritance and images', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createFixtureRoot(host);
+    const onSave = vi
+        .fn<(value: ReturnType<typeof newContentBlock>, allowImageReplacement?: boolean) => Promise<void>>()
+        .mockResolvedValue(undefined);
+    const value = {
+        ...newContentBlock('HERO', 0),
+        id: 'shared-editorial',
+        imageAssetId: 'desktop',
+        imageUrl: '/assets/desktop.webp',
+        translations: [
+            {
+                languageCode: 'zh_Hans' as const,
+                title: '中'.repeat(21),
+                subtitle: '',
+                body: '文'.repeat(61),
+                ctaLabel: '浏览',
+            },
+            {
+                languageCode: 'en' as const,
+                title: 'E'.repeat(57),
+                subtitle: '',
+                body: 'B'.repeat(131),
+                ctaLabel: 'Browse',
+            },
+        ],
+        settings: {
+            themePreset: 'bright',
+            mobileImageAssetId: 'phone',
+            mobileImageUrl: '/assets/phone.webp',
+            mobileImageWidth: 1200,
+            mobileImageHeight: 900,
+        },
+    };
+    const hint = (viewport: 'desktop' | 'mobile', field: 'title' | 'body') =>
+        host.querySelector<HTMLElement>(`[data-hero-copy-hint="${viewport}-${field}"]`)!;
+    const selectLayout = async (layout: string) => {
+        await fixtureAct(() => {
+            const select = host.querySelector<HTMLSelectElement>('[aria-label="轮播图文布局"]')!;
+            select.value = layout;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    };
+    const fillCopy = async (control: HTMLInputElement | HTMLTextAreaElement, text: string) => {
+        await fixtureAct(() => {
+            const prototype =
+                control instanceof HTMLTextAreaElement
+                    ? HTMLTextAreaElement.prototype
+                    : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(control, text);
+            control.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    };
+    try {
+        await fixtureAct(() =>
+            root.render(
+                <StorefrontBlockEditor
+                    value={value}
+                    saving={false}
+                    onClose={() => undefined}
+                    onSave={onSave}
+                />,
+            ),
+        );
+        expect(host.querySelector<HTMLSelectElement>('[aria-label="轮播图文布局"]')!.value).toBe('overlay');
+        expect(hint('desktop', 'title').textContent).toContain('当前 21 个字符');
+        expect(hint('mobile', 'title').textContent).toContain('沿用当前语言电脑版文案');
+        expect(hint('mobile', 'title').textContent).toContain('当前 21 个字符');
+        expect(host.textContent).not.toContain('建议不超过');
+        await selectLayout('editorial');
+        expect(hint('desktop', 'title').textContent).toContain('建议不超过 20 个字符');
+        expect(hint('desktop', 'body').textContent).toContain('建议不超过 60 个字符');
+        expect(hint('mobile', 'title').textContent).toContain('建议不超过 16 个字符');
+        expect(hint('mobile', 'body').textContent).toContain('建议不超过 36 个字符');
+        expect(hint('desktop', 'title').textContent).toContain('可能超出两行');
+        expect(hint('desktop', 'title').textContent).toContain('此提示不影响保存');
+        expect(fixtureButton(host, '保存并核对').disabled).toBe(false);
+        await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+        expect(onSave).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                imageAssetId: value.imageAssetId,
+                imageUrl: value.imageUrl,
+                translations: value.translations,
+                settings: { ...value.settings, heroArtworkLayout: 'editorial' },
+            }),
+            false,
+        );
+
+        await fixtureAct(() => fixtureButton(host, '英文').click());
+        expect(hint('desktop', 'title').textContent).toContain('建议不超过 56 个字符');
+        expect(hint('desktop', 'body').textContent).toContain('建议不超过 130 个字符');
+        expect(hint('mobile', 'title').textContent).toContain('建议不超过 36 个字符');
+        expect(hint('mobile', 'body').textContent).toContain('建议不超过 85 个字符');
+        const desktopTitle = host.querySelector<HTMLInputElement>('[data-translation-field="title"]')!;
+        const desktopBody = host.querySelector<HTMLTextAreaElement>('[data-translation-field="body"]')!;
+        const phoneTitle = fixtureInput(host, '手机标题（选填）');
+        expect(desktopTitle.hasAttribute('maxlength')).toBe(false);
+        expect(desktopBody.hasAttribute('maxlength')).toBe(false);
+        expect(phoneTitle.hasAttribute('maxlength')).toBe(false);
+        await fillCopy(desktopTitle, 'E'.repeat(100));
+        await fillCopy(desktopBody, 'B'.repeat(180));
+        expect(hint('mobile', 'title').textContent).toContain('当前 100 个字符');
+        await fillCopy(phoneTitle, 'Phone title');
+        await fillCopy(phoneTitle, '');
+        expect(hint('mobile', 'title').textContent).toContain('已明确隐藏手机该文字');
+        expect(hint('mobile', 'title').textContent).toContain('当前 0 个字符');
+        await fixtureAct(() => fixtureButton(host, '恢复当前语言电脑版文案').click());
+        expect(hint('mobile', 'title').textContent).toContain('沿用当前语言电脑版文案');
+        expect(hint('mobile', 'title').textContent).toContain('当前 100 个字符');
+        await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+        const saved = onSave.mock.calls.at(-1)![0];
+        expect(saved.translations).toEqual([
+            value.translations[0],
+            { ...value.translations[1], title: 'E'.repeat(100), body: 'B'.repeat(180) },
+        ]);
+        expect(saved.settings).toMatchObject({ ...value.settings, heroArtworkLayout: 'editorial' });
+        expect(saved.settings?.mobileHeroTranslations).toEqual([
+            { languageCode: 'zh_Hans' },
+            { languageCode: 'en' },
+        ]);
+        await selectLayout('overlay');
+        expect(host.textContent).not.toContain('建议不超过');
+        expect(hint('desktop', 'title').textContent).toContain('当前 100 个字符');
+        expect(fixtureButton(host, '保存并核对').disabled).toBe(false);
+    } finally {
+        await fixtureAct(() => root.unmount());
+        host.remove();
+    }
+});
+
 // The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
 vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));
