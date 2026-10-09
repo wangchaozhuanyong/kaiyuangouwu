@@ -293,7 +293,19 @@ function Fixture() {
                             api={api}
                             code={order.code}
                             confirmationToken={proof}
-                            customer={null}
+                            customer={
+                                params.get('customer') === 'signed-in'
+                                    ? {
+                                          id: 'synthetic-customer',
+                                          firstName: 'Synthetic',
+                                          lastName: 'Customer',
+                                          emailAddress: 'fixture@example.invalid',
+                                          phoneNumber: null,
+                                          addresses: [],
+                                          orders: { items: [], totalItems: 0 },
+                                      }
+                                    : null
+                            }
                             market={market}
                             locale={market.locale}
                             language={language}
@@ -322,6 +334,12 @@ function Fixture() {
 }
 const route = createRootRoute({ component: Fixture });
 const router = createRouter({ routeTree: route, history: createMemoryHistory({ initialEntries: ['/'] }) });
+(
+    window as Window & { fixtureRoute?: () => Pick<typeof router.state.location, 'pathname' | 'search'> }
+).fixtureRoute = () => ({
+    pathname: router.state.location.pathname,
+    search: router.state.location.search,
+});
 const container = document.getElementById('root');
 if (!container) throw new Error('Synthetic receipt root was not found');
 createRoot(container).render(

@@ -452,6 +452,15 @@ describe('storefront skin system', () => {
                             file === path.join(__dirname, 'styles/skeletons.css') &&
                             selector.trim() === '.brand-loading-bar'
                         ) &&
+                        // The approved carousel marker identifies only the current interactive page.
+                        !(
+                            file === path.join(__dirname, 'styles/desktop-home.css') &&
+                            selector.trim() === ".hero-page-picker button[aria-current='true']::after" &&
+                            /width:\s*12px\s*;/.test(body) &&
+                            /height:\s*2px\s*;/.test(body) &&
+                            /background:\s*var\(--hero-pagination-active-color, currentColor\)/.test(body) &&
+                            /pointer-events:\s*none/.test(body)
+                        ) &&
                         // The approved coupon navigation underline marks the active tab.
                         !(
                             file === path.join(__dirname, 'styles/coupon-center.css') &&
