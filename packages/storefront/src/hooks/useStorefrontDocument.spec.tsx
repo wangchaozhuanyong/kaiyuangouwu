@@ -23,6 +23,7 @@ function Fixture({
     presetId = 'classic',
     route,
     ready = true,
+    scope,
 }: {
     logo: string | null;
     product?: Product;
@@ -31,6 +32,7 @@ function Fixture({
     presetId?: StorefrontVisualPresetId;
     route?: RouteState;
     ready?: boolean;
+    scope?: string;
 }) {
     useLayoutEffect(() => applyStorefrontVisualPreset(document.documentElement, presetId), [presetId]);
     useStorefrontBrandColors(
@@ -51,6 +53,7 @@ function Fixture({
         storefrontName: logo ? '当前店铺' : '店铺',
         logoUrl: logo,
         brandingReady: ready,
+        brandingScopeKey: scope,
     });
     return null;
 }
@@ -176,6 +179,7 @@ describe('runtime channel branding', () => {
         );
         expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#f1f5f9');
         expect(document.title).not.toContain('MOYAO');
+        expect(sessionStorage.getItem('__storefront_logo_url__')).toBeNull();
         act(() => root.unmount());
     });
 
@@ -196,6 +200,26 @@ describe('runtime channel branding', () => {
                 '/current-store.png?storefront-icon=2&iv=3',
             );
             expect(document.querySelector('link[rel="apple-touch-icon"]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
+    it('clears the previous store icon while the next store configuration is pending', () => {
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<Fixture logo="/store-a.png" scope="store-a" />));
+            expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toContain(
+                '/store-a.png',
+            );
+            act(() => root.render(<Fixture logo={null} scope="store-b" ready={false} />));
+            expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toContain(
+                '/neutral-store.png',
+            );
+            act(() => root.render(<Fixture logo="/store-b.png" scope="store-b" />));
+            expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toContain(
+                '/store-b.png',
+            );
         } finally {
             act(() => root.unmount());
         }

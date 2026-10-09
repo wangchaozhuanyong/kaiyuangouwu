@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PageReadinessBoundary, usePageReadiness } from './page-readiness';
-import { PageSkeleton } from './route-loading';
+import { PageSkeleton, RouteTransitionLoader } from './route-loading';
+import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 function RequiredQuery({ pending }: { pending: boolean }) {
@@ -176,5 +177,248 @@ describe('explicit route readiness', () => {
         } finally {
             document.removeEventListener('storefront:page-ready', ready);
         }
+    });
+});
+
+describe('store-scoped initial loading and recovery', () => {
+    let host: HTMLDivElement;
+    let root: ReturnType<typeof createRoot>;
+    let retry: ReturnType<typeof vi.fn<() => void>>;
+    let back: ReturnType<typeof vi.fn<() => void>>;
+    beforeEach(() => {
+        vi.useFakeTimers();
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        retry = vi.fn();
+        back = vi.fn();
+    });
+    afterEach(() => {
+        act(() => root.unmount());
+        host.remove();
+        vi.useRealTimers();
+    });
+    function render({
+        scope = 'store-a',
+        request = 'home',
+        loading = true,
+        compact = false,
+        routeModule = false,
+        pending = false,
+        online = true,
+        language = 'zh',
+        initialError = false,
+    }: {
+        scope?: string;
+        request?: string;
+        loading?: boolean;
+        compact?: boolean;
+        routeModule?: boolean;
+        pending?: boolean;
+        online?: boolean;
+        language?: 'zh' | 'en';
+        initialError?: boolean;
+    } = {}) {
+        act(() =>
+            root.render(
+                <StorefrontContext.Provider
+                    value={
+                        {
+                            storefrontName: scope,
+                            storefrontCode: scope,
+                            logoUrl: `/${scope}.svg`,
+                            language,
+                        } as StorefrontContextValue
+                    }
+                >
+                    <PageReadinessBoundary
+                        initialScopeKey={scope}
+                        initialError={initialError}
+                        requestKey={request}
+                        pending={pending}
+                        online={online}
+                        language={language}
+                        onRetry={retry}
+                        onBack={back}
+                    >
+                        <header>
+                            <button>Store navigation</button>
+                        </header>
+                        {loading ? (
+                            routeModule ? (
+                                <RouteTransitionLoader language={language} />
+                            ) : (
+                                <PageSkeleton compact={compact} language={language} />
+                            )
+                        ) : (
+                            <main>
+                                <button>Available content</button>
+                            </main>
+                        )}
+                    </PageReadinessBoundary>
+                </StorefrontContext.Provider>,
+            ),
+        );
+    }
+    const advance = (ms: number) =>
+        act(async () => {
+            await vi.advanceTimersByTimeAsync(ms);
+        });
+    const stage = () => host.querySelector<HTMLElement>('.page-readiness-stage');
+    const initial = () => host.querySelector('.page-readiness-initial');
+    const phase = () => host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness');
+
+    it('keeps the shell mounted but hidden from first paint, revealing one centered brand after 200 ms', async () => {
+        render();
+        expect(initial()).not.toBeNull();
+        expect(stage()?.hidden).toBe(true);
+        expect(stage()?.hasAttribute('inert')).toBe(true);
+        expect(host.querySelector('header')).not.toBeNull();
+        expect(host.querySelector('.brand-loading')).toBeNull();
+        await advance(199);
+        expect(host.querySelector('.brand-loading')).toBeNull();
+        await advance(1);
+        expect(host.querySelectorAll('.brand-loading')).toHaveLength(1);
+        expect(initial()?.textContent).toContain('store-a');
+        expect(host.querySelector('.page-skeleton')).toBeNull();
+        render({ loading: false });
+        expect(initial()).toBeNull();
+        expect(stage()?.hidden).toBe(false);
+        expect(stage()?.hasAttribute('inert')).toBe(false);
+        expect(phase()).toBe('ready');
+    });
+
+    it('does not force a brand animation when required data is ready before the delay', async () => {
+        render();
+        await advance(100);
+        render({ loading: false });
+        await advance(200);
+        expect(initial()).toBeNull();
+        expect(host.querySelector('.brand-loading')).toBeNull();
+        expect(host.textContent).toContain('Available content');
+    });
+
+    it('replaces the initial loader with one branded error and restarts only its current read', async () => {
+        render();
+        await advance(10_100);
+        expect(phase()).toBe('error');
+        expect(initial()?.textContent).toContain('store-a');
+        expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
+        expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+        expect(host.querySelector('[aria-busy=true]')).toBeNull();
+        expect(host.querySelector('.page-readiness-overlay')).toBeNull();
+        act(() => host.querySelector<HTMLButtonElement>('.page-readiness-error-actions button')?.click());
+        expect(retry).toHaveBeenCalledTimes(1);
+        expect(phase()).toBe('preparing');
+        expect(host.querySelector('[role=alert]')).toBeNull();
+        await advance(200);
+        expect(initial()?.textContent).toContain('store-a');
+        expect(host.querySelector('.brand-loading-bar')).not.toBeNull();
+        render({ loading: false });
+        expect(initial()).toBeNull();
+        expect(phase()).toBe('ready');
+    });
+
+    it('keeps later reads in their page region without a full brand or duplicated timeout', async () => {
+        render({ loading: false });
+        const navigation = host.querySelector('header button');
+        (navigation as HTMLButtonElement).focus();
+        render({ request: 'catalog' });
+        expect(initial()).toBeNull();
+        expect(stage()?.hidden).toBe(false);
+        expect(document.activeElement).toBe(navigation);
+        expect(host.querySelector('.brand-loading')).toBeNull();
+        expect(host.querySelector('.page-loading-indicator')).not.toBeNull();
+        await advance(10_100);
+        expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
+        expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-overlay')).toBeNull();
+        expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+        expect(host.querySelector('[aria-busy=true]')).toBeNull();
+    });
+
+    it('does not turn a local coupon read into a full-page initial loader', async () => {
+        render({ compact: true });
+        expect(initial()).toBeNull();
+        expect(stage()?.hidden).toBe(false);
+        expect(host.querySelector('.page-loading-indicator')).not.toBeNull();
+        await advance(10_100);
+        expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
+        expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+    });
+
+    it('gives a new store a fresh initial deadline and cannot reuse the prior store brand', async () => {
+        render();
+        await advance(9000);
+        render({ scope: 'store-b' });
+        expect(initial()).not.toBeNull();
+        expect(initial()?.textContent).not.toContain('store-a');
+        await advance(2000);
+        expect(phase()).toBe('preparing');
+        expect(initial()?.textContent).toContain('store-b');
+        expect(host.querySelector('img')?.getAttribute('src')).toBe('/store-b.svg');
+        render({ scope: 'store-b', loading: false });
+        render({ scope: 'store-a' });
+        expect(initial()).not.toBeNull();
+        await advance(200);
+        expect(initial()?.textContent).toContain('store-a');
+        expect(initial()?.textContent).not.toContain('store-b');
+    });
+
+    it('does not reuse the timeout or visible loading delay from a previous A to B to A visit', async () => {
+        render();
+        await advance(10_100);
+        expect(phase()).toBe('error');
+        render({ scope: 'store-b' });
+        await advance(1000);
+        render();
+        expect(phase()).toBe('preparing');
+        expect(host.querySelector('.brand-loading')).toBeNull();
+        await advance(200);
+        expect(initial()?.textContent).toContain('store-a');
+        expect(host.querySelector('[role=alert]')).toBeNull();
+        await advance(9000);
+        expect(phase()).toBe('preparing');
+    });
+
+    it('keeps a store displayed across language and request changes, including route-module timeout', async () => {
+        render({ loading: false });
+        render({ request: 'en-new-route', language: 'en', routeModule: true });
+        expect(initial()).toBeNull();
+        expect(stage()?.hidden).toBe(false);
+        expect(host.querySelector('.route-transition')?.textContent).toContain('Loading page');
+        await advance(10_100);
+        expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
+        expect(host.textContent).toContain('The page took too long');
+        expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+        expect(host.querySelector('[aria-busy=true]')).toBeNull();
+    });
+
+    it('shows an offline initial error without motion and accepts late recovery', () => {
+        render({ online: false });
+        expect(initial()).not.toBeNull();
+        expect(initial()?.textContent).toContain('当前网络不可用');
+        expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+        render({ loading: false, online: false });
+        expect(initial()).toBeNull();
+        expect(phase()).toBe('ready');
+    });
+
+    it('holds a failed configuration in the initial state even without a mounted page loader', async () => {
+        render({ loading: false, initialError: true });
+        expect(initial()).not.toBeNull();
+        expect(stage()?.hidden).toBe(true);
+        expect(phase()).toBe('error');
+        expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+        render({ loading: false, pending: true });
+        expect(phase()).toBe('preparing');
+        expect(initial()).not.toBeNull();
+        await advance(200);
+        expect(initial()?.textContent).toContain('store-a');
+        render({ loading: false });
+        expect(initial()).toBeNull();
+        render({ loading: false, initialError: true });
+        expect(initial()).toBeNull();
+        expect(phase()).toBe('ready');
     });
 });

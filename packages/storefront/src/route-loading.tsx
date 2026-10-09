@@ -1,5 +1,5 @@
 import { BrandLoadingIndicator } from './brand-loading';
-import { usePageReadiness } from './page-readiness';
+import { PageReadinessError, usePageLoadingState, usePageReadiness } from './page-readiness';
 
 export type RouteSkeletonVariant =
     'home' | 'catalog' | 'detail' | 'services' | 'account' | 'checkout' | 'studio' | 'default';
@@ -46,18 +46,30 @@ export function PageSkeleton({
     root?: boolean;
     compact?: boolean;
 }) {
-    usePageReadiness(true);
+    usePageReadiness(true, compact ? 'local' : 'page');
+    const readiness = usePageLoadingState();
+    const failed = readiness?.phase === 'error';
     const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
     const Tag = root ? 'main' : 'div';
+    // The boundary owns the one initial brand; keep this component mounted for registration.
+    if (readiness?.initial) return null;
     return (
         <Tag
-            data-page-pending="data"
+            data-page-pending={failed ? undefined : 'data'}
             className={`page-skeleton page-skeleton--route page-skeleton--${variant}${compact ? ' page-skeleton--compact' : ''}`}
-            role="status"
-            aria-label={ariaLabel}
-            aria-busy="true"
+            role={failed ? undefined : 'status'}
+            aria-label={failed ? undefined : ariaLabel}
+            aria-busy={!failed}
         >
-            <BrandLoadingIndicator language={language} local={compact} label={ariaLabel} />
+            {failed && readiness ? (
+                <PageReadinessError state={readiness} inline />
+            ) : (
+                <BrandLoadingIndicator
+                    language={language}
+                    local={compact || Boolean(readiness)}
+                    label={ariaLabel}
+                />
+            )}
         </Tag>
     );
 }
@@ -71,16 +83,30 @@ export function RouteTransitionLoader({
     logoUrl?: string | null;
     storefrontName?: string;
 }) {
+    usePageReadiness(true, 'page');
+    const readiness = usePageLoadingState();
+    const failed = readiness?.phase === 'error';
+    if (readiness?.initial) return null;
     return (
         <div
-            data-page-pending="module"
+            data-page-pending={failed ? undefined : 'module'}
             className="route-transition"
-            role="status"
-            aria-label={loadingPageLabel(language)}
+            role={failed ? undefined : 'status'}
+            aria-label={failed ? undefined : loadingPageLabel(language)}
             aria-live="polite"
-            aria-busy="true"
+            aria-busy={!failed}
         >
-            <BrandLoadingIndicator language={language} logoUrl={logoUrl} storefrontName={storefrontName} />
+            {failed && readiness ? (
+                <PageReadinessError state={readiness} inline />
+            ) : (
+                <BrandLoadingIndicator
+                    language={language}
+                    logoUrl={logoUrl}
+                    storefrontName={storefrontName}
+                    local={Boolean(readiness)}
+                    label={loadingPageLabel(language)}
+                />
+            )}
         </div>
     );
 }

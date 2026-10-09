@@ -24,16 +24,13 @@ export function restoreStorefrontIcons() {
         ...document.querySelectorAll<HTMLLinkElement>('link[rel=icon],link[rel=apple-touch-icon]'),
     ];
     if (links.some(link => link.dataset.storefrontIcon === 'server')) {
-        // The request's Channel profile is newer than either session cache.
+        // These icons were resolved for this document's host by the server.
         links.forEach(link => {
             if (link.dataset.storefrontIcon !== 'server') link.remove();
         });
         return;
     }
-    try {
-        const cachedLogoUrl = sessionStorage.getItem('__storefront_logo_url__');
-        if (cachedLogoUrl) applyStorefrontIcons(cachedLogoUrl);
-    } catch {
-        // A disabled cache must not prevent the storefront from starting.
-    }
+    // A legacy session-wide logo has no channel ownership. Keep the document
+    // neutral until the scoped configuration can supply its own brand.
+    applyStorefrontIcons(null);
 }

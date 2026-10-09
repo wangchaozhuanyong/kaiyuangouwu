@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import {
     resolveStorefrontSemanticPalette,
@@ -13,7 +13,6 @@ import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import { type RouteName, type RouteState } from '../storefront-router';
 import { cacheStorefrontTheme } from '../storefront-theme-cache';
 import { productImage, setMetaContent, trimText } from '../storefront-utils';
-import { cacheLogoUrl } from '../StorefrontErrorBoundary';
 import { type Product, type StorefrontConfig } from '../types';
 
 export function useStorefrontBrandColors(
@@ -70,6 +69,7 @@ export function useStorefrontMetadata({
     storefrontName,
     logoUrl,
     brandingReady = true,
+    brandingScopeKey,
 }: {
     isZh: boolean;
     route: RouteState;
@@ -78,7 +78,9 @@ export function useStorefrontMetadata({
     storefrontName: string;
     logoUrl: string | null;
     brandingReady?: boolean;
+    brandingScopeKey?: string;
 }) {
+    const iconScope = useRef(brandingScopeKey);
     useEffect(() => {
         const routeLabels: Partial<Record<RouteName, string>> = {
             category: isZh ? '商品' : 'Shop',
@@ -173,11 +175,15 @@ export function useStorefrontMetadata({
         canonical.href = canonicalUrl.href;
     }, [isZh, route, selectedProduct, storefrontDescription, storefrontName, logoUrl]);
 
-    useEffect(() => {
-        if (!brandingReady) return;
-        cacheLogoUrl(logoUrl);
+    useLayoutEffect(() => {
+        const scopeChanged = iconScope.current !== brandingScopeKey;
+        iconScope.current = brandingScopeKey;
+        if (!brandingReady) {
+            if (scopeChanged) applyStorefrontIcons(null);
+            return;
+        }
         applyStorefrontIcons(logoUrl);
-    }, [logoUrl, brandingReady]);
+    }, [logoUrl, brandingReady, brandingScopeKey]);
 }
 
 export function storefrontShareImage(

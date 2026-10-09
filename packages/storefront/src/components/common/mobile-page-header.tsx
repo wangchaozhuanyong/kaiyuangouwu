@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { BrandLogo } from '../../storefront-ui/content-ui';
+import { BrandLogo } from '../../storefront-ui/brand-logo';
 import { NoticeButton } from '../../storefront-ui/page-shell';
 import { StorefrontLanguage } from '../../types';
 

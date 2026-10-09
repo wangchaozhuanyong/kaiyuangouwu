@@ -15,7 +15,7 @@ import {
 
 import { type ShopApi } from './api';
 import { useStorefrontBrandColors } from './hooks/useStorefrontDocument';
-import { STOREFRONT_CONFIG_REFRESH_INTERVAL } from './query-client';
+import { STOREFRONT_CONFIG_REFRESH_INTERVAL, storefrontQueryKeys } from './query-client';
 import { cacheStorefrontTheme, restoredStorefrontTheme } from './storefront-theme-cache';
 import { type MarketConfig, type StorefrontConfig } from './types';
 import { useStorefrontVisualPreset } from './use-storefront-visual-preset';
@@ -112,14 +112,45 @@ it('updates an already visible guest skin from the saved store configuration', a
 
 const restoreScript = readFileSync(path.join(__dirname, '../public/storefront/restore-theme.js'), 'utf8');
 const skinStyles = readFileSync(path.join(__dirname, './styles/visual-presets.css'), 'utf8');
-function restoreBeforePaint() {
+function publicSnapshot() {
+    return {
+        schemaVersion: 1,
+        generatedAt: Date.now(),
+        route: window.location.pathname,
+        scope: {
+            host: window.location.host,
+            channelCode: 'my-malaysia',
+            languageCode: 'zh_Hans',
+            currencyCode: 'MYR',
+            priceContext: 'public',
+        },
+        config: { code: 'my-malaysia', accessMode: 'LIVE' },
+    };
+}
+function restoreBeforePaint(snapshot: unknown = publicSnapshot()) {
     document.head.innerHTML = '<meta name="theme-color"><meta name="color-scheme">';
+    if (snapshot !== null) {
+        const script = document.createElement('script');
+        script.id = 'storefront-public-page-data';
+        script.type = 'application/json';
+        script.textContent = JSON.stringify(snapshot);
+        document.head.append(script);
+    }
     document.documentElement.setAttribute('data-storefront-theme-pending', '');
     runInNewContext(restoreScript, { window, document, location: window.location, URLSearchParams, Date });
     const style = document.createElement('style');
     style.textContent = skinStyles;
     document.head.append(style);
 }
+
+it('preserves same-store theme restoration on category pages with filters', () => {
+    window.history.replaceState(null, '', '/category?sort=price');
+    const colors = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('neo-minimalist'));
+    cacheStorefrontTheme('my-malaysia', 'neo-minimalist', colors);
+    restoreBeforePaint({ ...publicSnapshot(), route: '/category?sort=price' });
+    expect(document.documentElement.dataset.storefrontPreset).toBe('neo-minimalist');
+    expect(document.documentElement.style.getPropertyValue('--bg')).toBe(colors['--bg']);
+});
 
 it.each(['classic', 'neo-minimalist'] as const)(
     'keeps the complete %s palette across prepaint, context resolution and a delayed skin response',
@@ -317,9 +348,13 @@ it('falls back to a valid local v3 palette when the session cache has unsafe col
     expect(document.documentElement.hasAttribute('data-storefront-theme-pending')).toBe(false);
 });
 
-it('does not adopt another verified channel skin while loading the active channel', () => {
+it('removes another channel restored CSS while loading the active channel without clearing unrelated styles', () => {
     document.documentElement.dataset.storefrontPreset = 'neo-minimalist';
     document.documentElement.dataset.storefrontThemeChannel = 'other-store';
+    document.documentElement.style.setProperty('--bg', '#070b14');
+    document.documentElement.style.setProperty('--accent', '#6654c8');
+    document.documentElement.style.setProperty('--unrelated-offset', '32px');
+    document.documentElement.style.setProperty('color-scheme', 'dark');
     const client = new QueryClient();
     const root = createRoot(document.createElement('div'));
     let visual!: ReturnType<typeof useStorefrontVisualPreset>;
@@ -340,6 +375,12 @@ it('does not adopt another verified channel skin while loading the active channe
         act(() => root.render(createElement(QueryClientProvider, { client }, createElement(Probe))));
         expect(visual.presetId).toBe('classic');
         expect(visual.ready).toBe(false);
+        expect(document.documentElement.dataset.storefrontPreset).toBeUndefined();
+        expect(document.documentElement.dataset.storefrontThemeChannel).toBeUndefined();
+        expect(document.documentElement.style.getPropertyValue('--bg')).toBe('');
+        expect(document.documentElement.style.getPropertyValue('--accent')).toBe('');
+        expect(document.documentElement.style.getPropertyValue('color-scheme')).toBe('');
+        expect(document.documentElement.style.getPropertyValue('--unrelated-offset')).toBe('32px');
     } finally {
         act(() => root.unmount());
         client.clear();
@@ -374,6 +415,98 @@ it('reveals the cold-load fallback after a skin request fails instead of leaving
         });
         expect(document.documentElement.hasAttribute('data-storefront-theme-pending')).toBe(false);
         expect(document.documentElement.style.getPropertyValue('--bg')).toBe('#f1f5f9');
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
+
+it('restores cached colors only after the fresh HTML confirms the same public store', () => {
+    const colors = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('neo-minimalist'));
+    cacheStorefrontTheme('my-malaysia', 'neo-minimalist', colors);
+    const valid = publicSnapshot();
+    for (const snapshot of [
+        null,
+        {
+            ...valid,
+            scope: { ...valid.scope, channelCode: 'other-store' },
+            config: { code: 'other-store', accessMode: 'LIVE' },
+        },
+        { ...valid, scope: { ...valid.scope, host: 'another-store.example' } },
+        { ...valid, config: { ...valid.config, code: 'mismatched-store' } },
+        { ...valid, config: { ...valid.config, accessMode: 'PREVIEW' } },
+        { ...valid, config: { ...valid.config, accessMode: 'CLOSED' } },
+        { ...valid, generatedAt: Date.now() - 31_000 },
+        { ...valid, generatedAt: Date.now() + 6_000 },
+        { ...valid, route: '/different-route' },
+        { ...valid, visualPreset: { presetId: 'classic' } },
+    ]) {
+        restoreBeforePaint(snapshot);
+        expect(document.documentElement.style.getPropertyValue('--bg')).toBe('');
+        expect(document.documentElement.dataset.storefrontThemeChannel).toBeUndefined();
+    }
+    restoreBeforePaint(valid);
+    expect(document.documentElement.style.getPropertyValue('--bg')).toBe(colors['--bg']);
+    expect(document.documentElement.dataset.storefrontThemeChannel).toBe('my-malaysia');
+});
+
+it('does not actively apply or persist cached query or restored skin while identity is unresolved', () => {
+    document.documentElement.dataset.storefrontPreset = 'neo-minimalist';
+    document.documentElement.dataset.storefrontThemeChannel = 'my-malaysia';
+    const market = { code: 'my-malaysia', currencyCode: 'MYR' } as MarketConfig;
+    const client = new QueryClient();
+    client.setQueryData(
+        [...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), 'zh_Hans'), 'visual-preset'],
+        { presetId: 'neo-minimalist' },
+    );
+    const root = createRoot(document.createElement('div'));
+    let visual!: ReturnType<typeof useStorefrontVisualPreset>;
+    const api = { storefrontVisualPreset: vi.fn() } as unknown as Pick<ShopApi, 'storefrontVisualPreset'>;
+    function Probe() {
+        visual = useStorefrontVisualPreset(api, market, 'zh_Hans', false);
+        return null;
+    }
+    try {
+        act(() => root.render(createElement(QueryClientProvider, { client }, createElement(Probe))));
+        expect(visual).toEqual({ presetId: 'classic', ready: false, cache: false });
+        expect(api.storefrontVisualPreset).not.toHaveBeenCalled();
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
+
+it('retires restored theme ownership on a same-document A to B to A switch', () => {
+    const colors = semanticPaletteCssVariables(resolveStorefrontSemanticPalette('neo-minimalist'));
+    cacheStorefrontTheme('my-malaysia', 'neo-minimalist', colors);
+    restoreBeforePaint();
+    const client = new QueryClient();
+    const root = createRoot(document.createElement('div'));
+    let visual!: ReturnType<typeof useStorefrontVisualPreset>;
+    const api = { storefrontVisualPreset: () => new Promise(() => undefined) } as unknown as Pick<
+        ShopApi,
+        'storefrontVisualPreset'
+    >;
+    function Probe({ code }: { code: string }) {
+        visual = useStorefrontVisualPreset(api, { code, currencyCode: 'MYR' } as MarketConfig, 'zh_Hans');
+        return null;
+    }
+    const render = (code: string) =>
+        act(() =>
+            root.render(createElement(QueryClientProvider, { client }, createElement(Probe, { code }))),
+        );
+    try {
+        render('my-malaysia');
+        expect(visual.presetId).toBe('neo-minimalist');
+        expect(visual.ready).toBe(true);
+        render('other-store');
+        expect(visual.presetId).toBe('classic');
+        expect(visual.ready).toBe(false);
+        expect(document.documentElement.style.getPropertyValue('--bg')).toBe('');
+        render('my-malaysia');
+        expect(visual.presetId).toBe('classic');
+        expect(visual.ready).toBe(false);
+        expect(document.documentElement.dataset.storefrontThemeChannel).toBeUndefined();
     } finally {
         act(() => root.unmount());
         client.clear();

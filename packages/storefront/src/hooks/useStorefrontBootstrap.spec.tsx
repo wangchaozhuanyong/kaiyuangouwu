@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { act } from 'react';
+import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,9 +11,11 @@ import {
     storefrontQueryKeys,
 } from '../query-client';
 import { ShopApiGraphQlError } from '../shop-api-errors';
+import * as publicPageData from '../storefront-page-data';
 import { seedPublicPage, type PublicPageData } from '../storefront-page-data';
 import { scopedStorageKey } from '../storefront-storage';
 import { FAVORITE_PRODUCT_STORAGE_KEY } from '../storefront-utils';
+import { StorefrontErrorBoundary } from '../StorefrontErrorBoundary';
 import { Product, StorefrontConfig } from '../types';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
@@ -30,9 +32,13 @@ describe('storefront bootstrap boundaries', () => {
     let config: StorefrontConfig | undefined;
     let configError: unknown;
     let listedProducts: Product[] | undefined;
+    let brandFrames: Array<{ code: string; name: string; logo: string | null }>;
+    let beforeCommit: (() => void) | undefined;
     const dataUpdatedAt = 123_000;
     function Harness() {
         value = useStorefrontBootstrap();
+        brandFrames.push({ code: value.storefrontCode, name: value.storefrontName, logo: value.logoUrl });
+        beforeCommit?.();
         return null;
     }
     function render() {
@@ -75,6 +81,8 @@ describe('storefront bootstrap boundaries', () => {
         config = undefined;
         configError = undefined;
         listedProducts = undefined;
+        brandFrames = [];
+        beforeCommit = undefined;
         queries.read.mockReset().mockImplementation(() => ({
             configQuery: { data: config, error: configError, dataUpdatedAt, refetch: vi.fn() },
             productsQuery: { data: listedProducts, refetch: vi.fn() },
@@ -92,10 +100,188 @@ describe('storefront bootstrap boundaries', () => {
         render();
         expect(value.storefrontContextResolved).toBe(false);
         expect(queries.read.mock.lastCall?.[0].storefrontContextResolved).toBe(false);
+        expect(value.storefrontCode).toBe('');
+        expect(value.storefrontName).toBe('');
+        expect(value.logoUrl).toBeNull();
+    });
+
+    it('keeps the validated initial brand on the first React frame and retires it after leaving its scope', () => {
+        const initialConfig: StorefrontConfig = {
+            ...nextConfig(),
+            accessMode: 'LIVE',
+            logoUrl: '/assets/initial-store.webp',
+            logoOnLightUrl: '/assets/initial-store-light.webp',
+            logoOnDarkUrl: '/assets/initial-store-dark.webp',
+        };
+        const initialPage: PublicPageData = {
+            schemaVersion: 1,
+            version: 'initial-brand',
+            generatedAt: Date.now(),
+            route: '/',
+            scope: {
+                host: window.location.host,
+                channelCode: initialConfig.code,
+                languageCode: 'zh_Hans',
+                currencyCode: 'MYR',
+                priceContext: 'public',
+            },
+            config: initialConfig,
+            media: [],
+            failures: [],
+        };
+        vi.spyOn(publicPageData, 'readInitialPublicPage').mockReturnValue(initialPage);
+        render();
+        expect(brandFrames[0]).toEqual({
+            code: initialConfig.code,
+            name: '测试店铺',
+            logo: '/assets/initial-store.webp',
+        });
+        expect(value.logoOnLightUrl).toBe('/assets/initial-store-light.webp');
+        expect(value.logoOnDarkUrl).toBe('/assets/initial-store-dark.webp');
+        const initialMarket = value.market;
+        act(() =>
+            value.setStorefrontContext({ market: { ...initialMarket, code: 'next-store' }, language: 'zh' }),
+        );
+        expect(value.storefrontCode).toBe('');
+        expect(value.storefrontName).toBe('');
+        expect(value.logoUrl).toBeNull();
+        act(() => value.setStorefrontContext({ market: initialMarket, language: 'zh' }));
+        expect(value.storefrontCode).toBe('');
+        expect(value.logoUrl).toBeNull();
+    });
+
+    it('shows the newly resolved brand before market correction and updates all brand fields together', () => {
+        config = { ...nextConfig(), logoUrl: '/assets/resolved-store.webp' };
+        render();
+        expect(brandFrames[0]).toEqual({
+            code: config.code,
+            name: '测试店铺',
+            logo: '/assets/resolved-store.webp',
+        });
+        config = {
+            ...config,
+            customFields: { storefrontNameZh: '更新店铺', storefrontNameEn: 'New store' },
+            logoUrl: '/assets/updated-store.webp',
+            tagline: ' Updated tagline ',
+        };
+        render();
+        expect(brandFrames.at(-1)).toEqual({
+            code: config.code,
+            name: '更新店铺',
+            logo: '/assets/updated-store.webp',
+        });
+        expect(value.storefrontTagline).toBe('Updated tagline');
+    });
+
+    it('clears a committed recovery brand before a different confirmed channel corrects the market', () => {
+        function recoveryBrand() {
+            const boundary = new StorefrontErrorBoundary({ children: null });
+            boundary.state = { failed: true };
+            const fallback = boundary.render() as ReactElement<{ children: ReactNode[] }>;
+            return fallback.props.children[0];
+        }
+        config = { ...nextConfig(), logoUrl: '/assets/committed-first-store.webp' };
+        render();
+        expect(value.market.code).toBe(config.code);
+        expect(recoveryBrand()).not.toBeNull();
+        const previousChannel = config.code;
+        const beforeCorrection: ReactNode[] = [];
+        beforeCommit = () => {
+            if (value.storefrontCode === 'next-store' && value.market.code === previousChannel)
+                beforeCorrection.push(recoveryBrand());
+        };
+        config = {
+            ...config,
+            code: 'next-store',
+            customFields: { storefrontNameZh: '下一店', storefrontNameEn: 'Next store' },
+            logoUrl: '/assets/next-store.webp',
+        };
+        render();
+        // Inspect the error boundary during the transition render, before its layout
+        // effects can commit B or correct the market. A crash here must already be neutral.
+        expect(beforeCorrection).toEqual([null]);
+        expect(value.market.code).toBe('next-store');
+        expect(recoveryBrand()).not.toBeNull();
+    });
+
+    it('clears branding immediately on a store switch and ignores an old store response that finishes later', async () => {
+        const first: StorefrontConfig = {
+            ...nextConfig(),
+            code: enabledMarkets[0].code,
+            defaultLanguageCode: enabledMarkets[0].defaultLanguageCode,
+            defaultCurrencyCode: enabledMarkets[0].currencyCode,
+            availableCountries: [{ code: enabledMarkets[0].countryCode, name: 'First market' }],
+            customFields: { storefrontNameZh: '第一店', storefrontNameEn: 'First' },
+            logoUrl: '/assets/first-store.webp',
+        };
+        const second: StorefrontConfig = {
+            ...nextConfig(),
+            code: 'second-store',
+            customFields: { storefrontNameZh: '第二店', storefrontNameEn: 'Second' },
+            logoUrl: '/assets/second-store.webp',
+        };
+        const configKey = (marketCode: string) => [
+            ...storefrontQueryKeys.config(marketCode, 'zh_Hans'),
+            'public',
+        ];
+        const firstKey = configKey(storefrontQueryKeys.market(marketForStorefrontConfig(first)));
+        client.setQueryData(firstKey, first);
+        let finishSecond!: (response: StorefrontConfig) => void;
+        queries.read.mockImplementation(function useScopedConfig(context: StorefrontQueryContext) {
+            return {
+                configQuery: useQuery({
+                    queryKey: configKey(storefrontQueryKeys.market(context.market)),
+                    staleTime: Infinity,
+                    queryFn: () =>
+                        new Promise<StorefrontConfig>(resolve => {
+                            finishSecond = resolve;
+                        }),
+                }),
+                productsQuery: { data: [], refetch: vi.fn() },
+                collectionsQuery: { refetch: vi.fn() },
+            };
+        });
+        render();
+        expect(value.storefrontName).toBe('第一店');
+        let finishFirst!: (response: StorefrontConfig) => void;
+        let oldRead!: Promise<StorefrontConfig>;
+        await act(async () => {
+            oldRead = client.fetchQuery({
+                queryKey: firstKey,
+                staleTime: 0,
+                queryFn: () =>
+                    new Promise<StorefrontConfig>(resolve => {
+                        finishFirst = resolve;
+                    }),
+            });
+            await Promise.resolve();
+        });
+        await act(async () => {
+            value.setStorefrontContext({ market: marketForStorefrontConfig(second), language: 'zh' });
+            await Promise.resolve();
+        });
+        expect(value.storefrontCode).toBe('');
+        expect(value.storefrontName).toBe('');
+        expect(value.logoUrl).toBeNull();
+        await act(async () => {
+            finishFirst({ ...first, logoUrl: '/assets/late-first-store.webp' });
+            await oldRead;
+            await new Promise(done => setTimeout(done, 10));
+        });
+        expect(value.storefrontName).toBe('');
+        expect(value.logoUrl).toBeNull();
+        await act(async () => {
+            finishSecond(second);
+            await new Promise(done => setTimeout(done, 10));
+        });
+        expect(value.storefrontCode).toBe(second.code);
+        expect(value.storefrontName).toBe('第二店');
+        expect(value.logoUrl).toBe('/assets/second-store.webp');
     });
     it('closes an already-loaded store, discards its scoped catalog cache and resumes reads after fresh configuration recovery', async () => {
-        config = { ...nextConfig(), accessMode: 'PREVIEW' };
+        config = { ...nextConfig(), accessMode: 'PREVIEW', logoUrl: '/assets/current-store.webp' };
         render();
+        expect(value.logoUrl).toBe('/assets/current-store.webp');
         const currentMarket = storefrontQueryKeys.market(value.market);
         const productKey = storefrontQueryKeys.product(currentMarket, 'zh_Hans', 'cached-product');
         const otherKey = storefrontQueryKeys.product('other:CNY', 'zh_Hans', 'unrelated-product');
@@ -112,6 +298,9 @@ describe('storefront bootstrap boundaries', () => {
         render();
         expect(value.storefrontUnavailable).toBe(true);
         expect(value.storefrontContextResolved).toBe(false);
+        expect(value.storefrontCode).toBe('');
+        expect(value.storefrontName).toBe('');
+        expect(value.logoUrl).toBeNull();
         expect(client.getQueryData(productKey)).toBeUndefined();
         expect(client.getQueryData(otherKey)).toEqual({ id: 'unrelated-product' });
         configError = undefined;

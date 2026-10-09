@@ -14,20 +14,33 @@ export default function BrandLoadingContent({
     compact = false,
     local = false,
     label,
+    pending = true,
 }: BrandLoadingProps) {
     const context = useContext(StorefrontContext);
     // Root router pending renders outside the provider. Only the validated server payload may brand it.
     const initialPage = context ? undefined : readInitialPublicPage();
     const resolvedLanguage = language ?? context?.language ?? initialPage?.scope.languageCode ?? 'zh';
     const chinese = resolvedLanguage === 'zh' || resolvedLanguage.startsWith('zh_');
-    const config = initialPage?.config;
+    const known = !context || Boolean(context.storefrontCode);
+    const config = context
+        ? context.configQuery?.data && context.configQuery.data.code === context.storefrontCode
+            ? context.configQuery.data
+            : undefined
+        : initialPage?.config;
     const source = normalizeStorefrontAssetUrl(
-        logoUrl !== undefined ? (logoUrl ?? '') : (context?.logoUrl ?? config?.logoUrl ?? ''),
+        known ? (logoUrl !== undefined ? (logoUrl ?? '') : (context?.logoUrl ?? config?.logoUrl ?? '')) : '',
     );
-    const name =
-        storefrontName ??
-        context?.storefrontName ??
-        (chinese ? config?.customFields.storefrontNameZh : config?.customFields.storefrontNameEn);
+    const name = known
+        ? (
+              storefrontName ??
+              context?.storefrontName ??
+              (chinese ? config?.customFields.storefrontNameZh : config?.customFields.storefrontNameEn)
+          )?.trim()
+        : '';
+    const secondaryName = chinese ? config?.customFields.storefrontNameEn?.trim() : '';
+    const owner = JSON.stringify([context?.storefrontCode ?? initialPage?.scope.channelCode, source]);
+    const loadingLabel =
+        label ?? (chinese ? (name ? '正在加载' : '正在连接') : name ? 'Loading' : 'Connecting');
 
     if (local) {
         return (
@@ -44,14 +57,28 @@ export default function BrandLoadingContent({
 
     return (
         <span className={`brand-loading${compact ? ' brand-loading--compact' : ''}`} aria-hidden="true">
-            <BrandLoadingLogo key={source} source={source} />
+            <BrandLoadingLogo key={owner} source={source} />
             {compact && label && <span>{label}</span>}
-            {!compact && name?.trim() && <strong className="brand-loading-name">{name.trim()}</strong>}
-            <span className="brand-loading-dots">
-                <i />
-                <i />
-                <i />
-            </span>
+            {!compact && name && <strong className="brand-loading-name">{name}</strong>}
+            {!compact && name && secondaryName && secondaryName !== name && (
+                <span className="brand-loading-subtitle">{secondaryName}</span>
+            )}
+            {pending && (
+                <span className="brand-loading-caption">
+                    {!compact && <span>{loadingLabel}</span>}
+                    {compact ? (
+                        <span className="brand-loading-dots">
+                            <i />
+                            <i />
+                            <i />
+                        </span>
+                    ) : (
+                        <span className="brand-loading-bar">
+                            <i />
+                        </span>
+                    )}
+                </span>
+            )}
         </span>
     );
 }

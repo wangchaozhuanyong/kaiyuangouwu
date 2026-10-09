@@ -60,7 +60,7 @@ describe('storefront visual preset lifecycle', () => {
                 });
                 runInNewContext(script, {
                     URLSearchParams,
-                    location: { origin, search: '' },
+                    location: { origin, host: 'store.example.test', pathname: '/', search: '' },
                     window: {
                         sessionStorage: {
                             getItem: (key: string) =>
@@ -76,6 +76,22 @@ describe('storefront visual preset lifecycle', () => {
                         },
                     },
                     document: {
+                        cookie: '',
+                        getElementById: () => ({
+                            textContent: JSON.stringify({
+                                schemaVersion: 1,
+                                scope: {
+                                    host: 'store.example.test',
+                                    priceContext: 'public',
+                                    channelCode: 'skin-test-store',
+                                    languageCode: 'zh_Hans',
+                                    currencyCode: 'MYR',
+                                },
+                                config: { code: 'skin-test-store', accessMode: 'LIVE' },
+                                route: '/',
+                                generatedAt: Date.now(),
+                            }),
+                        }),
                         querySelector: () => ({ content: '' }),
                         documentElement: {
                             style: {

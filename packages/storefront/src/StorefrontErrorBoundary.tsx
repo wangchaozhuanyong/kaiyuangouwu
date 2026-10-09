@@ -1,20 +1,99 @@
-import { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode, useState } from 'react';
 
-import { storefrontWebpUrl } from './responsive-image';
+import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-image';
 
-const LOGO_URL_CACHE_KEY = '__storefront_logo_url__';
+interface StorefrontRecoveryScope {
+    channelCode: string;
+    currencyCode: string;
+    languageCode: string;
+}
 
-/** Cache the logo URL so the error boundary can display it even after a render crash. */
-export function cacheLogoUrl(url: string | null): void {
-    try {
-        if (url) {
-            sessionStorage.setItem(LOGO_URL_CACHE_KEY, storefrontWebpUrl(url, 'thumbnail'));
-        } else {
-            sessionStorage.removeItem(LOGO_URL_CACHE_KEY);
-        }
-    } catch {
-        // Silently ignore storage errors.
+interface StorefrontRecoveryBrand {
+    channelCode: string;
+    name: string;
+    logoUrl: string | null;
+}
+
+interface RecoveryOwner {
+    document: Document;
+    origin: string;
+    scopeKey: string;
+    channelCode: string;
+}
+
+// This is a single committed presentation record for a render crash in this document,
+// not a query cache. Never restore branding from sessionStorage or a previous document.
+let recovery: { owner: RecoveryOwner; brand: StorefrontRecoveryBrand | null } | null = null;
+
+/** Called synchronously before descendant hooks can throw, so a store switch clears old branding. */
+export function beginStorefrontRecoveryScope(scope: StorefrontRecoveryScope): RecoveryOwner | null {
+    if (
+        typeof document === 'undefined' ||
+        typeof window === 'undefined' ||
+        !scope.channelCode.trim() ||
+        !scope.currencyCode.trim() ||
+        !scope.languageCode.trim()
+    ) {
+        recovery = null;
+        return null;
     }
+    const scopeKey = JSON.stringify([scope.channelCode, scope.currencyCode, scope.languageCode]);
+    if (
+        recovery?.owner.document !== document ||
+        recovery.owner.origin !== window.location.origin ||
+        recovery.owner.scopeKey !== scopeKey
+    ) {
+        recovery = {
+            owner: { document, origin: window.location.origin, scopeKey, channelCode: scope.channelCode },
+            brand: null,
+        };
+    }
+    return recovery.owner;
+}
+
+/** Commit only a confirmed brand; a stale owner cannot publish after an A → B → A switch. */
+export function setStorefrontRecoveryBrand(
+    owner: RecoveryOwner | null,
+    brand: StorefrontRecoveryBrand | null,
+): void {
+    if (!owner || recovery?.owner !== owner) return;
+    recovery.brand =
+        owner.document === document &&
+        owner.origin === window.location.origin &&
+        brand?.channelCode === owner.channelCode
+            ? {
+                  channelCode: brand.channelCode,
+                  name: brand.name.trim(),
+                  logoUrl: normalizeStorefrontAssetUrl(brand.logoUrl ?? '') || null,
+              }
+            : null;
+}
+
+function currentRecoveryBrand(): StorefrontRecoveryBrand | null {
+    if (recovery?.owner.document !== document || recovery.owner.origin !== window.location.origin) {
+        recovery = null;
+        return null;
+    }
+    return recovery.brand;
+}
+
+function RecoveryLogo({ source }: { source: string }) {
+    const [original, setOriginal] = useState(false);
+    const [failed, setFailed] = useState(false);
+    const src = original ? source : storefrontWebpUrl(source, 'thumbnail');
+    if (failed) return null;
+    return (
+        <span className="route-transition-mark is-logo-ready">
+            <img
+                src={src}
+                alt=""
+                onError={() => {
+                    if (src !== source) setOriginal(true);
+                    else setFailed(true);
+                }}
+            />
+        </span>
+    );
 }
 
 interface StorefrontErrorBoundaryProps {
@@ -46,21 +125,15 @@ export class StorefrontErrorBoundary extends Component<
         if (!this.state.failed) return this.props.children;
 
         const isZh = document.documentElement.lang.toLowerCase().startsWith('zh');
-        let cachedLogoUrl: string | null = null;
-        try {
-            cachedLogoUrl = sessionStorage.getItem(LOGO_URL_CACHE_KEY);
-        } catch {
-            // Ignore storage errors.
-        }
+        const brand = currentRecoveryBrand();
         return (
             <main className="fatal-error-page" role="alert">
-                {cachedLogoUrl ? (
-                    <img className="fatal-error-mark" src={cachedLogoUrl} alt="" />
-                ) : (
-                    <span className="fatal-error-mark" aria-hidden="true">
-                        ◇
+                {brand && (brand.name || brand.logoUrl) ? (
+                    <span className="brand-loading">
+                        {brand.logoUrl && <RecoveryLogo key={brand.logoUrl} source={brand.logoUrl} />}
+                        {brand.name && <strong className="brand-loading-name">{brand.name}</strong>}
                     </span>
-                )}
+                ) : null}
                 <h1>{isZh ? '页面暂时无法显示' : 'This page could not be displayed'}</h1>
                 <p>
                     {isZh

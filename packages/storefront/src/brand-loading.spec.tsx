@@ -21,7 +21,7 @@ it('keeps an accessible pending state when the optional brand visual chunk canno
         });
         expect(host.querySelector('main[role="status"]')?.getAttribute('aria-label')).toBe('正在加载页面');
         expect(host.querySelector('[data-page-pending="data"]')).not.toBeNull();
-        expect(host.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(host.querySelector('.brand-loading-bar')).not.toBeNull();
         expect(host.querySelector('[role="alert"]')).toBeNull();
     } finally {
         act(() => root.unmount());

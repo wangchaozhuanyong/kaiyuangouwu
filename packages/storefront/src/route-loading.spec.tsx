@@ -51,7 +51,7 @@ describe('route loading skeletons', () => {
         expect(markup).toContain('page-skeleton--default');
     });
 
-    it('brands every store from its current provider without showing generic loading copy', () => {
+    it('brands every store from its confirmed provider with localized loading feedback', () => {
         for (const name of ['闪铸商城', '大马通', 'MOYAO AI']) {
             const markup = renderToStaticMarkup(
                 <StorefrontContext.Provider
@@ -59,6 +59,7 @@ describe('route loading skeletons', () => {
                         {
                             logoUrl: '/current-brand.svg',
                             storefrontName: name,
+                            storefrontCode: 'confirmed-store',
                             language: 'zh',
                         } as StorefrontContextValue
                     }
@@ -71,7 +72,7 @@ describe('route loading skeletons', () => {
             expect(markup).toContain('data-page-pending="data"');
             expect(markup).toContain('aria-label="正在加载页面"');
             expect(markup).not.toContain('page-loading-spinner');
-            expect(markup).not.toContain('>正在加载页面<');
+            expect(markup).toContain('>正在加载页面<');
         }
     });
 
@@ -129,7 +130,7 @@ describe('transition logo loading', () => {
     it('keeps a quiet pending state without inventing a brand before configuration arrives', async () => {
         await render();
         expect(container.querySelector('svg')).toBeNull();
-        expect(container.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(container.querySelector('.brand-loading-bar')).not.toBeNull();
         expect(container.querySelector('img')).toBeNull();
         expect(container.innerHTML).not.toContain('/storefront/neutral-store.png');
     });
@@ -142,6 +143,7 @@ describe('transition logo loading', () => {
                         {
                             logoUrl: '/first-store.svg',
                             storefrontName: 'First store',
+                            storefrontCode: 'first-store',
                         } as StorefrontContextValue
                     }
                 >
@@ -153,7 +155,13 @@ describe('transition logo loading', () => {
         await interact(() =>
             root.render(
                 <StorefrontContext.Provider
-                    value={{ logoUrl: null, storefrontName: 'Second store' } as StorefrontContextValue}
+                    value={
+                        {
+                            logoUrl: null,
+                            storefrontName: 'Second store',
+                            storefrontCode: 'second-store',
+                        } as StorefrontContextValue
+                    }
                 >
                     <PageSkeleton />
                 </StorefrontContext.Provider>,
@@ -201,7 +209,7 @@ describe('transition logo loading', () => {
         await interact(() => logoImage().dispatchEvent(new Event('error')));
         expect(container.querySelector('img')).toBeNull();
         expect(container.textContent).toContain('当前店铺');
-        expect(container.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(container.querySelector('.brand-loading-bar')).not.toBeNull();
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
     });
 

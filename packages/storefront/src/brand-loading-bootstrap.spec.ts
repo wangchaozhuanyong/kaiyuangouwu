@@ -18,6 +18,7 @@ const scope = { host: 'store.test', request, now: 20_000 };
 const brand = {
     language: 'zh_Hans' as const,
     storefrontName: '当前店铺',
+    secondaryName: 'Current store',
     logoUrl: '/assets/preview/current-store.png',
 };
 
@@ -68,7 +69,7 @@ describe('parser-time storefront loading', () => {
         expect(pending?.getAttribute('aria-label')).toBe('正在加载页面');
         expect(pending?.getAttribute('aria-busy')).toBe('true');
         expect(pending?.classList.contains('page-skeleton--viewport')).toBe(true);
-        expect(pending?.querySelectorAll('.brand-loading-dots > i')).toHaveLength(3);
+        expect(pending?.querySelectorAll('.brand-loading-bar > i')).toHaveLength(1);
         expect(pending?.querySelector('img, svg, .brand-loading-name')).toBeNull();
     });
 
@@ -97,13 +98,13 @@ describe('parser-time storefront loading', () => {
         expect(initialLoadingBrandForSnapshot(english, scope)?.storefrontName).toBe('Current store');
     });
 
-    it('inserts the saved name as text and keeps unknown branding as dots', () => {
+    it('inserts the saved name as text and keeps unknown branding neutral', () => {
         applyInitialLoadingBrand({ ...brand, logoUrl: '', storefrontName: '' });
         expect(document.querySelector('.brand-loading-name, .route-transition-mark')).toBeNull();
         applyInitialLoadingBrand({ ...brand, logoUrl: '', storefrontName: '<img src="injected">' });
         expect(document.querySelector('.brand-loading-name')?.textContent).toBe('<img src="injected">');
         expect(document.querySelector('img')).toBeNull();
-        expect(document.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(document.querySelector('.brand-loading-bar')).not.toBeNull();
     });
 
     it('waits for the body when the early head script runs before the loader has been parsed', () => {
@@ -170,6 +171,28 @@ describe('parser-time storefront loading', () => {
         image.dispatchEvent(new Event('error'));
         expect(document.querySelector('.route-transition-mark')).toBeNull();
         expect(document.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
-        expect(document.querySelector('.brand-loading-dots')).not.toBeNull();
+        expect(document.querySelector('.brand-loading-bar')).not.toBeNull();
+    });
+
+    it('replaces the whole brand and rejects a previous image decode on the same bootstrap node', async () => {
+        let decoded!: () => void;
+        vi.spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(
+            () => new Promise<void>(resolve => (decoded = resolve)),
+        );
+        applyInitialLoadingBrand(brand);
+        const previousImage = document.querySelector('img');
+        const previousMark = previousImage?.parentElement;
+        if (!previousImage || !previousMark) throw new Error('Expected the original brand image and mark');
+        Object.defineProperty(previousImage, 'naturalWidth', { value: 160 });
+        previousImage.dispatchEvent(new Event('load'));
+        applyInitialLoadingBrand({ language: 'en', storefrontName: 'Next store', logoUrl: '' });
+        decoded();
+        await Promise.resolve();
+        expect(document.querySelectorAll('.brand-loading-name')).toHaveLength(1);
+        expect(document.querySelector('.brand-loading-name')?.textContent).toBe('Next store');
+        expect(document.querySelector('.brand-loading-subtitle, .route-transition-mark')).toBeNull();
+        expect(document.querySelector('.brand-loading-label')?.textContent).toBe('Loading');
+        expect(previousMark.classList.contains('is-logo-ready')).toBe(false);
+        expect(document.body.textContent).not.toContain(brand.storefrontName);
     });
 });

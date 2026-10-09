@@ -616,8 +616,9 @@ export function useStorefrontAppState() {
         selectedProduct,
         storefrontDescription,
         storefrontName,
-        logoUrl: configQuery.data?.logoUrl ?? null,
-        brandingReady: Boolean(configQuery.data && configQuery.isFetchedAfterMount),
+        logoUrl,
+        brandingScopeKey: market.code,
+        brandingReady: storefrontUnavailable || Boolean(configQuery.data && configQuery.isFetchedAfterMount),
     });
 
     const visitProductRef = useRef(productActivity.visitProduct);
