@@ -61,6 +61,7 @@ function activeNavigationRoute(route: string): string {
             'favorites',
             'history',
             'notifications',
+            'announcements',
             'coupons',
             'referral',
             'reviews',

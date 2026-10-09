@@ -147,6 +147,13 @@ function renderAccount(
 }
 
 describe('account referral visibility', () => {
+    it('replaces the mobile store-home shortcut with system announcements and keeps personal notifications separate', () => {
+        const markup = renderAccount(true);
+        expect(markup).toContain('系统公告');
+        expect(markup).toContain('消息通知');
+        expect(markup).not.toContain('店铺首页');
+    });
+
     it.each([false, true])(
         'starts with account details and keeps current account functions on desktop=%s',
         desktop => {

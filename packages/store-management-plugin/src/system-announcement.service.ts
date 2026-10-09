@@ -23,6 +23,8 @@ import { SystemAnnouncement } from './entities/system-announcement.entity';
 import { StorefrontDataChangedEvent } from './realtime/storefront-data-changed.event';
 import {
     CreateSystemAnnouncementInput,
+    StorefrontAnnouncementPageOptions,
+    StorefrontSystemAnnouncementList,
     SystemAnnouncementPublicView,
     UpdateSystemAnnouncementInput,
 } from './types';
@@ -65,8 +67,42 @@ export class SystemAnnouncementService {
     }
 
     async findActive(ctx: RequestContext): Promise<SystemAnnouncementPublicView[]> {
+        const announcements = await this.activeQuery(ctx)
+            .orderBy('announcement.createdAt', 'DESC')
+            .addOrderBy('announcement.priority', 'DESC')
+            .addOrderBy('announcement.id', 'DESC')
+            .take(20)
+            .getMany();
+        return this.publicViews(ctx, announcements);
+    }
+
+    async findActivePage(
+        ctx: RequestContext,
+        options?: StorefrontAnnouncementPageOptions | null,
+    ): Promise<StorefrontSystemAnnouncementList> {
+        const announcements = await this.activeQuery(ctx)
+            .addSelect('COALESCE(announcement.startsAt, announcement.createdAt)', 'announcement_published_at')
+            .orderBy('announcement_published_at', 'DESC')
+            .addOrderBy('announcement.createdAt', 'DESC')
+            .addOrderBy('announcement.id', 'DESC')
+            .getMany();
+        // Translation eligibility uses the shared language validator. Apply it before
+        // pagination so untranslated records never hide older, readable announcements.
+        // This full active-set read belongs only to the archive, not the homepage aggregate.
+        const visible = this.publicViews(ctx, announcements);
+        const skip = pageInteger(options?.skip, 0, 0, Number.MAX_SAFE_INTEGER);
+        const take = pageInteger(options?.take, 20, 1, 100);
+        return { items: visible.slice(skip, skip + take), totalItems: visible.length };
+    }
+
+    async findActiveById(ctx: RequestContext, id: ID): Promise<SystemAnnouncementPublicView | null> {
+        const announcement = await this.activeQuery(ctx).andWhere('announcement.id = :id', { id }).getOne();
+        return announcement ? (this.publicViews(ctx, [announcement])[0] ?? null) : null;
+    }
+
+    private activeQuery(ctx: RequestContext) {
         const now = new Date();
-        const announcements = await this.connection
+        return this.connection
             .getRepository(ctx, SystemAnnouncement)
             .createQueryBuilder('announcement')
             .leftJoin('announcement.channels', 'targetChannel')
@@ -77,12 +113,13 @@ export class SystemAnnouncementService {
                 allMode: 'ALL',
                 channelId: ctx.channelId,
             })
-            .distinct(true)
-            .orderBy('announcement.createdAt', 'DESC')
-            .addOrderBy('announcement.priority', 'DESC')
-            .addOrderBy('announcement.id', 'DESC')
-            .take(20)
-            .getMany();
+            .distinct(true);
+    }
+
+    private publicViews(
+        ctx: RequestContext,
+        announcements: SystemAnnouncement[],
+    ): SystemAnnouncementPublicView[] {
         const isZh = String(ctx.languageCode).toLowerCase().startsWith('zh');
         return announcements
             .filter(announcement => isZh || hasCompleteAnnouncementTranslation(announcement))
@@ -418,4 +455,10 @@ function hasCompleteAnnouncementTranslation(announcement: SystemAnnouncement): b
         isUsableEnglishTranslation(announcement.titleEn) &&
         isUsableEnglishTranslation(announcement.contentEn)
     );
+}
+
+function pageInteger(value: number | null | undefined, fallback: number, min: number, max: number): number {
+    return value == null || !Number.isFinite(value)
+        ? fallback
+        : Math.min(max, Math.max(min, Math.trunc(value)));
 }

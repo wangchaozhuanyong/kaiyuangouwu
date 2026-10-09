@@ -1,0 +1,74 @@
+/* Announcement pages share the site page shell, notification rows and skin tokens. */
+.announcement-list-heading,
+.announcement-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+}
+.announcement-list-heading h2,
+.announcement-article h1 {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+.announcement-list-heading > span,
+.announcement-date {
+    color: var(--muted);
+}
+.announcement-pagination svg,
+.announcement-category svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+.announcement-article {
+    display: grid;
+    gap: var(--space-section);
+    padding: var(--space-section);
+    background: var(--surface);
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    box-shadow: var(--skin-card-shadow);
+}
+.announcement-article > header {
+    display: grid;
+    gap: var(--space-12);
+}
+.announcement-category {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--accent-ink);
+}
+.announcement-body {
+    font-weight: var(--font-weight-normal);
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+.announcement-article > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: var(--experience-control-min);
+    padding: var(--space-8) var(--space-16);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+    justify-self: start;
+}
+.announcement-article > button svg {
+    width: 20px;
+    height: 20px;
+}
+
+.announcement-article > * {
+    width: 100%;
+    max-width: var(--experience-reading-max);
+    margin-inline: auto;
+}
+.announcement-article > button {
+    width: auto;
+    margin-inline: 0;
+}

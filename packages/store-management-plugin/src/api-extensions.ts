@@ -1215,6 +1215,16 @@ export const shopApiExtensions = gql`
         endsAt: DateTime
     }
 
+    input StorefrontAnnouncementPageOptions {
+        skip: Int
+        take: Int
+    }
+
+    type StorefrontSystemAnnouncementList {
+        items: [StorefrontSystemAnnouncement!]!
+        totalItems: Int!
+    }
+
     type ReferralInvitee {
         id: ID!
         displayName: String!
@@ -1292,6 +1302,8 @@ export const shopApiExtensions = gql`
         myStorefrontCouponUsageRecordsPage(options: StoreCouponPageOptions): StoreCouponUsageRecordList!
         activeStorefrontFlashSales: [StoreFlashSale!]!
         activeSystemAnnouncements: [StorefrontSystemAnnouncement!]!
+        storefrontAnnouncements(options: StorefrontAnnouncementPageOptions): StorefrontSystemAnnouncementList!
+        storefrontAnnouncement(id: ID!): StorefrontSystemAnnouncement
         referralProgram: ReferralProgram!
         validateReferralInviteCode(code: String!): Boolean!
         myReferralOverview: MyReferralOverview!

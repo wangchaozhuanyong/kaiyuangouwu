@@ -47,6 +47,7 @@ export function asyncRouteTitle(routeName: RouteName, language: StorefrontLangua
         addresses: isZh ? '地址管理' : 'Addresses',
         'account-security': isZh ? '账户与安全' : 'Account and security',
         notifications: isZh ? '消息通知' : 'Notifications',
+        announcements: isZh ? '系统公告' : 'Announcements',
         coupons: isZh ? '优惠券' : 'Coupons',
         referral: isZh ? '邀请返利' : 'Referral rewards',
         'image-studio': isZh ? 'AI 图片工坊' : 'AI image studio',

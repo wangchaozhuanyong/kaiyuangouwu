@@ -513,7 +513,7 @@ describe('authoritative public access modes', () => {
         const find = vi.fn(() => route);
         const modules = h.modules.get.getMockImplementation();
         if (!modules) throw new Error('Missing module fixture');
-        const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader');
+        const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
         h.modules.get.mockImplementation(token =>
             token === PUBLIC_CATALOG_READER ? ({ find } as never) : modules(token),
         );
@@ -772,7 +772,7 @@ describe('public page media assembly', () => {
 });
 
 it('shares timed-out optional source reads across different public page assemblies and caches their later completion', async () => {
-    const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader');
+    const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
     const entries = new Map<string, unknown>();
     const cache = new StorefrontPublicCacheService(
         {

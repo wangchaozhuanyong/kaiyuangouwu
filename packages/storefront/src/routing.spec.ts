@@ -9,6 +9,25 @@ import {
 } from './storefront-router';
 
 describe('storefront routing', () => {
+    it('round-trips announcement detail and list page in shared and browser-history URLs', () => {
+        const detail = { name: 'announcements' as const, id: 'notice-25', page: 3 };
+        expect(routeFromHash(routeHref(detail))).toMatchObject(detail);
+        expect(routeFromRouterLocation('/announcements', { id: 'notice-25', page: '3' })).toMatchObject(
+            detail,
+        );
+        expect(routeFromHash('/announcements?page=3')).toMatchObject({
+            name: 'announcements',
+            page: 3,
+            id: undefined,
+        });
+        expect(routeHref({ name: 'announcements' })).toBe('/announcements');
+    });
+
+    it.each(['0', '-1', '1.5', 'Infinity', '1000001', '9007199254740992', ['2'], {}])(
+        'rejects invalid announcement page search %s',
+        page => expect(routeFromRouterLocation('/announcements', { page }).page).toBeUndefined(),
+    );
+
     it('preserves the logistics origin and list filter through related order links', () => {
         for (const source of ['logistics', 'logistics-detail'] as const) {
             const route = {

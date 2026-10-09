@@ -125,6 +125,36 @@ describe('public cache persistence work', () => {
 });
 
 describe('public React Query session cache', () => {
+    it('isolates announcement list pagination and direct details by store, currency and language', () => {
+        const client = createStorefrontQueryClient();
+        const listKey = storefrontQueryKeys.announcements('shop-a:MYR', 'zh_Hans', 1, 12);
+        const detailKey = storefrontQueryKeys.announcement('shop-a:MYR', 'zh_Hans', 'notice-1');
+        client.setQueryData(listKey, { items: [{ id: 'notice-1' }], totalItems: 25 });
+        client.setQueryData(detailKey, { id: 'notice-1', title: 'Only current store' });
+        for (const [scope, language] of [
+            ['shop-b:MYR', 'zh_Hans'],
+            ['shop-a:CNY', 'zh_Hans'],
+            ['shop-a:MYR', 'en'],
+        ]) {
+            expect(
+                client.getQueryData(storefrontQueryKeys.announcements(scope, language, 1, 12)),
+            ).toBeUndefined();
+            expect(
+                client.getQueryData(storefrontQueryKeys.announcement(scope, language, 'notice-1')),
+            ).toBeUndefined();
+        }
+        expect(
+            client.getQueryData(storefrontQueryKeys.announcements('shop-a:MYR', 'zh_Hans', 2, 12)),
+        ).toBeUndefined();
+        expect(
+            client.getQueryData(storefrontQueryKeys.announcements('shop-a:MYR', 'zh_Hans', 1, 24)),
+        ).toBeUndefined();
+        expect(
+            client.getQueryData(storefrontQueryKeys.announcement('shop-a:MYR', 'zh_Hans', 'notice-2')),
+        ).toBeUndefined();
+        client.clear();
+    });
+
     it('respects stale time when the page mounts or regains focus', () => {
         const queryDefaults = createStorefrontQueryClient().getDefaultOptions().queries;
 

@@ -86,6 +86,8 @@ export function routePageIdentity(route: RouteState): string {
             return `product:${route.id ?? ''}`;
         case 'order-detail':
             return `order-detail:${route.id ?? route.orderCode ?? ''}`;
+        case 'announcements':
+            return `announcements:${route.id ?? 'list'}`;
         case 'legal':
             return `legal:${route.id ?? ''}`;
         case 'category':
@@ -110,6 +112,7 @@ export interface RouteState {
     editAddress?: boolean;
     id?: string;
     quantity?: number;
+    page?: number;
     variantId?: string;
     orderCode?: string;
     focus?: 'evaluation';
@@ -239,6 +242,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const rawQuantity = stringValue('quantity');
     const quantity = rawQuantity && /^\d+$/.test(rawQuantity) ? Number(rawQuantity) : undefined;
     const focus = stringValue('focus');
+    const page = Number(stringValue('page'));
     return {
         auth:
             search.auth === 'login' || search.auth === 'register' || search.auth === 'forgot-password'
@@ -258,6 +262,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
         editAddress: search.editAddress === true || search.editAddress === 'true' || undefined,
         id: stringValue('id'),
         quantity: quantity && Number.isSafeInteger(quantity) && quantity > 0 ? quantity : undefined,
+        page: Number.isSafeInteger(page) && page > 0 && page <= 1000000 ? page : undefined,
         variantId: stringValue('variantId'),
         orderCode: stringValue('orderCode'),
         focus: focus === 'evaluation' ? focus : undefined,
@@ -315,6 +320,7 @@ export function routeHref(route: RouteState): string {
     if (search.editAddress) params.set('editAddress', 'true');
     if (search.id) params.set('id', search.id);
     if (search.quantity) params.set('quantity', String(search.quantity));
+    if (search.page) params.set('page', String(search.page));
     if (search.orderCode) params.set('orderCode', search.orderCode);
     if (search.focus) params.set('focus', search.focus);
     if (search.tab) params.set('tab', search.tab);
