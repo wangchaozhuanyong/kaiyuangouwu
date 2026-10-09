@@ -1,3 +1,4 @@
+import postcss from 'postcss';
 import { describe, expect, it } from 'vitest';
 
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
@@ -42,6 +43,18 @@ describe('fixed bottom layout clearance', () => {
         expect(stylesheet).toMatch(
             /@media \(min-width: 1024px\) \{\s*\.page:not\(\.subpage\) \{\s*--page-bottom-fixed-height: 0px;/,
         );
-        expect(stylesheet).not.toContain('@media (min-width: 640px)');
+        const navigationClearanceBreakpoints: number[] = [];
+        postcss.parse(stylesheet).walkAtRules('media', media => {
+            const minWidth = /min-width:\s*(\d+)px/.exec(media.params);
+            if (!minWidth) return;
+            media.walkRules('.page:not(.subpage)', rule => {
+                rule.walkDecls('--page-bottom-fixed-height', declaration => {
+                    if (declaration.value === '0px') {
+                        navigationClearanceBreakpoints.push(Number(minWidth[1]));
+                    }
+                });
+            });
+        });
+        expect(navigationClearanceBreakpoints).toEqual([1024]);
     });
 });
