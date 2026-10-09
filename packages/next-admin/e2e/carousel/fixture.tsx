@@ -85,7 +85,29 @@ if (params.has('editorialHome')) {
     if (!artworkBase || !/^http:\/\/127\.0\.0\.1:\d+(?:\/@fs\/[^?#]+\/assets)?$/u.test(artworkBase)) {
         throw new Error('轮播设计夹具需要明确的本地素材地址');
     }
-    blocks = editorialHomeBlocks(artworkBase).map(block => ({
+    const referenceArtwork = params.get('referenceArtwork');
+    if (referenceArtwork && !/^http:\/\/127\.0\.0\.1:\d+\/@fs\/[^?#]+\.png$/u.test(referenceArtwork)) {
+        throw new Error('原构图预览需要明确的本地 PNG 素材地址');
+    }
+    const deviceArtworkBase = params.get('deviceArtworkBase');
+    if (deviceArtworkBase && !/^http:\/\/127\.0\.0\.1:\d+\/@fs\/[^?#]+\/assets$/u.test(deviceArtworkBase)) {
+        throw new Error('双端图片预览需要明确的本地素材目录');
+    }
+    blocks = editorialHomeBlocks(
+        artworkBase,
+        params.has('layout-review'),
+        deviceArtworkBase ? `${deviceArtworkBase}/models-desktop-v3.png` : referenceArtwork || undefined,
+        deviceArtworkBase
+            ? {
+                  desktop: { width: 2172, height: 724 },
+                  mobile: {
+                      imageUrl: `${deviceArtworkBase}/models-mobile-v3.png`,
+                      width: 1536,
+                      height: 1024,
+                  },
+              }
+            : undefined,
+    ).map(block => ({
         ...block,
         __typename: 'StorefrontContentBlock',
     })) as typeof blocks;
@@ -906,7 +928,12 @@ export function ServicesClientFixture() {
 
 createRoot(document.getElementById('root')!).render(
     params.has('editorialHomeClient') ? (
-        <EditorialHomeClient blocks={blocks} />
+        <EditorialHomeClient
+            blocks={blocks}
+            layoutReview={params.has('layout-review')}
+            referenceArtwork={params.has('referenceArtwork')}
+            independentDeviceArtwork={params.has('deviceArtworkBase')}
+        />
     ) : params.has('services-client') ? (
         <ServicesClientFixture />
     ) : (

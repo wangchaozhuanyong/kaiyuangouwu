@@ -578,8 +578,8 @@
    The wrapper selector also outranks the storefront's existing page-level media rules. */
 .hero.hero-image-overlay div.hero-scene-wrapper[data-hero-artwork-layout='editorial'] {
     position: relative;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 50fr) minmax(0, 50fr);
     width: 100%;
     height: auto;
     background: var(--hero-copy-background);
@@ -591,19 +591,21 @@
     --hero-title-shadow: none;
     --hero-body-shadow: none;
     order: 0;
+    grid-column: 1;
+    grid-row: 1;
     position: relative;
     inset: auto;
     width: 100%;
     height: auto;
-    min-height: 0;
+    min-height: 240px;
     max-height: none;
     box-sizing: border-box;
     margin: 0;
-    padding: var(--space-24);
-    gap: var(--space-16);
+    padding: var(--space-16);
+    gap: var(--space-8);
     justify-content: center;
     overflow: visible;
-    background: var(--hero-copy-background);
+    background: transparent;
     color: var(--hero-copy-foreground);
 }
 
@@ -674,10 +676,10 @@
 
 .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-media {
     order: 1;
-    position: relative;
-    inset: auto;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
     min-width: 0;
     background: var(--hero-copy-background);
 }
@@ -685,17 +687,17 @@
 .hero.hero-image-overlay
     .hero-scene-wrapper[data-hero-artwork-layout='editorial']
     :is(.hero-rich-image-link, .safe-image-frame) {
-    position: relative;
-    inset: auto;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
 }
 
 .hero.hero-image-overlay
     .hero-scene-wrapper[data-hero-artwork-layout='editorial']
     :is(.hero-rich-backdrop, .safe-image-preview) {
     width: 100%;
-    height: auto;
+    height: 100%;
     object-fit: contain;
     object-position: center;
 }
@@ -703,7 +705,29 @@
 .hero.hero-image-overlay
     .hero-scene-wrapper[data-hero-artwork-layout='editorial']
     .hero-rich-image-link::after {
-    content: none;
+    content: '';
+    background: linear-gradient(to right, var(--hero-copy-background) 45%, transparent 54%);
+}
+
+@media (max-width: 1023px) {
+    .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-pill {
+        padding: 0;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
+    }
+
+    .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-desc {
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
+    }
+
+    .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='editorial']
+        .hero-rich-title:not(:empty)::after {
+        height: var(--space-4);
+        margin-top: var(--space-8);
+        margin-bottom: var(--space-4);
+    }
 }
 
 @media (min-width: 1024px) {

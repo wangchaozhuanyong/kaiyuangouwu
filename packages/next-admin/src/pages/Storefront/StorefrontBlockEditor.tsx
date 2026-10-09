@@ -128,8 +128,9 @@ export function StorefrontBlockEditor({
         binding: StorefrontContentBlock | StorefrontContentBlock['items'][number] | undefined,
     ) => binding?.imageAsset?.name || binding?.imageUrl?.split('/').pop() || '清除图片';
     const imageChangeDescriptions = imageChanges.map(change => {
-        if (change.slot === 'main') return `主图：${imageName(value)} → ${imageName(draft)}`;
-        if (change.slot === 'mobile-hero') return '手机轮播图已替换或清除';
+        if (change.slot === 'main')
+            return `${draft.type === 'HERO' ? '电脑端轮播图' : '主图'}：${imageName(value)} → ${imageName(draft)}`;
+        if (change.slot === 'mobile-hero') return '手机端轮播图已替换或清除';
         if (change.slot === 'mobile-decoration') return '手机底部装饰图已替换或清除';
         const itemId = change.slot.slice('item:'.length);
         const previous = value.items.find(item => String(item.id) === itemId);
@@ -163,6 +164,7 @@ export function StorefrontBlockEditor({
         }));
     const phoneTranslation = mobileHeroTranslation(draft.settings, language);
     const editorialHero = draft.type === 'HERO' && resolveHeroArtworkLayout(draft.settings) === 'editorial';
+    const phoneImageUrl = stringSetting(draft.settings?.mobileImageUrl, '').trim();
     const updatePhoneTranslation = (patch: Partial<MobileHeroTranslation>) => {
         const translations = (['zh_Hans', 'en'] as const).map(code => {
             const translation = {
@@ -486,14 +488,15 @@ export function StorefrontBlockEditor({
                                         <>
                                             <Field
                                                 label="手机标题（选填）"
-                                                helpText="未设置沿用当前语言电脑版文案；已填写后清空则手机隐藏该文字。"
+                                                helpText="可换行，前台按排版完整显示；未设置沿用当前语言电脑版文案，已填写后清空则手机隐藏该文字。"
                                             >
-                                                <AdminInput
+                                                <AdminTextArea
+                                                    rows={2}
                                                     value={phoneTranslation.title ?? ''}
                                                     onChange={event =>
                                                         updatePhoneTranslation({ title: event.target.value })
                                                     }
-                                                    className={inputClass}
+                                                    className={`${inputClass} resize-y`}
                                                 />
                                             </Field>
                                             <HeroCopyHint
@@ -588,7 +591,13 @@ export function StorefrontBlockEditor({
                                     {draft.type !== 'CORE_CATEGORIES' && (
                                         <div className="sm:col-span-2">
                                             <AssetPicker
-                                                label={isSupport ? '电脑端客服页首配图' : '主图素材'}
+                                                label={
+                                                    isSupport
+                                                        ? '电脑端客服页首配图'
+                                                        : draft.type === 'HERO'
+                                                          ? '电脑端轮播图'
+                                                          : '主图素材'
+                                                }
                                                 value={draft.imageAsset}
                                                 fallbackUrl={draft.imageUrl}
                                                 onChange={asset =>
@@ -602,8 +611,10 @@ export function StorefrontBlockEditor({
                                             />
                                             {draft.type === 'HERO' && (
                                                 <p className="mt-2 text-xs leading-5 text-slate-500">
+                                                    电脑端使用此图，建议比例
+                                                    3:1；手机未单独设置图片时也会沿用此图。
                                                     底图不写广告标题、说明和按钮；中英文文字在前台文案中分别编辑。
-                                                    切换图文布局不会替换主图或手机图。
+                                                    切换图文布局不会替换电脑图或手机图。
                                                 </p>
                                             )}
                                         </div>
@@ -611,11 +622,9 @@ export function StorefrontBlockEditor({
                                     {draft.type === 'HERO' && (
                                         <div className="sm:col-span-2">
                                             <AssetPicker
-                                                label="手机轮播图（可选）"
+                                                label="手机端轮播图（可选）"
                                                 value={null}
-                                                fallbackUrl={
-                                                    stringSetting(draft.settings?.mobileImageUrl, '') || null
-                                                }
+                                                fallbackUrl={phoneImageUrl || null}
                                                 onChange={asset =>
                                                     updateSettings({
                                                         mobileImageUrl: asset
@@ -627,10 +636,19 @@ export function StorefrontBlockEditor({
                                                     })
                                                 }
                                             />
-                                            <p className="mt-2 text-xs text-slate-500">
+                                            <p
+                                                data-hero-artwork-binding="mobile"
+                                                className="mt-2 text-xs leading-5 text-slate-500"
+                                            >
+                                                {phoneImageUrl
+                                                    ? '已单独设置手机端轮播图，电脑端继续使用电脑图。'
+                                                    : '未单独设置手机图，当前沿用电脑端轮播图。'}
+                                                建议比例 3:2；清除手机图后恢复沿用电脑图。
+                                            </p>
+                                            <p className="mt-2 text-xs leading-5 text-slate-500">
                                                 {editorialHero
-                                                    ? '手机文字在上、图片主体在下。建议使用 4:3 或 1:1 的紧凑主体构图，无需顶部文字留白；未单独设置手机图时沿用主图。'
-                                                    : '使用与手机容器比例匹配的专用图片；留空沿用主图。电脑端继续使用主图。'}
+                                                    ? '手机也采用左侧文字、右侧主体构图，底图左侧请留出文字空间，右侧保留完整主体。'
+                                                    : '手机图可按手机屏幕单独构图；在右侧预览中切换“电脑 / 手机”核对各自图片。'}
                                             </p>
                                         </div>
                                     )}
@@ -679,7 +697,7 @@ export function StorefrontBlockEditor({
                                                 label="轮播图文布局"
                                                 helpText={
                                                     editorialHero
-                                                        ? '电脑左侧约 45% 显示网页文字，右侧保留完整 3D 主体，底图左侧请留空；手机文字在上、图片在下。'
+                                                        ? '电脑与手机均为左侧网页文字、右侧完整主体，底图左侧请留空；电脑图建议 3:1，手机图建议 3:2，可分别设置。'
                                                         : '保留现有图片上的网页文字布局；选择左右构图后，电脑与手机会使用共用的图文分离布局。'
                                                 }
                                             >
