@@ -63,6 +63,18 @@ jobs:
                   awk '/^(MemTotal|MemAvailable|SwapTotal|SwapFree|AnonPages|Shmem|SReclaimable|SUnreclaim|Slab):/ {printf "MEMORY_DIAG %s %s_kib\n", $1, $2}' /proc/meminfo
                   ps -eo comm=,rss= --sort=-rss | awk 'NR <= 15 {printf "PROCESS_MEMORY rank=%d name=%s rss_mib=%.1f\n", NR, $1, $2 / 1024}'
                   sudo -n -H -u ubuntu pm2 jlist | node -e 'const fs=require("fs");let input="";process.stdin.on("data",chunk=>input+=chunk);process.stdin.on("end",()=>{for(const entry of JSON.parse(input)){if(["vendure-api","vendure-worker"].includes(entry.name)){const status=fs.readFileSync(`/proc/${entry.pid}/status`,"utf8");const mib=key=>{const match=status.match(new RegExp(`^${key}:\\s+(\\d+) kB$`,"m"));return match?(Number(match[1])/1024).toFixed(1):"unavailable"};console.log(`PM2_MEMORY name=${entry.name} pid=${entry.pid} sampled_mib=${((entry.monit?.memory??0)/1048576).toFixed(1)} resident_mib=${mib("VmRSS")} swapped_mib=${mib("VmSwap")} restarts=${entry.pm2_env?.restart_time??0}`)}}})'
+                  sudo -n -H -u ubuntu pm2 jlist | node -e 'const cp=require("child_process");let input="";process.stdin.on("data",c=>input+=c);process.stdin.on("end",()=>{for(const p of JSON.parse(input)){if(!["vendure-api","vendure-worker"].includes(p.name)||!Number.isInteger(p.pid)||p.pid<1)continue;const stats=cp.execFileSync("ps",["-p",String(p.pid),"-o","pcpu=,stat=,etime=,nlwp="],{encoding:"utf8",timeout:5000}).trim().split(/\s+/);if(stats.length===4&&/^\d+(?:\.\d+)?$/.test(stats[0])&&/^[A-Za-z<>+]+$/.test(stats[1])&&/^[\d:-]+$/.test(stats[2])&&/^\d+$/.test(stats[3]))console.log(`API_PROCESS_DIAG name=${p.name} cpu_percent=${stats[0]} state=${stats[1]} elapsed=${stats[2]} threads=${stats[3]}`)}})'
+                  for pressure in cpu memory io; do
+                    if [ -r "/proc/pressure/$pressure" ]; then
+                      awk -v resource="$pressure" '{printf "HOST_PRESSURE_DIAG resource=%s %s\n", resource, $0}' "/proc/pressure/$pressure"
+                    fi
+                  done
+                  if api_health=$(curl --max-time 10 --silent --output /dev/null --write-out 'http=%{http_code} seconds=%{time_total}' http://127.0.0.1:3002/health); then
+                    printf 'API_HEALTH_DIAG %s exit=0\n' "$api_health"
+                  else
+                    printf 'API_HEALTH_DIAG %s exit=%s\n' "$api_health" "$?"
+                  fi
+                  journalctl -u vendure-production-healthcheck.service --no-pager -n 40 -o cat | grep -Eo 'mysql-unreachable|public-health-failed|image-generation-health-failed|[a-z-]+-missing-or-stale|[a-z-]+-checksum-invalid|[a-z-]+-missing-or-invalid' | sort -u | while read -r code; do printf 'HEALTH_FAILURE_DIAG code=%s\n' "$code"; done || true
                   metadata_token=$(curl --max-time 2 -fsS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token 2>/dev/null || true)
                   if [ -n "$metadata_token" ]; then
                     instance_type=$(curl --max-time 2 -fsS -H "X-aws-ec2-metadata-token: $metadata_token" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || true)
