@@ -1122,7 +1122,7 @@ export function StorefrontBlockEditor({
                                             <>
                                                 <Field
                                                     label="公告展示期限"
-                                                    helpText="默认最近2年，可选最近30天；按上线时间（未设置则按创建时间）筛选有效公告，首页最多展示 5 条。"
+                                                    helpText="默认最近2年，可选最近30天；按上线时间（未设置则按创建时间）筛选有效系统公告，首页仅播放最新 3 条。无有效系统公告时不显示公告条；历史公告可通过全部查看。"
                                                 >
                                                     <AdminSelect
                                                         value={
@@ -1142,7 +1142,10 @@ export function StorefrontBlockEditor({
                                                         <option value="30_DAYS">最近30天</option>
                                                     </AdminSelect>
                                                 </Field>
-                                                <Field label="公告轮播间隔（秒）">
+                                                <Field
+                                                    label="短公告停留时间（秒）"
+                                                    helpText="正文能完整显示时按此时长停留；长正文完整滚动后再切换，不受此时间限制。"
+                                                >
                                                     <AdminInput
                                                         type="number"
                                                         min={3}

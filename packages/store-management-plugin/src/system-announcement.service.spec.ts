@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { SystemAnnouncementService } from './system-announcement.service';
 
 describe('SystemAnnouncementService', () => {
-    it('exposes persisted creation time for the recent homepage notice selector', async () => {
+    it('keeps homepage publication order consistent with the archive for previously created scheduled notices', async () => {
         const createdAt = new Date('2026-09-24T08:00:00.000Z');
+        const startsAt = new Date('2026-10-09T08:00:00.000Z');
         const repository = repositoryHarness([
             {
                 id: 'recent',
@@ -16,7 +17,7 @@ describe('SystemAnnouncementService', () => {
                 contentZh: '配送安排已更新',
                 contentEn: 'Delivery arrangements have changed',
                 linkUrl: null,
-                startsAt: null,
+                startsAt,
                 endsAt: null,
             },
         ]);
@@ -24,8 +25,12 @@ describe('SystemAnnouncementService', () => {
             languageCode: 'zh_Hans',
             channelId: 'channel-1',
         } as any);
-        expect(result[0]?.createdAt).toEqual(createdAt);
-        expect(repository.queryBuilder.orderBy).toHaveBeenCalledWith('announcement.createdAt', 'DESC');
+        expect(result[0]).toMatchObject({ createdAt, startsAt });
+        expect(repository.queryBuilder.addSelect).toHaveBeenCalledWith(
+            'COALESCE(announcement.startsAt, announcement.createdAt)',
+            'announcement_published_at',
+        );
+        expect(repository.queryBuilder.orderBy).toHaveBeenCalledWith('announcement_published_at', 'DESC');
     });
 
     it('normalizes and saves a scheduled announcement', async () => {
@@ -136,8 +141,9 @@ describe('SystemAnnouncementService', () => {
             ['announcement.id', 'DESC'],
         ]);
 
-        await service.findActive(context);
-        expect(repository.queryBuilder.take).toHaveBeenCalledWith(20);
+        expect((await service.findActive(context)).map(item => item.id)).toEqual(
+            records.slice(0, 20).map(item => item.id),
+        );
     });
 
     it('filters unusable English translations before counting and paginating the archive', async () => {
@@ -161,6 +167,23 @@ describe('SystemAnnouncementService', () => {
         expect(result.items[0]).toMatchObject({ title: 'Announcement', content: 'Published notice' });
     });
 
+    it('does not let untranslated notices hide the latest readable homepage notices and retains its 20-item cap', async () => {
+        const untranslated = Array.from({ length: 25 }, (_, index) => ({
+            ...publicAnnouncement(`untranslated-${index}`),
+            contentEn: index % 2 ? '' : '尚未翻译',
+        }));
+        const readable = Array.from({ length: 25 }, (_, index) => publicAnnouncement(`readable-${index}`));
+        const repository = repositoryHarness([...untranslated, ...readable]);
+
+        const result = await serviceWith(repository).findActive({
+            languageCode: 'en',
+            channelId: 'channel-1',
+        } as any);
+
+        expect(result.map(item => item.id)).toEqual(readable.slice(0, 20).map(item => item.id));
+        expect(repository.queryBuilder.take).not.toHaveBeenCalled();
+    });
+
     it('bounds archive pagination and keeps a successful empty page distinct from missing data', async () => {
         const records = Array.from({ length: 125 }, (_, index) => publicAnnouncement(String(index)));
         const service = serviceWith(repositoryHarness(records));
@@ -177,14 +200,15 @@ describe('SystemAnnouncementService', () => {
         });
     });
 
-    it.each(['list', 'detail'] as const)(
+    it.each(['homepage', 'list', 'detail'] as const)(
         'keeps enabled, schedule and current-store constraints on the public %s query',
         async mode => {
             const repository = repositoryHarness();
             const service = serviceWith(repository);
             const context = { languageCode: 'zh_Hans', channelId: 'current-store' } as any;
 
-            if (mode === 'list') await service.findActivePage(context);
+            if (mode === 'homepage') await service.findActive(context);
+            else if (mode === 'list') await service.findActivePage(context);
             else await service.findActiveById(context, 'older-announcement');
 
             expect(repository.queryBuilder.where).toHaveBeenCalledWith('announcement.enabled = :enabled', {

@@ -67,13 +67,7 @@ export class SystemAnnouncementService {
     }
 
     async findActive(ctx: RequestContext): Promise<SystemAnnouncementPublicView[]> {
-        const announcements = await this.activeQuery(ctx)
-            .orderBy('announcement.createdAt', 'DESC')
-            .addOrderBy('announcement.priority', 'DESC')
-            .addOrderBy('announcement.id', 'DESC')
-            .take(20)
-            .getMany();
-        return this.publicViews(ctx, announcements);
+        return (await this.findActivePage(ctx, { take: 20 })).items;
     }
 
     async findActivePage(
@@ -88,7 +82,7 @@ export class SystemAnnouncementService {
             .getMany();
         // Translation eligibility uses the shared language validator. Apply it before
         // pagination so untranslated records never hide older, readable announcements.
-        // This full active-set read belongs only to the archive, not the homepage aggregate.
+        // The homepage uses the same order and eligibility before taking its bounded subset.
         const visible = this.publicViews(ctx, announcements);
         const skip = pageInteger(options?.skip, 0, 0, Number.MAX_SAFE_INTEGER);
         const take = pageInteger(options?.take, 20, 1, 100);

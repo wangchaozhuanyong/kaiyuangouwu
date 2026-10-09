@@ -365,8 +365,8 @@
         background: transparent;
     }
     .desktop-store-layout .home-page .notice-strip {
-        min-height: 40px;
-        padding: 8px 18px;
+        min-height: 44px;
+        padding: 0 18px;
         gap: 12px;
         font-size: var(--type-helper-size);
         line-height: var(--type-helper-leading);
