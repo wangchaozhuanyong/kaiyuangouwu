@@ -3,21 +3,9 @@ import '../styles/coupon-center.css';
 import type { ShopApi } from '../api';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import {
-    ArrowRight,
-    Badge,
-    CalendarDays,
-    Check,
-    ChevronRight,
-    FileText,
-    MapPin,
-    ReceiptText,
-    Tag,
-    TicketPercent,
-} from 'lucide-react';
+import { ArrowRight, Check, TicketPercent } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 
-import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import {
     CouponCenterTab,
@@ -28,7 +16,6 @@ import {
     customerCouponsForTab,
     isLockedCoupon,
 } from '../coupon-center-state';
-import { useDesktopLayout } from '../desktop-layout';
 import { storefrontInitialQueryError } from '../loading-state';
 import { PageSkeleton } from '../route-loading';
 import {
@@ -304,49 +291,43 @@ export function CouponCenterPage() {
                                         const action = (
                                             <button
                                                 type="button"
-                                                className={`${
-                                                    activeTab === 'ACTIVITIES'
-                                                        ? 'coupon-activity-action'
-                                                        : 'coupon-claim-btn'
-                                                }${canClaim ? '' : ' is-claimed'}${
+                                                className={`coupon-claim-btn${canClaim ? '' : ' is-claimed'}${
                                                     actionState.detail ? ' is-unavailable' : ''
-                                                }`}
+                                                }${claimingId === campaign.id ? ' is-claiming' : ''}`}
                                                 disabled={!canClaim || loading || claimingId !== null}
+                                                aria-busy={claimingId === campaign.id}
                                                 onClick={() => void claim(campaign.id)}
                                             >
                                                 <span className="coupon-btn-text-wrap">
                                                     <span>
-                                                        {activeTab === 'UNCLAIMED' && canClaim && isZh
-                                                            ? '领取'
-                                                            : actionState.label}
+                                                        {claimingId === campaign.id
+                                                            ? isZh
+                                                                ? '领取中'
+                                                                : 'Claiming'
+                                                            : canClaim && isZh
+                                                              ? '领取'
+                                                              : actionState.label}
                                                     </span>
                                                     {actionState.detail ? (
                                                         <small>{actionState.detail}</small>
                                                     ) : null}
                                                     {campaign.claimed ? (
                                                         <Check size={13} aria-hidden="true" />
-                                                    ) : canClaim ? (
-                                                        <ChevronRight size={15} aria-hidden="true" />
                                                     ) : null}
                                                 </span>
                                             </button>
                                         );
-                                        return activeTab === 'ACTIVITIES' ? (
-                                            <ActivityCoupon
-                                                key={card.id}
-                                                card={card}
-                                                campaign={campaign}
-                                                language={language}
-                                                muted={!canClaim}
-                                                action={action}
-                                            />
-                                        ) : (
+                                        return (
                                             <CouponTicket
                                                 key={card.id}
                                                 card={card}
-                                                muted={!canClaim}
                                                 action={action}
-                                                meta={campaignValidity(campaign, language)}
+                                                meta={
+                                                    <CampaignDetails
+                                                        campaign={campaign}
+                                                        language={language}
+                                                    />
+                                                }
                                                 scope={couponScopeSummary(campaign.kind, language)}
                                             />
                                         );
@@ -384,6 +365,7 @@ export function CouponCenterPage() {
                                             <CouponTicket
                                                 key={coupon.id}
                                                 card={card}
+                                                unavailable={locked}
                                                 action={
                                                     locked ? (
                                                         <span className="coupon-ticket-status">
@@ -397,12 +379,28 @@ export function CouponCenterPage() {
                                                         >
                                                             <span className="coupon-btn-text-wrap">
                                                                 <span>{isZh ? '去使用' : 'Shop now'}</span>
-                                                                <ChevronRight size={15} aria-hidden="true" />
                                                             </span>
                                                         </button>
                                                     )
                                                 }
-                                                meta={customerCouponValidity(coupon, language)}
+                                                meta={
+                                                    <CouponDetails
+                                                        rows={[
+                                                            [
+                                                                isZh ? '有效期' : 'Validity',
+                                                                customerCouponValidity(coupon, language),
+                                                            ],
+                                                            ...(coupon.status === 'RETURNED'
+                                                                ? [
+                                                                      [
+                                                                          isZh ? '状态' : 'Status',
+                                                                          isZh ? '已返还' : 'Returned',
+                                                                      ] as [string, string],
+                                                                  ]
+                                                                : []),
+                                                        ]}
+                                                    />
+                                                }
                                                 scope={couponScopeSummary(coupon.campaignKind, language)}
                                             />
                                         );
@@ -429,7 +427,6 @@ export function CouponCenterPage() {
                                         <CouponTicket
                                             key={record.id}
                                             card={couponCardFromUsageRecord(record, language, index)}
-                                            muted
                                             historical
                                             action={
                                                 <span className="coupon-ticket-status is-used">
@@ -443,7 +440,7 @@ export function CouponCenterPage() {
                                                           : 'Used'}
                                                 </span>
                                             }
-                                            meta={couponUsageRecord(record, language)}
+                                            meta={<CouponUsageDetails record={record} language={language} />}
                                             scope={couponScopeSummary(record.campaignKind, language)}
                                         />
                                     ))}
@@ -493,73 +490,25 @@ export function CouponCenterPage() {
                     className="coupon-center-guide"
                     aria-label={isZh ? '使用说明' : 'Using your coupons'}
                 >
-                    <div className="coupon-guide-layout">
-                        <header className="coupon-guide-intro">
-                            <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
-                            <p>
-                                {isZh
-                                    ? '了解优惠券的使用规则，更好地享受购物优惠。'
-                                    : 'Understand how your coupons work and make the most of your savings.'}
-                            </p>
-                            <TicketPercent className="coupon-guide-art" aria-hidden="true" />
-                        </header>
-                        <div className="coupon-guide-content">
-                            <dl>
-                                <div>
-                                    <dt>
-                                        <span
-                                            className="coupon-guide-symbol is-conditions"
-                                            aria-hidden="true"
-                                        >
-                                            <FileText />
-                                        </span>
-                                        {isZh ? '使用条件' : 'Conditions'}
-                                    </dt>
-                                    <dd>
-                                        {isZh
-                                            ? '查看券面标注的有效期、适用范围和使用门槛。'
-                                            : 'Check the coupon’s validity, eligible items and minimum spend.'}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt>
-                                        <span className="coupon-guide-symbol is-discounts" aria-hidden="true">
-                                            <Tag />
-                                        </span>
-                                        {isZh ? '优惠明细' : 'Discounts'}
-                                    </dt>
-                                    <dd>
-                                        {isZh
-                                            ? '在购物车查看可用优惠及折扣明细。'
-                                            : 'Review available coupons and discount details in your cart.'}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt>
-                                        <span className="coupon-guide-symbol is-amount" aria-hidden="true">
-                                            <ReceiptText />
-                                        </span>
-                                        {isZh ? '结算金额' : 'Final amount'}
-                                    </dt>
-                                    <dd>
-                                        {isZh
-                                            ? '最终应付金额以结算页为准。'
-                                            : 'The checkout page confirms your final amount.'}
-                                    </dd>
-                                </div>
-                            </dl>
-                            <button
-                                className="coupon-center-cart-link"
-                                type="button"
-                                onClick={() => navigateTo({ name: 'cart' })}
-                            >
-                                <span>
-                                    {isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}
-                                </span>
-                                <ArrowRight aria-hidden="true" />
-                            </button>
-                        </div>
-                    </div>
+                    <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
+                    <p>
+                        {isZh
+                            ? '请查看券面的使用门槛、适用范围和有效期。'
+                            : 'Check the minimum spend, eligible items and validity on each coupon.'}
+                    </p>
+                    <p>
+                        {isZh
+                            ? '可用优惠及折扣明细可在购物车查看，最终应付金额以结算页为准。'
+                            : 'Review available coupons and savings in your cart. Checkout confirms the final amount.'}
+                    </p>
+                    <button
+                        className="coupon-center-cart-link"
+                        type="button"
+                        onClick={() => navigateTo({ name: 'cart' })}
+                    >
+                        <span>{isZh ? '查看购物车和优惠明细' : 'View cart and discount details'}</span>
+                        <ArrowRight aria-hidden="true" />
+                    </button>
                 </section>
             </SubpageBody>
         </Subpage>
@@ -644,117 +593,29 @@ export function CouponQueryBoundary({
 
 function CouponTicket({
     card,
-    muted,
+    unavailable = false,
     historical = false,
     action,
     meta,
     scope,
 }: {
     card: StorefrontCouponCard;
-    muted?: boolean;
+    unavailable?: boolean;
     historical?: boolean;
     action: ReactNode;
-    meta?: string;
+    meta?: ReactNode;
     scope: string;
 }) {
-    const desktop = useDesktopLayout();
-    if (desktop)
-        return (
-            <DesktopCouponTicket
-                card={card}
-                action={action}
-                meta={meta}
-                scope={scope}
-                historical={historical}
-            />
-        );
     return (
-        <article className="coupon-center-ticket-item">
-            <div
-                className={`coupon-ticket-card coupon-center-ticket coupon-ticket-${card.theme}${
-                    muted ? ' is-claimed' : ''
-                }${historical ? ' is-history' : ''}`}
-            >
-                <div className="coupon-ticket-main">
-                    <div className="coupon-ticket-top">
-                        <span className="coupon-ticket-tag">{card.tag}</span>
-                    </div>
-                    <div className={`coupon-ticket-value${card.unitBefore ? ' is-unit-before' : ''}`}>
-                        <Badge className="coupon-ticket-seal" aria-hidden="true" />
-                        {card.unitBefore ? (
-                            <>
-                                <small className="coupon-unit">{card.unit}</small>
-                                <strong className="coupon-num">{card.value}</strong>
-                            </>
-                        ) : (
-                            <>
-                                <strong className="coupon-num">{card.value}</strong>
-                                {card.unit ? <small className="coupon-unit">{card.unit}</small> : null}
-                            </>
-                        )}
-                    </div>
-                    <ContentText className="coupon-ticket-desc">{card.description}</ContentText>
-                    {meta ? <small className="coupon-center-ticket-meta">{meta}</small> : null}
-                </div>
-                <div className="coupon-ticket-action">{action}</div>
-            </div>
-        </article>
-    );
-}
-
-function ActivityCoupon({
-    card,
-    campaign,
-    language,
-    muted,
-    action,
-}: {
-    card: StorefrontCouponCard;
-    campaign: StorefrontCouponCampaign;
-    language: StorefrontLanguage;
-    muted?: boolean;
-    action: ReactNode;
-}) {
-    const desktop = useDesktopLayout();
-    if (desktop)
-        return (
-            <article className="coupon-center-ticket-item">
-                <DesktopCouponTicket
-                    card={card}
-                    action={action}
-                    meta={campaignValidity(campaign, language)}
-                    scope={couponScopeSummary(campaign.kind, language)}
-                />
-            </article>
-        );
-    return (
-        <article className={`coupon-activity-card coupon-ticket-${card.theme}${muted ? ' is-claimed' : ''}`}>
-            <div className="coupon-activity-hero">
-                <div className="coupon-activity-topline">
-                    <span className="coupon-activity-tag">{card.tag}</span>
-                    {action}
-                </div>
-                <div className={`coupon-activity-value${card.unitBefore ? ' is-unit-before' : ''}`}>
-                    {card.unitBefore ? (
-                        <>
-                            <small>{card.unit}</small>
-                            <strong>{card.value}</strong>
-                        </>
-                    ) : (
-                        <>
-                            <strong>{card.value}</strong>
-                            {card.unit ? <small>{card.unit}</small> : null}
-                        </>
-                    )}
-                </div>
-                <p>
-                    <strong>{card.title}</strong>
-                    <span aria-hidden="true"> · </span>
-                    <ContentText as="span">{card.description}</ContentText>
-                </p>
-            </div>
-            <CampaignInstructions campaign={campaign} language={language} />
-        </article>
+        <DesktopCouponTicket
+            variant="full"
+            card={card}
+            action={action}
+            meta={meta}
+            scope={scope}
+            unavailable={unavailable}
+            historical={historical}
+        />
     );
 }
 
@@ -762,7 +623,20 @@ function couponScopeSummary(kind: StorefrontCouponCampaign['kind'], language: St
     return `${language === 'zh' ? '适用范围：' : 'Applies to: '}${couponScopeLabel(kind, language)}`;
 }
 
-function CampaignInstructions({
+function CouponDetails({ rows }: { rows: Array<[string, string]> }) {
+    return (
+        <dl className="coupon-center-details">
+            {rows.map(([label, value]) => (
+                <div key={label}>
+                    <dt>{label}</dt>
+                    <dd>{value}</dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
+
+function CampaignDetails({
     campaign,
     language,
 }: {
@@ -770,30 +644,45 @@ function CampaignInstructions({
     language: StorefrontLanguage;
 }) {
     const isZh = language === 'zh';
-    return (
-        <div
-            className="coupon-center-instructions"
-            role="group"
-            aria-label={isZh ? '使用说明' : 'Usage details'}
-        >
-            <dl>
-                <div>
-                    <dt>
-                        <CalendarDays aria-hidden="true" />
-                        {isZh ? '有效期' : 'Validity'}
-                    </dt>
-                    <dd>{campaignValidity(campaign, language)}</dd>
-                </div>
-                <div>
-                    <dt>
-                        <MapPin aria-hidden="true" />
-                        {isZh ? '适用范围' : 'Applies to'}
-                    </dt>
-                    <dd>{couponScopeLabel(campaign.kind, language)}</dd>
-                </div>
-            </dl>
-        </div>
-    );
+    const locale = isZh ? 'zh-CN' : 'en-US';
+    const rows: Array<[string, string]> = [];
+    if (campaign.claimStartsAt || campaign.claimEndsAt) {
+        const starts = campaign.claimStartsAt ? formatDateTime(campaign.claimStartsAt, locale) : null;
+        const ends = campaign.claimEndsAt ? formatDateTime(campaign.claimEndsAt, locale) : null;
+        const window =
+            starts && ends
+                ? `${starts} – ${ends}`
+                : ends
+                  ? `${isZh ? '截止 ' : 'Until '}${ends}`
+                  : `${isZh ? '开始 ' : 'From '}${starts}`;
+        rows.push([isZh ? '领取时间' : 'Claim period', window]);
+    }
+    rows.push([isZh ? '有效期' : 'Validity', campaignValidity(campaign, language)]);
+    return <CouponDetails rows={rows} />;
+}
+
+function CouponUsageDetails({
+    record,
+    language,
+}: {
+    record: StoreCouponUsageRecord;
+    language: StorefrontLanguage;
+}) {
+    const isZh = language === 'zh';
+    const locale = isZh ? 'zh-CN' : 'en-US';
+    const saved = new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: record.currencyCode,
+    }).format(record.savedAmount / 100);
+    const rows: Array<[string, string]> = [
+        [isZh ? '使用时间' : 'Used on', formatDateTime(record.usedAt, locale)],
+        [isZh ? '订单' : 'Order', record.orderCode],
+        [isZh ? '实省金额' : 'Saved', saved],
+    ];
+    if (record.status === 'REFUNDED' && record.refundedAt) {
+        rows.push([isZh ? '退款时间' : 'Refunded on', formatDateTime(record.refundedAt, locale)]);
+    }
+    return <CouponDetails rows={rows} />;
 }
 
 function CouponTabEmpty({
@@ -862,10 +751,10 @@ function campaignValidity(campaign: StorefrontCouponCampaign, language: Storefro
             ? `领取后 ${campaign.validityDays} 天内有效`
             : `Valid for ${campaign.validityDays} days after claiming`;
         const starts = campaign.startsAt
-            ? `${isZh ? '可用开始 ' : 'Starts '}${formatDate(campaign.startsAt, locale)}`
+            ? `${isZh ? '可用开始 ' : 'Starts '}${formatDateTime(campaign.startsAt, locale)}`
             : null;
         const ends = campaign.endsAt
-            ? `${isZh ? '最晚至 ' : 'No later than '}${formatDate(campaign.endsAt, locale)}`
+            ? `${isZh ? '最晚至 ' : 'No later than '}${formatDateTime(campaign.endsAt, locale)}`
             : null;
         return [relative, starts, ends].filter(Boolean).join(isZh ? '，' : ', ');
     }
@@ -878,28 +767,12 @@ function customerCouponValidity(coupon: StoreCustomerCoupon, language: Storefron
     return dateWindow(coupon.validFrom, coupon.validUntil, locale, isZh);
 }
 
-function couponUsageRecord(record: StoreCouponUsageRecord, language: StorefrontLanguage): string {
-    const isZh = language === 'zh';
-    const locale = isZh ? 'zh-CN' : 'en-US';
-    const saved = new Intl.NumberFormat(locale, {
-        style: 'currency',
-        currency: record.currencyCode,
-    }).format(record.savedAmount / 100);
-    return `${isZh ? '使用于' : 'Used'} ${formatDateTime(record.usedAt, locale)} · ${
-        isZh ? '订单' : 'Order'
-    } ${record.orderCode} · ${isZh ? '优惠' : 'Saved'} ${saved}`;
-}
-
 function dateWindow(startsAt: string | null, endsAt: string | null, locale: string, isZh: boolean): string {
-    if (startsAt && endsAt) return `${formatDate(startsAt, locale)} – ${formatDate(endsAt, locale)}`;
-    if (endsAt) return `${isZh ? '有效至' : 'Valid until'} ${formatDate(endsAt, locale)}`;
+    if (startsAt && endsAt) return `${formatDateTime(startsAt, locale)} – ${formatDateTime(endsAt, locale)}`;
+    if (endsAt) return `${isZh ? '有效至' : 'Valid until'} ${formatDateTime(endsAt, locale)}`;
     if (startsAt)
-        return `${isZh ? '自' : 'From'} ${formatDate(startsAt, locale)} ${isZh ? '起有效' : ''}`.trim();
+        return `${isZh ? '自' : 'From'} ${formatDateTime(startsAt, locale)} ${isZh ? '起有效' : ''}`.trim();
     return isZh ? '长期有效' : 'No expiry';
-}
-
-function formatDate(value: string, locale: string): string {
-    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));
 }
 
 function formatDateTime(value: string, locale: string): string {

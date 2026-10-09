@@ -283,6 +283,21 @@ describe('storefront skin system', () => {
                             'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
                         ];
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
+                        // Approved paired coupon design: ticket perforation and metadata,
+                        // plus boundaries between page navigation, offers and usage guidance.
+                        const couponSeparators: Record<string, string> = {
+                            'styles/desktop-coupon-ticket.css|.desktop-coupon-value|inline':
+                                '1px dashed var(--line-subtle)',
+                            'styles/desktop-coupon-ticket.css|.desktop-coupon-meta|top':
+                                '1px dashed var(--line-subtle)',
+                            'styles/coupon-center.css|.coupon-center-tabs|bottom':
+                                '1px solid var(--line-subtle)',
+                            'styles/coupon-center.css|.coupon-center-guide|top':
+                                '1px solid var(--line-subtle)',
+                        };
+                        if (couponSeparators[`${functionalKey}|${border[1]}`] === border[2].trim()) {
+                            continue;
+                        }
                         if (
                             border[1] === 'top' &&
                             functionalSeparators.includes(functionalKey) &&

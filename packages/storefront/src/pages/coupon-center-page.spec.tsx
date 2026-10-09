@@ -70,10 +70,10 @@ describe('coupon center paginated navigation counts', () => {
             onRetryUsageRecords: vi.fn(),
             onClaim: vi.fn().mockResolvedValue(null),
         };
-        const render = () =>
+        const render = (desktop = true) =>
             renderToStaticMarkup(
                 <QueryClientProvider client={client}>
-                    <DesktopLayoutContext.Provider value={true}>
+                    <DesktopLayoutContext.Provider value={desktop}>
                         <CouponCenterPageContext.Provider value={props}>
                             <CouponCenterPage />
                         </CouponCenterPageContext.Provider>
@@ -89,7 +89,7 @@ describe('coupon center paginated navigation counts', () => {
                         signal,
                     ),
             });
-        return { client, api, queryKey, render, readOwnedPage };
+        return { client, api, queryKey, props, render, readOwnedPage };
     }
 
     function count(markup: string, label: string) {
@@ -138,6 +138,40 @@ describe('coupon center paginated navigation counts', () => {
         api.myCouponsPage.mockRejectedValueOnce(new Error('后台读取失败'));
         await readOwnedPage().catch(() => undefined);
         expect(count(render(), '未使用')).toBe('12');
+    });
+
+    it.each([false, true])('keeps actual claim dates and usage validity separate (desktop=%s)', desktop => {
+        const { props, render } = fixture();
+        props.coupons = [
+            {
+                id: 'campaign-claim-window',
+                name: '指定商品活动',
+                kind: 'PRODUCT_PERCENTAGE',
+                startsAt: null,
+                endsAt: '2026-11-01T15:59:00.000Z',
+                claimStartsAt: '2026-10-08T14:56:00.000Z',
+                claimEndsAt: '2026-10-15T14:56:00.000Z',
+                validityDays: 7,
+                minimumSpend: 150000,
+                currencyCode: 'MYR',
+                discountAmount: null,
+                discountRate: 8,
+                remainingIssueCount: 12,
+                claimed: false,
+                claimable: true,
+            },
+        ];
+
+        const markup = render(desktop);
+        const format = new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' });
+        expect(markup).toContain('适用范围：指定商品');
+        expect(markup).toContain('领取时间');
+        expect(markup).toContain(format.format(new Date(props.coupons[0].claimStartsAt ?? '')));
+        expect(markup).toContain(format.format(new Date(props.coupons[0].claimEndsAt ?? '')));
+        expect(markup).toContain('领取后 7 天内有效');
+        expect(markup).toContain('最晚至');
+        expect(markup).toContain('desktop-coupon-ticket');
+        expect(markup).not.toContain('coupon-activity-card');
     });
 });
 
@@ -198,9 +232,9 @@ describe('coupon center instruction layout', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(stylesheet).toMatch(
-            /\.coupon-center-instructions dl > div\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*auto minmax\(0, 1fr\);[^}]*align-items:\s*center;/,
+            /\.coupon-center-details > div\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(4em, 6em\) minmax\(0, 1fr\);/,
         );
-        expect(stylesheet).toMatch(/\.coupon-center-instructions dd\s*\{[^}]*overflow-wrap:\s*anywhere;/);
-        expect(stylesheet).toContain('repeat(auto-fit, minmax(min(100%, 150px), 1fr))');
+        expect(stylesheet).toMatch(/\.coupon-center-details dd\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+        expect(stylesheet).not.toMatch(/\.coupon-center-details dd\s*\{[^}]*white-space:\s*nowrap;/);
     });
 });

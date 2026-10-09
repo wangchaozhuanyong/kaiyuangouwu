@@ -583,6 +583,19 @@
     display: none;
 }
 
+.coupon-hub-scroll > .desktop-coupon-ticket {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+}
+.coupon-hub-scroll:has(> :nth-child(2)) > .desktop-coupon-ticket {
+    flex-basis: calc(100% - 18px);
+}
+@media (min-width: 1024px) {
+    .coupon-hub-scroll:has(> :nth-child(2)) > .desktop-coupon-ticket {
+        flex-basis: calc(50% - 5px);
+    }
+}
+
 /* Coupon Ticket Card */
 .coupon-ticket-card {
     --coupon-accent: var(--accent-ink);
