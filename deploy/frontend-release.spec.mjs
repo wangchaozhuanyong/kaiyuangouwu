@@ -31,6 +31,7 @@ import {
 import {
     activateFrontends,
     assertFrontendScope,
+    assertStaticBackendRuntime,
     assertTwoFactorRouting,
     frontendReleases,
     validateTwoFactorCandidate,
@@ -38,6 +39,85 @@ import {
     verifyTwoFactor,
 } from './frontend-release.mjs';
 import { frontendDeployCommand } from './frontend-ssm.mjs';
+
+function staticBackendSnapshot() {
+    const backendSha = 'a'.repeat(40);
+    const runtimeDirectory = `/var/www/kaiyuangouwu-releases/${backendSha}-123-2-linux-x64`;
+    return {
+        backendSha,
+        checkoutSha: 'b'.repeat(40),
+        targetSha: 'c'.repeat(40),
+        metadataSha: backendSha,
+        runtimeDirectory,
+        processes: [
+            ['vendure-api', 'index.js'],
+            ['vendure-worker', 'index-worker.js'],
+        ].map(([name, entry]) => ({
+            name,
+            status: 'online',
+            cwd: runtimeDirectory,
+            entry: `${runtimeDirectory}/packages/dev-server/dist/${entry}`,
+        })),
+    };
+}
+
+test('static release accepts a recovered source checkout only with the verified immutable backend', () => {
+    const snapshot = staticBackendSnapshot();
+    const ancestry = [];
+    assertStaticBackendRuntime(snapshot, (before, after) => {
+        ancestry.push([before, after]);
+        return true;
+    });
+    assert.deepEqual(ancestry, [
+        [snapshot.backendSha, snapshot.checkoutSha],
+        [snapshot.checkoutSha, snapshot.targetSha],
+    ]);
+});
+
+test('static release rejects divergent or newer source checkouts', () => {
+    for (const rejectedBefore of ['a'.repeat(40), 'b'.repeat(40)])
+        assert.throws(() =>
+            assertStaticBackendRuntime(staticBackendSnapshot(), before => before !== rejectedBefore),
+        );
+});
+
+test('static release rejects changed runtime metadata, pointers, process states and entry paths', () => {
+    const mutations = [
+        snapshot => {
+            snapshot.metadataSha = 'd'.repeat(40);
+        },
+        snapshot => {
+            snapshot.runtimeDirectory = '/var/www/kaiyuangouwu';
+        },
+        snapshot => {
+            snapshot.processes[0].cwd = '/var/www/kaiyuangouwu';
+        },
+        snapshot => {
+            snapshot.processes[1].entry = '/var/www/kaiyuangouwu/packages/dev-server/dist/index-worker.js';
+        },
+        snapshot => {
+            snapshot.processes[1].status = 'stopped';
+        },
+        snapshot => {
+            snapshot.processes.pop();
+        },
+        snapshot => {
+            snapshot.processes.push(snapshot.processes[0]);
+        },
+    ];
+    for (const mutate of mutations) {
+        const snapshot = staticBackendSnapshot();
+        mutate(snapshot);
+        assert.throws(() => assertStaticBackendRuntime(snapshot, () => true));
+    }
+});
+
+test('immutable backend check precedes static mutation and retains the tracked-source guard', () => {
+    const script = readFileSync(new URL('./deploy-frontends-from-s3.sh', import.meta.url), 'utf8');
+    assert.ok(script.indexOf('Server has tracked source changes') < script.indexOf(' backend-runtime '));
+    assert.ok(script.indexOf(' backend-runtime ') < script.indexOf('readonly staging='));
+    assert.ok(!/git\s+(?:reset|checkout|clean)/u.test(script));
+});
 
 test('static deployment runs target control files while preserving the active backend checkout', t => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'frontend-target-controls-')));

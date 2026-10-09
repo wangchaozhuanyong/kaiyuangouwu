@@ -20,9 +20,8 @@ git fetch origin main --no-tags
 [[ "$(git rev-parse origin/main)" == "$target_sha" ]] || fail 'Target is no longer current main'
 readonly backend_sha="$(cat /var/www/kaiyuangouwu-releases/current-sha)"
 [[ "$backend_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'Invalid backend version'
-[[ "$(git rev-parse HEAD)" == "$backend_sha" ]] || fail 'Server source differs from active runtime'
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail 'Server has tracked source changes'
-git merge-base --is-ancestor "$backend_sha" "$target_sha"
+node "$controls_root/deploy/frontend-release.mjs" backend-runtime "$backend_sha" "$target_sha"
 read_frontend_sha() {
     node -e 'const fs=require("node:fs");const sha=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).sourceSha;if(!/^[a-f0-9]{40}$/.test(sha))process.exit(1);process.stdout.write(sha)' "$1"
 }
