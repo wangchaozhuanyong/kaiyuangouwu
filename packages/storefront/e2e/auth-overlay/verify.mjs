@@ -53,7 +53,14 @@ try {
                         await dialog.locator('.auth-switch button').click();
                         await dialog.locator('.auth-login-options button').click();
                     }
-                    await expect(dialog.locator('h1')).toBeVisible();
+                    const pageLabel = {
+                        login: lang === 'zh' ? '登录' : 'Sign in',
+                        register: lang === 'zh' ? '注册' : 'Create account',
+                        'forgot-password': lang === 'zh' ? '忘记密码' : 'Forgot password',
+                    }[mode];
+                    // Wait for the requested form, rather than measuring the previous form during navigation.
+                    await expect(dialog.locator('.auth-page')).toHaveAttribute('aria-label', pageLabel);
+                    await expect(dialog.locator('.auth-form-heading h1')).toBeVisible();
                     const geometry = await dialog.evaluate(element => {
                         const body = element.querySelector('.auth-dialog-body');
                         const heading = element.querySelector('h1');
