@@ -22,6 +22,30 @@ function validSupportBlock() {
     return block;
 }
 
+it('creates an independent footer with optional bilingual brand names and editable legal links', () => {
+    const footer = newContentBlock('FOOTER', 130);
+    expect(footer).toMatchObject({
+        type: 'FOOTER',
+        code: 'home-fixed-footer',
+        enabled: true,
+        position: 130,
+        targetType: 'NONE',
+        imageUrl: null,
+    });
+    expect(footer.translations.map(item => item.title)).toEqual(['', '']);
+    expect(footer.items.map(item => item.targetValue)).toEqual(['/legal?id=privacy', '/legal?id=terms']);
+    expect(footer.items[0].translations.map(item => item.label)).toEqual(['隐私政策', 'Privacy policy']);
+    expect(storefrontBlockValidation(footer)).toBeNull();
+    expect(storefrontBlockInput(footer).translations).toEqual([
+        { languageCode: 'zh_Hans', title: '', subtitle: '', body: '', ctaLabel: '' },
+        { languageCode: 'en', title: '', subtitle: '', body: '', ctaLabel: '' },
+    ]);
+    footer.items = [];
+    footer.enabled = false;
+    expect(storefrontBlockValidation(footer)).toBeNull();
+    expect(storefrontBlockInput(footer)).toMatchObject({ enabled: false, items: [] });
+});
+
 it('defaults a new notice block to two years and submits that setting', () => {
     const block = newContentBlock('NOTICE', 0);
     expect(block.settings).toEqual({

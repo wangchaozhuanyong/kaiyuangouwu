@@ -1,6 +1,7 @@
 import { CrudPermissionDefinition } from '@vendure/core';
 
 export { STOREFRONT_ACCOUNT_HERO_CODE } from './account-hero-config';
+export { STOREFRONT_FOOTER_CODE } from './homepage-manifest';
 
 export {
     MAX_STOREFRONT_CLIENT_PLUGINS,
@@ -56,6 +57,7 @@ export const storefrontContentBlockTypes = [
     'BEST_SELLERS',
     'RECOMMENDATIONS',
     'STORY',
+    'FOOTER',
     'LEGAL',
     'SUPPORT',
     'AUTH_LOGIN',

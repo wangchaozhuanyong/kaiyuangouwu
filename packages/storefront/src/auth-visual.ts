@@ -1,11 +1,12 @@
+import type { AuthVisualVariant } from './auth-visual-content';
+
 import {
     authBenefitIcons,
     type AuthBenefitIcon,
 } from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import { StorefrontContentBlock, StorefrontLanguage } from './types';
-
-export type AuthVisualVariant = 'login' | 'register';
+export { findAuthVisualContent, type AuthVisualVariant } from './auth-visual-content';
 
 /** Shared client/editor default for the approved auth hero overlay. */
 export function authHeroCopyPosition(settings?: Record<string, unknown> | null) {
@@ -26,18 +27,6 @@ export interface AuthVisualMessage {
     tags: string[];
     benefits: AuthVisualBenefit[];
     serviceTypes: string[];
-}
-
-const managedType: Record<AuthVisualVariant, StorefrontContentBlock['type']> = {
-    login: 'AUTH_LOGIN',
-    register: 'AUTH_REGISTER',
-};
-
-export function findAuthVisualContent(
-    blocks: StorefrontContentBlock[],
-    variant: AuthVisualVariant,
-): StorefrontContentBlock | undefined {
-    return blocks.find(block => block.type === managedType[variant]);
 }
 
 export function resolveAuthVisualMessage(

@@ -1,8 +1,11 @@
 import { type CSSProperties, type ReactNode, useState } from 'react';
 
+import { authOriginalImageUrl, configuredColor } from './auth-visual-utils';
 import { ContentText } from './content-text';
 import { type ImageTone, useImageTone } from './image-tone';
 import { readableStorefrontForeground, storefrontContrastRatio } from './storefront-semantic-palette';
+
+export { authOriginalImageUrl, configuredColor } from './auth-visual-utils';
 
 export interface AuthVisualData {
     imageUrl?: string | null;
@@ -65,10 +68,6 @@ export function authPresentation(
     };
 }
 
-export function configuredColor(value: unknown): string | undefined {
-    return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : undefined;
-}
-
 export function readableColor(background: string): string {
     const rgb = [1, 3, 5].map(offset => {
         const component = parseInt(background.slice(offset, offset + 2), 16) / 255;
@@ -108,26 +107,6 @@ export function authVisualStyle(content?: AuthVisualData, imageTone?: ImageTone)
         '--auth-hero-secondary-text': secondaryColor,
         '--auth-visual-accent': accent ?? (isLightTone ? '#2563eb' : 'var(--accent, #635bff)'),
     } as CSSProperties;
-}
-
-/** Use the existing non-cropping asset preset; external URLs remain unchanged. */
-export function authOriginalImageUrl(value: string): string {
-    const source = value.trim();
-    if (!source) return '';
-    try {
-        const url = new URL(source, 'https://storefront.invalid');
-        if (!/\/assets\/(?:preview|source)\//.test(url.pathname) || /\.svg$/i.test(url.pathname))
-            return source;
-        for (const key of ['w', 'h', 'width', 'height', 'mode', 'fit', 'crop']) url.searchParams.delete(key);
-        url.searchParams.set('preset', 'storefront-original-preview');
-        url.searchParams.set('format', 'webp');
-        url.searchParams.set('q', '90');
-        return /^[a-z][a-z\d+.-]*:/i.test(source) || source.startsWith('//')
-            ? url.toString()
-            : `${url.pathname}${url.search}${url.hash}`;
-    } catch {
-        return '';
-    }
 }
 
 function AuthVisualImage({ source, language }: { source: string; language: string }) {

@@ -164,11 +164,13 @@ export function BottomNavigation({
     cartQuantity,
     language,
     navigationBlock,
+    onNavigate,
 }: {
     activeRoute: RouteName;
     cartQuantity: number;
     language: StorefrontLanguage;
     navigationBlock?: StorefrontContentBlock;
+    onNavigate?: (route: { name: RouteName }) => void;
 }) {
     const isZh = language === 'zh';
     const navigate = useNavigate();
@@ -215,7 +217,8 @@ export function BottomNavigation({
                                 return;
                             }
                             event.preventDefault();
-                            void navigate({ to: item.target });
+                            if (onNavigate) onNavigate({ name: item.routeName });
+                            else void navigate({ to: item.target });
                         }}
                         onFocus={preloadTarget}
                         onMouseEnter={preloadTarget}

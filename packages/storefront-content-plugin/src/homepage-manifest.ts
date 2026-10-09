@@ -1,3 +1,5 @@
+export const STOREFRONT_FOOTER_CODE = 'home-fixed-footer';
+
 /** Every store configures the same homepage capabilities. Defaults are editor drafts only. */
 export const homepageModuleCatalog = [
     { type: 'HERO', name: '首页主视觉', description: '轮播图、标题、卖点和跳转入口', defaultEnabled: true },
@@ -22,6 +24,12 @@ export const homepageModuleCatalog = [
     { type: 'RECOMMENDATIONS', name: '猜你喜欢', description: '按购买和浏览行为推荐', defaultEnabled: true },
     { type: 'STORY', name: '品牌故事', description: '大图、品牌文案和阅读入口', defaultEnabled: false },
     { type: 'TRUST_BAR', name: '服务保障', description: '配送、售后、支付等保障项', defaultEnabled: true },
+    {
+        type: 'FOOTER',
+        name: '页脚',
+        description: '店铺名称和页脚链接，可编辑、排序及开关',
+        defaultEnabled: true,
+    },
 ] as const;
 
 /** These content floors render independently; only HERO combines multiple records into a carousel. */

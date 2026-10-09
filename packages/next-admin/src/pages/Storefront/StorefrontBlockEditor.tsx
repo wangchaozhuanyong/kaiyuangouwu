@@ -139,6 +139,7 @@ export function StorefrontBlockEditor({
         return `${label}：${imageName(previous)} → ${next ? imageName(next) : '移除子项图片'}`;
     });
     const isSupport = draft.type === 'SUPPORT';
+    const isFooter = draft.type === 'FOOTER';
     const isAuth = draft.type === 'AUTH_LOGIN' || draft.type === 'AUTH_REGISTER';
     const authLanguageSuffix = language === 'zh_Hans' ? 'Zh' : 'En';
     const productSettingKey = ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(draft.type)
@@ -207,7 +208,9 @@ export function StorefrontBlockEditor({
                             {value.id ? '编辑' : '新建'}：{draft.internalName}
                         </h2>
                         <p className="mt-1 text-xs text-slate-500">
-                            中文是前台必填内容；英文可在右侧语言切换后补充
+                            {isFooter
+                                ? '品牌名留空时使用店铺名称；页脚链接的中英文分别维护'
+                                : '中文是前台必填内容；英文可在右侧语言切换后补充'}
                         </p>
                     </div>
                     <AdminButton
@@ -298,7 +301,7 @@ export function StorefrontBlockEditor({
                                             onChange={event =>
                                                 setDraft({ ...draft, code: event.target.value })
                                             }
-                                            disabled={Boolean(draft.id)}
+                                            disabled={Boolean(draft.id) || isFooter}
                                             className={`${inputClass} font-mono disabled:bg-slate-100 disabled:text-slate-400`}
                                         />
                                     </Field>
@@ -350,7 +353,16 @@ export function StorefrontBlockEditor({
                                 </div>
                                 <div className="mt-4 space-y-4">
                                     <Field
-                                        label={`${isAuth ? '电脑左侧' : ''}${language === 'zh_Hans' ? '中文' : '英文'}标题${language === 'zh_Hans' ? ' *' : ''}`}
+                                        label={
+                                            isFooter
+                                                ? `${language === 'zh_Hans' ? '中文' : '英文'}品牌名称（可选）`
+                                                : `${isAuth ? '电脑左侧' : ''}${language === 'zh_Hans' ? '中文' : '英文'}标题${language === 'zh_Hans' ? ' *' : ''}`
+                                        }
+                                        helpText={
+                                            isFooter
+                                                ? '留空使用当前店铺名称；此模块不编辑法律正文。'
+                                                : undefined
+                                        }
                                     >
                                         {isAuth || draft.type === 'HERO' ? (
                                             <AdminTextArea
@@ -371,6 +383,7 @@ export function StorefrontBlockEditor({
                                                     updateTranslation({ title: event.target.value })
                                                 }
                                                 className={inputClass}
+                                                placeholder={isFooter ? '使用当前店铺名称' : undefined}
                                             />
                                         )}
                                     </Field>
@@ -388,16 +401,18 @@ export function StorefrontBlockEditor({
                                             editorial={editorialHero}
                                         />
                                     )}
-                                    <Field label={isAuth ? '电脑左侧副标题' : '副标题'}>
-                                        <AdminInput
-                                            data-translation-field="subtitle"
-                                            value={translation.subtitle}
-                                            onChange={event =>
-                                                updateTranslation({ subtitle: event.target.value })
-                                            }
-                                            className={inputClass}
-                                        />
-                                    </Field>
+                                    {!isFooter && (
+                                        <Field label={isAuth ? '电脑左侧副标题' : '副标题'}>
+                                            <AdminInput
+                                                data-translation-field="subtitle"
+                                                value={translation.subtitle}
+                                                onChange={event =>
+                                                    updateTranslation({ subtitle: event.target.value })
+                                                }
+                                                className={inputClass}
+                                            />
+                                        </Field>
+                                    )}
                                     {isAuth && (
                                         <>
                                             <Field label="表单标题（电脑与手机共用）">
@@ -452,17 +467,19 @@ export function StorefrontBlockEditor({
                                             </Field>
                                         </>
                                     )}
-                                    <Field label={isSupport ? '客服说明' : '正文'}>
-                                        <AdminTextArea
-                                            rows={5}
-                                            data-translation-field="body"
-                                            value={translation.body}
-                                            onChange={event =>
-                                                updateTranslation({ body: event.target.value })
-                                            }
-                                            className={`${inputClass} resize-y leading-6`}
-                                        />
-                                    </Field>
+                                    {!isFooter && (
+                                        <Field label={isSupport ? '客服说明' : '正文'}>
+                                            <AdminTextArea
+                                                rows={5}
+                                                data-translation-field="body"
+                                                value={translation.body}
+                                                onChange={event =>
+                                                    updateTranslation({ body: event.target.value })
+                                                }
+                                                className={`${inputClass} resize-y leading-6`}
+                                            />
+                                        </Field>
+                                    )}
                                     {draft.type === 'HERO' && (
                                         <HeroCopyHint
                                             language={language}
@@ -472,7 +489,7 @@ export function StorefrontBlockEditor({
                                             editorial={editorialHero}
                                         />
                                     )}
-                                    {!isSupport && (
+                                    {!isSupport && !isFooter && (
                                         <Field label={isAuth ? '图片上的引导短句' : '按钮文案'}>
                                             <AdminInput
                                                 data-translation-field="ctaLabel"
@@ -568,401 +585,416 @@ export function StorefrontBlockEditor({
                                 </div>
                             </section>
 
-                            <section className="rounded-xl border border-slate-200 bg-white p-5">
-                                <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                    {isSupport
-                                        ? '客服页配色'
-                                        : draft.type === 'CORE_CATEGORIES'
-                                          ? '双卡配色与跳转'
-                                          : '图片、配色与跳转'}
-                                    {draft.type !== 'CORE_CATEGORIES' && (
-                                        <FeatureHelpButton
-                                            topic="storefront.block-visuals"
-                                            title="图片与配色"
-                                        />
-                                    )}
-                                </h3>
-                                {isSupport && (
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                        页首配图用于电脑端客服页面；微信二维码请在下方客服渠道中上传
-                                    </p>
-                                )}
-                                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                                    {draft.type !== 'CORE_CATEGORIES' && (
-                                        <div className="sm:col-span-2">
-                                            <AssetPicker
-                                                label={
-                                                    isSupport
-                                                        ? '电脑端客服页首配图'
-                                                        : draft.type === 'HERO'
-                                                          ? '电脑端轮播图'
-                                                          : '主图素材'
-                                                }
-                                                value={draft.imageAsset}
-                                                fallbackUrl={draft.imageUrl}
-                                                onChange={asset =>
-                                                    setDraft({
-                                                        ...draft,
-                                                        imageAsset: asset,
-                                                        imageAssetId: asset?.id ?? null,
-                                                        imageUrl: asset?.preview ?? null,
-                                                    })
-                                                }
+                            {!isFooter && (
+                                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                        {isSupport
+                                            ? '客服页配色'
+                                            : draft.type === 'CORE_CATEGORIES'
+                                              ? '双卡配色与跳转'
+                                              : '图片、配色与跳转'}
+                                        {draft.type !== 'CORE_CATEGORIES' && (
+                                            <FeatureHelpButton
+                                                topic="storefront.block-visuals"
+                                                title="图片与配色"
                                             />
-                                            {draft.type === 'HERO' && (
-                                                <p className="mt-2 text-xs leading-5 text-slate-500">
-                                                    电脑端使用此图，建议比例
-                                                    3:1；手机未单独设置图片时也会沿用此图。
-                                                    底图不写广告标题、说明和按钮；中英文文字在前台文案中分别编辑。
-                                                    切换图文布局不会替换电脑图或手机图。
-                                                </p>
-                                            )}
-                                        </div>
+                                        )}
+                                    </h3>
+                                    {isSupport && (
+                                        <p className="mt-1 text-[11px] text-slate-400">
+                                            页首配图用于电脑端客服页面；微信二维码请在下方客服渠道中上传
+                                        </p>
                                     )}
-                                    {draft.type === 'HERO' && (
-                                        <div className="sm:col-span-2">
-                                            <AssetPicker
-                                                label="手机端轮播图（可选）"
-                                                value={null}
-                                                fallbackUrl={phoneImageUrl || null}
-                                                onChange={asset =>
-                                                    updateSettings({
-                                                        mobileImageUrl: asset
-                                                            ? storefrontAssetUrl(asset) || null
-                                                            : null,
-                                                        mobileImageAssetId: asset?.id ?? null,
-                                                        mobileImageWidth: asset?.width ?? null,
-                                                        mobileImageHeight: asset?.height ?? null,
-                                                    })
-                                                }
-                                            />
-                                            <p
-                                                data-hero-artwork-binding="mobile"
-                                                className="mt-2 text-xs leading-5 text-slate-500"
-                                            >
-                                                {phoneImageUrl
-                                                    ? '已单独设置手机端轮播图，电脑端继续使用电脑图。'
-                                                    : '未单独设置手机图，当前沿用电脑端轮播图。'}
-                                                建议比例 3:2；清除手机图后恢复沿用电脑图。
-                                            </p>
-                                            <p className="mt-2 text-xs leading-5 text-slate-500">
-                                                {editorialHero
-                                                    ? '手机也采用左侧文字、右侧主体构图，底图左侧请留出文字空间，右侧保留完整主体。'
-                                                    : '手机图可按手机屏幕单独构图；在右侧预览中切换“电脑 / 手机”核对各自图片。'}
-                                            </p>
-                                        </div>
-                                    )}
-                                    {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
-                                        <Field label="卡片样式">
-                                            <AdminSelect
-                                                className={inputClass}
-                                                value={normalizedHomepageVisualStyle(
-                                                    draft.settings?.visualStyle,
+                                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                        {draft.type !== 'CORE_CATEGORIES' && (
+                                            <div className="sm:col-span-2">
+                                                <AssetPicker
+                                                    label={
+                                                        isSupport
+                                                            ? '电脑端客服页首配图'
+                                                            : draft.type === 'HERO'
+                                                              ? '电脑端轮播图'
+                                                              : '主图素材'
+                                                    }
+                                                    value={draft.imageAsset}
+                                                    fallbackUrl={draft.imageUrl}
+                                                    onChange={asset =>
+                                                        setDraft({
+                                                            ...draft,
+                                                            imageAsset: asset,
+                                                            imageAssetId: asset?.id ?? null,
+                                                            imageUrl: asset?.preview ?? null,
+                                                        })
+                                                    }
+                                                />
+                                                {draft.type === 'HERO' && (
+                                                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                                                        电脑端使用此图，建议比例
+                                                        3:1；手机未单独设置图片时也会沿用此图。
+                                                        底图不写广告标题、说明和按钮；中英文文字在前台文案中分别编辑。
+                                                        切换图文布局不会替换电脑图或手机图。
+                                                    </p>
                                                 )}
-                                                onChange={event =>
-                                                    updateSettings({ visualStyle: event.target.value })
-                                                }
-                                            >
-                                                {homepageVisualStyles.map(option => (
-                                                    <option key={option.value} value={option.value}>
-                                                        {option.label}
-                                                    </option>
-                                                ))}
-                                            </AdminSelect>
-                                        </Field>
-                                    )}
-                                    {draft.type === 'CORE_CATEGORIES' && (
-                                        <Field
-                                            label="双卡片颜色模板"
-                                            helpText="双卡仅展示文案和跳转，不使用图片；暖居纯色会自动跟随当前店铺皮肤配色。"
-                                        >
-                                            <AdminSelect
-                                                className={inputClass}
-                                                value={dualCardTemplateId(draft.settings)}
-                                                onChange={event =>
-                                                    updateSettings({ dualCardTemplate: event.target.value })
-                                                }
-                                            >
-                                                {dualCardTemplates.map(template => (
-                                                    <option key={template.id} value={template.id}>
-                                                        {template.labelZh} · {template.descriptionZh}
-                                                    </option>
-                                                ))}
-                                            </AdminSelect>
-                                        </Field>
-                                    )}
-                                    {draft.type === 'HERO' && (
-                                        <>
-                                            <Field
-                                                label="轮播图文布局"
-                                                helpText={
-                                                    editorialHero
-                                                        ? '电脑与手机均为左侧网页文字、右侧完整主体，底图左侧请留空；电脑图建议 3:1，手机图建议 3:2，可分别设置。'
-                                                        : '保留现有图片上的网页文字布局；选择左右构图后，电脑与手机会使用共用的图文分离布局。'
-                                                }
-                                            >
-                                                <AdminSelect
-                                                    aria-label="轮播图文布局"
-                                                    className={inputClass}
-                                                    value={resolveHeroArtworkLayout(draft.settings)}
-                                                    disabled={saving}
-                                                    onChange={event =>
+                                            </div>
+                                        )}
+                                        {draft.type === 'HERO' && (
+                                            <div className="sm:col-span-2">
+                                                <AssetPicker
+                                                    label="手机端轮播图（可选）"
+                                                    value={null}
+                                                    fallbackUrl={phoneImageUrl || null}
+                                                    onChange={asset =>
                                                         updateSettings({
-                                                            heroArtworkLayout: event.target.value,
+                                                            mobileImageUrl: asset
+                                                                ? storefrontAssetUrl(asset) || null
+                                                                : null,
+                                                            mobileImageAssetId: asset?.id ?? null,
+                                                            mobileImageWidth: asset?.width ?? null,
+                                                            mobileImageHeight: asset?.height ?? null,
                                                         })
                                                     }
+                                                />
+                                                <p
+                                                    data-hero-artwork-binding="mobile"
+                                                    className="mt-2 text-xs leading-5 text-slate-500"
                                                 >
-                                                    <option value="overlay">原图文叠加</option>
-                                                    <option value="editorial">无文字底图·左右构图</option>
-                                                </AdminSelect>
-                                            </Field>
-                                            <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
-                                                <AdminInput
-                                                    type="checkbox"
-                                                    checked={draft.settings?.mobileHeroHideStats === true}
-                                                    onChange={event =>
-                                                        updateSettings({
-                                                            mobileHeroHideStats: event.target.checked,
-                                                        })
-                                                    }
-                                                />
-                                                手机隐藏轮播卖点（电脑端保留）
-                                            </label>
-                                            <Field label="手机标题文字色（选填）">
-                                                <ColorInput
-                                                    value={stringSetting(
-                                                        draft.settings?.mobileHeroTextColor,
-                                                        '',
-                                                    )}
-                                                    onChange={color =>
-                                                        updateSettings({ mobileHeroTextColor: color })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label="手机说明文字色（选填）">
-                                                <ColorInput
-                                                    value={stringSetting(
-                                                        draft.settings?.mobileHeroSecondaryTextColor,
-                                                        '',
-                                                    )}
-                                                    onChange={color =>
-                                                        updateSettings({
-                                                            mobileHeroSecondaryTextColor: color,
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label="轮播图样式">
+                                                    {phoneImageUrl
+                                                        ? '已单独设置手机端轮播图，电脑端继续使用电脑图。'
+                                                        : '未单独设置手机图，当前沿用电脑端轮播图。'}
+                                                    建议比例 3:2；清除手机图后恢复沿用电脑图。
+                                                </p>
+                                                <p className="mt-2 text-xs leading-5 text-slate-500">
+                                                    {editorialHero
+                                                        ? '手机也采用左侧文字、右侧主体构图，底图左侧请留出文字空间，右侧保留完整主体。'
+                                                        : '手机图可按手机屏幕单独构图；在右侧预览中切换“电脑 / 手机”核对各自图片。'}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
+                                            <Field label="卡片样式">
                                                 <AdminSelect
                                                     className={inputClass}
-                                                    value={normalizedHeroThemePreset(
-                                                        draft.settings?.themePreset,
+                                                    value={normalizedHomepageVisualStyle(
+                                                        draft.settings?.visualStyle,
                                                     )}
                                                     onChange={event =>
-                                                        updateSettings({ themePreset: event.target.value })
+                                                        updateSettings({ visualStyle: event.target.value })
                                                     }
                                                 >
-                                                    {heroThemePresets.map(option => (
+                                                    {homepageVisualStyles.map(option => (
                                                         <option key={option.value} value={option.value}>
                                                             {option.label}
                                                         </option>
                                                     ))}
                                                 </AdminSelect>
                                             </Field>
-                                            <Field label="遮罩对比度">
-                                                <AdminSelect
-                                                    className={inputClass}
-                                                    value={
-                                                        draft.settings?.contrastMode === 'high'
-                                                            ? 'high'
-                                                            : 'standard'
-                                                    }
-                                                    onChange={event =>
-                                                        updateSettings({ contrastMode: event.target.value })
-                                                    }
-                                                >
-                                                    <option value="standard">标准</option>
-                                                    <option value="high">高对比度</option>
-                                                </AdminSelect>
-                                            </Field>
-                                        </>
-                                    )}
-                                    {isAuth && (
-                                        <>
-                                            <Field label="电脑端图片上的文字位置">
-                                                <AdminSelect
-                                                    className={inputClass}
-                                                    value={authHeroCopyPosition(draft.settings)}
-                                                    onChange={event =>
-                                                        updateSettings({
-                                                            heroCopyPosition: event.target.value,
-                                                        })
-                                                    }
-                                                >
-                                                    <option value="center">左侧居中</option>
-                                                    <option value="bottom">左侧靠下</option>
-                                                </AdminSelect>
-                                            </Field>
-                                            <Field label="卖点呈现方式">
-                                                <AdminSelect
-                                                    className={inputClass}
-                                                    value={
-                                                        draft.settings?.heroBenefitsStyle === 'tags'
-                                                            ? 'tags'
-                                                            : 'icons'
-                                                    }
-                                                    onChange={event =>
-                                                        updateSettings({
-                                                            heroBenefitsStyle: event.target.value,
-                                                        })
-                                                    }
-                                                >
-                                                    <option value="icons">图标、标题与说明</option>
-                                                    <option value="tags">简洁文字标签</option>
-                                                </AdminSelect>
-                                            </Field>
-                                            <label className="flex items-center gap-2 text-sm text-slate-700">
-                                                <AdminInput
-                                                    type="checkbox"
-                                                    checked={draft.settings?.heroLogoEnabled !== false}
-                                                    onChange={event =>
-                                                        updateSettings({
-                                                            heroLogoEnabled: event.target.checked,
-                                                        })
-                                                    }
-                                                />
-                                                图片顶部展示店铺品牌
-                                            </label>
-                                            <Field label="手机底部装饰图（选填）">
-                                                <AssetPicker
-                                                    label="装饰图素材"
-                                                    value={null}
-                                                    fallbackUrl={
-                                                        stringSetting(
-                                                            draft.settings?.mobileDecorationImageUrl,
-                                                            '',
-                                                        ) || null
-                                                    }
-                                                    onChange={asset =>
-                                                        updateSettings({
-                                                            mobileDecorationImageUrl: asset?.preview ?? null,
-                                                            mobileDecorationImageAssetId: asset?.id ?? null,
-                                                        })
-                                                    }
-                                                />
-                                                <p className="mt-2 text-xs text-slate-500">
-                                                    建议使用浅色横向城市轮廓图；仅显示在表单下方，短屏或输入时隐藏。留空不展示。
-                                                </p>
-                                            </Field>
-                                        </>
-                                    )}
-                                    {['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'].includes(draft.type) && (
-                                        <Field label="强调色">
-                                            <ColorInput
-                                                value={stringSetting(draft.settings?.accentColor, '')}
-                                                onChange={value => updateSettings({ accentColor: value })}
-                                            />
-                                        </Field>
-                                    )}
-                                    {draft.type === 'HERO' && (
-                                        <>
-                                            <Field label="正文文字色">
-                                                <ColorInput
-                                                    value={stringSetting(
-                                                        draft.settings?.secondaryTextColor,
-                                                        '',
-                                                    )}
-                                                    onChange={value =>
-                                                        updateSettings({ secondaryTextColor: value })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label="按钮渐变色">
-                                                <ColorInput
-                                                    value={stringSetting(
-                                                        draft.settings?.accentSecondaryColor,
-                                                        '',
-                                                    )}
-                                                    onChange={value =>
-                                                        updateSettings({ accentSecondaryColor: value })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label="按钮文字色">
-                                                <ColorInput
-                                                    value={stringSetting(draft.settings?.buttonTextColor, '')}
-                                                    onChange={value =>
-                                                        updateSettings({ buttonTextColor: value })
-                                                    }
-                                                />
-                                            </Field>
-                                        </>
-                                    )}
-                                    <Field label="背景色" helpText="留空时继承商城统一背景色">
-                                        <ColorInput
-                                            value={draft.backgroundColor ?? ''}
-                                            placeholder="继承商城默认"
-                                            onChange={value => setDraft({ ...draft, backgroundColor: value })}
-                                        />
-                                    </Field>
-                                    {!isSupport && (
-                                        <>
+                                        )}
+                                        {draft.type === 'CORE_CATEGORIES' && (
                                             <Field
-                                                label="文字色"
-                                                helpText={
-                                                    draft.type === 'HERO'
-                                                        ? '填写后使用设定文字色；留空时根据图片明暗选色，图片保持原色、无颜色遮罩'
-                                                        : '留空时继承商城默认文字色'
-                                                }
+                                                label="双卡片颜色模板"
+                                                helpText="双卡仅展示文案和跳转，不使用图片；暖居纯色会自动跟随当前店铺皮肤配色。"
                                             >
-                                                <ColorInput
-                                                    value={draft.textColor ?? ''}
-                                                    placeholder={
-                                                        draft.type === 'HERO'
-                                                            ? '自动适应图片'
-                                                            : '继承商城默认'
-                                                    }
-                                                    onChange={value =>
-                                                        setDraft({ ...draft, textColor: value })
-                                                    }
-                                                />
-                                            </Field>
-                                            <Field label="跳转类型">
                                                 <AdminSelect
-                                                    value={draft.targetType}
+                                                    className={inputClass}
+                                                    value={dualCardTemplateId(draft.settings)}
                                                     onChange={event =>
-                                                        setDraft({
-                                                            ...draft,
-                                                            targetType: event.target
-                                                                .value as StorefrontTargetType,
-                                                            targetValue:
-                                                                event.target.value === 'NONE'
-                                                                    ? null
-                                                                    : draft.targetValue,
+                                                        updateSettings({
+                                                            dualCardTemplate: event.target.value,
                                                         })
                                                     }
-                                                    className={inputClass}
                                                 >
-                                                    {targetOptions.map(([value, label]) => (
-                                                        <option key={value} value={value}>
-                                                            {label}
+                                                    {dualCardTemplates.map(template => (
+                                                        <option key={template.id} value={template.id}>
+                                                            {template.labelZh} · {template.descriptionZh}
                                                         </option>
                                                     ))}
                                                 </AdminSelect>
                                             </Field>
-                                            <Field label="跳转目标">
-                                                <TargetValueInput
-                                                    type={draft.targetType}
-                                                    value={draft.targetValue ?? ''}
-                                                    onChange={value =>
-                                                        setDraft({ ...draft, targetValue: value || null })
+                                        )}
+                                        {draft.type === 'HERO' && (
+                                            <>
+                                                <Field
+                                                    label="轮播图文布局"
+                                                    helpText={
+                                                        editorialHero
+                                                            ? '电脑与手机均为左侧网页文字、右侧完整主体，底图左侧请留空；电脑图建议 3:1，手机图建议 3:2，可分别设置。'
+                                                            : '保留现有图片上的网页文字布局；选择左右构图后，电脑与手机会使用共用的图文分离布局。'
                                                     }
+                                                >
+                                                    <AdminSelect
+                                                        aria-label="轮播图文布局"
+                                                        className={inputClass}
+                                                        value={resolveHeroArtworkLayout(draft.settings)}
+                                                        disabled={saving}
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                heroArtworkLayout: event.target.value,
+                                                            })
+                                                        }
+                                                    >
+                                                        <option value="overlay">原图文叠加</option>
+                                                        <option value="editorial">无文字底图·左右构图</option>
+                                                    </AdminSelect>
+                                                </Field>
+                                                <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+                                                    <AdminInput
+                                                        type="checkbox"
+                                                        checked={draft.settings?.mobileHeroHideStats === true}
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                mobileHeroHideStats: event.target.checked,
+                                                            })
+                                                        }
+                                                    />
+                                                    手机隐藏轮播卖点（电脑端保留）
+                                                </label>
+                                                <Field label="手机标题文字色（选填）">
+                                                    <ColorInput
+                                                        value={stringSetting(
+                                                            draft.settings?.mobileHeroTextColor,
+                                                            '',
+                                                        )}
+                                                        onChange={color =>
+                                                            updateSettings({ mobileHeroTextColor: color })
+                                                        }
+                                                    />
+                                                </Field>
+                                                <Field label="手机说明文字色（选填）">
+                                                    <ColorInput
+                                                        value={stringSetting(
+                                                            draft.settings?.mobileHeroSecondaryTextColor,
+                                                            '',
+                                                        )}
+                                                        onChange={color =>
+                                                            updateSettings({
+                                                                mobileHeroSecondaryTextColor: color,
+                                                            })
+                                                        }
+                                                    />
+                                                </Field>
+                                                <Field label="轮播图样式">
+                                                    <AdminSelect
+                                                        className={inputClass}
+                                                        value={normalizedHeroThemePreset(
+                                                            draft.settings?.themePreset,
+                                                        )}
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                themePreset: event.target.value,
+                                                            })
+                                                        }
+                                                    >
+                                                        {heroThemePresets.map(option => (
+                                                            <option key={option.value} value={option.value}>
+                                                                {option.label}
+                                                            </option>
+                                                        ))}
+                                                    </AdminSelect>
+                                                </Field>
+                                                <Field label="遮罩对比度">
+                                                    <AdminSelect
+                                                        className={inputClass}
+                                                        value={
+                                                            draft.settings?.contrastMode === 'high'
+                                                                ? 'high'
+                                                                : 'standard'
+                                                        }
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                contrastMode: event.target.value,
+                                                            })
+                                                        }
+                                                    >
+                                                        <option value="standard">标准</option>
+                                                        <option value="high">高对比度</option>
+                                                    </AdminSelect>
+                                                </Field>
+                                            </>
+                                        )}
+                                        {isAuth && (
+                                            <>
+                                                <Field label="电脑端图片上的文字位置">
+                                                    <AdminSelect
+                                                        className={inputClass}
+                                                        value={authHeroCopyPosition(draft.settings)}
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                heroCopyPosition: event.target.value,
+                                                            })
+                                                        }
+                                                    >
+                                                        <option value="center">左侧居中</option>
+                                                        <option value="bottom">左侧靠下</option>
+                                                    </AdminSelect>
+                                                </Field>
+                                                <Field label="卖点呈现方式">
+                                                    <AdminSelect
+                                                        className={inputClass}
+                                                        value={
+                                                            draft.settings?.heroBenefitsStyle === 'tags'
+                                                                ? 'tags'
+                                                                : 'icons'
+                                                        }
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                heroBenefitsStyle: event.target.value,
+                                                            })
+                                                        }
+                                                    >
+                                                        <option value="icons">图标、标题与说明</option>
+                                                        <option value="tags">简洁文字标签</option>
+                                                    </AdminSelect>
+                                                </Field>
+                                                <label className="flex items-center gap-2 text-sm text-slate-700">
+                                                    <AdminInput
+                                                        type="checkbox"
+                                                        checked={draft.settings?.heroLogoEnabled !== false}
+                                                        onChange={event =>
+                                                            updateSettings({
+                                                                heroLogoEnabled: event.target.checked,
+                                                            })
+                                                        }
+                                                    />
+                                                    图片顶部展示店铺品牌
+                                                </label>
+                                                <Field label="手机底部装饰图（选填）">
+                                                    <AssetPicker
+                                                        label="装饰图素材"
+                                                        value={null}
+                                                        fallbackUrl={
+                                                            stringSetting(
+                                                                draft.settings?.mobileDecorationImageUrl,
+                                                                '',
+                                                            ) || null
+                                                        }
+                                                        onChange={asset =>
+                                                            updateSettings({
+                                                                mobileDecorationImageUrl:
+                                                                    asset?.preview ?? null,
+                                                                mobileDecorationImageAssetId:
+                                                                    asset?.id ?? null,
+                                                            })
+                                                        }
+                                                    />
+                                                    <p className="mt-2 text-xs text-slate-500">
+                                                        建议使用浅色横向城市轮廓图；仅显示在表单下方，短屏或输入时隐藏。留空不展示。
+                                                    </p>
+                                                </Field>
+                                            </>
+                                        )}
+                                        {['HERO', 'AUTH_LOGIN', 'AUTH_REGISTER'].includes(draft.type) && (
+                                            <Field label="强调色">
+                                                <ColorInput
+                                                    value={stringSetting(draft.settings?.accentColor, '')}
+                                                    onChange={value => updateSettings({ accentColor: value })}
                                                 />
                                             </Field>
-                                        </>
-                                    )}
-                                </div>
-                            </section>
+                                        )}
+                                        {draft.type === 'HERO' && (
+                                            <>
+                                                <Field label="正文文字色">
+                                                    <ColorInput
+                                                        value={stringSetting(
+                                                            draft.settings?.secondaryTextColor,
+                                                            '',
+                                                        )}
+                                                        onChange={value =>
+                                                            updateSettings({ secondaryTextColor: value })
+                                                        }
+                                                    />
+                                                </Field>
+                                                <Field label="按钮渐变色">
+                                                    <ColorInput
+                                                        value={stringSetting(
+                                                            draft.settings?.accentSecondaryColor,
+                                                            '',
+                                                        )}
+                                                        onChange={value =>
+                                                            updateSettings({ accentSecondaryColor: value })
+                                                        }
+                                                    />
+                                                </Field>
+                                                <Field label="按钮文字色">
+                                                    <ColorInput
+                                                        value={stringSetting(
+                                                            draft.settings?.buttonTextColor,
+                                                            '',
+                                                        )}
+                                                        onChange={value =>
+                                                            updateSettings({ buttonTextColor: value })
+                                                        }
+                                                    />
+                                                </Field>
+                                            </>
+                                        )}
+                                        <Field label="背景色" helpText="留空时继承商城统一背景色">
+                                            <ColorInput
+                                                value={draft.backgroundColor ?? ''}
+                                                placeholder="继承商城默认"
+                                                onChange={value =>
+                                                    setDraft({ ...draft, backgroundColor: value })
+                                                }
+                                            />
+                                        </Field>
+                                        {!isSupport && (
+                                            <>
+                                                <Field
+                                                    label="文字色"
+                                                    helpText={
+                                                        draft.type === 'HERO'
+                                                            ? '填写后使用设定文字色；留空时根据图片明暗选色，图片保持原色、无颜色遮罩'
+                                                            : '留空时继承商城默认文字色'
+                                                    }
+                                                >
+                                                    <ColorInput
+                                                        value={draft.textColor ?? ''}
+                                                        placeholder={
+                                                            draft.type === 'HERO'
+                                                                ? '自动适应图片'
+                                                                : '继承商城默认'
+                                                        }
+                                                        onChange={value =>
+                                                            setDraft({ ...draft, textColor: value })
+                                                        }
+                                                    />
+                                                </Field>
+                                                <Field label="跳转类型">
+                                                    <AdminSelect
+                                                        value={draft.targetType}
+                                                        onChange={event =>
+                                                            setDraft({
+                                                                ...draft,
+                                                                targetType: event.target
+                                                                    .value as StorefrontTargetType,
+                                                                targetValue:
+                                                                    event.target.value === 'NONE'
+                                                                        ? null
+                                                                        : draft.targetValue,
+                                                            })
+                                                        }
+                                                        className={inputClass}
+                                                    >
+                                                        {targetOptions.map(([value, label]) => (
+                                                            <option key={value} value={value}>
+                                                                {label}
+                                                            </option>
+                                                        ))}
+                                                    </AdminSelect>
+                                                </Field>
+                                                <Field label="跳转目标">
+                                                    <TargetValueInput
+                                                        type={draft.targetType}
+                                                        value={draft.targetValue ?? ''}
+                                                        onChange={value =>
+                                                            setDraft({ ...draft, targetValue: value || null })
+                                                        }
+                                                    />
+                                                </Field>
+                                            </>
+                                        )}
+                                    </div>
+                                </section>
+                            )}
 
                             {moduleHasSettings(draft.type) && (
                                 <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -1238,16 +1270,18 @@ export function StorefrontBlockEditor({
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                                                {isSupport ? '客服渠道' : '子项内容'}
+                                                {isSupport ? '客服渠道' : isFooter ? '页脚链接' : '子项内容'}
                                                 <FeatureHelpButton
                                                     topic="storefront.block-copy"
                                                     title="模块子项内容"
                                                     description={
                                                         isSupport
                                                             ? '启用需要展示的联系方式；微信客服需上传二维码'
-                                                            : draft.type === 'CORE_CATEGORIES'
-                                                              ? '客户端按顺序展示前两张已启用卡片；停用的卡片不占展示名额'
-                                                              : '用于轮播、入口、保障项、法律页或导航项'
+                                                            : isFooter
+                                                              ? '维护链接名称与跳转目标；可排序、停用或删除，法律正文在法律条款模块维护'
+                                                              : draft.type === 'CORE_CATEGORIES'
+                                                                ? '客户端按顺序展示前两张已启用卡片；停用的卡片不占展示名额'
+                                                                : '用于轮播、入口、保障项、法律页或导航项'
                                                     }
                                                 />
                                             </h3>
@@ -1259,7 +1293,12 @@ export function StorefrontBlockEditor({
                                                     ...draft,
                                                     items: [
                                                         ...draft.items,
-                                                        newContentItem(draft.items.length),
+                                                        {
+                                                            ...newContentItem(draft.items.length),
+                                                            ...(isFooter
+                                                                ? { targetType: 'PAGE' as const }
+                                                                : {}),
+                                                        },
                                                     ],
                                                 })
                                             }
@@ -1267,7 +1306,7 @@ export function StorefrontBlockEditor({
                                             className="flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-40"
                                         >
                                             <Plus className="h-3.5 w-3.5" />
-                                            {isSupport ? '添加渠道' : '添加子项'}
+                                            {isSupport ? '添加渠道' : isFooter ? '添加链接' : '添加子项'}
                                         </AdminButton>
                                     </div>
                                     <div className="mt-4 space-y-3">
@@ -1316,7 +1355,9 @@ export function StorefrontBlockEditor({
                                             <p className="rounded-lg bg-slate-50 py-8 text-center text-xs text-slate-400">
                                                 {draft.type === 'CORE_CATEGORIES'
                                                     ? '当前没有卡片，客户端不会展示该模块；请添加并启用卡片后保存'
-                                                    : '当前没有子项，该楼层可以仅展示主文案'}
+                                                    : isFooter
+                                                      ? '当前没有页脚链接，客户端仅展示品牌名称'
+                                                      : '当前没有子项，该楼层可以仅展示主文案'}
                                             </p>
                                         )}
                                     </div>
@@ -1331,7 +1372,9 @@ export function StorefrontBlockEditor({
                                 <p className="mt-2 leading-5">
                                     {draft.type === 'CORE_CATEGORIES'
                                         ? '预览包含尚未保存的修改。保存并核对后，客户端按已启用子项、当前语言和店铺皮肤展示双卡；已存图片不会显示。'
-                                        : '预览包含尚未保存的修改。保存并核对成功后更新当前店铺配置；客户端按启用状态、语言内容、图片与展示时间决定是否显示。'}
+                                        : isFooter
+                                          ? '页脚是独立装修模块，可在首页清单排序、启用或停用。保存并核对后，仅展示已启用链接；品牌名留空使用店铺名。法律条款正文与此模块的开关互不影响。'
+                                          : '预览包含尚未保存的修改。保存并核对成功后更新当前店铺配置；客户端按启用状态、语言内容、图片与展示时间决定是否显示。'}
                                 </p>
                             </div>
                         </aside>

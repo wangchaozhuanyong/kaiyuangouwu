@@ -2,6 +2,8 @@ import { createLink, Link } from '@tanstack/react-router';
 import { ShoppingCart, UserRound } from 'lucide-react';
 import { type AnchorHTMLAttributes, forwardRef, lazy, Suspense, useState } from 'react';
 
+import { authOverlayForNavigation } from '../../auth-overlay-navigation';
+import { routeFromHash } from '../../storefront-router';
 import { BrandLogo } from '../../storefront-ui/brand-logo';
 import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
@@ -16,12 +18,30 @@ const DesktopSearch = lazy(() => import('./desktop-search'));
 const DesktopNavigationLink = createLink(
     forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement> & { current: boolean }>(
         function DesktopNavigationAnchor({ current, ...props }, ref) {
+            const context = useStorefront();
             return (
                 <a
                     {...props}
                     ref={ref}
                     aria-current={current ? 'page' : undefined}
                     data-status={current ? 'active' : undefined}
+                    onClick={event => {
+                        const next = props.href?.startsWith('/') ? routeFromHash(`#${props.href}`) : null;
+                        if (
+                            next &&
+                            context.navigate &&
+                            authOverlayForNavigation(next, Boolean(context.customer)) &&
+                            !event.defaultPrevented &&
+                            event.button === 0 &&
+                            !event.metaKey &&
+                            !event.ctrlKey &&
+                            !event.shiftKey &&
+                            !event.altKey
+                        ) {
+                            event.preventDefault();
+                            context.navigate(next);
+                        } else props.onClick?.(event);
+                    }}
                 />
             );
         },

@@ -1,6 +1,6 @@
 import { type CSSProperties } from 'react';
 
-import { configuredColor } from '../../storefront-content-plugin/src/shared/auth-visual';
+import { configuredColor } from '../../storefront-content-plugin/src/shared/auth-visual-utils';
 
 import { type StorefrontContentBlock } from './types';
 

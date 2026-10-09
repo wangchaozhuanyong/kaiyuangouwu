@@ -87,6 +87,7 @@ export function moduleUsesItems(type: StorefrontContentBlock['type']) {
         'CORE_CATEGORIES',
         'COUPONS',
         'TRUST_BAR',
+        'FOOTER',
         'LEGAL',
         'SUPPORT',
         'NAVIGATION',

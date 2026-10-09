@@ -71,6 +71,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { STOREFRONT_FOOTER_CODE } from '../homepage-manifest';
 import { heroThemeStyle } from '../shared/hero-theme';
 import { readableStorefrontForeground, storefrontContrastRatio } from '../shared/storefront-semantic-palette';
 
@@ -443,6 +444,7 @@ const blockTypeLabels: Record<ContentBlockType, { zh: string; en: string }> = {
     BEST_SELLERS: { zh: '热门商品', en: 'Best sellers' },
     RECOMMENDATIONS: { zh: '猜你喜欢', en: 'Recommendations' },
     STORY: { zh: '内容故事', en: 'Story' },
+    FOOTER: { zh: '页脚', en: 'Footer' },
     LEGAL: { zh: '条款内容', en: 'Legal' },
     SUPPORT: { zh: '客服配置', en: 'Support' },
     AUTH_LOGIN: { zh: '登录页视觉', en: 'Login visual' },
@@ -479,6 +481,8 @@ const storefrontPageTargets = [
     { value: '/notifications', zh: '消息中心', en: 'Notifications' },
     { value: '/logistics', zh: '物流查询', en: 'Logistics' },
     { value: SUPPORT_CENTER_TARGET, zh: '客服中心', en: 'Customer support' },
+    { value: '/legal?id=privacy', zh: '隐私政策', en: 'Privacy policy' },
+    { value: '/legal?id=terms', zh: '使用条款', en: 'Terms of use' },
 ] as const;
 
 const supportTargets = [{ value: SUPPORT_CENTER_TARGET, zh: '客服中心', en: 'Customer support' }] as const;
@@ -2266,9 +2270,25 @@ function BlockEditor({
                                                 <legend className="px-1 text-[11px] font-medium text-muted-foreground">
                                                     {languageCode === 'zh_Hans' ? text.chinese : text.english}
                                                 </legend>
-                                                <Field compact label={text.blockTitle}>
+                                                <Field
+                                                    compact
+                                                    label={
+                                                        draft.type === 'FOOTER'
+                                                            ? isZh
+                                                                ? '品牌名称'
+                                                                : 'Brand name'
+                                                            : text.blockTitle
+                                                    }
+                                                >
                                                     <Input
                                                         value={translation.title}
+                                                        placeholder={
+                                                            draft.type === 'FOOTER'
+                                                                ? isZh
+                                                                    ? '留空使用店铺名称'
+                                                                    : 'Leave blank to use the store name'
+                                                                : undefined
+                                                        }
                                                         onChange={event =>
                                                             updateTranslation(languageCode, {
                                                                 title: event.target.value,
@@ -2417,6 +2437,23 @@ function BlockEditor({
                                             translation={previewTranslation}
                                             isZh={isZh}
                                         />
+                                    ) : draft.type === 'FOOTER' ? (
+                                        <footer className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-muted p-3">
+                                            <strong className="text-sm">
+                                                {previewTranslation?.title ||
+                                                    (isZh ? '店铺名称' : 'Store name')}
+                                            </strong>
+                                            <div className="flex flex-wrap gap-3 text-sm">
+                                                {draft.items
+                                                    .filter(item => item.enabled)
+                                                    .sort((a, b) => a.position - b.position)
+                                                    .map((item, index) => (
+                                                        <span key={item.id ?? index}>
+                                                            {preferredItemTranslation(item, isZh).label}
+                                                        </span>
+                                                    ))}
+                                            </div>
+                                        </footer>
                                     ) : (
                                         <>
                                             {previewUsesBlockImage(draft.type) ? (
@@ -3434,6 +3471,7 @@ function simpleItemNeedsTarget(type: ContentBlockType): boolean {
         'CATEGORY_AD',
         'CORE_CATEGORIES',
         'COUPONS',
+        'FOOTER',
         'LEGAL',
         'SUPPORT',
         'CUSTOM',
@@ -3468,6 +3506,7 @@ function simpleModuleUsesItems(type: ContentBlockType): boolean {
         'COUPONS',
         'TRUST_BAR',
         'CORE_CATEGORIES',
+        'FOOTER',
         'LEGAL',
         'SUPPORT',
         'CUSTOM',
@@ -3531,14 +3570,31 @@ function fixedModuleDraft(type: FixedHomepageModuleType, position: number): Cont
 
     const block: ContentBlock = {
         ...newBlock(position, type),
-        code: `home-fixed-${type.toLowerCase().replace(/_/g, '-')}`,
+        code:
+            type === 'FOOTER'
+                ? STOREFRONT_FOOTER_CODE
+                : `home-fixed-${type.toLowerCase().replace(/_/g, '-')}`,
         internalName: descriptor.labelZh,
         enabled: descriptor.defaultEnabled,
         translations: [
-            { ...emptyBlockTranslation('zh_Hans'), title: descriptor.labelZh },
-            { ...emptyBlockTranslation('en'), title: descriptor.labelEn },
+            { ...emptyBlockTranslation('zh_Hans'), title: type === 'FOOTER' ? '' : descriptor.labelZh },
+            { ...emptyBlockTranslation('en'), title: type === 'FOOTER' ? '' : descriptor.labelEn },
         ],
     };
+    if (type === 'FOOTER') {
+        block.items = [
+            { targetValue: '/legal?id=privacy', zh: '隐私政策', en: 'Privacy policy' },
+            { targetValue: '/legal?id=terms', zh: '使用条款', en: 'Terms of use' },
+        ].map((link, itemPosition) => ({
+            ...newItem(itemPosition, type),
+            targetType: 'PAGE',
+            targetValue: link.targetValue,
+            translations: [
+                { languageCode: 'zh_Hans', label: link.zh, description: '' },
+                { languageCode: 'en', label: link.en, description: '' },
+            ],
+        }));
+    }
     return type === 'CORE_CATEGORIES' ? applyCoreCategoryDefaults(block) : block;
 }
 
@@ -3701,7 +3757,7 @@ function blockInput(block: ContentBlock) {
                 body: body.trim(),
                 ctaLabel: block.type === 'CATEGORY_AD' ? '' : ctaLabel.trim(),
             }))
-            .filter(translation => Boolean(translation.title)),
+            .filter(translation => block.type === 'FOOTER' || Boolean(translation.title)),
         items: block.items.map((item, index) => ({
             ...(item.id ? { id: item.id } : {}),
             enabled: item.enabled,
@@ -3726,7 +3782,9 @@ function isValid(block: ContentBlock): boolean {
     return (
         Boolean(block.code.trim()) &&
         Boolean(block.internalName.trim()) &&
-        blockHasChineseSource(block.translations) &&
+        (block.type === 'FOOTER'
+            ? block.translations.some(translation => translation.languageCode === 'zh_Hans')
+            : blockHasChineseSource(block.translations)) &&
         block.items.every(item => itemHasChineseSource(item.translations))
     );
 }

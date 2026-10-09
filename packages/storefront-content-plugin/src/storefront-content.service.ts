@@ -24,6 +24,7 @@ import {
     MIN_HERO_AUTOPLAY_INTERVAL_SECONDS,
     STOREFRONT_ACCOUNT_HERO_CODE,
     STOREFRONT_CLIENT_PLUGINS_CODE,
+    STOREFRONT_FOOTER_CODE,
     STOREFRONT_NAVIGATION_CODE,
     storefrontClientPluginCodes,
     storefrontClientPluginPlacements,
@@ -573,7 +574,8 @@ export class StorefrontContentService {
         block: StorefrontContentBlock,
         inputs: StorefrontContentBlockTranslationInput[],
     ): Promise<void> {
-        const allowEmpty = block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER';
+        const allowEmpty =
+            block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER' || block.type === 'FOOTER';
         this.validateTranslations(inputs, 'title', allowEmpty);
         const repository = this.connection.getRepository(ctx, StorefrontContentBlockTranslation);
         const existing = await repository.find({ where: { base: { id: block.id } } });
@@ -900,6 +902,13 @@ export class StorefrontContentService {
         ) {
             throw new UserInputError('个人中心头图必须使用系统保留编码');
         }
+        if (
+            (input.type === 'FOOTER' && code !== STOREFRONT_FOOTER_CODE) ||
+            (input.type !== 'FOOTER' && code === STOREFRONT_FOOTER_CODE)
+        ) {
+            // The existing Channel/code unique index makes the footer a singleton without a migration.
+            throw new UserInputError('页脚模块必须使用系统保留编码');
+        }
         const authVisualType = input.type as keyof typeof authVisualCodeByType;
         const requiredAuthVisualCode = authVisualCodeByType[authVisualType];
         const reservedAuthVisualCodes = Object.values(authVisualCodeByType);
@@ -940,7 +949,7 @@ export class StorefrontContentService {
         this.validateTranslations(
             input.translations,
             'title',
-            input.type === 'AUTH_LOGIN' || input.type === 'AUTH_REGISTER',
+            input.type === 'AUTH_LOGIN' || input.type === 'AUTH_REGISTER' || input.type === 'FOOTER',
         );
         this.validateImageUrl(input.imageUrl, '区块图片');
         this.validateColor(input.backgroundColor, '背景颜色');

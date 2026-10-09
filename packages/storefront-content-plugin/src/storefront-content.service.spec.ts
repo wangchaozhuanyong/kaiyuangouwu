@@ -1,9 +1,12 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
+import { Kind } from 'graphql';
 import 'reflect-metadata';
 import { Not } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
+import { adminApiExtensions, shopApiExtensions } from './api-extensions';
+import { STOREFRONT_FOOTER_CODE, storefrontContentBlockTypes } from './constants';
 import { createContentPublicationChecker } from './content-publication';
 import { DESKTOP_CATEGORY_BANNER_PURPOSE, desktopCategoryBannerCode } from './desktop-category-banner';
 import { StorefrontContentBlock } from './entities/storefront-content-block.entity';
@@ -93,6 +96,122 @@ function validate(input: CreateStorefrontContentBlockInput) {
 }
 
 describe('StorefrontContentService input validation', () => {
+    it('exposes FOOTER to both APIs and reserves its singleton code while allowing an empty brand', () => {
+        expect(storefrontContentBlockTypes).toContain('FOOTER');
+        for (const schema of [adminApiExtensions, shopApiExtensions]) {
+            const enumType = schema.definitions.find(
+                definition =>
+                    definition.kind === Kind.ENUM_TYPE_DEFINITION &&
+                    definition.name.value === 'StorefrontContentBlockType',
+            );
+            expect(
+                enumType?.kind === Kind.ENUM_TYPE_DEFINITION &&
+                    enumType.values?.some(value => value.name.value === 'FOOTER'),
+            ).toBe(true);
+        }
+        const footer = createInput({
+            code: STOREFRONT_FOOTER_CODE,
+            type: 'FOOTER',
+            internalName: '页脚',
+            targetType: 'NONE',
+            targetValue: null,
+            items: [],
+            translations: [
+                { languageCode: LanguageCode.zh_Hans, title: '' },
+                { languageCode: LanguageCode.en, title: '' },
+            ],
+        });
+        expect(validate(footer)).toMatchObject({ type: 'FOOTER', items: [], internalName: '页脚' });
+        expect(() => validate({ ...footer, code: 'second-footer' })).toThrow(/系统保留编码/);
+        expect(() => validate({ ...footer, type: 'CUSTOM' })).toThrow(/系统保留编码/);
+        expect(() => validate({ ...footer, code: 'legal', type: 'LEGAL' })).toThrow(/区块标题不能为空/);
+        const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
+        expect(() =>
+            (service as any).validateItemInput(
+                { position: 0, translations: [{ languageCode: LanguageCode.zh_Hans, label: '' }] },
+                'FOOTER',
+            ),
+        ).toThrow(/条目名称不能为空/);
+        expect(() =>
+            (service as any).validateItemInput(
+                {
+                    position: 0,
+                    targetType: 'URL',
+                    targetValue: 'javascript:alert(1)',
+                    translations: [{ languageCode: LanguageCode.zh_Hans, label: '链接' }],
+                },
+                'FOOTER',
+            ),
+        ).toThrow(/HTTP\(S\)/);
+    });
+
+    it('uses the existing Channel/code uniqueness guard for footer records', async () => {
+        const repository = { findOne: vi.fn().mockResolvedValue({ id: 'footer-a' }) };
+        const service = new StorefrontContentService(
+            { getRepository: () => repository } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        const context = { channelId: 'store-a' } as never;
+        await expect((service as any).assertUniqueCode(context, STOREFRONT_FOOTER_CODE)).rejects.toThrow(
+            /相同编码/,
+        );
+        await expect(
+            (service as any).assertUniqueCode(context, STOREFRONT_FOOTER_CODE, 'footer-a'),
+        ).resolves.toBeUndefined();
+        expect(repository.findOne).toHaveBeenCalledWith({
+            where: { channelId: 'store-a', code: STOREFRONT_FOOTER_CODE },
+        });
+        repository.findOne.mockResolvedValue(null);
+        await expect(
+            (service as any).assertUniqueCode({ channelId: 'store-b' }, STOREFRONT_FOOTER_CODE),
+        ).resolves.toBeUndefined();
+    });
+
+    it('persists empty footer titles through the shared translation pipeline', async () => {
+        const repository = {
+            find: vi.fn().mockResolvedValue([]),
+            delete: vi.fn().mockResolvedValue(undefined),
+            save: vi.fn().mockResolvedValue(undefined),
+        };
+        const translations = {
+            prepareLocalizedFields: vi.fn((fields: Array<{ path: string }>) =>
+                Promise.resolve(fields.map(field => ({ ...field, translatedText: '' }))),
+            ),
+            recordPreparedFields: vi.fn().mockResolvedValue(undefined),
+        };
+        const service = new StorefrontContentService(
+            { getRepository: () => repository } as never,
+            {} as never,
+            {} as never,
+            translations as never,
+        );
+        const footer = new StorefrontContentBlock({ id: 'footer-a', type: 'FOOTER' });
+        const context = { channelId: 'store-a' } as never;
+        await expect(
+            (service as any).replaceBlockTranslations(context, footer, [
+                { languageCode: LanguageCode.zh_Hans, title: '' },
+                { languageCode: LanguageCode.en, title: '' },
+            ]),
+        ).resolves.toBeUndefined();
+        expect(translations.prepareLocalizedFields).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({ path: 'title', sourceText: '', required: false }),
+            ]),
+        );
+        expect(repository.save).toHaveBeenCalledWith(
+            expect.arrayContaining([
+                expect.objectContaining({ languageCode: LanguageCode.zh_Hans, title: '', base: footer }),
+                expect.objectContaining({ languageCode: LanguageCode.en, title: '', base: footer }),
+            ]),
+        );
+        expect(translations.recordPreparedFields).toHaveBeenCalledWith(
+            context,
+            expect.objectContaining({ channelId: 'store-a', entityId: 'footer-a' }),
+            expect.any(Array),
+        );
+    });
     it('normalizes codes, optional text, dates, and internal targets', () => {
         const result = validate(
             createInput({
@@ -964,8 +1083,9 @@ describe('StorefrontContentService carousel settings', () => {
             { id: 'hero-b', type: 'HERO', position: 1 },
             { id: 'hero-a', type: 'HERO', position: 2 },
             { id: 'login', type: 'AUTH_LOGIN', position: 3 },
+            { id: 'footer', type: 'FOOTER', position: 4, enabled: false },
         ];
-        const codeOrder = [floors[3], floors[2], floors[1], floors[0]];
+        const codeOrder = [floors[4], floors[3], floors[2], floors[1], floors[0]];
         const blockRepository = { find: vi.fn() };
         const settings = new StorefrontContentSettings({
             channelId: 'store-a',
@@ -989,7 +1109,7 @@ describe('StorefrontContentService carousel settings', () => {
         const context = { channelId: 'store-a', channel: { id: 'store-a' } } as never;
         const expected = {
             heroAutoplayIntervalSeconds: 5,
-            configuredBlockTypes: ['AUTH_LOGIN', 'HERO', 'NOTICE'],
+            configuredBlockTypes: ['AUTH_LOGIN', 'FOOTER', 'HERO', 'NOTICE'],
         };
 
         for (const order of [floors, codeOrder]) {
@@ -999,8 +1119,8 @@ describe('StorefrontContentService carousel settings', () => {
                 service.updateSettings(context, { heroAutoplayIntervalSeconds: 5 }),
             ).resolves.toEqual(expected);
         }
-        expect(floors.map(floor => floor.id)).toEqual(['notice', 'hero-b', 'hero-a', 'login']);
-        expect(floors.map(floor => floor.position)).toEqual([0, 1, 2, 3]);
+        expect(floors.map(floor => floor.id)).toEqual(['notice', 'hero-b', 'hero-a', 'login', 'footer']);
+        expect(floors.map(floor => floor.position)).toEqual([0, 1, 2, 3, 4]);
         expect(blockRepository.find).toHaveBeenCalledWith({
             where: { channelId: 'store-a', code: Not(STOREFRONT_VISUAL_PRESET_CODE) },
             select: { type: true },

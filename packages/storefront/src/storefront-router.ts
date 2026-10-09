@@ -187,7 +187,10 @@ const routePaths: Record<RouteName, string> = {
 
 const routeNamesByPath = new Map(Object.entries(routePaths).map(([name, path]) => [path, name as RouteName]));
 
-export type StorefrontRouteSearch = Omit<RouteState, 'name'>;
+export type StorefrontRouteSearch = Omit<RouteState, 'name'> & {
+    auth?: 'login' | 'register' | 'forgot-password';
+    authTarget?: string;
+};
 
 export function routePath(name: RouteName): string {
     return routePaths[name];
@@ -237,6 +240,11 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const quantity = rawQuantity && /^\d+$/.test(rawQuantity) ? Number(rawQuantity) : undefined;
     const focus = stringValue('focus');
     return {
+        auth:
+            search.auth === 'login' || search.auth === 'register' || search.auth === 'forgot-password'
+                ? search.auth
+                : undefined,
+        authTarget: stringValue('authTarget'),
         returnTo: returnTo && isCheckoutRoute(returnTo) ? returnTo : undefined,
         source:
             search.source === 'logistics' || search.source === 'logistics-detail' ? search.source : undefined,
@@ -273,9 +281,11 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
 
 export function routeFromRouterLocation(pathname: string, search: Record<string, unknown>): RouteState {
     const normalizedPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
+    // Overlay state must not change the background page/query/readiness identity.
+    const { auth: _auth, authTarget: _target, ...pageSearch } = normalizeRouteSearch(search);
     return {
         name: routeNamesByPath.get(normalizedPath) ?? 'not-found',
-        ...normalizeRouteSearch(search),
+        ...pageSearch,
     };
 }
 

@@ -252,6 +252,77 @@
     }
 }
 
+@media (min-width: 1400px) {
+    /* A paired desktop hero fits the fixed gallery row, including editorial artwork. */
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay {
+        min-height: 0;
+        height: 100%;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        div.hero-scene-wrapper {
+        height: 100%;
+        min-height: 0;
+        aspect-ratio: auto;
+        grid-template-rows: minmax(0, 1fr);
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-rich-content {
+        box-sizing: border-box;
+        height: 100%;
+        min-height: 0;
+        max-height: 100%;
+        justify-content: flex-start;
+        overflow-y: auto;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-rich-copy-region {
+        display: flex;
+        min-height: var(--experience-control-min, 44px);
+        flex: 1 1 0;
+        flex-direction: column;
+        gap: var(--space-12);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        pointer-events: auto;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        :is(.hero-rich-copy-region > *, .hero-rich-cta-btn) {
+        flex-shrink: 0;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-rich-desc {
+        display: block;
+        overflow: visible;
+        -webkit-line-clamp: unset;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        :is(.hero-rich-backdrop, .safe-image-preview) {
+        object-fit: cover;
+        object-position: right center;
+    }
+}
+
 .quick-grid {
     margin: 0 12px 10px;
     padding: 14px 8px;
@@ -2590,6 +2661,19 @@
     text-align: start;
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
+}
+
+.home-page > .legal-footer,
+.home-page .homepage-modules > .legal-footer {
+    padding: var(--space-12) var(--space-16);
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.home-page .homepage-modules > .legal-footer {
+    margin: 0;
 }
 
 .legal-footer-brand {

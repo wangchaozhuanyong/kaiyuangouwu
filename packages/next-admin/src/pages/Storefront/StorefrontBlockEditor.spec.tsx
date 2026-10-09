@@ -876,5 +876,96 @@ it('selects editorial artwork with advisory bilingual counts while preserving ph
     }
 });
 
+it('edits only footer brand and links, preserving bilingual labels, order and independent switches', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createFixtureRoot(host);
+    const value = newContentBlock('FOOTER', 130);
+    value.items.forEach((item, index) => {
+        item.id = `footer-link-${index}`;
+    });
+    const onSave = vi
+        .fn<(value: ReturnType<typeof newContentBlock>, reviewed?: boolean) => Promise<void>>()
+        .mockResolvedValue(undefined);
+    const setInput = async (input: HTMLInputElement, text: string) =>
+        fixtureAct(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, text);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    try {
+        await fixtureAct(() =>
+            root.render(
+                <StorefrontBlockEditor value={value} saving={false} onClose={vi.fn()} onSave={onSave} />,
+            ),
+        );
+        expect(host.textContent).toContain('页脚链接');
+        expect(fixtureInput(host, '稳定编码').disabled).toBe(true);
+        expect(host.querySelector('[data-translation-field="subtitle"]')).toBeNull();
+        expect(host.querySelector('[data-translation-field="body"]')).toBeNull();
+        expect(host.querySelector('[data-translation-field="ctaLabel"]')).toBeNull();
+        expect(host.querySelector('[data-translation-field="description"]')).toBeNull();
+        expect(host.textContent).not.toContain('主图素材');
+        expect(
+            Array.from(host.querySelectorAll('label')).some(label => label.textContent === '法律正文'),
+        ).toBe(false);
+        expect(fixtureButton(host, '保存并核对').disabled).toBe(false);
+        await setInput(fixtureInput(host, '中文品牌名称'), '本店品牌');
+        await fixtureAct(() => fixtureButton(host, '英文').click());
+        await setInput(fixtureInput(host, '英文品牌名称'), 'Store brand');
+        await setInput(
+            host.querySelector<HTMLInputElement>(
+                '[data-translation-item-id="footer-link-0"] [data-translation-field="label"]',
+            )!,
+            'Data policy',
+        );
+        await fixtureAct(() => fixtureButton(host, '中文').click());
+        await fixtureAct(() =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[data-translation-item-id="footer-link-1"] [aria-label="上移"]',
+                )!
+                .click(),
+        );
+        await fixtureAct(() =>
+            host
+                .querySelector<HTMLInputElement>(
+                    '[data-translation-item-id="footer-link-0"] input[type="checkbox"]',
+                )!
+                .click(),
+        );
+        await fixtureAct(() => fixtureInput(host, '启用（保存后生效）').click());
+        await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+        const saved = onSave.mock.calls.at(-1)![0];
+        expect(saved).toMatchObject({ type: 'FOOTER', code: 'home-fixed-footer', enabled: false });
+        expect(saved.translations.map(item => item.title)).toEqual(['本店品牌', 'Store brand']);
+        expect(saved.items.map(item => [item.id, item.position, item.enabled])).toEqual([
+            ['footer-link-1', 0, true],
+            ['footer-link-0', 1, false],
+        ]);
+        expect(saved.items[1].translations.map(item => item.label)).toEqual(['隐私政策', 'Data policy']);
+        await fixtureAct(() =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[data-translation-item-id="footer-link-1"] [aria-label="删除"]',
+                )!
+                .click(),
+        );
+        await fixtureAct(() =>
+            host
+                .querySelector<HTMLButtonElement>(
+                    '[data-translation-item-id="footer-link-0"] [aria-label="删除"]',
+                )!
+                .click(),
+        );
+        expect(host.textContent).toContain('当前没有页脚链接，客户端仅展示品牌名称');
+        expect(fixtureButton(host, '保存并核对').disabled).toBe(false);
+        await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+        expect(onSave.mock.calls.at(-1)![0].items).toEqual([]);
+    } finally {
+        await fixtureAct(() => root.unmount());
+        host.remove();
+    }
+});
+
 // The business fixtures own mocked data; lifecycle behavior is tested with real Apollo.
 vi.mock('../../hooks/use-admin-query', () => import('../../test/admin-query-mock'));

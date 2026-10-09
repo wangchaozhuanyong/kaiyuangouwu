@@ -1,4 +1,7 @@
-import { homepageModuleCatalog } from '../../../../storefront-content-plugin/src/homepage-manifest';
+import {
+    homepageModuleCatalog,
+    STOREFRONT_FOOTER_CODE,
+} from '../../../../storefront-content-plugin/src/homepage-manifest';
 import { imageBindingKey } from '../../../../storefront-content-plugin/src/image-replacement-policy';
 import { supportFaqValidation } from '../../../../storefront-content-plugin/src/support-faq';
 import type {
@@ -152,6 +155,14 @@ export function newContentBlock(
         items: [],
     };
 
+    if (type === 'FOOTER') {
+        block.code = STOREFRONT_FOOTER_CODE;
+        block.translations = [emptyBlockTranslation('zh_Hans'), emptyBlockTranslation('en')];
+        block.items = [
+            navigationItem(0, '/legal?id=privacy', '隐私政策', 'Privacy policy'),
+            navigationItem(1, '/legal?id=terms', '使用条款', 'Terms of use'),
+        ];
+    }
     if (type === 'NAVIGATION') {
         block.code = 'storefront-navigation';
         block.items = [
@@ -247,6 +258,7 @@ function englishDefaultTitle(type: StorefrontBlockType): string {
             RECOMMENDATIONS: 'Recommendations',
             STORY: 'Brand story',
             TRUST_BAR: 'Service guarantees',
+            FOOTER: '',
             LEGAL: 'Legal',
             SUPPORT: 'Support',
             AUTH_LOGIN: 'Login visual',
@@ -397,7 +409,7 @@ export function storefrontBlockInput(
             .filter(
                 translation =>
                     translation.languageCode === 'en' ||
-                    ['AUTH_LOGIN', 'AUTH_REGISTER'].includes(block.type) ||
+                    ['AUTH_LOGIN', 'AUTH_REGISTER', 'FOOTER'].includes(block.type) ||
                     Boolean(translation.title),
             ),
         items: block.items.map((item, position) => {
@@ -471,7 +483,7 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
     if (!block.internalName.trim()) return '请填写内部管理名称';
     if (!block.code.trim()) return '缺少区块编码';
     if (
-        !['AUTH_LOGIN', 'AUTH_REGISTER'].includes(block.type) &&
+        !['AUTH_LOGIN', 'AUTH_REGISTER', 'FOOTER'].includes(block.type) &&
         !blockTranslation(block, 'zh_Hans').title.trim()
     )
         return '请填写中文标题';

@@ -77,13 +77,14 @@ export function createContentPublicationChecker(isUsableEnglishTranslation: (val
         if (block.endsAt && new Date(block.endsAt).getTime() <= now) return 'EXPIRED';
         const requireEnglish = !languageCode.toLowerCase().startsWith('zh');
         const isAuth = block.type === 'AUTH_LOGIN' || block.type === 'AUTH_REGISTER';
+        const optionalTitle = isAuth || block.type === 'FOOTER';
         const source = block.translations?.find(t => t.languageCode === 'zh_Hans');
         const target = block.translations?.find(t => t.languageCode === 'en');
         const items = publishedContentItems(block);
         if (
-            (isAuth ? !source : !source?.title?.trim()) ||
+            (optionalTitle ? !source : !source?.title?.trim()) ||
             (requireEnglish &&
-                (isAuth
+                (optionalTitle
                     ? !target || !translationPair(source?.title, target.title)
                     : !isUsableEnglishTranslation(target?.title))) ||
             (requireEnglish &&

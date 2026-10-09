@@ -19,6 +19,45 @@ const item = {
 const core = { type: 'CORE_CATEGORIES', enabled: true, translations, items: [item] };
 
 describe('shared admin and Shop API publication contract', () => {
+    it('publishes a footer with an empty brand while preserving item and translation requirements', () => {
+        const footer = {
+            type: 'FOOTER',
+            enabled: true,
+            translations: [
+                { languageCode: 'zh_Hans', title: '' },
+                { languageCode: 'en', title: '' },
+            ],
+            items: [item],
+        };
+        for (const language of ['zh_Hans', 'en']) {
+            expect(status(footer, now, language)).toBe('PUBLISHED');
+            expect(status({ ...footer, items: [] }, now, language)).toBe('PUBLISHED');
+            expect(status({ ...footer, enabled: false }, now, language)).toBe('DISABLED');
+            expect(status({ ...footer, items: [{ ...item, translations: [] }] }, now, language)).toBe(
+                'INCOMPLETE_TRANSLATION',
+            );
+            expect(status({ ...footer, type: 'LEGAL' }, now, language)).toBe('INCOMPLETE_TRANSLATION');
+        }
+        expect(status({ ...footer, translations: [{ languageCode: 'zh_Hans', title: '' }] }, now, 'en')).toBe(
+            'INCOMPLETE_TRANSLATION',
+        );
+        expect(
+            status(
+                {
+                    ...footer,
+                    translations: [
+                        { languageCode: 'zh_Hans', title: '我的店铺' },
+                        { languageCode: 'en', title: '' },
+                    ],
+                },
+                now,
+                'en',
+            ),
+        ).toBe('INCOMPLETE_TRANSLATION');
+        expect(status({ ...footer, items: [{ enabled: false, translations: [] }] }, now, 'en')).toBe(
+            'PUBLISHED',
+        );
+    });
     it('uses saved card positions without reordering or removing Admin draft items', () => {
         const items = [
             { ...item, position: 40, translations: [] },

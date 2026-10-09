@@ -24,11 +24,13 @@ export function EditorialHomeClient({
     layoutReview = false,
     referenceArtwork = false,
     independentDeviceArtwork = false,
+    configuredBlockTypes = ['HERO'],
 }: {
     blocks: StorefrontContentBlock[];
     layoutReview?: boolean;
     referenceArtwork?: boolean;
     independentDeviceArtwork?: boolean;
+    configuredBlockTypes?: HomePageProps['configuredBlockTypes'];
 }) {
     const [language, setLanguage] = useState<'zh_Hans' | 'en'>('zh_Hans');
     const [preset, setPreset] = useState(normalizeStorefrontVisualPreset('classic'));
@@ -85,7 +87,7 @@ export function EditorialHomeClient({
         contentBlocks,
         managedContentProducts: [],
         heroAutoplayIntervalSeconds: 12,
-        configuredBlockTypes: ['HERO'],
+        configuredBlockTypes,
         coupons: [],
         couponCampaignsLoading: false,
         couponCampaignsError: '',

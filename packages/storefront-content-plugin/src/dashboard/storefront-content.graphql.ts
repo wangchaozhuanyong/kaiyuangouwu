@@ -195,6 +195,7 @@ export type ContentBlockType =
     | 'BEST_SELLERS'
     | 'RECOMMENDATIONS'
     | 'STORY'
+    | 'FOOTER'
     | 'LEGAL'
     | 'SUPPORT'
     | 'AUTH_LOGIN'

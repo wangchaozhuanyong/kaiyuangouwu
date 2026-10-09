@@ -103,6 +103,15 @@ describe('homepageModuleEntries', () => {
         expect(entries.find(entry => entry.type === 'HERO')?.blocks).toHaveLength(2);
     });
 
+    it('orders the independent footer as a fixed module without treating legal documents as floors', () => {
+        const entries = homepageModuleEntries(
+            [block('FOOTER', 1), block('LEGAL', 0), block('STORY', 2)],
+            ['FOOTER', 'LEGAL', 'STORY'],
+        );
+        expect(entries.map(entry => entry.type)).toEqual(['FOOTER', 'STORY']);
+        expect(homepageModuleEntries([], ['FOOTER'])).toEqual([]);
+    });
+
     it('does not render login and registration visuals as homepage modules', () => {
         const entries = homepageModuleEntries(
             [block('AUTH_LOGIN', 1), block('AUTH_REGISTER', 2), block('NOTICE', 3)],

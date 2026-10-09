@@ -36,6 +36,7 @@ const StorefrontTrafficPreference = lazy(() =>
 );
 
 const LoginRoutePage = lazyRouteComponent(() => import('./route-pages/auth-route-pages'), 'LoginRoutePage');
+const AuthenticationOverlay = lazyRouteComponent(() => import('./auth-overlay'), 'AuthenticationOverlay');
 const PreviewScenarioPanel = lazyRouteComponent(
     () => import('./storefront-preview-scenario-panel'),
     'PreviewScenarioPanel',
@@ -311,6 +312,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                     cartQuantity={cart?.totalQuantity ?? 0}
                                     language={language}
                                     navigationBlock={navigationBlock}
+                                    onNavigate={storefrontContextValue.navigate}
                                 />
                             )}
                         {toast && (
@@ -347,6 +349,25 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 )}
                             </div>
                         )}
+
+                        {/* Keep this host mounted when its dialog closes so focus returns to
+                            the original trigger. Language changes retain the in-memory form;
+                            store/currency/background changes still release the shared overlay. */}
+                        <OverlayHost
+                            ownerKey={JSON.stringify([
+                                'authentication',
+                                storefrontContextValue.storefrontCode,
+                                storefrontContextValue.market.code,
+                                storefrontContextValue.market.currencyCode,
+                                routeHref(displayedRoute),
+                            ])}
+                        >
+                            {storefrontContextValue.authOverlay && (
+                                <Suspense fallback={null}>
+                                    <AuthenticationOverlay request={storefrontContextValue.authOverlay} />
+                                </Suspense>
+                            )}
+                        </OverlayHost>
 
                         {deferredUiReady && (
                             <Suspense fallback={null}>

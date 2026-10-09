@@ -4,7 +4,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApiError } from './api';
-import { LoginPage, RegisterPage } from './auth-pages';
+import { ForgotPasswordPage, LoginPage, RegisterPage } from './auth-pages';
+import { AuthPresentationContext } from './auth-presentation';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 
@@ -51,6 +52,189 @@ afterEach(() => {
     act(() => root.unmount());
     host.remove();
     vi.clearAllMocks();
+});
+
+describe('storefront authentication overlay presentation', () => {
+    it('uses managed form copy and persistent labels without loading the standalone artwork', async () => {
+        const navigate = vi.fn();
+        const onEmailDraftChange = vi.fn();
+        const content = {
+            id: 'overlay-login',
+            code: 'overlay-login',
+            type: 'AUTH_LOGIN',
+            enabled: true,
+            position: 0,
+            imageUrl: '/assets/preview/overlay-login.webp',
+            backgroundColor: '#f5f5ff',
+            textColor: '#172033',
+            settings: { formTitleZh: '配置的登录标题', formSubtitleZh: '配置的登录说明' },
+            title: '仅供独立页的图片标题',
+            subtitle: '',
+            body: '',
+            ctaLabel: '',
+            items: [],
+        };
+        await settle(() =>
+            root.render(
+                <AuthPresentationContext.Provider
+                    value={{ navigate, emailDraft: 'shared@example.invalid', onEmailDraftChange }}
+                >
+                    <LoginPage
+                        {...baseProps}
+                        api={{} as never}
+                        logoUrl="/assets/preview/overlay-logo.png"
+                        authVisualContent={content as never}
+                        onSuccess={vi.fn().mockResolvedValue(undefined)}
+                    />
+                </AuthPresentationContext.Provider>,
+            ),
+        );
+        expect(host.querySelector('.auth-page-overlay')).not.toBeNull();
+        expect(host.querySelector('.auth-hero')).toBeNull();
+        expect(host.querySelector('.auth-form-brand')).toBeNull();
+        expect(host.querySelector('.auth-form-toolbar')).toBeNull();
+        expect(host.querySelector('img')).toBeNull();
+        expect(requiredElement('.auth-form-heading h1').textContent).toBe('配置的登录标题');
+        expect(requiredElement('.auth-form-heading p').textContent).toBe('配置的登录说明');
+        expect(host.querySelectorAll('.auth-field-label-row label')).toHaveLength(2);
+        expect(host.querySelector('.auth-floating-label')).toBeNull();
+        const email = requiredElement<HTMLInputElement>('input[name="emailAddress"]');
+        expect(email.value).toBe('shared@example.invalid');
+        expect(email.placeholder).toBe('');
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        await settle(() => {
+            descriptor?.set?.call(email, 'updated@example.invalid');
+            email.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        expect(onEmailDraftChange).toHaveBeenLastCalledWith('updated@example.invalid');
+    });
+
+    it('switches login and registration through the host while keeping the existing registration fields', async () => {
+        const navigate = vi.fn();
+        const api = { referralProgram: vi.fn().mockResolvedValue({ enabled: false }) };
+        await settle(() =>
+            root.render(
+                <AuthPresentationContext.Provider value={{ navigate, emailDraft: 'draft@example.invalid' }}>
+                    <LoginPage {...baseProps} api={api as never} onSuccess={vi.fn()} />
+                </AuthPresentationContext.Provider>,
+            ),
+        );
+        expect(requiredElement('.auth-form-heading p').textContent).toBe('登录后管理订单与服务');
+        await settle(() => requiredElement<HTMLButtonElement>('.auth-switch button').click());
+        expect(navigate).toHaveBeenLastCalledWith({ name: 'register' }, true);
+        await settle(() =>
+            root.render(
+                <AuthPresentationContext.Provider value={{ navigate, emailDraft: 'draft@example.invalid' }}>
+                    <RegisterPage {...baseProps} api={api as never} language="en" />
+                </AuthPresentationContext.Provider>,
+            ),
+        );
+        expect(requiredElement('.auth-form-heading p').textContent).toBe(
+            'Create an account to explore products and services',
+        );
+        for (const name of ['fullName', 'emailAddress', 'password', 'confirmPassword']) {
+            const input = requiredElement<HTMLInputElement>(`input[name="${name}"]`);
+            expect(input.labels?.[0]?.closest('.auth-field-label-row')).not.toBeNull();
+        }
+        expect(requiredElement<HTMLInputElement>('input[name="emailAddress"]').value).toBe(
+            'draft@example.invalid',
+        );
+        expect(host.querySelector('.auth-registration-consent')).not.toBeNull();
+        await settle(() => requiredElement<HTMLButtonElement>('.auth-switch button').click());
+        expect(navigate).toHaveBeenLastCalledWith({ name: 'login' }, true);
+    });
+
+    it('preserves password-reset submission and returns its result to the overlay login state', async () => {
+        const navigate = vi.fn();
+        const requestPasswordReset = vi.fn().mockResolvedValue(undefined);
+        await settle(() =>
+            root.render(
+                <AuthPresentationContext.Provider value={{ navigate, emailDraft: 'reset@example.invalid' }}>
+                    <ForgotPasswordPage {...baseProps} api={{ requestPasswordReset } as never} />
+                </AuthPresentationContext.Provider>,
+            ),
+        );
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        expect(requestPasswordReset).toHaveBeenCalledWith('reset@example.invalid');
+        expect(host.textContent).toContain('如果该邮箱已注册');
+        await settle(() => requiredElement<HTMLButtonElement>('.auth-result button').click());
+        expect(navigate).toHaveBeenLastCalledWith({ name: 'login' }, false);
+    });
+
+    it('returns to overlay login before requesting a password reset', async () => {
+        const navigate = vi.fn();
+        const requestPasswordReset = vi.fn();
+        await settle(() =>
+            root.render(
+                <AuthPresentationContext.Provider value={{ navigate }}>
+                    <ForgotPasswordPage {...baseProps} api={{ requestPasswordReset } as never} />
+                </AuthPresentationContext.Provider>,
+            ),
+        );
+        await settle(() => requiredElement<HTMLButtonElement>('.auth-switch button').click());
+        expect(navigate).toHaveBeenLastCalledWith({ name: 'login' }, false);
+        expect(requestPasswordReset).not.toHaveBeenCalled();
+    });
+
+    it.each(['login', 'register', 'forgot-password'] as const)(
+        'reports the %s submitting lifecycle and releases its host state on unmount',
+        async mode => {
+            const onSubmittingChange = vi.fn();
+            let finish!: () => void;
+            const request = vi.fn(() => new Promise<void>(resolve => (finish = resolve)));
+            const api = {
+                login: request,
+                registerCustomerAccount: request,
+                requestPasswordReset: request,
+                referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+            };
+            const props = {
+                ...baseProps,
+                api: api as never,
+                onSuccess: vi.fn().mockResolvedValue(undefined),
+            };
+            const form =
+                mode === 'login' ? (
+                    <LoginPage {...props} />
+                ) : mode === 'register' ? (
+                    <RegisterPage {...props} />
+                ) : (
+                    <ForgotPasswordPage {...props} />
+                );
+            await settle(() =>
+                root.render(
+                    <AuthPresentationContext.Provider value={{ navigate: vi.fn(), onSubmittingChange }}>
+                        {form}
+                    </AuthPresentationContext.Provider>,
+                ),
+            );
+            expect(onSubmittingChange).toHaveBeenLastCalledWith(false);
+            requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'busy@example.invalid';
+            for (const name of ['password', 'confirmPassword']) {
+                const input = host.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+                if (input) input.value = 'qa-busy-only';
+            }
+            if (mode === 'register') {
+                requiredElement<HTMLInputElement>('input[name="fullName"]').value = '李测试';
+                acceptRegistrationConsent();
+            }
+            await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+            expect(request).toHaveBeenCalledOnce();
+            expect(onSubmittingChange).toHaveBeenLastCalledWith(true);
+            expect(requiredElement<HTMLButtonElement>('button[type="submit"]').disabled).toBe(true);
+            expect(requiredElement<HTMLButtonElement>('.auth-switch button').disabled).toBe(true);
+            if (mode === 'login') {
+                expect(
+                    requiredElement<HTMLButtonElement>('.auth-login-options .auth-inline-link').disabled,
+                ).toBe(true);
+            }
+            await settle(() => finish());
+            expect(onSubmittingChange).toHaveBeenLastCalledWith(false);
+            onSubmittingChange.mockClear();
+            await settle(() => root.render(null));
+            expect(onSubmittingChange).toHaveBeenLastCalledWith(false);
+        },
+    );
 });
 
 describe('storefront configurable authentication methods', () => {

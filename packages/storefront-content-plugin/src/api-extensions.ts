@@ -14,6 +14,7 @@ const commonTypes = gql`
         BEST_SELLERS
         RECOMMENDATIONS
         STORY
+        FOOTER
         LEGAL
         SUPPORT
         AUTH_LOGIN
