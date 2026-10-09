@@ -75,6 +75,18 @@ jobs:
                     printf 'API_HEALTH_DIAG %s exit=%s\n' "$api_health" "$?"
                   fi
                   journalctl -u vendure-production-healthcheck.service --no-pager -n 40 -o cat | grep -Eo 'mysql-unreachable|public-health-failed|image-generation-health-failed|[a-z-]+-missing-or-stale|[a-z-]+-checksum-invalid|[a-z-]+-missing-or-invalid' | sort -u | while read -r code; do printf 'HEALTH_FAILURE_DIAG code=%s\n' "$code"; done || true
+                  ss -lnt '( sport = :3002 )' | awk 'NR > 1 {printf "API_LISTEN_DIAG state=%s recv_queue=%s send_queue=%s\n", $1, $2, $3}'
+                  ss -nt '( sport = :3002 )' | awk 'NR > 1 {counts[$1]++} END {for (state in counts) printf "API_CONNECTION_DIAG state=%s count=%d\n", state, counts[state]}'
+                  if root_health=$(curl --connect-timeout 3 --max-time 5 --silent --output /dev/null --write-out 'http=%{http_code} connect=%{time_connect} first_byte=%{time_starttransfer}' http://127.0.0.1:3002/); then
+                    printf 'API_ROOT_DIAG %s exit=0\n' "$root_health"
+                  else
+                    printf 'API_ROOT_DIAG %s exit=%s\n' "$root_health" "$?"
+                  fi
+                  if database_status=$(sudo -n timeout 8 mysql --protocol=socket --batch --skip-column-names --execute="SELECT CONCAT('DATABASE_STATUS_DIAG name=', VARIABLE_NAME, ' value=', VARIABLE_VALUE) FROM performance_schema.global_status WHERE VARIABLE_NAME IN ('Threads_connected','Threads_running','Max_used_connections','Aborted_connects','Uptime'); SELECT CONCAT('DATABASE_WAIT_DIAG command=', COMMAND, ' state=', COALESCE(NULLIF(STATE,''),'none'), ' count=', COUNT(*), ' longest_seconds=', MAX(TIME)) FROM information_schema.PROCESSLIST WHERE ID != CONNECTION_ID() GROUP BY COMMAND, STATE LIMIT 12; SELECT CONCAT('DATABASE_TRANSACTION_DIAG active_count=', COUNT(*), ' oldest_seconds=', COALESCE(MAX(TIMESTAMPDIFF(SECOND, trx_started, NOW())),0), ' waiting_count=', SUM(trx_state='LOCK WAIT')) FROM information_schema.innodb_trx; SELECT CONCAT('DATABASE_LOCK_WAIT_DIAG count=', COUNT(*)) FROM performance_schema.data_lock_waits;" 2>/dev/null); then
+                    printf '%s\n' "$database_status"
+                  else
+                    printf 'DATABASE_STATUS_DIAG access_or_timeout=unavailable\n'
+                  fi
                   metadata_token=$(curl --max-time 2 -fsS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' http://169.254.169.254/latest/api/token 2>/dev/null || true)
                   if [ -n "$metadata_token" ]; then
                     instance_type=$(curl --max-time 2 -fsS -H "X-aws-ec2-metadata-token: $metadata_token" http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || true)
