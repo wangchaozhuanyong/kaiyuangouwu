@@ -9,6 +9,82 @@ import { affectedFrontendsForFile, classifyChanges, STATIC_APPS } from '../scrip
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { assertServedStorefrontAssets, switchStorefront } from './storefront-release.mjs';
 
+// Recovery may fast-forward the source checkout while restarting the last verified
+// immutable runtime. Static releases must verify that runtime, not reset the checkout.
+export function assertStaticBackendRuntime(snapshot, isAncestor) {
+    const { backendSha, checkoutSha, targetSha, runtimeDirectory, metadataSha, processes } = snapshot;
+    for (const sha of [backendSha, checkoutSha, targetSha, metadataSha])
+        assert.match(sha ?? '', /^[a-f0-9]{40}$/u, 'Invalid static runtime revision');
+    assert.equal(metadataSha, backendSha, 'Runtime metadata differs from backend marker');
+    assert.match(
+        runtimeDirectory,
+        new RegExp(`^/var/www/kaiyuangouwu-releases/${backendSha}-[0-9]+-[0-9]+-linux-x64$`, 'u'),
+        'Backend must use a recognized immutable release',
+    );
+    assert.equal(isAncestor(backendSha, checkoutSha), true, 'Checkout is not descended from backend');
+    assert.equal(isAncestor(checkoutSha, targetSha), true, 'Checkout is not an ancestor of target');
+    for (const [name, entry] of [
+        ['vendure-api', 'index.js'],
+        ['vendure-worker', 'index-worker.js'],
+    ]) {
+        const matches = processes.filter(item => item.name === name);
+        assert.equal(matches.length, 1, 'Managed backend process is missing or ambiguous');
+        const process = matches[0];
+        assert.equal(process.status, 'online', 'Managed backend process is not online');
+        assert.equal(process.cwd, runtimeDirectory, 'Backend process is outside verified runtime');
+        assert.equal(
+            process.entry,
+            resolve(runtimeDirectory, 'packages/dev-server/dist', entry),
+            'Backend entry is outside verified runtime',
+        );
+    }
+}
+
+function verifyStaticBackendRuntime(backendSha, targetSha) {
+    const runtimeDirectory = realpathSync('/var/www/kaiyuangouwu-current');
+    const readGit = args =>
+        execFileSync('git', ['-C', '/var/www/kaiyuangouwu', ...args], { encoding: 'utf8' }).trim();
+    let processSnapshot;
+    try {
+        processSnapshot = JSON.parse(
+            execFileSync('pm2', ['jlist'], {
+                encoding: 'utf8',
+                timeout: 30000,
+                maxBuffer: 10 * 1024 * 1024,
+                stdio: ['ignore', 'pipe', 'pipe'],
+            }),
+        );
+    } catch {
+        // PM2 includes environment values. Never forward the raw command error.
+        throw new Error('Managed backend process snapshot is unavailable');
+    }
+    const processes = processSnapshot
+        .filter(process => ['vendure-api', 'vendure-worker'].includes(process.name))
+        .map(process => ({
+            name: process.name,
+            status: process.pm2_env?.status,
+            cwd: realpathSync(process.pm2_env.pm_cwd),
+            entry: realpathSync(process.pm2_env.pm_exec_path),
+        }));
+    const checkoutSha = readGit(['rev-parse', 'HEAD']);
+    assertStaticBackendRuntime(
+        {
+            backendSha,
+            targetSha,
+            checkoutSha,
+            runtimeDirectory,
+            metadataSha: JSON.parse(readFileSync(resolve(runtimeDirectory, 'RUNTIME-METADATA.json'), 'utf8'))
+                .gitSha,
+            processes,
+        },
+        (before, after) => {
+            readGit(['merge-base', '--is-ancestor', before, after]);
+            return true;
+        },
+    );
+    process.stdout.write(`FRONTEND_BACKEND_RUNTIME_VERIFIED backend=${backendSha} checkout=${checkoutSha}\n`);
+}
+
 const TWO_FACTOR_DIRECTORY = '.two-factor';
 export const TWO_FACTOR_POINTER = '/var/www/kaiyuangouwu-two-factor-current';
 
@@ -245,7 +321,9 @@ export async function verifyFrontend(component, candidate, releaseId, { config, 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     const [command, componentList, directory, releaseId] = process.argv.slice(2);
-    if (command === 'vault-routing' || command === 'vault-routing-tool') {
+    if (command === 'backend-runtime') {
+        verifyStaticBackendRuntime(componentList, directory);
+    } else if (command === 'vault-routing' || command === 'vault-routing-tool') {
         const candidate =
             command === 'vault-routing' ? resolve(componentList, TWO_FACTOR_DIRECTORY) : componentList;
         const config = validateTwoFactorCandidate(candidate);
