@@ -99,6 +99,7 @@ export function BusinessServicesPage() {
                 <BusinessServicesHero
                     title={heroTitle}
                     body={heroDescription}
+                    visual={clientPluginBlock}
                     layout={resolveBusinessServicesHeroLayout(clientPluginBlock?.settings)}
                     image={
                         heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined

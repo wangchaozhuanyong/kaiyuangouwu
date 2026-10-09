@@ -32,6 +32,8 @@
 
 营销标题使用 `hero / display / showcase / showcase-compact`，优惠券金额使用 `coupon`，活动大金额使用 `promotion`，认证标题使用 `auth / auth-compact`。这些是明确用途的角色，不能替代普通页面的标题、正文或按钮。
 
+`campaign` 用于首页图文分离轮播、智能服务图文横幅等可编辑广告主标题，强调营销主视觉，不用于普通界面标题、正文或按钮。手机字号 `clamp(30px, 8.2vw, 34px)`／行高 `1.08`；电脑字号 `clamp(64px, 6.25vw, 90px)`／行高 `1.04`，字重700，中文字距0，沿用系统字体。中英文可手动分行或自然换行，长标题完整显示，容器随内容增长。原 `hero` 等规格不变。
+
 字重：正文 400，标签 500，标题／按钮 600，金额与重点 700。使用 `--font-weight-*`；常规中文标题使用 `--tracking-normal`，价格使用 `--tracking-numeric`，代码使用 `--tracking-code`。字体使用 `--font-ui / --font-numeric / --font-code`，保留系统字体栈。
 
 ## 新页面写法

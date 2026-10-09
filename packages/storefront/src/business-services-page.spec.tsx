@@ -310,6 +310,28 @@ describe('business services page', () => {
         }
     });
 
+    it('uses existing managed colors and manual line breaks only in the optional artwork layout', () => {
+        const block = businessPluginBlock();
+        block.settings = {
+            businessServicesCopyVersion: 1,
+            businessServicesHeroLayout: 'image-overlay',
+            secondaryTextColor: '#344b65',
+        };
+        block.imageUrl = '/assets/text-free-services.webp';
+        block.title = '多款模型\n一站连接';
+        block.backgroundColor = '#f7fbff';
+        block.textColor = '#1748ff';
+        const host = document.createElement('div');
+        host.innerHTML = renderPage([block], 'zh', true);
+        expect(host.querySelector('.business-services-page-title')?.textContent).toBe(block.title);
+        const heading = host.querySelector<HTMLElement>('.business-services-heading');
+        expect(heading?.style.getPropertyValue('--hero-copy-background')).toBe('#f7fbff');
+        expect(heading?.style.getPropertyValue('--hero-copy-foreground')).toBe('#1748ff');
+        expect(heading?.style.getPropertyValue('--hero-copy-body-foreground')).toBe('#344b65');
+        host.innerHTML = renderPage([{ ...block, settings: { businessServicesCopyVersion: 1 } }], 'zh', true);
+        expect(host.querySelector('.business-services-heading')?.getAttribute('style')).toBeNull();
+    });
+
     it('keeps long localized copy literal and complete in the optional artwork layout', () => {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1, businessServicesHeroLayout: 'image-overlay' };

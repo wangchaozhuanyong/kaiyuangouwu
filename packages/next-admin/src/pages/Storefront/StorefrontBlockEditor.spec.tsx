@@ -86,12 +86,13 @@ it('owns the complete drawer in the body overlay host, preserves its draft while
         expect(host.contains(dialog)).toBe(false);
         expect(dialog.className).toContain('fixed inset-0 z-50');
         expect(dialog.querySelector('header [aria-label="关闭编辑器"]')).not.toBeNull();
-        const title = dialog.querySelector<HTMLInputElement>('[data-translation-field="title"]');
+        const title = dialog.querySelector<HTMLTextAreaElement>('[data-translation-field="title"]');
         if (!title) throw new Error('Expected the editable title');
-        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        expect(title.tagName).toBe('TEXTAREA');
+        const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
         if (!setter) throw new Error('Expected the native input value setter');
         await act(async () => {
-            setter.call(title, '尚未保存的轮播标题');
+            setter.call(title, '尚未保存的\n轮播标题');
             title.dispatchEvent(new Event('input', { bubbles: true }));
         });
         await render(false);
@@ -99,7 +100,7 @@ it('owns the complete drawer in the body overlay host, preserves its draft while
         expect(owner.hasAttribute('inert')).toBe(true);
         await render();
         expect(owner.hidden).toBe(false);
-        expect(title.value).toBe('尚未保存的轮播标题');
+        expect(title.value).toBe('尚未保存的\n轮播标题');
         expect(onSave).not.toHaveBeenCalled();
         await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="关闭编辑器"]')?.click());
         expect(onClose).toHaveBeenCalledTimes(1);
@@ -145,6 +146,7 @@ it('focuses the requested existing item field in English without changing conten
         const target = host.querySelector<HTMLInputElement>(
             '[data-translation-item-id="audit-item"] [data-translation-field="description"]',
         )!;
+        expect(host.querySelector('[data-translation-field="title"]')?.tagName).toBe('INPUT');
         expect(target.value).toBe('Reviewed English');
         expect(document.activeElement).toBe(target);
         expect(value).toEqual(before);
@@ -736,13 +738,14 @@ it('selects editorial artwork with advisory bilingual counts while preserving ph
         expect(hint('desktop', 'body').textContent).toContain('建议不超过 130 个字符');
         expect(hint('mobile', 'title').textContent).toContain('建议不超过 36 个字符');
         expect(hint('mobile', 'body').textContent).toContain('建议不超过 85 个字符');
-        const desktopTitle = host.querySelector<HTMLInputElement>('[data-translation-field="title"]')!;
+        const desktopTitle = host.querySelector<HTMLTextAreaElement>('[data-translation-field="title"]')!;
         const desktopBody = host.querySelector<HTMLTextAreaElement>('[data-translation-field="body"]')!;
         const phoneTitle = fixtureInput(host, '手机标题（选填）');
         expect(desktopTitle.hasAttribute('maxlength')).toBe(false);
         expect(desktopBody.hasAttribute('maxlength')).toBe(false);
         expect(phoneTitle.hasAttribute('maxlength')).toBe(false);
-        await fillCopy(desktopTitle, 'E'.repeat(100));
+        const multilineTitle = `${'E'.repeat(45)}\n${'E'.repeat(54)}`;
+        await fillCopy(desktopTitle, multilineTitle);
         await fillCopy(desktopBody, 'B'.repeat(180));
         expect(hint('mobile', 'title').textContent).toContain('当前 100 个字符');
         await fillCopy(phoneTitle, 'Phone title');
@@ -756,7 +759,7 @@ it('selects editorial artwork with advisory bilingual counts while preserving ph
         const saved = onSave.mock.calls.at(-1)![0];
         expect(saved.translations).toEqual([
             value.translations[0],
-            { ...value.translations[1], title: 'E'.repeat(100), body: 'B'.repeat(180) },
+            { ...value.translations[1], title: multilineTitle, body: 'B'.repeat(180) },
         ]);
         expect(saved.settings).toMatchObject({ ...value.settings, heroArtworkLayout: 'editorial' });
         expect(saved.settings?.mobileHeroTranslations).toEqual([

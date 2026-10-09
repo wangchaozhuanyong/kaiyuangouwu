@@ -350,7 +350,7 @@ export function StorefrontBlockEditor({
                                     <Field
                                         label={`${isAuth ? '电脑左侧' : ''}${language === 'zh_Hans' ? '中文' : '英文'}标题${language === 'zh_Hans' ? ' *' : ''}`}
                                     >
-                                        {isAuth ? (
+                                        {isAuth || draft.type === 'HERO' ? (
                                             <AdminTextArea
                                                 rows={2}
                                                 data-translation-field="title"
@@ -372,6 +372,11 @@ export function StorefrontBlockEditor({
                                             />
                                         )}
                                     </Field>
+                                    {draft.type === 'HERO' && (
+                                        <p className="text-xs leading-5 text-slate-500">
+                                            可换行，前台按排版完整显示。
+                                        </p>
+                                    )}
                                     {draft.type === 'HERO' && (
                                         <HeroCopyHint
                                             language={language}
