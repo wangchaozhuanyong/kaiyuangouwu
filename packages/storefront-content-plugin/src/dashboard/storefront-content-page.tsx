@@ -185,8 +185,9 @@ const zhCopy = {
     displayCount: '显示商品数量',
     displayCountHint: '客户端首屏显示 1 到 50 个商品。',
     categoryAdDisplayCountHint: '分类主视觉右侧最多显示 4 个商品；不足时从所选分类的首页商品中补齐。',
-    noticeInterval: '公告滚动间隔',
-    noticeIntervalHint: '有多条公告时，每 3 到 30 秒切换一条。',
+    noticeInterval: '短公告停留时间（秒）',
+    noticeIntervalHint:
+        '正文能完整显示时停留 3 到 30 秒；长正文完整滚动后再切换。首页仅播放最新 3 条有效系统公告，无有效系统公告时不显示公告条；历史公告可通过全部查看。',
     selectProducts: '选择固定商品',
     selectPinnedProducts: '选择置顶商品',
     productsSelected: '个商品已选择',
@@ -335,8 +336,11 @@ const enCopy: typeof zhCopy = {
     displayCountHint: 'Show 1 to 50 products in this storefront section.',
     categoryAdDisplayCountHint:
         'Show up to four products beside the category visual. Missing slots use homepage products from the selected category.',
-    noticeInterval: 'Notice rotation interval',
-    noticeIntervalHint: 'Rotate multiple notices every 3 to 30 seconds.',
+    noticeInterval: 'Short notice display time (seconds)',
+    noticeIntervalHint:
+        'Fully visible text stays for 3 to 30 seconds; longer text finishes scrolling before switching. ' +
+        'The homepage plays the latest 3 valid system announcements and hides the notice strip when none are available. ' +
+        'Open All to view older announcements.',
     selectProducts: 'Select fixed products',
     selectPinnedProducts: 'Select pinned products',
     productsSelected: 'products selected',

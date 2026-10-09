@@ -1696,7 +1696,7 @@ describe('HomePage desktop intro layout', () => {
 });
 
 describe('HomePage notices', () => {
-    it('uses the current store two-year window while preserving publication dates and the five-item limit', () => {
+    it('uses the current store two-year window while preserving publication dates and the three-item limit', () => {
         const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-08T01:00:00Z'));
         try {
             const announcements = [
@@ -1730,8 +1730,6 @@ describe('HomePage notices', () => {
                 'system-delivery',
                 'system-purchase',
                 'system-launch',
-                'system-last-year',
-                'system-boundary',
             ]);
             expect(
                 buildHomeNoticeItems(
@@ -1742,24 +1740,12 @@ describe('HomePage notices', () => {
                     noticeBlock,
                     'zh',
                 ).map(item => item.id),
-            ).toEqual([
-                'system-delivery',
-                'system-purchase',
-                'system-launch',
-                'system-last-year',
-                'system-extra',
-            ]);
+            ).toEqual(['system-delivery', 'system-purchase', 'system-launch']);
             expect(
                 buildHomeNoticeItems(announcements, { ...noticeBlock, settings: null }, 'zh').map(
                     item => item.id,
                 ),
-            ).toEqual([
-                'system-delivery',
-                'system-purchase',
-                'system-launch',
-                'system-last-year',
-                'system-boundary',
-            ]);
+            ).toEqual(['system-delivery', 'system-purchase', 'system-launch']);
             expect(
                 buildHomeNoticeItems(
                     announcements,
@@ -1861,7 +1847,7 @@ describe('HomePage notices', () => {
         }
     });
 
-    it('rotates only the five newest announcements within the default window', () => {
+    it('rotates only the three newest announcements within the default window', () => {
         const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
         const announcements = [35, 4, 2, 7, 1, 3, 5].map(days => ({
             id: String(days),
@@ -1876,8 +1862,6 @@ describe('HomePage notices', () => {
             'system-1',
             'system-2',
             'system-3',
-            'system-4',
-            'system-5',
         ]);
     });
 
@@ -1943,7 +1927,7 @@ describe('HomePage notices', () => {
         expect(items.map(item => item.id)).toEqual(['system-newer', 'system-older']);
     });
 
-    it('shows system announcements together with store notices', () => {
+    it('uses dated system announcements without mixing undated legacy store notices', () => {
         const noticeBlock: StorefrontContentBlock = {
             ...heroBlock,
             id: 'notice-block',
@@ -1983,7 +1967,9 @@ describe('HomePage notices', () => {
             'zh',
         );
 
-        expect(items.map(item => item.id)).toEqual(['system-system-notice-1', 'store-notice-1']);
+        expect(items.map(item => item.id)).toEqual(['system-system-notice-1']);
+        expect(buildHomeNoticeItems([], noticeBlock, 'zh')).toEqual([]);
+        expect(noticeBlock.items[0].description).toBe('今日订单将在明日发货。');
     });
 
     it('keeps a notice without a link clickable so the full content can be opened', () => {
@@ -2010,7 +1996,7 @@ describe('HomePage notices', () => {
     });
 
     it.each(['block', 'item'] as const)(
-        'shows managed %s notice content beside its title without shortening the text',
+        'hides undated managed %s notices without deleting their saved content',
         source => {
             const body = '第一段公告正文。\n\n第二段保留完整内容，按屏幕宽度决定展示多少。';
             const block: StorefrontContentBlock = {
@@ -2026,12 +2012,37 @@ describe('HomePage notices', () => {
             };
             for (const desktop of [false, true]) {
                 const markup = renderHome({ contentBlocks: [block], systemAnnouncements: [] }, desktop);
-                expect(markup).toContain('class="notice-strip-title">服务提醒</strong>');
-                expect(markup).toContain(body.replace(/\s+/gu, ' '));
+                expect(markup).not.toContain('class="notice-strip"');
             }
-            expect(buildHomeNoticeItems([], block, 'zh')[0].content).toBe(body);
+            expect(buildHomeNoticeItems([], block, 'zh')).toEqual([]);
+            expect(source === 'block' ? block.body : block.items[0].description).toBe(body);
         },
     );
+
+    it('does not let empty or expired notices occupy the latest three places', () => {
+        const announcement = (id: string, daysAgo: number) => ({
+            id,
+            title: id,
+            content: '完整内容',
+            startsAt: null,
+            endsAt: null,
+            linkUrl: null,
+            createdAt: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+        });
+        const records = [
+            { ...announcement('empty', 0), title: ' ', content: ' ' },
+            { ...announcement('expired', 1), endsAt: new Date(Date.now() - 1000).toISOString() },
+            announcement('one', 2),
+            announcement('two', 3),
+            announcement('three', 4),
+            announcement('four', 5),
+        ];
+        expect(buildHomeNoticeItems(records, undefined, 'zh').map(item => item.id)).toEqual([
+            'system-one',
+            'system-two',
+            'system-three',
+        ]);
+    });
 
     it('shows the full content and jump button in the notice detail sheet', () => {
         const content = '第一段完整内容。\n\n第二段完整内容，不能在公告条中被截断后丢失。';

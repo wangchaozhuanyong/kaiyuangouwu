@@ -1,6 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
-    Bell,
     Check,
     ChevronLeft,
     ChevronRight,
@@ -36,6 +35,7 @@ import { ContentText } from '../../../storefront-content-plugin/src/shared/conte
 import { heroContentForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
+import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { claimableCouponCampaigns } from '../coupon-center-state';
@@ -143,6 +143,8 @@ export function buildHomeNoticeItems(
     }
     const recentAnnouncements = systemAnnouncements
         .filter(announcement => {
+            if (announcement.endsAt && Date.parse(announcement.endsAt) <= now) return false;
+            if (!announcement.title.trim() && !announcement.content.trim()) return false;
             const publishedAt = announcement.startsAt ?? announcement.createdAt;
             if (!publishedAt) return true; // Older API responses keep their previous behavior during rollout.
             const time = Date.parse(publishedAt);
@@ -153,7 +155,7 @@ export function buildHomeNoticeItems(
             const rightTime = Date.parse(right.startsAt ?? right.createdAt ?? '') || 0;
             return rightTime - leftTime;
         })
-        .slice(0, 5);
+        .slice(0, 3);
     const systemNoticeItems = recentAnnouncements.flatMap(announcement => {
         const announcementTitle = announcement.title.trim();
         const content = announcement.content.trim();
@@ -171,45 +173,7 @@ export function buildHomeNoticeItems(
             },
         ];
     });
-    const managedNoticeItems = (noticeBlock?.items ?? []).flatMap(item => {
-        const label = item.label.trim();
-        const description = item.description.trim();
-        if (!label && !description) return [];
-        return [
-            {
-                id: item.id,
-                summary: label || description,
-                title: label || noticeBlock?.title || (language === 'zh' ? '公告详情' : 'Notice details'),
-                content: description,
-                ctaLabel: '',
-                targetType: item.targetType,
-                targetValue: item.targetValue,
-                linkUrl: null,
-            },
-        ];
-    });
-    if (managedNoticeItems.length || !noticeBlock || noticeBlock.items.length) {
-        return [...systemNoticeItems, ...managedNoticeItems].slice(0, 5);
-    }
-
-    const title = noticeBlock.title.trim();
-    const subtitle = noticeBlock.subtitle.trim();
-    const body = noticeBlock.body.trim();
-    if (!title && !subtitle && !body) return systemNoticeItems;
-    if (systemNoticeItems.length && !subtitle && !body) return systemNoticeItems;
-    return [
-        ...systemNoticeItems,
-        {
-            id: noticeBlock.id,
-            summary: title || body || subtitle,
-            title,
-            content: [subtitle, body].filter(Boolean).join('\n\n'),
-            ctaLabel: noticeBlock.ctaLabel,
-            targetType: noticeBlock.targetType,
-            targetValue: noticeBlock.targetValue,
-            linkUrl: null,
-        },
-    ].slice(0, 5);
+    return systemNoticeItems;
 }
 
 export function NoticeDetailSheet({
@@ -522,9 +486,6 @@ export function HomePage() {
     const [readyHeroImage, setReadyHeroImage] = useState('');
     const [quickPage, setQuickPage] = useState(0);
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
-    const [noticeIndex, setNoticeIndex] = useState(0);
-    const [noticeHovered, setNoticeHovered] = useState(false);
-    const [noticeFocused, setNoticeFocused] = useState(false);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
     const [heroGestureActive, setHeroGestureActive] = useState(false);
     const [heroMotion, setHeroMotion] = useState<{
@@ -574,25 +535,7 @@ export function HomePage() {
     const managedHero = managedHeroes[heroIndex];
     const heroImage = managedHero?.imageUrl ?? '';
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
-    const defaultNoticeItem: HomeNoticeItem = {
-        id: 'default-notice',
-        summary: isZh ? '现货商品配送时效以结算页为准' : 'Delivery timing is confirmed at checkout',
-        title: isZh ? '配送说明' : 'Delivery notice',
-        content: isZh
-            ? '现货商品配送时效以结算页显示的信息为准。'
-            : 'Delivery timing for in-stock items is confirmed at checkout.',
-        ctaLabel: '',
-        targetType: 'NONE',
-        targetValue: null,
-        linkUrl: null,
-    };
-    const activeNoticeItem = noticeItems[noticeIndex % Math.max(1, noticeItems.length)] ?? defaultNoticeItem;
-    const activeNoticeTitle = activeNoticeItem.title || (isZh ? '公告' : 'Notice');
-    const activeNoticePreview = activeNoticeItem.content.replace(/\s+/gu, ' ').trim();
-    const openNoticeItem =
-        openNoticeId === defaultNoticeItem.id
-            ? defaultNoticeItem
-            : noticeItems.find(item => item.id === openNoticeId);
+    const openNoticeItem = noticeItems.find(item => item.id === openNoticeId);
     const showFooter = !footerConfigured && (Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL'));
     const emptyCatalogOrder =
         footerBlock && homepageModuleOrder('FOOTER') === homepageModules.length - 1
@@ -816,36 +759,6 @@ export function HomePage() {
         document.addEventListener('visibilitychange', updatePageVisibility);
         return () => document.removeEventListener('visibilitychange', updatePageVisibility);
     }, []);
-
-    useEffect(() => {
-        if (
-            noticeItems.length < 2 ||
-            openNoticeId ||
-            noticeHovered ||
-            noticeFocused ||
-            prefersReducedMotion ||
-            !pageVisible
-        ) {
-            return;
-        }
-        const timer = window.setInterval(
-            () => setNoticeIndex(index => (index + 1) % noticeItems.length),
-            noticeIntervalSeconds * 1000,
-        );
-        return () => window.clearInterval(timer);
-    }, [
-        noticeIntervalSeconds,
-        noticeItems.length,
-        openNoticeId,
-        noticeHovered,
-        noticeFocused,
-        pageVisible,
-        prefersReducedMotion,
-    ]);
-
-    useEffect(() => {
-        if (noticeIndex >= noticeItems.length) setNoticeIndex(0);
-    }, [noticeIndex, noticeItems.length]);
 
     useEffect(() => {
         if (
@@ -1163,32 +1076,16 @@ export function HomePage() {
                 <>
                     <div className="homepage-modules">
                         {hasHomepageModule('NOTICE') && noticeItems.length > 0 ? (
-                            <button
-                                className="notice-strip"
-                                style={{ order: homepageModuleOrder('NOTICE') }}
-                                type="button"
-                                aria-haspopup="dialog"
-                                aria-expanded={Boolean(openNoticeItem)}
-                                aria-label={
-                                    isZh
-                                        ? `查看公告全文：${activeNoticeTitle}`
-                                        : `Read full notice: ${activeNoticeTitle}`
-                                }
-                                onClick={() => setOpenNoticeId(activeNoticeItem.id)}
-                                onMouseEnter={() => setNoticeHovered(true)}
-                                onMouseLeave={() => setNoticeHovered(false)}
-                                onFocus={() => setNoticeFocused(true)}
-                                onBlur={() => setNoticeFocused(false)}
-                            >
-                                <Bell aria-hidden="true" />
-                                <span className="notice-strip-copy" key={activeNoticeItem.id}>
-                                    <strong className="notice-strip-title">{activeNoticeTitle}</strong>
-                                    {activeNoticePreview && (
-                                        <span className="notice-strip-content">{activeNoticePreview}</span>
-                                    )}
-                                </span>
-                                <ChevronRight aria-hidden="true" />
-                            </button>
+                            <HomeNoticeTicker
+                                items={noticeItems}
+                                language={language}
+                                order={homepageModuleOrder('NOTICE')}
+                                holdSeconds={noticeIntervalSeconds}
+                                paused={Boolean(openNoticeItem) || !pageVisible}
+                                reducedMotion={prefersReducedMotion}
+                                onOpen={setOpenNoticeId}
+                                onAll={() => navigateTo({ name: 'announcements' })}
+                            />
                         ) : null}
                         <div
                             className={`home-intro-grid${groupedIntro ? ' is-grouped-intro' : ''}`}

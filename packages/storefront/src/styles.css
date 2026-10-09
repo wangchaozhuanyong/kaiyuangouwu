@@ -843,7 +843,7 @@ img {
     width: calc(100% - 24px);
     margin: 8px 12px 10px;
     min-height: 44px;
-    padding: 7px 14px;
+    padding: 0 14px;
     border: 0;
     border-radius: var(--radius-sm, 8px);
     background: var(--surface);
@@ -855,7 +855,6 @@ img {
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
     box-shadow: var(--shadow-sm);
-    cursor: pointer;
     transition: background-color 0.2s ease;
 }
 
@@ -871,6 +870,43 @@ img {
     gap: 10px;
 }
 
+.notice-strip-open {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    text-align: left;
+}
+
+.notice-strip :is(.notice-strip-open, .notice-strip-control, .notice-strip-all) {
+    min-height: 44px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+    border-radius: var(--skin-control-radius);
+    cursor: pointer;
+}
+
+.notice-strip :is(.notice-strip-control, .notice-strip-all) {
+    flex: 0 0 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notice-strip :is(.notice-strip-control, .notice-strip-all):hover {
+    background: var(--control-surface);
+}
+
+.notice-strip .notice-strip-control svg {
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+}
+
 .notice-strip-title {
     flex: 0 1 auto;
     min-width: 0;
@@ -882,7 +918,7 @@ img {
     font-weight: var(--font-weight-bold);
 }
 
-.notice-strip-title:only-child {
+.notice-strip-copy.is-title-only .notice-strip-title {
     max-width: 100%;
 }
 
@@ -896,20 +932,18 @@ img {
     font-weight: var(--font-weight-normal);
 }
 
+.notice-strip-track {
+    display: inline-block;
+    min-width: 100%;
+    white-space: nowrap;
+}
+
 .notice-strip:focus-visible {
     outline: 3px solid var(--focus);
     outline-offset: 2px;
 }
 
-.notice-strip > svg:last-child {
-    width: 15px;
-    height: 15px;
-    flex-shrink: 0;
-    margin-left: auto;
-    color: var(--muted);
-}
-
-.notice-strip svg:first-child {
+.notice-strip > svg {
     color: var(--accent);
     width: 16px;
     height: 16px;

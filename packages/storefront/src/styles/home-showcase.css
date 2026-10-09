@@ -3446,10 +3446,6 @@ html[lang='en'] .primary-category-image {
         color: var(--muted);
     }
 
-    .notice-strip-copy {
-        animation: notice-ticker-enter 240ms ease-out;
-    }
-
     .category-page .primary-categories-all-label {
         height: auto;
         min-height: 36px;

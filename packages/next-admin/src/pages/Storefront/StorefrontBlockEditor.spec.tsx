@@ -241,6 +241,10 @@ it.each([
             .find(label => label.textContent?.includes('公告展示期限'))!
             .querySelector('select')!;
         expect(select.value).toBe(expected);
+        const shortNoticeDuration = Array.from(host.querySelectorAll('label'))
+            .find(label => label.textContent?.includes('短公告停留时间（秒）'))!
+            .querySelector('input')!;
+        expect(shortNoticeDuration.value).toBe('8');
         expect(value).toEqual(before);
         expect(onSave).not.toHaveBeenCalled();
     } finally {
