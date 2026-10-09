@@ -8,6 +8,8 @@ import { parseArgs } from 'node:util';
 export const STATIC_APPS = ['storefront', 'next-admin'];
 // These shared renderers/styles have only browser consumers in both static apps.
 const sharedStaticInputs = new Set([
+    'packages/storefront-content-plugin/src/shared/business-services-hero.css',
+    'packages/storefront-content-plugin/src/shared/business-services-hero.tsx',
     'packages/storefront-content-plugin/src/shared/hero-scene.css',
     'packages/storefront-content-plugin/src/shared/hero-scene.tsx',
     'packages/storefront-content-plugin/src/shared/auth-visual.tsx',

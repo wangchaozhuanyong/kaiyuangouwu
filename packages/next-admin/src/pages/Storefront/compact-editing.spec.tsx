@@ -49,9 +49,11 @@ afterEach(() => {
     act(() => root.unmount());
     host.remove();
 });
-async function fill(input: HTMLInputElement, value: string) {
+async function fill(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
     await act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+        const prototype =
+            input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(input, value);
         input.dispatchEvent(new Event('input', { bubbles: true }));
     });
 }
@@ -93,6 +95,13 @@ describe('compact editors retain drafts', () => {
         await select(layout, 'image-overlay');
         expect(preview.getAttribute('data-services-hero-layout')).toBe('image-overlay');
         expect(preview.querySelector('img')!.getAttribute('src')).toBe(originalImage);
+        const colorControl = (label: string) =>
+            [...host.querySelectorAll('label')]
+                .find(field => field.textContent?.includes(label))!
+                .querySelector<HTMLInputElement>('input:not([type="color"])')!;
+        await fill(colorControl('文案背景色（选填）'), '#f4eee3');
+        await fill(colorControl('广告标题色（选填）'), '#2457a5');
+        await fill(colorControl('说明文字色（选填）'), '#334155');
         const save = [...host.querySelectorAll('button')].find(button =>
             button.textContent?.includes('保存并发布'),
         )!;
@@ -103,12 +112,24 @@ describe('compact editors retain drafts', () => {
             expectedUpdatedAt: block.updatedAt,
             targetType: 'URL',
             targetValue: 'https://example.com/services',
-            settings: { preservedSetting: true, businessServicesHeroLayout: 'image-overlay' },
+            backgroundColor: '#f4eee3',
+            textColor: '#2457a5',
+            settings: {
+                preservedSetting: true,
+                businessServicesHeroLayout: 'image-overlay',
+                secondaryTextColor: '#334155',
+            },
         });
         expect(input.items).toHaveLength(1);
         expect(input).not.toHaveProperty('imageAssetId');
         expect(input).not.toHaveProperty('imageUrl');
         expect(input.allowImageReplacement).not.toBe(true);
+        await select(layout, 'stacked');
+        expect(host.textContent).not.toContain('广告标题色（选填）');
+        await select(layout, 'image-overlay');
+        expect(colorControl('文案背景色（选填）').value).toBe('#f4eee3');
+        expect(colorControl('广告标题色（选填）').value).toBe('#2457a5');
+        expect(colorControl('说明文字色（选填）').value).toBe('#334155');
     });
 
     it('keeps editing available when the current store preview theme is unavailable', async () => {
@@ -116,7 +137,7 @@ describe('compact editors retain drafts', () => {
         await act(async () => root.render(<BusinessServicesCopyModule />));
         expect(host.querySelector('[data-business-services-preview]')).toBeNull();
         expect(host.textContent).toContain('店铺预览主题读取失败，编辑内容已保留');
-        const chinese = host.querySelector<HTMLInputElement>('input[maxlength="40"]')!;
+        const chinese = host.querySelector<HTMLTextAreaElement>('textarea[maxlength="40"]')!;
         expect(chinese.disabled).toBe(false);
         await fill(chinese, '主题读取失败时保留的草稿');
         expect(chinese.value).toBe('主题读取失败时保留的草稿');
@@ -125,25 +146,25 @@ describe('compact editors retain drafts', () => {
     it('retains both language drafts and submits both after switching the visible editor', async () => {
         await act(async () => root.render(<BusinessServicesCopyModule />));
         const language = host.querySelector<HTMLSelectElement>('[aria-label="编辑语言"]')!;
-        const chinese = host.querySelector<HTMLInputElement>('input[maxlength="40"]')!;
-        const english = host.querySelector<HTMLInputElement>('input[maxlength="80"]')!;
-        await fill(chinese, '中文草稿');
+        const chinese = host.querySelector<HTMLTextAreaElement>('textarea[maxlength="40"]')!;
+        const english = host.querySelector<HTMLTextAreaElement>('textarea[maxlength="80"]')!;
+        await fill(chinese, '中文\n草稿');
         await select(language, 'en');
         expect(chinese.closest('[hidden]')).not.toBeNull();
         expect(english.closest('[hidden]')).toBeNull();
-        await fill(english, 'English draft');
+        await fill(english, 'English\ndraft');
         const mobileViews = host.querySelectorAll<HTMLButtonElement>('[aria-label="编辑与预览视图"] button');
         await act(async () => mobileViews[1].click());
         expect(mobileViews[1].getAttribute('aria-pressed')).toBe('true');
         expect(english.closest('section')?.classList.contains('hidden')).toBe(true);
         await act(async () => mobileViews[0].click());
         expect(english.closest('section')?.classList.contains('hidden')).toBe(false);
-        expect(english.value).toBe('English draft');
+        expect(english.value).toBe('English\ndraft');
         expect(mocks.mutate).not.toHaveBeenCalled();
         await select(language, 'zh_Hans');
-        expect(chinese.value).toBe('中文草稿');
-        expect(english.value).toBe('English draft');
-        expect(host.querySelector('h3')?.textContent).toBe('中文草稿');
+        expect(chinese.value).toBe('中文\n草稿');
+        expect(english.value).toBe('English\ndraft');
+        expect(host.querySelector('h3')?.textContent).toBe('中文\n草稿');
         const save = [...host.querySelectorAll('button')].find(button =>
             button.textContent?.includes('保存并发布'),
         )!;
@@ -151,8 +172,8 @@ describe('compact editors retain drafts', () => {
         expect(mocks.mutate).toHaveBeenCalledOnce();
         expect(mocks.mutate.mock.calls[0][0].variables.input.translations).toEqual(
             expect.arrayContaining([
-                expect.objectContaining({ languageCode: 'zh_Hans', title: '中文草稿' }),
-                expect.objectContaining({ languageCode: 'en', title: 'English draft' }),
+                expect.objectContaining({ languageCode: 'zh_Hans', title: '中文\n草稿' }),
+                expect.objectContaining({ languageCode: 'en', title: 'English\ndraft' }),
             ]),
         );
     });

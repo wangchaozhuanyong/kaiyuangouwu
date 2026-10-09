@@ -157,7 +157,7 @@
     padding: 0;
     gap: 0;
     border-color: var(--line-subtle);
-    background: var(--surface);
+    background: var(--hero-copy-background, var(--surface));
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-heading-copy {
@@ -169,7 +169,31 @@
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-12);
     padding: var(--space-24);
-    color: var(--text);
+    color: var(--hero-copy-foreground, var(--text));
+}
+
+.business-services-heading[data-services-hero-layout='image-overlay'] .business-services-page-title {
+    font-family: var(--font-ui);
+    font-size: var(--type-campaign-size);
+    line-height: var(--type-campaign-leading);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
+    color: var(--hero-copy-foreground, var(--text));
+    white-space: pre-line;
+    text-wrap: balance;
+}
+
+.business-services-heading[data-services-hero-layout='image-overlay'] .business-services-page-title::after {
+    content: '';
+    display: block;
+    width: min(72%, 6ch);
+    height: var(--space-8);
+    margin-top: var(--space-12);
+    margin-bottom: var(--space-8);
+    border-radius: var(--skin-control-radius);
+    background: var(--hero-accent-secondary-color, var(--accent-soft));
+    transform: rotate(-3deg);
+    transform-origin: left;
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-heading-link {
@@ -184,6 +208,9 @@
 .business-services-heading[data-services-hero-layout='image-overlay'] p {
     grid-column: 1;
     max-width: none;
+    color: var(--hero-copy-body-foreground, var(--muted));
+    font-size: var(--type-reading-size);
+    line-height: var(--type-reading-leading);
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-hero-media {
@@ -199,7 +226,7 @@
     z-index: 2;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(to bottom, var(--surface), transparent 28%);
+    background: linear-gradient(to bottom, var(--hero-copy-background, var(--surface)), transparent 28%);
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay']
@@ -213,9 +240,18 @@
     .business-services-heading[data-services-hero-layout='image-overlay'] {
         display: grid;
         grid-template-columns: minmax(0, 9fr) minmax(0, 11fr);
+        grid-template-rows: minmax(min-content, 1fr);
         align-items: stretch;
-        aspect-ratio: 5 / 2;
         min-height: 360px;
+    }
+
+    /* Preserve the 5:2 artwork frame as a minimum; longer copy can grow the shared row. */
+    .business-services-heading[data-services-hero-layout='image-overlay']::before {
+        content: '';
+        grid-column: 1 / -1;
+        grid-row: 1;
+        padding-top: 40%;
+        pointer-events: none;
     }
 
     .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-heading-copy {
@@ -224,11 +260,6 @@
         align-content: center;
         min-height: 360px;
         padding: var(--space-32);
-    }
-
-    .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-page-title {
-        font-size: var(--type-hero-size);
-        line-height: var(--type-hero-leading);
     }
 
     .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-hero-media {
@@ -247,6 +278,16 @@
 
     .business-services-heading[data-services-hero-layout='image-overlay']
         .business-services-hero-media::after {
-        background: linear-gradient(to right, var(--surface) 44%, transparent 50%);
+        content: none;
+    }
+
+    /* Keep the full artwork; protect only the editable description over coloured ribbons. */
+    .business-services-heading[data-services-hero-layout='image-overlay'] p {
+        width: fit-content;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding: var(--space-8) var(--space-12);
+        border-radius: var(--skin-control-radius);
+        background: color-mix(in srgb, var(--hero-copy-background, var(--surface)) 88%, transparent);
     }
 }

@@ -614,11 +614,36 @@
 }
 
 .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-title {
-    font-size: var(--type-hero-size);
-    line-height: var(--type-hero-leading);
-    white-space: normal;
+    font-family: var(--font-ui);
+    font-size: var(--type-campaign-size);
+    line-height: var(--type-campaign-leading);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
+    white-space: pre-line;
     overflow-wrap: anywhere;
-    text-wrap: pretty;
+    text-wrap: balance;
+}
+
+.hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='editorial']
+    .hero-rich-title:not(:empty)::after {
+    content: '';
+    display: block;
+    width: min(72%, 6ch);
+    height: var(--space-8);
+    margin-top: var(--space-12);
+    margin-bottom: var(--space-8);
+    border-radius: var(--skin-control-radius);
+    background: var(--hero-accent-secondary-color);
+    transform: rotate(-3deg);
+    transform-origin: left;
+}
+
+.hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-pill {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--tracking-eyebrow);
 }
 
 .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-desc {
@@ -626,8 +651,8 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
+    font-size: var(--type-reading-size);
+    line-height: var(--type-reading-leading);
 }
 
 .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='editorial'] .hero-rich-cta-btn {

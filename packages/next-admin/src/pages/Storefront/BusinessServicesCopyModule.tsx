@@ -44,6 +44,7 @@ import {
     updateBusinessServicesLink,
 } from './business-services-link';
 import { storefrontBlockInput } from './storefront-content-utils';
+import { ColorInput } from './storefront-editor-controls';
 import { verifyContentChannel, verifySavedBlock } from './storefront-save-verification';
 
 const BLOCK_CODE = 'storefront-client-plugins';
@@ -337,8 +338,9 @@ export function BusinessServicesCopyModule() {
                                     >
                                         <strong className="text-xs">{zh ? '中文' : '英文'}</strong>
                                         <Field label={`标题 ${translation.title.length}/${zh ? 40 : 80}`}>
-                                            <AdminInput
+                                            <AdminTextArea
                                                 value={translation.title}
+                                                rows={2}
                                                 maxLength={zh ? 40 : 80}
                                                 disabled={!canEdit}
                                                 onChange={event =>
@@ -347,6 +349,9 @@ export function BusinessServicesCopyModule() {
                                                 className={inputClass}
                                             />
                                         </Field>
+                                        <p className="text-xs leading-5 text-slate-500">
+                                            可换行，前台按排版完整显示。
+                                        </p>
                                         <Field label={`说明 ${translation.body.length}/200`}>
                                             <AdminTextArea
                                                 value={translation.body}
@@ -390,6 +395,62 @@ export function BusinessServicesCopyModule() {
                                     <option value="image-overlay">无文字底图，文字叠加</option>
                                 </AdminSelect>
                             </AdminField>
+                            {heroLayout === 'image-overlay' && (
+                                <fieldset
+                                    disabled={!canEdit || pending}
+                                    className="grid gap-3 sm:grid-cols-2"
+                                >
+                                    <Field label="文案背景色（选填）">
+                                        <ColorInput
+                                            value={draft.backgroundColor ?? ''}
+                                            onChange={color =>
+                                                setDraft(current =>
+                                                    current
+                                                        ? {
+                                                              ...current,
+                                                              backgroundColor: color.trim() || null,
+                                                          }
+                                                        : current,
+                                                )
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="广告标题色（选填）">
+                                        <ColorInput
+                                            value={draft.textColor ?? ''}
+                                            onChange={color =>
+                                                setDraft(current =>
+                                                    current
+                                                        ? { ...current, textColor: color.trim() || null }
+                                                        : current,
+                                                )
+                                            }
+                                        />
+                                    </Field>
+                                    <Field label="说明文字色（选填）">
+                                        <ColorInput
+                                            value={
+                                                typeof draft.settings?.secondaryTextColor === 'string'
+                                                    ? draft.settings.secondaryTextColor
+                                                    : ''
+                                            }
+                                            onChange={color =>
+                                                setDraft(current =>
+                                                    current
+                                                        ? {
+                                                              ...current,
+                                                              settings: {
+                                                                  ...(current.settings ?? {}),
+                                                                  secondaryTextColor: color.trim() || null,
+                                                              },
+                                                          }
+                                                        : current,
+                                                )
+                                            }
+                                        />
+                                    </Field>
+                                </fieldset>
+                            )}
                         </section>
                         <div className="min-w-0 space-y-3 lg:sticky lg:top-0">
                             <section
@@ -434,6 +495,7 @@ export function BusinessServicesCopyModule() {
                                             title={preview.title || '—'}
                                             body={preview.body || '—'}
                                             layout={heroLayout}
+                                            visual={draft}
                                             image={
                                                 previewImage ? (
                                                     <AdminImage

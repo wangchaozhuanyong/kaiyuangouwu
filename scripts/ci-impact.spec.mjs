@@ -75,6 +75,26 @@ test('a storefront spacing change never launches backend, codegen or database ch
         assert.equal(plan[key], false, key);
     assert.equal(plan.lane, 'frontend');
 });
+test('shared business services renderers rebuild both static apps without a backend release', () => {
+    for (const file of [
+        'packages/storefront-content-plugin/src/shared/business-services-hero.css',
+        'packages/storefront-content-plugin/src/shared/business-services-hero.tsx',
+    ]) {
+        const plan = classifyChanges([file], inventory);
+        assert.equal(plan.lane, 'frontend', file);
+        assert.deepEqual(plan.frontends, ['next-admin', 'storefront']);
+        assert.deepEqual(plan.packages, []);
+        assert.deepEqual(plan.databases, []);
+        assert.equal(plan.publishing, false);
+    }
+    assert.equal(
+        classifyChanges(
+            ['packages/storefront-content-plugin/src/storefront-content.service.ts'],
+            [...inventory, { directory: 'storefront-content-plugin', name: 'storefront-content' }],
+        ).lane,
+        'runtime',
+    );
+});
 test('static deployment entry repairs select controls and reuse frontend checks', () => {
     const controls = [
         'deploy/frontend-release.mjs',

@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 
 import './business-services-hero.css';
 import { ContentText } from './content-text';
+import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 
 export type BusinessServicesHeroLayout = 'stacked' | 'image-overlay';
 
@@ -22,6 +23,7 @@ export function BusinessServicesHero({
     layout = 'stacked',
     headingLevel = 'h1',
     className,
+    visual,
 }: {
     title: string;
     body: string;
@@ -31,12 +33,14 @@ export function BusinessServicesHero({
     layout?: BusinessServicesHeroLayout;
     headingLevel?: 'h1' | 'h3';
     className?: string;
+    visual?: HeroThemeData;
 }) {
     const Heading = headingLevel;
     return (
         <header
             className={['business-services-heading', className].filter(Boolean).join(' ')}
             data-services-hero-layout={image ? layout : 'stacked'}
+            style={image && layout === 'image-overlay' ? heroThemeStyle(visual ?? {}) : undefined}
         >
             {image ? <div className="business-services-hero-media">{image}</div> : decoration}
             <div className="business-services-heading-copy">
