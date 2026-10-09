@@ -42,6 +42,19 @@ const defaultAuthSettings: StorefrontAuthSettings = {
 };
 
 export class ContentReviewsApi extends BaseDomainApi {
+    private async announcementReader() {
+        const { AnnouncementsApi } = await import('./announcements');
+        return new AnnouncementsApi(this.ctx);
+    }
+
+    async announcements(options: { skip: number; take: number }, signal?: AbortSignal) {
+        return (await this.announcementReader()).list(options, signal);
+    }
+
+    async announcement(id: string, signal?: AbortSignal) {
+        return (await this.announcementReader()).detail(id, signal);
+    }
+
     async recordStorefrontHeartbeat(visitorId: string): Promise<boolean> {
         const { StoreNotificationsApi } = await import('./store-notifications');
         return new StoreNotificationsApi(this.ctx.request).recordStorefrontHeartbeat(visitorId);

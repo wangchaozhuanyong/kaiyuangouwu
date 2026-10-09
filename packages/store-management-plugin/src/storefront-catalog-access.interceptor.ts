@@ -18,6 +18,8 @@ const publicQueries = new Set([
     'activeStorefrontFlashSales',
     'activeStorefrontCoupons',
     'activeSystemAnnouncements',
+    'storefrontAnnouncements',
+    'storefrontAnnouncement',
     'storefrontContentSettings',
     'activeStoreCommerceMode',
     'imageStudioConfig',

@@ -3,7 +3,11 @@ import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendur
 import { storefrontContentPermission } from '@vendure/storefront-content-plugin';
 
 import { SystemAnnouncementService } from './system-announcement.service';
-import { CreateSystemAnnouncementInput, UpdateSystemAnnouncementInput } from './types';
+import {
+    CreateSystemAnnouncementInput,
+    StorefrontAnnouncementPageOptions,
+    UpdateSystemAnnouncementInput,
+} from './types';
 
 @Resolver('SystemAnnouncement')
 export class SystemAnnouncementAdminResolver {
@@ -75,5 +79,20 @@ export class SystemAnnouncementShopResolver {
     @Allow(Permission.Public)
     activeSystemAnnouncements(@Ctx() ctx: RequestContext) {
         return this.announcementService.findActive(ctx);
+    }
+
+    @Query()
+    @Allow(Permission.Public)
+    storefrontAnnouncements(
+        @Ctx() ctx: RequestContext,
+        @Args('options') options?: StorefrontAnnouncementPageOptions,
+    ) {
+        return this.announcementService.findActivePage(ctx, options);
+    }
+
+    @Query()
+    @Allow(Permission.Public)
+    storefrontAnnouncement(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
+        return this.announcementService.findActiveById(ctx, id);
     }
 }

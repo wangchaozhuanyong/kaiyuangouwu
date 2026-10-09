@@ -100,6 +100,7 @@ export function useStorefrontMetadata({
             favorites: isZh ? '我的收藏' : 'My favorites',
             history: isZh ? '浏览足迹' : 'Browsing history',
             notifications: isZh ? '消息通知' : 'Notifications',
+            announcements: isZh ? '系统公告' : 'Announcements',
             coupons: isZh ? '优惠券' : 'Coupons',
             referral: isZh ? '邀请返利' : 'Referral rewards',
             support: isZh ? '客服中心' : 'Customer support',

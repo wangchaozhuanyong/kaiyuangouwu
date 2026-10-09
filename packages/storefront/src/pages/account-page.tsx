@@ -9,9 +9,9 @@ import {
     Heart,
     History,
     MapPin,
+    Megaphone,
     Package,
     RotateCcw,
-    Store,
     TicketPercent,
     Truck,
     WalletCards,
@@ -456,10 +456,10 @@ export function AccountPage() {
                         onClick={() => navigateTo({ name: 'support' })}
                     />
                     <ServiceButton
-                        icon={<Store />}
+                        icon={<Megaphone />}
                         tone="mail"
-                        label={compactCopy.services.store}
-                        onClick={() => navigateTo({ name: 'home' })}
+                        label={compactCopy.services.announcements}
+                        onClick={() => navigateTo({ name: 'announcements' })}
                     />
                     {!desktop && (
                         <ServiceButton

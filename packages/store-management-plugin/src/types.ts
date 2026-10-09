@@ -41,6 +41,16 @@ export interface SystemAnnouncementPublicView {
     endsAt: Date | null;
 }
 
+export interface StorefrontAnnouncementPageOptions {
+    skip?: number | null;
+    take?: number | null;
+}
+
+export interface StorefrontSystemAnnouncementList {
+    items: SystemAnnouncementPublicView[];
+    totalItems: number;
+}
+
 export type StorefrontPromotionContentType = 'HTML' | 'MARKDOWN';
 
 export interface StorefrontPromotionPageView {

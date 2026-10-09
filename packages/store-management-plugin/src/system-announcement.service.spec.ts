@@ -115,6 +115,140 @@ describe('SystemAnnouncementService', () => {
         ).rejects.toThrow('跳转链接');
     });
 
+    it('paginates the complete active archive beyond the homepage limit', async () => {
+        const records = Array.from({ length: 45 }, (_, index) => publicAnnouncement(String(index)));
+        const repository = repositoryHarness(records);
+        const service = serviceWith(repository);
+        const context = { languageCode: 'zh_Hans', channelId: 'channel-1' } as any;
+
+        const result = await service.findActivePage(context, { skip: 20, take: 20 });
+
+        expect(result.totalItems).toBe(45);
+        expect(result.items.map(item => item.id)).toEqual(records.slice(20, 40).map(item => item.id));
+        expect(repository.queryBuilder.take).not.toHaveBeenCalled();
+        expect(repository.queryBuilder.addSelect).toHaveBeenCalledWith(
+            'COALESCE(announcement.startsAt, announcement.createdAt)',
+            'announcement_published_at',
+        );
+        expect(repository.queryBuilder.orderBy).toHaveBeenCalledWith('announcement_published_at', 'DESC');
+        expect(repository.queryBuilder.addOrderBy.mock.calls).toEqual([
+            ['announcement.createdAt', 'DESC'],
+            ['announcement.id', 'DESC'],
+        ]);
+
+        await service.findActive(context);
+        expect(repository.queryBuilder.take).toHaveBeenCalledWith(20);
+    });
+
+    it('filters unusable English translations before counting and paginating the archive', async () => {
+        const untranslated = Array.from({ length: 25 }, (_, index) => ({
+            ...publicAnnouncement(`untranslated-${index}`),
+            contentEn: index % 2 ? '' : '尚未翻译',
+        }));
+        const repository = repositoryHarness([
+            ...untranslated,
+            publicAnnouncement('readable-one'),
+            publicAnnouncement('readable-two'),
+        ]);
+
+        const result = await serviceWith(repository).findActivePage(
+            { languageCode: 'en', channelId: 'channel-1' } as any,
+            { skip: 1, take: 1 },
+        );
+
+        expect(result.totalItems).toBe(2);
+        expect(result.items.map(item => item.id)).toEqual(['readable-two']);
+        expect(result.items[0]).toMatchObject({ title: 'Announcement', content: 'Published notice' });
+    });
+
+    it('bounds archive pagination and keeps a successful empty page distinct from missing data', async () => {
+        const records = Array.from({ length: 125 }, (_, index) => publicAnnouncement(String(index)));
+        const service = serviceWith(repositoryHarness(records));
+        const context = { languageCode: 'zh_Hans', channelId: 'channel-1' } as any;
+
+        expect((await service.findActivePage(context, { skip: -5, take: 1_000 })).items).toHaveLength(100);
+        expect((await service.findActivePage(context, { skip: 1.9, take: 0 })).items[0].id).toBe('1');
+        expect((await service.findActivePage(context, null)).items).toHaveLength(20);
+        expect((await service.findActivePage(context, { take: Number.NaN })).items).toHaveLength(20);
+        expect(await service.findActivePage(context, { skip: 500 })).toEqual({ items: [], totalItems: 125 });
+        expect(await serviceWith(repositoryHarness()).findActivePage(context)).toEqual({
+            items: [],
+            totalItems: 0,
+        });
+    });
+
+    it.each(['list', 'detail'] as const)(
+        'keeps enabled, schedule and current-store constraints on the public %s query',
+        async mode => {
+            const repository = repositoryHarness();
+            const service = serviceWith(repository);
+            const context = { languageCode: 'zh_Hans', channelId: 'current-store' } as any;
+
+            if (mode === 'list') await service.findActivePage(context);
+            else await service.findActiveById(context, 'older-announcement');
+
+            expect(repository.queryBuilder.where).toHaveBeenCalledWith('announcement.enabled = :enabled', {
+                enabled: true,
+            });
+            expect(repository.queryBuilder.andWhere).toHaveBeenCalledWith(
+                '(announcement.startsAt IS NULL OR announcement.startsAt <= :now)',
+                { now: expect.any(Date) },
+            );
+            expect(repository.queryBuilder.andWhere).toHaveBeenCalledWith(
+                '(announcement.endsAt IS NULL OR announcement.endsAt > :now)',
+                { now: expect.any(Date) },
+            );
+            expect(repository.queryBuilder.andWhere).toHaveBeenCalledWith(
+                '(announcement.targetMode = :allMode OR targetChannel.id = :channelId)',
+                { allMode: 'ALL', channelId: 'current-store' },
+            );
+            expect(repository.queryBuilder.distinct).toHaveBeenCalledWith(true);
+        },
+    );
+
+    it('reads a direct announcement independently of the homepage limit and returns only public fields', async () => {
+        const repository = repositoryHarness();
+        repository.queryBuilder.getOne.mockResolvedValue(publicAnnouncement('older-announcement'));
+
+        const result = await serviceWith(repository).findActiveById(
+            { languageCode: 'zh_Hans', channelId: 'channel-1' } as any,
+            'older-announcement',
+        );
+
+        expect(result).toEqual({
+            id: 'older-announcement',
+            createdAt: new Date('2025-01-01T00:00:00.000Z'),
+            title: '公告标题',
+            content: '公告正文',
+            linkUrl: null,
+            startsAt: null,
+            endsAt: null,
+        });
+        expect(repository.queryBuilder.andWhere).toHaveBeenCalledWith('announcement.id = :id', {
+            id: 'older-announcement',
+        });
+        expect(repository.queryBuilder.getMany).not.toHaveBeenCalled();
+        expect(repository.queryBuilder.take).not.toHaveBeenCalled();
+    });
+
+    it('returns null for a filtered-out detail or one without a complete English translation', async () => {
+        const repository = repositoryHarness();
+        const service = serviceWith(repository);
+        const context = { languageCode: 'en', channelId: 'channel-1' } as any;
+
+        expect(await service.findActiveById(context, 'not-visible')).toBeNull();
+        repository.queryBuilder.getOne.mockResolvedValue({
+            ...publicAnnouncement('untranslated'),
+            titleEn: '',
+        });
+        expect(await service.findActiveById(context, 'untranslated')).toBeNull();
+        repository.queryBuilder.getOne.mockResolvedValue({
+            ...publicAnnouncement('untranslated'),
+            contentEn: '中文内容',
+        });
+        expect(await service.findActiveById(context, 'untranslated')).toBeNull();
+    });
+
     it('requires two valid Channels for a multiple-store announcement', async () => {
         const repository = repositoryHarness();
         const channelRepository = { find: vi.fn().mockResolvedValue([{ id: 'channel-1' }]) };
@@ -225,10 +359,12 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         where: vi.fn(),
         andWhere: vi.fn(),
         distinct: vi.fn(),
+        addSelect: vi.fn(),
         orderBy: vi.fn(),
         addOrderBy: vi.fn(),
         take: vi.fn(),
         getMany: vi.fn(() => Promise.resolve(activeAnnouncements)),
+        getOne: vi.fn((): Promise<any> => Promise.resolve(null)),
     };
     for (const method of [
         'leftJoin',
@@ -237,6 +373,7 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         'where',
         'andWhere',
         'distinct',
+        'addSelect',
         'orderBy',
         'addOrderBy',
         'take',
@@ -251,6 +388,20 @@ function repositoryHarness(activeAnnouncements: any[] = []) {
         find: vi.fn(() => Promise.resolve(activeAnnouncements)),
         findOne: vi.fn((): Promise<any> => Promise.resolve(null)),
         remove: vi.fn(),
+    };
+}
+
+function publicAnnouncement(id: string) {
+    return {
+        id,
+        createdAt: new Date('2025-01-01T00:00:00.000Z'),
+        titleZh: '公告标题',
+        contentZh: '公告正文',
+        titleEn: 'Announcement',
+        contentEn: 'Published notice',
+        linkUrl: null,
+        startsAt: null,
+        endsAt: null,
     };
 }
 

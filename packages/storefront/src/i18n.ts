@@ -235,7 +235,7 @@ export const compactUiCopy = {
             messages: '消息通知',
             reviews: '评价中心',
             support: '帮助中心',
-            store: '店铺首页',
+            announcements: '系统公告',
         },
     },
     en: {
@@ -269,7 +269,7 @@ export const compactUiCopy = {
             messages: 'Messages',
             reviews: 'Reviews',
             support: 'Help',
-            store: 'Store',
+            announcements: 'Notices',
         },
     },
 } as const satisfies Record<StorefrontLanguage, object>;

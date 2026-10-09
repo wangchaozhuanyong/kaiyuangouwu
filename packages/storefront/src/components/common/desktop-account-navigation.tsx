@@ -8,6 +8,7 @@ import {
     Heart,
     History,
     MapPin,
+    Megaphone,
     Package,
     RotateCcw,
     ShieldCheck,
@@ -29,6 +30,7 @@ type AccountPath =
     | '/logistics'
     | '/coupons'
     | '/notifications'
+    | '/announcements'
     | '/favorites'
     | '/history'
     | '/reviews'
@@ -72,6 +74,12 @@ const desktopAccountGroups: ReadonlyArray<{
                 label: ['消息通知', 'Notifications'],
                 routes: ['notifications'],
                 icon: Bell,
+            },
+            {
+                path: '/announcements',
+                label: ['系统公告', 'Announcements'],
+                routes: ['announcements'],
+                icon: Megaphone,
             },
         ],
     },

@@ -1,6 +1,5 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 
-// Preserve old links without showing the retired standalone announcements page.
-export const Route = createFileRoute('/announcements')({
-    beforeLoad: () => redirect({ to: '/', replace: true }),
-});
+import { AnnouncementsRoutePage } from '../route-pages/announcements-route-page';
+
+export const Route = createFileRoute('/announcements')({ component: AnnouncementsRoutePage });
