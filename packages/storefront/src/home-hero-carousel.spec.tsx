@@ -900,7 +900,7 @@ describe('HomePage carousel pointer interactions', () => {
                     left: 0,
                     right: 360,
                     bottom: height,
-                    width: this.matches('.hero-overlay-controls') ? pagerWidth : 360,
+                    width: 360,
                     height,
                     toJSON: () => ({}),
                 };
