@@ -32,7 +32,11 @@ describe('homepage module spacing', () => {
             /\.legal-footer\s*\{[^}]*margin:\s*var\(--space-section\) var\(--page-section-inset, var\(--experience-page-gutter-mobile\)\) 0;/,
         );
         expect(stylesheet).toMatch(
-            /\.quick-grid b\s*\{[^}]*width:\s*5em;[^}]*font-size:\s*var\(--type-meta-size\);[^}]*line-height:\s*var\(--type-meta-leading\);/,
+            new RegExp(
+                '\\.quick-grid b\\s*\\{[^}]*width:\\s*100%;[^}]*min-width:\\s*0;' +
+                    '[^}]*font-size:\\s*var\\(--type-navigation-compact-size\\);' +
+                    '[^}]*line-height:\\s*var\\(--type-navigation-compact-leading\\);[^}]*white-space:\\s*normal;',
+            ),
         );
         expect(stylesheet).not.toMatch(/html\[lang='en'\] \.quick-grid b\s*\{/);
     });
