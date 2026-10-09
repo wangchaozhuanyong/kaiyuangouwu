@@ -272,6 +272,7 @@
     }
 
     .hero-page-picker :is(button, .hero-page-static-number) {
+        position: relative;
         flex: 0 0 44px;
         width: 44px;
         min-height: 44px;
@@ -298,11 +299,24 @@
     }
 
     .hero-page-picker button:hover {
-        color: var(--accent-ink);
+        color: var(--hero-pagination-active-color, var(--accent-ink));
     }
 
     .hero-page-picker button[aria-current='true'] {
         font-weight: var(--font-weight-bold);
+    }
+
+    .hero-page-picker button[aria-current='true']::after {
+        content: '';
+        position: absolute;
+        bottom: var(--space-4);
+        left: 50%;
+        transform: translateX(-50%);
+        width: 12px;
+        height: 2px;
+        border-radius: var(--skin-control-radius);
+        background: var(--hero-pagination-active-color, currentColor);
+        pointer-events: none;
     }
 
     .hero-page-number {

@@ -11,7 +11,7 @@
 }
 /* Home Trust Guarantees Bar */
 .home-trust-bar {
-    margin: 0 12px 10px;
+    margin: 0 var(--page-section-inset, var(--experience-page-gutter-mobile)) 10px;
     padding: 8px 12px;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -168,11 +168,11 @@
     margin: 0;
     border: 0;
     border-radius: var(--skin-control-radius);
-    background: var(--hero-stat-background);
+    background: color-mix(in srgb, var(--hero-stat-background) 54%, transparent);
     color: var(--hero-image-copy-foreground, var(--text));
     box-shadow: none;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(2px) brightness(1.05);
+    backdrop-filter: blur(2px) brightness(1.05);
 }
 
 /* Home banners stay compact while their editable copy can still grow naturally. */
