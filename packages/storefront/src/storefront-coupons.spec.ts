@@ -9,7 +9,12 @@ import {
     couponCardsFromCampaigns,
     couponScopeLabel,
 } from './storefront-coupons';
-import { StoreCustomerCoupon, StorefrontContentBlock, StorefrontCouponCampaign } from './types';
+import {
+    StoreCouponUsageRecord,
+    StoreCustomerCoupon,
+    StorefrontContentBlock,
+    StorefrontCouponCampaign,
+} from './types';
 
 afterEach(() => resetMoneyDisplay());
 
@@ -221,6 +226,57 @@ it('does not derive a discounted product price from unclaimable and unusable sou
 });
 
 describe('storefront coupons', () => {
+    it.each([
+        { rate: 8, english: '20', chinese: '8' },
+        { rate: 9.5, english: '5', chinese: '9.5' },
+    ])(
+        'localizes $rate 折 consistently across campaign, owned and history cards',
+        ({ rate, english, chinese }) => {
+            const campaign = couponCampaign({ discountRate: rate, minimumSpend: 10_000 });
+            const owned = customerCoupon({ discountRate: rate, minimumSpend: 10_000 });
+            const record: StoreCouponUsageRecord = {
+                id: 'usage-percentage',
+                customerCouponId: owned.id,
+                campaignId: campaign.id,
+                campaignName: campaign.name,
+                campaignKind: 'ORDER_PERCENTAGE',
+                status: 'USED',
+                currencyCode: 'CNY',
+                minimumSpend: 10_000,
+                discountAmount: null,
+                discountRate: rate,
+                savedAmount: 2_000,
+                usedAt: '2026-10-09T00:00:00.000Z',
+                refundedAt: null,
+                orderId: 'order-percentage',
+                orderCode: 'PERCENTAGE1',
+            };
+
+            for (const language of ['zh', 'en'] as const) {
+                const cards = [
+                    couponCardsFromCampaigns([campaign], language, 'CNY')[0],
+                    couponCardFromCustomerCoupon(owned, language, 'CNY'),
+                    couponCardFromUsageRecord(record, language),
+                ];
+                for (const card of cards) {
+                    expect(card).toMatchObject({
+                        value: language === 'zh' ? chinese : english,
+                        unit: language === 'zh' ? '折' : '% OFF',
+                        unitBefore: false,
+                        description: language === 'zh' ? '满 ¥100 可用' : 'Spend ¥100',
+                        scope: language === 'zh' ? '全场订单' : 'All orders',
+                    });
+                }
+            }
+
+            expect([campaign.discountRate, owned.discountRate, record.discountRate]).toEqual([
+                rate,
+                rate,
+                rate,
+            ]);
+        },
+    );
+
     it('uses the lowest eligible coupon price for the selected product variant', () => {
         const result = bestProductCouponPrice({
             campaigns: [

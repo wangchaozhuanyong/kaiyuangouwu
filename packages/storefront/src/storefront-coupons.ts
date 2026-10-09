@@ -19,6 +19,7 @@ export interface StorefrontCouponCard {
     title: string;
     description: string;
     tag: string;
+    scope?: string;
     theme: StorefrontCouponTheme;
     claimed: boolean;
     claimable: boolean;
@@ -218,7 +219,7 @@ export function couponCardsFromCampaigns(
             displayCurrencyCode,
             language,
         );
-        const value = isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate);
+        const value = isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate, language);
         const threshold = coupon.minimumSpend
             ? isZh
                 ? `满 ${money.unit}${money.value} 可用`
@@ -230,11 +231,12 @@ export function couponCardsFromCampaigns(
             id: coupon.id,
             campaignId: coupon.id,
             value,
-            unit: isFixed ? discountMoney.unit : isZh ? '折' : 'x',
+            unit: isFixed ? discountMoney.unit : isZh ? '折' : '% OFF',
             unitBefore: isFixed,
             title: coupon.name,
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
+            scope: couponScopeLabel(coupon.kind, language),
             theme: couponTheme(coupon.appearanceTheme, coupon.kind),
             claimed: coupon.claimed,
             claimable: coupon.claimable && !coupon.claimed,
@@ -267,8 +269,8 @@ export function couponCardFromCustomerCoupon(
     return {
         id: coupon.id,
         campaignId: coupon.campaignId,
-        value: isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate),
-        unit: isFixed ? discountMoney.unit : isZh ? '折' : 'x',
+        value: isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate, language),
+        unit: isFixed ? discountMoney.unit : isZh ? '折' : '% OFF',
         unitBefore: isFixed,
         title: coupon.campaignName,
         description: coupon.minimumSpend
@@ -279,6 +281,7 @@ export function couponCardFromCustomerCoupon(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(coupon.campaignKind, language),
+        scope: couponScopeLabel(coupon.campaignKind, language),
         theme: couponTheme(coupon.appearanceTheme, coupon.campaignKind),
         claimed: true,
         claimable: false,
@@ -320,8 +323,8 @@ export function couponCardFromUsageRecord(
         campaignId: record.campaignId,
         value: isFixed
             ? formatMinorAmount(record.discountAmount ?? 0, language)
-            : formatDiscountRate(record.discountRate),
-        unit: isFixed ? currencyUnit : isZh ? '折' : 'x',
+            : formatDiscountRate(record.discountRate, language),
+        unit: isFixed ? currencyUnit : isZh ? '折' : '% OFF',
         unitBefore: isFixed,
         title: record.campaignName,
         description: record.minimumSpend
@@ -332,6 +335,7 @@ export function couponCardFromUsageRecord(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(record.campaignKind, language),
+        scope: couponScopeLabel(record.campaignKind, language),
         theme: couponTheme(record.appearanceTheme, record.campaignKind),
         claimed: true,
         claimable: false,
@@ -423,6 +427,8 @@ function formatMinorAmount(value: number, language: StorefrontLanguage): string 
     }).format(value / 100);
 }
 
-function formatDiscountRate(value: number | null): string {
-    return value == null ? '-' : String(Math.round(value * 100) / 100);
+function formatDiscountRate(value: number | null, language: StorefrontLanguage): string {
+    if (value == null) return '-';
+    const displayValue = language === 'zh' ? value : 100 - value * 10;
+    return String(Math.round(displayValue * 100) / 100);
 }

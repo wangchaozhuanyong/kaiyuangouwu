@@ -280,7 +280,6 @@ function HomepageCouponHub({
     onToast,
 }: HomepageCouponHubProps) {
     const navigate = useNavigate();
-    const desktop = useDesktopLayout();
     const isZh = language === 'zh';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
@@ -354,57 +353,19 @@ function HomepageCouponHub({
                                             <Check size={12} strokeWidth={2.4} aria-hidden="true" />
                                         </>
                                     ) : (
-                                        <span>{isZh ? '立即领取' : 'Claim'}</span>
+                                        <span>{isZh ? '领取' : 'Claim'}</span>
                                     )}
                                 </span>
                             </button>
                         );
-                        if (desktop)
-                            return (
-                                <DesktopCouponTicket
-                                    key={coupon.id}
-                                    card={coupon}
-                                    role="listitem"
-                                    action={claimAction}
-                                />
-                            );
-
                         return (
-                            <div
+                            <DesktopCouponTicket
                                 key={coupon.id}
-                                className={`coupon-ticket-card coupon-ticket-${coupon.theme} ${!canClaim ? 'is-claimed' : ''}`}
+                                card={coupon}
+                                variant="compact"
                                 role="listitem"
-                            >
-                                <div className="coupon-ticket-main">
-                                    <div className="coupon-ticket-top">
-                                        <span className="coupon-ticket-tag">{coupon.tag}</span>
-                                    </div>
-                                    <div
-                                        className={`coupon-ticket-value${
-                                            coupon.unitBefore ? ' is-unit-before' : ''
-                                        }`}
-                                    >
-                                        {coupon.unitBefore ? (
-                                            <>
-                                                <small className="coupon-unit">{coupon.unit}</small>
-                                                <strong className="coupon-num">{coupon.value}</strong>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <strong className="coupon-num">{coupon.value}</strong>
-                                                {coupon.unit && (
-                                                    <small className="coupon-unit">{coupon.unit}</small>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                    <ContentText className="coupon-ticket-desc">
-                                        {coupon.description}
-                                    </ContentText>
-                                </div>
-
-                                <div className="coupon-ticket-action">{claimAction}</div>
-                            </div>
+                                action={claimAction}
+                            />
                         );
                     })}
                 </div>
