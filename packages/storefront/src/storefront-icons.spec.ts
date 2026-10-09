@@ -49,18 +49,16 @@ describe('storefront document icons', () => {
             '/fresh-touch.png',
         );
     });
-    it('restores a cached asset with PNG URLs when the server fragment is unavailable', () => {
+    it('ignores an unscoped cached logo when the server fragment is unavailable', () => {
+        document.head.innerHTML = '<link rel="icon" href="/previous-store.png">';
         sessionStorage.setItem(
             '__storefront_logo_url__',
             '/assets/preview/store.webp?preset=storefront-thumbnail-fit-160&format=webp',
         );
         restoreStorefrontIcons();
-        expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toContain(
-            'preset=storefront-icon-96&format=png',
-        );
-        expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toContain(
-            'preset=storefront-thumbnail-fit-320&format=png',
-        );
+        for (const link of document.querySelectorAll('link')) {
+            expect(link.getAttribute('href')).toBe('/storefront/neutral-store.png?storefront-icon=2&iv=3');
+        }
     });
     it('replaces cached duplicate declarations and initializes their URLs before browser insertion', () => {
         document.head.innerHTML = '<link rel="icon" href="/old.png"><link rel="icon" href="/older.png">';

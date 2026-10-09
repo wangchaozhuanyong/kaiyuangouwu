@@ -12,6 +12,7 @@ export interface InitialLoadingBrand {
     logoUrl: string;
     storefrontName: string;
     language: 'en' | 'zh_Hans';
+    secondaryName?: string;
 }
 
 /** The parser-time loader uses only the current host's reusable public snapshot. */
@@ -80,13 +81,20 @@ export function initialLoadingBrandForSnapshot(
     return {
         language,
         storefrontName: typeof name === 'string' ? name.trim() : '',
+        secondaryName:
+            language === 'zh_Hans' && typeof page.config.customFields.storefrontNameEn === 'string'
+                ? page.config.customFields.storefrontNameEn.trim()
+                : '',
         logoUrl:
             typeof page.config.logoUrl === 'string' ? normalizeStorefrontAssetUrl(page.config.logoUrl) : '',
     };
 }
 
+let initialBrandGeneration = 0;
+
 /** React replaces this element on mount; late image work may only touch its original owner. */
 export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
+    const generation = ++initialBrandGeneration;
     const boot = document.getElementById('storefront-boot-loading');
     if (!boot) {
         // The early entry is async in <head> and may run before the body has been parsed.
@@ -95,7 +103,11 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
             document.addEventListener(
                 'DOMContentLoaded',
                 () => {
-                    if (document.getElementById('storefront-boot-loading')) applyInitialLoadingBrand(brand);
+                    if (
+                        generation === initialBrandGeneration &&
+                        document.getElementById('storefront-boot-loading')
+                    )
+                        applyInitialLoadingBrand(brand);
                 },
                 { once: true },
             );
@@ -104,16 +116,37 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     const content = boot.querySelector('.brand-loading');
     if (!boot || !content) return;
     const ownsBoot = () =>
+        generation === initialBrandGeneration &&
         boot.isConnected &&
         document.getElementById('storefront-boot-loading') === boot &&
         document.getElementById('root')?.contains(boot) === true;
     if (!ownsBoot()) return;
+    content
+        .querySelectorAll('.brand-loading-name, .brand-loading-subtitle, .route-transition-mark')
+        .forEach(element => element.remove());
     boot.setAttribute('aria-label', brand.language === 'en' ? 'Loading page' : '正在加载页面');
+    const caption = content.querySelector('.brand-loading-caption');
+    const label = content.querySelector('.brand-loading-label');
+    if (label)
+        label.textContent =
+            brand.language === 'en'
+                ? brand.storefrontName
+                    ? 'Loading'
+                    : 'Connecting'
+                : brand.storefrontName
+                  ? '正在加载'
+                  : '正在连接';
     if (brand.storefrontName) {
         const name = document.createElement('strong');
         name.className = 'brand-loading-name';
         name.textContent = brand.storefrontName;
-        content.insertBefore(name, content.querySelector('.brand-loading-dots'));
+        content.insertBefore(name, caption);
+        if (brand.secondaryName && brand.secondaryName !== brand.storefrontName) {
+            const subtitle = document.createElement('span');
+            subtitle.className = 'brand-loading-subtitle';
+            subtitle.textContent = brand.secondaryName;
+            content.insertBefore(subtitle, caption);
+        }
     }
     if (!brand.logoUrl) return;
     const mark = document.createElement('span');

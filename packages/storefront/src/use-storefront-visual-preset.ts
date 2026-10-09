@@ -11,7 +11,7 @@ import { type ShopApi } from './api';
 import { SEND_CLIENT_CHANNEL_TOKEN } from './api/helpers';
 import { storefrontQueryKeys } from './query-client';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
-import { restoredStorefrontTheme } from './storefront-theme-cache';
+import { discardRestoredStorefrontTheme, restoredStorefrontTheme } from './storefront-theme-cache';
 import { type MarketConfig } from './types';
 
 export function applyStorefrontVisualPreset(root: HTMLElement, value: unknown): () => void {
@@ -42,7 +42,7 @@ export function useStorefrontVisualPreset(
             ? null
             : readStorefrontPreviewPreset(storefrontPreviewParameters().toString()),
     );
-    const [restoredTheme] = useState(restoredStorefrontTheme);
+    const [restoredTheme, setRestoredTheme] = useState(restoredStorefrontTheme);
     const query = useQuery({
         queryKey: [
             ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), languageCode),
@@ -59,15 +59,21 @@ export function useStorefrontVisualPreset(
     });
     // Theme loading stays independent of route rendering, so slow requests never unmount a form.
     const restoredPreset =
-        restoredTheme && (!enabled || restoredTheme.channelCode === market.code)
-            ? restoredTheme.presetId
-            : undefined;
-    const presetId = previewPreset ?? normalizeStorefrontVisualPreset(query.data?.presetId ?? restoredPreset);
+        enabled && restoredTheme?.channelCode === market.code ? restoredTheme.presetId : undefined;
+    const presetId =
+        previewPreset ??
+        normalizeStorefrontVisualPreset((enabled ? query.data?.presetId : undefined) ?? restoredPreset);
     const ready = Boolean(previewPreset || (enabled && (query.data || query.isError || restoredPreset)));
+    useLayoutEffect(() => {
+        if (restoredTheme && (previewPreset || restoredTheme.channelCode !== market.code)) {
+            discardRestoredStorefrontTheme(restoredTheme.channelCode);
+            setRestoredTheme(null);
+        }
+    }, [restoredTheme, market.code, previewPreset]);
     useLayoutEffect(() => {
         if (!ready) return;
         const cleanup = applyStorefrontVisualPreset(document.documentElement, presetId);
         return cleanup;
     }, [presetId, ready]);
-    return { presetId, ready, cache: !previewPreset && Boolean(query.data) };
+    return { presetId, ready, cache: !previewPreset && enabled && Boolean(query.data) };
 }

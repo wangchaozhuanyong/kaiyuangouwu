@@ -185,6 +185,12 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
             <DesktopLayoutContext.Provider value={desktop}>
                 <OverlayHost ownerKey={readinessIdentity}>
                     <PageReadinessBoundary
+                        initialScopeKey={storefrontContextValue.market.code}
+                        initialError={
+                            !storefrontContextValue.storefrontContextResolved &&
+                            storefrontContextValue.configQuery.isError &&
+                            !storefrontContextValue.configQuery.isFetching
+                        }
                         requestKey={readinessIdentity}
                         navigationKey={readinessIdentity}
                         pending={Boolean(state.pageDataPending || state.isNavigationPending)}

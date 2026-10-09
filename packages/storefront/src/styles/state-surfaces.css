@@ -1,5 +1,28 @@
 /* Shared state owner: pages provide content, skins provide semantic tokens.
    Route and desktop styles must not repaint or resize these components. */
+.page-readiness-stage[hidden] {
+    display: none;
+}
+.page-readiness-initial {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: var(--space-24);
+    width: 100%;
+    min-width: 0;
+    min-height: 100svh;
+    min-height: 100dvh;
+    padding: max(var(--space-24), env(safe-area-inset-top)) max(var(--space-24), env(safe-area-inset-right))
+        max(var(--space-24), env(safe-area-inset-bottom)) max(var(--space-24), env(safe-area-inset-left));
+    background: var(--surface);
+    color: var(--text);
+    text-align: center;
+}
+.page-readiness-initial > [role='status'] {
+    display: grid;
+    place-items: center;
+    width: 100%;
+}
 .page-readiness-overlay {
     /* A late timeout must not repaint or intercept the already visible page. */
     position: fixed;
@@ -28,6 +51,35 @@
     min-height: var(--experience-control-min);
     margin: 0 4px;
     padding: 8px 16px;
+}
+.page-readiness-error-actions {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+}
+.page-readiness-error-actions button:first-child {
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+}
+.page-readiness-error-actions button:first-child:hover {
+    background: var(--accent-hover);
+}
+.page-readiness-initial .page-readiness-error,
+.page-readiness-inline-error {
+    max-width: 36em;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.page-readiness-initial .page-readiness-error p,
+.page-readiness-inline-error p {
+    margin-bottom: var(--space-24);
 }
 @media (min-width: 1024px) {
     .page-readiness-overlay {

@@ -2,7 +2,7 @@ import { createLink, Link } from '@tanstack/react-router';
 import { ShoppingCart, UserRound } from 'lucide-react';
 import { type AnchorHTMLAttributes, forwardRef, lazy, Suspense, useState } from 'react';
 
-import { BrandLogo } from '../../storefront-ui/content-ui';
+import { BrandLogo } from '../../storefront-ui/brand-logo';
 import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
 

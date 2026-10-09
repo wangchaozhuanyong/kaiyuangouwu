@@ -3,6 +3,44 @@
     try {
         // An embedded Admin preview owns its skin; never inherit a client cache.
         if (new URLSearchParams(location.search).get('storefrontPreviewEmbedded') === '1') return;
+        // A same-origin cache does not identify the current Channel. Only the host-resolved
+        // LIVE HTML snapshot can authorize a prepaint restore; unknown identity stays neutral.
+        var snapshotElement = document.getElementById('storefront-public-page-data');
+        var snapshot = JSON.parse((snapshotElement && snapshotElement.textContent) || 'null');
+        if (
+            !snapshot ||
+            snapshot.schemaVersion !== 1 ||
+            !snapshot.scope ||
+            snapshot.scope.host !== location.host ||
+            snapshot.scope.priceContext !== 'public' ||
+            typeof snapshot.scope.channelCode !== 'string' ||
+            !snapshot.scope.channelCode ||
+            !snapshot.config ||
+            snapshot.config.code !== snapshot.scope.channelCode ||
+            snapshot.config.accessMode !== 'LIVE' ||
+            !/^(en|zh_Hans)$/.test(snapshot.scope.languageCode) ||
+            !/^[A-Z]{3}$/.test(snapshot.scope.currencyCode) ||
+            typeof snapshot.route !== 'string' ||
+            snapshot.route.split(/[?#]/)[0] !== location.pathname ||
+            typeof snapshot.generatedAt !== 'number' ||
+            !Number.isFinite(snapshot.generatedAt) ||
+            Date.now() - snapshot.generatedAt > 30000 ||
+            snapshot.generatedAt - Date.now() > 5000
+        )
+            return;
+        var preferences = document.cookie.split('; ');
+        for (var p = 0; p < preferences.length; p++) {
+            var preference = preferences[p].split('=');
+            if (
+                (preference[0] === 'storefront_public_language' &&
+                    /^(en|zh_Hans)$/.test(preference[1]) &&
+                    preference[1] !== snapshot.scope.languageCode) ||
+                (preference[0] === 'storefront_public_currency' &&
+                    /^[A-Z]{3}$/.test(preference[1]) &&
+                    preference[1] !== snapshot.scope.currencyCode)
+            )
+                return;
+        }
         // Cache only plain semantic colors. Derived module treatments stay in skin CSS.
         var allowed =
             /^--(?:store-(?:background|primary|highlight|foreground)|auth-store-(?:background|foreground)|brand-(?:background|primary|accent|highlight)|bg|paper|surface(?:-elevated)?|soft|text|muted|accent(?:-hover|-pressed|-soft|-foreground|-ink)?|selection(?:-hover|-foreground|-soft)?|interaction-(?:hover|pressed|ink)|line(?:-strong)?|focus|success|warning|danger)$/;
@@ -15,7 +53,10 @@
                         candidate.version !== version ||
                         candidate.origin !== location.origin ||
                         typeof candidate.channelCode !== 'string' ||
-                        !candidate.channelCode ||
+                        candidate.channelCode !== snapshot.scope.channelCode ||
+                        (snapshot.visualPreset &&
+                            /^(classic|neo-minimalist)$/.test(snapshot.visualPreset.presetId) &&
+                            candidate.presetId !== snapshot.visualPreset.presetId) ||
                         typeof candidate.savedAt !== 'number' ||
                         candidate.savedAt > Date.now() ||
                         Date.now() - candidate.savedAt >= 7 * 86400000 ||

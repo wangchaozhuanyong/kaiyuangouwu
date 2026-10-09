@@ -76,6 +76,7 @@ describe('catalog rendering boundary', () => {
             customer: null,
             customerLoadState: 'ready',
             retryAccount: vi.fn(),
+            retryPageLoad: vi.fn(),
             storefrontUnavailable: false,
             ...overrides,
         };
@@ -83,10 +84,34 @@ describe('catalog rendering boundary', () => {
             route: state.displayedRoute,
             market: { code: 'fixture-store', currencyCode: 'MYR' },
             storefrontCode: 'fixture-store',
+            storefrontContextResolved: true,
+            configQuery: { isError: false, isFetching: false },
             ...(state.storefrontContextValue as Record<string, unknown>),
         };
         act(() => root.render(<StorefrontShell state={state as never} />));
     };
+    it('uses the centered initial state until configuration is resolved, including an immediate read failure', () => {
+        render({
+            pageDataPending: true,
+            storefrontContextValue: { storefrontCode: '', storefrontContextResolved: false },
+        });
+        expect(element.querySelector('.page-readiness-initial')).not.toBeNull();
+        expect(element.querySelector('.page-readiness-stage')?.hasAttribute('hidden')).toBe(true);
+        render({
+            storefrontContextValue: {
+                storefrontCode: '',
+                storefrontContextResolved: false,
+                configQuery: { isError: true, isFetching: false },
+            },
+        });
+        expect(element.querySelector('.page-readiness-initial [role="alert"]')?.textContent).toContain(
+            '暂时无法加载',
+        );
+        expect(element.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+        render();
+        expect(element.querySelector('.page-readiness-initial')).toBeNull();
+        expect(element.querySelector('.page-readiness-stage')?.hasAttribute('hidden')).toBe(false);
+    });
     it('requests neither deferred module before readiness and idle, and hides update UI on sensitive routes', async () => {
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');

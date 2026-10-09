@@ -45,6 +45,7 @@ import {
     readStoredSettlementCurrency,
     writeManualLanguage,
 } from '../storefront-utils';
+import { beginStorefrontRecoveryScope, setStorefrontRecoveryBrand } from '../StorefrontErrorBoundary';
 import { MarketConfig, StorefrontConfig, StorefrontLanguage, StorefrontLegalIdentity } from '../types';
 import { useStorefrontVisualPreset } from '../use-storefront-visual-preset';
 
@@ -60,7 +61,7 @@ function previewLanguage(fallback: StorefrontLanguage): StorefrontLanguage {
 
 export function useStorefrontBootstrap() {
     const queryClient = useQueryClient();
-    const [initialPage] = useState(readInitialPublicPage);
+    const [initialPage, setInitialPage] = useState(readInitialPublicPage);
     const initializedPreferenceScope = useRef('');
     const restoredCacheScopes = useRef(new Set<string>());
 
@@ -81,14 +82,6 @@ export function useStorefrontBootstrap() {
     const [storefrontContextResolved, setStorefrontContextResolved] = useState(Boolean(initialPage));
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
-    const [storefrontNames, setStorefrontNames] =
-        useState<Record<StorefrontLanguage, string>>(DEFAULT_STOREFRONT_NAMES);
-    const [storefrontCode, setStorefrontCode] = useState('');
-    const [logoUrl, setLogoUrl] = useState<string | null>(null);
-    const [logoOnLightUrl, setLogoOnLightUrl] = useState<string | null>(null);
-    const [logoOnDarkUrl, setLogoOnDarkUrl] = useState<string | null>(null);
-    const [storefrontDescription, setStorefrontDescription] = useState('');
-    const [storefrontTagline, setStorefrontTagline] = useState('');
     const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
     const [availableProvinces, setAvailableProvinces] = useState<
         NonNullable<StorefrontConfig['availableProvinces']>
@@ -99,9 +92,13 @@ export function useStorefrontBootstrap() {
     const locale = localeFor(language, market);
     const text = uiCopy[language];
     const isZh = language === 'zh';
-    const storefrontName = storefrontNames[language];
     const vendureLanguageCode = languageCodeFor(language);
     const marketCode = storefrontQueryKeys.market(market);
+    const recoveryOwner = beginStorefrontRecoveryScope({
+        channelCode: market.code,
+        currencyCode: market.currencyCode,
+        languageCode: vendureLanguageCode,
+    });
     const subscribeAccess = useCallback(
         (notify: () => void) => watchStorefrontScopeAccess(queryClient, notify),
         [queryClient],
@@ -159,6 +156,42 @@ export function useStorefrontBootstrap() {
         accessDenied ||
         configQuery.data?.accessMode === 'CLOSED' ||
         isStorefrontClosedError(configQuery.error, true);
+    const initialBrandMatchesScope =
+        initialPage?.scope.channelCode === market.code &&
+        initialPage.scope.currencyCode === market.currencyCode &&
+        initialPage.scope.languageCode === vendureLanguageCode;
+    // The scoped query is the sole ongoing brand owner. The validated HTML snapshot only
+    // bridges its first React render; it cannot reappear after a scope change or denial.
+    const brandConfig = storefrontUnavailable
+        ? undefined
+        : (configQuery.data ?? (initialBrandMatchesScope ? initialPage?.config : undefined));
+    const storefrontCode = brandConfig?.code ?? '';
+    const storefrontName = brandConfig
+        ? normalizeStorefrontName(
+              language === 'zh'
+                  ? brandConfig.customFields.storefrontNameZh
+                  : brandConfig.customFields.storefrontNameEn,
+              DEFAULT_STOREFRONT_NAMES[language],
+          )
+        : '';
+    const logoUrl = brandConfig?.logoUrl ?? null;
+    const logoOnLightUrl = brandConfig?.logoOnLightUrl ?? null;
+    const logoOnDarkUrl = brandConfig?.logoOnDarkUrl ?? null;
+    const storefrontDescription = brandConfig?.description?.trim() ?? '';
+    const storefrontTagline = brandConfig?.tagline?.trim() ?? '';
+    // Clear before any child can fail; only committed, current-scope brands may be
+    // offered by the outer crash boundary. Old layout effects cannot reclaim ownership.
+    if (!brandConfig || brandConfig.code !== market.code) setStorefrontRecoveryBrand(recoveryOwner, null);
+    useLayoutEffect(() => {
+        setStorefrontRecoveryBrand(
+            recoveryOwner,
+            brandConfig ? { channelCode: storefrontCode, name: storefrontName, logoUrl } : null,
+        );
+    }, [recoveryOwner, brandConfig, storefrontCode, storefrontName, logoUrl]);
+    useEffect(() => {
+        if (initialPage && (configQuery.data || !initialBrandMatchesScope || storefrontUnavailable))
+            setInitialPage(undefined);
+    }, [initialPage, configQuery.data, initialBrandMatchesScope, storefrontUnavailable]);
     useEffect(() => {
         if (!storefrontUnavailable) return;
         setStorefrontContextResolved(false);
@@ -257,7 +290,6 @@ export function useStorefrontBootstrap() {
             restorePublicQueryCache(queryClient);
         }
         setStorefrontContextResolved(true);
-        setStorefrontCode(nextStorefrontCode);
         const preferenceScope = `${nextStorefrontCode}:${customerAuthenticated}`;
         if (initializedPreferenceScope.current !== preferenceScope) {
             initializedPreferenceScope.current = preferenceScope;
@@ -274,15 +306,6 @@ export function useStorefrontBootstrap() {
                 ),
             );
         }
-        setStorefrontNames({
-            zh: normalizeStorefrontName(config.customFields.storefrontNameZh, DEFAULT_STOREFRONT_NAMES.zh),
-            en: normalizeStorefrontName(config.customFields.storefrontNameEn, DEFAULT_STOREFRONT_NAMES.en),
-        });
-        setLogoUrl(config.logoUrl ?? null);
-        setLogoOnLightUrl(config.logoOnLightUrl ?? null);
-        setLogoOnDarkUrl(config.logoOnDarkUrl ?? null);
-        setStorefrontDescription(config.description?.trim() ?? '');
-        setStorefrontTagline(config.tagline?.trim() ?? '');
     }, [
         customerAuthenticated,
         configQuery.data,
@@ -293,7 +316,6 @@ export function useStorefrontBootstrap() {
         queryClient,
         vendureLanguageCode,
         marketCode,
-        storefrontUnavailable,
     ]);
 
     useStorefrontBrandColors(configQuery.data, visualConfig.presetId, {

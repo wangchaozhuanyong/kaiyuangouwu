@@ -9,7 +9,6 @@ import {
     LayoutGrid,
     RotateCcw,
     Sparkles,
-    Store,
     Tag,
     Truck,
     Waypoints,
@@ -24,7 +23,6 @@ import { useDesktopLayout } from '../desktop-layout';
 import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
 import { managedContentStyle } from '../managed-content-style';
-import { responsiveImageSources } from '../responsive-image';
 import { StorefrontCouponCard } from '../storefront-coupons';
 import { routePath } from '../storefront-router';
 import {
@@ -52,31 +50,8 @@ import {
 } from './product-display';
 import { ProductSection } from './product-section';
 
-export function BrandLogo({ url, name, className }: { url: string | null; name: string; className: string }) {
-    const sourceUrl = url?.trim() || null;
-    const responsiveSource = sourceUrl ? responsiveImageSources(sourceUrl, 'thumbnail') : null;
-
-    if (!responsiveSource) {
-        return (
-            <span className={`${className} is-brand-fallback`} aria-hidden="true">
-                <Store size={24} />
-            </span>
-        );
-    }
-
-    return (
-        <span className={`${className} is-brand-image`}>
-            <SafeImage
-                src={sourceUrl ?? ''}
-                imageKind="thumbnail"
-                sizes="36px"
-                width={36}
-                height={36}
-                alt={name}
-            />
-        </span>
-    );
-}
+// Preserve the existing public export while headers use the small brand module directly.
+export { BrandLogo } from './brand-logo';
 
 export interface HomepageCouponHubProps {
     block?: StorefrontContentBlock;
@@ -809,7 +784,8 @@ export function ManagedContentSection({
     );
 }
 
-const ManagedAdCarouselRail = lazy(() => import('./managed-ad-carousel'));
+// Creating a lazy descriptor does not start its import; unused re-exports need no runtime work.
+const ManagedAdCarouselRail = /* @__PURE__ */ lazy(() => import('./managed-ad-carousel'));
 
 /** Repeatable, per-block carousel: its content and timing come entirely from Admin. */
 export function ManagedAdCarousel({
