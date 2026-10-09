@@ -1447,6 +1447,7 @@ export function OrderConfirmationPage({
                 {customer && (
                     <button
                         type="button"
+                        className="secondary-action"
                         onClick={() =>
                             navigateTo({
                                 name: 'orders',

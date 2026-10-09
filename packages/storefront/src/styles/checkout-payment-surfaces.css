@@ -602,7 +602,7 @@
     padding-top: 20px;
 }
 
-.order-confirmation-actions button {
+.order-confirmation-actions button:is(.primary-action, .secondary-action) {
     flex: 1 1 160px;
     display: flex;
     align-items: center;
@@ -610,16 +610,14 @@
     gap: 8px;
     min-height: 48px;
     padding: 10px 16px;
-    border: 0;
     border-radius: var(--skin-control-radius);
-    background: transparent;
-    color: var(--accent-ink);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
     font-weight: var(--font-weight-semibold);
 }
 
-.order-confirmation-actions button.primary-action {
-    color: var(--accent-foreground);
-    background: var(--accent);
+.order-confirmation-actions button svg {
+    flex-shrink: 0;
 }
 
 .icon-data-export {
