@@ -34,6 +34,7 @@ export function LogisticsPage({
     locale,
     language,
     onBack,
+    onReturnToRoute,
     onOpenOrder,
     route = { name: 'logistics' },
 }: {
@@ -43,6 +44,7 @@ export function LogisticsPage({
     locale: string;
     language: StorefrontLanguage;
     onBack: () => void;
+    onReturnToRoute: (target: RouteState) => void;
     onOpenOrder?: (orderId: string) => void;
     route?: RouteState;
 }) {
@@ -151,7 +153,7 @@ export function LogisticsPage({
                     route.id ? (zh ? '物流详情' : 'Delivery details') : zh ? '物流动态' : 'Delivery updates'
                 }
                 language={language}
-                onBack={route.id ? () => go(listRoute) : onBack}
+                onBack={route.id ? () => onReturnToRoute(listRoute) : onBack}
             />
             <SubpageBody>
                 {!customer ? (
@@ -168,7 +170,7 @@ export function LogisticsPage({
                         <PageBackButton
                             className="delivery-back-link"
                             label={zh ? '返回物流列表' : 'Back to deliveries'}
-                            onClick={() => go(listRoute)}
+                            onClick={() => onReturnToRoute(listRoute)}
                         >
                             {zh ? '返回物流列表' : 'Back to deliveries'}
                         </PageBackButton>

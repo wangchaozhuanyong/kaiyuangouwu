@@ -140,6 +140,7 @@ function renderLogistics(cachedOrders?: Order[]) {
         locale: market.locale,
         language: 'zh' as const,
         onBack: vi.fn(),
+        onReturnToRoute: vi.fn(),
     });
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
 }

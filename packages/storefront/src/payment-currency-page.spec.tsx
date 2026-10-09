@@ -5,7 +5,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { PaymentPage } from './payment-pages';
 const queryClient = new QueryClient();
 
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('@tanstack/react-router', async importOriginal => {
+    const { createMemoryHistory } = await importOriginal<typeof import('@tanstack/react-router')>();
+    const navigate = vi.fn();
+    const router = { history: createMemoryHistory({ initialEntries: ['/payment'] }), navigate };
+    return { useNavigate: () => navigate, useRouter: () => router };
+});
 vi.mock('@tanstack/react-query', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-query')>()),
     useQueryClient: () => queryClient,

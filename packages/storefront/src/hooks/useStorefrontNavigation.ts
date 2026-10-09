@@ -12,6 +12,7 @@ import { catalogRouteSearch, catalogRouteState, type CatalogRouteState } from '.
 import { categoryTargetSelection } from '../category-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
+import { goBackInStorefront, returnToStorefrontRoute } from '../storefront-navigation-history';
 import {
     routeFromHash,
     routeFromRouterLocation,
@@ -217,10 +218,16 @@ export function useStorefrontNavigation({
 
     const goBack = useCallback(() => {
         navigationIntent.current++;
-        if (router.history.canGoBack()) {
-            router.history.back();
-        } else navigate({ name: 'home' }, true);
-    }, [navigate, router.history]);
+        goBackInStorefront(router);
+    }, [router]);
+
+    const returnToRoute = useCallback(
+        (target: RouteState) => {
+            navigationIntent.current++;
+            returnToStorefrontRoute(router, target);
+        },
+        [router],
+    );
 
     const updateCategory = useCallback(
         (
@@ -302,6 +309,7 @@ export function useStorefrontNavigation({
         maximumPrice,
         navigate,
         goBack,
+        returnToRoute,
         updateCategory,
         authOverlay,
         changeAuthOverlay,

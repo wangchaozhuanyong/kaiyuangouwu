@@ -19,7 +19,12 @@ const mocks = vi.hoisted(() => ({
     preloadRoute: vi.fn().mockResolvedValue(undefined),
 }));
 const queryClient = new QueryClient();
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('@tanstack/react-router', async importOriginal => {
+    const { createMemoryHistory } = await importOriginal<typeof import('@tanstack/react-router')>();
+    const navigate = vi.fn();
+    const router = { history: createMemoryHistory({ initialEntries: ['/payment'] }), navigate };
+    return { useNavigate: () => navigate, useRouter: () => router };
+});
 vi.mock('./route-component-preload', () => ({
     preloadStorefrontRouteComponent: mocks.preloadRoute,
 }));

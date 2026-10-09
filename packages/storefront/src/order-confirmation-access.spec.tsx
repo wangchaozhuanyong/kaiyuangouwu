@@ -11,7 +11,12 @@ import type { MarketConfig, Order } from './types';
 import { OrderConfirmationPage } from './payment-pages';
 import { storefrontQueryKeys } from './query-client';
 
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('@tanstack/react-router', async importOriginal => {
+    const { createMemoryHistory } = await importOriginal<typeof import('@tanstack/react-router')>();
+    const navigate = vi.fn();
+    const router = { history: createMemoryHistory({ initialEntries: ['/order-confirmation'] }), navigate };
+    return { useNavigate: () => navigate, useRouter: () => router };
+});
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const market = { code: 'probe', currencyCode: 'MYR' } as MarketConfig;

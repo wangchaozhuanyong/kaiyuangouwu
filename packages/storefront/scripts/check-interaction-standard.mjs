@@ -6,6 +6,11 @@ import ts from 'typescript';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = path.join(root, 'src');
 const reloadOwners = new Set(['StorefrontErrorBoundary.tsx', 'StorefrontUpdatePrompt.tsx']);
+// Auth closes an entry it owns; ordinary page returns belong to the shared history owner.
+const historyReturnOwners = new Set([
+    'storefront-navigation-history.ts',
+    'auth-overlay-navigation-actions.ts',
+]);
 
 export function checkInteractionSource(file, source) {
     const violations = [];
@@ -15,6 +20,14 @@ export function checkInteractionSource(file, source) {
     const visit = node => {
         if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
             const method = node.expression.name.text;
+            const receiver = node.expression.expression;
+            const rawHistory =
+                (ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'history') ||
+                (ts.isIdentifier(receiver) && receiver.text === 'history');
+            if (rawHistory && (method === 'back' || method === 'go') && !historyReturnOwners.has(file))
+                violations.push(
+                    '页面返回必须使用 goBackInStorefront / returnToStorefrontRoute，避免重复历史和返回循环',
+                );
             if (method === 'refetch' || method === 'fetchNextPage') {
                 const options = node.arguments[0];
                 const joinsRequest =

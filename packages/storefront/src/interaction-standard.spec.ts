@@ -27,4 +27,23 @@ describe('storefront interaction architecture guard', () => {
         expect(checkInteractionSource('StorefrontErrorBoundary.tsx', 'window.location.reload()')).toEqual([]);
         expect(checkInteractionSource('StorefrontUpdatePrompt.tsx', 'window.location.reload()')).toEqual([]);
     });
+    it('rejects raw history returns outside the shared navigation and owned auth overlay', () => {
+        for (const source of [
+            'router.history.back()',
+            'window.history.back()',
+            'router.history?.back?.()',
+            'history.go(-1)',
+        ])
+            expect(checkInteractionSource('pages/new-page.tsx', source)).not.toEqual([]);
+        expect(checkInteractionSource('pages/new-page.tsx', 'goBackInStorefront(router)')).toEqual([]);
+        expect(
+            checkInteractionSource('pages/new-page.tsx', 'returnToStorefrontRoute(router, listRoute)'),
+        ).toEqual([]);
+        expect(
+            checkInteractionSource('storefront-navigation-history.ts', 'router.history.go(delta)'),
+        ).toEqual([]);
+        expect(checkInteractionSource('auth-overlay-navigation-actions.ts', 'router.history.back()')).toEqual(
+            [],
+        );
+    });
 });

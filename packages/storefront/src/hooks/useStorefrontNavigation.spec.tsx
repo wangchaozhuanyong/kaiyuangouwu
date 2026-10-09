@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { RouterHistory } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BottomNavigation } from '../components/common/bottom-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
-import { routeHref } from '../storefront-router';
+import { registerStorefrontNavigationHistory } from '../storefront-navigation-history';
+import { normalizeRouteSearch, routeHref } from '../storefront-router';
+import { SubHeader } from '../storefront-ui/page-shell';
 import { type CollectionSummary } from '../types';
 
 import { useStorefrontNavigation } from './useStorefrontNavigation';
@@ -47,7 +50,7 @@ vi.mock('../route-media-preload', () => ({ preloadRouteMedia: vi.fn() }));
 
 const routerInstance = {
     ...router,
-    history: { back: router.back, forward: router.forward, canGoBack: vi.fn(() => true) },
+    history: {} as RouterHistory & { canGoBack: ReturnType<typeof vi.fn<() => boolean>> },
 };
 
 function emitLoad(location: MockLocation, beforeNavigate = true) {
@@ -96,10 +99,36 @@ describe('storefront navigation state', () => {
             await vi.dynamicImportSettled();
         });
     }
-    beforeEach(() => {
+    beforeEach(async () => {
         prepareProduct = undefined;
         authenticated = true;
-        routerInstance.history.canGoBack.mockReset().mockReturnValue(true);
+        const actual =
+            await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router');
+        const history = actual.createMemoryHistory({
+            initialEntries: ['/services', '/category'],
+            initialIndex: 1,
+        });
+        const actualBack = history.back.bind(history);
+        const actualForward = history.forward.bind(history);
+        routerInstance.history = Object.assign(history, {
+            back: router.back,
+            forward: router.forward,
+            canGoBack: vi.fn(history.canGoBack),
+        });
+        registerStorefrontNavigationHistory(routerInstance);
+        history.subscribe(({ location }) => {
+            const search = Object.fromEntries(
+                Object.entries(
+                    normalizeRouteSearch(Object.fromEntries(new URLSearchParams(location.search))),
+                ).filter(([, searchValue]) => searchValue !== undefined),
+            );
+            emitLoad({
+                pathname: location.pathname,
+                search,
+                searchStr: location.search,
+                state: { ...location.state },
+            });
+        });
         vi.mocked(preloadStorefrontRouteComponent).mockClear();
         vi.mocked(preloadRouteMedia).mockClear();
         router.navigate.mockReset();
@@ -107,10 +136,8 @@ describe('storefront navigation state', () => {
             router.state.location = { pathname: to, search, searchStr: '' };
             return Promise.resolve();
         });
-        routerInstance.history.back.mockReset();
-        routerInstance.history.back.mockImplementation(() => {
-            router.state.location = { pathname: '/services', search: {}, searchStr: '' };
-        });
+        router.back.mockReset();
+        router.forward.mockReset();
         router.state.location = { pathname: '/category', search: {}, searchStr: '' };
         router.state.resolvedLocation = router.state.location;
         router.state.status = 'idle';
@@ -128,26 +155,27 @@ describe('storefront navigation state', () => {
                 to,
                 search = {},
                 state,
+                replace = false,
             }: {
                 to: string;
                 search?: Record<string, unknown>;
                 state?:
                     | Record<string, unknown>
                     | ((previous: Record<string, unknown>) => Record<string, unknown>);
+                replace?: boolean;
             }) => {
-                emitLoad({
-                    pathname: to,
-                    search,
-                    searchStr: new URLSearchParams(
-                        Object.entries(search).map(([key, searchValue]) => [key, String(searchValue)]),
-                    ).toString(),
-                    state: typeof state === 'function' ? state(router.state.location.state ?? {}) : state,
-                });
+                const searchStr = new URLSearchParams(
+                    Object.entries(search).map(([key, searchValue]) => [key, String(searchValue)]),
+                ).toString();
+                history[replace ? 'replace' : 'push'](
+                    `${to}${searchStr ? `?${searchStr}` : ''}`,
+                    typeof state === 'function' ? state(router.state.location.state ?? {}) : state,
+                );
                 return Promise.resolve();
             },
         );
-        router.back.mockImplementation(() => emitLoad({ pathname: '/services', search: {}, searchStr: '' }));
-        router.forward.mockImplementation(() => emitLoad({ pathname: '/cart', search: {}, searchStr: '' }));
+        router.back.mockImplementation(actualBack);
+        router.forward.mockImplementation(actualForward);
         router.preloadRoute.mockClear();
         host = document.createElement('div');
         document.body.append(host);
@@ -157,6 +185,7 @@ describe('storefront navigation state', () => {
     afterEach(() => {
         if (!unmounted) act(() => root.unmount());
         host.remove();
+        routerInstance.history.destroy();
         vi.useRealTimers();
     });
 
@@ -281,10 +310,46 @@ describe('storefront navigation state', () => {
                 finish();
                 await Promise.resolve();
             });
-            expect(router.state.location.pathname).toBe('/services');
+            expect(router.state.location.pathname).toBe('/category');
             expect(router.navigate).toHaveBeenCalledOnce();
         },
     );
+
+    it('uses the shared return history to exit announcement details and then their list', () => {
+        act(() => root.render(<Harness />));
+        act(() => value.navigate({ name: 'account' }));
+        act(() => value.navigate({ name: 'announcements', page: 2 }));
+        act(() => value.navigate({ name: 'announcements', id: 'notice-a', page: 2 }));
+        act(() => value.returnToRoute({ name: 'announcements', page: 2 }));
+        act(() => root.render(<Harness />));
+        expect(value.route).toMatchObject({ name: 'announcements', page: 2 });
+        expect(value.route.id).toBeUndefined();
+        act(() => value.goBack());
+        act(() => root.render(<Harness />));
+        expect(value.route.name).toBe('account');
+        expect(router.navigate).toHaveBeenCalledTimes(3);
+    });
+
+    it('ignores the actual React click event when SubHeader forwards it to goBack', () => {
+        const onBack = vi.fn<(...args: unknown[]) => void>();
+        function ReturnButtonHarness() {
+            value = useStorefrontNavigation({ collections, authenticated });
+            onBack.mockImplementation(value.goBack);
+            return <SubHeader title="公告详情" language="zh" onBack={onBack} />;
+        }
+        act(() => root.render(<ReturnButtonHarness />));
+        act(() => value.navigate({ name: 'announcements' }));
+        act(() => value.navigate({ name: 'announcements', id: 'notice-a' }));
+        const button = host.querySelector<HTMLButtonElement>('button[aria-label="返回"]');
+        if (!button) throw new Error('Expected the actual SubHeader return button');
+        act(() => button.click());
+        expect(onBack.mock.calls[0]?.[0]).toMatchObject({ type: 'click' });
+        expect(router.state.location.pathname).toBe('/announcements');
+        expect(router.state.location.search).not.toHaveProperty('id');
+        act(() => button.click());
+        expect(router.state.location.pathname).toBe('/category');
+        expect(router.navigate).toHaveBeenCalledTimes(2);
+    });
 
     it('keeps the last of two different product intents even when their data resolves in reverse order', async () => {
         const finish = new Map<string, () => void>();
@@ -452,6 +517,12 @@ describe('storefront navigation state', () => {
             );
             act(() => root.render(<Harness />));
             act(() => value.navigate({ name: 'product', id: 'old-product' }));
+            if (direction === 'forward') {
+                act(() => {
+                    routerInstance.history.push('/cart');
+                    routerInstance.history.back();
+                });
+            }
             act(() => {
                 void routerInstance.history[direction]();
             });
@@ -460,7 +531,7 @@ describe('storefront navigation state', () => {
                 await Promise.resolve();
             });
             expect(value.isPreparingProduct).toBe(false);
-            expect(router.state.location.pathname).toBe(direction === 'back' ? '/services' : '/cart');
+            expect(router.state.location.pathname).toBe(direction === 'back' ? '/category' : '/cart');
             expect(router.navigate).toHaveBeenCalledTimes(1);
         },
     );
@@ -976,11 +1047,17 @@ describe('storefront navigation state', () => {
         const opened = router.state.location;
         router.back.mockImplementation(() => emitLoad(original));
         router.forward.mockImplementation(() => emitLoad(opened));
-        await act(() => routerInstance.history.back());
+        await act(async () => {
+            routerInstance.history.back();
+            await Promise.resolve();
+        });
         act(() => root.render(<Harness />));
         expect(value.authOverlay).toBeNull();
         expect(value.activeCollectionId).toBe('chosen');
-        await act(() => routerInstance.history.forward());
+        await act(async () => {
+            routerInstance.history.forward();
+            await Promise.resolve();
+        });
         act(() => root.render(<Harness />));
         expect(value.authOverlay?.mode).toBe('register');
         expect(value.activeCollectionId).toBe('chosen');

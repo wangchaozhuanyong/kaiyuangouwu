@@ -199,7 +199,10 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         online={online}
                         language={language}
                         onRetry={() => void state.retryPageLoad()}
-                        onBack={storefrontContextValue.goBack ?? (() => window.history.back())}
+                        onBack={
+                            storefrontContextValue.goBack ??
+                            (() => storefrontContextValue.navigate({ name: 'home' }, true))
+                        }
                     >
                         <div
                             data-route={renderedRouteName}

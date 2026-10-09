@@ -31,6 +31,7 @@ export interface AnnouncementsPageProps {
     locale: string;
     route: RouteState;
     onBack: () => void;
+    onReturnToRoute: (target: RouteState) => void;
     onNavigate: (route: RouteState, replace?: boolean) => void;
     onContentTarget: (type: StorefrontContentTargetType, value: string | null) => void;
 }
@@ -52,6 +53,7 @@ export function AnnouncementsPage({
     locale,
     route,
     onBack,
+    onReturnToRoute,
     onNavigate,
     onContentTarget,
 }: AnnouncementsPageProps) {
@@ -91,7 +93,8 @@ export function AnnouncementsPage({
     usePageReadiness(state === 'loading');
     const showList = (targetPage = page) =>
         onNavigate({ name: 'announcements', page: targetPage > 1 ? targetPage : undefined });
-    const back = id ? () => showList() : onBack;
+    const back = () =>
+        id ? onReturnToRoute({ name: 'announcements', page: page > 1 ? page : undefined }) : onBack();
     if (state !== 'ready')
         return (
             <AsyncRouteStatePage
@@ -167,7 +170,7 @@ export function AnnouncementsPage({
                                     : 'It may have been removed, expired, or be unavailable in this language.'
                             }
                             action={isZh ? '返回全部公告' : 'View all announcements'}
-                            onAction={() => showList()}
+                            onAction={back}
                         />
                     )
                 ) : (

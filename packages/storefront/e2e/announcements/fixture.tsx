@@ -3,6 +3,7 @@ import type { MarketConfig, StorefrontContentBlock, StorefrontSystemAnnouncement
 // organize-imports-ignore -- Preserve production shared stylesheet cascade.
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
+    createBrowserHistory,
     createMemoryHistory,
     createRootRoute,
     createRoute,
@@ -24,6 +25,11 @@ import { AccountPage } from '../../src/pages/account-page';
 import { HomePage } from '../../src/pages/home-page';
 import { createStorefrontQueryClient } from '../../src/query-client';
 import { AnnouncementsRoutePage } from '../../src/route-pages/announcements-route-page';
+import {
+    goBackInStorefront,
+    registerStorefrontNavigationHistory,
+    returnToStorefrontRoute,
+} from '../../src/storefront-navigation-history';
 import { AccountPageContext, HomePageContext } from '../../src/storefront-page-contexts';
 import {
     normalizeRouteSearch,
@@ -162,8 +168,9 @@ function Fixture() {
     const desktop = useDesktopViewport();
     const location = useRouterState({ select: state => state.location });
     const route = routeFromRouterLocation(location.pathname, location.search);
-    const navigate = (next: RouteState) => void router.navigate(routeNavigateOptions(next) as never);
-    const onBack = () => (router.history.canGoBack() ? router.history.back() : navigate({ name: 'account' }));
+    const navigate = (next: RouteState, replace = false) =>
+        void router.navigate({ ...routeNavigateOptions(next), replace } as never);
+    const onBack = () => goBackInStorefront(router);
     const context = {
         api,
         route,
@@ -175,6 +182,7 @@ function Fixture() {
         reviewSettingsStatus: 'enabled',
         navigate,
         goBack: onBack,
+        returnToRoute: (target: RouteState) => returnToStorefrontRoute(router, target),
         logoUrl: null,
         storefrontName: isZh ? '店铺预览' : 'Store preview',
         displayedRoute: route,
@@ -193,6 +201,7 @@ function Fixture() {
                 <div
                     className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}
                     data-page-family={route.name === 'home' ? 'home' : 'content'}
+                    data-route={route.name}
                 >
                     <aside
                         className="type-helper"
@@ -308,16 +317,48 @@ const rootRoute = createRootRoute({ component: Fixture, validateSearch: normaliz
 const routes = ['/', '/account', '/announcements', '/category', '/services', '/support', '/cart'].map(path =>
     createRoute({ getParentRoute: () => rootRoute, path }),
 );
-const initialId = params.get('id');
 const initial = homePreview
     ? '/'
     : params.get('view') === 'account'
       ? '/account'
-      : `/announcements${initialId ? `?id=${encodeURIComponent(initialId)}` : ''}`;
+      : `/announcements${
+            new URLSearchParams([...params].filter(([key]) => key === 'id' || key === 'page')).size
+                ? `?${new URLSearchParams([...params].filter(([key]) => key === 'id' || key === 'page'))}`
+                : ''
+        }`;
+const nativeHistory = params.get('nativeHistory') === '1';
+const fixtureDocumentUrl = `${window.location.pathname}${window.location.search}`;
+if (nativeHistory && !window.location.hash) {
+    window.history.replaceState(window.history.state, '', `${fixtureDocumentUrl}#${initial}`);
+}
 const router = createRouter({
     routeTree: rootRoute.addChildren(routes),
-    history: createMemoryHistory({ initialEntries: [initial] }),
+    history: nativeHistory
+        ? createBrowserHistory({
+              parseLocation: () => {
+                  const url = new URL(window.location.hash.slice(1) || initial, window.location.origin);
+                  return {
+                      href: `${url.pathname}${url.search}${url.hash}`,
+                      pathname: url.pathname,
+                      search: url.search,
+                      hash: url.hash,
+                      state: window.history.state,
+                  };
+              },
+              createHref: href => `${fixtureDocumentUrl}#${href}`,
+          })
+        : createMemoryHistory({ initialEntries: [initial] }),
 });
+registerStorefrontNavigationHistory(router);
+(window as unknown as { fixtureNavigation: object }).fixtureNavigation = {
+    router,
+    get route() {
+        return routeFromRouterLocation(router.state.location.pathname, router.state.location.search);
+    },
+    get index() {
+        return router.history.location.state.__TSR_index;
+    },
+};
 const mount = document.getElementById('root');
 if (!mount) throw new Error('Announcement fixture mount is missing');
 createRoot(mount).render(

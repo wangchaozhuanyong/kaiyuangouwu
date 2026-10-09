@@ -23,6 +23,7 @@ import { offlineLoadError } from '../loading-state';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { goBackInStorefront } from '../storefront-navigation-history';
 import { NotificationsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { afterSalesNotification, orderNotification } from '../storefront-ui/order-ui';
@@ -101,10 +102,7 @@ export function NotificationsPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
-    const goBack = () => {
-        if (router.history.canGoBack()) router.history.back();
-        else navigateTo({ name: 'home' });
-    };
+    const goBack = () => goBackInStorefront(router);
     const { api, customer, market, locale, language } = NotificationsPageContext.useValue();
     useEffect(() => setSelected(null), [customer?.id, market.code]);
     const selectedEntry =
