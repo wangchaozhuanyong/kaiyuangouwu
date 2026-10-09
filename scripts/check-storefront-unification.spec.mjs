@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
     auditStorefrontUnification,
+    findRetiredStorefrontIssues,
     findStorefrontUnificationIssues,
 } from './check-storefront-unification.mjs';
 
@@ -75,5 +76,39 @@ test('permits the exact platform channel title while still rejecting merchant de
             'packages/storefront/src/page.tsx',
         ).length,
         1,
+    );
+});
+
+test('rejects restored retired helpers and account artwork, including CSS in a new file', () => {
+    for (const source of [
+        'export function desktopCategoryBannerInput() {}',
+        'import { resolveDesktopCategoryBanner } from "./desktop-category-banner";',
+    ]) {
+        assert.equal(
+            findRetiredStorefrontIssues(source, 'packages/storefront-content-plugin/src/new.ts').length,
+            1,
+        );
+    }
+    for (const source of [
+        '.account-hero { background: orange; }',
+        '.account-hero.has-custom-background .account-hero-art { display: block; }',
+        '<div className="account-hero-art" />',
+        '<div className="account-hero" />',
+    ]) {
+        assert.equal(findRetiredStorefrontIssues(source, 'packages/storefront/src/new.css').length, 1);
+    }
+    assert.deepEqual(
+        findRetiredStorefrontIssues(
+            'type Block = "ACCOUNT_HERO"; const purpose = "desktop-category-banner";',
+            'packages/storefront-content-plugin/src/legacy-records.ts',
+        ),
+        [],
+    );
+    assert.deepEqual(
+        findRetiredStorefrontIssues(
+            '.account-profile-card { background: var(--account-hero-bg); }',
+            'packages/storefront/src/styles/account.css',
+        ),
+        [],
     );
 });

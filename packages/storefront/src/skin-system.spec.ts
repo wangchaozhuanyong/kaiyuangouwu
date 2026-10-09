@@ -447,6 +447,11 @@ describe('storefront skin system', () => {
                         !(thinWidth && thinHeight) &&
                         /(?:^|;)\s*background(?:-color)?:/.test(body) &&
                         !/display:\s*none|content:\s*none/.test(body) &&
+                        // The approved brand-loading track communicates progress, not a reading divider.
+                        !(
+                            file === path.join(__dirname, 'styles/skeletons.css') &&
+                            selector.trim() === '.brand-loading-bar'
+                        ) &&
                         // The approved coupon navigation underline marks the active tab.
                         !(
                             file === path.join(__dirname, 'styles/coupon-center.css') &&
@@ -1146,69 +1151,29 @@ describe('storefront skin system', () => {
         expect(services).not.toMatch(/\.hero-rich-content\s*\{[^}]*width:\s*40%;/);
     });
 
-    it('centers mobile trust and reserves separate desktop corners for trust and the pager', () => {
+    it('keeps configured trust content as an ordered floor without restoring the retired hero overlay', () => {
         const services = stylesheet('./styles/home-showcase.css');
-        const overlay = services.match(/\.home-page \.home-hero-trust\s*\{([^}]+)\}/)?.[1];
+        const desktop = stylesheet('./styles/desktop-home.css');
+        const page = readFileSync(path.join(__dirname, 'pages/home-page.tsx'), 'utf8');
         expect(services).toMatch(/\.hero-carousel\s*\{[^}]*position:\s*relative;/);
-        expect(overlay).toContain('position: absolute;');
-        expect(overlay).toContain('bottom: 12px;');
-        expect([undefined, 'auto']).toContain(overlay?.match(/\btop:\s*([^;]+);/)?.[1]);
-        expect(overlay).toContain('left: 50%;');
-        expect(overlay).toContain('transform: translateX(-50%);');
-        expect(overlay).toContain('pointer-events: none;');
+        expect(page).toContain("hasHomepageModule('TRUST_BAR') && trustItems.length > 0");
+        expect(page).toContain("style={{ order: homepageModuleOrder('TRUST_BAR') }}");
+        expect(page).toContain("aria-label={isZh ? '服务信息' : 'Service information'}");
+        expect(`${services}\n${desktop}\n${page}`).not.toMatch(/home-hero-trust|hero-service-overlay/);
         expect(services).toMatch(
-            /\.hero\.hero-image-overlay \.hero-rich-content\s*\{[^}]*padding-top:\s*24px;/,
-        );
-        const reservedCopy = services.match(
-            new RegExp(
-                '\\.hero-carousel:has\\(> \\.home-hero-trust\\) ' +
-                    '\\.hero\\.hero-image-overlay \\.hero-rich-content\\s*\\{([^}]+)\\}',
-            ),
-        )?.[1];
-        expect(reservedCopy).toContain(
-            'padding-bottom: calc(var(--hero-overlay-height, 0px) + var(--home-hero-trust-height, 0px) + 44px);',
-        );
-        const shiftedPager = services.match(
-            /\.hero-carousel:has\(> \.home-hero-trust\) \.hero \.hero-overlay-controls\s*\{([^}]+)\}/,
-        )?.[1];
-        expect(shiftedPager).toContain('bottom: calc(var(--home-hero-trust-height, 0px) + 24px);');
-        expect(services).toMatch(/\.home-page \.hero \.hero-overlay-controls\s*\{[^}]*bottom:\s*12px;/);
-        const desktopOverlay = services.match(
-            /@media \(min-width: 1024px\)\s*\{[\s\S]*?\.home-page \.home-hero-trust\s*\{([^}]+)\}/,
-        )?.[1];
-        expect(desktopOverlay).toContain('left: clamp(28px, 3vw, 44px);');
-        expect(desktopOverlay).toContain('transform: none;');
-        expect(desktopOverlay).toContain('var(--home-hero-pager-width, 0px)');
-        expect(services).toMatch(/right: clamp\(28px, 3vw, 44px\);/);
-        expect(overlay).toContain('justify-content: center;');
-        expect(services).toMatch(
-            new RegExp(
-                '\\.home-hero-trust \\.home-trust-bar\\s*\\{[^}]*display:\\s*flex;[^}]*flex-wrap:\\s*nowrap;' +
-                    '[^}]*max-width:\\s*calc\\(100% - 40px\\);[^}]*overflow-x:\\s*auto;',
-            ),
-        );
-        expect(services).toMatch(/\.home-hero-trust \.home-trust-bar\s*\{[^}]*pointer-events:\s*auto;/);
-        expect(services).toMatch(
-            /\.home-hero-trust \.home-trust-bar\s*\{[^}]*max-width:\s*calc\(100% - 16px\);[^}]*gap:\s*4px;[^}]*padding-inline:\s*6px;/,
+            /\.home-trust-bar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/,
         );
         expect(services).toMatch(
-            new RegExp(
-                '\\.home-hero-trust \\.home-trust-item\\s*\\{[^}]*flex:\\s*0 0 auto;' +
-                    '[^}]*font-size:\\s*var\\(--type-helper-size\\);' +
-                    '[^}]*line-height:\\s*var\\(--type-helper-leading\\);[^}]*white-space:\\s*nowrap;',
-            ),
+            /\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
         );
         expect(services).toMatch(
-            /\.home-hero-trust \.home-trust-copy\s*\{[^}]*display:\s*inline-flex;[^}]*white-space:\s*nowrap;/,
+            /\.home-trust-description\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;/,
         );
-        expect(services).toMatch(
-            /\.home-hero-trust \.home-trust-copy :is\(\.home-trust-label, \.home-trust-description\)\s*\{[^}]*display:\s*inline;[^}]*white-space:\s*nowrap;/,
+        expect(desktop).toMatch(
+            /\.desktop-store-layout \.homepage-modules > \.home-trust-bar\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/,
         );
-        expect(services).toMatch(
-            /\.home-hero-trust \.home-trust-bar \.home-trust-item \.trust-icon\s*\{[^}]*color:\s*inherit;/,
-        );
-        expect(services).not.toMatch(
-            /\.home-hero-trust[^}]*text-overflow:\s*ellipsis|\.hero-service-overlay/,
+        expect(desktop).toMatch(
+            /\.desktop-store-layout \.homepage-modules > \.home-trust-bar \.home-trust-item\s*\{[^}]*color:\s*inherit;/,
         );
     });
 
