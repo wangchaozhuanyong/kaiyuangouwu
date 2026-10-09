@@ -17,6 +17,8 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import './frontend-invocation.spec.mjs';
+
 import { receiptFromInvocation, validateAcceptanceReceipt } from './acceptance-receipt.mjs';
 import { artifactSourceHash, runtimeArtifactRunTrusted } from './artifact-inputs.mjs';
 import { compiledExtractPython, validateBuildArtifact } from './build-artifact.mjs';
