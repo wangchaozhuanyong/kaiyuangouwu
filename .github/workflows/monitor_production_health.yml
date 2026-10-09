@@ -68,7 +68,7 @@ jobs:
               env:
                   FRONTEND_COMMAND_ID: ${{ inputs.read_frontend_command_id }}
                   FRONTEND_SOURCE_SHA: ${{ inputs.frontend_source_sha }}
-              run: node deploy/frontend-invocation.mjs
+              run: node deploy/frontend-ssm.mjs read-invocation
 
             - name: Audit masked production memory consumers
               if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_memory_processes && inputs.read_frontend_command_id == '' }}

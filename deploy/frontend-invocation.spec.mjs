@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { maskedDeploymentLines, readFrontendInvocation } from './frontend-invocation.mjs';
+import { maskedDeploymentLines, readFrontendInvocation } from './frontend-ssm.mjs';
 
 const commandId = 'aa4285f5-3701-449c-a23b-aa3407cddeb6';
 const sourceSha = '3949cb7468ef0ee53a79eff568305b29d497e642';
@@ -58,7 +58,7 @@ test('diagnostic workflow reads the invocation without sending a new host comman
     );
     const steps = w.jobs.monitor.steps;
     const read = steps.find(x => x.name === 'Read a bound frontend deployment receipt');
-    assert.match(read.run, /node deploy\/frontend-invocation\.mjs/u);
+    assert.match(read.run, /node deploy\/frontend-ssm\.mjs read-invocation/u);
     assert.deepEqual(w.permissions, { contents: 'read', 'id-token': 'write' });
     for (const step of steps.filter(
         x => x.name === 'Check production health' || /notification|outages/iu.test(x.name),
