@@ -30,6 +30,7 @@ import { ProductReviewsSection } from '../review-pages';
 import { sanitizeProductDescription } from '../rich-text';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { bestProductCouponPrice } from '../storefront-coupons';
+import { goBackInStorefront } from '../storefront-navigation-history';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { SubHeader, SubpageBody } from '../storefront-ui/page-shell';
@@ -94,10 +95,7 @@ export function ProductDetailPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
-    const goBack = () => {
-        if (router.history.canGoBack()) router.history.back();
-        else navigateTo({ name: 'category' });
-    };
+    const goBack = () => goBackInStorefront(router, { name: 'category' });
     const {
         api,
         product,

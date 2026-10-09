@@ -19,6 +19,7 @@ export function AnnouncementsRoutePage() {
             locale={runtime.locale}
             route={runtime.route}
             onBack={runtime.goBack}
+            onReturnToRoute={runtime.returnToRoute}
             onNavigate={runtime.navigate}
             onContentTarget={runtime.openContentTarget}
         />

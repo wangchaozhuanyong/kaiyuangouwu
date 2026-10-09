@@ -7,6 +7,7 @@ import { useDesktopLayout } from '../desktop-layout';
 import { useAccountProductList } from '../hooks/useAccountProductList';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { goBackInStorefront } from '../storefront-navigation-history';
 import { FavoriteProductsPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { EmptyState, InlineError, SubHeader } from '../storefront-ui/page-shell';
@@ -36,10 +37,7 @@ export function FavoriteProductsPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
-    const goBack = () => {
-        if (router.history.canGoBack()) router.history.back();
-        else navigateTo({ name: 'home' });
-    };
+    const goBack = () => goBackInStorefront(router);
     const {
         api,
         productIds,

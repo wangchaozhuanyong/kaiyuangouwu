@@ -5,6 +5,7 @@ import { storefrontQueryClient } from './query-client';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
+import { registerStorefrontNavigationHistory } from './storefront-navigation-history';
 import { prefetchPublicPage } from './storefront-page-data';
 import {
     getStorefrontScrollRestorationKey,
@@ -48,6 +49,8 @@ export const router = createRouter({
     scrollToTopSelectors: ['[data-scroll-restoration-id="category-results"]'],
     getScrollRestorationKey: getStorefrontScrollRestorationKey,
 });
+
+registerStorefrontNavigationHistory(router);
 
 router.subscribe('onBeforeNavigate', event => {
     const route = routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search);

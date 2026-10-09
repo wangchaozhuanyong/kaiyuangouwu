@@ -26,6 +26,7 @@ import {
     couponScopeLabel,
 } from '../storefront-coupons';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { goBackInStorefront } from '../storefront-navigation-history';
 import { CouponCenterPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import { EmptyState, InlineError, Subpage, SubpageBody } from '../storefront-ui/page-shell';
@@ -63,10 +64,7 @@ export function CouponCenterPage() {
     const navigate = useNavigate();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const router = useRouter();
-    const goBack = () => {
-        if (router.history.canGoBack()) router.history.back();
-        else navigateTo({ name: 'home' });
-    };
+    const goBack = () => goBackInStorefront(router);
     const {
         coupons,
         myCoupons,

@@ -1,5 +1,5 @@
 /* eslint-disable import/order -- prettier-plugin-organize-imports places type-only imports after runtime imports. */
-import { useNavigate, useRouter } from '@tanstack/react-router';
+import { useRouter } from '@tanstack/react-router';
 import { ArrowUpRight, Check, ChevronRight, Copy, Headphones, QrCode, Star, ThumbsUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
@@ -12,8 +12,8 @@ import telegramIcon from '../assets/support/telegram.svg';
 import wechatIcon from '../assets/support/wechat.svg';
 import whatsappIcon from '../assets/support/whatsapp.svg';
 import { SafeImage } from '../safe-image';
+import { goBackInStorefront } from '../storefront-navigation-history';
 import { SupportPageContext } from '../storefront-page-contexts';
-import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, Sheet, Subpage, SubpageBody } from '../storefront-ui/page-shell';
 import '../styles/modals-and-support.css';
 import {
@@ -54,12 +54,8 @@ const channelIcons: Record<SupportChannelKey, string> = {
 };
 
 export function SupportPage() {
-    const navigate = useNavigate();
     const router = useRouter();
-    const goBack = () => {
-        if (router.history.canGoBack()) router.history.back();
-        else void navigate(routeNavigateOptions({ name: 'home' }) as never);
-    };
+    const goBack = () => goBackInStorefront(router);
     const { api, customer, content, language, orderCode, focus, onNotify, onSignIn } =
         SupportPageContext.useValue();
     const isZh = language === 'zh';

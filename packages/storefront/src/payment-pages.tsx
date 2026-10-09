@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import {
     ArrowLeft,
     Check,
@@ -28,6 +28,7 @@ import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton } from './route-loading';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
+import { returnToStorefrontRoute } from './storefront-navigation-history';
 import { routeNavigateOptions } from './storefront-router';
 import { customerOrderStateLabel } from './storefront-ui/order-ui';
 import { EmptyState, InlineError, SubHeader, Subpage } from './storefront-ui/page-shell';
@@ -194,6 +195,7 @@ export function PaymentPage({
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
+    const router = useRouter();
     const isZh = language === 'zh';
     const [selectedMethod, setSelectedMethod] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -676,7 +678,9 @@ export function PaymentPage({
             <Subpage
                 title={isZh ? '选择支付方式' : 'Choose payment'}
                 language={language}
-                onBack={() => navigateTo({ name: hasUnresolvedPayment ? 'orders' : 'cart' })}
+                onBack={() =>
+                    returnToStorefrontRoute(router, { name: hasUnresolvedPayment ? 'orders' : 'cart' })
+                }
             >
                 <EmptyState
                     icon={<WalletCards />}
@@ -1244,6 +1248,7 @@ export function OrderConfirmationPage({
     language: StorefrontLanguage;
 }) {
     const navigate = useNavigate();
+    const router = useRouter();
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
     const orderQuery = useQuery({
@@ -1292,7 +1297,7 @@ export function OrderConfirmationPage({
             <Subpage
                 title={isZh ? '订单已提交' : 'Order confirmed'}
                 language={language}
-                onBack={() => navigateTo({ name: 'home' })}
+                onBack={() => returnToStorefrontRoute(router, { name: 'home' })}
             >
                 <PageSkeleton label={isZh ? '正在加载订单结果' : 'Loading order result'} />
             </Subpage>
@@ -1303,7 +1308,7 @@ export function OrderConfirmationPage({
             <Subpage
                 title={isZh ? '订单已提交' : 'Order confirmed'}
                 language={language}
-                onBack={() => navigateTo({ name: 'home' })}
+                onBack={() => returnToStorefrontRoute(router, { name: 'home' })}
             >
                 <EmptyState
                     icon={<Package />}
@@ -1322,7 +1327,7 @@ export function OrderConfirmationPage({
                     onAction={() =>
                         loadError
                             ? void orderQuery.refetch({ cancelRefetch: false })
-                            : navigateTo({ name: 'home' })
+                            : returnToStorefrontRoute(router, { name: 'home' })
                     }
                 />
             </Subpage>

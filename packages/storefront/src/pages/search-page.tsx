@@ -40,6 +40,7 @@ import {
 } from '../query-client';
 import { SafeImage } from '../safe-image';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { goBackInStorefront } from '../storefront-navigation-history';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from '../storefront-storage';
@@ -329,8 +330,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
     };
     const closeSearch = () => {
         if (embedded) return embedded.close();
-        if (router.history.canGoBack()) router.history.back();
-        else navigateTo({ name: 'home' });
+        goBackInStorefront(router);
     };
     useEffect(() => {
         if (!desktop || embedded) return;
@@ -343,12 +343,11 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
             )
                 return;
             event.preventDefault();
-            if (router.history.canGoBack()) router.history.back();
-            else void navigate(routeNavigateOptions({ name: 'home' }) as never);
+            goBackInStorefront(router);
         };
         window.addEventListener('keydown', onEscape);
         return () => window.removeEventListener('keydown', onEscape);
-    }, [desktop, navigate, router.history]);
+    }, [desktop, embedded, router]);
     const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
         if (isInputMethodKey(event.nativeEvent) || composing) return;
         if (event.key === 'Escape' && embedded) {

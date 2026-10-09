@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createMemoryHistory } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import { ShopApi } from '../api';
 import { CatalogPaginationError } from '../catalog-pagination';
 import { enabledMarkets } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { registerStorefrontNavigationHistory } from '../storefront-navigation-history';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { Product } from '../types';
 
@@ -22,14 +24,17 @@ function required<T>(value: T | null | undefined): T {
     return value;
 }
 const navigate = vi.hoisted(() => vi.fn());
-const back = vi.hoisted(() => vi.fn());
-const canGoBack = vi.hoisted(() => vi.fn(() => false));
+const historyRef = vi.hoisted(() => ({ current: null as ReturnType<typeof createMemoryHistory> | null }));
 const viewport = vi.hoisted(() => ({ desktop: false }));
 vi.mock('../desktop-layout', () => ({ useDesktopLayout: () => viewport.desktop }));
-vi.mock('@tanstack/react-router', () => ({
-    useNavigate: () => navigate,
-    useRouter: () => ({ history: { back, canGoBack } }),
-}));
+vi.mock('@tanstack/react-router', async () => {
+    const actual = await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router');
+    return {
+        ...actual,
+        useNavigate: () => navigate,
+        useRouter: () => ({ history: required(historyRef.current), navigate }),
+    };
+});
 describe('search result and product-detail cache separation', () => {
     const market = enabledMarkets[0];
     const product: Product = {
@@ -397,8 +402,7 @@ describe('search result and product-detail cache separation', () => {
     });
     beforeEach(() => {
         navigate.mockClear();
-        back.mockClear();
-        canGoBack.mockReturnValue(false);
+        historyRef.current = createMemoryHistory({ initialEntries: ['/search?term=coffee'] });
         viewport.desktop = false;
         client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         client.setQueryData(searchKey, {
@@ -449,14 +453,19 @@ describe('search result and product-detail cache separation', () => {
         const close = container.querySelector<HTMLButtonElement>('.search-close');
         expect(close?.textContent).toContain('Close search');
         void act(() => close?.click());
-        expect(navigate).toHaveBeenCalledWith({ to: '/', search: {} });
+        expect(navigate).toHaveBeenCalledWith({ to: '/', search: {}, replace: true });
     });
     it('returns to the previous page when closing an entered desktop search', () => {
         viewport.desktop = true;
-        canGoBack.mockReturnValue(true);
+        const history = createMemoryHistory({ initialEntries: ['/category'] });
+        historyRef.current = history;
+        registerStorefrontNavigationHistory({ history, navigate });
+        history.push('/search?term=coffee');
+        const go = vi.spyOn(history, 'go');
         render();
         void act(() => container.querySelector<HTMLButtonElement>('.search-close')?.click());
-        expect(back).toHaveBeenCalledOnce();
+        expect(go).toHaveBeenCalledExactlyOnceWith(-1);
+        expect(history.location.pathname).toBe('/category');
         expect(navigate).not.toHaveBeenCalled();
     });
     it('closes desktop search with Escape while preserving an open dialog', async () => {
@@ -475,7 +484,7 @@ describe('search result and product-detail cache separation', () => {
             window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
             await Promise.resolve();
         });
-        expect(navigate).toHaveBeenCalledWith({ to: '/', search: {} });
+        expect(navigate).toHaveBeenCalledWith({ to: '/', search: {}, replace: true });
     });
     it('returns to discovery when the search term is cleared', () => {
         viewport.desktop = true;

@@ -173,7 +173,7 @@ export function LogisticsRoutePage() {
         <RouteGate name="logistics">
             <AuthPageBoundary
                 language={runtime.language}
-                onBack={() => runtime.navigate({ name: 'account' })}
+                onBack={() => runtime.returnToRoute({ name: 'account' })}
             >
                 <LazyLogisticsPage
                     route={runtime.route}
@@ -182,7 +182,8 @@ export function LogisticsRoutePage() {
                     market={runtime.market}
                     locale={runtime.locale}
                     language={runtime.language}
-                    onBack={() => runtime.navigate({ name: 'account' })}
+                    onBack={() => runtime.returnToRoute({ name: 'account' })}
+                    onReturnToRoute={runtime.returnToRoute}
                     onOpenOrder={setDetailOrderId}
                 />
                 {detailOrderId && runtime.customer && (
@@ -202,15 +203,12 @@ export function OrderDetailRoutePage() {
     const isZh = runtime.language === 'zh';
     const back = () =>
         runtime.route.source?.startsWith('logistics')
-            ? runtime.navigate(
-                  {
-                      name: 'logistics',
-                      id: runtime.route.source === 'logistics-detail' ? runtime.route.id : undefined,
-                      deliveryStatus: runtime.route.deliveryStatus,
-                      term: runtime.route.term,
-                  },
-                  true,
-              )
+            ? runtime.returnToRoute({
+                  name: 'logistics',
+                  id: runtime.route.source === 'logistics-detail' ? runtime.route.id : undefined,
+                  deliveryStatus: runtime.route.deliveryStatus,
+                  term: runtime.route.term,
+              })
             : runtime.goBack();
     if (!runtime.customer) {
         return (
@@ -305,7 +303,7 @@ export function AddressesRoutePage() {
     const addressId = checkoutAddress(runtime.customer, runtime.route.addressId)?.id;
     const back = () =>
         selectionMode && returnTo
-            ? runtime.navigate({ name: returnTo, checkoutOrderId, addressId: runtime.route.addressId }, true)
+            ? runtime.returnToRoute({ name: returnTo, checkoutOrderId, addressId: runtime.route.addressId })
             : runtime.goBack();
     return (
         <RouteGate name="addresses">

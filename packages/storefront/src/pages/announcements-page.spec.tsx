@@ -58,6 +58,7 @@ function fixture(items: StorefrontSystemAnnouncement[] = [], options: Partial<An
         locale: 'zh-CN',
         route: { name: 'announcements' },
         onBack: vi.fn(),
+        onReturnToRoute: vi.fn(route => render({ route: routeFromHash(routeHref(route)) })),
         onContentTarget: vi.fn(),
         onNavigate: vi.fn(route => render({ route: routeFromHash(routeHref(route)) })),
         ...options,
@@ -127,6 +128,7 @@ describe('all announcements and detail navigation', () => {
         expect(view.props.route).toMatchObject({ name: 'announcements', page: 3, id: '25' });
         expect(view.host.querySelector('.announcement-body')?.textContent).toBe('Body 25');
         await view.click('返回');
+        expect(view.props.onReturnToRoute).toHaveBeenLastCalledWith({ name: 'announcements', page: 3 });
         expect(view.props.route.page).toBe(3);
         expect(view.props.route.id).toBeUndefined();
         expect(view.host.querySelector('.notification-list')?.textContent).toContain('Announcement 25');
@@ -142,6 +144,7 @@ describe('all announcements and detail navigation', () => {
         await view.click('前往相关页面');
         expect(view.props.onContentTarget).toHaveBeenCalledWith('URL', '/support');
         await view.click('返回');
+        expect(view.props.onReturnToRoute).toHaveBeenLastCalledWith({ name: 'announcements', page: 2 });
         expect(view.props.route).toMatchObject({ name: 'announcements', page: 2 });
         expect(view.list).toHaveBeenLastCalledWith({ skip: 12, take: 12 }, expect.any(AbortSignal));
     });
@@ -170,6 +173,10 @@ describe('all announcements and detail navigation', () => {
         expect(view.host.textContent).toContain('此公告暂不可查看');
         expect(view.host.textContent).not.toContain('页面数据加载失败');
         await view.click('返回全部公告');
+        expect(view.props.onReturnToRoute).toHaveBeenLastCalledWith({
+            name: 'announcements',
+            page: undefined,
+        });
         expect(view.props.route.id).toBeUndefined();
         expect(view.host.textContent).toContain('暂无系统公告');
     });
