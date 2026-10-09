@@ -5,6 +5,16 @@ on:
         - cron: '17,47 * * * *'
     workflow_dispatch:
         inputs:
+            read_frontend_command_id:
+                description: Read only an existing frontend deployment command receipt
+                required: false
+                default: ''
+                type: string
+            frontend_source_sha:
+                description: Exact source SHA bound to the frontend command comment
+                required: false
+                default: ''
+                type: string
             audit_payment_config:
                 description: Run the masked production payment configuration audit
                 required: false
@@ -53,8 +63,15 @@ jobs:
                   aws-region: ${{ env.AWS_REGION }}
                   allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
 
+            - name: Read a bound frontend deployment receipt
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.read_frontend_command_id != '' }}
+              env:
+                  FRONTEND_COMMAND_ID: ${{ inputs.read_frontend_command_id }}
+                  FRONTEND_SOURCE_SHA: ${{ inputs.frontend_source_sha }}
+              run: node deploy/frontend-ssm.mjs read-invocation
+
             - name: Audit masked production memory consumers
-              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_memory_processes }}
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_memory_processes && inputs.read_frontend_command_id == '' }}
               shell: bash
               run: |
                   set -Eeuo pipefail
@@ -138,11 +155,11 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Check out the audited revision
-              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config }}
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config && inputs.read_frontend_command_id == '' }}
               uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
 
             - name: Audit masked production payment configuration
-              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config }}
+              if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_payment_config && inputs.read_frontend_command_id == '' }}
               shell: bash
               run: |
                   set -Eeuo pipefail
@@ -203,6 +220,7 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Check production health
+              if: ${{ inputs.read_frontend_command_id == '' }}
               run: |
                   REALTIME_CAPACITY_AUDIT=false
                   if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
@@ -260,7 +278,7 @@ jobs:
                   } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Restore notification incident state
-              if: always()
+              if: ${{ always() && inputs.read_frontend_command_id == '' }}
               uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: .notification-monitor-state
@@ -268,7 +286,7 @@ jobs:
                   restore-keys: production-notification-state-
 
             - name: Notify confirmed outages and inspection failures in Chinese
-              if: always()
+              if: ${{ always() && inputs.read_frontend_command_id == '' }}
               env:
                   TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
                   TELEGRAM_OPS_CHAT_ID: ${{ secrets.TELEGRAM_OPS_CHAT_ID }}
@@ -278,7 +296,7 @@ jobs:
               run: node deploy/monitor-notifications.mjs
 
             - name: Persist notification incident state
-              if: always()
+              if: ${{ always() && inputs.read_frontend_command_id == '' }}
               uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
               with:
                   path: .notification-monitor-state
