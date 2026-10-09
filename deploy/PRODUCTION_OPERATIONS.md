@@ -281,13 +281,21 @@ gh workflow run production_operations.yml --ref main \
 ```
 
 The product report counts related entities and historical orders by their
-`order.salesChannelId`, including orders for deleted variants. It reports only
-Channel codes and aggregate order and order-line counts; it does not publish
-order IDs, customer details, SKU labels, or credentials. A null sales owner is
-reported separately. This evidence identifies historical dependencies but is
-not an ownership migration plan or permission to detach a Channel. Review any
-default-Channel, other-store, or unresolved sale before preparing a separate
-scoped migration.
+`order.salesChannelId`, including orders for deleted variants. It also reads
+stock levels only for the requested product's active variant IDs, reporting
+stock-level, variant and warehouse IDs, quantities, warehouse existence and
+warehouse Channel memberships. Missing, default and shared memberships remain
+facts to review; the audit never assigns a store or changes stock.
+
+The Operations output retains counts and explicit truncation flags for variant
+IDs, stock levels and warehouse Channels. Truncated details cannot prove a
+complete ownership map. The stock receipt validator is transported only for
+this audit, preserving the transport capacity of other Operations. No order IDs,
+customer details, SKU or warehouse names, or credentials are published. A null
+sales owner is reported separately. This
+evidence identifies historical dependencies but is not an ownership migration
+plan or permission to detach a Channel. Review any default-Channel, other-store,
+or unresolved sale or stock before preparing a separate scoped migration.
 
 ## Backfill historical order sales ownership
 

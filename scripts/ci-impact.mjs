@@ -41,6 +41,7 @@ export const architectureBudgetInput = file =>
         ),
     );
 export const isDocumentation = file =>
+    file === 'deploy/PRODUCTION_OPERATIONS.md' ||
     /^(docs\/|\.github\/ISSUE_TEMPLATE\/)/u.test(file) ||
     /(^|\/)(README[^/]*|CHANGELOG[^/]*|AGENTS)\.md$/u.test(file);
 
@@ -54,8 +55,12 @@ export const isAutomationOnly = file =>
         'deploy/frontend-ssm.mjs',
         'deploy/deploy-frontends-from-s3.sh',
         'deploy/production-operations.cjs',
+        'deploy/product-stock-ownership-receipt.cjs',
         'deploy/icloud-relay-diagnostic.mjs',
         'deploy/icloud-relay-receipt.cjs',
+        // This fixed SELECT-only audit is transported by Production Operations;
+        // serving processes never import it. Keep other dev-server scripts fail-closed.
+        'packages/dev-server/scripts/product-ownership-preflight.mjs',
     ].includes(file) ||
     /^scripts\/(ci-|release-|architecture-debt|lint-check\.mjs$)/u.test(file) ||
     /^(deploy\/|packages\/dev-server\/scripts\/).*\.spec\.mjs$/u.test(file);

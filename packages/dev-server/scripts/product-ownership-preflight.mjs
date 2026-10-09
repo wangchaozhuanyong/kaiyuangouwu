@@ -34,8 +34,18 @@ const RELATION_TABLES = [
     'channel',
     'order',
     'order_line',
+    'stock_level',
+    'stock_location',
+    'stock_location_channels_channel',
     ...Object.values(ENTITY_TYPES).flatMap(([entity, relation]) => [entity, relation]),
 ];
+
+const STOCK_COLUMNS = {
+    stock_level: ['id', 'productVariantId', 'stockLocationId', 'stockOnHand', 'stockAllocated'],
+    stock_location: ['id'],
+    stock_location_channels_channel: ['stockLocationId', 'channelId'],
+    channel: ['id', 'code'],
+};
 
 function quoted(identifier) {
     if (!/^[a-z][a-zA-Z0-9_]*$/u.test(identifier)) throw new Error('Unsafe database identifier');
@@ -50,6 +60,87 @@ function uniqueIds(values) {
 
 function placeholders(values) {
     return values.map(() => '?').join(', ');
+}
+
+function stockCheck(condition) {
+    if (!condition) throw new Error('Invalid stock ownership facts');
+}
+
+function stockOwnershipId(value) {
+    stockCheck(typeof value === 'string' || Number.isSafeInteger(value));
+    stockCheck(/^[1-9][0-9]*$/u.test(String(value)));
+    return String(value);
+}
+
+function stockQuantity(value) {
+    stockCheck(Number.isSafeInteger(value));
+    return value;
+}
+
+async function collectStockOwnership(adapter, variantIds, channelRows) {
+    for (const [table, columns] of Object.entries(STOCK_COLUMNS)) {
+        for (const column of columns) {
+            if (!(await adapter.columnExists(table, column))) {
+                throw new Error(`Missing required column: ${table}.${column}`);
+            }
+        }
+    }
+    const channels = new Map(
+        channelRows.map(({ id, code }) => {
+            stockCheck(code === null || typeof code === 'string');
+            return [stockOwnershipId(id), code];
+        }),
+    );
+    stockCheck(channels.size === channelRows.length);
+    if (variantIds.length === 0) return { variantIds, levels: [] };
+    const variantScope = new Set(variantIds);
+    const stockRows = await adapter.query(
+        `SELECT stock.id, stock.productVariantId, stock.stockLocationId, stock.stockOnHand,
+                stock.stockAllocated, location.id AS locationId,
+                membership.stockLocationId AS memberLocationId, membership.channelId
+         FROM \`stock_level\` stock
+         LEFT JOIN \`stock_location\` location ON location.id = stock.stockLocationId
+         LEFT JOIN \`stock_location_channels_channel\` membership ON membership.stockLocationId = stock.stockLocationId
+         WHERE stock.productVariantId IN (${placeholders(variantIds)}) ORDER BY stock.id, membership.channelId`,
+        variantIds,
+    );
+    const levels = new Map();
+    const joinedIds = new Set();
+    for (const row of stockRows) {
+        const level = {
+            id: stockOwnershipId(row.id),
+            productVariantId: stockOwnershipId(row.productVariantId),
+            stockLocationId: stockOwnershipId(row.stockLocationId),
+            stockOnHand: stockQuantity(row.stockOnHand),
+            stockAllocated: stockQuantity(row.stockAllocated),
+            stockLocationExists: row.locationId !== null,
+        };
+        const channelId = row.channelId === null ? null : stockOwnershipId(row.channelId);
+        stockCheck(variantScope.has(level.productVariantId));
+        stockCheck(!level.stockLocationExists || stockOwnershipId(row.locationId) === level.stockLocationId);
+        stockCheck(
+            channelId === null
+                ? row.memberLocationId === null
+                : stockOwnershipId(row.memberLocationId) === level.stockLocationId && channels.has(channelId),
+        );
+        const previous = levels.get(level.id);
+        const key = `${level.id}:${channelId}`;
+        stockCheck(!previous || Object.entries(level).every(([field, value]) => previous[field] === value));
+        stockCheck(!joinedIds.has(key));
+        joinedIds.add(key);
+        if (!previous) levels.set(level.id, { ...level, channels: [] });
+        if (channelId !== null) {
+            levels.get(level.id).channels.push({ id: channelId, code: channels.get(channelId) });
+        }
+    }
+    return {
+        variantIds,
+        levels: uniqueIds([...levels.keys()]).map(id => {
+            const level = levels.get(id);
+            level.channels.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+            return level;
+        }),
+    };
 }
 
 async function linkedIds(adapter, table, sourceColumn, targetColumn, sourceIds) {
@@ -191,7 +282,10 @@ export async function collectProductOwnershipPreflight(adapter, productId) {
         'SELECT id, sku, featuredAssetId FROM `product_variant` WHERE productId = ? AND deletedAt IS NULL',
         [productId],
     );
-    const variantIds = uniqueIds(variantRows.map(row => row.id));
+    const activeVariantIds = variantRows.map(row => stockOwnershipId(row.id));
+    stockCheck(new Set(activeVariantIds).size === activeVariantIds.length);
+    const variantIds = uniqueIds(activeVariantIds);
+    const stockOwnership = await collectStockOwnership(adapter, variantIds, channelRows);
     const assetIds = uniqueIds([
         products[0].featuredAssetId,
         ...variantRows.map(row => row.featuredAssetId),
@@ -275,6 +369,7 @@ export async function collectProductOwnershipPreflight(adapter, productId) {
     return {
         ...report,
         historicalSales: await historicalSales(adapter, productId, channelCodes),
+        stockOwnership,
     };
 }
 

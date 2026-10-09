@@ -148,6 +148,32 @@ test('read-only mailbox diagnostics require controls without a website release',
         'runtime',
     );
 });
+test('fixed read-only product inventory audit requires controls without a serving-process release', () => {
+    const files = [
+        'deploy/PRODUCTION_OPERATIONS.md',
+        '.github/workflows/production_operations.yml',
+        'deploy/product-stock-ownership-receipt.cjs',
+        'packages/dev-server/scripts/product-ownership-preflight.mjs',
+        'packages/dev-server/scripts/product-ownership-preflight.spec.mjs',
+        'deploy/production-operations.cjs',
+        'packages/dev-server/scripts/production-operations.spec.mjs',
+        'scripts/ci-impact.mjs',
+        'scripts/ci-impact.spec.mjs',
+    ];
+    const plan = classifyChanges(files, inventory);
+    assert.equal(plan.controls, true);
+    assert.equal(plan.lane, 'none');
+    assert.equal(plan.full, false);
+    assert.deepEqual(plan.frontends, []);
+    assert.deepEqual(plan.packages, []);
+    assert.deepEqual(plan.databases, []);
+    for (const runtimeFile of [
+        'packages/dev-server/scripts/moyao-default-store-migration.mjs',
+        'packages/store-management-plugin/src/digital-product.service.ts',
+    ]) {
+        assert.equal(classifyChanges([...files, runtimeFile], inventory).lane, 'runtime', runtimeFile);
+    }
+});
 test('storefront runtime source updates Admin preview, while client tests and isolated tool do not', () => {
     assert.deepEqual(
         classifyChanges(['packages/storefront/src/styles/home-showcase.css'], inventory).frontends,

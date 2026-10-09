@@ -337,6 +337,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         ],
         [
             ...commonFiles,
+            'deploy/product-stock-ownership-receipt.cjs',
             'packages/dev-server/scripts/store-isolation-data-preflight.mjs',
             'packages/dev-server/scripts/store-isolation-ownership-evidence.mjs',
             'packages/dev-server/scripts/store-isolation-customer-dependencies.mjs',
@@ -1875,6 +1876,22 @@ void test('administrator and product readiness audit reports blockers without ex
         editableAsExclusiveStoreProduct: false,
         product: { id: '1', channels: [{ id: '1', code: '__default_channel__' }] },
         related: { variants: [{ id: '7', label: 'PRIVATE-SKU' }] },
+        stockOwnership: {
+            variantIds: ['7'],
+            levels: [
+                {
+                    id: '11',
+                    productVariantId: '7',
+                    stockLocationId: '2',
+                    stockOnHand: 100,
+                    stockAllocated: -2,
+                    stockLocationExists: true,
+                    channels: [{ id: '1', code: '__default_channel__' }],
+                    stockLocationName: 'PRIVATE-WAREHOUSE',
+                    sku: 'PRIVATE-SKU',
+                },
+            ],
+        },
         historicalSales: {
             orderCount: 2,
             orderLineCount: 3,
@@ -1908,6 +1925,27 @@ void test('administrator and product readiness audit reports blockers without ex
     assert.equal(result.administrator.unmappedCount, 1);
     assert.equal(result.product.editableAsExclusiveStoreProduct, false);
     assert.equal(result.product.relatedCounts.variants, 1);
+    assert.deepEqual(result.product.stockOwnership, {
+        variantCount: 1,
+        variantIds: ['7'],
+        variantIdsTruncated: false,
+        levelCount: 1,
+        levels: [
+            {
+                id: '11',
+                productVariantId: '7',
+                stockLocationId: '2',
+                stockOnHand: 100,
+                stockAllocated: -2,
+                stockLocationExists: true,
+                channelCount: 1,
+                channels: [{ id: '1', code: '__default_channel__' }],
+                channelsTruncated: false,
+            },
+        ],
+        levelsTruncated: false,
+        detailsTruncated: false,
+    });
     assert.deepEqual(result.product.historicalSales, {
         orderCount: 2,
         orderLineCount: 3,
@@ -1915,6 +1953,7 @@ void test('administrator and product readiness audit reports blockers without ex
     });
     assert.equal(result.product.blockerCount, 1);
     assert.ok(!JSON.stringify(result).includes('PRIVATE-SKU'));
+    assert.ok(!JSON.stringify(result).includes('PRIVATE-WAREHOUSE'));
     assert.ok(!JSON.stringify(result).includes('PRIVATE_ERROR_NOT_FORWARDED'));
     assert.throws(() =>
         operations.runAdministratorProductReadinessAudit(request, {
@@ -1955,6 +1994,240 @@ void test('administrator and product readiness audit reports blockers without ex
             return true;
         },
     );
+});
+
+function stockReadinessAuditFixture() {
+    const runtimeSha = 'b'.repeat(40);
+    const request = operations.validateRequest({
+        OPS_OPERATION: 'audit-administrator-product-readiness',
+        OPS_SOURCE_SHA: sourceSha,
+        OPS_EXPECTED_RUNTIME_SHA: runtimeSha,
+        OPS_PRODUCT_ID: '1',
+    });
+    const plan = { markerSha: runtimeSha, currentRuntime: '/immutable/runtime' };
+    const administrator = {
+        mode: 'read-only',
+        readyForStagedMigration: false,
+        activeAdministratorCount: 1,
+        ownerAdministratorIds: ['1'],
+        existingProfileCount: 0,
+        legacyPrimaries: [],
+        unmapped: [],
+        blockers: [],
+    };
+    const product = {
+        mode: 'read-only',
+        productId: '1',
+        editableAsExclusiveStoreProduct: false,
+        product: { channels: [{ id: '1', code: '__default_channel__' }] },
+        related: { variants: [{ id: '7' }] },
+        stockOwnership: {
+            variantIds: ['7'],
+            levels: [
+                {
+                    id: '11',
+                    productVariantId: '7',
+                    stockLocationId: '2',
+                    stockOnHand: -4,
+                    stockAllocated: -2,
+                    stockLocationExists: false,
+                    channels: [{ id: '1', code: null }],
+                },
+            ],
+        },
+        historicalSales: { orderCount: 0, orderLineCount: 0, bySalesChannel: [] },
+        blockers: [{ code: 'PRODUCT_WITHOUT_STORE', entityId: '1' }],
+    };
+    let healthChecks = 0;
+    const run = () =>
+        operations.runAdministratorProductReadinessAudit(request, {
+            inspect: () => structuredClone(plan),
+            health: () => {
+                healthChecks++;
+                return { status: 'ok', output: 'Result=success\nExecMainStatus=0\nActiveState=inactive' };
+            },
+            spawn: (command, args) => {
+                assert.equal(command, '/usr/bin/node');
+                assert.ok(!args.includes('--apply'));
+                return {
+                    status: 0,
+                    stdout: JSON.stringify(args.includes('--product-id=1') ? product : administrator),
+                    stderr: 'PRIVATE-STOCK-CHILD-ERROR',
+                };
+            },
+        });
+    return { product, run, healthChecks: () => healthChecks };
+}
+
+void test('stock ownership evidence preserves negative integers, missing locations and empty inventory', () => {
+    const auditFixture = stockReadinessAuditFixture();
+    const result = auditFixture.run();
+    assert.equal(result.product.editableAsExclusiveStoreProduct, false);
+    assert.deepEqual(result.product.historicalSales, auditFixture.product.historicalSales);
+    assert.equal(result.product.stockOwnership.levels[0].stockOnHand, -4);
+    assert.equal(result.product.stockOwnership.levels[0].stockAllocated, -2);
+    assert.equal(result.product.stockOwnership.levels[0].stockLocationExists, false);
+    assert.deepEqual(result.product.stockOwnership.levels[0].channels, [{ id: '1', code: null }]);
+    assert.equal(result.product.detailsTruncated, false);
+    auditFixture.product.related.variants = [];
+    auditFixture.product.stockOwnership = { variantIds: [], levels: [] };
+    assert.deepEqual(auditFixture.run().product.stockOwnership, {
+        variantCount: 0,
+        variantIds: [],
+        variantIdsTruncated: false,
+        levelCount: 0,
+        levels: [],
+        levelsTruncated: false,
+        detailsTruncated: false,
+    });
+});
+
+void test('stock ownership audit rejects malformed or out-of-scope evidence and still checks health', async t => {
+    const mutations = [
+        ['missing stock evidence', product => delete product.stockOwnership],
+        ['non-array variants', product => (product.stockOwnership.variantIds = {})],
+        ['duplicate variants', product => product.stockOwnership.variantIds.push('7')],
+        ['duplicate related variants', product => product.related.variants.push({ id: '7' })],
+        ['missing related variant', product => (product.stockOwnership.variantIds = [])],
+        ['unrelated variant', product => (product.stockOwnership.variantIds = ['8'])],
+        ['numeric variant ID', product => (product.stockOwnership.variantIds = [7])],
+        ['zero variant ID', product => (product.stockOwnership.variantIds = ['0'])],
+        ['noncanonical variant ID', product => (product.stockOwnership.variantIds = ['07'])],
+        ['private invalid ID', product => (product.stockOwnership.variantIds = ['PRIVATE-STOCK-INPUT'])],
+        ['invalid related variant ID', product => (product.related.variants[0].id = null)],
+        ['non-array levels', product => (product.stockOwnership.levels = {})],
+        ['invalid level', product => (product.stockOwnership.levels = [null])],
+        [
+            'duplicate level ID',
+            product => product.stockOwnership.levels.push(product.stockOwnership.levels[0]),
+        ],
+        ['invalid level ID', product => (product.stockOwnership.levels[0].id = '0')],
+        ['unrelated level variant', product => (product.stockOwnership.levels[0].productVariantId = '8')],
+        ['invalid location ID', product => (product.stockOwnership.levels[0].stockLocationId = '-2')],
+        ['fractional stock', product => (product.stockOwnership.levels[0].stockOnHand = 0.5)],
+        [
+            'unsafe stock',
+            product => (product.stockOwnership.levels[0].stockOnHand = Number.MAX_SAFE_INTEGER + 1),
+        ],
+        ['non-number allocated', product => (product.stockOwnership.levels[0].stockAllocated = '2')],
+        ['fractional allocated', product => (product.stockOwnership.levels[0].stockAllocated = -0.5)],
+        [
+            'invalid location existence',
+            product => (product.stockOwnership.levels[0].stockLocationExists = 'false'),
+        ],
+        ['non-array Channels', product => (product.stockOwnership.levels[0].channels = {})],
+        ['invalid Channel', product => (product.stockOwnership.levels[0].channels = [null])],
+        ['invalid Channel ID', product => (product.stockOwnership.levels[0].channels[0].id = 1)],
+        [
+            'invalid Channel code',
+            product =>
+                (product.stockOwnership.levels[0].channels[0].code = { secret: 'PRIVATE-STOCK-INPUT' }),
+        ],
+        [
+            'duplicate Channel IDs',
+            product => product.stockOwnership.levels[0].channels.push({ id: '1', code: null }),
+        ],
+    ];
+    for (const [label, mutate] of mutations) {
+        await t.test(label, () => {
+            const auditFixture = stockReadinessAuditFixture();
+            mutate(auditFixture.product);
+            assert.throws(auditFixture.run, error => {
+                assert.doesNotMatch(error.message, /PRIVATE-STOCK/u);
+                return true;
+            });
+            assert.equal(auditFixture.healthChecks(), 2);
+        });
+    }
+});
+
+void test('stock ownership output caps every detail array while retaining totals and stripping private fields', () => {
+    const auditFixture = stockReadinessAuditFixture();
+    auditFixture.product.editableAsExclusiveStoreProduct = true;
+    const privateValue = 'PRIVATE-STOCK-INPUT';
+    const variantIds = Array.from({ length: 51 }, (_, index) => String(index + 1));
+    auditFixture.product.related.variants = variantIds.map(id => ({ id, label: privateValue }));
+    auditFixture.product.stockOwnership = {
+        variantIds,
+        warehouseName: privateValue,
+        customer: { email: privateValue },
+        secret: privateValue,
+        levels: variantIds.map((id, index) => ({
+            id: String(index + 100),
+            productVariantId: id,
+            stockLocationId: '2',
+            stockOnHand: 100,
+            stockAllocated: 0,
+            stockLocationExists: true,
+            warehouseName: privateValue,
+            sku: privateValue,
+            customer: { email: privateValue },
+            token: privateValue,
+            channels: Array.from({ length: 11 }, (_, channelIndex) => ({
+                id: String(channelIndex + 1),
+                code: channelIndex === 0 ? null : `store-${channelIndex}`,
+                name: privateValue,
+                token: privateValue,
+            })),
+        })),
+    };
+    const result = auditFixture.run();
+    const stock = result.product.stockOwnership;
+    assert.equal(stock.variantCount, 51);
+    assert.equal(stock.variantIds.length, 50);
+    assert.equal(stock.variantIdsTruncated, true);
+    assert.equal(stock.levelCount, 51);
+    assert.equal(stock.levels.length, 50);
+    assert.equal(stock.levelsTruncated, true);
+    assert.equal(stock.detailsTruncated, true);
+    assert.equal(result.product.detailsTruncated, true);
+    assert.equal(result.product.editableAsExclusiveStoreProduct, true);
+    assert.equal(result.product.relatedCounts.variants, 51);
+    for (const level of stock.levels) {
+        assert.equal(level.channelCount, 11);
+        assert.equal(level.channels.length, 10);
+        assert.equal(level.channelsTruncated, true);
+    }
+    assert.doesNotMatch(
+        JSON.stringify(result),
+        /PRIVATE-STOCK|warehouseName|customer|"sku"|"token"|"secret"/u,
+    );
+    auditFixture.product.related.variants = [{ id: '1' }];
+    auditFixture.product.stockOwnership.variantIds = ['1'];
+    auditFixture.product.stockOwnership.levels = [auditFixture.product.stockOwnership.levels[0]];
+    const channelOnly = auditFixture.run().product;
+    assert.equal(channelOnly.stockOwnership.variantIdsTruncated, false);
+    assert.equal(channelOnly.stockOwnership.levelsTruncated, false);
+    assert.equal(channelOnly.stockOwnership.detailsTruncated, true);
+    assert.equal(channelOnly.detailsTruncated, true);
+    assert.equal(channelOnly.stockOwnership.levels[0].channelCount, 11);
+    auditFixture.product.stockOwnership.levels[0].channels.pop();
+    assert.equal(auditFixture.run().product.stockOwnership.detailsTruncated, false);
+});
+
+void test('stock ownership validates omitted rows and Channels before truncating evidence', () => {
+    for (const invalidTail of ['level', 'Channel']) {
+        const auditFixture = stockReadinessAuditFixture();
+        const level = auditFixture.product.stockOwnership.levels[0];
+        if (invalidTail === 'level') {
+            auditFixture.product.stockOwnership.levels = Array.from({ length: 51 }, (_, index) => ({
+                ...level,
+                id: String(index + 100),
+            }));
+            auditFixture.product.stockOwnership.levels[50].productVariantId = '8';
+        } else {
+            level.channels = Array.from({ length: 11 }, (_, index) => ({
+                id: String(index + 1),
+                code: null,
+            }));
+            level.channels[10].code = { token: 'PRIVATE-STOCK-INPUT' };
+        }
+        assert.throws(auditFixture.run, error => {
+            assert.doesNotMatch(error.message, /PRIVATE-STOCK/u);
+            return true;
+        });
+        assert.equal(auditFixture.healthChecks(), 2);
+    }
 });
 
 void test('reviewed retention preserves current, two rollback releases, backup and unrelated files', t => {
