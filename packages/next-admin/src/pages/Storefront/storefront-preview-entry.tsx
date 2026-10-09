@@ -13,6 +13,7 @@ import type { StorefrontContentResponse } from '../../../../storefront/src/types
 import '../../../../storefront/src/storefront-styles';
 import {
     applyDecorationDraft,
+    applyDecorationDraftSettings,
     isReadOnlyPreviewQuery,
     type DecorationDraft,
 } from './storefront-decoration-model';
@@ -143,7 +144,14 @@ function render(next: DecorationDraft) {
                 predicate: query =>
                     query.queryKey.includes('content') || query.queryKey.includes('account-content'),
             },
-            data => (data ? { ...data, blocks: applyDecorationDraft(data.blocks, next) } : data),
+            data =>
+                data
+                    ? {
+                          ...data,
+                          blocks: applyDecorationDraft(data.blocks, next),
+                          settings: applyDecorationDraftSettings(data.settings, next),
+                      }
+                    : data,
         );
         if (router.state.location.href !== next.route) void router.history.replace(next.route);
     }
@@ -173,8 +181,15 @@ window.addEventListener('message', event => {
             send({ type: 'decoration-error' });
             return;
         }
-        if (draft && Array.isArray(payload.data?.storefrontContent))
+        if (draft && Array.isArray(payload.data?.storefrontContent)) {
             payload.data.storefrontContent = applyDecorationDraft(payload.data.storefrontContent, draft);
+            if (draft.block?.type === 'FOOTER') {
+                payload.data.storefrontContentSettings = applyDecorationDraftSettings(
+                    payload.data.storefrontContentSettings ?? {},
+                    draft,
+                );
+            }
+        }
         request.resolve(
             new Response(JSON.stringify(payload), {
                 status: event.data.status,

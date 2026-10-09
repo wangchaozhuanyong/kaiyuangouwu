@@ -1,8 +1,8 @@
 import { preload } from 'react-dom';
 
-import { authOriginalImageUrl } from '../../storefront-content-plugin/src/shared/auth-visual';
+import { authOriginalImageUrl } from '../../storefront-content-plugin/src/shared/auth-visual-utils';
 
-import { findAuthVisualContent } from './auth-visual';
+import { findAuthVisualContent } from './auth-visual-content';
 import { productImage } from './product-media';
 import { imageSources } from './responsive-image';
 import { RouteState } from './storefront-router';

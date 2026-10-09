@@ -50,6 +50,7 @@ export function ItemEditor({
     const accountCopy = supportAccountCopy(supportChannel, automaticSupportLink);
     const coreCategories = blockType === 'CORE_CATEGORIES';
     const legal = blockType === 'LEGAL';
+    const footer = blockType === 'FOOTER';
     const auth = blockType === 'AUTH_LOGIN' || blockType === 'AUTH_REGISTER';
     const updateLocalizedSetting = (field: 'badgeLabel' | 'ctaLabel', value: string) =>
         onChange({
@@ -71,7 +72,7 @@ export function ItemEditor({
                         checked={item.enabled}
                         onChange={event => onChange({ ...item, enabled: event.target.checked })}
                     />
-                    {support ? '客服渠道' : '子项'} {index + 1}
+                    {support ? '客服渠道' : footer ? '链接' : '子项'} {index + 1}
                 </label>
                 <div className="flex gap-1">
                     <IconButton
@@ -104,26 +105,28 @@ export function ItemEditor({
                         className={inputClass}
                     />
                 </Field>
-                <div className={legal ? 'sm:col-span-2' : undefined}>
-                    <Field label={legal ? '法律正文' : '说明'}>
-                        {legal ? (
-                            <AdminTextArea
-                                rows={8}
-                                data-translation-field="description"
-                                value={translation.description}
-                                onChange={event => updateTranslation({ description: event.target.value })}
-                                className={`${inputClass} min-h-40 resize-y`}
-                            />
-                        ) : (
-                            <AdminInput
-                                data-translation-field="description"
-                                value={translation.description}
-                                onChange={event => updateTranslation({ description: event.target.value })}
-                                className={inputClass}
-                            />
-                        )}
-                    </Field>
-                </div>
+                {!footer && (
+                    <div className={legal ? 'sm:col-span-2' : undefined}>
+                        <Field label={legal ? '法律正文' : '说明'}>
+                            {legal ? (
+                                <AdminTextArea
+                                    rows={8}
+                                    data-translation-field="description"
+                                    value={translation.description}
+                                    onChange={event => updateTranslation({ description: event.target.value })}
+                                    className={`${inputClass} min-h-40 resize-y`}
+                                />
+                            ) : (
+                                <AdminInput
+                                    data-translation-field="description"
+                                    value={translation.description}
+                                    onChange={event => updateTranslation({ description: event.target.value })}
+                                    className={inputClass}
+                                />
+                            )}
+                        </Field>
+                    </div>
+                )}
                 {auth && (
                     <Field label="卖点图标（已选子项图片优先）">
                         <AdminSelect
@@ -331,7 +334,7 @@ export function ItemEditor({
                         />
                     </div>
                 )}
-                {!navigation && !support && !coreCategories && (
+                {!navigation && !support && !coreCategories && !footer && (
                     <div className="sm:col-span-2">
                         <AssetPicker
                             label="子项图片"

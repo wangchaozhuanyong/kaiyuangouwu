@@ -1,6 +1,13 @@
 import { useNavigate, useRouter, useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
+import {
+    authOverlayForNavigation,
+    isAuthOverlayMode,
+    readAuthOverlay,
+    type AuthOverlayMode,
+    type AuthOverlayRequest,
+} from '../auth-overlay-navigation';
 import { catalogRouteSearch, catalogRouteState, type CatalogRouteState } from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
@@ -25,15 +32,18 @@ export function useStorefrontNavigation({
     contentBlocks = [],
     products = [],
     prepareProduct,
+    authenticated = true,
 }: {
     collections: CollectionSummary[];
     contentBlocks?: StorefrontContentBlock[];
     products?: Product[];
     prepareProduct?: (id: string) => Promise<void>;
+    authenticated?: boolean;
 }) {
     const router = useRouter();
 
     const tanstackNavigate = useNavigate();
+    const navigationIntent = useRef(0);
     const mediaContext = useRef({ contentBlocks, products });
     mediaContext.current = { contentBlocks, products };
     useEffect(() => {
@@ -42,8 +52,10 @@ export function useStorefrontNavigation({
             preloadRouteMedia(next, mediaContext.current.contentBlocks, mediaContext.current.products);
         };
         const unsubscribe = router.subscribe('onBeforeNavigate', event => {
+            navigationIntent.current++;
             prepare(routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search));
         });
+        const unsubscribeLoad = router.subscribe('onBeforeLoad', () => navigationIntent.current++);
         const onIntent = (event: Event) => {
             const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
             if (!(anchor instanceof HTMLAnchorElement) || anchor.origin !== window.location.origin) return;
@@ -58,7 +70,9 @@ export function useStorefrontNavigation({
         document.addEventListener('focusin', onIntent);
         document.addEventListener('pointerdown', onIntent);
         return () => {
+            navigationIntent.current++;
             unsubscribe();
+            unsubscribeLoad();
             document.removeEventListener('pointerover', onIntent);
             document.removeEventListener('focusin', onIntent);
             document.removeEventListener('pointerdown', onIntent);
@@ -66,6 +80,7 @@ export function useStorefrontNavigation({
     }, [router]);
 
     const routerLocation = useRouterState({ select: state => state.location });
+    const authOverlay = readAuthOverlay(routerLocation.search);
 
     const isNavigationPending = useRouterState({ select: state => state.status === 'pending' });
 
@@ -115,8 +130,9 @@ export function useStorefrontNavigation({
     const minimumPrice = visibleCategoryState.minPrice ?? '';
     const maximumPrice = visibleCategoryState.maxPrice ?? '';
 
-    const navigate = useCallback(
+    const navigatePage = useCallback(
         (next: RouteState, replace = false) => {
+            navigationIntent.current++;
             const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
             if (resolvedNext.name === 'category') {
                 categoryStateRef.current = catalogRouteSearch(resolvedNext);
@@ -140,12 +156,67 @@ export function useStorefrontNavigation({
                 to: routePath(resolvedNext.name),
                 search: routeSearch(resolvedNext),
                 replace,
+                ...(readAuthOverlay(router.state.location.search) &&
+                routeHref(resolvedNext) ===
+                    routeHref(
+                        routeFromRouterLocation(router.state.location.pathname, router.state.location.search),
+                    )
+                    ? { resetScroll: false }
+                    : {}),
             } as never);
         },
         [prepareProduct, router, tanstackNavigate],
     );
 
+    const applyAuthAction = useCallback(
+        (request: AuthOverlayRequest | null, fallback: RouteState, replace = false) => {
+            const intent = ++navigationIntent.current;
+            const location = router.state.location;
+            const isCurrent = () => navigationIntent.current === intent && router.state.location === location;
+            void import('../auth-overlay-navigation-actions')
+                .then(({ applyAuthOverlayNavigation }) => {
+                    if (isCurrent()) applyAuthOverlayNavigation(router, tanstackNavigate, request, replace);
+                })
+                .catch(() => {
+                    // Preserve the existing standalone route if the optional action chunk fails to load.
+                    if (isCurrent()) navigatePage(fallback, request ? replace : true);
+                });
+        },
+        [navigatePage, router, tanstackNavigate],
+    );
+
+    const navigate = useCallback(
+        (next: RouteState, replace = false) => {
+            const location = router.state.location;
+            const current = routeFromRouterLocation(location.pathname, location.search);
+            const request = authOverlayForNavigation(next, authenticated);
+            // Direct links and verification/reset flows keep their existing page fallback.
+            if (
+                request &&
+                !isAuthOverlayMode(current.name) &&
+                current.name !== 'reset-password' &&
+                current.name !== 'verify-account'
+            ) {
+                applyAuthAction(request, next, replace);
+                return;
+            }
+            navigatePage(next, replace);
+        },
+        [applyAuthAction, authenticated, navigatePage, router],
+    );
+
+    const changeAuthOverlay = useCallback(
+        (mode: AuthOverlayMode) => navigate({ name: mode }, true),
+        [navigate],
+    );
+
+    const closeAuthOverlay = useCallback(() => {
+        const location = router.state.location;
+        applyAuthAction(null, routeFromRouterLocation(location.pathname, location.search));
+    }, [applyAuthAction, router]);
+
     const goBack = useCallback(() => {
+        navigationIntent.current++;
         if (router.history.canGoBack()) {
             router.history.back();
         } else navigate({ name: 'home' }, true);
@@ -232,5 +303,9 @@ export function useStorefrontNavigation({
         navigate,
         goBack,
         updateCategory,
+        authOverlay,
+        changeAuthOverlay,
+        closeAuthOverlay,
+        navigateAfterAuthentication: navigatePage,
     };
 }

@@ -249,6 +249,39 @@ it('portals the actual carousel manager outside the isolated page and preserves 
 });
 
 describe('store scoped verified content writes', () => {
+    it('creates a footer from the homepage catalog and reopens its independent configuration', async () => {
+        mocks.create.mockImplementation(({ variables: { input } }) => {
+            const saved = { ...input, id: 'footer-saved', updatedAt: core.updatedAt };
+            current.storefrontContentBlocks.push(saved);
+            return Promise.resolve({ data: { createStorefrontContentBlock: saved } });
+        });
+        mocks.refetch.mockImplementation(() => Promise.resolve({ data: current }));
+        await render();
+        const footerButton = () =>
+            Array.from(host.querySelectorAll('button')).find(
+                node => node.querySelector('strong')?.textContent === '页脚',
+            )!;
+        await act(async () => footerButton().click());
+        expect(button('保存测试草稿').dataset.blockType).toBe('FOOTER');
+        expect(button('保存测试草稿').dataset.blockPosition).toBe('1');
+        await click('保存测试草稿');
+        expect(mocks.create).toHaveBeenCalledTimes(1);
+        expect(mocks.create.mock.calls[0][0].variables.input).toMatchObject({
+            type: 'FOOTER',
+            code: 'home-fixed-footer',
+            enabled: true,
+            translations: [
+                { languageCode: 'zh_Hans', title: '' },
+                { languageCode: 'en', title: '' },
+            ],
+        });
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        await act(async () => footerButton().click());
+        expect(button('保存测试草稿').dataset.blockId).toBe('footer-saved');
+        expect(mocks.create).toHaveBeenCalledTimes(1);
+        expect(mocks.update).not.toHaveBeenCalled();
+    });
+
     it('opens an audit deep link for content-only blocks in the shared existing editor without writing', async () => {
         const legal = { ...newContentBlock('LEGAL', 5), id: 'legal-87', items: [item] };
         current.storefrontContentBlocks.push(legal);

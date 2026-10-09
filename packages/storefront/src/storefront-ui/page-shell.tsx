@@ -414,16 +414,24 @@ export function LegalFooter({
     language,
     content,
     onContentTarget,
+    style,
 }: {
     storefrontName: string;
     language: StorefrontLanguage;
     content?: StorefrontContentBlock;
     onContentTarget?: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+    style?: CSSProperties;
 }) {
     const isZh = language === 'zh';
-    const items = [...(content?.items ?? [])].filter(
-        item => item.targetType !== 'NONE' && Boolean(item.targetValue?.trim()),
-    );
+    const managedFooter = content?.type === 'FOOTER';
+    const items = [...(content?.items ?? [])]
+        .filter(
+            item =>
+                (!managedFooter || item.enabled) &&
+                item.targetType !== 'NONE' &&
+                Boolean(item.targetValue?.trim()),
+        )
+        .sort((first, second) => first.position - second.position);
     const normalizedTargets = new Set(
         items.map(item => item.targetValue?.trim().toLowerCase().replace(/^#?\//u, '')),
     );
@@ -448,12 +456,13 @@ export function LegalFooter({
                 !normalizedTargets.has(fallback.kind) && !normalizedTargets.has(`legal?id=${fallback.kind}`),
         )
         .map(({ kind: _kind, ...item }) => item);
-    const footerItems = [...items, ...defaultLegalItems];
+    const footerItems = managedFooter ? items : [...items, ...defaultLegalItems];
+    const footerBrand = managedFooter ? content.title.trim() || storefrontName : storefrontName;
     const footerTitle = isZh ? '服务与政策' : 'Service and policies';
 
     return (
-        <footer className="legal-footer">
-            <strong className="legal-footer-brand">{storefrontName}</strong>
+        <footer className="legal-footer" style={style}>
+            <strong className="legal-footer-brand">{footerBrand}</strong>
             {!!footerItems.length && (
                 <nav aria-label={footerTitle}>
                     {footerItems.map(item => (

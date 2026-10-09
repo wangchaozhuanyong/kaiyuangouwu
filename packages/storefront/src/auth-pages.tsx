@@ -18,7 +18,7 @@ import {
     Ticket,
     UserRound,
 } from 'lucide-react';
-import { CSSProperties, FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { CSSProperties, FormEvent, ReactNode, useContext, useEffect, useId, useRef, useState } from 'react';
 
 import {
     authOriginalImageUrl,
@@ -29,6 +29,7 @@ import { ContentText } from '../../storefront-content-plugin/src/shared/content-
 import { useImageTextContrast } from '../../storefront-content-plugin/src/shared/image-tone';
 
 import { ShopApi, ShopApiError } from './api';
+import { AuthPresentationContext, type AuthPresentationRoute } from './auth-presentation';
 import {
     ACCOUNT_PASSWORD_MAX_LENGTH,
     ACCOUNT_PASSWORD_MIN_LENGTH,
@@ -57,7 +58,7 @@ import {
     StorefrontLanguage,
 } from './types';
 
-type AuthRoute = { name: 'login' | 'register' | 'forgot-password' };
+type AuthRoute = AuthPresentationRoute;
 
 const COMMON_CHINESE_COMPOUND_SURNAMES = [
     '欧阳',
@@ -244,11 +245,23 @@ function AuthFormIntro({
     language: StorefrontLanguage;
     content?: StorefrontContentBlock;
 }) {
+    const overlay = useContext(AuthPresentationContext);
     const presentation = authPresentation(content, variant, language);
+    const configuredSubtitle = content?.settings?.[`formSubtitle${language === 'zh' ? 'Zh' : 'En'}`];
+    const subtitle =
+        overlay && !(typeof configuredSubtitle === 'string' && configuredSubtitle.trim())
+            ? variant === 'login'
+                ? language === 'zh'
+                    ? '登录后管理订单与服务'
+                    : 'Sign in to manage your orders and services'
+                : language === 'zh'
+                  ? '创建账户，探索更多商品与服务'
+                  : 'Create an account to explore products and services'
+            : presentation.subtitle;
     return (
         <header className={`auth-form-heading auth-form-heading-${language}`}>
             <h1>{presentation.title}</h1>
-            <p>{presentation.subtitle}</p>
+            <p>{subtitle}</p>
         </header>
     );
 }
@@ -269,7 +282,12 @@ function useAuthNavigate(
     returnQuantity?: number,
 ) {
     const navigate = useNavigate();
+    const overlay = useContext(AuthPresentationContext);
     return (route: AuthRoute, replace = false) => {
+        if (overlay) {
+            overlay.navigate(route, replace);
+            return;
+        }
         const routeState: RouteState = { ...route };
         if (returnTo) {
             routeState.returnTo = returnTo;
@@ -281,6 +299,16 @@ function useAuthNavigate(
         const options = routeNavigateOptions(routeState);
         void navigate((replace ? { ...options, replace: true } : options) as never);
     };
+}
+
+function useAuthSubmittingState(submitting: boolean) {
+    const overlay = useContext(AuthPresentationContext);
+    const onSubmittingChange = overlay?.onSubmittingChange;
+    useEffect(() => {
+        onSubmittingChange?.(submitting);
+        return () => onSubmittingChange?.(false);
+    }, [onSubmittingChange, submitting]);
+    return Boolean(overlay);
 }
 
 export function LoginPage({
@@ -302,6 +330,7 @@ export function LoginPage({
     const navigateTo = useAuthNavigate(returnTo, returnVariantId, returnQuantity);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
+    const inOverlay = useAuthSubmittingState(submitting);
     const [error, setError] = useState('');
     const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
@@ -440,6 +469,7 @@ export function LoginPage({
                                 <button
                                     className="auth-inline-link"
                                     type="button"
+                                    disabled={inOverlay && submitting}
                                     onClick={() => navigateTo({ name: 'forgot-password' })}
                                 >
                                     {isZh ? '忘记密码？' : 'Forgot password?'}
@@ -495,7 +525,11 @@ export function LoginPage({
                     ) : null}
                     <p className="auth-switch">
                         <span>{isZh ? '还没有账户？' : 'New to this store?'}</span>
-                        <button type="button" onClick={() => navigateTo({ name: 'register' }, true)}>
+                        <button
+                            type="button"
+                            disabled={inOverlay && submitting}
+                            onClick={() => navigateTo({ name: 'register' }, true)}
+                        >
                             {isZh ? '立即注册' : 'Create an account'}
                         </button>
                     </p>
@@ -527,6 +561,7 @@ export function RegisterPage({
     const navigateTo = useAuthNavigate(returnTo, returnVariantId, returnQuantity);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
+    const inOverlay = useAuthSubmittingState(submitting);
     const [registeredEmail, setRegisteredEmail] = useState('');
     const [error, setError] = useState('');
     const [resendMessage, setResendMessage] = useState('');
@@ -929,7 +964,11 @@ export function RegisterPage({
                     ) : null}
                     <p className="auth-switch">
                         <span>{isZh ? '已有账户？' : 'Already have an account?'}</span>
-                        <button type="button" onClick={() => navigateTo({ name: 'login' }, true)}>
+                        <button
+                            type="button"
+                            disabled={inOverlay && submitting}
+                            onClick={() => navigateTo({ name: 'login' }, true)}
+                        >
                             {isZh ? '立即登录' : 'Sign in'}
                         </button>
                     </p>
@@ -1170,18 +1209,11 @@ export function ForgotPasswordPage({
     authVisualContent,
     onBack,
 }: AuthPageBaseProps & AuthVisualProps) {
-    const navigate = useNavigate();
-    const navigateTo = (route: AuthRoute) =>
-        void navigate(
-            routeNavigateOptions({
-                ...route,
-                returnTo,
-                id: returnTo === 'purchase' ? returnVariantId : undefined,
-                quantity: returnTo === 'purchase' ? returnQuantity : undefined,
-            }) as never,
-        );
+    const navigateTo = useAuthNavigate(returnTo, returnVariantId, returnQuantity);
+    const overlay = useContext(AuthPresentationContext);
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
+    useAuthSubmittingState(submitting);
     const [requested, setRequested] = useState(false);
     const [error, setError] = useState('');
     const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1259,6 +1291,17 @@ export function ForgotPasswordPage({
                             busy={isZh ? '发送中' : 'Sending'}
                         />
                     </form>
+                    {overlay && (
+                        <p className="auth-switch">
+                            <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => navigateTo({ name: 'login' })}
+                            >
+                                {isZh ? '返回登录' : 'Back to sign in'}
+                            </button>
+                        </p>
+                    )}
                 </>
             )}
         </AuthLayout>
@@ -1407,6 +1450,7 @@ function AuthLayout({
     children: ReactNode;
 }) {
     const desktop = useDesktopLayout();
+    const overlay = useContext(AuthPresentationContext);
     const authVisualVariant = heroVariant === 'login' || heroVariant === 'register' ? heroVariant : null;
     const heroMessage = authVisualVariant
         ? resolveAuthVisualMessage(heroContent, authVisualVariant, language)
@@ -1421,11 +1465,27 @@ function AuthLayout({
               } as CSSProperties)
             : undefined;
     const managedHeroSrc = heroContent?.imageUrl?.trim();
-    const heroImageContrast = useImageTextContrast(managedHeroSrc);
+    const heroImageContrast = useImageTextContrast(overlay ? undefined : managedHeroSrc);
     const heroImageTone = heroImageContrast.tone;
     const hasManagedHero = Boolean(authVisualVariant && heroContent);
     const heroImageSrc = managedHeroSrc ? authOriginalImageUrl(managedHeroSrc) : null;
     const heroFallbackSrc = managedHeroSrc;
+
+    if (overlay) {
+        return (
+            <section
+                className="page auth-page auth-page-overlay"
+                aria-label={title}
+                style={authVisualStyle(heroContent)}
+            >
+                <div className="login-content">
+                    <div className="auth-form-column">
+                        <div className="auth-card-content">{children}</div>
+                    </div>
+                </div>
+            </section>
+        );
+    }
 
     return (
         <main
@@ -1628,6 +1688,9 @@ function Field({
     onBlur?: (value: string) => void;
 }) {
     const inputId = useId();
+    const overlay = useContext(AuthPresentationContext);
+    const persistentLabel = overlay ? true : showLabel;
+    const sharedEmailDraft = name === 'emailAddress' && value === undefined ? overlay : null;
     const [passwordVisible, setPasswordVisible] = useState(false);
     const hasPasswordToggle = type === 'password' && revealPassword;
     const inputType = hasPasswordToggle && passwordVisible ? 'text' : type;
@@ -1647,18 +1710,27 @@ function Field({
             autoComplete={autoComplete}
             minLength={minLength}
             maxLength={maxLength}
-            placeholder={label}
+            placeholder={overlay ? undefined : label}
             value={value}
-            onChange={onChange ? event => onChange(event.currentTarget.value) : undefined}
+            defaultValue={sharedEmailDraft?.emailDraft}
+            onChange={
+                onChange || sharedEmailDraft?.onEmailDraftChange
+                    ? event => {
+                          const nextValue = event.currentTarget.value;
+                          onChange?.(nextValue);
+                          sharedEmailDraft?.onEmailDraftChange?.(nextValue);
+                      }
+                    : undefined
+            }
             onBlur={onBlur ? event => onBlur(event.currentTarget.value) : undefined}
         />
     );
 
     return (
         <div
-            className={`auth-field${wide ? ' field-wide' : ''}${showLabel ? '' : ' auth-field-placeholder-only'}`}
+            className={`auth-field${wide ? ' field-wide' : ''}${persistentLabel ? '' : ' auth-field-placeholder-only'}`}
         >
-            {showLabel ? (
+            {persistentLabel ? (
                 <div className="auth-field-label-row">
                     <label className="auth-field-label" htmlFor={inputId}>
                         {label}
@@ -1673,7 +1745,7 @@ function Field({
                     </span>
                 )}
                 {input}
-                {!showLabel && (
+                {!persistentLabel && (
                     <label className="auth-floating-label" htmlFor={inputId}>
                         {label}
                     </label>
@@ -1690,7 +1762,9 @@ function Field({
                     </button>
                 ) : null}
             </div>
-            {!showLabel && labelAction ? <div className="auth-field-action-row">{labelAction}</div> : null}
+            {!persistentLabel && labelAction ? (
+                <div className="auth-field-action-row">{labelAction}</div>
+            ) : null}
         </div>
     );
 }

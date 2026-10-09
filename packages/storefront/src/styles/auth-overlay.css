@@ -1,0 +1,368 @@
+@import './auth-shell.css';
+
+/* Authentication presentation uses the shared Overlay lifecycle and skin tokens. */
+.auth-overlay-layer {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-top: max(var(--space-16), env(safe-area-inset-top));
+    padding-bottom: var(--storefront-viewport-bottom-offset, 0px);
+    isolation: isolate;
+}
+
+.auth-overlay-mask {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--accent) 46%, transparent);
+    cursor: default;
+}
+
+.auth-dialog {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-height: calc(
+        100dvh - max(var(--space-16), env(safe-area-inset-top)) -
+            var(--storefront-viewport-bottom-offset, 0px)
+    );
+    margin: 0;
+    overflow: hidden;
+    border: var(--skin-card-outline, 0);
+    border-bottom: 0;
+    border-radius: var(--skin-hero-radius) var(--skin-hero-radius) 0 0;
+    background:
+        radial-gradient(
+            ellipse at 100% 0,
+            color-mix(in srgb, var(--auth-visual-background, var(--accent-soft)) 12%, transparent),
+            transparent 55%
+        ),
+        linear-gradient(
+            150deg,
+            color-mix(in srgb, var(--auth-visual-accent, var(--accent)) 16%, var(--surface-elevated)) 0%,
+            color-mix(in srgb, var(--auth-visual-accent, var(--accent)) 5%, var(--soft)) 58%,
+            var(--soft) 100%
+        );
+    color: var(--text);
+    box-shadow: var(--skin-hero-shadow);
+    animation: auth-dialog-enter var(--experience-motion-standard) var(--experience-ease-standard);
+}
+
+.auth-dialog-toolbar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    padding: var(--space-12) var(--space-16) 0;
+}
+
+/* Initial focus lands on the dialog; interactive controls retain their focus rings. */
+.auth-dialog:focus {
+    outline: none;
+}
+
+.auth-overlay-language,
+.auth-overlay-close {
+    min-height: var(--experience-control-min);
+    border: 0;
+    border-radius: var(--skin-control-radius);
+    background: color-mix(in srgb, var(--surface-elevated) 72%, transparent);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: background var(--experience-motion-fast) var(--experience-ease-standard);
+}
+
+.auth-overlay-language {
+    max-width: calc(100% - var(--experience-control-min) - var(--space-16));
+    padding-inline: var(--space-12);
+}
+
+.auth-overlay-language option {
+    background: var(--surface-elevated);
+    color: var(--text);
+}
+
+.auth-overlay-close {
+    flex: 0 0 var(--experience-control-min);
+    display: grid;
+    place-items: center;
+    width: var(--experience-control-min);
+    padding: 0;
+}
+
+.auth-overlay-close svg {
+    width: 20px;
+    height: 20px;
+}
+
+.auth-overlay-language:hover,
+.auth-overlay-close:hover {
+    background: var(--control-surface-hover);
+}
+
+.auth-overlay-language:focus-visible,
+.auth-overlay-close:focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.auth-dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable both-edges;
+    scroll-padding-block: var(--space-24);
+    padding: var(--space-16) var(--space-24) max(var(--space-24), env(safe-area-inset-bottom));
+}
+
+/* Reset the standalone split-page frame only inside this dedicated presentation. */
+.auth-dialog .page.auth-page.auth-page-overlay {
+    display: block;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.auth-dialog .auth-page-overlay .login-content,
+.auth-dialog .auth-page-overlay .auth-form-column,
+.auth-dialog .auth-page-overlay .auth-card-content {
+    display: block;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.auth-dialog .auth-page-overlay :is(.auth-form-intro, .auth-form-heading) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: var(--space-8);
+    width: 100%;
+    margin: var(--space-4) 0 var(--space-24);
+    text-align: center;
+}
+
+.auth-dialog .auth-page-overlay :is(.auth-form-intro, .auth-form-heading) > h1 {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    color: var(--text);
+    font-size: var(--type-auth-size);
+    line-height: var(--type-auth-leading);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: var(--tracking-normal);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.auth-dialog .auth-page-overlay :is(.auth-form-intro, .auth-form-heading) > p {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+.auth-dialog .auth-page-overlay .login-content .auth-account-form {
+    gap: var(--space-12);
+    margin: 0;
+}
+
+.auth-dialog .auth-page-overlay .auth-field-label-row {
+    min-height: 0;
+    margin-bottom: var(--space-8);
+}
+
+.auth-dialog .auth-page-overlay .auth-field-label {
+    margin: 0;
+    color: var(--text);
+    font-weight: var(--font-weight-medium);
+}
+
+.auth-dialog .auth-page-overlay .login-content .auth-input-shell {
+    min-height: 48px;
+    border: 1px solid var(--control-border, var(--line));
+    border-radius: var(--skin-control-radius);
+    background: var(--surface-elevated);
+    box-shadow: none;
+}
+
+.auth-dialog .auth-page-overlay .login-content .auth-input-shell:focus-within {
+    border-color: var(--focus);
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.auth-dialog .auth-page-overlay .login-content .auth-input-shell input {
+    background: transparent;
+    color: var(--text);
+    scroll-margin-block: var(--space-24);
+}
+
+.auth-dialog .auth-page-overlay .auth-input-shell input::placeholder,
+.auth-dialog .auth-page-overlay .auth-field-icon,
+.auth-dialog .auth-page-overlay .auth-password-toggle {
+    color: var(--muted);
+}
+
+.auth-dialog .auth-page-overlay .auth-password-toggle:hover {
+    background: var(--control-surface-hover);
+    color: var(--text);
+}
+
+.auth-dialog .auth-page-overlay .auth-invitation summary,
+.auth-dialog .auth-page-overlay .auth-secondary-action,
+.auth-dialog .auth-page-overlay .auth-legal-links button {
+    min-height: var(--experience-control-min);
+}
+
+.auth-dialog .auth-page-overlay .auth-registration-consent {
+    margin-block: 0;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+
+.auth-dialog .auth-page-overlay .auth-registration-consent .auth-legal-links {
+    display: inline;
+    margin-inline: var(--space-4);
+}
+
+.auth-dialog .auth-page-overlay .auth-registration-consent .auth-legal-links button {
+    margin-inline-end: var(--space-4);
+}
+
+.auth-dialog .auth-page-overlay .wide-action {
+    width: 100%;
+    min-height: 48px;
+    margin-top: var(--space-4);
+    border-radius: var(--skin-control-radius);
+    background: var(--accent);
+    color: var(--accent-foreground);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    box-shadow: none;
+}
+
+.auth-dialog .auth-page-overlay .wide-action:hover:not(:disabled) {
+    background: var(--skin-primary-hover, var(--accent-hover));
+    box-shadow: none;
+}
+
+.auth-dialog .auth-page-overlay .wide-action:active:not(:disabled) {
+    background: var(--accent-pressed, var(--accent-hover));
+}
+
+.auth-dialog .auth-page-overlay .wide-action:disabled {
+    background: var(--accent-disabled-bg);
+    color: var(--accent-disabled-text);
+}
+
+.auth-dialog .auth-page-overlay :is(button, summary):focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.auth-dialog .auth-page-overlay .auth-switch {
+    margin-top: var(--space-8);
+}
+
+.auth-dialog .auth-page-overlay .auth-legal-notice {
+    text-align: center;
+}
+
+.auth-dialog .auth-page-overlay .auth-legal-links {
+    justify-content: center;
+}
+
+.auth-dialog .auth-page-overlay .auth-legal-links button {
+    color: var(--accent-ink);
+    text-decoration-color: var(--line-strong);
+}
+
+.auth-dialog .auth-page-overlay .auth-methods-unavailable {
+    background: var(--control-surface);
+    color: var(--muted);
+}
+
+@media (min-width: 768px) {
+    .auth-overlay-layer {
+        align-items: center;
+        padding: var(--space-24);
+    }
+
+    .auth-dialog {
+        width: 480px;
+        max-width: 100%;
+        max-height: calc(100dvh - var(--space-48));
+        border: var(--skin-card-outline, 0);
+        border-radius: var(--skin-hero-radius);
+    }
+
+    .auth-dialog-body {
+        padding: var(--space-16) var(--space-32) var(--space-24);
+    }
+}
+
+@media (max-height: 600px) {
+    .auth-dialog-body {
+        padding-top: var(--space-8);
+    }
+
+    .auth-dialog .auth-page-overlay :is(.auth-form-intro, .auth-form-heading) {
+        margin-bottom: var(--space-16);
+    }
+}
+
+@keyframes auth-dialog-enter {
+    from {
+        opacity: 0;
+        transform: translateY(var(--space-16));
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-dialog {
+        animation: none;
+    }
+
+    .auth-overlay-language,
+    .auth-overlay-close {
+        transition: none;
+    }
+}

@@ -82,6 +82,15 @@ export function applyDecorationDraft(blocks: ClientBlock[], draft: DecorationDra
     return [...remaining, ...(draft.visible ? [draftBlock] : [])].sort((a, b) => a.position - b.position);
 }
 
+/** A footer draft owns its enabled state even before its first save in this store. */
+export function applyDecorationDraftSettings<T extends { configuredBlockTypes?: ClientBlock['type'][] }>(
+    settings: T,
+    draft: DecorationDraft,
+): T {
+    if (draft.block?.type !== 'FOOTER' || settings.configuredBlockTypes?.includes('FOOTER')) return settings;
+    return { ...settings, configuredBlockTypes: [...(settings.configuredBlockTypes ?? []), 'FOOTER'] };
+}
+
 // Parse the full document: a query prefix alone must never admit a second mutation.
 export function isReadOnlyPreviewQuery(query: unknown): query is string {
     if (typeof query !== 'string' || query.length > 100_000) return false;

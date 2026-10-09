@@ -26,6 +26,16 @@ const blocks = [
 ];
 
 describe('homepage carousel management order', () => {
+    it('moves a disabled footer as its own floor without moving legal content', () => {
+        const footer = { ...block('footer', 'FOOTER', 9), enabled: false };
+        const configured = [...blocks, footer];
+        expect(storefrontHomepageRows(configured).at(-1)).toMatchObject({ key: 'footer', blocks: [footer] });
+        const reordered = dropHomepageRow(configured, 'footer', 'notice', 'before')!;
+        expect(reordered[0]).toBe('footer');
+        expect(reordered[2]).toBe('legal');
+        expect(reordered).toHaveLength(configured.length);
+        expect(new Set(reordered).size).toBe(configured.length);
+    });
     it('inserts a dragged floor across multiple rows in either direction without swapping neighbors', () => {
         const ids = dropHomepageRow(blocks, 'notice', 'custom-a', 'after')!;
         expect(ids).toEqual([

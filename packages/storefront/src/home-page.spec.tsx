@@ -256,6 +256,101 @@ function homeMarkupElement(overrides: Partial<HomePageProps> = {}, desktop = fal
     return element;
 }
 
+describe('HomePage managed footer', () => {
+    const footer: StorefrontContentBlock = {
+        ...heroBlock,
+        id: 'footer',
+        code: 'home-fixed-footer',
+        type: 'FOOTER',
+        position: 2,
+        imageUrl: null,
+        title: '可编辑页脚',
+        items: [],
+    };
+
+    it('renders one ordered footer independently of the legal document switch', () => {
+        const element = homeMarkupElement({
+            contentBlocks: [footer, heroBlock],
+            configuredBlockTypes: ['FOOTER', 'LEGAL'],
+        });
+        expect(element.querySelectorAll('.legal-footer')).toHaveLength(1);
+        expect(element.querySelector('.homepage-modules > .legal-footer')?.textContent).toContain(
+            '可编辑页脚',
+        );
+        expect((element.querySelector('.legal-footer') as HTMLElement).style.order).toBe('1');
+    });
+
+    it('hides configured unpublished or disabled footers without restoring the legacy footer', () => {
+        expect(
+            homeMarkupElement({ contentBlocks: [], configuredBlockTypes: ['FOOTER'] }).querySelector(
+                '.legal-footer',
+            ),
+        ).toBeNull();
+        expect(
+            homeMarkupElement({
+                contentBlocks: [{ ...footer, enabled: false }],
+                configuredBlockTypes: [],
+            }).querySelector('.legal-footer'),
+        ).toBeNull();
+    });
+
+    it('preserves the legacy footer until a store configures the independent module', () => {
+        const element = homeMarkupElement({ contentBlocks: [], configuredBlockTypes: [] });
+        expect(element.querySelector('.home-page > .legal-footer')?.textContent).toContain('测试店铺');
+        expect(element.querySelector('.legal-footer')?.textContent).toContain('隐私政策');
+    });
+
+    it('keeps the default last footer after the catalog empty state', () => {
+        const element = homeMarkupElement({
+            products: [],
+            contentBlocks: [
+                { ...heroBlock, type: 'STORY', id: 'story', position: 0 },
+                { ...heroBlock, type: 'TRUST_BAR', id: 'trust', position: 1 },
+                { ...footer, position: 2 },
+            ],
+            configuredBlockTypes: ['STORY', 'TRUST_BAR', 'FOOTER'],
+        });
+        const empty = [...element.querySelectorAll<HTMLElement>('.homepage-module-shell')].find(node =>
+            node.textContent?.includes('暂无在售商品'),
+        );
+        const module = element.querySelector<HTMLElement>('.homepage-modules > .legal-footer');
+        expect(empty).toBeDefined();
+        expect(Number.isInteger(Number(empty?.style.order))).toBe(true);
+        expect(Number(empty?.style.order)).toBeLessThan(Number(module?.style.order));
+    });
+
+    it('keeps the desktop gallery beside the carousel when the footer is sorted between them', () => {
+        const shortcuts: StorefrontContentBlock = {
+            ...heroBlock,
+            id: 'shortcuts',
+            type: 'QUICK_LINKS',
+            position: 2,
+            imageUrl: null,
+            items: [
+                {
+                    id: 'link',
+                    enabled: true,
+                    position: 0,
+                    imageUrl: null,
+                    targetType: 'PAGE',
+                    targetValue: '/category',
+                    label: '分类',
+                    description: '',
+                },
+            ],
+        };
+        const element = homeMarkupElement(
+            {
+                contentBlocks: [heroBlock, { ...footer, position: 1 }, shortcuts],
+                configuredBlockTypes: ['HERO', 'FOOTER', 'QUICK_LINKS'],
+            },
+            true,
+        );
+        expect(element.querySelector('.home-intro-grid.is-grouped-intro > .quick-grid')).not.toBeNull();
+        expect(element.querySelector('.homepage-modules > .legal-footer')).not.toBeNull();
+    });
+});
+
 describe('HomePage hero carousel', () => {
     it('reserves the uploaded dimensions for category and story artwork before decoding', () => {
         const markup = renderHome(
@@ -1526,20 +1621,17 @@ describe('HomePage desktop intro layout', () => {
             expect(quick?.style.order).toBe(trustPosition === 4 ? '1' : '2');
             expect(story?.style.order).toBe(trustPosition === 4 ? '2' : '3');
             expect(element.querySelector('.home-hero-trust')).toBeNull();
-            expect(Boolean(element.querySelector('.home-intro-grid.is-grouped-intro'))).toBe(
-                desktop && trustPosition === 4,
-            );
+            expect(Boolean(element.querySelector('.home-intro-grid.is-grouped-intro'))).toBe(desktop);
         },
     );
 
-    it.each([
-        { layouts: ['editorial'], grouped: false },
-        { layouts: ['editorial', 'overlay'], grouped: false },
-        { layouts: ['overlay', 'editorial'], grouped: false },
-        { layouts: ['overlay', 'overlay'], grouped: true },
-    ] as const)(
-        'keeps editorial carousels full-width even when an editorial slide is inactive ($layouts)',
-        ({ layouts, grouped }) => {
+    it.each(
+        [['editorial'], ['editorial', 'overlay'], ['overlay', 'editorial'], ['overlay', 'overlay']].flatMap(
+            layouts => [false, true].map(trustBetween => ({ layouts, trustBetween })),
+        ),
+    )(
+        'keeps desktop shortcuts beside every carousel artwork layout ($layouts, trustBetween=$trustBetween)',
+        ({ layouts, trustBetween }) => {
             const heroes: StorefrontContentBlock[] = layouts.map((layout, index) => ({
                 ...positionedHeroBlock,
                 id: `poster-hero-${index}`,
@@ -1553,18 +1645,28 @@ describe('HomePage desktop intro layout', () => {
                 position: heroes.length + 1,
                 items: [{ ...trustBarBlock.items[0], label: '商品分类', targetType: 'PAGE' }],
             };
-            const element = homeMarkupElement({ contentBlocks: [...heroes, shortcuts] }, true);
+            const contentBlocks = [
+                ...heroes,
+                ...(trustBetween ? [{ ...positionedTrustBlock, position: heroes.length + 0.5 }] : []),
+                shortcuts,
+            ];
+            const element = homeMarkupElement({ contentBlocks }, true);
             const intro = element.querySelector<HTMLElement>('.home-intro-grid');
             const carousel = element.querySelector<HTMLElement>('.hero-carousel');
             const quick = element.querySelector<HTMLElement>('.quick-grid');
 
-            expect(Boolean(intro?.classList.contains('is-grouped-intro'))).toBe(grouped);
-            expect(intro?.style.order).toBe(grouped ? '0' : '');
+            expect(intro?.classList.contains('is-grouped-intro')).toBe(true);
+            expect(intro?.style.order).toBe('0');
             expect(carousel?.style.order).toBe('0');
-            expect(quick?.style.order).toBe('1');
+            expect(quick?.style.order).toBe(trustBetween ? '2' : '1');
             expect(carousel?.querySelector('.hero-rich-title')?.textContent).toBe('多款模型\n一站连接');
             expect(carousel?.querySelector('img')?.getAttribute('src')).toBe('/assets/poster-hero-0.jpg');
             expect(quick?.textContent).toContain('商品分类');
+            if (trustBetween)
+                expect(element.querySelector('.home-trust-bar')?.parentElement).toBe(
+                    element.querySelector('.homepage-modules'),
+                );
+            expect(homeMarkupElement({ contentBlocks }).querySelector('.is-grouped-intro')).toBeNull();
         },
     );
 

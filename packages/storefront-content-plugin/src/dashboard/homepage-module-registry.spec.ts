@@ -1,5 +1,6 @@
 /* eslint-disable import/order -- The Prettier import organizer places type imports after runtime imports. */
 import { describe, expect, it } from 'vitest';
+import { repeatableHomepageModuleTypes } from '../homepage-manifest';
 import type { ContentBlock } from './storefront-content.graphql';
 
 import {
@@ -49,6 +50,28 @@ describe('homepage module registry', () => {
         expect(entries.find(entry => entry.type === 'COUPONS')).toMatchObject({ enabled: false });
         expect(entries.find(entry => entry.type === 'STORY')).toMatchObject({ enabled: false });
         expect(entries.every(entry => !entry.enabled)).toBe(true);
+    });
+
+    it('registers one footer at the default end and keeps its state separate from legal documents', () => {
+        const emptyEntries = homepageLayoutEntries([]);
+        const footerEntry = emptyEntries[emptyEntries.length - 1];
+        expect(footerEntry).toMatchObject({ type: 'FOOTER', enabled: false, position: 130 });
+        expect(footerEntry?.descriptor).toMatchObject({ defaultEnabled: true });
+        expect(repeatableHomepageModuleTypes.some(type => String(type) === 'FOOTER')).toBe(false);
+        const blocks = [
+            block({ id: 'notice', code: 'notice', type: 'NOTICE', position: 10 }),
+            block({ id: 'legal', code: 'legal', type: 'LEGAL', position: 15 }),
+            block({ id: 'footer', code: 'home-fixed-footer', type: 'FOOTER', enabled: false, position: 20 }),
+        ];
+        const entries = homepageLayoutEntries(blocks);
+        const footer = entries.find(entry => entry.type === 'FOOTER');
+        expect(footer).toMatchObject({ fixed: true, enabled: false, duplicateCount: 0 });
+        expect(movedHomepageBlockIds(entries, 'fixed:FOOTER', 'fixed:NOTICE', blocks)).toEqual([
+            'footer',
+            'legal',
+            'notice',
+        ]);
+        expect(blocks[1].enabled).toBe(true);
     });
 
     it('keeps multiple hero slides in one module and reports duplicate singleton records', () => {

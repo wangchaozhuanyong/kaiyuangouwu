@@ -136,6 +136,13 @@ const homepageModuleLabels: ReadonlyArray<
         descriptionZh: '固定服务保障样式，可设置保障项目文案。',
         descriptionEn: 'Fixed service guarantee strip with configurable messages.',
     },
+    {
+        type: 'FOOTER',
+        labelZh: '页脚',
+        labelEn: 'Footer',
+        descriptionZh: '独立页脚模块，可编辑店铺名称与链接、调整顺序或关闭，不影响条款内容。',
+        descriptionEn: 'Independent footer with editable brand and links, ordering and visibility settings.',
+    },
 ];
 
 export const homepageModuleRegistry: readonly HomepageModuleDescriptor[] = homepageModuleDefaults.map(

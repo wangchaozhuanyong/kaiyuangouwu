@@ -5,12 +5,48 @@ import { heroContentForViewport } from '../../../../storefront-content-plugin/sr
 import { newContentBlock } from './storefront-content-utils';
 import {
     applyDecorationDraft,
+    applyDecorationDraftSettings,
     decorationDraft,
     isReadOnlyPreviewQuery,
     previewQueryCurrencyCode,
 } from './storefront-decoration-model';
 
 describe('decoration drafts follow the Shop publication contract', () => {
+    it.each(['zh_Hans', 'en'] as const)(
+        'marks an unsaved disabled footer configured for %s without changing other stores or module fallbacks',
+        language => {
+            const footer = newContentBlock('FOOTER', 130);
+            footer.enabled = false;
+            const draft = decorationDraft(footer, language);
+            const source = { configuredBlockTypes: ['NOTICE' as const], heroAutoplayIntervalSeconds: 8 };
+            const merged = applyDecorationDraftSettings(source, draft);
+            expect(merged.configuredBlockTypes).toEqual(['NOTICE', 'FOOTER']);
+            expect(source.configuredBlockTypes).toEqual(['NOTICE']);
+            expect(merged.heroAutoplayIntervalSeconds).toBe(8);
+            expect(applyDecorationDraftSettings(merged, draft)).toBe(merged);
+            expect(
+                applyDecorationDraftSettings(source, decorationDraft(newContentBlock('LEGAL', 0), language)),
+            ).toBe(source);
+            expect(applyDecorationDraftSettings({}, draft)).toEqual({ configuredBlockTypes: ['FOOTER'] });
+        },
+    );
+    it('previews a footer with a blank brand and ordered enabled links, independent of legal content', () => {
+        const footer = newContentBlock('FOOTER', 130);
+        footer.items.reverse();
+        footer.items.forEach((item, position) => {
+            item.position = position;
+        });
+        footer.items[1].enabled = false;
+        const draft = decorationDraft(footer, 'en');
+        expect(draft).toMatchObject({ visible: true, route: '/', language: 'en' });
+        expect(draft.block).toMatchObject({ type: 'FOOTER', title: '' });
+        expect(draft.block?.items.map(item => item.label)).toEqual(['Terms of use']);
+        footer.enabled = false;
+        expect(decorationDraft(footer, 'zh_Hans').visible).toBe(false);
+        footer.enabled = true;
+        footer.items = [];
+        expect(decorationDraft(footer, 'zh_Hans')).toMatchObject({ visible: true, block: { items: [] } });
+    });
     it('passes the notice display period to the client preview with existing settings', () => {
         const block = newContentBlock('NOTICE', 0);
         block.enabled = true;

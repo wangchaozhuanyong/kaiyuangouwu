@@ -957,6 +957,82 @@ describe('HomePage carousel pointer interactions', () => {
         },
     );
 
+    it('fixes the grouped desktop carousel to its gallery height despite long copy and releases separated galleries', async () => {
+        viewportWidth = 1440;
+        let galleryHeight = 460;
+        let contentHeight = 900;
+        vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function (this: Element) {
+            return this.matches('.hero-rich-content') ? contentHeight : 0;
+        });
+        boundsMock.mockImplementation(function (this: Element) {
+            const height = this.matches('.quick-grid') ? galleryHeight : 320;
+            return {
+                x: 0,
+                y: 0,
+                top: 0,
+                left: 0,
+                right: 360,
+                bottom: height,
+                width: 360,
+                height,
+                toJSON: () => ({}),
+            };
+        });
+        const shortcuts: StorefrontContentBlock = {
+            ...heroBlock,
+            id: 'gallery',
+            type: 'QUICK_LINKS',
+            position: 2,
+            items: Array.from({ length: 5 }, (_, position) => ({
+                id: `shortcut-${position}`,
+                enabled: true,
+                position,
+                imageUrl: null,
+                targetType: 'NONE',
+                targetValue: null,
+                label: `Category ${position}`,
+                description: '',
+            })),
+        };
+        const trust: StorefrontContentBlock = {
+            ...shortcuts,
+            id: 'trust-gallery',
+            type: 'TRUST_BAR',
+            position: 1,
+        };
+        await render(true, [heroes[0], trust, shortcuts]);
+        const stage = requiredElement(host, '.hero-carousel-stage');
+        const gallery = requiredElement(host, '.quick-grid');
+        expect(requiredElement(host, '.home-intro-grid').classList.contains('is-grouped-intro')).toBe(true);
+        expect(stage.style.height).toBe('460px');
+        expect(requiredElement(activeSlide(), '.hero-rich-copy-region').getAttribute('role')).toBe('region');
+        const observer = resizeObservers.find(candidate => candidate.elements.has(gallery));
+        expect(observer).toBeDefined();
+        if (!observer) throw new Error('Expected the grouped gallery resize observer');
+        contentHeight = 1400;
+        await interact(() => observer.notify());
+        expect(stage.style.height).toBe('460px');
+        galleryHeight = 540;
+        await interact(() => observer.notify());
+        expect(stage.style.height).toBe('540px');
+        galleryHeight = 349.328125;
+        await interact(() => observer.notify());
+        expect(stage.style.height).toBe('349.328125px');
+        galleryHeight = 0;
+        await interact(() => observer.notify());
+        expect(stage.style.height).toBe('349.328125px');
+        await render(true, [
+            heroes[0],
+            trust,
+            { ...heroBlock, id: 'interleaved-story', type: 'STORY', position: 1.5 },
+            shortcuts,
+        ]);
+        expect(host.querySelector('.home-intro-grid.is-grouped-intro')).toBeNull();
+        expect(stage.style.height).toBe('1400px');
+        expect(requiredElement(activeSlide(), '.hero-rich-copy-region').hasAttribute('role')).toBe(false);
+        expect(observer.elements.has(gallery)).toBe(false);
+    });
+
     it.each([false, true])(
         'grows before entrance, observes content changes and shrinks after settling (desktop=%s)',
         async desktop => {

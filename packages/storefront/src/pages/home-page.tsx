@@ -34,10 +34,7 @@ import {
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { heroContentForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
-import {
-    HeroScene,
-    resolveHeroArtworkLayout,
-} from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
@@ -503,6 +500,9 @@ export function HomePage() {
         block => block.type === 'CORE_CATEGORIES' && block.enabled && block.items.some(item => item.enabled),
     );
     const legalBlock = contentBlocks.find(block => block.type === 'LEGAL');
+    const footerBlock = contentBlocks.find(block => block.type === 'FOOTER' && block.enabled);
+    const footerConfigured =
+        configuredBlockTypes.includes('FOOTER') || contentBlocks.some(block => block.type === 'FOOTER');
     const bestSellersTitle = resolveManagedContentCopy(bestSellersBlock, 'title', '');
     const homepageModules = homepageModuleEntries(contentBlocks, configuredBlockTypes);
     const homepageModuleOrder = (type: StorefrontContentBlock['type'], blockId?: string) =>
@@ -540,6 +540,7 @@ export function HomePage() {
     const heroViewportRef = useRef<HTMLElement>(null);
     const heroStageRef = useRef<HTMLDivElement>(null);
     const [heroStageHeight, setHeroStageHeight] = useState<number>();
+    const [heroCopyScrollable, setHeroCopyScrollable] = useState(false);
     const heroStageHeightRef = useRef<number | undefined>(undefined);
     const heroHeightGrowthDeadlineRef = useRef(0);
     const heroQueuedSelectionRef = useRef<{ index: number; direction?: -1 | 1 } | null>(null);
@@ -592,7 +593,11 @@ export function HomePage() {
         openNoticeId === defaultNoticeItem.id
             ? defaultNoticeItem
             : noticeItems.find(item => item.id === openNoticeId);
-    const showFooter = Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL');
+    const showFooter = !footerConfigured && (Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL'));
+    const emptyCatalogOrder =
+        footerBlock && homepageModuleOrder('FOOTER') === homepageModules.length - 1
+            ? homepageModuleOrder('FOOTER') - 1
+            : homepageModules.length;
     const campaignCouponCards = couponCardsFromCampaigns(
         claimableCouponCampaigns(coupons),
         language,
@@ -732,24 +737,39 @@ export function HomePage() {
         const heightSurfaces = Array.from(
             stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
         );
+        const carousel = viewport.closest<HTMLElement>('.hero-carousel');
+        const gallery = desktop
+            ? carousel
+                  ?.closest('.home-intro-grid.is-grouped-intro')
+                  ?.querySelector<HTMLElement>('.quick-grid')
+            : null;
         let active = true;
         const measure = () => {
             if (!active) return;
-            const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
-            const height = Math.ceil(
-                Math.max(
-                    minimum,
-                    ...heightSurfaces.map(surface =>
-                        Math.max(surface.getBoundingClientRect().height, surface.scrollHeight),
-                    ),
-                ),
-            );
+            const paired =
+                gallery &&
+                carousel &&
+                window.getComputedStyle(gallery).gridRowStart ===
+                    window.getComputedStyle(carousel).gridRowStart;
+            setHeroCopyScrollable(Boolean(paired));
+            // The right-hand gallery owns the fixed desktop frame. Neither artwork
+            // dimensions nor overflowing copy can change its height between slides.
+            const height = paired
+                ? gallery.getBoundingClientRect().height
+                : Math.ceil(
+                      Math.max(
+                          Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0,
+                          ...heightSurfaces.map(surface =>
+                              Math.max(surface.getBoundingClientRect().height, surface.scrollHeight),
+                          ),
+                      ),
+                  );
             if (height <= 0 || height === heroStageHeightRef.current) return;
             const previous = heroStageHeightRef.current ?? stage.getBoundingClientRect().height;
             heroStageHeightRef.current = height;
             // Make room for the taller copy before its final horizontal entrance.
             heroHeightGrowthDeadlineRef.current =
-                height > previous && !reducedMotionRef.current
+                !paired && height > previous && !reducedMotionRef.current
                     ? performance.now() + HERO_HEIGHT_TRANSITION_MS
                     : 0;
             setHeroStageHeight(height);
@@ -757,6 +777,7 @@ export function HomePage() {
         const observer = new ResizeObserver(measure);
         heightSurfaces.forEach(surface => observer.observe(surface));
         observer.observe(viewport);
+        if (gallery) observer.observe(gallery);
         window.addEventListener('resize', measure);
         measure();
         return () => {
@@ -1071,17 +1092,17 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    // Only adjacent hero and shortcut floors may share the desktop introduction grid.
+    // Artwork changes only the slide interior. A service floor must not move the
+    // approved desktop shortcut gallery away from the right of the carousel.
     const introOrders = ['HERO', 'QUICK_LINKS']
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
     const groupedIntro =
         desktop &&
-        !managedHeroes.some(hero => resolveHeroArtworkLayout(hero.settings) === 'editorial') &&
         introOrders.length > 0 &&
         homepageModules
             .slice(Math.min(...introOrders), Math.max(...introOrders) + 1)
-            .every(entry => ['HERO', 'QUICK_LINKS'].includes(entry.type));
+            .every(entry => ['HERO', 'QUICK_LINKS', 'TRUST_BAR', 'FOOTER'].includes(entry.type));
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
@@ -1283,6 +1304,7 @@ export function HomePage() {
                                                             inert={inactive || undefined}
                                                         >
                                                             <HeroScene
+                                                                copyScrollable={heroCopyScrollable}
                                                                 content={slide}
                                                                 mediaOverlay={
                                                                     desktop && heroCount > 0 ? (
@@ -1498,6 +1520,16 @@ export function HomePage() {
 
                         {trustBar}
 
+                        {footerBlock && hasHomepageModule('FOOTER') ? (
+                            <LegalFooter
+                                storefrontName={storefrontName}
+                                language={language}
+                                content={footerBlock}
+                                onContentTarget={onContentTarget}
+                                style={{ order: homepageModuleOrder('FOOTER') }}
+                            />
+                        ) : null}
+
                         {hasHomepageModule('COUPONS') &&
                             (couponCards.length > 0 || couponCampaignsLoading || couponCampaignsError) && (
                                 <div
@@ -1556,7 +1588,7 @@ export function HomePage() {
                         !recommendationProducts.length ? (
                             <div
                                 className={homepageSectionShellClassName}
-                                style={{ order: homepageModules.length }}
+                                style={{ order: emptyCatalogOrder }}
                             >
                                 {catalogLoading ? (
                                     <PageSkeleton

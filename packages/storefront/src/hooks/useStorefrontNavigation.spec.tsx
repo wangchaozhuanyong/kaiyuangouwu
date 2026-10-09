@@ -6,26 +6,35 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BottomNavigation } from '../components/common/bottom-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
+import { routeHref } from '../storefront-router';
 import { type CollectionSummary } from '../types';
 
 import { useStorefrontNavigation } from './useStorefrontNavigation';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-type MockLocation = { pathname: string; search: Record<string, unknown>; searchStr: string };
+type MockLocation = {
+    pathname: string;
+    search: Record<string, unknown>;
+    searchStr: string;
+    state?: Record<string, unknown>;
+};
 type MockNavigationEvent = { toLocation: MockLocation; hrefChanged: boolean };
-const router = vi.hoisted(() => ({
-    navigate: vi.fn(),
-    back: vi.fn(),
-    forward: vi.fn(),
-    preloadRoute: vi.fn(() => Promise.resolve()),
-    listeners: new Map<string, Set<(event: MockNavigationEvent) => void>>(),
-    subscribe: vi.fn(),
-    state: {
+const router = vi.hoisted(() => {
+    const state: { location: MockLocation; resolvedLocation: MockLocation; status: string } = {
         location: { pathname: '/category', search: {}, searchStr: '' },
         resolvedLocation: { pathname: '/category', search: {}, searchStr: '' },
         status: 'idle',
-    },
-}));
+    };
+    return {
+        navigate: vi.fn(),
+        back: vi.fn(),
+        forward: vi.fn(),
+        preloadRoute: vi.fn(() => Promise.resolve()),
+        listeners: new Map<string, Set<(event: MockNavigationEvent) => void>>(),
+        subscribe: vi.fn(),
+        state,
+    };
+});
 vi.mock('@tanstack/react-router', () => ({
     useNavigate: () => router.navigate,
     useRouter: () => routerInstance,
@@ -38,7 +47,7 @@ vi.mock('../route-media-preload', () => ({ preloadRouteMedia: vi.fn() }));
 
 const routerInstance = {
     ...router,
-    history: { back: router.back, forward: router.forward, canGoBack: () => true },
+    history: { back: router.back, forward: router.forward, canGoBack: vi.fn(() => true) },
 };
 
 function emitLoad(location: MockLocation, beforeNavigate = true) {
@@ -59,6 +68,7 @@ describe('storefront navigation state', () => {
     let unmounted: boolean;
     let value: ReturnType<typeof useStorefrontNavigation>;
     let prepareProduct: ((id: string) => Promise<void>) | undefined;
+    let authenticated = true;
     const collections: CollectionSummary[] = [
         {
             id: 'first',
@@ -72,7 +82,7 @@ describe('storefront navigation state', () => {
         },
     ];
     function Harness() {
-        value = useStorefrontNavigation({ collections, prepareProduct });
+        value = useStorefrontNavigation({ collections, prepareProduct, authenticated });
         return <BottomNavigation activeRoute={value.route.name} cartQuantity={0} language="zh" />;
     }
     function servicesLink() {
@@ -80,8 +90,16 @@ describe('storefront navigation state', () => {
         if (!link) throw new Error('Expected the actual services navigation link');
         return link;
     }
+    async function authAction(action: () => void) {
+        await act(async () => {
+            action();
+            await vi.dynamicImportSettled();
+        });
+    }
     beforeEach(() => {
         prepareProduct = undefined;
+        authenticated = true;
+        routerInstance.history.canGoBack.mockReset().mockReturnValue(true);
         vi.mocked(preloadStorefrontRouteComponent).mockClear();
         vi.mocked(preloadRouteMedia).mockClear();
         router.navigate.mockReset();
@@ -106,13 +124,24 @@ describe('storefront navigation state', () => {
             },
         );
         router.navigate.mockImplementation(
-            ({ to, search = {} }: { to: string; search?: Record<string, unknown> }) => {
+            ({
+                to,
+                search = {},
+                state,
+            }: {
+                to: string;
+                search?: Record<string, unknown>;
+                state?:
+                    | Record<string, unknown>
+                    | ((previous: Record<string, unknown>) => Record<string, unknown>);
+            }) => {
                 emitLoad({
                     pathname: to,
                     search,
                     searchStr: new URLSearchParams(
                         Object.entries(search).map(([key, searchValue]) => [key, String(searchValue)]),
                     ).toString(),
+                    state: typeof state === 'function' ? state(router.state.location.state ?? {}) : state,
                 });
                 return Promise.resolve();
             },
@@ -845,4 +874,233 @@ describe('storefront navigation state', () => {
         act(() => value.openContentTarget('PAGE', '/cart'));
         expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/cart' }));
     });
+
+    it('pushes the first auth opening on the current page without resetting its scroll or filters', async () => {
+        router.state.location = {
+            pathname: '/category',
+            search: { collectionId: 'chosen', minPrice: '10' },
+            searchStr: '?collectionId=chosen&minPrice=10',
+        };
+        act(() => root.render(<Harness />));
+        const original = routeHref(value.route);
+        await authAction(() => value.navigate({ name: 'login' }));
+        act(() => root.render(<Harness />));
+        expect(router.navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                to: '/category',
+                search: { collectionId: 'chosen', minPrice: '10', auth: 'login' },
+                replace: false,
+                resetScroll: false,
+            }),
+        );
+        expect(router.state.location.state?.storefrontAuthPushed).toBe(true);
+        expect(value.authOverlay?.mode).toBe('login');
+        expect(routeHref(value.route)).toBe(original);
+        expect(routeHref(value.displayedRoute)).toBe(original);
+    });
+
+    it('replaces auth modes and retains the protected purchase target across switches', async () => {
+        authenticated = false;
+        act(() => root.render(<Harness />));
+        await authAction(() => value.navigate({ name: 'purchase', id: 'variant-7', quantity: 3 }));
+        act(() => root.render(<Harness />));
+        expect(value.authOverlay?.target).toMatchObject({ name: 'purchase', id: 'variant-7', quantity: 3 });
+        await authAction(() => value.changeAuthOverlay('register'));
+        act(() => root.render(<Harness />));
+        expect(router.navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                to: '/category',
+                search: { auth: 'register', authTarget: '/purchase?id=variant-7&quantity=3' },
+                replace: true,
+                resetScroll: false,
+            }),
+        );
+        expect(router.state.location.state?.storefrontAuthPushed).toBe(true);
+        await authAction(() => value.changeAuthOverlay('forgot-password'));
+        act(() => root.render(<Harness />));
+        expect(value.authOverlay?.mode).toBe('forgot-password');
+        expect(value.authOverlay?.target).toMatchObject({ name: 'purchase', id: 'variant-7', quantity: 3 });
+    });
+
+    it('opens the guest private account target without changing the background pathname', async () => {
+        authenticated = false;
+        router.state.location = { pathname: '/services', search: {}, searchStr: '' };
+        act(() => root.render(<Harness />));
+        await authAction(() => value.navigate({ name: 'account' }));
+        act(() => root.render(<Harness />));
+        expect(router.state.location.pathname).toBe('/services');
+        expect(value.authOverlay?.target).toMatchObject({ name: 'account' });
+        expect(value.route.name).toBe('services');
+    });
+
+    it('closes its own pushed auth history entry with back', async () => {
+        act(() => root.render(<Harness />));
+        await authAction(() => value.navigate({ name: 'login' }));
+        act(() => root.render(<Harness />));
+        router.navigate.mockClear();
+        await authAction(() => value.closeAuthOverlay());
+        expect(router.back).toHaveBeenCalledOnce();
+        expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])(
+        'closes a direct query by replace even when back history exists (%s)',
+        async canGoBack => {
+            router.state.location = {
+                pathname: '/category',
+                search: { collectionId: 'chosen', auth: 'register', authTarget: '/orders' },
+                searchStr: '?collectionId=chosen&auth=register&authTarget=%2Forders',
+            };
+            routerInstance.history.canGoBack.mockReturnValue(canGoBack);
+            act(() => root.render(<Harness />));
+            await authAction(() => value.closeAuthOverlay());
+            expect(router.back).not.toHaveBeenCalled();
+            expect(router.navigate).toHaveBeenLastCalledWith({
+                to: '/category',
+                search: { collectionId: 'chosen' },
+                replace: true,
+                resetScroll: false,
+            });
+        },
+    );
+
+    it('restores auth query mode and background identity on browser back and forward', async () => {
+        const original: MockLocation = {
+            pathname: '/category',
+            search: { collectionId: 'chosen' },
+            searchStr: '?collectionId=chosen',
+        };
+        router.state.location = original;
+        act(() => root.render(<Harness />));
+        await authAction(() => value.navigate({ name: 'register' }));
+        const opened = router.state.location;
+        router.back.mockImplementation(() => emitLoad(original));
+        router.forward.mockImplementation(() => emitLoad(opened));
+        await act(() => routerInstance.history.back());
+        act(() => root.render(<Harness />));
+        expect(value.authOverlay).toBeNull();
+        expect(value.activeCollectionId).toBe('chosen');
+        await act(() => routerInstance.history.forward());
+        act(() => root.render(<Harness />));
+        expect(value.authOverlay?.mode).toBe('register');
+        expect(value.activeCollectionId).toBe('chosen');
+        expect(value.route).not.toHaveProperty('auth');
+    });
+
+    it.each(['navigation', 'close', 'history', 'same-route-load'] as const)(
+        'ignores a delayed auth opening after %s supersedes it',
+        async supersedingAction => {
+            act(() => root.render(<Harness />));
+            await authAction(() => {
+                value.navigate({ name: 'login' });
+                if (supersedingAction === 'navigation') value.navigate({ name: 'services' });
+                else if (supersedingAction === 'close') value.closeAuthOverlay();
+                else if (supersedingAction === 'history') routerInstance.history.back();
+                else emitLoad({ pathname: '/category', search: {}, searchStr: '' }, false);
+            });
+            expect(router.state.location.search).not.toHaveProperty('auth');
+            expect(router.state.location.pathname).toBe(
+                supersedingAction === 'navigation' || supersedingAction === 'history'
+                    ? '/services'
+                    : '/category',
+            );
+            expect(router.navigate).toHaveBeenCalledTimes(supersedingAction === 'navigation' ? 1 : 0);
+        },
+    );
+
+    it('ignores a delayed auth opening after its hook unmounts', async () => {
+        act(() => root.render(<Harness />));
+        await authAction(() => {
+            value.navigate({ name: 'login' });
+            root.unmount();
+            unmounted = true;
+        });
+        expect(router.navigate).not.toHaveBeenCalled();
+    });
+
+    it('opens only the latest mode when auth clicks happen before the action chunk settles', async () => {
+        act(() => root.render(<Harness />));
+        await authAction(() => {
+            value.navigate({ name: 'login' });
+            value.changeAuthOverlay('register');
+        });
+        expect(router.navigate).toHaveBeenCalledOnce();
+        expect(router.state.location.search).toEqual({ auth: 'register' });
+    });
+
+    it('does not let a delayed close erase a newer auth mode', async () => {
+        router.state.location = {
+            pathname: '/category',
+            search: { auth: 'login', authTarget: '/orders' },
+            searchStr: '?auth=login&authTarget=%2Forders',
+        };
+        act(() => root.render(<Harness />));
+        await authAction(() => {
+            value.closeAuthOverlay();
+            value.changeAuthOverlay('register');
+        });
+        expect(router.back).not.toHaveBeenCalled();
+        expect(router.navigate).toHaveBeenCalledOnce();
+        expect(router.state.location.search).toEqual({ auth: 'register', authTarget: '/orders' });
+    });
+
+    it.each(['open', 'close'] as const)(
+        'preserves a current %s action when the optional chunk cannot be applied',
+        async action => {
+            const actions = await import('../auth-overlay-navigation-actions');
+            const fail = vi.spyOn(actions, 'applyAuthOverlayNavigation').mockImplementationOnce(() => {
+                throw new Error('Optional action chunk unavailable');
+            });
+            if (action === 'close')
+                router.state.location = {
+                    pathname: '/category',
+                    search: { collectionId: 'chosen', auth: 'login' },
+                    searchStr: '?collectionId=chosen&auth=login',
+                };
+            try {
+                act(() => root.render(<Harness />));
+                await authAction(() => {
+                    if (action === 'open')
+                        value.navigate({ name: 'login', returnTo: 'purchase', id: 'variant-7', quantity: 3 });
+                    else value.closeAuthOverlay();
+                });
+                expect(router.state.location).toMatchObject(
+                    action === 'open'
+                        ? {
+                              pathname: '/login',
+                              search: { returnTo: 'purchase', id: 'variant-7', quantity: 3 },
+                          }
+                        : { pathname: '/category', search: { collectionId: 'chosen' } },
+                );
+                expect(router.state.location.search).not.toHaveProperty('auth');
+            } finally {
+                fail.mockRestore();
+            }
+        },
+    );
+
+    it('keeps ordinary public navigation and authenticated private navigation outside the modal', () => {
+        authenticated = false;
+        act(() => root.render(<Harness />));
+        act(() => value.navigate({ name: 'services' }));
+        expect(router.navigate).toHaveBeenLastCalledWith({ to: '/services', search: {}, replace: false });
+        authenticated = true;
+        act(() => root.render(<Harness />));
+        act(() => value.navigate({ name: 'account' }));
+        expect(router.navigate).toHaveBeenLastCalledWith({ to: '/account', search: {}, replace: false });
+    });
+
+    it.each(['/verify-account', '/reset-password'])(
+        'retains the token-route standalone fallback on %s',
+        pathname => {
+            router.state.location = {
+                pathname,
+                search: { token: 'qa-route-token' },
+                searchStr: '?token=qa-route-token',
+            };
+            act(() => root.render(<Harness />));
+            act(() => value.navigate({ name: 'login' }));
+            expect(router.navigate).toHaveBeenLastCalledWith({ to: '/login', search: {}, replace: false });
+        },
+    );
 });

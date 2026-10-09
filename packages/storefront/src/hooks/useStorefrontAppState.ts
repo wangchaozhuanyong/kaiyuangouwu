@@ -1,10 +1,11 @@
+// organize-imports-ignore -- Preserve ESLint type groups and CSS side-effect order.
+import type { RouteState } from '../storefront-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApiError } from '../api';
 import { subscribeAuthSessionChanges } from '../auth-session-sync';
 import { CartCommandAcknowledgedReadError } from '../cart/cart-repository';
-import { resumeAuthenticatedCheckout } from '../checkout-authentication';
 import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
@@ -19,7 +20,6 @@ import {
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
-import { isPublicStorefrontRoute } from '../storefront-access';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { writeStoredCurrency, writeStoredSettlementCurrency } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
@@ -161,11 +161,16 @@ export function useStorefrontAppState() {
         updateCategory,
         openContentTarget,
         isPreparingProduct,
+        authOverlay,
+        changeAuthOverlay,
+        closeAuthOverlay,
+        navigateAfterAuthentication,
     } = useStorefrontNavigation({
         collections,
         contentBlocks,
         products,
         prepareProduct: storefrontContextResolved ? prepareProductNavigation : undefined,
+        authenticated: customerAuthenticated,
     });
 
     // React DOM deduplicates resource hints. Calling this during render lets a restored public
@@ -572,34 +577,34 @@ export function useStorefrontAppState() {
         text.loadError,
     ]);
 
-    const completeAuthentication = useCallback(async () => {
-        cartController.reset();
-        clearPrivateQueryCache();
-        const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
-        if (!nextCustomer) {
-            throw new Error(
-                isZh ? '登录状态尚未确认，请重新登录' : 'Sign-in could not be confirmed. Try again.',
+    const completeAuthentication = useCallback(
+        async (
+            authenticationRoute?: RouteState,
+            destination?: RouteState,
+            isCurrent: () => boolean = () => true,
+        ) => {
+            if (!isCurrent()) return;
+            const { completeStorefrontAuthentication } = await import('../checkout-authentication');
+            await completeStorefrontAuthentication(
+                {
+                    api,
+                    cartController,
+                    clearPrivateQueryCache,
+                    setCustomer,
+                    setCart,
+                    setCartError,
+                    setCheckoutOrder,
+                    notify,
+                    navigate: navigateAfterAuthentication,
+                    isZh,
+                },
+                authenticationRoute ?? route,
+                destination,
+                isCurrent,
             );
-        }
-        setCustomer(nextCustomer);
-        setCart(nextCart);
-        setCartError(null);
-        setCheckoutOrder(nextCart.checkoutOrder);
-        try {
-            const resumed = await resumeAuthenticatedCheckout(api, cartController, nextCart, route);
-            setCart(resumed.cart);
-            setCheckoutOrder(resumed.order);
-            notify(isZh ? '登录成功' : 'Signed in');
-            navigate(!isPublicStorefrontRoute(route.name) && !route.returnTo ? route : resumed.route, true);
-        } catch {
-            const message = isZh
-                ? '已登录，请在购物车确认商品后重新结算'
-                : 'Signed in. Review your cart and try checkout again.';
-            setCartError(message);
-            notify(message);
-            navigate({ name: 'cart' }, true);
-        }
-    }, [api, cartController, clearPrivateQueryCache, isZh, navigate, notify, route]);
+        },
+        [api, cartController, clearPrivateQueryCache, isZh, navigateAfterAuthentication, notify, route],
+    );
 
     const selectedProduct = route.id
         ? ((routeProduct?.id === route.id ? routeProduct : null) ??
@@ -861,6 +866,9 @@ export function useStorefrontAppState() {
         cancelAuthorizedOrder,
         createAfterSalesRequest,
         completeAuthentication,
+        authOverlay,
+        changeAuthOverlay,
+        closeAuthOverlay,
     } satisfies Record<string, unknown>;
 
     return {
