@@ -1,4 +1,4 @@
-import { Bell, Pause, Play } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { type HomeNoticeItem } from '../../pages/home-page';
@@ -29,7 +29,6 @@ export function HomeNoticeTicker({
     const [index, setIndex] = useState(0);
     const [cycle, setCycle] = useState(0);
     const [distance, setDistance] = useState<number | null>(null);
-    const [stopped, setStopped] = useState(false);
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
     const viewport = useRef<HTMLSpanElement>(null);
@@ -37,7 +36,7 @@ export function HomeNoticeTicker({
     const reader = useRef<HTMLButtonElement>(null);
     const animation = useRef<Animation | null>(null);
     const keyboardInput = useRef(true);
-    const shouldPause = paused || stopped || hovered || focused;
+    const shouldPause = paused || hovered || focused;
     const pauseRef = useRef(shouldPause);
     pauseRef.current = shouldPause;
     const item = items[index % Math.max(1, items.length)];
@@ -129,7 +128,6 @@ export function HomeNoticeTicker({
     }, [shouldPause]);
 
     if (!item) return null;
-    const canPlay = !reducedMotion && (items.length > 1 || Boolean(distance));
     return (
         <div
             className="notice-strip"
@@ -159,25 +157,6 @@ export function HomeNoticeTicker({
                     </span>
                 </span>
             </button>
-            {canPlay ? (
-                <button
-                    className="notice-strip-control"
-                    type="button"
-                    aria-label={
-                        stopped
-                            ? isZh
-                                ? '继续播放公告'
-                                : 'Resume announcements'
-                            : isZh
-                              ? '暂停公告播放'
-                              : 'Pause announcements'
-                    }
-                    aria-pressed={stopped}
-                    onClick={() => setStopped(value => !value)}
-                >
-                    {stopped ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
-                </button>
-            ) : null}
             <button
                 className="notice-strip-all"
                 type="button"

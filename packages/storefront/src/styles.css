@@ -878,7 +878,7 @@ img {
     text-align: left;
 }
 
-.notice-strip :is(.notice-strip-open, .notice-strip-control, .notice-strip-all) {
+.notice-strip :is(.notice-strip-open, .notice-strip-all) {
     min-height: 44px;
     border: 0;
     padding: 0;
@@ -890,21 +890,15 @@ img {
     cursor: pointer;
 }
 
-.notice-strip :is(.notice-strip-control, .notice-strip-all) {
+.notice-strip .notice-strip-all {
     flex: 0 0 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-.notice-strip :is(.notice-strip-control, .notice-strip-all):hover {
+.notice-strip .notice-strip-all:hover {
     background: var(--control-surface);
-}
-
-.notice-strip .notice-strip-control svg {
-    width: 16px;
-    height: 16px;
-    color: var(--muted);
 }
 
 .notice-strip-title {

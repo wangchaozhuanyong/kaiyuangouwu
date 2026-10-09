@@ -148,17 +148,11 @@ describe('home announcement playback', () => {
         expect(required(host.querySelector('.notice-strip-title')).textContent).toBe('Notice first');
     });
 
-    it('preserves the timeline when manually paused or a detail/background pauses playback', () => {
+    it('preserves the timeline when a detail or background pauses playback', () => {
         render();
         const playback = required(animations.at(-1));
         playback.currentTime = 4200;
-        click('.notice-strip-control');
-        expect(playback.playState).toBe('paused');
-        expect(required(host.querySelector('.notice-strip-control')).getAttribute('aria-pressed')).toBe(
-            'true',
-        );
-        click('.notice-strip-control');
-        expect(playback.playState).toBe('running');
+        expect(host.querySelector('.notice-strip-control')).toBeNull();
         render({ paused: true });
         expect(playback.playState).toBe('paused');
         render();
