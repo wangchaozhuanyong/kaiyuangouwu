@@ -23,6 +23,23 @@ const platformAdminBrandFiles = new Set([
     'packages/next-admin/src/pages/Auth/InitialPasswordChangeModule.tsx',
 ]);
 
+// These surfaces were explicitly retired; historical API types and records remain valid.
+export function findRetiredStorefrontIssues(source, relativePath) {
+    const issues = [];
+    if (/\b(?:desktopCategoryBannerInput|resolveDesktopCategoryBanner)\b/u.test(source)) {
+        issues.push(`${relativePath}: retired category banner creation/rendering helper must not return`);
+    }
+    if (
+        relativePath.startsWith('packages/storefront/') &&
+        /(?:\.account-hero(?:[\w-]*)(?=[\s.{:#>\[,])|["'`]account-hero(?=[\s"'`])|\baccount-hero-art\b)/u.test(
+            source,
+        )
+    ) {
+        issues.push(`${relativePath}: retired account artwork/card implementation must not return`);
+    }
+    return issues;
+}
+
 export function findStorefrontUnificationIssues(source, relativePath) {
     const issues = [];
     for (const [index, line] of source.split(/\r?\n/u).entries()) {
@@ -62,7 +79,7 @@ async function walk(directory) {
                 files.push(...(await walk(fullPath)));
         } else if (
             entry.isFile() &&
-            /\.(?:[cm]?[jt]sx?|html|xml|txt)$/u.test(entry.name) &&
+            /\.(?:[cm]?[jt]sx?|css|html|xml|txt)$/u.test(entry.name) &&
             !/\.(?:spec|test)\.[cm]?[jt]sx?$/u.test(entry.name)
         ) {
             files.push(fullPath);
@@ -76,7 +93,11 @@ export async function auditStorefrontUnification(repositoryRoot = root) {
     const issues = [];
     for (const file of files) {
         const relativePath = path.relative(repositoryRoot, file).split(path.sep).join('/');
-        issues.push(...findStorefrontUnificationIssues(await readFile(file, 'utf8'), relativePath));
+        const source = await readFile(file, 'utf8');
+        issues.push(...findRetiredStorefrontIssues(source, relativePath));
+        if (!relativePath.endsWith('.css')) {
+            issues.push(...findStorefrontUnificationIssues(source, relativePath));
+        }
     }
     return { issues, inspectedFiles: files.length };
 }
