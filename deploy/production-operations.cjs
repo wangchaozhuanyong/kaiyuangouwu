@@ -2392,6 +2392,7 @@ function runAdministratorProductReadinessAudit(
         assert.ok(product.related && typeof product.related === 'object' && !Array.isArray(product.related));
         assert.ok(Object.values(product.related).every(items => Array.isArray(items)));
         assert.ok(Array.isArray(product.blockers));
+        const stockOwnership = require('./product-stock-ownership-receipt.cjs')(product);
         const history = product.historicalSales;
         assert.ok(history && typeof history === 'object' && !Array.isArray(history));
         assert.ok(Number.isSafeInteger(history.orderCount) && history.orderCount >= 0);
@@ -2410,7 +2411,7 @@ function runAdministratorProductReadinessAudit(
             history.bySalesChannel.reduce((count, group) => count + group.orderLineCount, 0),
             history.orderLineCount,
         );
-        reports = { administrator, product };
+        reports = { administrator, product, stockOwnership };
     } catch (error) {
         auditError = error;
     }
@@ -2426,7 +2427,7 @@ function runAdministratorProductReadinessAudit(
     if (stateError) throw stateError;
     if (auditError) throw auditError;
 
-    const { administrator, product } = reports;
+    const { administrator, product, stockOwnership } = reports;
     const relatedCounts = Object.fromEntries(
         Object.entries(product.related || {}).map(([type, items]) => [type, items.length]),
     );
@@ -2456,6 +2457,7 @@ function runAdministratorProductReadinessAudit(
             editableAsExclusiveStoreProduct: product.editableAsExclusiveStoreProduct,
             channels: product.product.channels,
             relatedCounts,
+            stockOwnership,
             historicalSales: {
                 orderCount: product.historicalSales.orderCount,
                 orderLineCount: product.historicalSales.orderLineCount,
@@ -2467,7 +2469,7 @@ function runAdministratorProductReadinessAudit(
             },
             blockerCount: product.blockers.length,
             blockers: product.blockers.slice(0, 50),
-            detailsTruncated: product.blockers.length > 50,
+            detailsTruncated: product.blockers.length > 50 || stockOwnership.detailsTruncated,
         },
     };
 }

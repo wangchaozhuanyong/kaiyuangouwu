@@ -333,6 +333,7 @@ jobs:
                       ])
                   if operation_name == 'audit-administrator-product-readiness':
                       lines.extend([
+                          transport('deploy/product-stock-ownership-receipt.cjs', 'product-stock-ownership-receipt.cjs'),
                           transport('packages/dev-server/scripts/store-isolation-data-preflight.mjs', 'repository/packages/dev-server/scripts/store-isolation-data-preflight.mjs'),
                           transport('packages/dev-server/scripts/store-isolation-ownership-evidence.mjs', 'repository/packages/dev-server/scripts/store-isolation-ownership-evidence.mjs'),
                           transport('packages/dev-server/scripts/store-isolation-customer-dependencies.mjs', 'repository/packages/dev-server/scripts/store-isolation-customer-dependencies.mjs'),
