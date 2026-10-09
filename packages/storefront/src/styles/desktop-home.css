@@ -105,6 +105,10 @@
         background: var(--soft);
         cursor: pointer;
     }
+    .desktop-store-layout .home-intro-grid:not(.is-grouped-intro) .desktop-quick-tile {
+        aspect-ratio: auto;
+        min-height: 120px;
+    }
     .desktop-store-layout .homepage-modules .home-intro-grid .desktop-quick-tile > .desktop-quick-media {
         position: absolute;
         z-index: 0;
@@ -193,9 +197,7 @@
         width: 36px;
         padding: 8px;
     }
-    .desktop-store-layout .homepage-modules .home-intro-grid > .home-trust-bar {
-        grid-column: 1 / -1;
-        grid-row: 2;
+    .desktop-store-layout .homepage-modules > .home-trust-bar {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 24px 32px;
@@ -208,7 +210,7 @@
         align-content: center;
         margin: 0;
     }
-    .desktop-store-layout .home-intro-grid .home-trust-item {
+    .desktop-store-layout .homepage-modules > .home-trust-bar .home-trust-item {
         display: flex;
         min-height: 44px;
         align-items: center;
@@ -224,18 +226,18 @@
         white-space: normal;
         overflow-wrap: anywhere;
     }
-    .desktop-store-layout .home-intro-grid .home-trust-copy {
+    .desktop-store-layout .homepage-modules > .home-trust-bar .home-trust-copy {
         min-width: 0;
         display: grid;
         gap: 6px;
     }
-    .desktop-store-layout .home-intro-grid .home-trust-description {
+    .desktop-store-layout .homepage-modules > .home-trust-bar .home-trust-description {
         color: var(--muted);
         font-size: var(--type-helper-size);
         font-weight: var(--font-weight-normal);
         line-height: var(--type-helper-leading);
     }
-    .desktop-store-layout .home-intro-grid .trust-icon {
+    .desktop-store-layout .homepage-modules > .home-trust-bar .trust-icon {
         width: 28px;
         height: 28px;
         flex: none;
@@ -1482,9 +1484,6 @@
     }
     .desktop-quick-row {
         display: contents;
-    }
-    .desktop-store-layout .homepage-modules .home-intro-grid > .home-trust-bar {
-        grid-row: 3;
     }
 }
 @media (prefers-reduced-motion: reduce) {

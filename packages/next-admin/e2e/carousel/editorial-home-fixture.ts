@@ -1,6 +1,6 @@
 import type { StorefrontContentBlock } from '../../src/graphql/storefront.graphql';
 
-import { newContentBlock } from '../../src/pages/Storefront/storefront-content-utils';
+import { newContentBlock, newContentItem } from '../../src/pages/Storefront/storefront-content-utils';
 
 /** Local sample content only. Production artwork and links are configured in Admin. */
 export const editorialHomeCopy = [
@@ -81,7 +81,15 @@ export const editorialHomeCopy = [
     },
 ] as const;
 
-export function editorialHomeBlocks(artworkBase: string): StorefrontContentBlock[] {
+export function editorialHomeBlocks(
+    artworkBase: string,
+    layoutReview = false,
+    referenceArtwork?: string,
+    deviceArtwork?: {
+        desktop: { width: number; height: number };
+        mobile: { imageUrl: string; width: number; height: number };
+    },
+): StorefrontContentBlock[] {
     const copy = (languageCode: 'zh_Hans' | 'en', values: readonly string[]) => ({
         languageCode,
         title: values[0],
@@ -89,7 +97,7 @@ export function editorialHomeBlocks(artworkBase: string): StorefrontContentBlock
         body: values[2],
         ctaLabel: values[3],
     });
-    return editorialHomeCopy.map((entry, position) => {
+    const heroes: StorefrontContentBlock[] = editorialHomeCopy.map((entry, position) => {
         const imageUrl = `${artworkBase}/${entry.key}-desktop-v1.png`;
         return {
             ...newContentBlock('HERO', position, entry.name),
@@ -126,4 +134,134 @@ export function editorialHomeBlocks(artworkBase: string): StorefrontContentBlock
             items: [],
         };
     });
+    const referenceCopy = [
+        copy('zh_Hans', [
+            '多款模型\n一站连接',
+            'MOYAO AI · 模钥',
+            '探索 ChatGPT、Claude 与 Gemini，让创作与开发更顺手。',
+            '探索智能服务',
+        ]),
+        copy('en', [
+            'AI models.\nOne hub.',
+            'MOYAO AI',
+            'Explore ChatGPT, Claude and Gemini for ideas and code.',
+            'Explore AI services',
+        ]),
+    ];
+    // The approved reference has one completed theme. Keep earlier concepts out of its preview.
+    const selectedHeroes: StorefrontContentBlock[] = referenceArtwork
+        ? [
+              {
+                  ...heroes[1],
+                  id: deviceArtwork ? 'editorial-models-devices-v3' : 'editorial-models-reference-v2',
+                  code: deviceArtwork ? 'editorial-models-devices-v3' : 'editorial-models-reference-v2',
+                  position: 0,
+                  imageUrl: referenceArtwork,
+                  imageAsset: {
+                      id: 'editorial-art-models-reference-v2',
+                      name: deviceArtwork ? '多模型电脑专用 V3' : '原构图多模型 V2',
+                      mimeType: 'image/png',
+                      source: referenceArtwork,
+                      preview: referenceArtwork,
+                      width: deviceArtwork?.desktop.width ?? 1983,
+                      height: deviceArtwork?.desktop.height ?? 793,
+                  },
+                  settings: {
+                      ...heroes[1].settings,
+                      mobileImageUrl: deviceArtwork?.mobile.imageUrl ?? referenceArtwork,
+                      mobileImageAssetId: deviceArtwork
+                          ? 'editorial-mobile-models-devices-v3'
+                          : 'editorial-mobile-models-reference-v2',
+                      mobileImageWidth: deviceArtwork?.mobile.width ?? 1983,
+                      mobileImageHeight: deviceArtwork?.mobile.height ?? 793,
+                      mobileHeroTranslations: [
+                          copy('zh_Hans', [
+                              '多款模型\n一站连接',
+                              'MOYAO AI · 模钥',
+                              'ChatGPT · Claude · Gemini',
+                              '探索服务',
+                          ]),
+                          copy('en', [
+                              'More AI\nOne hub',
+                              'MOYAO AI',
+                              'ChatGPT · Claude · Gemini',
+                              'Explore AI',
+                          ]),
+                      ],
+                  },
+                  targetType: 'PAGE',
+                  targetValue: '/services',
+                  translations: referenceCopy,
+              },
+          ]
+        : heroes;
+    if (!layoutReview) return selectedHeroes;
+    const floor = (type: 'QUICK_LINKS' | 'STORY' | 'TRUST_BAR', position: number) => ({
+        ...newContentBlock(type, position, '首页布局验收示例'),
+        id: `layout-${type.toLowerCase()}`,
+        code: `layout-${type.toLowerCase()}`,
+        enabled: true,
+        createdAt: '2026-10-09T00:00:00Z',
+        updatedAt: '2026-10-09T00:00:00Z',
+    });
+    const labels = [
+        ['套餐说明', 'Plan details'],
+        ['订单进度', 'Order progress'],
+        ['使用提醒', 'Usage guidance'],
+        ['售后指引', 'After-sales support'],
+    ];
+    const trust = {
+        ...floor('TRUST_BAR', 30),
+        settings: { placement: 'heroOverlay' },
+        items: labels.map(([zh, en], position) => ({
+            ...newContentItem(position),
+            id: `layout-trust-${position}`,
+            translations: [
+                {
+                    languageCode: 'zh_Hans' as const,
+                    label: zh,
+                    description: '完整的后台服务说明可自然换行显示。',
+                },
+                {
+                    languageCode: 'en' as const,
+                    label: en,
+                    description:
+                        'Complete editable service information wraps naturally in this independent section.',
+                },
+            ],
+        })),
+    };
+    const story = {
+        ...floor('STORY', 20),
+        translations: [
+            {
+                languageCode: 'zh_Hans' as const,
+                title: '按需选择 AI 服务',
+                subtitle: '',
+                body: '本地布局示例：信任区应按照后台排序显示在这个内容区块之后。',
+                ctaLabel: '',
+            },
+            {
+                languageCode: 'en' as const,
+                title: 'Find the AI service that fits',
+                subtitle: '',
+                body: 'Local layout example: the service information section follows the saved homepage order.',
+                ctaLabel: '',
+            },
+        ],
+    };
+    const shortcuts = {
+        ...floor('QUICK_LINKS', 10),
+        items: ['Codex', 'ChatGPT', 'Gemini'].map((label, position) => ({
+            ...newContentItem(position),
+            id: `layout-quick-${position}`,
+            targetType: 'SEARCH' as const,
+            targetValue: label,
+            translations: [
+                { languageCode: 'zh_Hans' as const, label, description: '' },
+                { languageCode: 'en' as const, label, description: '' },
+            ],
+        })),
+    };
+    return [...selectedHeroes, shortcuts, story, trust];
 }

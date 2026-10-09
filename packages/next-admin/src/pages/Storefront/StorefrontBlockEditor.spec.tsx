@@ -3,9 +3,11 @@ import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
+import { heroContentForViewport } from '../../../../storefront-content-plugin/src/shared/hero-image';
 import { AdminOverlayHost } from '../../components/AdminOverlayHost';
 import { AdminOverlayContext } from '../../runtime/admin-overlay-context';
 import { newContentBlock, newContentItem, storefrontBlockInput } from './storefront-content-utils';
+import { decorationDraft } from './storefront-decoration-model';
 import { verifySavedBlock } from './storefront-save-verification';
 import { StorefrontBlockEditor } from './StorefrontBlockEditor';
 
@@ -460,13 +462,23 @@ function fixtureInput(host: HTMLElement, labelText: string): HTMLInputElement {
     return input;
 }
 
+function fixtureTextArea(host: HTMLElement, labelText: string): HTMLTextAreaElement {
+    const control = Array.from(host.querySelectorAll('label'))
+        .find(label => label.textContent?.includes(labelText))
+        ?.querySelector('textarea');
+    if (!control) throw new Error(`Expected fixture textarea: ${labelText}`);
+    return control;
+}
+
 it.each([false, true])(
     'saves phone artwork separately and reviews replacements or clearing: %s',
     async existing => {
         const host = document.createElement('div');
         document.body.append(host);
         const root = createFixtureRoot(host);
-        const onSave = vi.fn(() => Promise.resolve(undefined));
+        const onSave = vi
+            .fn<(value: ReturnType<typeof newContentBlock>, reviewed?: boolean) => Promise<void>>()
+            .mockResolvedValue(undefined);
         const value = {
             ...newContentBlock('HERO', 0),
             id: 'hero',
@@ -497,10 +509,19 @@ it.each([false, true])(
                     />,
                 ),
             );
-            await fixtureAct(() => button('手机轮播图（可选）换图').click());
+            expect(host.textContent).toContain('电脑端轮播图');
+            expect(host.textContent).toContain('建议比例 3:1');
+            expect(host.textContent).toContain('建议比例 3:2');
+            const binding = () =>
+                host.querySelector<HTMLElement>('[data-hero-artwork-binding="mobile"]')!.textContent;
+            expect(binding()).toContain(
+                existing ? '已单独设置手机端轮播图' : '未单独设置手机图，当前沿用电脑端轮播图',
+            );
+            await fixtureAct(() => button('手机端轮播图（可选）换图').click());
+            expect(binding()).toContain('已单独设置手机端轮播图');
             expect(button('保存并核对').disabled).toBe(existing);
             if (existing) {
-                expect(host.textContent).toContain('手机轮播图已替换或清除');
+                expect(host.textContent).toContain('手机端轮播图已替换或清除');
                 await fixtureAct(() => checkbox().click());
             }
             await fixtureAct(() => button('保存并核对').click());
@@ -518,7 +539,11 @@ it.each([false, true])(
                 }),
                 existing,
             );
-            await fixtureAct(() => button('手机轮播图（可选）清除').click());
+            const phoneDraft = decorationDraft(onSave.mock.calls.at(-1)![0], 'zh_Hans').block!;
+            expect(heroContentForViewport(phoneDraft, false, 'zh').imageUrl).toBe('/assets/replacement.png');
+            expect(heroContentForViewport(phoneDraft, true, 'zh').imageUrl).toBe('/assets/desktop.webp');
+            await fixtureAct(() => button('手机端轮播图（可选）清除').click());
+            expect(binding()).toContain('未单独设置手机图，当前沿用电脑端轮播图');
             expect(button('保存并核对').disabled).toBe(existing);
             if (existing) {
                 expect(checkbox().checked).toBe(false);
@@ -539,12 +564,67 @@ it.each([false, true])(
                 }),
                 existing,
             );
+            const inheritedDraft = decorationDraft(onSave.mock.calls.at(-1)![0], 'zh_Hans').block!;
+            expect(heroContentForViewport(inheritedDraft, false, 'zh').imageUrl).toBe('/assets/desktop.webp');
         } finally {
             await fixtureAct(() => root.unmount());
             host.remove();
         }
     },
 );
+
+it('changes desktop artwork with review while preserving the independent phone binding', async () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createFixtureRoot(host);
+    const onSave = vi
+        .fn<(value: ReturnType<typeof newContentBlock>, reviewed?: boolean) => Promise<void>>()
+        .mockResolvedValue(undefined);
+    const value = {
+        ...newContentBlock('HERO', 0),
+        id: 'independent-device-artwork',
+        imageAssetId: 'desktop',
+        imageUrl: '/assets/desktop.webp',
+        settings: {
+            heroArtworkLayout: 'editorial',
+            merchantSetting: 'preserve',
+            mobileImageAssetId: 'phone',
+            mobileImageUrl: '/assets/phone.webp',
+            mobileImageWidth: 1200,
+            mobileImageHeight: 800,
+        },
+    };
+    try {
+        await fixtureAct(() =>
+            root.render(
+                <StorefrontBlockEditor
+                    value={value}
+                    saving={false}
+                    onClose={() => undefined}
+                    onSave={onSave}
+                />,
+            ),
+        );
+        await fixtureAct(() => fixtureButton(host, '电脑端轮播图换图').click());
+        expect(host.textContent).toContain('电脑端轮播图：desktop.webp → replacement.png');
+        expect(fixtureButton(host, '保存并核对').disabled).toBe(true);
+        await fixtureAct(() => fixtureInput(host, '我确认替换或清除以上图片').click());
+        await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+        expect(onSave).toHaveBeenLastCalledWith(
+            expect.objectContaining({ imageAssetId: 'replacement', settings: value.settings }),
+            true,
+        );
+        const draft = decorationDraft(onSave.mock.calls.at(-1)![0], 'zh_Hans').block!;
+        expect(heroContentForViewport(draft, true, 'zh').imageUrl).toBe('/assets/replacement.png');
+        expect(heroContentForViewport(draft, false, 'zh')).toMatchObject({
+            imageUrl: '/assets/phone.webp',
+            imageAsset: { width: 1200, height: 800 },
+        });
+    } finally {
+        await fixtureAct(() => root.unmount());
+        host.remove();
+    }
+});
 
 it('switches phone draft language and restores only the selected language to desktop copy', async () => {
     const host = document.createElement('div');
@@ -573,14 +653,14 @@ it('switches phone draft language and restores only the selected language to des
             mobileHeroTranslations: [
                 {
                     languageCode: 'zh_Hans',
-                    title: '中文手机标题',
+                    title: '中文手机\n标题',
                     subtitle: '',
                     body: '中文简短说明',
                     ctaLabel: '浏览',
                 },
                 {
                     languageCode: 'en',
-                    title: 'Phone title',
+                    title: 'Phone\nTitle',
                     subtitle: '',
                     body: 'Short copy',
                     ctaLabel: 'Browse',
@@ -589,7 +669,13 @@ it('switches phone draft language and restores only the selected language to des
         },
     };
     const button = (text: string) => fixtureButton(host, text);
-    const title = () => fixtureInput(host, '手机标题（选填）');
+    const title = () => fixtureTextArea(host, '手机标题（选填）');
+    const fillTitle = (text: string) =>
+        fixtureAct(() => {
+            Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(title(), text);
+            title().dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    const chineseDraft = { ...value.settings.mobileHeroTranslations[0], title: '中文手机\n广告标题' };
     try {
         await fixtureAct(() =>
             root.render(
@@ -601,11 +687,25 @@ it('switches phone draft language and restores only the selected language to des
                 />,
             ),
         );
-        expect(title().value).toBe('中文手机标题');
+        expect(title().value).toBe('中文手机\n标题');
+        expect(title().rows).toBe(2);
+        expect(title().classList.contains('resize-y')).toBe(true);
+        await fillTitle(chineseDraft.title);
         const hideBenefits = fixtureInput(host, '手机隐藏轮播卖点');
         await fixtureAct(() => hideBenefits.click());
         await fixtureAct(() => button('英文').click());
-        expect(title().value).toBe('Phone title');
+        expect(title().value).toBe('Phone\nTitle');
+        await fillTitle('Phone\nPoster title');
+        await fixtureAct(() => button('保存并核对').click());
+        const multilineSaved = onSave.mock.calls.at(-1)![0];
+        const multilineReadback = JSON.parse(JSON.stringify(multilineSaved));
+        expect(() =>
+            verifySavedBlock(multilineReadback, storefrontBlockInput(multilineSaved, value)),
+        ).not.toThrow();
+        expect(multilineReadback.settings.mobileHeroTranslations).toEqual([
+            chineseDraft,
+            { ...value.settings.mobileHeroTranslations[1], title: 'Phone\nPoster title' },
+        ]);
         await fixtureAct(() => button('恢复当前语言电脑版文案').click());
         expect(title().value).toBe('');
         await fixtureAct(() => button('保存并核对').click());
@@ -614,10 +714,7 @@ it('switches phone draft language and restores only the selected language to des
         // JSON settings omit undefined fields during the actual mutation transport.
         const readback = JSON.parse(JSON.stringify(saved));
         expect(() => verifySavedBlock(readback, storefrontBlockInput(saved, value))).not.toThrow();
-        expect(saved.settings?.mobileHeroTranslations).toEqual([
-            value.settings.mobileHeroTranslations[0],
-            { languageCode: 'en' },
-        ]);
+        expect(saved.settings?.mobileHeroTranslations).toEqual([chineseDraft, { languageCode: 'en' }]);
         expect(() =>
             verifySavedBlock(
                 { ...readback, settings: { ...readback.settings, mobileHeroHideStats: false } },
@@ -632,11 +729,11 @@ it('switches phone draft language and restores only the selected language to des
             settings: {
                 mobileHeroTextColor: null,
                 mobileHeroHideStats: true,
-                mobileHeroTranslations: [value.settings.mobileHeroTranslations[0], { languageCode: 'en' }],
+                mobileHeroTranslations: [chineseDraft, { languageCode: 'en' }],
             },
         });
         await fixtureAct(() => button('中文').click());
-        expect(title().value).toBe('中文手机标题');
+        expect(title().value).toBe(chineseDraft.title);
     } finally {
         await fixtureAct(() => root.unmount());
         host.remove();
@@ -715,6 +812,8 @@ it('selects editorial artwork with advisory bilingual counts while preserving ph
         expect(hint('mobile', 'title').textContent).toContain('当前 21 个字符');
         expect(host.textContent).not.toContain('建议不超过');
         await selectLayout('editorial');
+        expect(host.textContent).toContain('电脑与手机均为左侧网页文字、右侧完整主体');
+        expect(host.textContent).not.toContain('手机文字在上');
         expect(hint('desktop', 'title').textContent).toContain('建议不超过 20 个字符');
         expect(hint('desktop', 'body').textContent).toContain('建议不超过 60 个字符');
         expect(hint('mobile', 'title').textContent).toContain('建议不超过 16 个字符');
@@ -740,7 +839,7 @@ it('selects editorial artwork with advisory bilingual counts while preserving ph
         expect(hint('mobile', 'body').textContent).toContain('建议不超过 85 个字符');
         const desktopTitle = host.querySelector<HTMLTextAreaElement>('[data-translation-field="title"]')!;
         const desktopBody = host.querySelector<HTMLTextAreaElement>('[data-translation-field="body"]')!;
-        const phoneTitle = fixtureInput(host, '手机标题（选填）');
+        const phoneTitle = fixtureTextArea(host, '手机标题（选填）');
         expect(desktopTitle.hasAttribute('maxlength')).toBe(false);
         expect(desktopBody.hasAttribute('maxlength')).toBe(false);
         expect(phoneTitle.hasAttribute('maxlength')).toBe(false);
@@ -748,7 +847,8 @@ it('selects editorial artwork with advisory bilingual counts while preserving ph
         await fillCopy(desktopTitle, multilineTitle);
         await fillCopy(desktopBody, 'B'.repeat(180));
         expect(hint('mobile', 'title').textContent).toContain('当前 100 个字符');
-        await fillCopy(phoneTitle, 'Phone title');
+        await fillCopy(phoneTitle, 'Phone\nTitle');
+        expect(phoneTitle.value).toBe('Phone\nTitle');
         await fillCopy(phoneTitle, '');
         expect(hint('mobile', 'title').textContent).toContain('已明确隐藏手机该文字');
         expect(hint('mobile', 'title').textContent).toContain('当前 0 个字符');

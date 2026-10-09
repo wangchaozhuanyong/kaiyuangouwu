@@ -34,7 +34,10 @@ import {
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { heroContentForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
-import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import {
+    HeroScene,
+    resolveHeroArtworkLayout,
+} from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
@@ -507,13 +510,6 @@ export function HomePage() {
             entry => entry.type === type && (blockId === undefined || entry.block?.id === blockId),
         );
     const hasHomepageModule = (type: StorefrontContentBlock['type']) => homepageModuleOrder(type) >= 0;
-    const heroTrustBar =
-        hasHomepageModule('HERO') &&
-        managedHeroes.length > 0 &&
-        hasHomepageModule('TRUST_BAR') &&
-        Boolean(
-            trustBlock?.items.some(item => item.enabled && (item.label.trim() || item.description.trim())),
-        );
     const managedSections = homepageModules.flatMap(entry =>
         entry.block && ['CATEGORY_AD', 'FEATURED_COLLECTION', 'STORY', 'CUSTOM'].includes(entry.type)
             ? [entry.block]
@@ -543,7 +539,6 @@ export function HomePage() {
     const heroMotionFrameRef = useRef<number | null>(null);
     const heroViewportRef = useRef<HTMLElement>(null);
     const heroStageRef = useRef<HTMLDivElement>(null);
-    const heroTrustRef = useRef<HTMLDivElement>(null);
     const [heroStageHeight, setHeroStageHeight] = useState<number>();
     const heroStageHeightRef = useRef<number | undefined>(undefined);
     const heroHeightGrowthDeadlineRef = useRef(0);
@@ -737,33 +732,16 @@ export function HomePage() {
         const heightSurfaces = Array.from(
             stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
         );
-        const gallery = desktop ? viewport.closest('.home-intro-grid')?.querySelector('.quick-grid') : null;
-        const trust = heroTrustRef.current;
-        const carousel = viewport.closest<HTMLElement>('.hero-carousel');
-        const pager = desktop ? stage.querySelector<HTMLElement>('.hero-overlay-controls') : null;
-        let measuredPagerWidth: number | undefined;
-        let measuredTrustHeight: number | undefined;
         let active = true;
         const measure = () => {
             if (!active) return;
-            const pagerWidth = pager ? Math.ceil(pager.getBoundingClientRect().width) : 0;
-            if (pagerWidth !== measuredPagerWidth) {
-                measuredPagerWidth = pagerWidth;
-                if (pager) carousel?.style.setProperty('--home-hero-pager-width', `${pagerWidth}px`);
-                else carousel?.style.removeProperty('--home-hero-pager-width');
-            }
-            const trustHeight = trust ? Math.ceil(trust.getBoundingClientRect().height) : 0;
-            if (trustHeight !== measuredTrustHeight) {
-                measuredTrustHeight = trustHeight;
-                if (trust) viewport.style.setProperty('--home-hero-trust-height', `${trustHeight}px`);
-                else viewport.style.removeProperty('--home-hero-trust-height');
-            }
             const minimum = Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0;
             const height = Math.ceil(
                 Math.max(
                     minimum,
-                    ...heightSurfaces.map(surface => surface.getBoundingClientRect().height),
-                    gallery?.getBoundingClientRect().height ?? 0,
+                    ...heightSurfaces.map(surface =>
+                        Math.max(surface.getBoundingClientRect().height, surface.scrollHeight),
+                    ),
                 ),
             );
             if (height <= 0 || height === heroStageHeightRef.current) return;
@@ -779,19 +757,14 @@ export function HomePage() {
         const observer = new ResizeObserver(measure);
         heightSurfaces.forEach(surface => observer.observe(surface));
         observer.observe(viewport);
-        if (gallery) observer.observe(gallery);
-        if (trust) observer.observe(trust);
-        if (pager) observer.observe(pager);
         window.addEventListener('resize', measure);
         measure();
         return () => {
             active = false;
             observer.disconnect();
             window.removeEventListener('resize', measure);
-            viewport.style.removeProperty('--home-hero-trust-height');
-            carousel?.style.removeProperty('--home-hero-pager-width');
         };
-    }, [desktop, heroIndex, heroMotion?.nextIndex, heroTrustBar, managedHeroes]);
+    }, [desktop, heroIndex, heroMotion?.nextIndex, managedHeroes]);
 
     useEffect(() => {
         const queued = heroQueuedSelectionRef.current;
@@ -1070,7 +1043,6 @@ export function HomePage() {
                 className={`home-trust-bar${trustBarHasLongCopy ? ' has-long-copy' : ''}${colorfulTrustBar ? ' is-color-marketplace' : ''}`}
                 style={{ order: homepageModuleOrder('TRUST_BAR') }}
                 aria-label={isZh ? '服务信息' : 'Service information'}
-                tabIndex={heroCount > 0 || (!desktop && trustBarHasLongCopy) ? 0 : undefined}
             >
                 {trustItems.map((item, index) => {
                     const { label, description, icon: TrustIcon } = item;
@@ -1099,17 +1071,17 @@ export function HomePage() {
                 })}
             </div>
         ) : null;
-    // Services stay outside the swipe region: bottom-left on desktop, bottom-center on mobile. A standalone
-    // service floor is only needed when the merchant has no published hero.
-    const introOrders = (heroTrustBar ? ['HERO', 'QUICK_LINKS'] : ['HERO', 'QUICK_LINKS', 'TRUST_BAR'])
+    // Only adjacent hero and shortcut floors may share the desktop introduction grid.
+    const introOrders = ['HERO', 'QUICK_LINKS']
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
     const groupedIntro =
         desktop &&
+        !managedHeroes.some(hero => resolveHeroArtworkLayout(hero.settings) === 'editorial') &&
         introOrders.length > 0 &&
         homepageModules
             .slice(Math.min(...introOrders), Math.max(...introOrders) + 1)
-            .every(entry => ['HERO', 'QUICK_LINKS', 'TRUST_BAR'].includes(entry.type));
+            .every(entry => ['HERO', 'QUICK_LINKS'].includes(entry.type));
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
@@ -1212,13 +1184,6 @@ export function HomePage() {
                                         if (!event.currentTarget.contains(event.relatedTarget)) {
                                             setHeroInteractionPaused(false);
                                         }
-                                    }}
-                                    onScrollCapture={event => {
-                                        if (
-                                            event.target instanceof HTMLElement &&
-                                            event.target.matches('.home-trust-bar')
-                                        )
-                                            setHeroAutoplayStopped(true);
                                     }}
                                 >
                                     <section
@@ -1429,15 +1394,8 @@ export function HomePage() {
                                                 : ''}
                                         </span>
                                     </section>
-                                    {heroTrustBar && (
-                                        <div ref={heroTrustRef} className="home-hero-trust">
-                                            {trustBar}
-                                        </div>
-                                    )}
                                 </div>
                             )}
-
-                            {!heroTrustBar && trustBar}
 
                             {hasHomepageModule('QUICK_LINKS') && quickLinks.length > 0 ? (
                                 <nav
@@ -1537,6 +1495,8 @@ export function HomePage() {
                                 </nav>
                             ) : null}
                         </div>
+
+                        {trustBar}
 
                         {hasHomepageModule('COUPONS') &&
                             (couponCards.length > 0 || couponCampaignsLoading || couponCampaignsError) && (

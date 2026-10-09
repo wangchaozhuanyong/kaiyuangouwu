@@ -19,11 +19,23 @@ import { normalizeStorefrontVisualPreset } from '../../../storefront-content-plu
 import { decorationDraft } from '../../src/pages/Storefront/storefront-decoration-model';
 
 /** Actual HomePage, synthetic local content, and action receipts without external navigation. */
-export function EditorialHomeClient({ blocks }: { blocks: StorefrontContentBlock[] }) {
+export function EditorialHomeClient({
+    blocks,
+    layoutReview = false,
+    referenceArtwork = false,
+    independentDeviceArtwork = false,
+}: {
+    blocks: StorefrontContentBlock[];
+    layoutReview?: boolean;
+    referenceArtwork?: boolean;
+    independentDeviceArtwork?: boolean;
+}) {
     const [language, setLanguage] = useState<'zh_Hans' | 'en'>('zh_Hans');
     const [preset, setPreset] = useState(normalizeStorefrontVisualPreset('classic'));
     const [length, setLength] = useState('saved');
     const [action, setAction] = useState('');
+    const [trustPosition, setTrustPosition] = useState('bottom');
+    const [artworkLayout, setArtworkLayout] = useState('editorial');
     const desktop = useDesktopViewport();
     const palette = resolveStorefrontSemanticPalette(preset);
     const variables = {
@@ -44,8 +56,13 @@ export function EditorialHomeClient({ blocks }: { blocks: StorefrontContentBlock
     const contentBlocks = blocks
         .filter(block => block.enabled)
         .flatMap(block => {
+            if (layoutReview && block.type === 'TRUST_BAR' && trustPosition === 'off') return [];
             const converted = decorationDraft(block, language).block;
             if (!converted) return [];
+            if (layoutReview && block.type === 'TRUST_BAR')
+                converted.position = trustPosition === 'middle' ? 5 : 30;
+            if (layoutReview && block.type === 'HERO')
+                converted.settings = { ...converted.settings, heroArtworkLayout: artworkLayout };
             // Local artwork server is a fixture-only source, not a public Vendure Asset URL.
             converted.imageUrl = block.imageUrl || converted.imageUrl;
             if (length === 'long' && block.type === 'HERO') {
@@ -127,7 +144,13 @@ export function EditorialHomeClient({ blocks }: { blocks: StorefrontContentBlock
                 }}
                 data-editorial-carousel-controls
             >
-                <strong>首页轮播本地验收 · 示例数据</strong>
+                <strong>
+                    {independentDeviceArtwork
+                        ? '首页双端设计预览 · 电脑 / 手机专用图 · 示例数据'
+                        : referenceArtwork
+                          ? '首页最新设计预览 · 原构图 V2 · 示例数据'
+                          : '首页轮播本地验收 · 示例数据'}
+                </strong>
                 <label>
                     语言{' '}
                     <select
@@ -161,6 +184,33 @@ export function EditorialHomeClient({ blocks }: { blocks: StorefrontContentBlock
                         <option value="long">长文案示例</option>
                     </select>
                 </label>
+                {layoutReview && (
+                    <React.Fragment>
+                        <label>
+                            信任区{' '}
+                            <select
+                                aria-label="信任区验收位置"
+                                value={trustPosition}
+                                onChange={e => setTrustPosition(e.target.value)}
+                            >
+                                <option value="bottom">页面底部</option>
+                                <option value="middle">轮播与快捷入口之间</option>
+                                <option value="off">不显示</option>
+                            </select>
+                        </label>
+                        <label>
+                            轮播布局{' '}
+                            <select
+                                aria-label="轮播验收布局"
+                                value={artworkLayout}
+                                onChange={e => setArtworkLayout(e.target.value)}
+                            >
+                                <option value="editorial">海报图文布局</option>
+                                <option value="overlay">原有图片叠加布局</option>
+                            </select>
+                        </label>
+                    </React.Fragment>
+                )}
                 {action && <span role="status">{action}</span>}
             </div>
             <div className={`storefront-app ${desktop ? 'desktop-store-layout' : ''}`}>

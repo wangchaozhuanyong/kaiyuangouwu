@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -247,6 +248,12 @@ function renderHome(overrides: Partial<HomePageProps> = {}, desktop = false) {
             </HomePageContext.Provider>
         </DesktopLayoutContext.Provider>,
     );
+}
+
+function homeMarkupElement(overrides: Partial<HomePageProps> = {}, desktop = false) {
+    const element = document.createElement('div');
+    element.innerHTML = renderHome(overrides, desktop);
+    return element;
 }
 
 describe('HomePage hero carousel', () => {
@@ -519,21 +526,22 @@ describe('HomePage localized trust bar layout', () => {
         [true, 'heroOverlay'],
         [true, 'belowHero'],
     ] as const)(
-        'keeps one bottom overlay trust strip outside the swipe region (desktop=%s, legacy placement=%s)',
+        'keeps one independent trust floor regardless of legacy placement (desktop=%s, legacy placement=%s)',
         (desktop, placement) => {
-            const markup = renderHome(
+            const element = homeMarkupElement(
                 {
                     contentBlocks: [heroBlock, { ...trustBarBlock, settings: { placement } }],
                 },
                 desktop,
             );
-            const heroMarkup = markup.match(/<section class="hero\b[\s\S]*?<\/section>/)?.[0];
-            expect(heroMarkup).toBeDefined();
-            // The sibling is positioned over the image while keeping its gestures outside the swipe region.
-            expect(heroMarkup).not.toContain('home-trust-bar');
-            expect(markup).toMatch(/<\/section><div class="home-hero-trust">[\s\S]*?home-trust-label/);
-            expect(markup).not.toContain('hero-service-overlay');
-            expect(markup.match(/class="home-trust-bar"/g)).toHaveLength(1);
+            const modules = element.querySelector('.homepage-modules');
+            const trust = element.querySelector('.home-trust-bar');
+            expect(trust?.parentElement).toBe(modules);
+            expect(element.querySelector('.hero-carousel .home-trust-bar')).toBeNull();
+            expect(element.querySelector('.home-intro-grid .home-trust-bar')).toBeNull();
+            expect(element.querySelector('.home-hero-trust')).toBeNull();
+            expect(element.querySelector('.hero-service-overlay')).toBeNull();
+            expect(element.querySelectorAll('.home-trust-bar')).toHaveLength(1);
         },
     );
 
@@ -553,7 +561,7 @@ describe('HomePage localized trust bar layout', () => {
         { desktop: false, language: 'en' as const },
         { desktop: true, language: 'en' as const },
     ])(
-        'keeps complete saved labels and descriptions in the single overlay strip ($desktop, $language)',
+        'keeps complete saved labels and descriptions in the independent floor ($desktop, $language)',
         ({ desktop, language }) => {
             const label = language === 'zh' ? '数字商品订单进度可查' : 'Review your digital product orders';
             const description =
@@ -568,7 +576,7 @@ describe('HomePage localized trust bar layout', () => {
 
             expect(markup).toContain(`class="home-trust-label">${label}</span>`);
             expect(markup).toContain(`class="home-trust-description">${description}</small>`);
-            expect(markup).toMatch(/<\/section><div class="home-hero-trust">[\s\S]*?home-trust-copy/);
+            expect(markup).not.toContain('home-hero-trust');
             expect(markup).not.toContain('查看规格、价格与库存');
         },
     );
@@ -643,7 +651,7 @@ describe('HomePage localized trust bar layout', () => {
         );
     });
 
-    it('keeps long merchant-managed labels in a complete scrollable single row', () => {
+    it('lets long merchant-managed labels wrap completely in the independent floor', () => {
         const managedTrustBlock: StorefrontContentBlock = {
             ...trustBarBlock,
             items: [
@@ -663,15 +671,13 @@ describe('HomePage localized trust bar layout', () => {
         const stylesheet = readStorefrontStylesheet();
 
         expect(markup).toContain('数字商品订单交付进度可查');
+        expect(markup).not.toContain('home-hero-trust');
+        expect(stylesheet).toMatch(/\.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:/);
         expect(stylesheet).toMatch(
-            /\.home-trust-bar\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto;/,
+            /\.home-trust-bar\.has-long-copy \.home-trust-item\s*\{[^}]*white-space:\s*normal;/,
         );
-        expect(stylesheet).toMatch(/\.home-trust-item\s*\{[^}]*flex:\s*0 0 auto;[^}]*white-space:\s*nowrap;/);
         expect(stylesheet).toMatch(
-            /\.home-hero-trust \.home-trust-copy :is\(\.home-trust-label, \.home-trust-description\)\s*\{[^}]*white-space:\s*nowrap;/,
-        );
-        expect(stylesheet).not.toMatch(
-            /\.home-hero-trust \.home-trust-bar\.has-long-copy\s*\{[^}]*grid-template-columns:/,
+            /\.home-trust-bar\.has-long-copy \.home-trust-label\s*\{[^}]*overflow-wrap:\s*anywhere;/,
         );
     });
 
@@ -1426,47 +1432,141 @@ describe('HomePage desktop intro layout', () => {
         );
 
         expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
-        expect(markup).toContain('class="home-hero-trust"');
+        expect(markup).not.toContain('home-hero-trust');
         expect(markup).toContain('class="quick-grid quick-grid-4');
         for (const label of ['卧室', '餐厅', '客厅', '书房']) expect(markup).toContain(`<b>${label}</b>`);
     });
 
-    it.each([4, 5])('groups %i desktop shortcuts beside the hero with its separate service strip', count => {
-        const shortcuts: StorefrontContentBlock = {
-            ...quickLinksBlock,
-            position: 3,
-            items: Array.from({ length: count }, (_, position) => ({
-                id: `shortcut-${position}`,
-                enabled: true,
-                position,
-                imageUrl: `/shortcut-${position}.webp`,
-                targetType: 'PAGE',
-                targetValue: 'category',
-                label: `入口${position + 1}`,
-                description: '',
-            })),
-        };
-        const contentBlocks = [positionedHeroBlock, positionedTrustBlock, shortcuts];
-        const markup = renderHome({ contentBlocks }, true);
+    it.each([4, 5])(
+        'groups %i adjacent desktop shortcuts beside the hero with an independent service floor',
+        count => {
+            const shortcuts: StorefrontContentBlock = {
+                ...quickLinksBlock,
+                position: 2,
+                items: Array.from({ length: count }, (_, position) => ({
+                    id: `shortcut-${position}`,
+                    enabled: true,
+                    position,
+                    imageUrl: `/shortcut-${position}.webp`,
+                    targetType: 'PAGE',
+                    targetValue: 'category',
+                    label: `入口${position + 1}`,
+                    description: '',
+                })),
+            };
+            const contentBlocks = [positionedHeroBlock, { ...positionedTrustBlock, position: 3 }, shortcuts];
+            const markup = renderHome({ contentBlocks }, true);
 
-        expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
-        expect(markup).toContain('class="home-hero-trust"');
-        expect(markup.match(/class="desktop-quick-row"/g)).toHaveLength(2);
-        expect(markup.match(/class="desktop-quick-tile"/g)).toHaveLength(count);
-        expect(markup).toContain(`grid-template-columns:repeat(${count - 2}, minmax(0, 1fr))`);
-        expect(renderHome({ contentBlocks })).not.toContain('is-grouped-intro');
+            expect(markup).toContain('class="home-intro-grid is-grouped-intro"');
+            expect(markup).not.toContain('home-hero-trust');
+            expect(markup.match(/class="desktop-quick-row"/g)).toHaveLength(2);
+            expect(markup.match(/class="desktop-quick-tile"/g)).toHaveLength(count);
+            expect(markup).toContain(`grid-template-columns:repeat(${count - 2}, minmax(0, 1fr))`);
+            expect(renderHome({ contentBlocks })).not.toContain('is-grouped-intro');
 
-        const separatedMarkup = renderHome(
-            {
-                contentBlocks: [
-                    ...contentBlocks,
-                    { ...heroBlock, id: 'story-between', type: 'STORY', position: 2.5 },
+            const separatedMarkup = renderHome(
+                {
+                    contentBlocks: [
+                        ...contentBlocks,
+                        { ...heroBlock, id: 'story-between', type: 'STORY', position: 1.5 },
+                    ],
+                },
+                true,
+            );
+            expect(separatedMarkup).not.toContain('is-grouped-intro');
+        },
+    );
+
+    it.each([
+        { desktop: false, trustPosition: 4 },
+        { desktop: true, trustPosition: 4 },
+        { desktop: false, trustPosition: 1.5 },
+        { desktop: true, trustPosition: 1.5 },
+    ])(
+        'honours the saved trust floor position at the bottom or between hero and shortcuts ($desktop, $trustPosition)',
+        ({ desktop, trustPosition }) => {
+            const shortcuts: StorefrontContentBlock = {
+                ...quickLinksBlock,
+                position: 2,
+                items: [
+                    {
+                        ...trustBarBlock.items[0],
+                        label: '商品分类',
+                        targetType: 'PAGE',
+                        targetValue: 'category',
+                    },
                 ],
-            },
-            true,
-        );
-        expect(separatedMarkup).not.toContain('is-grouped-intro');
-    });
+            };
+            const element = homeMarkupElement(
+                {
+                    contentBlocks: [
+                        positionedHeroBlock,
+                        shortcuts,
+                        { ...heroBlock, id: 'story-order', type: 'STORY', position: 3 },
+                        {
+                            ...positionedTrustBlock,
+                            position: trustPosition,
+                            settings: { placement: 'heroOverlay' },
+                        },
+                    ],
+                },
+                desktop,
+            );
+            const modules = element.querySelector('.homepage-modules');
+            const hero = element.querySelector<HTMLElement>('.hero-carousel');
+            const trust = element.querySelector<HTMLElement>('.home-trust-bar');
+            const quick = element.querySelector<HTMLElement>('.quick-grid');
+            const story = element
+                .querySelector('.content-story-section')
+                ?.closest<HTMLElement>('.homepage-module-shell');
+
+            expect(trust?.parentElement).toBe(modules);
+            expect(hero?.style.order).toBe('0');
+            expect(trust?.style.order).toBe(trustPosition === 4 ? '3' : '1');
+            expect(quick?.style.order).toBe(trustPosition === 4 ? '1' : '2');
+            expect(story?.style.order).toBe(trustPosition === 4 ? '2' : '3');
+            expect(element.querySelector('.home-hero-trust')).toBeNull();
+            expect(Boolean(element.querySelector('.home-intro-grid.is-grouped-intro'))).toBe(
+                desktop && trustPosition === 4,
+            );
+        },
+    );
+
+    it.each([
+        { layouts: ['editorial'], grouped: false },
+        { layouts: ['editorial', 'overlay'], grouped: false },
+        { layouts: ['overlay', 'editorial'], grouped: false },
+        { layouts: ['overlay', 'overlay'], grouped: true },
+    ] as const)(
+        'keeps editorial carousels full-width even when an editorial slide is inactive ($layouts)',
+        ({ layouts, grouped }) => {
+            const heroes: StorefrontContentBlock[] = layouts.map((layout, index) => ({
+                ...positionedHeroBlock,
+                id: `poster-hero-${index}`,
+                position: index + 1,
+                imageUrl: `/assets/poster-hero-${index}.jpg`,
+                title: index === 0 ? '多款模型\n一站连接' : '轻松使用常用工具',
+                settings: { heroArtworkLayout: layout },
+            }));
+            const shortcuts: StorefrontContentBlock = {
+                ...quickLinksBlock,
+                position: heroes.length + 1,
+                items: [{ ...trustBarBlock.items[0], label: '商品分类', targetType: 'PAGE' }],
+            };
+            const element = homeMarkupElement({ contentBlocks: [...heroes, shortcuts] }, true);
+            const intro = element.querySelector<HTMLElement>('.home-intro-grid');
+            const carousel = element.querySelector<HTMLElement>('.hero-carousel');
+            const quick = element.querySelector<HTMLElement>('.quick-grid');
+
+            expect(Boolean(intro?.classList.contains('is-grouped-intro'))).toBe(grouped);
+            expect(intro?.style.order).toBe(grouped ? '0' : '');
+            expect(carousel?.style.order).toBe('0');
+            expect(quick?.style.order).toBe('1');
+            expect(carousel?.querySelector('.hero-rich-title')?.textContent).toBe('多款模型\n一站连接');
+            expect(carousel?.querySelector('img')?.getAttribute('src')).toBe('/assets/poster-hero-0.jpg');
+            expect(quick?.textContent).toContain('商品分类');
+        },
+    );
 
     it('renders all six managed Damatong category shortcuts in a balanced grid', () => {
         const labels = ['正品香烟', '正品白酒', '正品槟榔', '坦克咖啡', '商业服务', '软件订阅'];
