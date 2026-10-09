@@ -87,6 +87,11 @@ try {
                     assert(geometry.height <= 60, `${label}: single compact strip`);
                     for (const node of geometry.nodes)
                         assert(node.height <= node.lineHeight + 1, `${label}: ${node.selector} single line`);
+                    assert.equal(
+                        await page.locator('.notice-strip-control').count(),
+                        0,
+                        `${label}: no pause button`,
+                    );
                     for (const control of geometry.controls)
                         assert(control.height >= 44, `${label}: touch target height`);
                     const titleBefore = await title().boundingBox();
@@ -120,16 +125,16 @@ try {
         const firstTitle = await title().innerText();
         const firstContent = await track().innerText();
         await seek(3500);
-        await page.locator('.notice-strip-control').dispatchEvent('click');
+        await page.locator('.notice-strip').hover();
         const paused = await animationState();
         await page.waitForTimeout(220);
         const still = await animationState();
         assert.equal(still.playState, 'paused');
         assert(Math.abs(still.x - paused.x) < 1, 'Pause preserves current position');
-        await page.locator('.notice-strip-control').dispatchEvent('click');
+        await page.mouse.move(0, 0);
         await page.waitForTimeout(220);
         assert((await animationState()).x < still.x - 3, 'Resume continues from same position');
-        report.cases.push({ label: 'pause-resume-in-place', status: 'pass' });
+        report.cases.push({ label: 'hover-pause-resume-in-place', status: 'pass' });
 
         const duration = (await animationState()).duration;
         await seek(duration - 1850);
