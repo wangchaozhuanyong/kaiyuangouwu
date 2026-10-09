@@ -153,35 +153,48 @@
         flex: 1;
         padding: 12px 0 0;
     }
+
+    .product-row.is-compact .product-row-top {
+        gap: 0;
+    }
+
+    .product-row.is-compact .product-row-bottom {
+        padding-top: 0;
+    }
+
+    .product-row.is-compact .product-row-price {
+        display: flex;
+    }
+
+    .product-row.is-compact .product-row-price .price-lockup {
+        font-size: var(--type-price-size);
+        line-height: var(--type-price-leading);
+    }
 }
 
-/* Narrow rows need the full card width for the currency and complete amount. */
+/* Horizontal rows keep the price in the copy column at every narrow width. */
 @media (max-width: 1023px) {
-    .product-row {
-        container-type: inline-size;
+    .product-row-top {
+        gap: 0;
+    }
+
+    .product-row-bottom {
+        padding-top: 0;
+    }
+
+    .product-row-price {
+        display: flex;
+    }
+
+    .product-row-price .price-lockup {
+        font-size: var(--type-price-size);
+        line-height: var(--type-price-leading);
     }
 
     /* Reading separation requested for the continuous, unframed product list. */
     .product-row + .product-row {
         padding-top: 12px;
         border-top: 1px solid var(--skin-divider);
-    }
-
-    @container (max-width: 320px) {
-        .product-row-content {
-            display: contents;
-        }
-
-        .product-row-top {
-            grid-column: 2;
-            padding: 0;
-        }
-
-        .product-row-bottom {
-            grid-column: 1 / -1;
-            margin-top: 0;
-            padding: 10px 0 0;
-        }
     }
 }
 
