@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { packageInventory, STATIC_APPS } from './ci-impact.mjs';
@@ -23,6 +23,23 @@ export function packageCommands(plan, operation, inventory) {
             ...packages.flatMap(pkg => ['--scope', pkg.name]),
             ...(script === 'build' ? ['--include-dependencies'] : []),
         ],
+    ];
+}
+
+export function frontendTestCommands(tests, sources, cwd) {
+    const paths = files => files.map(file => resolve(file));
+    const nodeTests = tests.filter(file => /\bfrom\s*['"]node:test['"]/u.test(readFileSync(file, 'utf8')));
+    const vitestTests = tests.filter(file => !nodeTests.includes(file));
+    const exclusions = nodeTests.flatMap(file => [
+        '--exclude',
+        relative(cwd, resolve(file)).replaceAll('\\', '/'),
+    ]);
+    return [
+        ...(nodeTests.length ? [['node', '--test', ...paths(nodeTests)]] : []),
+        ...(vitestTests.length ? [['bunx', 'vitest', 'run', ...paths(vitestTests)]] : []),
+        ...(sources.length
+            ? [['bunx', 'vitest', 'related', '--run', '--passWithNoTests', ...exclusions, ...paths(sources)]]
+            : []),
     ];
 }
 
@@ -48,19 +65,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         );
         const tests = files.filter(file => /\.(spec|test)\.[cm]?[jt]sx?$/u.test(file));
         const sources = files.filter(file => !tests.includes(file) && /\.(css|[cm]?[jt]sx?)$/u.test(file));
-        const relative = values => values.map(file => resolve(file));
         const testEnvironment = { NODE_ENV: 'test' };
         if (plan.full || (!tests.length && !sources.length))
             run(['bun', 'run', 'test'], cwd, testEnvironment);
-        else {
-            if (tests.length) run(['bunx', 'vitest', 'run', ...relative(tests)], cwd, testEnvironment);
-            if (sources.length)
-                run(
-                    ['bunx', 'vitest', 'related', '--run', '--passWithNoTests', ...relative(sources)],
-                    cwd,
-                    testEnvironment,
-                );
-        }
+        else
+            for (const command of frontendTestCommands(tests, sources, cwd))
+                run(command, cwd, testEnvironment);
         run(['bun', 'run', 'build'], cwd, { NODE_ENV: 'production' });
     } else {
         for (const command of packageCommands(plan, operation, packageInventory())) run(command);
