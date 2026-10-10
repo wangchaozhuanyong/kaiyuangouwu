@@ -53,6 +53,8 @@ const ROUTE_PERMISSION_RULES: RoutePermissionRule[] = [
 ];
 
 export function getRequiredPermissionsForAdminPath(pathname: string): AdminPermission[] {
+    if (/^\/catalog\/products\/[^/]+\/seo$/u.test(pathname)) return ['ReadProduct', 'ReadCatalog'];
+    if (/^\/catalog\/collections\/[^/]+\/seo$/u.test(pathname)) return ['ReadCollection', 'ReadCatalog'];
     if (/^\/sales\/orders\/[^/]+\/modify$/.test(pathname)) return ['UpdateOrder'];
     return (
         ROUTE_PERMISSION_RULES.find(

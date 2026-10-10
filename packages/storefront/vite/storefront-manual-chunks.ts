@@ -12,4 +12,9 @@ export function storefrontManualChunks(id: string): string | undefined {
     if (normalizedId.includes('/node_modules/@tanstack/')) {
         return 'vendor-tanstack';
     }
+
+    // Keep the existing content sanitizer shared across entry and lazy public pages.
+    if (normalizedId.includes('/node_modules/xss/') || normalizedId.includes('/node_modules/cssfilter/')) {
+        return 'vendor-content-sanitizer';
+    }
 }

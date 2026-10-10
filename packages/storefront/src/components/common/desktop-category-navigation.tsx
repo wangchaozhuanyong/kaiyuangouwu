@@ -1,7 +1,8 @@
 import { ChevronRight, LayoutGrid } from 'lucide-react';
 
 import { catalogRouteWithChanges } from '../../catalog-route-query';
-import { RouteState } from '../../storefront-router';
+import { interceptContentNavigation } from '../../content-target-href';
+import { routeHref, RouteState } from '../../storefront-router';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
 import { useStorefront } from '../../StorefrontContext';
 import { CollectionSummary, Product, StorefrontLanguage } from '../../types';
@@ -59,22 +60,28 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                 className={`desktop-category-entry${isExpanded ? ' is-expanded' : ''}`}
                                 key={collection.id}
                             >
-                                <button
-                                    type="button"
+                                <a
+                                    href={routeHref({
+                                        name: 'category',
+                                        collectionId: collection.id,
+                                        publicLanguage: language,
+                                    })}
                                     className={
                                         activeCollection?.id === collection.id ? 'is-active' : undefined
                                     }
-                                    aria-pressed={activeCollection?.id === collection.id}
+                                    aria-current={activeCollection?.id === collection.id ? 'page' : undefined}
                                     aria-expanded={
                                         expandChildren && collection.children?.length ? isExpanded : undefined
                                     }
-                                    onClick={() =>
-                                        update({
-                                            name: 'category',
-                                            collectionId: collection.id,
-                                            childId: 'all',
-                                            term: undefined,
-                                        })
+                                    onClick={event =>
+                                        interceptContentNavigation(event, () =>
+                                            update({
+                                                name: 'category',
+                                                collectionId: collection.id,
+                                                childId: 'all',
+                                                term: undefined,
+                                            }),
+                                        )
                                     }
                                 >
                                     <span className="desktop-category-icon" aria-hidden="true">
@@ -98,7 +105,7 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                             aria-hidden="true"
                                         />
                                     ) : null}
-                                </button>
+                                </a>
                                 {expandChildren && Boolean(collection.children?.length) ? (
                                     <div
                                         className="desktop-category-children"
@@ -157,15 +164,22 @@ export function DesktopSubcategoryNavigation({ collection }: { collection?: Coll
                 }
             >
                 {displayedCollection.children.map(child => (
-                    <button
+                    <a
                         key={child.id}
-                        type="button"
+                        href={routeHref({
+                            name: 'category',
+                            collectionId: displayedCollection.id,
+                            childId: child.id,
+                            publicLanguage: language,
+                        })}
                         title={child.name}
-                        aria-pressed={activeChild?.id === child.id}
-                        onClick={() => update({ childId: child.id })}
+                        aria-current={activeChild?.id === child.id ? 'page' : undefined}
+                        onClick={event =>
+                            interceptContentNavigation(event, () => update({ childId: child.id }))
+                        }
                     >
                         <span className="desktop-subcategory-name">{child.name}</span>
-                    </button>
+                    </a>
                 ))}
             </nav>
         </aside>

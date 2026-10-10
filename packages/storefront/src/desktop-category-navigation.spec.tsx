@@ -199,12 +199,12 @@ describe('desktop catalog category navigation', () => {
             collectionId: 'parent',
             childId: 'child',
         });
-        expect(category.match(/aria-pressed="true"/g)).toHaveLength(1);
+        expect(category.match(/aria-current="page"/g)).toHaveLength(1);
         expect(category).not.toContain('一级分类');
         expect(category).not.toContain('二级分类');
         expect(subcategories).toContain('后台商品分类');
         expect(subcategories).toContain('后台子分类');
-        expect(subcategories.match(/aria-pressed="true"/g)).toHaveLength(1);
+        expect(subcategories.match(/aria-current="page"/g)).toHaveLength(1);
     });
 
     it('keeps the primary navigation visible in the actual desktop product listing', () => {
@@ -276,7 +276,7 @@ describe('desktop catalog category navigation', () => {
         expect(html).toContain('class="desktop-category-children" aria-hidden="false"');
         expect(html).toContain('class="desktop-category-children" inert="" aria-hidden="true"');
         expect(html).toContain('收起的子分类');
-        expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
+        expect(html.match(/aria-current="page"/g)).toHaveLength(2);
         expect(html.match(/aria-expanded="true"/g)).toHaveLength(1);
     });
 

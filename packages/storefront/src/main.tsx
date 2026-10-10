@@ -2,7 +2,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 
 import {
     persistPublicQueryCache,
@@ -12,7 +12,7 @@ import {
 } from './query-client';
 import { router } from './router';
 import { restoreStorefrontIcons } from './storefront-icons';
-import { readInitialPublicPage, seedPublicPage } from './storefront-page-data';
+import { readInitialPublicPage, seedPublicPage, type PublicPageData } from './storefront-page-data';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './storefront-styles';
 
@@ -25,9 +25,11 @@ const appRootElement = rootElement;
 
 const embeddedPreview = new URLSearchParams(window.location.search).get('storefrontPreviewEmbedded') === '1';
 restoreStorefrontIcons();
+let initialPublicPage: PublicPageData | undefined;
 if (!embeddedPreview) {
     try {
         const initialPage = readInitialPublicPage();
+        initialPublicPage = initialPage;
         if (initialPage) seedPublicPage(storefrontQueryClient, initialPage);
         restorePublicQueryCache(storefrontQueryClient);
         watchPublicQueryCache(storefrontQueryClient);
@@ -49,15 +51,24 @@ async function mountStorefront() {
         installStorefrontPreviewRuntime();
     }
 
-    createRoot(appRootElement).render(
+    const interactiveApp = (
         <StrictMode>
             <QueryClientProvider client={storefrontQueryClient}>
                 <StorefrontErrorBoundary>
                     <RouterProvider router={router} />
                 </StorefrontErrorBoundary>
             </QueryClientProvider>
-        </StrictMode>,
+        </StrictMode>
     );
+    if (!embeddedPreview && initialPublicPage && appRootElement.dataset.publicRendered === '1') {
+        const { createPublicSnapshotApp } = await import('./public-snapshot');
+        const initialTree = await createPublicSnapshotApp(initialPublicPage, () =>
+            root.render(interactiveApp),
+        );
+        const root = hydrateRoot(appRootElement, initialTree);
+    } else {
+        createRoot(appRootElement).render(interactiveApp);
+    }
 }
 
 void mountStorefront();

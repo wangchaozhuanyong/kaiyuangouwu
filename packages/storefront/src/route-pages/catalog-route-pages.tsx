@@ -71,6 +71,10 @@ export function HomeRoutePage() {
                 locale: runtime.locale,
                 language: runtime.language,
                 storefrontName: runtime.storefrontName,
+                storefrontNameAliases: [
+                    configQuery.data?.customFields.storefrontNameZh ?? '',
+                    configQuery.data?.customFields.storefrontNameEn ?? '',
+                ],
                 storefrontDescription: runtime.storefrontDescription,
                 storefrontTagline: runtime.storefrontTagline,
                 logoUrl: runtime.logoUrl,

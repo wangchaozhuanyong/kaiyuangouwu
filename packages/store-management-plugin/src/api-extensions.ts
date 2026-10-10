@@ -16,6 +16,7 @@ import {
 } from './notifications/store-notification.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { referralPosterFields } from './referral/referral-poster-fields';
+import { storefrontSeoAdminSchema } from './seo/storefront-seo.schema';
 import { storePaymentApiSchema } from './store-payment-api.schema';
 import { storeProfileInputSchema } from './store-profile-input.schema';
 import { storefrontBrandingSchema, storefrontPreviewBrandingSchema } from './storefront-branding.schema';
@@ -226,6 +227,7 @@ export const adminApiExtensions = gql`
     ${storefrontPreviewBrandingSchema}
     ${storeNotificationAdminSchema}
     ${trafficAdminSchema}
+    ${storefrontSeoAdminSchema}
     ${commonTypes}
     ${customerServiceFeedbackAdminSchema}
     ${storeProfileInputSchema}

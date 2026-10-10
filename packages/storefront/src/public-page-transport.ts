@@ -14,7 +14,8 @@ export function invalidatePublicPageReads(): void {
 }
 
 const flights = new Map<string, Promise<unknown>>();
-let bootstrap: { key: string; promise: Promise<unknown> } | undefined;
+let bootstrap:
+    { key: string; promise: Promise<unknown>; languageCode?: string; currencyCode?: string } | undefined;
 
 export function publicPageUrl(request: PublicPageRequest, languageCode?: string, currencyCode?: string): URL {
     const url = new URL('/_storefront/page-data', window.location.origin);
@@ -84,6 +85,8 @@ export function startPublicPageBootstrap(
     bootstrap = {
         key: publicPageRequestKey(request),
         promise: requestPublicPage(publicPageUrl(request, languageCode, currencyCode)),
+        languageCode,
+        currencyCode,
     };
     // It is a one-time handoff to the query owner, not a reusable response cache.
     const current = bootstrap;
@@ -93,8 +96,17 @@ export function startPublicPageBootstrap(
     }, 20_000);
 }
 
-export function takePublicPageBootstrap(request: PublicPageRequest): Promise<unknown> | undefined {
+export function takePublicPageBootstrap(
+    request: PublicPageRequest,
+    scope?: { languageCode: string; currencyCode?: string },
+): Promise<unknown> | undefined {
     if (bootstrap?.key !== publicPageRequestKey(request)) return;
+    if (
+        scope &&
+        ((bootstrap.languageCode && scope.languageCode !== bootstrap.languageCode) ||
+            (bootstrap.currencyCode && scope.currencyCode !== bootstrap.currencyCode))
+    )
+        return;
     const promise = bootstrap.promise;
     bootstrap = undefined;
     return promise;

@@ -26,6 +26,7 @@ export function artifactSourceHash({
                     'deploy/build-artifact.mjs',
                     'deploy/frontend-artifact.mjs',
                     'deploy/artifact-inputs.mjs',
+                    'deploy/storefront-renderer.mjs',
                 ].includes(path);
             if (path.startsWith('.github/'))
                 return (

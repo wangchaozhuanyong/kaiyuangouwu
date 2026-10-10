@@ -1136,7 +1136,7 @@
         letter-spacing: var(--tracking-normal);
     }
 
-    .quick-grid button > span {
+    .quick-grid :is(button, a) > span {
         width: 46px;
         height: 46px;
     }

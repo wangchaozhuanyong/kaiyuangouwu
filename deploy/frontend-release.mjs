@@ -8,6 +8,7 @@ import { affectedFrontendsForFile, classifyChanges, STATIC_APPS } from '../scrip
 
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { assertServedStorefrontAssets, switchStorefront } from './storefront-release.mjs';
+import { assertStorefrontRenderer } from './storefront-renderer.mjs';
 
 // Recovery may fast-forward the source checkout while restarting the last verified
 // immutable runtime. Static releases must verify that runtime, not reset the checkout.
@@ -156,6 +157,7 @@ export function frontendReleases(
         pointer: pointers[component],
     }));
     if (components.includes('storefront')) {
+        assertStorefrontRenderer(resolve(directory, 'storefront'));
         const candidate = resolve(directory, 'storefront', TWO_FACTOR_DIRECTORY);
         validateTwoFactorCandidate(candidate);
         const main = JSON.parse(readFileSync(resolve(directory, 'storefront/frontend-release.json'), 'utf8'));

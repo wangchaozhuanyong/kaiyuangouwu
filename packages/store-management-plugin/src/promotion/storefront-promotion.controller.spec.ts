@@ -1,5 +1,13 @@
+import { LanguageCode } from '@vendure/core';
+import { load } from 'cheerio';
 import type { Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
+
+import {
+    defaultStorefrontSeoDocument,
+    defaultStorefrontSeoSettings,
+    publicStorefrontSeoSettings,
+} from '../seo/storefront-seo.contract';
 
 import { PROMOTION_VISUAL_SCRIPT_SHA256 } from './promotion-visual-script';
 import { StorefrontPromotionController } from './storefront-promotion.controller';
@@ -19,6 +27,116 @@ function responseMock() {
 }
 
 describe('StorefrontPromotionController', () => {
+    function publishedController() {
+        const ctx = {
+            channel: { code: 'shop', customFields: { storefrontNameEn: 'Shop', storefrontNameZh: '店铺' } },
+            channelId: 1,
+            languageCode: LanguageCode.zh_Hans,
+            copy: (changes: { languageCode: LanguageCode }) => ({ ...ctx, ...changes }),
+        };
+        const configuration = {
+            payload: {
+                ...publicStorefrontSeoSettings(defaultStorefrontSeoSettings()),
+                indexingEnabled: true,
+            },
+            version: 2,
+        };
+        const record = {
+            payload: { ...defaultStorefrontSeoDocument('PAGE'), title: 'Published promo' },
+            version: 4,
+        };
+        const seo = {
+            publishedConfiguration: vi.fn().mockResolvedValue(configuration),
+            publishedRecord: vi.fn().mockResolvedValue(record),
+        };
+        const publicSeo = {
+            primaryHost: vi.fn().mockResolvedValue('shop.test'),
+            robots: vi.fn().mockResolvedValue('shared robots'),
+            sitemap: vi.fn().mockResolvedValue('<shared-sitemap/>'),
+        };
+        const activation = { getAccessMode: vi.fn().mockResolvedValue('LIVE') };
+        const access = {
+            resolveRequest: vi.fn().mockResolvedValue({ ctx, host: 'shop.test' }),
+            createEntryTicket: vi.fn().mockReturnValue('fixture-ticket'),
+        };
+        const promotion = {
+            renderPublished: vi
+                .fn()
+                .mockResolvedValue(
+                    '<html lang="en"><head><title>Published Shop</title>' +
+                        '<meta name="description" content="Published description"></head>' +
+                        '<body><main>Published body</main></body></html>',
+                ),
+        };
+        const connection = {
+            getRepository: vi.fn().mockReturnValue({
+                findOne: vi.fn().mockResolvedValue({
+                    descriptionEn: 'Actual store description',
+                    descriptionZh: '真实中文简介',
+                }),
+            }),
+        };
+        const controller = new StorefrontPromotionController(
+            access as never,
+            promotion as never,
+            {} as never,
+            {} as never,
+            seo as never,
+            publicSeo as never,
+            activation as never,
+            connection as never,
+        );
+        return { controller, seo, publicSeo, activation, promotion, configuration, record };
+    }
+
+    it('publishes qualified language promo metadata while keeping the legacy entry noindex', async () => {
+        const { controller, promotion } = publishedController();
+        const localized = responseMock();
+        await controller.promotion({ originalUrl: '/en/promo' } as Request, localized as never);
+        expect(promotion.renderPublished).toHaveBeenCalledWith(
+            expect.objectContaining({ languageCode: LanguageCode.en }),
+            'fixture-ticket',
+        );
+        expect(localized.setHeader).toHaveBeenLastCalledWith(
+            'X-Robots-Tag',
+            'index, follow, max-image-preview:large',
+        );
+        expect(load(localized.send.mock.calls[0][0] as string)('link[rel="canonical"]').attr('href')).toBe(
+            'https://shop.test/en/promo',
+        );
+        const legacy = responseMock();
+        await controller.promotion({ originalUrl: '/promo' } as Request, legacy as never);
+        expect(legacy.setHeader).toHaveBeenLastCalledWith('X-Robots-Tag', 'noindex, follow');
+    });
+    it('blocks a store closure or changed publication before sending rendered promotion HTML', async () => {
+        const closing = publishedController();
+        closing.activation.getAccessMode.mockResolvedValueOnce('LIVE').mockResolvedValueOnce('CLOSED');
+        const closedResponse = responseMock();
+        await expect(
+            closing.controller.promotion({ originalUrl: '/en/promo' } as Request, closedResponse as never),
+        ).rejects.toThrow();
+        expect(closedResponse.send).not.toHaveBeenCalled();
+        const changed = publishedController();
+        changed.seo.publishedRecord
+            .mockResolvedValueOnce(changed.record)
+            .mockResolvedValueOnce({ ...changed.record, version: 5 });
+        const changedResponse = responseMock();
+        await expect(
+            changed.controller.promotion({ originalUrl: '/en/promo' } as Request, changedResponse as never),
+        ).rejects.toThrow('changed');
+        expect(changedResponse.send).not.toHaveBeenCalled();
+    });
+    it('delegates legacy discovery endpoints to the same robots and sitemap policy', async () => {
+        const { controller, publicSeo } = publishedController();
+        const robots = responseMock();
+        const sitemap = responseMock();
+        await controller.robots({} as Request, robots as never);
+        await controller.sitemap({} as Request, sitemap as never);
+        expect(publicSeo.robots).toHaveBeenCalledOnce();
+        expect(publicSeo.sitemap).toHaveBeenCalledOnce();
+        expect(robots.send).toHaveBeenCalledWith('shared robots');
+        expect(sitemap.send).toHaveBeenCalledWith('<shared-sitemap/>');
+    });
     it.each([undefined, { id: 'anonymous-session' }])(
         'rejects entry cookies and anonymous sessions even when the legacy entry gate is disabled',
         async session => {
@@ -81,10 +199,7 @@ describe('StorefrontPromotionController', () => {
             `script-src-elem 'sha256-${PROMOTION_VISUAL_SCRIPT_SHA256}' https://static.cloudflareinsights.com`,
         );
         expect(contentSecurityPolicy).toContain("connect-src 'self' https://cloudflareinsights.com");
-        expect(response.setHeader).toHaveBeenCalledWith(
-            'X-Robots-Tag',
-            'index, nofollow, max-image-preview:large',
-        );
+        expect(response.setHeader).toHaveBeenCalledWith('X-Robots-Tag', 'noindex, follow');
     });
 
     it('does not issue an entry cookie without a valid signed proof', async () => {
@@ -251,7 +366,7 @@ describe('StorefrontPromotionController', () => {
         );
     });
 
-    it('publishes only the public promotion URL without reading catalog data', async () => {
+    it('keeps the legacy constructor fail closed without advertising unpublished promotion URLs', async () => {
         const accessService = {
             resolveRequest: vi.fn().mockResolvedValue({ ctx: {}, host: 'shop.example.com' }),
         };
@@ -266,10 +381,11 @@ describe('StorefrontPromotionController', () => {
         await controller.robots({} as Request, robotsResponse as unknown as Response);
         await controller.sitemap({} as Request, sitemapResponse as unknown as Response);
         expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Disallow: /\n'));
-        expect(robotsResponse.send).toHaveBeenCalledWith(expect.stringContaining('Allow: /promo$\n'));
+        expect(robotsResponse.send).toHaveBeenCalledWith(
+            expect.stringContaining('User-agent: GPTBot\nDisallow: /'),
+        );
         const xml = sitemapResponse.send.mock.calls[0][0] as string;
-        expect(xml).toContain('<loc>https://shop.example.com/promo</loc>');
-        expect(xml.match(/<loc>/g)).toHaveLength(1);
+        expect(xml).not.toContain('<loc>');
         expect(xml).not.toMatch(/product|category|flash-sale|recommendations/);
     });
 });

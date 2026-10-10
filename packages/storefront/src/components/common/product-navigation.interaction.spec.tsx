@@ -72,7 +72,7 @@ describe('shared product navigation', () => {
         '%s opens once from image, name, price and card space through the same real link',
         layout => {
             const link = render(layout);
-            expect(link.getAttribute('href')).toBe('/product?id=product-1');
+            expect(link.getAttribute('href')).toBe('/zh/product?id=product-1');
             for (const target of [
                 element('img'),
                 element('strong'),
@@ -161,7 +161,7 @@ describe('shared product navigation', () => {
 
     it('keeps image fallback content navigable and encodes product identifiers', () => {
         const link = render('card', { ...product, id: '商品 & 1', featuredAsset: null });
-        expect(link.getAttribute('href')).toBe('/product?id=%E5%95%86%E5%93%81+%26+1');
+        expect(link.getAttribute('href')).toBe('/zh/product?id=%E5%95%86%E5%93%81+%26+1');
         const media = element('.product-card-media');
         expect(link.contains(media)).toBe(true);
         act(() => {

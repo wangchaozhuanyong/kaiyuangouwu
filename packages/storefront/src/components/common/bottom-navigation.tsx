@@ -21,7 +21,7 @@ import { twMerge } from 'tailwind-merge';
 
 import { preloadStorefrontRouteComponent } from '../../route-component-preload';
 import { SafeImage } from '../../safe-image';
-import { rootPages, RouteName } from '../../storefront-router';
+import { rootPages, routeHref, RouteName, routeNavigateOptions } from '../../storefront-router';
 import { StorefrontContentBlock, StorefrontLanguage } from '../../types';
 
 import { CountBadge, countBadgeLabel } from './count-badge';
@@ -186,11 +186,12 @@ export function BottomNavigation({
             aria-label={isZh ? '主导航' : 'Main navigation'}
         >
             {items.map(item => {
+                const destination = { name: item.routeName, publicLanguage: language };
                 const isActive = activeItemRoute === item.routeName;
                 const Icon = targetIcons[item.target];
                 const preloadTarget = () => {
                     void preloadStorefrontRouteComponent(item.routeName);
-                    void router.preloadRoute({ to: item.target });
+                    void router.preloadRoute(routeNavigateOptions(destination) as never);
                 };
                 return (
                     <a
@@ -204,7 +205,7 @@ export function BottomNavigation({
                             item.label,
                             item.routeName === 'cart' ? cartQuantity : undefined,
                         )}
-                        href={item.target}
+                        href={routeHref(destination)}
                         onClick={event => {
                             if (
                                 event.defaultPrevented ||
@@ -217,8 +218,8 @@ export function BottomNavigation({
                                 return;
                             }
                             event.preventDefault();
-                            if (onNavigate) onNavigate({ name: item.routeName });
-                            else void navigate({ to: item.target });
+                            if (onNavigate) onNavigate(destination);
+                            else void navigate(routeNavigateOptions(destination) as never);
                         }}
                         onFocus={preloadTarget}
                         onMouseEnter={preloadTarget}

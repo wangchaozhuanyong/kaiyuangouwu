@@ -104,6 +104,9 @@ export {
     referralPermission,
 } from './referral/referral.constants.js';
 export { ReferralService } from './referral/referral.service.js';
+export * from './seo/storefront-seo.contract.js';
+export { StorefrontSeoRecord, StorefrontSeoRevision } from './seo/storefront-seo.entity.js';
+export { StorefrontSeoService } from './seo/storefront-seo.service.js';
 export { StoreActivationReadinessService } from './store-activation-readiness.service.js';
 export { StoreCommerceSettingsService } from './store-commerce-settings.service.js';
 export {

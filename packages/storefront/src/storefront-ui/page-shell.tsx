@@ -410,14 +410,49 @@ export function ServiceButton({
     );
 }
 
+function footerIntroduction(description: string, names: string[]): string {
+    const original = description.trim();
+    const aliases = names
+        .map(brandAlias => brandAlias.trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length);
+    const name = aliases.find(alias => {
+        if (!original.toLocaleLowerCase().startsWith(alias.toLocaleLowerCase())) return false;
+        // Do not treat a partial Latin word as a repeated brand name.
+        return !(
+            /[\p{Script=Latin}\d]$/u.test(alias) &&
+            /^[\p{Script=Latin}\d]/u.test(original.slice(alias.length))
+        );
+    });
+    if (!name) return original;
+    let remainder = original.slice(name.length).trimStart();
+    const parenthetical = remainder.match(/^[（(]([^）)]+)[）)]\s*/u);
+    if (parenthetical) {
+        // Strip only a known translated brand alias, never merchant facts in parentheses.
+        if (!aliases.some(alias => alias.toLocaleLowerCase() === parenthetical[1].trim().toLocaleLowerCase()))
+            return original;
+        remainder = remainder.slice(parenthetical[0].length);
+    }
+    remainder = remainder.replace(/^[\s:：,，·—–-]+/u, '');
+    return remainder.replace(/^\p{Ll}/u, character => character.toLocaleUpperCase());
+}
+
 export function LegalFooter({
     storefrontName,
+    storefrontNameAliases = [],
+    storefrontTagline = '',
+    storefrontDescription = '',
+    showLinks = true,
     language,
     content,
     onContentTarget,
     style,
 }: {
     storefrontName: string;
+    storefrontNameAliases?: string[];
+    storefrontTagline?: string;
+    storefrontDescription?: string;
+    showLinks?: boolean;
     language: StorefrontLanguage;
     content?: StorefrontContentBlock;
     onContentTarget?: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
@@ -460,11 +495,24 @@ export function LegalFooter({
     const footerItems = managedFooter ? items : [...items, ...defaultLegalItems];
     const footerBrand = managedFooter ? content.title.trim() || storefrontName : storefrontName;
     const footerTitle = isZh ? '服务与政策' : 'Service and policies';
+    const tagline = storefrontTagline.trim();
+    const description = footerIntroduction(storefrontDescription, [storefrontName, ...storefrontNameAliases]);
+    const hasIntroduction = Boolean(tagline || description);
 
     return (
-        <footer className="legal-footer" style={style}>
+        <footer className={`legal-footer${hasIntroduction ? ' has-introduction' : ''}`} style={style}>
+            {hasIntroduction && (
+                <div className="legal-footer-introduction">
+                    <h2 className="legal-footer-title">
+                        {[storefrontName.trim(), tagline].filter(Boolean).join(' · ')}
+                    </h2>
+                    {description && (
+                        <ContentText className="legal-footer-description">{description}</ContentText>
+                    )}
+                </div>
+            )}
             <strong className="legal-footer-brand">{footerBrand}</strong>
-            {!!footerItems.length && (
+            {showLinks && !!footerItems.length && (
                 <nav aria-label={footerTitle}>
                     {footerItems.map(item => (
                         <button

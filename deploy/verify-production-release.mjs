@@ -107,9 +107,7 @@ export async function verifyStorefrontAssets({
 }) {
     const storefront = normalizeStorefrontUrl(storefrontUrl);
     if (html === undefined) {
-        const response = await fetchWithTimeout(fetchImpl, storefront, { redirect: 'manual' }, timeoutMs);
-        expectStatus(response, 200, 'Direct storefront');
-        html = await response.text();
+        html = await readDirectStorefront(storefront, fetchImpl, timeoutMs);
     }
     // An SSI subrequest can leave the outer response at 200 while embedding
     // an upstream error document in <head>. Asset checks alone miss that.
@@ -186,6 +184,46 @@ function normalizeStorefrontUrl(value) {
     url.search = '';
     url.hash = '';
     return url;
+}
+
+// The public homepage permanently selects one explicit language. Follow only
+// that single same-origin hop; other redirects remain a release failure.
+async function readDirectStorefront(storefront, fetchImpl, timeoutMs) {
+    let response = await fetchWithTimeout(fetchImpl, storefront, { redirect: 'manual' }, timeoutMs);
+    let localized = false;
+    if ([301, 308].includes(response.status)) {
+        const location = response.headers.get('location');
+        let target;
+        try {
+            target = location ? new URL(location, storefront) : undefined;
+        } catch {
+            // Rejected with the same release diagnostic as a missing location.
+        }
+        await response.body?.cancel();
+        if (
+            !target ||
+            target.origin !== storefront.origin ||
+            target.username ||
+            target.password ||
+            target.search ||
+            target.hash ||
+            !/^\/(?:zh|en)\/?$/u.test(target.pathname)
+        ) {
+            throw new Error('Direct storefront: invalid permanent language redirect');
+        }
+        response = await fetchWithTimeout(fetchImpl, target, { redirect: 'manual' }, timeoutMs);
+        localized = true;
+    }
+    expectStatus(response, 200, 'Direct storefront');
+    const html = await response.text();
+    if (
+        localized &&
+        (!/text\/html/iu.test(response.headers.get('content-type') ?? '') ||
+            !/<[^>]+\bdata-public-rendered=["']1["']/iu.test(html))
+    ) {
+        throw new Error('Direct storefront: language homepage is missing server-rendered content');
+    }
+    return html;
 }
 
 function normalizeDashboardUrl(value) {
@@ -488,14 +526,7 @@ export async function verifyProductionRelease({
     });
     checks.push('dashboard preview Shop API');
 
-    const storefrontResponse = await fetchWithTimeout(
-        fetchImpl,
-        storefront,
-        { redirect: 'manual' },
-        timeoutMs,
-    );
-    expectStatus(storefrontResponse, 200, 'Direct storefront');
-    const storefrontHtml = await storefrontResponse.text();
+    const storefrontHtml = await readDirectStorefront(storefront, fetchImpl, timeoutMs);
     extractStorefrontAssetUrl(storefrontHtml, storefront);
     checks.push('direct storefront');
 

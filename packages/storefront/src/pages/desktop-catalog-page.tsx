@@ -46,6 +46,7 @@ export function DesktopCatalogPage() {
         input,
         enabled: runtime.storefrontContextResolved !== false,
         suspended: false,
+        route,
     });
     const query = pagination.query;
     const products = pagination.products;
@@ -304,6 +305,8 @@ export function DesktopCatalogPage() {
                         )}
                         {products.length ? (
                             <CategoryPaginationStatus
+                                nextHref={pagination.nextHref}
+                                previousHref={pagination.previousHref}
                                 sentinelRef={pagination.sentinelRef}
                                 language={language}
                                 state={

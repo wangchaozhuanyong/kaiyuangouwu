@@ -18,6 +18,7 @@ import { STATIC_APPS } from '../scripts/ci-impact.mjs';
 import { hasTrustedPullRequest, isTrustedRun } from '../scripts/release-evidence.mjs';
 
 import { artifactSourceHash } from './artifact-inputs.mjs';
+import { assertStorefrontRenderer } from './storefront-renderer.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 export const TWO_FACTOR_DIRECTORY = '.two-factor';
@@ -33,6 +34,7 @@ export function stageFrontend(component, directory, root = process.cwd()) {
         const tool = resolve(root, 'packages/storefront/dist-two-factor');
         assert.ok(existsSync(resolve(tool, 'index.html')), 'Missing isolated 2FA index');
         assert.ok(existsSync(resolve(tool, 'build-config.json')), 'Missing isolated 2FA build config');
+        assertStorefrontRenderer(dist);
     }
     cpSync(dist, directory, { recursive: true });
     if (component === 'storefront')
@@ -189,6 +191,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                     resolve('packages', component, 'dist'),
                 ]);
                 if (component === 'storefront') {
+                    assertStorefrontRenderer(resolve('packages', component, 'dist'));
                     const tool = resolve('packages', component, 'dist', TWO_FACTOR_DIRECTORY);
                     assert.ok(existsSync(resolve(tool, 'index.html')), 'Artifact is missing isolated 2FA');
                     assert.ok(

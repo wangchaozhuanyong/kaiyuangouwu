@@ -180,12 +180,15 @@ test.describe('Custom Fields', () => {
 
     // ─── Scalar save & persist ───────────────────────────────────────────
 
-    test('should save custom field values on a product', async ({ page }) => {
+    test('should save custom field values on a product', async ({ page }, testInfo) => {
         await goToFirstProduct(page);
         const dp = detailPage(page);
+        // Serial retries keep the shared product's saved values. Make this
+        // attempt dirty as well, so retrying still exercises a real save.
+        const infoUrl = `https://example.com/custom-fields-${testInfo.repeatEachIndex}-${testInfo.retry}`;
 
         // Fill in custom field values on the General tab
-        await dp.fillInput('Info URL', 'https://example.com');
+        await dp.fillInput('Info URL', infoUrl);
         await dp.fillNumber('Weight', '2.5');
         await dp.fillNumber('Review Rating', '4');
         await dp.toggleSwitch('Downloadable', true);
@@ -197,7 +200,7 @@ test.describe('Custom Fields', () => {
 
         // Reload and verify persistence
         await page.reload();
-        await expect(dp.formItem('Info URL').getByRole('textbox')).toHaveValue('https://example.com');
+        await expect(dp.formItem('Info URL').getByRole('textbox')).toHaveValue(infoUrl);
         await expect(dp.formItem('Weight').getByRole('spinbutton')).toHaveValue('2.5');
         await expect(dp.formItem('Review Rating').getByRole('spinbutton')).toHaveValue('4');
         await expect(dp.formItem('Downloadable').getByRole('switch')).toBeChecked();

@@ -28,6 +28,8 @@ export const routeModuleLoaders = {
     sharing: () => import('./pages/Marketing/SharingModule'),
     storefront: () => import('./pages/Storefront/StorefrontModule'),
     storefrontContent: () => import('./pages/Storefront/StorefrontContentModule'),
+    storefrontSeo: () => import('./pages/Storefront/StorefrontSeoModule'),
+    storefrontSeoEntity: () => import('./pages/Storefront/StorefrontSeoEntityModule'),
     businessServicesCopy: () => import('./pages/Storefront/BusinessServicesCopyModule'),
     clientPlugins: () => import('./pages/Plugins/ClientPluginsModule'),
     twoFactorCodes: () => import('./pages/Plugins/TwoFactorCodesModule'),
@@ -61,6 +63,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
 
     if (pathname === '/dashboard' || pathname === '/') return 'dashboard';
     if (pathname === '/profile') return 'profile';
+    if (/^\/catalog\/(?:products|collections)\/[^/]+\/seo$/u.test(pathname)) return 'storefrontSeoEntity';
     if (pathname.startsWith('/catalog/products/')) return 'productEditor';
     if (pathname === '/catalog/suppliers') return 'suppliers';
     if (pathname === '/catalog/purchase-orders') return 'purchaseOrders';
@@ -84,6 +87,7 @@ export function getRouteModuleKey(target: string): RouteModuleKey | null {
     if (pathname === '/marketing/sharing') return 'sharing';
     if (pathname.startsWith('/marketing')) return 'promotions';
     if (pathname === '/storefront/content') return 'storefrontContent';
+    if (pathname === '/storefront/seo') return 'storefrontSeo';
     if (pathname === '/storefront/business-services-copy') return 'businessServicesCopy';
     if (pathname.startsWith('/storefront')) return 'storefront';
     if (pathname === '/plugins/ai-settings') return 'aiImageSettings';

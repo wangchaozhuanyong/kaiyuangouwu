@@ -66,6 +66,18 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
         writeScope: 'STORE',
     },
     page('/catalog/products/new', 'STORE', ['CreateProduct'], ['CreateProduct']),
+    page(
+        '/catalog/products/seo',
+        'STORE',
+        ['ReadProduct', 'ReadCatalog'],
+        ['UpdateProduct', 'UpdateCatalog'],
+    ),
+    page(
+        '/catalog/collections/seo',
+        'STORE',
+        ['ReadCollection', 'ReadCatalog'],
+        ['UpdateCollection', 'UpdateCatalog'],
+    ),
     {
         ...page('/catalog/products', 'BOTH', ['ReadProduct', 'ReadCatalog'], ['UpdateProduct']),
         writeScope: 'STORE',
@@ -164,6 +176,13 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
     ),
     page('/marketing/sharing', 'STORE', ['ReadReferral'], ['UpdateReferral']),
     page('/storefront/decoration', 'STORE', ['ReadStorefrontContent'], ['UpdateStorefrontContent']),
+    ...section(
+        '/storefront/seo',
+        ['overview', 'pages', 'geo', 'redirects', 'diagnostics', 'platforms'],
+        'STORE',
+        ['ReadStorefrontContent'],
+        ['UpdateStorefrontContent'],
+    ),
     ...section(
         '/storefront/content',
         ['pages', 'landing'],
@@ -335,6 +354,14 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
 /** Longest matching route wins, including create routes before broad detail/list rules. */
 export function adminCapabilityForPath(pathname: string) {
     const path = pathname.split(/[?#]/u, 1)[0].replace(/\/+$/u, '');
+    // SEO attachments preserve native entity permissions, without store settings access.
+    const seoEntityPath = /^\/catalog\/products\/[^/]+\/seo$/u.test(path)
+        ? '/catalog/products/seo'
+        : /^\/catalog\/collections\/[^/]+\/seo$/u.test(path)
+          ? '/catalog/collections/seo'
+          : null;
+    if (seoEntityPath)
+        return ADMIN_CAPABILITY_DEFINITIONS.find(definition => definition.id === seoEntityPath);
     return ADMIN_CAPABILITY_DEFINITIONS.filter(definition =>
         definition.paths.some(prefix => path === prefix || path.startsWith(prefix + '/')),
     ).sort((a, b) => Math.max(...b.paths.map(p => p.length)) - Math.max(...a.paths.map(p => p.length)))[0];

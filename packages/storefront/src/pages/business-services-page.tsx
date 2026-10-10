@@ -8,6 +8,7 @@ import {
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
+import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
 import { useDesktopLayout } from '../desktop-layout';
 import { SafeImage } from '../safe-image';
 import { BusinessServicesPageContext } from '../storefront-page-contexts';
@@ -107,15 +108,19 @@ export function BusinessServicesPage() {
                     decoration={<ServiceArchitectureMotif />}
                     action={
                         heroLinkTarget ? (
-                            <button
-                                type="button"
+                            <a
+                                href={contentTargetHref('URL', heroLinkTarget, language)}
                                 className="business-services-heading-link"
-                                onClick={() => onContentTarget('URL', heroLinkTarget)}
+                                onClick={event =>
+                                    interceptContentNavigation(event, () =>
+                                        onContentTarget('URL', heroLinkTarget),
+                                    )
+                                }
                             >
                                 {clientPluginBlock?.ctaLabel.trim() ||
                                     (isZh ? '打开服务网站' : 'Open service website')}
                                 <ExternalLink aria-hidden="true" />
-                            </button>
+                            </a>
                         ) : undefined
                     }
                 />

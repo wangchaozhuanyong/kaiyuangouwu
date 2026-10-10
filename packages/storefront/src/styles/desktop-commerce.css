@@ -1168,7 +1168,7 @@
         padding-bottom: 8px;
         margin-block: 4px;
     }
-    .desktop-category-entry > button {
+    .desktop-category-entry > a {
         width: 100%;
         text-align: left;
         white-space: normal;
@@ -1242,14 +1242,14 @@
         white-space: nowrap;
     }
     .desktop-category-directory-title,
-    .desktop-local-navigation > button,
-    .desktop-category-entry > button {
+    .desktop-local-navigation > a,
+    .desktop-category-entry > a {
         display: flex;
         align-items: center;
         gap: 10px;
         width: 100%;
     }
-    .desktop-category-navigation .desktop-category-entry > button {
+    .desktop-category-navigation .desktop-category-entry > a {
         min-height: 52px;
         padding: 8px 10px;
         color: var(--text);
@@ -1311,14 +1311,14 @@
         transform: rotate(90deg);
         color: var(--accent-ink);
     }
-    .desktop-local-navigation > button[aria-pressed='true'],
-    .desktop-category-navigation .desktop-category-entry > button[aria-pressed='true'] {
+    .desktop-local-navigation > a[aria-current='page'],
+    .desktop-category-navigation .desktop-category-entry > a[aria-current='page'] {
         color: var(--accent-ink);
         background: transparent;
         font-weight: var(--font-weight-semibold);
     }
-    .desktop-local-navigation > button[aria-pressed='true']:hover:not(:disabled),
-    .desktop-category-entry > button[aria-pressed='true']:hover:not(:disabled) {
+    .desktop-local-navigation > a[aria-current='page']:hover:not(:disabled),
+    .desktop-category-entry > a[aria-current='page']:hover:not(:disabled) {
         background: var(--interaction-hover);
         color: var(--interaction-ink);
     }
@@ -1330,8 +1330,8 @@
         background: var(--interaction-pressed);
         color: var(--interaction-ink);
     }
-    .desktop-local-navigation > button[aria-pressed='true']:hover,
-    .desktop-category-entry > button[aria-pressed='true']:hover {
+    .desktop-local-navigation > a[aria-current='page']:hover,
+    .desktop-category-entry > a[aria-current='page']:hover {
         color: var(--interaction-ink);
         background: var(--interaction-hover);
     }
@@ -1383,7 +1383,7 @@
     .desktop-subcategory-sidebar nav::-webkit-scrollbar {
         display: none;
     }
-    .desktop-subcategory-sidebar nav > button {
+    .desktop-subcategory-sidebar nav > a {
         position: relative;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
@@ -1409,7 +1409,7 @@
         min-width: 0;
         overflow-wrap: anywhere;
     }
-    .desktop-subcategory-sidebar nav > button::before {
+    .desktop-subcategory-sidebar nav > a::before {
         content: '';
         position: absolute;
         left: 16px;
@@ -1421,29 +1421,29 @@
         opacity: 0;
         transform: scaleY(0.5);
     }
-    .desktop-subcategory-sidebar nav > button[aria-pressed='true']::before {
+    .desktop-subcategory-sidebar nav > a[aria-current='page']::before {
         opacity: 1;
         transform: scaleY(1);
     }
-    .desktop-subcategory-sidebar nav > button:hover {
+    .desktop-subcategory-sidebar nav > a:hover {
         color: var(--interaction-ink);
         background: var(--soft);
     }
-    .desktop-subcategory-sidebar nav > button:active {
+    .desktop-subcategory-sidebar nav > a:active {
         background: var(--interaction-pressed);
         color: var(--interaction-ink);
     }
-    .desktop-subcategory-sidebar nav > button[aria-pressed='true'] {
+    .desktop-subcategory-sidebar nav > a[aria-current='page'] {
         color: var(--accent-ink);
         background: var(--selection-soft);
         font-weight: var(--font-weight-semibold);
         box-shadow: none;
     }
-    .desktop-subcategory-sidebar nav > button[aria-pressed='true']:hover:not(:disabled) {
+    .desktop-subcategory-sidebar nav > a[aria-current='page']:hover:not(:disabled) {
         background: var(--selection-soft);
         color: var(--accent-ink);
     }
-    .desktop-subcategory-sidebar nav > button:focus-visible {
+    .desktop-subcategory-sidebar nav > a:focus-visible {
         /* Keep keyboard focus inside the scroll area so its sides are not clipped. */
         outline-offset: calc(-1 * var(--experience-focus-width));
     }
@@ -1471,7 +1471,7 @@
                 background-color var(--experience-motion-fast) var(--experience-ease-standard),
                 color var(--experience-motion-fast) var(--experience-ease-standard);
         }
-        .desktop-subcategory-sidebar nav > button::before {
+        .desktop-subcategory-sidebar nav > a::before {
             transition:
                 opacity var(--experience-motion-fast) var(--experience-ease-standard),
                 transform var(--experience-motion-fast) var(--experience-ease-standard);

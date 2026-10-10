@@ -19,6 +19,7 @@ import { publishedContentItems } from '../../../storefront-content-plugin/src/co
 import { dualCardTemplateId } from '../../../storefront-content-plugin/src/dual-card-template-options';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
+import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
 import { useDesktopLayout } from '../desktop-layout';
 import { selectManagedProducts } from '../home-merchandising';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -575,6 +576,8 @@ export function HomeDualCategoryShowcase({
         >
             {items.map((item, index) => {
                 const disabled = item.targetType === 'NONE' || !item.targetValue;
+                const href = contentTargetHref(item.targetType, item.targetValue, language);
+                const Target = href ? 'a' : 'button';
                 const ShowcaseIcon = index === 0 ? Waypoints : Headphones;
                 const badgeLabel = localizedDualCardItemSetting(
                     item.settings,
@@ -589,12 +592,19 @@ export function HomeDualCategoryShowcase({
                     block.ctaLabel || (isZh ? '查看分类' : 'View category'),
                 );
                 return (
-                    <button
+                    <Target
                         key={item.id}
-                        type="button"
+                        type={href ? undefined : 'button'}
+                        href={href}
                         className={`showcase-card showcase-card--${index === 0 ? 'gateway' : 'support'}`}
-                        disabled={disabled}
-                        onClick={() => onContentTarget(item.targetType, item.targetValue)}
+                        disabled={href ? undefined : disabled}
+                        onClick={event =>
+                            href
+                                ? interceptContentNavigation(event, () =>
+                                      onContentTarget(item.targetType, item.targetValue),
+                                  )
+                                : onContentTarget(item.targetType, item.targetValue)
+                        }
                     >
                         {template === 'tech-duo' ? (
                             <span className="showcase-card-icon" aria-hidden="true">
@@ -611,7 +621,7 @@ export function HomeDualCategoryShowcase({
                                 </span>
                             ) : null}
                         </div>
-                    </button>
+                    </Target>
                 );
             })}
         </section>
@@ -767,6 +777,7 @@ export function ManagedContentSection({
                                 key={item.id}
                                 item={item}
                                 products={products}
+                                language={language}
                                 onContentTarget={onContentTarget}
                             />
                         ))}
@@ -807,6 +818,7 @@ export function ManagedAdCarousel({
             key={item.id ?? `${item.position}-${item.label}`}
             item={item}
             products={products}
+            language={language}
             onContentTarget={onContentTarget}
         />
     ));
@@ -872,23 +884,34 @@ export function ManagedContentItemButton({
     item,
     products,
     onContentTarget,
+    language,
 }: {
     item: StorefrontContentItem;
     products: Product[];
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+    language: StorefrontLanguage;
 }) {
     const disabled = item.targetType === 'NONE' || !item.targetValue;
+    const href = contentTargetHref(item.targetType, item.targetValue, language);
+    const Target = href ? 'a' : 'button';
     const isProductMedia = item.targetType === 'PRODUCT';
     const [mediaRatio, setMediaRatio] = useState<{ source: string; value: number } | null>(null);
     const targetProduct =
         item.targetType === 'PRODUCT' ? products.find(product => product.id === item.targetValue) : undefined;
     const targetProductImage = productImage(targetProduct);
     return (
-        <button
+        <Target
             className={`managed-content-card${isProductMedia ? ' is-product-media' : ''}`}
-            type="button"
-            disabled={disabled}
-            onClick={() => onContentTarget(item.targetType, item.targetValue)}
+            type={href ? undefined : 'button'}
+            href={href}
+            disabled={href ? undefined : disabled}
+            onClick={event =>
+                href
+                    ? interceptContentNavigation(event, () =>
+                          onContentTarget(item.targetType, item.targetValue),
+                      )
+                    : onContentTarget(item.targetType, item.targetValue)
+            }
         >
             <span
                 className="managed-content-media"
@@ -936,6 +959,6 @@ export function ManagedContentItemButton({
                 </span>
                 {!disabled && <ChevronRight aria-hidden="true" />}
             </span>
-        </button>
+        </Target>
     );
 }

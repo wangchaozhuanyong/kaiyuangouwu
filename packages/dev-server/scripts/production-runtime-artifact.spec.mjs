@@ -77,6 +77,7 @@ void test('runtime artifact serves the standalone next-admin application', () =>
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin/dist/index.html'));
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/next-admin/dist/frontend-release.json'));
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/storefront/dist/frontend-release.json'));
+    assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/storefront/dist/.server/public-page-renderer.cjs'));
     assert.ok(!REQUIRED_RUNTIME_FILES.includes('packages/dev-server/dist/dashboard/index.html'));
 });
 

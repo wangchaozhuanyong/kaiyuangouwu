@@ -587,7 +587,10 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(config, /^ssl_protocols TLSv1\.2 TLSv1\.3;$/mu);
     assert.match(config, /^ssl_session_tickets off;$/mu);
     assert.match(config, /location = \/sitemap\.xml/u);
-    assert.match(config, /proxy_pass http:\/\/vendure_backend\/promo\/sitemap/u);
+    assert.match(
+        config,
+        /location = \/sitemap\.xml \{\s+proxy_pass http:\/\/vendure_backend\/storefront\/sitemap;/u,
+    );
     assert.match(config, /real_ip_header CF-Connecting-IP/u);
     assert.match(config, /^set_real_ip_from 127\.0\.0\.0\/8;$/mu);
     assert.match(config, /^set_real_ip_from ::1\/128;$/mu);
@@ -628,7 +631,18 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(storefrontServer, /location \^~ \/storefront\/ \{\s+expires 5m;/u);
     assert.match(storefrontServer, /proxy_pass http:\/\/vendure_backend\/promo\/access;/u);
     assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
-    assert.match(storefrontServer, /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \/index\.html;/u);
+    assert.match(
+        storefrontServer,
+        /location \/ \{[\s\S]*?try_files \$uri \$uri\/ @storefront_legacy_redirect;/u,
+    );
+    const legacyRedirect = storefrontServer.match(
+        /location @storefront_legacy_redirect \{(?<body>[\s\S]*?)\n    \}/u,
+    )?.groups?.body;
+    assert.ok(legacyRedirect);
+    assert.match(legacyRedirect, /rewrite \^ \/storefront\/redirect break;/u);
+    assert.match(legacyRedirect, /proxy_set_header Cookie "";/u);
+    assert.match(legacyRedirect, /proxy_set_header Authorization "";/u);
+    assert.match(legacyRedirect, /error_page 404 =200 \/index\.html;/u);
     const realtimeLocations = [
         ...config.matchAll(
             /location ~ \^\/storefront-realtime\/\(events\|mail-events\)\$ \{(?<body>[\s\S]*?)\n    \}/gu,

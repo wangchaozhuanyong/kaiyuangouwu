@@ -1,9 +1,17 @@
+import {
+    isPublicStorefrontPathname,
+    publicLanguageFromUrl,
+    publicLocalizedHref,
+    publicUnlocalizedPathname,
+} from '../../storefront-content-plugin/src/shared/public-page-data';
+
 import { FulfillmentType, ProductSearchSort } from './types';
 
 export type MainPage = 'home' | 'category' | 'services' | 'cart' | 'account';
 export type RouteName =
     | MainPage
     | 'product'
+    | 'guide'
     | 'search'
     | 'purchase'
     | 'checkout'
@@ -41,6 +49,7 @@ export const storefrontRouteNames = [
     'cart',
     'account',
     'product',
+    'guide',
     'search',
     'purchase',
     'checkout',
@@ -84,6 +93,8 @@ export function routePageIdentity(route: RouteState): string {
     switch (route.name) {
         case 'product':
             return `product:${route.id ?? ''}`;
+        case 'guide':
+            return `guide:${route.id ?? ''}`;
         case 'order-detail':
             return `order-detail:${route.id ?? route.orderCode ?? ''}`;
         case 'announcements':
@@ -104,6 +115,7 @@ export function routePageIdentity(route: RouteState): string {
 
 export interface RouteState {
     name: RouteName;
+    publicLanguage?: 'zh' | 'en';
     returnTo?: CheckoutRouteName;
     source?: 'logistics' | 'logistics-detail';
     deliveryStatus?: 'all' | 'preparing' | 'transit' | 'delivered' | 'cancelled';
@@ -156,6 +168,7 @@ const routePaths: Record<RouteName, string> = {
     cart: '/cart',
     account: '/account',
     product: '/product',
+    guide: '/guides',
     search: '/search',
     purchase: '/purchase',
     checkout: '/checkout',
@@ -191,6 +204,7 @@ const routePaths: Record<RouteName, string> = {
 const routeNamesByPath = new Map(Object.entries(routePaths).map(([name, path]) => [path, name as RouteName]));
 
 export type StorefrontRouteSearch = Omit<RouteState, 'name'> & {
+    __storefrontLanguage?: 'zh' | 'en';
     auth?: 'login' | 'register' | 'forgot-password';
     authTarget?: string;
 };
@@ -208,7 +222,8 @@ interface ScrollRestorationLocation {
 const rootPagePaths = new Set(rootPages.map(routePath));
 
 export function getStorefrontScrollRestorationKey(location: ScrollRestorationLocation): string {
-    const pathname = location.pathname === '/' ? '/' : location.pathname.replace(/\/+$/, '');
+    const path = publicUnlocalizedPathname(location.pathname);
+    const pathname = path === '/' ? '/' : path.replace(/\/+$/, '');
     // Each category/filter navigation starts at the top; back restores that history entry.
     if (pathname === '/category') return location.state.__TSR_key ?? location.href;
     if (rootPagePaths.has(pathname)) return `root:${pathname}`;
@@ -216,11 +231,24 @@ export function getStorefrontScrollRestorationKey(location: ScrollRestorationLoc
 }
 
 export function routeSearch(route: RouteState): StorefrontRouteSearch {
-    const { name: _name, ...search } = route;
-    return search;
+    const { name: _name, publicLanguage, ...search } = route;
+    const code = typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
+    const language = publicLanguage ?? (code === 'zh_Hans' ? 'zh' : code === 'en' ? 'en' : undefined);
+    return {
+        ...search,
+        ...((route.name === 'guide' || isPublicStorefrontPathname(routePath(route.name))) && language
+            ? { __storefrontLanguage: language }
+            : {}),
+    };
 }
 
 export function routeNavigateOptions(route: RouteState) {
+    if (route.name === 'guide')
+        return {
+            to: '/guides/$slug',
+            params: { slug: route.id ?? '' },
+            search: routeSearch(route),
+        };
     return {
         to: routePath(route.name),
         search: routeSearch(route),
@@ -244,6 +272,10 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const focus = stringValue('focus');
     const page = Number(stringValue('page'));
     return {
+        __storefrontLanguage:
+            search.__storefrontLanguage === 'zh' || search.__storefrontLanguage === 'en'
+                ? search.__storefrontLanguage
+                : undefined,
         auth:
             search.auth === 'login' || search.auth === 'register' || search.auth === 'forgot-password'
                 ? search.auth
@@ -285,12 +317,29 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
 }
 
 export function routeFromRouterLocation(pathname: string, search: Record<string, unknown>): RouteState {
-    const normalizedPath = pathname === '/' ? '/' : pathname.replace(/\/+$/, '');
+    const languageCode = publicLanguageFromUrl(pathname);
+    const path = publicUnlocalizedPathname(pathname);
+    const normalizedPath = path === '/' ? '/' : path.replace(/\/+$/, '');
     // Overlay state must not change the background page/query/readiness identity.
-    const { auth: _auth, authTarget: _target, ...pageSearch } = normalizeRouteSearch(search);
+    const {
+        auth: _auth,
+        authTarget: _target,
+        __storefrontLanguage,
+        ...pageSearch
+    } = normalizeRouteSearch(search);
     return {
-        name: routeNamesByPath.get(normalizedPath) ?? 'not-found',
+        name: /^\/guides\/[a-z0-9_-]{1,100}$/iu.test(normalizedPath)
+            ? 'guide'
+            : (routeNamesByPath.get(normalizedPath) ?? 'not-found'),
+        ...(languageCode || __storefrontLanguage
+            ? {
+                  publicLanguage: languageCode === 'zh_Hans' ? 'zh' : (languageCode ?? __storefrontLanguage),
+              }
+            : {}),
         ...pageSearch,
+        ...(/^\/guides\/[a-z0-9_-]{1,100}$/iu.test(normalizedPath)
+            ? { id: normalizedPath.slice('/guides/'.length) }
+            : {}),
     };
 }
 
@@ -318,7 +367,7 @@ export function routeHref(route: RouteState): string {
     if (search.addressId) params.set('addressId', search.addressId);
     if (search.checkoutOrderId) params.set('checkoutOrderId', search.checkoutOrderId);
     if (search.editAddress) params.set('editAddress', 'true');
-    if (search.id) params.set('id', search.id);
+    if (search.id && route.name !== 'guide') params.set('id', search.id);
     if (search.quantity) params.set('quantity', String(search.quantity));
     if (search.page) params.set('page', String(search.page));
     if (search.orderCode) params.set('orderCode', search.orderCode);
@@ -333,7 +382,13 @@ export function routeHref(route: RouteState): string {
     if (search.inStockOnly) params.set('inStockOnly', 'true');
     if (search.minPrice) params.set('minPrice', search.minPrice);
     if (search.maxPrice) params.set('maxPrice', search.maxPrice);
-    const path = routePath(route.name);
+    const code = route.publicLanguage === 'zh' ? 'zh_Hans' : route.publicLanguage;
+    const locationCode =
+        typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
+    const languageCode = code ?? locationCode;
+    const plainPath =
+        route.name === 'guide' ? `/guides/${encodeURIComponent(route.id ?? '')}` : routePath(route.name);
+    const path = languageCode ? publicLocalizedHref(plainPath, languageCode) : plainPath;
     return `${path}${params.size ? `?${params.toString()}` : ''}`;
 }
 

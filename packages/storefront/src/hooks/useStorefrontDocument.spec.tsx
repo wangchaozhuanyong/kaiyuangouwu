@@ -5,6 +5,8 @@ import { act, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { publicPageRequestKey } from '../../../storefront-content-plugin/src/shared/public-page-data';
+import { type PublicSeoDocument } from '../../../storefront-content-plugin/src/shared/public-seo';
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { type RouteState } from '../storefront-router';
 import { type Product, type StorefrontConfig } from '../types';
@@ -24,6 +26,8 @@ function Fixture({
     route,
     ready = true,
     scope,
+    seo,
+    accessMode,
 }: {
     logo: string | null;
     product?: Product;
@@ -33,6 +37,8 @@ function Fixture({
     route?: RouteState;
     ready?: boolean;
     scope?: string;
+    seo?: PublicSeoDocument;
+    accessMode?: string;
 }) {
     useLayoutEffect(() => applyStorefrontVisualPreset(document.documentElement, presetId), [presetId]);
     useStorefrontBrandColors(
@@ -54,6 +60,8 @@ function Fixture({
         logoUrl: logo,
         brandingReady: ready,
         brandingScopeKey: scope,
+        publicSeo: seo,
+        seoAccessMode: accessMode,
     });
     return null;
 }
@@ -63,6 +71,79 @@ afterEach(() => {
     sessionStorage.clear();
 });
 describe('runtime channel branding', () => {
+    it('uses a published scoped server document and removes it on another route or preview', () => {
+        window.history.replaceState({}, '', '/zh/product?id=p-1&utm_source=ad');
+        const seo: PublicSeoDocument = {
+            schemaVersion: 1,
+            published: true,
+            indexable: true,
+            host: window.location.host,
+            channelCode: 'store-a',
+            languageCode: 'zh_Hans',
+            requestKey: publicPageRequestKey({ kind: 'product', id: 'p-1' }),
+            title: '已发布商品标题',
+            description: '已发布摘要',
+            canonical: new URL('/zh/product?id=p-1', window.location.origin).href,
+            robots: 'index, follow, max-image-preview:large',
+            image: null,
+            alternates: [
+                { language: 'en', href: new URL('/en/product?id=p-1', window.location.origin).href },
+            ],
+            structuredData: [{ '@context': 'https://schema.org', '@type': 'Product', name: '实际商品' }],
+            reasons: [],
+            version: 1,
+        };
+        Object.assign(seo, { shareTitle: '已发布分享标题', shareDescription: '已发布分享摘要' });
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <Fixture
+                        logo={null}
+                        scope="store-a"
+                        seo={seo}
+                        accessMode="LIVE"
+                        route={{ name: 'product', id: 'p-1' }}
+                    />,
+                ),
+            );
+            expect(document.title).toBe(seo.title);
+            expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe(
+                '已发布分享标题',
+            );
+            expect(document.querySelector('meta[name="twitter:description"]')?.getAttribute('content')).toBe(
+                '已发布分享摘要',
+            );
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(seo.robots);
+            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(seo.canonical);
+            expect(document.querySelector('link[hreflang="en"]')).not.toBeNull();
+            expect(document.querySelector('script[data-storefront-seo]')?.textContent).toContain('实际商品');
+            act(() => root.render(<Fixture logo={null} scope="store-a" seo={seo} accessMode="PREVIEW" />));
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toContain(
+                'noindex',
+            );
+            expect(document.querySelector('script[data-storefront-seo]')).toBeNull();
+            expect(document.querySelector('link[hreflang]')).toBeNull();
+            window.history.replaceState({}, '', '/zh/product?id=p-2');
+            act(() =>
+                root.render(
+                    <Fixture
+                        logo={null}
+                        scope="store-a"
+                        seo={seo}
+                        accessMode="LIVE"
+                        route={{ name: 'product', id: 'p-2' }}
+                    />,
+                ),
+            );
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toContain(
+                'noindex',
+            );
+            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toContain('id=p-2');
+        } finally {
+            act(() => root.unmount());
+        }
+    });
     it('uses the selected skin palette across late branding responses and skin switches', () => {
         document.head.innerHTML = [
             '<style>:root { --bg: #f3f6fb; }</style>',
@@ -253,7 +334,7 @@ describe('runtime channel branding', () => {
                 'noindex, nofollow, noarchive',
             );
             expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
-                new URL('/product', window.location.origin).href,
+                new URL('/product?id=6', window.location.origin).href,
             );
         } finally {
             act(() => root.unmount());

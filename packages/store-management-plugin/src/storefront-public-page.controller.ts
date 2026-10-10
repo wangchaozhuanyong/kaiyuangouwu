@@ -4,6 +4,7 @@ import { canonicalPublicPageRequest, type PublicPageRequest } from '@vendure/sto
 import type { Request, Response } from 'express';
 
 import { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service';
+import { StorefrontPublicSeoService } from './seo/storefront-public-seo.service';
 import { StorefrontClosedError } from './storefront-activation.service';
 import { parsePublicPerformanceBatch, publicPerformanceRegion } from './storefront-performance';
 import { StorefrontPublicPageWarmService } from './storefront-public-page-warm.service';
@@ -14,6 +15,13 @@ export function parsePublicPageRequest(query: Request['query']): PublicPageReque
     if (query.kind == null || query.kind === 'home') return canonicalPublicPageRequest({ kind: 'home' });
     if (query.kind === 'product' && typeof query.id === 'string')
         return canonicalPublicPageRequest({ kind: 'product', id: query.id });
+    if (query.kind === 'article' && typeof query.id === 'string')
+        return canonicalPublicPageRequest({ kind: 'article', id: query.id });
+    if (query.kind === 'page' && typeof query.id === 'string')
+        return canonicalPublicPageRequest({
+            kind: 'page',
+            id: query.id as 'services' | 'support' | 'terms' | 'privacy',
+        });
     if (query.kind !== 'catalog' || typeof query.input !== 'string' || query.input.length > 2000)
         throw new Error('Invalid public page');
     return canonicalPublicPageRequest({
@@ -30,6 +38,7 @@ export class StorefrontPublicPageController {
         private readonly contexts: RequestContextService,
         private readonly pages: StorefrontPublicPageService,
         @Optional() private readonly warmer?: StorefrontPublicPageWarmService,
+        @Optional() private readonly seo?: StorefrontPublicSeoService,
     ) {}
 
     @Post('performance')
@@ -102,7 +111,8 @@ export class StorefrontPublicPageController {
             ...preferences,
         });
         const start = performance.now();
-        const page = await this.pages.read(ctx, verified.host, request);
+        const snapshot = await this.pages.read(ctx, verified.host, request);
+        const page = this.seo ? await this.seo.enrich(ctx, verified.host, snapshot) : snapshot;
         void this.warmer?.observe(ctx, verified.host, request).catch(() => undefined);
         res.setHeader('Server-Timing', `public-page;dur=${(performance.now() - start).toFixed(1)}`);
         res.status(200).json(page);

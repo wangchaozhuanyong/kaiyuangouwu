@@ -268,16 +268,16 @@ describe('HomePage managed footer', () => {
         items: [],
     };
 
-    it('renders one ordered footer independently of the legal document switch', () => {
+    it('renders one final footer independently of its saved position and the legal document switch', () => {
         const element = homeMarkupElement({
-            contentBlocks: [footer, heroBlock],
+            contentBlocks: [{ ...footer, position: -1 }, heroBlock],
             configuredBlockTypes: ['FOOTER', 'LEGAL'],
         });
+        const renderedFooter = element.querySelector('.home-page > .legal-footer');
         expect(element.querySelectorAll('.legal-footer')).toHaveLength(1);
-        expect(element.querySelector('.homepage-modules > .legal-footer')?.textContent).toContain(
-            '可编辑页脚',
-        );
-        expect((element.querySelector('.legal-footer') as HTMLElement).style.order).toBe('1');
+        expect(renderedFooter?.textContent).toContain('可编辑页脚');
+        expect(element.querySelector('.home-page')?.lastElementChild).toBe(renderedFooter);
+        expect(element.querySelector('.homepage-modules .legal-footer')).toBeNull();
     });
 
     it('hides configured unpublished or disabled footers without restoring the legacy footer', () => {
@@ -300,6 +300,67 @@ describe('HomePage managed footer', () => {
         expect(element.querySelector('.legal-footer')?.textContent).toContain('隐私政策');
     });
 
+    it.each([
+        { desktop: false, language: 'zh' as const },
+        { desktop: true, language: 'zh' as const },
+        { desktop: false, language: 'en' as const },
+        { desktop: true, language: 'en' as const },
+    ])(
+        'keeps one complete brand introduction after the home content ($desktop, $language)',
+        ({ desktop, language }) => {
+            const name = language === 'zh' ? '测试店铺' : 'Test Store';
+            const tagline = language === 'zh' ? '精选好物，便捷购物' : 'Selected products, simple shopping';
+            const description =
+                language === 'zh'
+                    ? '提供店铺精选商品与服务。\n完整的公开简介保留第二段说明。'
+                    : 'Offers selected products and services.\nThe complete public introduction keeps its second paragraph.';
+            const element = homeMarkupElement(
+                {
+                    language,
+                    storefrontName: name,
+                    storefrontTagline: tagline,
+                    storefrontDescription: description,
+                    contentBlocks: [heroBlock, { ...footer, position: -1 }],
+                    configuredBlockTypes: ['HERO', 'FOOTER'],
+                },
+                desktop,
+            );
+            const renderedFooter = element.querySelector('.home-page > .legal-footer');
+            expect(element.querySelector('.home-page')?.lastElementChild).toBe(renderedFooter);
+            expect(element.querySelectorAll('.legal-footer-introduction')).toHaveLength(1);
+            expect(renderedFooter?.querySelector('.legal-footer-title')?.textContent).toBe(
+                `${name} · ${tagline}`,
+            );
+            expect(renderedFooter?.querySelector('.legal-footer-description')?.textContent).toBe(description);
+            expect(element.querySelector('.home-page > .storefront-tagline')).toBeNull();
+            expect(element.querySelector('.home-page > .storefront-description')).toBeNull();
+            renderedFooter?.remove();
+            expect(element.textContent).not.toContain(tagline);
+            expect(element.textContent).not.toContain(description);
+        },
+    );
+
+    it.each(['unpublished', 'disabled'] as const)(
+        'retains the brand introduction without restoring links when the configured footer is %s',
+        state => {
+            const element = homeMarkupElement({
+                storefrontTagline: '精选好物，便捷购物',
+                storefrontDescription: '测试店铺：提供真实配置的商品与服务。',
+                contentBlocks: state === 'disabled' ? [{ ...footer, enabled: false }] : [],
+                configuredBlockTypes: state === 'unpublished' ? ['FOOTER'] : [],
+            });
+            const renderedFooter = element.querySelector('.home-page > .legal-footer');
+            expect(element.querySelector('.home-page')?.lastElementChild).toBe(renderedFooter);
+            expect(element.querySelectorAll('.legal-footer-introduction')).toHaveLength(1);
+            expect(renderedFooter?.querySelector('.legal-footer-description')?.textContent).toBe(
+                '提供真实配置的商品与服务。',
+            );
+            expect(renderedFooter?.querySelector('nav')).toBeNull();
+            expect(renderedFooter?.textContent).not.toContain('隐私政策');
+            expect(renderedFooter?.textContent).not.toContain('使用条款');
+        },
+    );
+
     it('keeps the default last footer after the catalog empty state', () => {
         const element = homeMarkupElement({
             products: [],
@@ -313,10 +374,12 @@ describe('HomePage managed footer', () => {
         const empty = [...element.querySelectorAll<HTMLElement>('.homepage-module-shell')].find(node =>
             node.textContent?.includes('暂无在售商品'),
         );
-        const module = element.querySelector<HTMLElement>('.homepage-modules > .legal-footer');
+        const renderedFooter = element.querySelector('.home-page > .legal-footer');
         expect(empty).toBeDefined();
-        expect(Number.isInteger(Number(empty?.style.order))).toBe(true);
-        expect(Number(empty?.style.order)).toBeLessThan(Number(module?.style.order));
+        expect(renderedFooter).not.toBeNull();
+        expect(element.querySelector('.home-page')?.lastElementChild).toBe(renderedFooter);
+        if (!empty || !renderedFooter) throw new Error('Expected the empty shelf and footer');
+        expect(empty.compareDocumentPosition(renderedFooter)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     });
 
     it('keeps the desktop gallery beside the carousel when the footer is sorted between them', () => {
@@ -347,7 +410,8 @@ describe('HomePage managed footer', () => {
             true,
         );
         expect(element.querySelector('.home-intro-grid.is-grouped-intro > .quick-grid')).not.toBeNull();
-        expect(element.querySelector('.homepage-modules > .legal-footer')).not.toBeNull();
+        expect(element.querySelector('.home-page > .legal-footer')).not.toBeNull();
+        expect(element.querySelector('.homepage-modules .legal-footer')).toBeNull();
     });
 });
 

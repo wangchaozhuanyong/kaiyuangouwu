@@ -725,6 +725,7 @@ const standaloneModuleExports: Partial<Record<keyof typeof routeModuleLoaders, s
     promotions: 'PromotionsModule',
     referrals: 'ReferralsModule',
     storefrontContent: 'StorefrontContentModule',
+    storefrontSeo: 'StorefrontSeoModule',
     aiImageSettings: 'AiImageSettingsModule',
     roles: 'RolesModule',
     systemOps: 'SystemOpsModule',

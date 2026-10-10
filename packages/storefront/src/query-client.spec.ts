@@ -225,6 +225,9 @@ describe('public React Query session cache', () => {
         expect(storefrontQueryKeys.catalog('cn', 'zh_Hans', { sort: 'SALES' })).not.toEqual(
             storefrontQueryKeys.catalog('cn', 'zh_Hans', { sort: 'NEWEST' }),
         );
+        expect(storefrontQueryKeys.catalog('cn', 'zh_Hans', { collectionId: '1', skip: 12 })).not.toEqual(
+            storefrontQueryKeys.catalog('cn', 'zh_Hans', { collectionId: '1', skip: 0 }),
+        );
     });
 
     it('isolates the same market cache by settlement currency', () => {

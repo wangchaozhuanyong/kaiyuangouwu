@@ -1,3 +1,5 @@
+import { publicLanguageFromUrl } from '../../storefront-content-plugin/src/shared/public-page-data';
+
 import {
     parseManualStorefrontLanguagePreference,
     resolveStorefrontLanguage,
@@ -40,6 +42,10 @@ export function normalizeStorefrontName(value: string | null | undefined, fallba
 }
 
 export function readStoredLanguage(market: MarketConfig): StorefrontLanguage {
+    if (typeof window !== 'undefined') {
+        const explicit = publicLanguageFromUrl(window.location.pathname);
+        if (explicit) return explicit === 'zh_Hans' ? 'zh' : 'en';
+    }
     try {
         const manualPreference = parseManualStorefrontLanguagePreference(
             localStorage.getItem(scopedStorageKey(STOREFRONT_LANGUAGE_PREFERENCE_STORAGE_KEY, market.code)),
@@ -113,7 +119,14 @@ export function writeStoredSettlementCurrency(marketCode: string, currencyCode: 
 }
 
 export function setMetaContent(selector: string, content: string): void {
-    document.querySelector<HTMLMetaElement>(selector)?.setAttribute('content', content);
+    let element = document.querySelector<HTMLMetaElement>(selector);
+    const attribute = /^meta\[(name|property)="([^"]+)"\]$/u.exec(selector);
+    if (!element && attribute) {
+        element = document.createElement('meta');
+        element.setAttribute(attribute[1], attribute[2]);
+        document.head.append(element);
+    }
+    element?.setAttribute('content', content);
 }
 
 export function trimText(value: string | undefined, length: number): string {

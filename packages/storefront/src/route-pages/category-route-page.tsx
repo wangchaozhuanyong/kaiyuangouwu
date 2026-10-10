@@ -31,6 +31,7 @@ export function CategoryRoutePage() {
                 inStockOnly: runtime.inStockOnly,
                 minimumPrice: runtime.minimumPrice,
                 maximumPrice: runtime.maximumPrice,
+                page: runtime.route.page,
                 onCollectionChange: (collectionId: string, childId: string) =>
                     runtime.updateCategory({ collectionId, childId }),
                 onChildChange: (childId: string) => runtime.updateCategory({ childId }),

@@ -1,14 +1,50 @@
-import { Body, Controller, Get, Post, Query, Req, Res, UseFilters } from '@nestjs/common';
-import { ConfigService, extractSessionToken, SessionService } from '@vendure/core';
+import {
+    Body,
+    Controller,
+    Get,
+    Optional,
+    Post,
+    Query,
+    Req,
+    Res,
+    ServiceUnavailableException,
+    UseFilters,
+} from '@nestjs/common';
+import {
+    ConfigService,
+    extractSessionToken,
+    LanguageCode,
+    RequestContext,
+    SessionService,
+    TransactionalConnection,
+} from '@vendure/core';
 import type { Request, Response } from 'express';
 
+import { StoreProfile } from '../entities/store-profile.entity';
+import { resolvePromotionSeo } from '../seo/storefront-promotion-seo';
+import { StorefrontPublicSeoService } from '../seo/storefront-public-seo.service';
+import { publicRobots, sitemapXml } from '../seo/storefront-seo-output';
+import { type StorefrontSeoDocument, type StorefrontSeoPublicSettings } from '../seo/storefront-seo.contract';
+import { StorefrontSeoService } from '../seo/storefront-seo.service';
+import { StorefrontActivationService, StorefrontClosedError } from '../storefront-activation.service';
 import { StorefrontClosedHttpFilter } from '../storefront-closed-http.filter';
+import { trustedPublicPageHeaders } from '../storefront-public-request';
 
 import { isAccountEntryRoute } from './account-entry-proof';
 import { promotionEntryRedirect } from './promotion-entry-destination';
 import { PROMOTION_VISUAL_SCRIPT_SHA256 } from './promotion-visual-script';
 import { StorefrontPromotionAccessService } from './storefront-promotion-access.service';
 import { StorefrontPromotionService } from './storefront-promotion.service';
+
+interface PromotionAuthority {
+    settings: StorefrontSeoPublicSettings | null;
+    document: StorefrontSeoDocument | null;
+    settingsVersion: number;
+    documentVersion: number;
+    primaryHost: string | null;
+    mode: string;
+    languageContentComplete: boolean;
+}
 
 @Controller('promo')
 @UseFilters(StorefrontClosedHttpFilter)
@@ -18,6 +54,10 @@ export class StorefrontPromotionController {
         private readonly promotionService: StorefrontPromotionService,
         private readonly sessionService: SessionService,
         private readonly configService: ConfigService,
+        @Optional() private readonly seo?: StorefrontSeoService,
+        @Optional() private readonly publicSeo?: StorefrontPublicSeoService,
+        @Optional() private readonly activation?: StorefrontActivationService,
+        @Optional() private readonly connection?: TransactionalConnection,
     ) {}
 
     @Get()
@@ -27,10 +67,45 @@ export class StorefrontPromotionController {
             res.status(404).type('text/plain').send('未找到该店铺推广页');
             return;
         }
-        const ticket = this.accessService.createEntryTicket(request);
-        const html = await this.promotionService.renderPublished(request.ctx, ticket);
         this.setPromotionHeaders(res);
-        res.status(200).type('html').send(html);
+        const forwardedPath = trustedPublicPageHeaders(req)
+            ? req.headers?.['x-storefront-original-uri']
+            : undefined;
+        const path = typeof forwardedPath === 'string' ? forwardedPath : (req.originalUrl ?? '/promo');
+        const explicit = /^\/(zh|en)\/promo(?:[/?]|$)/u.exec(path)?.[1];
+        const scoped =
+            explicit && request.ctx.copy
+                ? {
+                      ...request,
+                      ctx: request.ctx.copy({
+                          languageCode: explicit === 'zh' ? LanguageCode.zh_Hans : LanguageCode.en,
+                      }),
+                  }
+                : request;
+        const ticket = this.accessService.createEntryTicket(scoped);
+        const html = await this.promotionService.renderPublished(scoped.ctx, ticket);
+        const authority = await this.promotionAuthority(scoped.ctx);
+        if (authority.mode === 'CLOSED') throw new StorefrontClosedError();
+        const rendered = resolvePromotionSeo({
+            ...authority,
+            html,
+            host: scoped.host,
+            channelCode: scoped.ctx.channel?.code ?? '',
+            languageCode: scoped.ctx.languageCode === LanguageCode.zh_Hans ? 'zh_Hans' : 'en',
+            legacyEntry: !explicit,
+        });
+        const current = await this.promotionAuthority(scoped.ctx);
+        if (current.mode === 'CLOSED') throw new StorefrontClosedError();
+        if (
+            current.mode !== authority.mode ||
+            current.primaryHost !== authority.primaryHost ||
+            current.settingsVersion !== authority.settingsVersion ||
+            current.documentVersion !== authority.documentVersion ||
+            current.languageContentComplete !== authority.languageContentComplete
+        )
+            throw new ServiceUnavailableException('Promotion publication or store access changed');
+        res.setHeader('X-Robots-Tag', rendered.seo.robots);
+        res.status(200).type('html').send(rendered.html);
     }
 
     @Post('enter')
@@ -108,15 +183,9 @@ export class StorefrontPromotionController {
             res.status(404).type('text/plain').send('Storefront not found');
             return;
         }
-        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.setHeader('Cache-Control', 'no-store');
         res.type('text/plain').send(
-            `User-agent: *\n` +
-                `Disallow: /\n` +
-                `Allow: /promo$\n` +
-                `Disallow: /promo/enter\n` +
-                `Disallow: /promo/access\n` +
-                `Disallow: /promo/account-entry\n` +
-                `Sitemap: https://${request.host}/sitemap.xml\n`,
+            this.publicSeo ? await this.publicSeo.robots(request.ctx) : publicRobots(null, null, false),
         );
     }
 
@@ -127,18 +196,43 @@ export class StorefrontPromotionController {
             res.status(404).type('text/plain').send('Storefront not found');
             return;
         }
-        const publicPages = [['/promo', 'daily', '0.7']] as const;
-        const publicPageUrls = publicPages.map(
-            ([path, changefreq, priority]) =>
-                `  <url><loc>https://${request.host}${path}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`,
-        );
-        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.setHeader('Cache-Control', 'no-store');
         res.type('application/xml').send(
-            `<?xml version="1.0" encoding="UTF-8"?>\n` +
-                `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-                `${publicPageUrls.join('\n')}\n` +
-                `</urlset>\n`,
+            this.publicSeo ? await this.publicSeo.sitemap(request.ctx, request.host) : sitemapXml([]),
         );
+    }
+
+    private async promotionAuthority(ctx: RequestContext): Promise<PromotionAuthority> {
+        if (!this.seo || !this.publicSeo || !this.activation || !this.connection)
+            return {
+                settings: null,
+                document: null,
+                settingsVersion: 0,
+                documentVersion: 0,
+                primaryHost: null,
+                mode: 'UNKNOWN',
+                languageContentComplete: false,
+            };
+        const languageCode = ctx.languageCode === LanguageCode.zh_Hans ? 'zh_Hans' : 'en';
+        const [settings, document, primaryHost, mode, profile] = await Promise.all([
+            this.seo.publishedConfiguration(ctx),
+            this.seo.publishedRecord(ctx, { targetType: 'PAGE', targetId: 'promo', languageCode }),
+            this.publicSeo.primaryHost(ctx),
+            this.activation.getAccessMode(ctx),
+            this.connection.getRepository(ctx, StoreProfile).findOne({ where: { channelId: ctx.channelId } }),
+        ]);
+        const names = ctx.channel.customFields as { storefrontNameEn?: string; storefrontNameZh?: string };
+        const name = languageCode === 'zh_Hans' ? names.storefrontNameZh : names.storefrontNameEn;
+        const description = languageCode === 'zh_Hans' ? profile?.descriptionZh : profile?.descriptionEn;
+        return {
+            settings: settings?.payload ?? null,
+            document: document?.payload ?? null,
+            settingsVersion: settings?.version ?? 0,
+            documentVersion: document?.version ?? 0,
+            primaryHost,
+            mode,
+            languageContentComplete: Boolean(name?.trim() && description?.trim()),
+        };
     }
 
     private setPromotionHeaders(res: Response): void {
@@ -146,7 +240,7 @@ export class StorefrontPromotionController {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
         res.setHeader('X-Frame-Options', 'DENY');
-        res.setHeader('X-Robots-Tag', 'index, nofollow, max-image-preview:large');
+        res.setHeader('X-Robots-Tag', 'noindex, follow');
         res.setHeader(
             'Content-Security-Policy',
             [

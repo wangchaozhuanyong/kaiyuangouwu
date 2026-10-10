@@ -87,6 +87,14 @@ export const STANDALONE_ADMIN_PAGES: StandaloneAdminPage[] = [
         ['announcements', '首页公告', 'storefront'],
         ['landing', '推广落地页', 'storefront'],
     ]),
+    ...pages('/storefront/seo', 'storefrontSeo', [
+        ['overview', '搜索收录设置', 'storefront'],
+        ['pages', '页面 SEO', 'storefront'],
+        ['geo', 'GEO 内容与证据', 'storefront'],
+        ['redirects', '网址重定向', 'storefront'],
+        ['diagnostics', '搜索诊断', 'storefront'],
+        ['platforms', '搜索平台与效果', 'storefront'],
+    ]),
     ...pages('/plugins/ai-settings', 'aiImageSettings', [
         ['config', 'AI 生图配置', 'plugins'],
         ['jobs', 'AI 生图任务', 'plugins'],
@@ -162,6 +170,7 @@ const DEFAULT_PAGE_KEYS: Record<string, string> = {
     '/marketing/promotions': 'coupons',
     '/marketing/referrals': 'settings',
     '/storefront/content': 'pages',
+    '/storefront/seo': 'overview',
     '/plugins/ai-settings': 'config',
     '/settings/team': 'members',
     '/settings/system-ops': 'health',
@@ -237,6 +246,12 @@ const englishNavigationTitles: Record<string, string> = {
     固定内容与页面: 'Content and pages',
     首页公告: 'Homepage announcements',
     推广落地页: 'Landing pages',
+    搜索收录设置: 'Search indexing settings',
+    '页面 SEO': 'Page SEO',
+    'GEO 内容与证据': 'GEO content and evidence',
+    网址重定向: 'URL redirects',
+    搜索诊断: 'Search diagnostics',
+    搜索平台与效果: 'Search platforms and results',
     'AI 生图配置': 'AI image configuration',
     'AI 生图任务': 'AI image jobs',
     'AI 用量与费用': 'AI usage and costs',
@@ -297,6 +312,7 @@ export function localizeAdminNavigationTitle(title: string, language = getAdminD
 
 /** Frontend visibility follows existing server capabilities; no permission is created here. */
 export function standalonePagePermissions(page: StandaloneAdminPage): string[] | undefined {
+    if (page.sourcePath === '/storefront/seo') return ['ReadStorefrontContent'];
     if (page.sourcePath === '/storefront/content' && page.key === 'announcements')
         return ['ReadStorefrontContent'];
     if (page.sourcePath === '/settings/governance-risk') return ['SuperAdmin'];

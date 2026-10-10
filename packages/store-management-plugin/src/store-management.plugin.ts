@@ -186,6 +186,12 @@ import {
 } from './referral/referral.constants';
 import { ReferralAdminResolver, ReferralShopResolver } from './referral/referral.resolver';
 import { ReferralService } from './referral/referral.service';
+import { StorefrontPublicSeoService } from './seo/storefront-public-seo.service';
+import { StorefrontSeoHtmlService } from './seo/storefront-seo-html.service';
+import { StorefrontSeoController } from './seo/storefront-seo.controller';
+import { StorefrontSeoRecord, StorefrontSeoRevision } from './seo/storefront-seo.entity';
+import { StorefrontSeoAdminResolver } from './seo/storefront-seo.resolver';
+import { StorefrontSeoService } from './seo/storefront-seo.service';
 import { ShippingTemplateAdminResolver } from './shipping-template.resolver';
 import { StoreActivationReadinessService } from './store-activation-readiness.service';
 import { StoreCommerceSettingsResolver } from './store-commerce-settings.resolver';
@@ -273,6 +279,8 @@ import {
         StoreGovernanceChangeRequest,
         StoreProfile,
         StorefrontPromotionPage,
+        StorefrontSeoRecord,
+        StorefrontSeoRevision,
         SystemAnnouncement,
         StoreCouponCampaignConfig,
         CustomerCoupon,
@@ -316,6 +324,7 @@ import {
     ],
     controllers: [
         StorefrontPromotionController,
+        StorefrontSeoController,
         StorefrontRealtimeController,
         StorefrontLcpPreloadController,
         StorefrontPublicPageController,
@@ -356,6 +365,9 @@ import {
         StorefrontPromotionAccessService,
         StorefrontPromotionHtmlService,
         StorefrontPromotionService,
+        StorefrontSeoService,
+        StorefrontPublicSeoService,
+        StorefrontSeoHtmlService,
         StorePromotionCampaignService,
         StoreCouponLifecycleService,
         StoreCouponRepairService,
@@ -543,6 +555,7 @@ import {
             ShippingTemplateAdminResolver,
             StoreCurrencySettingsAdminResolver,
             StorefrontPromotionAdminResolver,
+            StorefrontSeoAdminResolver,
             StorePromotionCampaignAdminResolver,
             StoreCouponOrderResolver,
             SystemAnnouncementAdminResolver,
