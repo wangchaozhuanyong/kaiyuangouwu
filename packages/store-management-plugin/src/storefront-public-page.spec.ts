@@ -466,18 +466,21 @@ describe('authoritative public access modes', () => {
 
     it('keeps preview assembly bounded after real optional section budgets have returned responses', async () => {
         const h = accessHarness('PREVIEW');
-        let release!: (value: object) => void;
-        const optional = new Promise<object>(resolve => {
+        let release!: (value: unknown[]) => void;
+        const optional = new Promise<unknown[]>(resolve => {
             release = resolve;
         });
-        h.content.mockReturnValue(optional);
+        vi.spyOn(
+            h.service as unknown as { loadCollections(): Promise<unknown[]> },
+            'loadCollections',
+        ).mockReturnValue(optional);
         const first = await Promise.all(Array.from({ length: 4 }, () => h.service.read(h.ctx, 'a.test')));
-        expect(first.every(page => page.failures.includes('content'))).toBe(true);
+        expect(first.every(page => page.failures.includes('collections'))).toBe(true);
         expect(h.config).toHaveBeenCalledTimes(4);
         const next = h.service.read(h.ctx, 'a.test');
         await new Promise(resolve => setTimeout(resolve, 10));
         expect(h.config).toHaveBeenCalledTimes(4);
-        release({ blocks: [] });
+        release([]);
         expect((await next).failures).toEqual([]);
         expect(h.config).toHaveBeenCalledTimes(5);
         expect(h.raw.set).not.toHaveBeenCalled();
@@ -535,20 +538,23 @@ describe('authoritative public access modes', () => {
 
     it('rejects in-flight LIVE fills after closure, including optional work finishing after the page budget', async () => {
         const h = accessHarness();
-        let release!: (value: object) => void;
-        const gate = new Promise<object>(resolve => {
+        let release!: (value: unknown[]) => void;
+        const gate = new Promise<unknown[]>(resolve => {
             release = resolve;
         });
-        h.content.mockReturnValue(gate);
+        vi.spyOn(
+            h.service as unknown as { loadCollections(): Promise<unknown[]> },
+            'loadCollections',
+        ).mockReturnValue(gate);
         const page = await h.service.read(h.ctx, 'a.test');
-        expect(page.failures).toContain('content');
+        expect(page.failures).toContain('collections');
         h.state.mode = 'CLOSED';
         await expect(h.service.peek(h.ctx, 'a.test')).rejects.toMatchObject({ code: 'STOREFRONT_CLOSED' });
         const writes = h.raw.set.mock.calls.length;
-        release({ blocks: [{ title: 'revoked content' }] });
+        release([{ name: 'revoked collection' }]);
         await gate;
         await vi.waitFor(async () => {
-            expect(await h.cache.peek(h.ctx, 'content:a.test')).toBeUndefined();
+            expect(await h.cache.peek(h.ctx, 'collections:a.test')).toBeUndefined();
             expect(h.raw.set).toHaveBeenCalledTimes(writes);
         });
         h.state.mode = 'LIVE';
@@ -576,6 +582,67 @@ describe('authoritative public access modes', () => {
 
 describe('public page optional section budgets', () => {
     afterEach(() => vi.restoreAllMocks());
+
+    it.each(['LIVE', 'PREVIEW'] as const)(
+        'awaits required published content beyond the optional budget in %s',
+        async mode => {
+            const h = accessHarness(mode);
+            let complete!: (value: unknown) => void;
+            const content = new Promise(resolve => {
+                complete = resolve;
+            });
+            h.content.mockReturnValue(content);
+            let settled = false;
+            const result = h.service.read(h.ctx, 'a.test').finally(() => {
+                settled = true;
+            });
+
+            await new Promise(resolve => setTimeout(resolve, 700));
+            expect(h.content).toHaveBeenCalledTimes(1);
+            const completedBeforeContent = settled;
+            complete({ blocks: [{ title: 'Published title', body: 'Published body' }] });
+            const page = await result;
+
+            expect(completedBeforeContent).toBe(false);
+            expect(page.content).toMatchObject({
+                blocks: [{ title: 'Published title', body: 'Published body' }],
+            });
+            expect(page.failures).not.toContain('content');
+        },
+    );
+
+    it.each(['LIVE', 'PREVIEW'] as const)(
+        'still rejects closure while required content is pending in %s',
+        async mode => {
+            const h = accessHarness(mode);
+            let complete!: (value: unknown) => void;
+            const content = new Promise(resolve => {
+                complete = resolve;
+            });
+            h.content.mockReturnValue(content);
+            const result = h.service.read(h.ctx, 'a.test').then(
+                () => undefined,
+                error => error,
+            );
+
+            await new Promise(resolve => setTimeout(resolve, 700));
+            expect(h.content).toHaveBeenCalledTimes(1);
+            h.state.mode = 'CLOSED';
+            complete({ blocks: [{ title: 'Do not expose after closure' }] });
+            expect(await result).toBeInstanceOf(StorefrontClosedError);
+        },
+    );
+
+    it.each(['LIVE', 'PREVIEW'] as const)(
+        'keeps an actual required content failure explicit in %s',
+        async mode => {
+            const h = accessHarness(mode);
+            h.content.mockRejectedValue(new Error('published content unavailable'));
+            const page = await h.service.read(h.ctx, 'a.test');
+            expect(page.failures).toContain('content');
+            expect(page).not.toHaveProperty('content');
+        },
+    );
 
     it('keeps a timed-out section rejected even if it completes later', async () => {
         let complete!: (value: string[]) => void;
