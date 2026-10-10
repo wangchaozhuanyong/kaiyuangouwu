@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { storefrontInitialQueryError, type QueryLoadState } from '../loading-state';
+import {
+    storefrontInitialQueryError,
+    storefrontQueryPresentation,
+    type QueryLoadState,
+} from '../loading-state';
 import { orderStatusRefreshInterval } from '../order-refresh';
 import {
     PUBLIC_QUERY_GC_TIME,
@@ -34,11 +38,7 @@ export function useStorefrontRouteData({
             vendureLanguageCode,
             route.id ?? '',
         ),
-        queryFn: async ({ signal }) => {
-            const product = await api.product(route.id ?? '', signal);
-            if (!product) throw new Error(isZh ? '商品不存在或已下架' : 'Product not found');
-            return product;
-        },
+        queryFn: ({ signal }) => api.product(route.id ?? '', signal),
         enabled: storefrontContextResolved && route.name === 'product' && !!route.id,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -47,7 +47,8 @@ export function useStorefrontRouteData({
 
     const routeProduct = productQuery.data ?? null;
 
-    const routeProductLoading = productQuery.isLoading;
+    const routeProductLoading =
+        route.name === 'product' && !!route.id && storefrontQueryPresentation(productQuery).initialLoading;
 
     const routeProductError = storefrontInitialQueryError(productQuery, language);
 

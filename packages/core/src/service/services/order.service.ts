@@ -673,7 +673,8 @@ export class OrderService {
             return order;
         }
 
-        const channel = await this.channelService.getChannelFromToken(ctx.channel.token);
+        // Keep cache refresh on the transaction's connection when the pool is full.
+        const channel = await this.channelService.getChannelFromToken(ctx, ctx.channel.token);
         if (!channel.availableCurrencyCodes.includes(currencyCode)) {
             throw new UserInputError('error.currency-not-available', { currencyCode });
         }

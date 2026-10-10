@@ -17,7 +17,7 @@ import {
     sharedInputFingerprint,
 } from './ci-check-inputs.mjs';
 import { classifyChanges } from './ci-impact.mjs';
-import { packageCommands } from './ci-run.mjs';
+import { frontendTestCommands, packageCommands } from './ci-run.mjs';
 import {
     coversChanges,
     downloadEvidenceArtifact,
@@ -314,6 +314,33 @@ test('scoped backend commands do not invoke the whole repository test script', (
         ['bunx', 'lerna', 'run', 'test', '--scope', '@vendure/catalog'],
     ]);
     assert.ok(packageCommands(plan, 'build', inventory)[0].includes('--include-dependencies'));
+});
+
+test('mixed frontend checks run the Node fixture separately from Vitest and exclude it from related checks', () => {
+    const cwd = fileURLToPath(new URL('../packages/storefront/', import.meta.url));
+    const fixture = join(cwd, 'e2e/client-loading/preview-server.spec.mjs');
+    const unit = join(cwd, 'src/api/catalog.spec.ts');
+    const source = join(cwd, 'e2e/client-loading/preview-server.mjs');
+    assert.deepEqual(frontendTestCommands([fixture, unit], [source], cwd), [
+        ['node', '--test', fixture],
+        ['bunx', 'vitest', 'run', unit],
+        [
+            'bunx',
+            'vitest',
+            'related',
+            '--run',
+            '--passWithNoTests',
+            '--exclude',
+            'e2e/client-loading/preview-server.spec.mjs',
+            source,
+        ],
+    ]);
+});
+
+test('Vitest-only frontend checks retain their existing runner', () => {
+    const cwd = fileURLToPath(new URL('../packages/storefront/', import.meta.url));
+    const unit = join(cwd, 'src/api/catalog.spec.ts');
+    assert.deepEqual(frontendTestCommands([unit], [], cwd), [['bunx', 'vitest', 'run', unit]]);
 });
 
 test('a same-tree fork or superseded PR head cannot supply trusted release evidence', () => {

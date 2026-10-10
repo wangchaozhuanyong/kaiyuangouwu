@@ -126,15 +126,11 @@ export function useStorefrontAppState() {
             );
             await Promise.all([
                 preloadStorefrontRouteComponent('product'),
-                queryClient.getQueryData(queryKey)
+                queryClient.getQueryData(queryKey) !== undefined
                     ? Promise.resolve()
                     : queryClient.fetchQuery({
                           queryKey,
-                          queryFn: async ({ signal }) => {
-                              const product = await api.product(id, signal);
-                              if (!product) throw new Error('Product not found');
-                              return product;
-                          },
+                          queryFn: ({ signal }) => api.product(id, signal),
                           staleTime: PUBLIC_QUERY_STALE_TIME,
                           gcTime: PUBLIC_QUERY_GC_TIME,
                           meta: publicQueryMeta(),
@@ -609,7 +605,7 @@ export function useStorefrontAppState() {
 
     const selectedProduct = route.id
         ? ((routeProduct?.id === route.id ? routeProduct : null) ??
-          products.find(product => product.id === route.id) ??
+          (productQuery.data === undefined ? products.find(product => product.id === route.id) : null) ??
           null)
         : null;
     const selectedOrder = route.id && routeOrder?.id === route.id ? routeOrder : null;

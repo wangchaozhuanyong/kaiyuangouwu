@@ -110,10 +110,7 @@ export function HomeRoutePage() {
 export function ProductRoutePage() {
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
-    if (
-        !runtime.selectedProduct &&
-        (runtime.routeProductLoading || (runtime.route.id && !runtime.routeProductError))
-    ) {
+    if (!runtime.selectedProduct && runtime.routeProductLoading) {
         return (
             <Subpage
                 title={isZh ? '商品详情' : 'Product'}
