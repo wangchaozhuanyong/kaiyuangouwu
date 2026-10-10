@@ -25,14 +25,14 @@ const domainRules: Array<[ResourceDomain, RegExp]> = [
     ],
     [
         'orders',
-        /order|fulfillment|refund|payment|aftersales|autocard|profit|manualdigitaldelivery|checkoutdelivery|digitaldelivery|physicalreturn/iu,
+        /order|fulfillment|refund|payment|aftersales|autocard|profit|manualdigitaldelivery|checkoutdelivery|digitaldelivery|physicalreturn|migratedigitalinventory/iu,
     ],
     ['customers', /customer|address/iu],
     ['marketing', /promotion|coupon|referral|withdrawal|marketing|flashsale|sharing/iu],
     ['storefront', /storefront|contentblock|review|traffic|translation|systemannouncement/iu],
     [
         'settings',
-        /channel|seller|store(?!front)|commerce|settings|finance|currency|rate|shipping|tax|country|zone|role|administrator|platformownership|job|scheduledtask|apikey|incident|govern(?:ed|ance)|dataretention|datasubject/iu,
+        /channel|seller|store(?!front)|commerce|settings|finance|currency|rate|shipping|tax|country|zone|role|administrator|platformownership|job|scheduledtask|apikey|incident|govern(?:ed|ance)|dataretention|datasubject|migratedigitalinventory/iu,
     ],
     [
         'plugins',

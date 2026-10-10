@@ -3,7 +3,11 @@ import { Allow, Ctx, ID, Permission, RequestContext, Transaction } from '@vendur
 
 import { CheckoutResourcesService } from './checkout-resources.service';
 import { DigitalFileService, PrivateDigitalUpload } from './digital-file.service';
-import { DigitalProductService, UpdateDigitalVariantInput } from './digital-product.service';
+import {
+    DigitalInventoryOwnershipConfirmation,
+    DigitalProductService,
+    UpdateDigitalVariantInput,
+} from './digital-product.service';
 import { FulfillmentModelService } from './fulfillment-model.service';
 import { ProductDomainCopyService } from './product-domain-copy.service';
 
@@ -60,8 +64,12 @@ export class DigitalProductAdminResolver {
     }
     @Query()
     @Allow(Permission.ReadProduct)
-    digitalInventoryMigrationPreview(@Ctx() ctx: RequestContext, @Args('productVariantId') id: ID) {
-        return this.products.migrationPreview(ctx, id);
+    digitalInventoryMigrationPreview(
+        @Ctx() ctx: RequestContext,
+        @Args('productVariantId') id: ID,
+        @Args('ownershipConfirmation') confirmation?: DigitalInventoryOwnershipConfirmation,
+    ) {
+        return this.products.migrationPreview(ctx, id, undefined, confirmation);
     }
     @Mutation()
     @Transaction()
@@ -71,7 +79,8 @@ export class DigitalProductAdminResolver {
         @Args('productVariantId') id: ID,
         @Args('expectedAvailable') available: number,
         @Args('expectedReserved') reserved: number,
+        @Args('ownershipConfirmation') confirmation?: DigitalInventoryOwnershipConfirmation,
     ) {
-        return this.products.migrate(ctx, id, available, reserved);
+        return this.products.migrate(ctx, id, available, reserved, confirmation);
     }
 }

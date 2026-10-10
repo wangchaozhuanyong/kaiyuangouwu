@@ -1,6 +1,7 @@
+import { useMutation } from '@apollo/client/react';
 import { print } from 'graphql';
-import { useId, useState } from 'react';
-import { client, uploadAdminFile } from '../../apollo';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { getAdminQueryScope, uploadAdminFile } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -9,7 +10,10 @@ import {
     DIGITAL_MIGRATION_PREVIEW,
     MIGRATE_DIGITAL_INVENTORY,
     UPLOAD_DIGITAL_FILE,
+    type DigitalInventoryLegacyStockLevel,
+    type DigitalInventoryOwnershipConfirmation,
 } from '../../graphql/product-domains.graphql';
+import { useAdminLazyQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { useProductEditor } from './ProductEditorContext';
@@ -25,11 +29,44 @@ interface MigrationPreview {
     reservedQuantity: number;
     conflicts: string[];
     alreadyMigrated: boolean;
+    confirmableStockLevels: DigitalInventoryLegacyStockLevel[];
+}
+
+interface MigrationPreviewRequest {
+    identity: string;
+    variables: { productVariantId: string; ownershipConfirmation?: DigitalInventoryOwnershipConfirmation };
+    resolve: (preview: MigrationPreview) => void;
+    reject: (failure: unknown) => void;
+}
+
+function MigrationPreviewReader({ request }: { request: MigrationPreviewRequest }) {
+    const [readPreview] = useAdminLazyQuery<{ digitalInventoryMigrationPreview: MigrationPreview }>(
+        DIGITAL_MIGRATION_PREVIEW,
+        { fetchPolicy: 'network-only' },
+    );
+    useEffect(() => {
+        let active = true;
+        void readPreview({ variables: request.variables })
+            .then(result => {
+                if (!active) return;
+                if (result.error) request.reject(result.error);
+                else if (!result.data) request.reject(new Error('未收到迁移预览'));
+                else request.resolve(result.data.digitalInventoryMigrationPreview);
+            })
+            .catch(failure => {
+                if (active) request.reject(failure);
+            });
+        return () => {
+            active = false;
+        };
+    }, [readPreview, request]);
+    return null;
 }
 
 export function DigitalProductWorkspace() {
     const fieldId = useId();
     const {
+        productId,
         variants,
         setVariants,
         handleVariantFieldChange,
@@ -46,7 +83,51 @@ export function DigitalProductWorkspace() {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
-    const [preview, setPreview] = useState<{ id: string; result: MigrationPreview } | null>(null);
+    const scope = getAdminQueryScope();
+    const identity = `${scope}:${productId ?? 'new'}`;
+    const identityRef = useRef(identity);
+    const [reviewIdentity, setReviewIdentity] = useState(identity);
+    const reviewSequence = useRef(0);
+    const writeInFlight = useRef(false);
+    const [preview, setPreview] = useState<{
+        id: string;
+        identity: string;
+        result: MigrationPreview;
+        ownershipRows: DigitalInventoryLegacyStockLevel[];
+        confirmation?: DigitalInventoryOwnershipConfirmation;
+    } | null>(null);
+    const [ownershipChecked, setOwnershipChecked] = useState(false);
+    const [ownershipReason, setOwnershipReason] = useState('');
+    const [readbackFailed, setReadbackFailed] = useState(false);
+    const [previewRequest, setPreviewRequest] = useState<MigrationPreviewRequest | null>(null);
+    const previewRequestRef = useRef<MigrationPreviewRequest | null>(null);
+    const [applyMigration, migrationState] = useMutation<{
+        migrateDigitalInventory: { id: string; availableQuantity: number };
+    }>(MIGRATE_DIGITAL_INVENTORY);
+    const activePreview = preview?.identity === identity ? preview : null;
+    const pending = busy || migrationState.loading;
+    if (reviewIdentity !== identity) {
+        setReviewIdentity(identity);
+        setPreviewRequest(null);
+        setPreview(null);
+        setOwnershipChecked(false);
+        setOwnershipReason('');
+        setReadbackFailed(false);
+        setError('');
+        setNotice('');
+        setBusy(false);
+    }
+    useLayoutEffect(() => {
+        identityRef.current = identity;
+        reviewSequence.current += 1;
+        previewRequestRef.current?.reject(new Error('库存核对已结束'));
+        previewRequestRef.current = null;
+        return () => {
+            reviewSequence.current += 1;
+            previewRequestRef.current?.reject(new Error('库存核对已结束'));
+            previewRequestRef.current = null;
+        };
+    }, [identity]);
     const upload = async (file: File, index: number | null) => {
         setBusy(true);
         setError('');
@@ -73,48 +154,130 @@ export function DigitalProductWorkspace() {
             setBusy(false);
         }
     };
-    const reviewMigration = async (id: string) => {
+    const reviewMigration = async (id: string, confirmation?: DigitalInventoryOwnershipConfirmation) => {
+        if (getAdminQueryScope() !== scope) return;
+        const request = ++reviewSequence.current;
+        previewRequestRef.current?.reject(new Error('库存核对已结束'));
+        const requestedIdentity = identityRef.current;
+        if (!confirmation) {
+            setPreview(null);
+            setOwnershipChecked(false);
+            setOwnershipReason('');
+        } else {
+            setPreview(current => (current ? { ...current, confirmation: undefined } : null));
+        }
         setBusy(true);
         setError('');
         try {
-            const result = await client.query<{ digitalInventoryMigrationPreview: MigrationPreview }>({
-                query: DIGITAL_MIGRATION_PREVIEW,
-                variables: { productVariantId: id },
-                fetchPolicy: 'network-only',
+            const next = await new Promise<MigrationPreview>((resolve, reject) => {
+                const readRequest = {
+                    identity: requestedIdentity,
+                    variables: { productVariantId: id, ownershipConfirmation: confirmation },
+                    resolve,
+                    reject,
+                };
+                previewRequestRef.current = readRequest;
+                setPreviewRequest(readRequest);
             });
-            if (!result.data) throw new Error('未收到迁移预览');
-            setPreview({ id, result: result.data.digitalInventoryMigrationPreview });
+            if (
+                request !== reviewSequence.current ||
+                requestedIdentity !== identityRef.current ||
+                getAdminQueryScope() !== scope
+            )
+                return;
+            setPreview({
+                id,
+                identity: requestedIdentity,
+                result: next,
+                ownershipRows:
+                    confirmation?.stockLevels ??
+                    next.confirmableStockLevels.map(row => ({
+                        id: row.id,
+                        stockLocationId: row.stockLocationId,
+                        stockOnHand: row.stockOnHand,
+                        stockAllocated: row.stockAllocated,
+                    })),
+                confirmation: next.conflicts.length ? undefined : confirmation,
+            });
         } catch (failure) {
-            setError(toUserFacingError(failure, '库存核对失败'));
+            if (request === reviewSequence.current && requestedIdentity === identityRef.current)
+                setError(toUserFacingError(failure, '库存核对失败'));
         } finally {
-            setBusy(false);
+            if (request === reviewSequence.current && requestedIdentity === identityRef.current) {
+                previewRequestRef.current = null;
+                setPreviewRequest(null);
+                setBusy(false);
+            }
         }
     };
     const migrate = async () => {
-        if (!preview || preview.result.conflicts.length) return;
+        if (
+            !activePreview ||
+            getAdminQueryScope() !== scope ||
+            pending ||
+            saving ||
+            isDirty ||
+            writeInFlight.current ||
+            activePreview.result.conflicts.length ||
+            activePreview.result.alreadyMigrated ||
+            (activePreview.ownershipRows.length && !activePreview.confirmation)
+        )
+            return;
+        const requestedIdentity = identityRef.current;
+        writeInFlight.current = true;
+        setPreviewRequest(null);
         setBusy(true);
         setError('');
         try {
-            await client.mutate({
-                mutation: MIGRATE_DIGITAL_INVENTORY,
+            const result = await applyMigration({
                 variables: {
-                    productVariantId: preview.id,
-                    expectedAvailable: preview.result.availableQuantity,
-                    expectedReserved: preview.result.reservedQuantity,
+                    productVariantId: activePreview.id,
+                    expectedAvailable: activePreview.result.availableQuantity,
+                    expectedReserved: activePreview.result.reservedQuantity,
+                    ownershipConfirmation: activePreview.confirmation,
                 },
             });
+            if (!result.data?.migrateDigitalInventory) throw new Error('未收到迁移结果');
+            if (requestedIdentity !== identityRef.current) return;
             setPreview(null);
-            await refetchWorkspace();
             setNotice('迁移成功，旧库存记录已保留；后续数字交易使用独立份数');
+            try {
+                await refetchWorkspace();
+            } catch {
+                if (requestedIdentity === identityRef.current) {
+                    setReadbackFailed(true);
+                    setError('迁移已成功，但最新库存读取失败。请重新读取，不要重复迁移。');
+                }
+            }
         } catch (failure) {
-            setError(toUserFacingError(failure, '迁移失败，请重新核对'));
+            if (requestedIdentity === identityRef.current) {
+                setPreview(null);
+                setError(toUserFacingError(failure, '迁移结果尚未确认，请重新读取库存后再核对'));
+                setReadbackFailed(true);
+            }
         } finally {
-            setBusy(false);
+            writeInFlight.current = false;
+            if (requestedIdentity === identityRef.current) setBusy(false);
+        }
+    };
+    const refreshAfterMigration = async () => {
+        setBusy(true);
+        setError('');
+        const requestedIdentity = identityRef.current;
+        try {
+            await refetchWorkspace();
+            if (requestedIdentity === identityRef.current) setReadbackFailed(false);
+        } catch (failure) {
+            if (requestedIdentity === identityRef.current)
+                setError(toUserFacingError(failure, '最新库存读取失败，请重试读取'));
+        } finally {
+            if (requestedIdentity === identityRef.current) setBusy(false);
         }
     };
     const commonMode = variants[0]?.digitalDeliveryMode ?? 'manual_service';
     return (
         <div className="space-y-4" data-product-domain="digital">
+            {previewRequest?.identity === identity && <MigrationPreviewReader request={previewRequest} />}
             <div className="grid items-start gap-4 md:grid-cols-2">
                 <AdminField
                     className="space-y-1.5 text-xs font-semibold text-slate-700"
@@ -203,7 +366,7 @@ export function DigitalProductWorkspace() {
                             <span>该规格仍使用旧数字库存，需要先核对迁移。</span>
                             <AdminButton
                                 type="button"
-                                disabled={busy || isDirty}
+                                disabled={pending || saving || isDirty || readbackFailed}
                                 onClick={() => variant.id && void reviewMigration(variant.id)}
                                 className="font-semibold text-blue-700 disabled:opacity-50"
                             >
@@ -351,33 +514,122 @@ export function DigitalProductWorkspace() {
                     )}
                 </div>
             ))}
-            {preview && (
+            {activePreview && (
                 <div
                     className="space-y-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"
                     role="region"
                     aria-label="数字库存迁移核对"
                 >
                     <p>
-                        旧库存可售 {preview.result.availableQuantity} 份，未完成订单占用{' '}
-                        {preview.result.reservedQuantity} 份。
+                        旧库存可售 {activePreview.result.availableQuantity} 份，未完成订单占用{' '}
+                        {activePreview.result.reservedQuantity} 份。
                     </p>
-                    {preview.result.conflicts.map(conflict => (
+                    {activePreview.ownershipRows.length > 0 && (
+                        <div className="space-y-2">
+                            <p>
+                                以下历史记录尚未登记经营店铺。仅在确认全部属于当前店铺时继续；原仓库和记录将保留。
+                            </p>
+                            <ul className="space-y-1">
+                                {activePreview.ownershipRows.map(row => (
+                                    <li key={row.id}>
+                                        记录 {row.id} · 仓库 {row.stockLocationId} · 在库 {row.stockOnHand} ·
+                                        占用 {row.stockAllocated}
+                                    </li>
+                                ))}
+                            </ul>
+                            <label className="flex min-h-11 items-center gap-2">
+                                <AdminInput
+                                    type="checkbox"
+                                    checked={ownershipChecked}
+                                    disabled={pending}
+                                    onChange={event => {
+                                        setOwnershipChecked(event.target.checked);
+                                        setPreview(current =>
+                                            current ? { ...current, confirmation: undefined } : null,
+                                        );
+                                    }}
+                                />
+                                我确认上述历史库存全部属于当前经营店铺
+                            </label>
+                            <AdminField label="归属核对依据">
+                                <AdminInput
+                                    aria-label="归属核对依据"
+                                    value={ownershipReason}
+                                    maxLength={500}
+                                    disabled={pending}
+                                    onChange={event => {
+                                        setOwnershipReason(event.target.value);
+                                        setPreview(current =>
+                                            current ? { ...current, confirmation: undefined } : null,
+                                        );
+                                    }}
+                                    className={fieldClass}
+                                />
+                            </AdminField>
+                            <AdminButton
+                                type="button"
+                                disabled={
+                                    pending ||
+                                    !ownershipChecked ||
+                                    !ownershipReason.trim() ||
+                                    isDirty ||
+                                    saving
+                                }
+                                onClick={() =>
+                                    void reviewMigration(activePreview.id, {
+                                        stockLevels: activePreview.ownershipRows,
+                                        reason: ownershipReason.trim(),
+                                    })
+                                }
+                                className="font-semibold text-blue-700 disabled:opacity-50"
+                            >
+                                核验归属与库存
+                            </AdminButton>
+                        </div>
+                    )}
+                    {activePreview.result.conflicts.map(conflict => (
                         <p key={conflict} role="alert">
                             {conflict}
                         </p>
                     ))}
                     <AdminButton
                         type="button"
-                        disabled={busy || preview.result.conflicts.length > 0}
+                        disabled={
+                            pending ||
+                            saving ||
+                            isDirty ||
+                            activePreview.result.conflicts.length > 0 ||
+                            activePreview.result.alreadyMigrated ||
+                            (activePreview.ownershipRows.length > 0 && !activePreview.confirmation)
+                        }
                         onClick={() => void migrate()}
                         className="font-semibold text-blue-700 disabled:opacity-50"
                     >
                         确认核对并切换
                     </AdminButton>
-                    <AdminButton type="button" onClick={() => setPreview(null)} className="ml-4">
+                    <AdminButton
+                        type="button"
+                        disabled={pending}
+                        onClick={() => {
+                            reviewSequence.current += 1;
+                            setPreviewRequest(null);
+                            setPreview(null);
+                        }}
+                        className="ml-4"
+                    >
                         取消
                     </AdminButton>
                 </div>
+            )}
+            {readbackFailed && (
+                <AdminButton
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void refreshAfterMigration()}
+                    className="text-xs font-semibold text-blue-700"
+                >
+                    重新读取最新库存
+                </AdminButton>
             )}
             {error && (
                 <p role="alert" className="text-xs text-rose-600">

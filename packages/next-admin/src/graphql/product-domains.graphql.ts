@@ -73,13 +73,25 @@ export const UPLOAD_DIGITAL_FILE = gql`
     }
 `;
 export const DIGITAL_MIGRATION_PREVIEW = gql`
-    query DigitalInventoryMigrationPreview($productVariantId: ID!) {
-        digitalInventoryMigrationPreview(productVariantId: $productVariantId) {
+    query DigitalInventoryMigrationPreview(
+        $productVariantId: ID!
+        $ownershipConfirmation: DigitalInventoryOwnershipConfirmationInput
+    ) {
+        digitalInventoryMigrationPreview(
+            productVariantId: $productVariantId
+            ownershipConfirmation: $ownershipConfirmation
+        ) {
             productVariantId
             availableQuantity
             reservedQuantity
             conflicts
             alreadyMigrated
+            confirmableStockLevels {
+                id
+                stockLocationId
+                stockOnHand
+                stockAllocated
+            }
         }
     }
 `;
@@ -88,17 +100,30 @@ export const MIGRATE_DIGITAL_INVENTORY = gql`
         $productVariantId: ID!
         $expectedAvailable: Int!
         $expectedReserved: Int!
+        $ownershipConfirmation: DigitalInventoryOwnershipConfirmationInput
     ) {
         migrateDigitalInventory(
             productVariantId: $productVariantId
             expectedAvailable: $expectedAvailable
             expectedReserved: $expectedReserved
+            ownershipConfirmation: $ownershipConfirmation
         ) {
             id
             availableQuantity
         }
     }
 `;
+
+export interface DigitalInventoryLegacyStockLevel {
+    id: string;
+    stockLocationId: string;
+    stockOnHand: number;
+    stockAllocated: number;
+}
+export interface DigitalInventoryOwnershipConfirmation {
+    stockLevels: DigitalInventoryLegacyStockLevel[];
+    reason: string;
+}
 
 export const UPDATE_PHYSICAL_VARIANT = gql`
     mutation UpdatePhysicalVariant($input: UpdatePhysicalVariantInput!) {
