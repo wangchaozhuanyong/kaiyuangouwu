@@ -76,6 +76,7 @@ import { getLocalizedEntityTranslation } from '../../utils/localized-entity-disp
 import { mergeQueryLists } from '../../utils/merge-query-lists';
 import { selectQueryFields } from '../../utils/select-query-fields';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { SeoEditorLink } from '../Storefront/SeoEditorLink';
 import { CatalogTemplateLibraryPanel } from './CatalogTemplateLibraryPanel';
 import { CategoryImageField, type CategoryImageAsset } from './CategoryImageField';
 import { OptionGroupProductsDialog } from './OptionGroupProductsDialog';
@@ -1047,6 +1048,7 @@ export function CategoriesModule() {
                         >
                             <Edit3 className="h-3.5 w-3.5" />
                         </AdminButton>
+                        <SeoEditorLink targetType="COLLECTION" targetId={node.id} name={node.name} />
                         <AdminButton
                             type="button"
                             onClick={() => handleDelete(node)}

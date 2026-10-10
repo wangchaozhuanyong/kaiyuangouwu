@@ -13,6 +13,7 @@ import {
     storefrontQueryKeys,
     storefrontQueryRetry,
 } from '../query-client';
+import { routeFromLocation, routeHref, type RouteState } from '../storefront-router';
 import { MarketConfig, ProductSearchPage, StorefrontCatalogInput, StorefrontLanguage } from '../types';
 
 interface CategoryPaginationOptions {
@@ -24,6 +25,7 @@ interface CategoryPaginationOptions {
     enabled: boolean;
     suspended: boolean;
     pageSize?: number;
+    route?: RouteState;
 }
 
 export function useCategoryPagination({
@@ -35,6 +37,7 @@ export function useCategoryPagination({
     enabled,
     suspended,
     pageSize = STOREFRONT_CATALOG_PAGE_SIZE,
+    route,
 }: CategoryPaginationOptions) {
     const queryClient = useQueryClient();
     const queryKey = storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), languageCode, {
@@ -45,11 +48,18 @@ export function useCategoryPagination({
     const resultsRef = useRef<HTMLElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const requestRef = useRef<{ scope: string } | null>(null);
-    const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine);
+    const [online, setOnline] = useState(
+        () => typeof navigator === 'undefined' || navigator.onLine !== false,
+    );
     const [visible, setVisible] = useState(
         () => typeof document === 'undefined' || document.visibilityState !== 'hidden',
     );
-    const automaticSupported = typeof IntersectionObserver !== 'undefined';
+    // Match the server's first render; browser capabilities are applied after hydration.
+    const [automaticSupported, setAutomaticSupported] = useState(false);
+
+    useEffect(() => {
+        setAutomaticSupported(typeof IntersectionObserver !== 'undefined');
+    }, []);
 
     useEffect(() => {
         const updateConnection = () => setOnline(navigator.onLine);
@@ -84,7 +94,7 @@ export function useCategoryPagination({
                     : 'Could not load more products. Please retry.',
             );
         },
-        initialPageParam: 0,
+        initialPageParam: input.skip ?? 0,
         getNextPageParam: nextCatalogPageParam,
         enabled,
         staleTime: PUBLIC_QUERY_STALE_TIME,
@@ -177,5 +187,28 @@ export function useCategoryPagination({
         online,
         automaticSupported,
         loadMore,
+        nextHref:
+            query.hasNextPage && query.data
+                ? routeHref({
+                      ...(route ??
+                          (typeof window === 'undefined'
+                              ? { name: 'category' as const }
+                              : routeFromLocation())),
+                      page: Math.floor((Number(query.data.pageParams.at(-1) ?? 0) + pageSize) / pageSize) + 1,
+                  })
+                : undefined,
+        previousHref:
+            (input.skip ?? 0) > 0
+                ? routeHref({
+                      ...(route ??
+                          (typeof window === 'undefined'
+                              ? { name: 'category' as const }
+                              : routeFromLocation())),
+                      page:
+                          Math.floor((input.skip ?? 0) / pageSize) > 1
+                              ? Math.floor((input.skip ?? 0) / pageSize)
+                              : undefined,
+                  })
+                : undefined,
     };
 }

@@ -503,7 +503,7 @@ describe('product image navigation layers', () => {
         expect(markup).toContain('库存 10');
         expect(markup).not.toContain('加入购物车');
         expect(markup).toMatch(
-            /<a[^>]*product-row-detail-link[^>]*href="\/product\?id=[^"]+"[^>]*>[\s\S]*product-image-placeholder[\s\S]*<\/a>/,
+            /<a[^>]*product-row-detail-link[^>]*href="\/zh\/product\?id=[^"]+"[^>]*>[\s\S]*product-image-placeholder[\s\S]*<\/a>/,
         );
         expect(stylesheet).not.toMatch(
             /\.product-row-detail-link\s*\{[^}]*(?:position:\s*absolute|z-index:)/,

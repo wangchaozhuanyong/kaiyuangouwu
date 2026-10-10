@@ -2,6 +2,7 @@ import { AlertCircle, ArrowLeft, CheckCircle2, Save } from 'lucide-react';
 import { AdminButton } from '../../components/AdminControls';
 import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { SeoEditorLink } from '../Storefront/SeoEditorLink';
 import { ProductAssetPickerModal } from './ProductAssetPickerModal';
 import { ProductEditorProvider } from './ProductEditorContext';
 import { ProductEditorTitle } from './ProductEditorTitle';
@@ -58,6 +59,13 @@ export function ProductEditor() {
                             productName={editor.productName}
                             enabled={productData?.product?.enabled}
                         />
+                        {!isCreateMode && productData?.product?.id && (
+                            <SeoEditorLink
+                                targetType="PRODUCT"
+                                targetId={productData.product.id}
+                                name={editor.productName}
+                            />
+                        )}
                     </div>
                 </header>
 

@@ -1,6 +1,7 @@
 // Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 
+import { publicRouteRewrite } from './public-route-rewrite';
 import { storefrontQueryClient } from './query-client';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
@@ -37,6 +38,7 @@ if (typeof window !== 'undefined' && /^#\//.test(window.location.hash)) {
 export const router = createRouter({
     routeTree,
     history: createBrowserHistory(),
+    rewrite: publicRouteRewrite,
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',

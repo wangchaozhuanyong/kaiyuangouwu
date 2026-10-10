@@ -1,3 +1,5 @@
+import { publicUnlocalizedPathname } from '../../storefront-content-plugin/src/shared/public-page-data';
+
 import { BrandLoadingIndicator } from './brand-loading';
 import { PageReadinessError, usePageLoadingState, usePageReadiness } from './page-readiness';
 
@@ -15,6 +17,7 @@ export function loadingPageLabel(language?: string): string {
 
 export function pageSkeletonVariantForPathname(pathname: string): RouteSkeletonVariant {
     pathname = pathname.split(/[?#]/u, 1)[0] ?? pathname;
+    pathname = publicUnlocalizedPathname(pathname);
     if (pathname === '/' || pathname === '') return 'home';
     if (/^\/(?:category|search|flash-sale|recommendations|favorites|history)(?:\/|$)/u.test(pathname)) {
         return 'catalog';

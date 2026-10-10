@@ -22,6 +22,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { assertStorefrontRenderer } from '../../../deploy/storefront-renderer.mjs';
+
 import { damatongAssets } from './damatong-storefront-config.mjs';
 import { auditRuntimePackages } from './production-runtime-audit.mjs';
 import {
@@ -172,6 +174,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'packages/two-factor-dashboard-plugin/dist/index.js',
     'packages/telemetry-plugin/dist/index.js',
     'packages/storefront/dist/index.html',
+    'packages/storefront/dist/.server/public-page-renderer.cjs',
     'packages/storefront/dist/frontend-release.json',
     'packages/storefront/dist-two-factor/index.html',
     'packages/storefront/dist-two-factor/build-config.json',
@@ -597,6 +600,7 @@ async function assertRequiredFiles(stagingRoot) {
             throw new Error(`Required runtime file is missing: ${requiredFile}`);
         }
     }
+    assertStorefrontRenderer(path.join(stagingRoot, 'packages/storefront/dist'));
 }
 
 /**

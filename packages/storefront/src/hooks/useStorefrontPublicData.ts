@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { type PublicSeoDocument } from '../../../storefront-content-plugin/src/shared/public-seo';
 import { storefrontNavigationCollections } from '../api/catalog';
 import { SEND_CLIENT_CHANNEL_TOKEN } from '../api/helpers';
 import { normalizeHeroAutoplayIntervalSeconds } from '../hero-carousel';
@@ -17,6 +18,8 @@ import { useProductsByIdsQuery } from '../route-queries';
 import {
     currentPublicPageRequest,
     fetchPublicPage,
+    publicSeoQueryKey,
+    readInitialPublicPage,
     seedPublicPage,
     type PublicPageData,
 } from '../storefront-page-data';
@@ -34,6 +37,20 @@ export function useStorefrontPublicData({
     const text = uiCopy[language];
     const queryClient = useQueryClient();
     const request = currentPublicPageRequest();
+    const initialSeoPage = readInitialPublicPage();
+    // Observe metadata delivered by the same public read; this observer never starts a request.
+    const publicSeoQuery = useQuery<PublicSeoDocument | null>({
+        queryKey: publicSeoQueryKey(storefrontQueryKeys.market(market), vendureLanguageCode, request),
+        enabled: false,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        initialData:
+            initialSeoPage?.scope.channelCode === market.code &&
+            initialSeoPage.scope.currencyCode === market.currencyCode &&
+            initialSeoPage.scope.languageCode === vendureLanguageCode
+                ? initialSeoPage.seo
+                : undefined,
+    });
     const locationKey =
         typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search;
     const [readyLocation, setReadyLocation] = useState('');
@@ -302,6 +319,7 @@ export function useStorefrontPublicData({
             : 'ready';
     const contentError = storefrontInitialQueryError(contentQuery, language);
     return {
+        publicSeo: publicSeoQuery.data,
         productsQuery,
         collectionsQuery,
         configQuery,

@@ -61,6 +61,7 @@ export interface CategoryPageProps {
     inStockOnly: boolean;
     minimumPrice: string;
     maximumPrice: string;
+    page?: number;
     onCollectionChange: (collectionId: string, childId: string) => void;
     onChildChange: (childId: string) => void;
     onSortChange: (sort: SortMode) => void;
@@ -95,6 +96,7 @@ export function CategoryPage() {
         inStockOnly,
         minimumPrice: minimumPriceInput,
         maximumPrice: maximumPriceInput,
+        page,
         onCollectionChange,
         onChildChange,
         onSortChange,
@@ -195,6 +197,7 @@ export function CategoryPage() {
         inStockOnly,
         minPrice: minimumPriceInput,
         maxPrice: maximumPriceInput,
+        page,
     });
     const pagination = useCategoryPagination({
         api,
@@ -204,6 +207,18 @@ export function CategoryPage() {
         input: catalogInput,
         enabled: contextResolved,
         suspended: filterOpen || allCategoriesOpen,
+        route: {
+            name: 'category',
+            publicLanguage: language,
+            page,
+            collectionId: activeCollectionId === 'all' ? undefined : activeCollectionId,
+            childId: activeChildId === 'all' ? undefined : activeChildId,
+            sort: sortMode,
+            fulfillment: fulfillmentFilter,
+            inStockOnly,
+            minPrice: minimumPriceInput,
+            maxPrice: maximumPriceInput,
+        },
     });
     const catalogQuery = pagination.query;
 
@@ -635,6 +650,8 @@ export function CategoryPage() {
                             <CategoryPaginationStatus
                                 sentinelRef={pagination.sentinelRef}
                                 language={language}
+                                nextHref={pagination.nextHref}
+                                previousHref={pagination.previousHref}
                                 state={
                                     !pagination.online || catalogQuery.isPaused
                                         ? 'offline'

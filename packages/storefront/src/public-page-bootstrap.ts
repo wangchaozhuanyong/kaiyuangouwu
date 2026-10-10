@@ -1,4 +1,5 @@
 import {
+    publicLanguageFromUrl,
     publicPageRequestFromUrl,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
@@ -21,7 +22,9 @@ if (
                     ?.slice(name.length + 1);
             const rawLanguage = cookie('storefront_public_language');
             const rawCurrency = cookie('storefront_public_currency');
-            const language = rawLanguage === 'en' || rawLanguage === 'zh_Hans' ? rawLanguage : undefined;
+            const language =
+                publicLanguageFromUrl(location.pathname) ??
+                (rawLanguage === 'en' || rawLanguage === 'zh_Hans' ? rawLanguage : undefined);
             const currency = rawCurrency && /^[A-Z]{3}$/u.test(rawCurrency) ? rawCurrency : undefined;
             const snapshot = JSON.parse(
                 document.getElementById(STOREFRONT_PAGE_DATA_ELEMENT_ID)?.textContent ?? 'null',

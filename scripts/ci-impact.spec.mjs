@@ -353,6 +353,20 @@ test('artifact input hashing is a release control rather than serving process co
     assert.deepEqual(plan.packages, []);
 });
 
+test('public page contracts rebuild both frontends and keep the backend release lane', () => {
+    for (const name of ['public-page-data.ts', 'public-seo.ts']) {
+        const plan = classifyChanges(
+            [`packages/storefront-content-plugin/src/shared/${name}`],
+            [
+                ...inventory,
+                { directory: 'storefront-content-plugin', name: '@vendure/storefront-content-plugin' },
+            ],
+        );
+        assert.deepEqual(plan.frontends, ['next-admin', 'storefront'], name);
+        assert.equal(plan.lane, 'runtime', name);
+    }
+});
+
 // Shared content renderers are compiled only by the two browser apps.
 test('shared browser text renderers select both static apps without server checks', () => {
     for (const file of [

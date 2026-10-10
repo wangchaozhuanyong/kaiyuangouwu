@@ -45,6 +45,9 @@ const StoreAllocationMatrixModule = lazy(() =>
 const ProductEditor = lazy(() =>
     routeModuleLoaders.productEditor().then(module => ({ default: module.ProductEditor })),
 );
+const StorefrontSeoEntityModule = lazy(() =>
+    routeModuleLoaders.storefrontSeoEntity().then(module => ({ default: module.StorefrontSeoEntityModule })),
+);
 const CategoriesModule = lazy(() =>
     routeModuleLoaders.categories().then(module => ({ default: module.CategoriesModule })),
 );
@@ -350,6 +353,8 @@ function AppRoutes() {
                     <Route path="allocation" element={<Navigate to="/catalog/list" replace />} />
                     <Route path="products/new" element={<ProductEditor />} />
                     <Route path="products/:id" element={<ProductEditor />} />
+                    <Route path="products/:id/seo" element={<StorefrontSeoEntityModule />} />
+                    <Route path="collections/:id/seo" element={<StorefrontSeoEntityModule />} />
                     <Route path="categories" element={<CategoriesModule />} />
                     <Route path="inventory" element={<InventoryWarehouseModule />} />
                     <Route path="assets" element={<AssetsModule />} />

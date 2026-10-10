@@ -208,7 +208,7 @@ describe('desktop catalog card', () => {
             />,
         );
         expect(html).toContain('class="product-row product-row-detail-link"');
-        expect(html).toContain('href="/product?id=product-1"');
+        expect(html).toContain('href="/zh/product?id=product-1"');
         expect(html).not.toContain('product-catalog-action');
     });
     it('uses catalog grid sizes and eager loading without giving every first-row image high priority', () => {

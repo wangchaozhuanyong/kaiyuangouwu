@@ -25,7 +25,7 @@ describe('homepage module spacing', () => {
 
     it('keeps mobile module edges and quick-link content balanced', () => {
         expect(stylesheet).toMatch(/\.quick-grid\s*\{[^}]*margin:\s*0 12px 10px;[^}]*padding:\s*14px 8px;/);
-        expect(stylesheet).toMatch(/\.quick-grid button\s*\{[^}]*justify-content:\s*center;/);
+        expect(stylesheet).toMatch(/\.quick-grid :is\(button, a\)\s*\{[^}]*justify-content:\s*center;/);
         expect(stylesheet).toMatch(/\.quick-grid b\s*\{[^}]*min-height:\s*0;[^}]*margin-top:\s*0;/);
         expect(stylesheet).toMatch(/\.home-dual-showcase\s*\{[^}]*margin:\s*12px;/);
         expect(stylesheet).toMatch(

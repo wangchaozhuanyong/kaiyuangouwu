@@ -24,7 +24,7 @@ export function ProductDetailLink({
     return (
         <a
             className={className}
-            href={routeHref({ name: 'product', id: product.id })}
+            href={routeHref({ name: 'product', id: product.id, publicLanguage: language })}
             aria-label={`${language === 'zh' ? '查看' : 'View'} ${product.name}`}
             title={title}
             onClick={event => {

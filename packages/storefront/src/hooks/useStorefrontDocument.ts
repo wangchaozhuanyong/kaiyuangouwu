@@ -1,6 +1,14 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import {
+    publicLanguageFromUrl,
+    publicLocalizedHref,
+    publicPageRequestFromUrl,
+    publicPageRequestKey,
+    publicPageRouteHref,
+} from '../../../storefront-content-plugin/src/shared/public-page-data';
+import { type PublicSeoDocument } from '../../../storefront-content-plugin/src/shared/public-seo';
+import {
     resolveStorefrontSemanticPalette,
     semanticPaletteCssVariables,
     storefrontSkinCssVariables,
@@ -70,6 +78,8 @@ export function useStorefrontMetadata({
     logoUrl,
     brandingReady = true,
     brandingScopeKey,
+    publicSeo,
+    seoAccessMode,
 }: {
     isZh: boolean;
     route: RouteState;
@@ -79,9 +89,91 @@ export function useStorefrontMetadata({
     logoUrl: string | null;
     brandingReady?: boolean;
     brandingScopeKey?: string;
+    publicSeo?: PublicSeoDocument | null;
+    seoAccessMode?: string;
 }) {
     const iconScope = useRef(brandingScopeKey);
     useEffect(() => {
+        const location = new URL(storefrontDocumentUrl());
+        let request;
+        try {
+            request = publicPageRequestFromUrl(location.pathname + location.search);
+        } catch {
+            /* Invalid routes stay noindex. */
+        }
+        const explicitLanguage = publicLanguageFromUrl(location.pathname);
+        let canonicalMatchesHost = false;
+        try {
+            canonicalMatchesHost = Boolean(publicSeo && new URL(publicSeo.canonical).host === location.host);
+        } catch {
+            /* Invalid metadata stays noindex. */
+        }
+        const validSeo =
+            publicSeo?.schemaVersion === 1 &&
+            publicSeo.published === true &&
+            seoAccessMode === 'LIVE' &&
+            publicSeo.host === location.host &&
+            publicSeo.channelCode === brandingScopeKey &&
+            explicitLanguage === publicSeo.languageCode &&
+            publicSeo.languageCode === (isZh ? 'zh_Hans' : 'en') &&
+            request &&
+            publicSeo.requestKey === publicPageRequestKey(request) &&
+            canonicalMatchesHost;
+        document
+            .querySelectorAll('link[rel="alternate"][hreflang], script[data-storefront-seo]')
+            .forEach(node => node.remove());
+        if (validSeo && publicSeo) {
+            const share = publicSeo as PublicSeoDocument & { shareTitle?: string; shareDescription?: string };
+            const shareTitle = share.shareTitle || publicSeo.title;
+            const shareDescription = share.shareDescription || publicSeo.description;
+            document.title = publicSeo.title;
+            setMetaContent('meta[name="description"]', publicSeo.description);
+            setMetaContent('meta[name="application-name"]', storefrontName);
+            setMetaContent(
+                'meta[name="robots"]',
+                publicSeo.indexable === true ? publicSeo.robots : 'noindex, follow',
+            );
+            setMetaContent('meta[property="og:site_name"]', storefrontName);
+            setMetaContent('meta[property="og:type"]', 'website');
+            setMetaContent('meta[property="og:title"]', shareTitle);
+            setMetaContent('meta[property="og:description"]', shareDescription);
+            setMetaContent('meta[property="og:url"]', publicSeo.canonical);
+            setMetaContent('meta[property="og:locale"]', isZh ? 'zh_CN' : 'en');
+            setMetaContent('meta[name="twitter:title"]', shareTitle);
+            setMetaContent('meta[name="twitter:description"]', shareDescription);
+            setMetaContent('meta[name="twitter:card"]', publicSeo.image ? 'summary_large_image' : 'summary');
+            if (publicSeo.image) {
+                setMetaContent('meta[property="og:image"]', publicSeo.image);
+                setMetaContent('meta[name="twitter:image"]', publicSeo.image);
+            } else {
+                document.querySelector('meta[property="og:image"]')?.remove();
+                document.querySelector('meta[name="twitter:image"]')?.remove();
+                document.querySelector('meta[property="og:image:alt"]')?.remove();
+                document.querySelector('meta[name="twitter:image:alt"]')?.remove();
+            }
+            let publicCanonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+            if (!publicCanonical) {
+                publicCanonical = document.createElement('link');
+                publicCanonical.rel = 'canonical';
+                document.head.append(publicCanonical);
+            }
+            publicCanonical.href = publicSeo.canonical;
+            for (const alternate of publicSeo.alternates) {
+                const link = document.createElement('link');
+                link.rel = 'alternate';
+                link.hreflang = alternate.language;
+                link.href = alternate.href;
+                document.head.append(link);
+            }
+            for (const data of publicSeo.structuredData) {
+                const script = document.createElement('script');
+                script.type = 'application/ld+json';
+                script.dataset.storefrontSeo = '';
+                script.textContent = JSON.stringify(data);
+                document.head.append(script);
+            }
+            return;
+        }
         const routeLabels: Partial<Record<RouteName, string>> = {
             category: isZh ? '商品' : 'Shop',
             services: isZh ? '商业服务' : 'Business services',
@@ -145,10 +237,18 @@ export function useStorefrontMetadata({
                 : isZh
                   ? `${storefrontName}精选商品`
                   : `Featured products from ${storefrontName}`;
-        const isIndexable = false;
         const canonicalUrl = new URL(storefrontDocumentUrl());
         canonicalUrl.hash = '';
-        if (!isIndexable) canonicalUrl.search = '';
+        canonicalUrl.search = '';
+        if (request) {
+            const href = publicPageRouteHref(request);
+            const publicUrl = new URL(
+                explicitLanguage ? publicLocalizedHref(href, explicitLanguage) : href,
+                canonicalUrl.origin,
+            );
+            canonicalUrl.pathname = publicUrl.pathname;
+            canonicalUrl.search = publicUrl.search;
+        }
 
         document.title = title;
         setMetaContent('meta[name="description"]', description);
@@ -174,7 +274,17 @@ export function useStorefrontMetadata({
             document.head.append(canonical);
         }
         canonical.href = canonicalUrl.href;
-    }, [isZh, route, selectedProduct, storefrontDescription, storefrontName, logoUrl]);
+    }, [
+        isZh,
+        route,
+        selectedProduct,
+        storefrontDescription,
+        storefrontName,
+        logoUrl,
+        publicSeo,
+        seoAccessMode,
+        brandingScopeKey,
+    ]);
 
     useLayoutEffect(() => {
         const scopeChanged = iconScope.current !== brandingScopeKey;

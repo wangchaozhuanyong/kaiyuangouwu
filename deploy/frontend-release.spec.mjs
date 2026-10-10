@@ -39,6 +39,7 @@ import {
     verifyTwoFactor,
 } from './frontend-release.mjs';
 import { frontendDeployCommand } from './frontend-ssm.mjs';
+import { assertStorefrontRenderer } from './storefront-renderer.mjs';
 
 function staticBackendSnapshot() {
     const backendSha = 'a'.repeat(40);
@@ -256,6 +257,25 @@ function vaultFixture(root, origin = null) {
     return tool;
 }
 
+function rendererFixture(
+    directory,
+    contents = 'exports.renderPublicPage = async () => "<main>Public</main>";',
+) {
+    mkdirSync(join(directory, '.server'), { recursive: true });
+    writeFileSync(join(directory, '.server/public-page-renderer.cjs'), contents);
+}
+
+test('renderer gate rejects missing, empty and incompatible server output', t => {
+    const { root } = fixture(t);
+    assert.throws(() => assertStorefrontRenderer(root), /Missing storefront public page renderer/u);
+    rendererFixture(root, '');
+    assert.throws(() => assertStorefrontRenderer(root), /Missing storefront public page renderer/u);
+    rendererFixture(root, 'exports.wrongInterface = true;');
+    assert.throws(() => assertStorefrontRenderer(root), /Invalid storefront public page renderer/u);
+    rendererFixture(root);
+    assert.doesNotThrow(() => assertStorefrontRenderer(root));
+});
+
 test('static artifact round trip carries the isolated tool and rejects missing output before staging', t => {
     const { root } = fixture(t);
     const main = join(root, 'packages/storefront/dist');
@@ -266,12 +286,19 @@ test('static artifact round trip carries the isolated tool and rejects missing o
     assert.throws(() => stageFrontend('storefront', payload, root), /Missing isolated 2FA/u);
     assert.equal(existsSync(payload), false);
     vaultFixture(root);
+    assert.throws(
+        () => stageFrontend('storefront', payload, root),
+        /Missing storefront public page renderer/u,
+    );
+    assert.equal(existsSync(payload), false);
+    rendererFixture(main);
     stageFrontend('storefront', payload, root);
     const archive = join(root, 'frontend.tar.gz');
     const restored = join(root, 'restored');
     execFileSync('tar', ['-czf', archive, '-C', join(root, 'payload'), '.']);
     execFileSync('python3', ['-c', safeExtractPython, archive, restored]);
     assert.equal(readFileSync(join(restored, 'storefront/assets/main.js'), 'utf8'), 'export {};');
+    assert.doesNotThrow(() => assertStorefrontRenderer(join(restored, 'storefront')));
     assert.equal(
         readFileSync(join(restored, 'storefront/.two-factor/assets/vault.js'), 'utf8'),
         'export {};',
@@ -358,6 +385,7 @@ test('storefront and isolated pointer advance together and restore together on a
     mkdirSync(join(directory, 'storefront/.two-factor'), { recursive: true });
     execFileSync('cp', ['-R', tool + '/.', join(directory, 'storefront/.two-factor')]);
     writeFileSync(join(directory, 'storefront/index.html'), '<script src="/assets/main.js"></script>');
+    rendererFixture(join(directory, 'storefront'));
     writeFileSync(
         join(directory, 'storefront/frontend-release.json'),
         JSON.stringify({ sourceSha: 'a'.repeat(40), backendSha: 'b'.repeat(40), component: 'storefront' }),
@@ -675,6 +703,17 @@ test('compilation follows source inputs across release-script commits, and front
         hashFor({ 'packages/storefront-content-plugin/src/shared/hero-scene.css': 'cover' }, 'storefront'),
         hashFor({}, 'storefront'),
     );
+    for (const path of ['public-page-data.ts', 'public-seo.ts']) {
+        for (const component of ['storefront', 'next-admin']) {
+            assert.notEqual(
+                hashFor(
+                    { [`packages/storefront-content-plugin/src/shared/${path}`]: 'new contract' },
+                    component,
+                ),
+                hashFor({}, component),
+            );
+        }
+    }
     assert.equal(
         hashFor({ 'packages/next-admin/src/App.tsx': 'admin2' }, 'storefront'),
         hashFor({}, 'storefront'),

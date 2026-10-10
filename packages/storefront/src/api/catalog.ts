@@ -149,7 +149,8 @@ export class CatalogApi extends BaseDomainApi {
             {
                 kind: 'catalog',
                 path:
-                    typeof window !== 'undefined' && window.location.pathname === '/search'
+                    typeof window !== 'undefined' &&
+                    /^(?:\/(?:zh|en))?\/search\/?$/u.test(window.location.pathname)
                         ? '/search'
                         : '/category',
                 input: {

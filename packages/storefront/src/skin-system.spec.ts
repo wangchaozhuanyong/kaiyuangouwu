@@ -476,7 +476,7 @@ describe('storefront skin system', () => {
                             // Functional active-state marker in the narrow category rail.
                             '.category-subcat-sidebar .subcat-side-item.is-active::before',
                             // Desktop selection indicator; hidden on unselected category rows.
-                            '.desktop-subcategory-sidebar nav > button::before',
+                            '.desktop-subcategory-sidebar nav > a::before',
                         ]).has(selector.trim())
                     ) {
                         findings.push(`${file}: ${selector.trim()} draws a thin background divider`);

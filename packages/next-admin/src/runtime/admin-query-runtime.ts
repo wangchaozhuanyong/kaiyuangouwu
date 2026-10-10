@@ -64,7 +64,7 @@ export function queryPolicy(document: DocumentNode, variables?: Record<string, a
         );
     const report = /Dashboard|Traffic|ReferralOverview/u.test(name);
     const config =
-        /ServerConfig|ActiveChannel|CatalogChannels|StockLocations|CommerceMode|Countries|Zones|TaxCategories/u.test(
+        /ServerConfig|ActiveChannel|CatalogChannels|StockLocations|CommerceMode|Countries|Zones|TaxCategories|StorefrontSeo(?:Entity)?(?:Workspace|Record|History)/u.test(
             name,
         );
     const aiJob = /ProductAiImage.*(?:Job|Task)|ImageGenerationTask/u.test(name);

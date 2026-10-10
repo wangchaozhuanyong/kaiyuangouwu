@@ -1,10 +1,11 @@
 import { priceInputToMinorUnits } from './catalog-page-utils';
+import { STOREFRONT_CATALOG_PAGE_SIZE } from './query-client';
 import { RouteState } from './storefront-router';
 import { StorefrontCatalogInput } from './types';
 
 export type CatalogRouteState = Pick<
     RouteState,
-    'collectionId' | 'childId' | 'sort' | 'fulfillment' | 'inStockOnly' | 'minPrice' | 'maxPrice'
+    'collectionId' | 'childId' | 'sort' | 'fulfillment' | 'inStockOnly' | 'minPrice' | 'maxPrice' | 'page'
 >;
 
 export function catalogRouteState(route: RouteState): Required<CatalogRouteState> {
@@ -16,6 +17,7 @@ export function catalogRouteState(route: RouteState): Required<CatalogRouteState
         inStockOnly: route.inStockOnly === true,
         minPrice: route.minPrice ?? '',
         maxPrice: route.maxPrice ?? '',
+        page: route.page ?? 1,
     };
 }
 
@@ -29,6 +31,7 @@ export function catalogRouteSearch(route: RouteState): CatalogRouteState {
         inStockOnly: state.inStockOnly || undefined,
         minPrice: state.minPrice || undefined,
         maxPrice: state.maxPrice || undefined,
+        page: state.page > 1 ? state.page : undefined,
     };
 }
 
@@ -36,6 +39,8 @@ export function catalogRouteWithChanges(route: RouteState, changes: Partial<Rout
     const state = catalogRouteState(route);
     return {
         name: route.name === 'search' ? 'search' : 'category',
+        publicLanguage: route.publicLanguage,
+        page: changes.page,
         collectionId: state.collectionId,
         childId: state.childId,
         term: route.term,
@@ -59,5 +64,6 @@ export function catalogInputFromRoute(route: RouteState): StorefrontCatalogInput
         inStockOnly: state.inStockOnly,
         minPriceWithTax: priceInputToMinorUnits(state.minPrice),
         maxPriceWithTax: priceInputToMinorUnits(state.maxPrice),
+        ...(route.page && route.page > 1 ? { skip: (route.page - 1) * STOREFRONT_CATALOG_PAGE_SIZE } : {}),
     };
 }

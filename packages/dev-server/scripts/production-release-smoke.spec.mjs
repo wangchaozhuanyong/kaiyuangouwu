@@ -57,6 +57,7 @@ async function startFixtureServer({
     assetCacheControl = 'public, max-age=31536000, immutable',
     assetContentType = 'text/css',
     frontendReleaseSha,
+    languageRedirect,
 } = {}) {
     const server = createServer((request, response) => {
         const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -119,6 +120,11 @@ async function startFixtureServer({
             return;
         }
         if (request.method === 'GET' && requestUrl.pathname === '/') {
+            if (languageRedirect) {
+                response.writeHead(languageRedirect.status, { location: languageRedirect.location });
+                response.end();
+                return;
+            }
             if (!hasEntryCookie && redirectStorefrontToPromo) {
                 response.writeHead(302, { location: '/promo' });
                 response.end();
@@ -129,6 +135,14 @@ async function startFixtureServer({
                 '<html><head><link href="/assets/index-test.css" rel="stylesheet">' +
                     extraEntryScript +
                     '</head></html>',
+            );
+            return;
+        }
+        if (request.method === 'GET' && /^\/(?:zh|en)\/?$/u.test(requestUrl.pathname)) {
+            response.writeHead(200, { 'content-type': 'text/html' });
+            response.end(
+                '<html><head><link href="/assets/index-test.css" rel="stylesheet"></head>' +
+                    '<body><div id="root" data-public-rendered="1"><main>Language homepage</main></div></body></html>',
             );
             return;
         }
@@ -354,6 +368,63 @@ test('rejects a main storefront that still redirects to the promotion page', asy
         }),
         /Direct storefront: expected HTTP 200, received 302/u,
     );
+});
+
+test('full release and asset checks accept one permanent same-origin language homepage redirect', async t => {
+    for (const languageRedirect of [
+        { status: 301, location: '/zh/' },
+        { status: 308, location: '/en' },
+    ]) {
+        const fixture = await startFixtureServer({ languageRedirect });
+        t.after(fixture.close);
+        const checks = await verifyProductionRelease({
+            storefrontUrl: fixture.origin,
+            dashboardUrl: `${fixture.origin}/dashboard/`,
+            timeoutMs: 1_000,
+        });
+        assert.ok(checks.includes('direct storefront'));
+        assert.deepEqual(await verifyStorefrontAssets({ storefrontUrl: fixture.origin }), [
+            '/assets/index-test.css',
+        ]);
+    }
+});
+
+test('language redirect rejects foreign, private, query, loop and broken final pages', async () => {
+    const origin = 'https://store.example.com';
+    for (const { status = 301, location = '/zh/', finalStatus = 200, finalBody, expected } of [
+        { location: 'https://other.example/zh/', expected: /invalid permanent language redirect/u },
+        {
+            location: 'https://user:password@store.example.com/zh/',
+            expected: /invalid permanent language redirect/u,
+        },
+        { location: '/admin-api', expected: /invalid permanent language redirect/u },
+        { location: '/zh/?session=example', expected: /invalid permanent language redirect/u },
+        { location: '/zh/#loop', expected: /invalid permanent language redirect/u },
+        { status: 302, expected: /expected HTTP 200, received 302/u },
+        { finalStatus: 301, expected: /expected HTTP 200, received 301/u },
+        { finalStatus: 503, expected: /expected HTTP 200, received 503/u },
+        { finalBody: '<html><div id="root"></div></html>', expected: /missing server-rendered content/u },
+    ]) {
+        const paths = [];
+        await assert.rejects(
+            verifyStorefrontAssets({
+                storefrontUrl: origin,
+                fetchImpl: async url => {
+                    const path = new URL(url).pathname;
+                    paths.push(path);
+                    return path === '/'
+                        ? new Response(null, { status, headers: { location } })
+                        : new Response(finalBody ?? '<div data-public-rendered="1">Home</div>', {
+                              status: finalStatus,
+                              headers: { 'content-type': 'text/html', location: '/' },
+                          });
+                },
+            }),
+            expected,
+        );
+        assert.ok(paths.length <= 2, 'must not follow a loop or fetch unrelated locations');
+        assert.ok(paths.every(path => ['/', '/zh/'].includes(path)));
+    }
 });
 
 test('rejects private or non-reusable storefront build assets', async t => {

@@ -89,7 +89,7 @@ describe('storefront navigation state', () => {
         return <BottomNavigation activeRoute={value.route.name} cartQuantity={0} language="zh" />;
     }
     function servicesLink() {
-        const link = host.querySelector<HTMLAnchorElement>('a[href="/services"]');
+        const link = host.querySelector<HTMLAnchorElement>('a[href="/zh/services"]');
         if (!link) throw new Error('Expected the actual services navigation link');
         return link;
     }
@@ -479,7 +479,10 @@ describe('storefront navigation state', () => {
             expect(value.isPreparingProduct).toBe(false);
             expect(router.state.location.pathname).toBe('/services');
             expect(router.navigate).toHaveBeenCalledTimes(2);
-            expect(router.navigate).toHaveBeenLastCalledWith({ to: '/services' });
+            expect(router.navigate).toHaveBeenLastCalledWith({
+                to: '/services',
+                search: { __storefrontLanguage: 'zh' },
+            });
         },
     );
 

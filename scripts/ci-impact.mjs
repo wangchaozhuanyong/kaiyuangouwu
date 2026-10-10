@@ -16,14 +16,23 @@ const sharedStaticInputs = new Set([
     'packages/storefront-content-plugin/src/shared/content-text.tsx',
     'packages/storefront-content-plugin/src/shared/content-text.css',
 ]);
+// These contracts are also consumed by the backend. Include both browser
+// outputs without classifying a contract change as a static-only release.
+const sharedPublicInputs = new Set([
+    'packages/storefront-content-plugin/src/shared/public-page-data.ts',
+    'packages/storefront-content-plugin/src/shared/public-seo.ts',
+]);
 export const staticStyleOwner = file => (sharedStaticInputs.has(file) ? 'storefront' : undefined);
 // The Admin decoration preview compiles the storefront router and CSS into its own bundle.
 export const storefrontPreviewInput = file =>
     (file.startsWith('packages/storefront/src/') && !/\.(spec|test)\.[cm]?[jt]sx?$/u.test(file)) ||
-    Boolean(staticStyleOwner(file));
+    Boolean(staticStyleOwner(file)) ||
+    sharedPublicInputs.has(file);
 export const affectedFrontendsForFile = file =>
     sorted([
-        ...(staticStyleOwner(file) || file.startsWith('packages/storefront/') ? ['storefront'] : []),
+        ...(staticStyleOwner(file) || sharedPublicInputs.has(file) || file.startsWith('packages/storefront/')
+            ? ['storefront']
+            : []),
         ...(file.startsWith('packages/next-admin/') || storefrontPreviewInput(file) ? ['next-admin'] : []),
     ]);
 export const DATABASES = ['mysql', 'sqljs', 'postgres', 'mariadb'];
@@ -51,6 +60,7 @@ export const isAutomationOnly = file =>
     file.startsWith('.github/') ||
     [
         'deploy/artifact-inputs.mjs',
+        'deploy/storefront-renderer.mjs',
         'deploy/frontend-release.mjs',
         'deploy/frontend-ssm.mjs',
         'deploy/deploy-frontends-from-s3.sh',
@@ -118,6 +128,7 @@ export function classifyChanges(changedFiles, inventory = [], { full = false } =
     const selected = new Set(shared ? inventory.map(pkg => pkg.directory) : changedPackages);
     if (migration && inventory.some(pkg => pkg.directory === 'core')) selected.add('core');
     if (executable.some(storefrontPreviewInput)) selected.add('next-admin');
+    if (executable.some(file => sharedPublicInputs.has(file))) selected.add('storefront');
     // Include downstream packages, while the runner builds only their necessary prerequisites.
     let added;
     do {

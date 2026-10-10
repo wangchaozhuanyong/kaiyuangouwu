@@ -17,8 +17,7 @@ import {
     routeFromHash,
     routeFromRouterLocation,
     routeHref,
-    routePath,
-    routeSearch,
+    routeNavigateOptions,
     RouteState,
 } from '../storefront-router';
 import {
@@ -154,8 +153,7 @@ export function useStorefrontNavigation({
                 void prepareProduct?.(resolvedNext.id).catch(() => undefined);
             }
             void tanstackNavigate({
-                to: routePath(resolvedNext.name),
-                search: routeSearch(resolvedNext),
+                ...routeNavigateOptions(resolvedNext),
                 replace,
                 ...(readAuthOverlay(router.state.location.search) &&
                 routeHref(resolvedNext) ===
@@ -244,7 +242,7 @@ export function useStorefrontNavigation({
                 >
             >,
         ) => {
-            const next = { ...categoryStateRef.current, ...updates };
+            const next = { ...categoryStateRef.current, ...updates, page: undefined };
             navigate({ name: 'category', ...next });
         },
         [navigate],

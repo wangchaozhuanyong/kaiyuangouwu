@@ -22,6 +22,7 @@ describe('storefront account boundary', () => {
     it.each([
         'home',
         'product',
+        'guide',
         'category',
         'search',
         'flash-sale',

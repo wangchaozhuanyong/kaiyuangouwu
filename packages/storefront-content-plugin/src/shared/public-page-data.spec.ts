@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
     canonicalPublicPageRequest,
+    publicLanguageFromUrl,
+    publicLocalizedHref,
     publicPageDataSearchParams,
     publicPageRequestFromUrl,
     publicPageRequestKey,
@@ -10,6 +12,53 @@ import {
 } from './public-page-data';
 
 describe('canonical public route requests', () => {
+    it('keeps language authority and entity identity in public URLs while leaving private routes alone', () => {
+        expect(publicLanguageFromUrl('/zh/product?id=p-1')).toBe('zh_Hans');
+        expect(publicLanguageFromUrl('/en/guides/product-help')).toBe('en');
+        expect(publicLanguageFromUrl('/zh/account')).toBeUndefined();
+        expect(publicLocalizedHref('/zh/product?id=p-1&utm_source=ad', 'en')).toBe(
+            '/en/product?id=p-1&utm_source=ad',
+        );
+        expect(publicLocalizedHref('/account?tab=orders', 'en')).toBe('/account?tab=orders');
+        expect(publicPageRequestFromUrl('/zh/product?id=p-1')).toEqual({ kind: 'product', id: 'p-1' });
+        expect(publicPageRequestFromUrl('/en/guides/product-help')).toEqual({
+            kind: 'article',
+            id: 'product-help',
+        });
+        expect(publicPageRequestFromUrl('/zh/legal?id=terms')).toEqual({ kind: 'page', id: 'terms' });
+        expect(publicPageDataSearchParams({ kind: 'article', id: 'product-help' }).get('id')).toBe(
+            'product-help',
+        );
+    });
+
+    it('round-trips catalog page identity without collapsing page two to page one', () => {
+        const request = publicPageRequestFromUrl('/en/category?collectionId=cat&page=3');
+        if (!request) throw new Error('Expected a public catalog request');
+        expect(request).toMatchObject({
+            kind: 'catalog',
+            input: { collectionId: 'cat', skip: 24, take: 12 },
+        });
+        expect(publicPageRouteHref(request)).toBe('/category?collectionId=cat&page=3');
+        expect(publicPageRequestFromUrl(publicPageRouteHref(request))).toEqual(request);
+        for (const value of ['0', '-1', '1.5', 'Infinity', '100000']) {
+            expect(() => publicPageRequestFromUrl(`/category?page=${value}`)).toThrow();
+        }
+    });
+    it('preserves bounded arbitrary API offsets and page sizes with explicit query parameters', () => {
+        for (const input of [
+            { take: 2, skip: 1 },
+            { take: 24, skip: 24 },
+            { take: 12, skip: 1 },
+        ]) {
+            const request = canonicalPublicPageRequest({ kind: 'catalog', input });
+            const href = publicPageRouteHref(request);
+            expect(publicPageRequestFromUrl(href)).toEqual(request);
+            expect(href).toContain(`skip=${input.skip}`);
+            expect(href).toContain(`take=${input.take}`);
+        }
+        for (const query of ['take=0', 'take=49', 'skip=-1', 'skip=100001', 'skip=1.5', 'page=2&skip=1'])
+            expect(() => publicPageRequestFromUrl(`/category?${query}`)).toThrow();
+    });
     it('preserves the router legacy collection, child and stock aliases', () => {
         expect(publicPageRequestFromUrl('/category?collection=parent&child=child&stock=1')).toEqual(
             publicPageRequestFromUrl('/category?collectionId=parent&childId=child&inStockOnly=true'),

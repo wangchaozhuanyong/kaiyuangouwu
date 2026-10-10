@@ -38,6 +38,7 @@ import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket'
 import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
+import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
 import { claimableCouponCampaigns } from '../coupon-center-state';
 import { useDesktopLayout } from '../desktop-layout';
 import {
@@ -364,6 +365,7 @@ export interface HomePageProps {
     locale: string;
     language: StorefrontLanguage;
     storefrontName: string;
+    storefrontNameAliases?: string[];
     storefrontDescription: string;
     storefrontTagline: string;
     logoUrl: string | null;
@@ -427,6 +429,7 @@ export function HomePage() {
         locale,
         language,
         storefrontName,
+        storefrontNameAliases,
         storefrontDescription,
         storefrontTagline,
         logoUrl,
@@ -537,10 +540,8 @@ export function HomePage() {
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
     const openNoticeItem = noticeItems.find(item => item.id === openNoticeId);
     const showFooter = !footerConfigured && (Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL'));
-    const emptyCatalogOrder =
-        footerBlock && homepageModuleOrder('FOOTER') === homepageModules.length - 1
-            ? homepageModuleOrder('FOOTER') - 1
-            : homepageModules.length;
+    const activeFooter = footerBlock && hasHomepageModule('FOOTER') ? footerBlock : undefined;
+    const hasStorefrontIntroduction = Boolean(storefrontTagline.trim() || storefrontDescription.trim());
     const campaignCouponCards = couponCardsFromCampaigns(
         claimableCouponCampaigns(coupons),
         language,
@@ -939,6 +940,7 @@ export function HomePage() {
         imageUrl?: string | null;
         disabled?: boolean;
         onClick: () => void;
+        href?: string;
     }> = (quickBlock?.items ?? []).map((item, index) => ({
         id: item.id,
         label: item.label,
@@ -946,6 +948,7 @@ export function HomePage() {
         imageUrl: item.imageUrl?.trim(),
         disabled: item.targetType === 'NONE' || !item.targetValue,
         onClick: () => onContentTarget(item.targetType, item.targetValue),
+        href: contentTargetHref(item.targetType, item.targetValue, language),
     }));
     const quickPageCount = Math.max(1, Math.ceil(quickLinks.length / 5));
     const activeQuickPage = Math.min(quickPage, quickPageCount - 1);
@@ -1046,11 +1049,6 @@ export function HomePage() {
                     }}
                 />
             ) : null}
-
-            {storefrontTagline && <p className="storefront-tagline">{storefrontTagline}</p>}
-            {storefrontDescription && (
-                <ContentText className="storefront-description">{storefrontDescription}</ContentText>
-            )}
 
             {contentError && (
                 <div className="content-warning" role="status">
@@ -1344,45 +1342,67 @@ export function HomePage() {
                                                       gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
                                                   }}
                                               >
-                                                  {row.map(item => (
-                                                      <button
-                                                          type="button"
-                                                          className="desktop-quick-tile"
-                                                          key={item.id}
-                                                          onClick={item.onClick}
-                                                          disabled={item.disabled}
-                                                      >
-                                                          <span
-                                                              className="desktop-quick-media"
-                                                              aria-hidden="true"
+                                                  {row.map(item => {
+                                                      const Target = item.href ? 'a' : 'button';
+                                                      return (
+                                                          <Target
+                                                              type={item.href ? undefined : 'button'}
+                                                              href={item.href}
+                                                              className="desktop-quick-tile"
+                                                              key={item.id}
+                                                              onClick={event =>
+                                                                  item.href
+                                                                      ? interceptContentNavigation(
+                                                                            event,
+                                                                            item.onClick,
+                                                                        )
+                                                                      : item.onClick()
+                                                              }
+                                                              disabled={item.href ? undefined : item.disabled}
                                                           >
-                                                              {item.imageUrl ? (
-                                                                  <SafeImage
-                                                                      src={item.imageUrl}
-                                                                      alt=""
-                                                                      imageKind="card"
-                                                                      sizes="(min-width: 1400px) 210px, 20vw"
-                                                                  />
-                                                              ) : (
-                                                                  item.icon
-                                                              )}
-                                                          </span>
-                                                          <b>{item.label}</b>
-                                                      </button>
-                                                  ))}
+                                                              <span
+                                                                  className="desktop-quick-media"
+                                                                  aria-hidden="true"
+                                                              >
+                                                                  {item.imageUrl ? (
+                                                                      <SafeImage
+                                                                          src={item.imageUrl}
+                                                                          alt=""
+                                                                          imageKind="card"
+                                                                          sizes="(min-width: 1400px) 210px, 20vw"
+                                                                      />
+                                                                  ) : (
+                                                                      item.icon
+                                                                  )}
+                                                              </span>
+                                                              <b>{item.label}</b>
+                                                          </Target>
+                                                      );
+                                                  })}
                                               </div>
                                           ))
-                                        : visibleQuickLinks.map(item => (
-                                              <button
-                                                  type="button"
-                                                  key={item.id}
-                                                  onClick={item.onClick}
-                                                  disabled={item.disabled}
-                                              >
-                                                  <span>{item.icon}</span>
-                                                  <b>{item.label}</b>
-                                              </button>
-                                          ))}
+                                        : visibleQuickLinks.map(item => {
+                                              const Target = item.href ? 'a' : 'button';
+                                              return (
+                                                  <Target
+                                                      type={item.href ? undefined : 'button'}
+                                                      href={item.href}
+                                                      key={item.id}
+                                                      onClick={event =>
+                                                          item.href
+                                                              ? interceptContentNavigation(
+                                                                    event,
+                                                                    item.onClick,
+                                                                )
+                                                              : item.onClick()
+                                                      }
+                                                      disabled={item.href ? undefined : item.disabled}
+                                                  >
+                                                      <span>{item.icon}</span>
+                                                      <b>{item.label}</b>
+                                                  </Target>
+                                              );
+                                          })}
                                     {desktop && quickPageCount > 1 && (
                                         <div className="desktop-quick-pagination">
                                             <button
@@ -1416,16 +1436,6 @@ export function HomePage() {
                         </div>
 
                         {trustBar}
-
-                        {footerBlock && hasHomepageModule('FOOTER') ? (
-                            <LegalFooter
-                                storefrontName={storefrontName}
-                                language={language}
-                                content={footerBlock}
-                                onContentTarget={onContentTarget}
-                                style={{ order: homepageModuleOrder('FOOTER') }}
-                            />
-                        ) : null}
 
                         {hasHomepageModule('COUPONS') &&
                             (couponCards.length > 0 || couponCampaignsLoading || couponCampaignsError) && (
@@ -1485,7 +1495,7 @@ export function HomePage() {
                         !recommendationProducts.length ? (
                             <div
                                 className={homepageSectionShellClassName}
-                                style={{ order: emptyCatalogOrder }}
+                                style={{ order: homepageModules.length }}
                             >
                                 {catalogLoading ? (
                                     <PageSkeleton
@@ -1606,11 +1616,15 @@ export function HomePage() {
                         ) : null}
                     </div>
 
-                    {showFooter ? (
+                    {activeFooter || showFooter || hasStorefrontIntroduction ? (
                         <LegalFooter
                             storefrontName={storefrontName}
+                            storefrontNameAliases={storefrontNameAliases}
+                            storefrontTagline={storefrontTagline}
+                            storefrontDescription={storefrontDescription}
+                            showLinks={Boolean(activeFooter) || showFooter}
                             language={language}
-                            content={legalBlock}
+                            content={activeFooter ?? (showFooter ? legalBlock : undefined)}
                             onContentTarget={onContentTarget}
                         />
                     ) : null}
@@ -1851,6 +1865,7 @@ function ManagedContentSection({
                                 key={item.id}
                                 item={item}
                                 products={products}
+                                language={language}
                                 onContentTarget={onContentTarget}
                             />
                         ))}
@@ -1995,6 +2010,7 @@ function CategoryPromotionSection({
                                 key={item.id}
                                 item={item}
                                 products={products}
+                                language={language}
                                 onContentTarget={onContentTarget}
                             />
                         ))}

@@ -3,7 +3,7 @@ import { ShoppingCart, UserRound } from 'lucide-react';
 import { type AnchorHTMLAttributes, forwardRef, lazy, Suspense, useState } from 'react';
 
 import { authOverlayForNavigation } from '../../auth-overlay-navigation';
-import { routeFromHash } from '../../storefront-router';
+import { routeFromHash, routeSearch } from '../../storefront-router';
 import { BrandLogo } from '../../storefront-ui/brand-logo';
 import { useStorefront } from '../../StorefrontContext';
 import { StorefrontContentBlock } from '../../types';
@@ -93,7 +93,12 @@ export function DesktopHeader({
         <header className={`proto-desktop-header${visibleRoute.name === 'search' ? ' is-search-page' : ''}`}>
             <div className="proto-header-inner">
                 <div className="proto-header-left">
-                    <Link className="proto-brand" to="/" aria-label={context.storefrontName}>
+                    <Link
+                        className="proto-brand"
+                        to="/"
+                        search={routeSearch({ name: 'home', publicLanguage: context.language })}
+                        aria-label={context.storefrontName}
+                    >
                         <BrandLogo
                             url={context.logoUrl}
                             name={context.storefrontName}
@@ -106,6 +111,10 @@ export function DesktopHeader({
                             <DesktopNavigationLink
                                 key={item.key}
                                 to={item.target}
+                                search={routeSearch({
+                                    name: item.routeName,
+                                    publicLanguage: context.language,
+                                })}
                                 className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
                                 current={activeRoute === item.routeName}
                             >

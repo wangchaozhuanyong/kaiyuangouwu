@@ -82,7 +82,8 @@ export function useStorefrontAppState() {
         customerAuthenticated,
         legalIdentity,
         refetchStorefront,
-        toggleLanguage,
+        toggleLanguage: toggleStoredLanguage,
+        publicSeo,
         products,
         productsQuery,
         collections,
@@ -169,6 +170,24 @@ export function useStorefrontAppState() {
         prepareProduct: storefrontContextResolved ? prepareProductNavigation : undefined,
         authenticated: customerAuthenticated,
     });
+
+    useEffect(() => {
+        const publicLanguage = route.publicLanguage;
+        if (!publicLanguage) return;
+        setStorefrontContext(current =>
+            current.language === publicLanguage
+                ? current
+                : {
+                      ...current,
+                      language: publicLanguage,
+                  },
+        );
+    }, [route.publicLanguage, setStorefrontContext]);
+    const toggleLanguage = useCallback(() => {
+        if (route.publicLanguage) {
+            navigate({ ...route, publicLanguage: route.publicLanguage === 'zh' ? 'en' : 'zh' });
+        } else toggleStoredLanguage();
+    }, [navigate, route, toggleStoredLanguage]);
 
     // React DOM deduplicates resource hints. Calling this during render lets a restored public
     // query cache announce the LCP candidate before the route component commits its image node.
@@ -621,6 +640,8 @@ export function useStorefrontAppState() {
         logoUrl,
         brandingScopeKey: market.code,
         brandingReady: storefrontUnavailable || Boolean(configQuery.data && configQuery.isFetchedAfterMount),
+        publicSeo,
+        seoAccessMode: storefrontUnavailable ? 'CLOSED' : configQuery.data?.accessMode,
     });
 
     const visitProductRef = useRef(productActivity.visitProduct);

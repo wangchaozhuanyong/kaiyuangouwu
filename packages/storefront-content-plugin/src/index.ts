@@ -49,5 +49,6 @@ export type {
     PublicPageRequest,
     StorefrontPageData,
 } from './shared/public-page-data';
+export * from './shared/public-seo';
 export { StorefrontAccountSettingsService } from './storefront-account-settings';
 export { StorefrontVisualPresetService } from './storefront-visual-preset.service';

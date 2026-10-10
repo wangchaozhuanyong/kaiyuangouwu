@@ -81,6 +81,9 @@ describe('accepted writes and bounded reads', () => {
         ['retryCheckoutDelivery', 'order', 'orders'],
         ['retryCheckoutDelivery', 'digitalDeliveryExceptions', 'orders'],
         ['setDataRetentionLegalHold', 'dataRetentionRecords', 'settings'],
+        ['saveStorefrontSeoDraft', 'storefrontSeoWorkspace', 'storefront'],
+        ['publishStorefrontSeoRecord', 'storefrontSeoRecord', 'storefront'],
+        ['restoreStorefrontSeoRevision', 'storefrontSeoHistory', 'storefront'],
     ])('connects accepted %s writes to dependent %s reads', (field, read, domain) => {
         const document = gql(`mutation Mapping { ${field} { id } }`);
         const domains = resourceDomains(document);

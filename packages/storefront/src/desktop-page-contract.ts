@@ -10,6 +10,7 @@ export const desktopPageFamilyByRoute = {
     'flash-sale': 'discovery',
     recommendations: 'discovery',
     product: 'product',
+    guide: 'content',
     cart: 'commerce',
     purchase: 'commerce',
     checkout: 'commerce',

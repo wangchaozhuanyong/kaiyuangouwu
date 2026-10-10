@@ -7,6 +7,7 @@ import { normalizeRouteSearch } from '../storefront-router';
 
 export const Route = createFileRoute('/search')({
     validateSearch: normalizeRouteSearch,
-    loader: ({ location }) => prefetchPublicPage(storefrontQueryClient, location.href).catch(() => undefined),
+    loader: ({ location }) =>
+        prefetchPublicPage(storefrontQueryClient, location.publicHref).catch(() => undefined),
     component: SearchRoutePage,
 });

@@ -140,6 +140,24 @@ describe('category automatic pagination', () => {
         vi.unstubAllGlobals();
         vi.useRealTimers();
         onlineManager.setOnline(true);
+        window.history.replaceState({}, '', '/');
+    });
+
+    it('opens a direct page URL at its own offset and exposes real next and previous links', async () => {
+        window.history.replaceState({}, '', '/zh/category?collectionId=one&page=2');
+        input = { ...input, skip: 12 };
+        render();
+        await settle();
+        expect(catalog.mock.calls[0][0]).toMatchObject({ collectionId: 'one', skip: 12, take: 12 });
+        expect(pagination.products[0]?.id).toBe('12');
+        if (!pagination.nextHref || !pagination.previousHref)
+            throw new Error('Expected both pagination links');
+        expect(new URL(pagination.nextHref, window.location.origin).pathname).toBe('/zh/category');
+        expect(new URL(pagination.nextHref, window.location.origin).searchParams.get('page')).toBe('3');
+        expect(new URL(pagination.previousHref, window.location.origin).searchParams.get('page')).toBeNull();
+        expect(new URL(pagination.nextHref, window.location.origin).searchParams.get('collectionId')).toBe(
+            'one',
+        );
     });
 
     it('uses the results scroller and requests the next 12 products once during rapid triggers', async () => {

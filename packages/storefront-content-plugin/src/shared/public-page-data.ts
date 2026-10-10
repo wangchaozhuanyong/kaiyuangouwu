@@ -1,3 +1,4 @@
+import type { PublicGuideContent, PublicSeoDocument } from './public-seo';
 import type { MediaDescriptor } from './responsive-image';
 
 export type PublicPageCatalogInput = {
@@ -14,19 +15,81 @@ export type PublicPageCatalogInput = {
 export type PublicPageRequest =
     | { kind: 'home' }
     | { kind: 'catalog'; input: PublicPageCatalogInput; path?: '/category' | '/search' }
-    | { kind: 'product'; id: string };
+    | { kind: 'product'; id: string }
+    | { kind: 'article'; id: string }
+    | { kind: 'page'; id: 'services' | 'support' | 'terms' | 'privacy' };
 
 const publicId = /^[a-z0-9_-]{1,100}$/iu;
 const publicSorts = ['RECOMMENDED', 'SALES', 'NEWEST', 'NAME', 'PRICE_ASC', 'PRICE_DESC'] as const;
 const routeSorts = ['recommended', 'sales', 'newest', 'name', 'price-asc', 'price-desc'] as const;
 
+export type PublicStorefrontLanguageCode = 'zh_Hans' | 'en';
+const publicStorefrontPaths = new Set([
+    '/',
+    '/home',
+    '/product',
+    '/category',
+    '/search',
+    '/services',
+    '/support',
+    '/announcements',
+    '/legal',
+    '/promo',
+    '/flash-sale',
+    '/recommendations',
+]);
+
+/** Language prefixes apply only to public content, never account or checkout routes. */
+export function publicLanguageFromUrl(pathAndSearch: string): PublicStorefrontLanguageCode | undefined {
+    const match = /^\/(zh|en)(?:\/|\?|$)/u.exec(pathAndSearch);
+    if (!match) return;
+    const pathname = pathAndSearch.split(/[?#]/u, 1)[0];
+    const unprefixed = pathname.slice(match[1].length + 1) || '/';
+    if (
+        !publicStorefrontPaths.has(unprefixed === '/' ? '/' : unprefixed.replace(/\/+$/u, '')) &&
+        !/^\/guides\/[a-z0-9_-]{1,100}\/?$/iu.test(unprefixed)
+    )
+        return;
+    return match[1] === 'zh' ? 'zh_Hans' : 'en';
+}
+
+export function publicUnlocalizedPathname(pathname: string): string {
+    return publicLanguageFromUrl(pathname) ? pathname.replace(/^\/(zh|en)(?=\/|$)/u, '') || '/' : pathname;
+}
+
+export function isPublicStorefrontPathname(pathname: string): boolean {
+    const path = publicUnlocalizedPathname(pathname);
+    return (
+        publicStorefrontPaths.has(path === '/' ? '/' : path.replace(/\/+$/u, '')) ||
+        /^\/guides\/[a-z0-9_-]{1,100}\/?$/iu.test(path)
+    );
+}
+
+export function publicLocalizedHref(
+    pathAndSearch: string,
+    languageCode: PublicStorefrontLanguageCode,
+): string {
+    if (!pathAndSearch.startsWith('/') || pathAndSearch.startsWith('//') || /[\\\r\n]/u.test(pathAndSearch))
+        throw new Error('Invalid public location');
+    const url = new URL(pathAndSearch, 'https://storefront.invalid');
+    if (!isPublicStorefrontPathname(url.pathname)) return pathAndSearch;
+    const pathname = publicUnlocalizedPathname(url.pathname);
+    url.pathname = `/${languageCode === 'zh_Hans' ? 'zh' : 'en'}${pathname === '/home' ? '/' : pathname}`;
+    return url.pathname + url.search + url.hash;
+}
+
 /** One deterministic identity for SSI, early browser reads and navigation. No private route inputs. */
 export function canonicalPublicPageRequest(value: PublicPageRequest): PublicPageRequest {
     if (value.kind === 'home') return { kind: 'home' };
-    if (value.kind === 'product') {
+    if (value.kind === 'page') {
+        if (!['services', 'support', 'terms', 'privacy'].includes(value.id))
+            throw new Error('Invalid public page');
+        return { kind: 'page', id: value.id };
+    }
+    if (value.kind === 'product' || value.kind === 'article') {
         if (typeof value.id !== 'string' || !publicId.test(value.id))
             throw new Error('Invalid public product');
-        return { kind: 'product', id: value.id };
+        return { kind: value.kind, id: value.id };
     }
     if (
         value.kind !== 'catalog' ||
@@ -91,11 +154,22 @@ export function publicPageRequestFromUrl(
         return;
     const url = new URL(pathAndSearch, 'https://storefront.invalid');
     if (url.origin !== 'https://storefront.invalid') return;
-    if (url.pathname === '/' || url.pathname === '/home') return { kind: 'home' };
-    if (url.pathname === '/product') {
+    const rawPathname = publicUnlocalizedPathname(url.pathname);
+    const pathname = rawPathname === '/' ? '/' : rawPathname.replace(/\/+$/u, '');
+    if (pathname === '/' || pathname === '/home') return { kind: 'home' };
+    const article = /^\/guides\/([a-z0-9_-]{1,100})\/?$/iu.exec(pathname);
+    if (article) return { kind: 'article', id: article[1] };
+    if (pathname === '/services' || pathname === '/support')
+        return { kind: 'page', id: pathname.slice(1) as 'services' | 'support' };
+    if (pathname === '/legal') {
+        const id = url.searchParams.get('id');
+        if (id !== 'terms' && id !== 'privacy') throw new Error('Invalid public legal page');
+        return { kind: 'page', id };
+    }
+    if (pathname === '/product') {
         return canonicalPublicPageRequest({ kind: 'product', id: url.searchParams.get('id') ?? '' });
     }
-    if (url.pathname !== '/category' && url.pathname !== '/search') return;
+    if (pathname !== '/category' && pathname !== '/search') return;
     const query = url.searchParams;
     const child = query.get('childId') || query.get('child');
     const collection =
@@ -113,9 +187,25 @@ export function publicPageRequestFromUrl(
         if (!Number.isFinite(number) || number < 0) throw new Error('Invalid public price');
         return Math.round(number * 100);
     };
+    const rawTake = query.get('take');
+    const take = rawTake === null ? (options.take ?? 12) : Number(rawTake);
+    if (!Number.isSafeInteger(take) || take < 1 || take > 48) throw new Error('Invalid public pagination');
+    const rawPage = query.get('page');
+    const page = rawPage === null ? 1 : Number(rawPage);
+    if (!Number.isSafeInteger(page) || page < 1 || (page - 1) * take > 100_000)
+        throw new Error('Invalid public pagination');
+    const rawSkip = query.get('skip');
+    const skip = rawSkip === null ? (page - 1) * take : Number(rawSkip);
+    if (
+        !Number.isSafeInteger(skip) ||
+        skip < 0 ||
+        skip > 100_000 ||
+        (rawSkip !== null && rawPage !== null && skip !== (page - 1) * take)
+    )
+        throw new Error('Invalid public pagination');
     return canonicalPublicPageRequest({
         kind: 'catalog',
-        path: url.pathname,
+        path: pathname,
         input: {
             term: query.get('term') ?? undefined,
             collectionId: collection && collection !== 'all' ? collection : undefined,
@@ -125,8 +215,8 @@ export function publicPageRequestFromUrl(
             inStockOnly: query.get('inStockOnly') === 'true' || query.get('stock') === '1',
             minPriceWithTax: price('minPrice'),
             maxPriceWithTax: price('maxPrice'),
-            skip: 0,
-            take: options.take ?? 12,
+            skip,
+            take,
         },
     });
 }
@@ -135,6 +225,11 @@ export function publicPageRouteHref(value: PublicPageRequest): string {
     const request = canonicalPublicPageRequest(value);
     if (request.kind === 'home') return '/';
     if (request.kind === 'product') return `/product?id=${encodeURIComponent(request.id)}`;
+    if (request.kind === 'article') return `/guides/${encodeURIComponent(request.id)}`;
+    if (request.kind === 'page')
+        return request.id === 'terms' || request.id === 'privacy'
+            ? `/legal?id=${request.id}`
+            : `/${request.id}`;
     const query = new URLSearchParams();
     const input = request.input;
     if (input.term) query.set('term', input.term);
@@ -145,6 +240,14 @@ export function publicPageRouteHref(value: PublicPageRequest): string {
     if (input.inStockOnly) query.set('inStockOnly', 'true');
     if (input.minPriceWithTax != null) query.set('minPrice', String(input.minPriceWithTax / 100));
     if (input.maxPriceWithTax != null) query.set('maxPrice', String(input.maxPriceWithTax / 100));
+    const take = input.take ?? 12;
+    const skip = input.skip ?? 0;
+    if (take === 12 && skip % take === 0) {
+        if (skip) query.set('page', String(skip / take + 1));
+    } else {
+        if (skip) query.set('skip', String(skip));
+        query.set('take', String(take));
+    }
     return `${request.path ?? '/category'}${query.size ? `?${query}` : ''}`;
 }
 
@@ -154,7 +257,8 @@ export function publicPageDataSearchParams(
 ): URLSearchParams {
     const request = canonicalPublicPageRequest(value);
     const parameters = new URLSearchParams({ kind: request.kind });
-    if (request.kind === 'product') parameters.set('id', request.id);
+    if (request.kind === 'product' || request.kind === 'article' || request.kind === 'page')
+        parameters.set('id', request.id);
     if (request.kind === 'catalog') {
         parameters.set('path', request.path ?? '/category');
         parameters.set('input', JSON.stringify(request.input));
@@ -189,6 +293,8 @@ export interface StorefrontPageData<
     Product = unknown,
     Collection = unknown,
 > {
+    seo?: PublicSeoDocument;
+    publicContent?: PublicGuideContent;
     schemaVersion: 1;
     version: string;
     generatedAt: number;

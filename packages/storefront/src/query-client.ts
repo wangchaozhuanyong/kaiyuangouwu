@@ -628,5 +628,6 @@ export function catalogCacheInput(input: Record<string, string | number | boolea
         minPriceWithTax: input.minPriceWithTax,
         maxPriceWithTax: input.maxPriceWithTax,
         take: input.take ?? STOREFRONT_CATALOG_PAGE_SIZE,
+        ...(input.skip ? { skip: input.skip } : {}),
     };
 }
