@@ -17,8 +17,9 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { GovernanceService } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
-import { In, ObjectLiteral, ObjectType } from 'typeorm';
+import { In, ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
 import { autoCardDisplayStock } from './auto-card-display-stock';
 import { DigitalDeliveryMode } from './auto-card.constants';
@@ -47,6 +48,18 @@ export interface UpdateDigitalVariantInput {
     fileVersionId?: ID | null;
 }
 
+export interface DigitalInventoryLegacyStockLevel {
+    id: ID;
+    stockLocationId: ID;
+    stockOnHand: number;
+    stockAllocated: number;
+}
+
+export interface DigitalInventoryOwnershipConfirmation {
+    stockLevels: DigitalInventoryLegacyStockLevel[];
+    reason: string;
+}
+
 /** Digital availability never writes warehouse quantities or packaging information. */
 @Injectable()
 export class DigitalProductService implements OnApplicationBootstrap {
@@ -55,6 +68,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
         private readonly orders: OrderService,
         private readonly catalog: CatalogOperationsService,
         private readonly requestCache: RequestContextCacheService = new RequestContextCacheService(),
+        private readonly audit?: GovernanceService,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -495,31 +509,60 @@ export class DigitalProductService implements OnApplicationBootstrap {
             .findOne({ where: { channelId: ctx.channelId, orderLineId: lineId } });
     }
 
-    async migrationPreview(ctx: RequestContext, variantId: ID, lockedStocks?: StockLevel[]) {
+    async migrationPreview(
+        ctx: RequestContext,
+        variantId: ID,
+        lockedStocks?: StockLevel[],
+        ownershipConfirmation?: DigitalInventoryOwnershipConfirmation,
+    ) {
         const variant = await this.requireVariant(ctx, variantId);
         const stocks = await this.connection.getRepository(ctx, StockLevel).find({
             where: { productVariantId: variantId },
             relations: ['stockLocation', 'stockLocation.channels'],
         });
+        if (
+            lockedStocks &&
+            (stocks.length !== lockedStocks.length ||
+                stocks.some(stock => !lockedStocks.some(row => String(row.id) === String(stock.id))))
+        )
+            throw new UserInputError('旧库存记录集合已变化，请重新核对');
         if (lockedStocks)
             for (const stock of stocks) {
                 const fresh = lockedStocks.find(row => String(row.id) === String(stock.id));
                 if (fresh) {
+                    if (String(stock.stockLocationId) !== String(fresh.stockLocationId))
+                        throw new UserInputError('旧库存仓库关联已变化，请重新核对');
                     stock.stockOnHand = fresh.stockOnHand;
                     stock.stockAllocated = fresh.stockAllocated;
                 }
             }
-        const relevant = stocks.filter(stock =>
-            stock.stockLocation.channels.some(channel => String(channel.id) === String(ctx.channelId)),
-        );
-        const unknownStockOwner = stocks.some(
+        for (const stock of stocks)
+            if (!Number.isSafeInteger(stock.stockOnHand) || !Number.isSafeInteger(stock.stockAllocated))
+                throw new UserInputError('旧库存数量无效，请核对后迁移');
+        const unowned = stocks.filter(
             stock =>
                 (stock.stockOnHand || stock.stockAllocated) &&
-                !stock.stockLocation.channels.some(channel => channel.code !== '__default_channel__'),
+                !stock.stockLocation?.channels.some(channel => channel.code !== '__default_channel__'),
         );
+        const alreadyMigrated = Boolean(await this.config(ctx, variantId));
+        const confirmableStockLevels =
+            unowned.length && !alreadyMigrated
+                ? await this.confirmableLegacyStocks(ctx, variant, stocks, unowned)
+                : [];
+        const confirmation = ownershipConfirmation
+            ? this.validateOwnershipConfirmation(ownershipConfirmation, confirmableStockLevels)
+            : undefined;
+        const confirmedIds = new Set(confirmation?.stockLevels.map(stock => String(stock.id)));
+        // Explicitly confirmed rows join this store's migration projection, never its warehouse membership.
+        const relevant = stocks.filter(
+            stock =>
+                stock.stockLocation?.channels.some(channel => String(channel.id) === String(ctx.channelId)) ||
+                confirmedIds.has(String(stock.id)),
+        );
+        const unknownStockOwner = unowned.some(stock => !confirmedIds.has(String(stock.id)));
         const ambiguous = relevant.some(
             stock =>
-                stock.stockLocation.channels.filter(channel => channel.code !== '__default_channel__')
+                stock.stockLocation?.channels.filter(channel => channel.code !== '__default_channel__')
                     .length > 1,
         );
         const orders = await this.connection.getRepository(ctx, OrderLine).find({
@@ -532,7 +575,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                 !['Cancelled', 'Delivered'].includes(line.order.state) &&
                 !line.order.active,
         );
-        const allocated = relevant.reduce((sum, stock) => sum + stock.stockAllocated, 0);
+        const allocated = this.migrationTotal(relevant, stock => stock.stockAllocated);
         const fulfilled = open.length
             ? await this.connection.getRepository(ctx, FulfillmentLine).find({
                   where: { orderLine: { id: In(open.map(line => line.id)) } },
@@ -564,8 +607,15 @@ export class DigitalProductService implements OnApplicationBootstrap {
             ambiguous || (limited && pending.reduce((sum, item) => sum + item.quantity, 0) !== allocated);
         const available = Math.max(
             0,
-            relevant.reduce((sum, stock) => sum + stock.stockOnHand - stock.stockAllocated, 0),
+            this.migrationTotal(relevant, stock => stock.stockOnHand - stock.stockAllocated),
         );
+        if (!Number.isSafeInteger(allocated) || !Number.isSafeInteger(available))
+            throw new UserInputError('旧库存汇总数量无效，请核对后迁移');
+        try {
+            validateDigitalQuantity(available);
+        } catch (error) {
+            throw new UserInputError((error as Error).message);
+        }
         const conflicts = conflict ? ['仓库共享归属或未完成订单占用数量不一致，需要核对后迁移'] : [];
         if (
             unknownStockOwner ||
@@ -604,34 +654,140 @@ export class DigitalProductService implements OnApplicationBootstrap {
             availableQuantity: available,
             reservedQuantity: allocated,
             conflicts,
-            alreadyMigrated: Boolean(await this.config(ctx, variantId)),
+            alreadyMigrated,
+            confirmableStockLevels,
             variant,
             pending,
+            confirmation,
+            warehouseRows: stocks.map(stock => ({
+                ...this.legacyStockView(stock),
+                channelIds: stock.stockLocation?.channels.map(channel => String(channel.id)).sort() ?? [],
+            })),
         };
     }
 
-    async migrate(ctx: RequestContext, variantId: ID, expectedAvailable: number, expectedReserved: number) {
-        const preview = await this.migrationPreview(ctx, variantId);
-        if (preview.alreadyMigrated) return this.config(ctx, variantId);
-        if (preview.conflicts.length) throw new UserInputError(preview.conflicts[0]);
+    private legacyStockView(stock: StockLevel): DigitalInventoryLegacyStockLevel {
+        return {
+            id: stock.id,
+            stockLocationId: stock.stockLocationId,
+            stockOnHand: stock.stockOnHand,
+            stockAllocated: stock.stockAllocated,
+        };
+    }
+
+    private migrationTotal(stocks: StockLevel[], quantity: (stock: StockLevel) => number): number {
+        return stocks.reduce((total, stock) => {
+            const delta = quantity(stock);
+            if (!Number.isSafeInteger(delta) || !Number.isSafeInteger(total + delta))
+                throw new UserInputError('旧库存汇总数量无效，请核对后迁移');
+            return total + delta;
+        }, 0);
+    }
+
+    private async confirmableLegacyStocks(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        stocks: StockLevel[],
+        unowned: StockLevel[],
+    ): Promise<DigitalInventoryLegacyStockLevel[]> {
+        if (!ctx.activeUserId || !this.audit || unowned.length > 50) return [];
+        const [product, ownedVariant, configurations, migrations] = await Promise.all([
+            this.connection.getEntityOrThrow(ctx, Product, variant.productId, { relations: ['channels'] }),
+            this.connection.getEntityOrThrow(ctx, ProductVariant, variant.id, { relations: ['channels'] }),
+            this.connection.getRepository(ctx, DigitalVariantConfig).find({
+                where: { productVariantId: variant.id },
+            }),
+            this.connection.getRepository(ctx, DigitalQuotaMovement).find({
+                where: { productVariantId: variant.id, type: 'MIGRATE' },
+            }),
+        ]);
+        const soleOwner = (channels: Channel[]) => {
+            const owners = new Set(
+                channels
+                    .filter(channel => channel.code !== '__default_channel__')
+                    .map(channel => String(channel.id)),
+            );
+            return owners.size === 1 && owners.has(String(ctx.channelId));
+        };
         if (
-            preview.availableQuantity !== expectedAvailable ||
-            preview.reservedQuantity !== expectedReserved
-        ) {
-            throw new UserInputError('旧库存已变化，请重新核对迁移预览');
-        }
-        await this.lock(ctx, ProductVariant, variantId);
-        const oldStocks = await this.connection
-            .getRepository(ctx, StockLevel)
-            .find({ where: { productVariantId: variantId } });
-        const lockedStocks: Array<StockLevel | null> = [];
-        for (const stock of oldStocks.sort((a, b) => Number(a.id) - Number(b.id)))
-            lockedStocks.push(await this.lock(ctx, StockLevel, stock.id));
-        const current = await this.migrationPreview(
-            ctx,
-            variantId,
-            lockedStocks.filter((stock): stock is StockLevel => Boolean(stock)),
-        );
+            !soleOwner(product.channels) ||
+            !soleOwner(ownedVariant.channels) ||
+            configurations.some(config => String(config.channelId) !== String(ctx.channelId)) ||
+            migrations.length ||
+            unowned.some(stock => !stock.stockLocation || stock.stockAllocated !== 0) ||
+            stocks.some(stock => {
+                if (!stock.stockOnHand && !stock.stockAllocated) return false;
+                const owners = stock.stockLocation?.channels.filter(
+                    channel => channel.code !== '__default_channel__',
+                );
+                return owners?.length && !soleOwner(owners);
+            })
+        )
+            return [];
+        return unowned.map(stock => this.legacyStockView(stock));
+    }
+
+    private validateOwnershipConfirmation(
+        input: DigitalInventoryOwnershipConfirmation,
+        actual: DigitalInventoryLegacyStockLevel[],
+    ): DigitalInventoryOwnershipConfirmation {
+        const reason = typeof input.reason === 'string' ? input.reason.trim() : '';
+        if (!reason || reason.length > 500) throw new UserInputError('请填写1到500字的旧库存归属核对原因');
+        const rows = input.stockLevels;
+        if (
+            !Array.isArray(rows) ||
+            !rows.length ||
+            !actual.length ||
+            rows.length !== actual.length ||
+            new Set(rows.map(row => String(row?.id))).size !== rows.length ||
+            rows.some(row => {
+                const current = actual.find(stock => String(stock.id) === String(row?.id));
+                return (
+                    !current ||
+                    String(row.stockLocationId) !== String(current.stockLocationId) ||
+                    !Number.isSafeInteger(row.stockOnHand) ||
+                    !Number.isSafeInteger(row.stockAllocated) ||
+                    row.stockOnHand !== current.stockOnHand ||
+                    row.stockAllocated !== current.stockAllocated ||
+                    row.stockAllocated !== 0
+                );
+            })
+        )
+            throw new UserInputError('旧库存归属或数量已变化，不能确认，请重新核对完整库存记录');
+        return { stockLevels: actual, reason };
+    }
+
+    async migrate(
+        ctx: RequestContext,
+        variantId: ID,
+        expectedAvailable: number,
+        expectedReserved: number,
+        ownershipConfirmation?: DigitalInventoryOwnershipConfirmation,
+    ) {
+        if (!Number.isSafeInteger(expectedAvailable) || !Number.isSafeInteger(expectedReserved))
+            throw new UserInputError('迁移核对数量必须为有效整数');
+        if (ctx.channel.code === '__default_channel__')
+            throw new UserInputError('请选择具体店铺后管理数字商品');
+        if (
+            ownershipConfirmation &&
+            !this.connection.getRepository(ctx, ProductVariant).manager.queryRunner?.isTransactionActive
+        )
+            throw new UserInputError('旧库存归属确认必须通过事务迁移入口执行');
+        // Acquire locks before the first consistent read, including a concurrent migration's ACTIVE state.
+        const lockedVariant = await this.lock(ctx, ProductVariant, variantId, true);
+        const lockedProduct = await this.lock(ctx, Product, lockedVariant.productId);
+        if (lockedProduct.customFields.fulfillmentType !== 'digital')
+            throw new UserInputError('该操作仅适用于数字商品');
+        const stocksRepository = this.connection.getRepository(ctx, StockLevel);
+        const stockQuery = stocksRepository
+            .createQueryBuilder('lockedRow')
+            .where('lockedRow.productVariantId = :variantId', { variantId })
+            .orderBy('lockedRow.id', 'ASC');
+        if (this.canLock(stocksRepository)) stockQuery.setLock('pessimistic_write');
+        const lockedStocks = await stockQuery.getMany();
+        await this.requireVariant(ctx, variantId);
+        if (await this.config(ctx, variantId)) return this.config(ctx, variantId);
+        const current = await this.migrationPreview(ctx, variantId, lockedStocks, ownershipConfirmation);
         if (current.alreadyMigrated) return this.config(ctx, variantId);
         if (
             current.conflicts.length ||
@@ -678,6 +834,33 @@ export class DigitalProductService implements OnApplicationBootstrap {
             );
         }
         await this.movement(ctx, config, 'MIGRATE', current.availableQuantity);
+        if (current.confirmation) {
+            if (!this.audit) throw new UserInputError('旧库存归属审计暂不可用，不能迁移');
+            await this.audit.appendAudit(ctx, {
+                eventType: 'DIGITAL_LEGACY_STOCK_OWNERSHIP_CONFIRMED',
+                resourceType: 'DigitalVariantConfig',
+                resourceId: String(config.id),
+                actorType: 'ADMIN',
+                actorUserId: String(ctx.activeUserId),
+                actorLabel: String(ctx.activeUserId),
+                reason: current.confirmation.reason,
+                payload: {
+                    productId: String(variant.productId),
+                    productVariantId: String(variantId),
+                    channelId: String(ctx.channelId),
+                    productOperatingChannelIds: [String(ctx.channelId)],
+                    variantOperatingChannelIds: [String(ctx.channelId)],
+                    confirmedStockLevels: current.confirmation.stockLevels,
+                    warehouseRows: current.warehouseRows,
+                    deliveryMode: config.deliveryMode,
+                    stockPolicy: config.stockPolicy,
+                    availableQuantity: current.availableQuantity,
+                    reservedQuantity: current.reservedQuantity,
+                    warehouseRowsPreserved: true,
+                },
+                idempotencyKey: `digital-legacy-stock-owner:${variantId}`,
+            });
+        }
         // Keep warehouse rows untouched as read-only historical evidence.
         const channels = await this.connection
             .getRepository(ctx, Channel)
@@ -693,16 +876,28 @@ export class DigitalProductService implements OnApplicationBootstrap {
         return config;
     }
 
-    async lock<T extends ObjectLiteral>(ctx: RequestContext, entity: ObjectType<T>, id: ID): Promise<T> {
+    private canLock<T extends ObjectLiteral>(repository: Repository<T>): boolean {
+        return Boolean(
+            repository.manager.queryRunner?.isTransactionActive &&
+            !['sqlite', 'better-sqlite3', 'sqljs'].includes(repository.manager.connection.options.type),
+        );
+    }
+
+    async lock<T extends ObjectLiteral>(
+        ctx: RequestContext,
+        entity: ObjectType<T>,
+        id: ID,
+        channelScoped = false,
+    ): Promise<T> {
         // Resource expiry and recovery must use the same cart -> order locking as payment.
         if (entity === Order) await this.orders.lockOrderForRefund(ctx, id);
         const repository = this.connection.getRepository(ctx, entity);
         const query = repository.createQueryBuilder('lockedRow').where('lockedRow.id = :id', { id });
-        if (
-            repository.manager.queryRunner?.isTransactionActive &&
-            !['sqlite', 'better-sqlite3', 'sqljs'].includes(repository.manager.connection.options.type)
-        )
-            query.setLock('pessimistic_write');
+        if (channelScoped)
+            query.innerJoin('lockedRow.channels', 'migrationChannel', 'migrationChannel.id = :channelId', {
+                channelId: ctx.channelId,
+            });
+        if (this.canLock(repository)) query.setLock('pessimistic_write');
         const record = await query.getOne();
         if (!record) throw new UserInputError('业务记录已变化，请刷新后重试');
         return record;

@@ -46,6 +46,23 @@ export const digitalProductAdminSchema = gql`
         reservedQuantity: Int!
         conflicts: [String!]!
         alreadyMigrated: Boolean!
+        confirmableStockLevels: [DigitalInventoryLegacyStockLevel!]!
+    }
+    type DigitalInventoryLegacyStockLevel {
+        id: ID!
+        stockLocationId: ID!
+        stockOnHand: Int!
+        stockAllocated: Int!
+    }
+    input DigitalInventoryLegacyStockLevelInput {
+        id: ID!
+        stockLocationId: ID!
+        stockOnHand: Int!
+        stockAllocated: Int!
+    }
+    input DigitalInventoryOwnershipConfirmationInput {
+        stockLevels: [DigitalInventoryLegacyStockLevelInput!]!
+        reason: String!
     }
     input UpdateDigitalVariantConfigInput {
         productVariantId: ID!
@@ -59,7 +76,10 @@ export const digitalProductAdminSchema = gql`
         productTypeChangeAllowed(productId: ID!): Boolean!
         digitalDeliveryExceptions: [CheckoutDeliveryException!]!
         digitalProductWorkspace(productId: ID!): DigitalProductWorkspace!
-        digitalInventoryMigrationPreview(productVariantId: ID!): DigitalInventoryMigrationPreview!
+        digitalInventoryMigrationPreview(
+            productVariantId: ID!
+            ownershipConfirmation: DigitalInventoryOwnershipConfirmationInput
+        ): DigitalInventoryMigrationPreview!
     }
     extend type Mutation {
         copyProductBasicsAsType(productId: ID!, fulfillmentType: String!): Product!
@@ -70,6 +90,7 @@ export const digitalProductAdminSchema = gql`
             productVariantId: ID!
             expectedAvailable: Int!
             expectedReserved: Int!
+            ownershipConfirmation: DigitalInventoryOwnershipConfirmationInput
         ): DigitalVariantConfig!
     }
 `;

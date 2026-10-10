@@ -84,6 +84,13 @@ const productFixtureDescription = productEditorDesign
 const authFixture = view === 'login' || view === 'initial-password';
 const mockWritesEnabled =
     params.has('mockWrites') && !layoutAudit && !authFixture && !productEditorDesign && !adminRollout;
+const legacyOwnershipFixture = params.has('legacyOwnership') && digitalFixture && mockWritesEnabled;
+const legacyStockLevel = {
+    id: 'legacy-stock-demo',
+    stockLocationId: 'legacy-location-demo',
+    stockOnHand: 100,
+    stockAllocated: 0,
+};
 // Platform-only routes use the real shell scope guard; opt in with &platform.
 const platformFixture = params.has('platform');
 const alternateScopeParams = new URLSearchParams(params);
@@ -1030,6 +1037,14 @@ const data: Record<string, unknown> = {
             fileVersion: null,
         })),
     },
+    digitalInventoryMigrationPreview: {
+        productVariantId: variants[0].id,
+        availableQuantity: 0,
+        reservedQuantity: 0,
+        conflicts: [],
+        alreadyMigrated: false,
+        confirmableStockLevels: [],
+    },
     facets:
         layoutAudit || productEditorDesign ? { items: auditFacets, totalItems: auditFacets.length } : empty,
     assets: layoutAudit || productEditorDesign ? { items: [auditAsset], totalItems: 1 } : empty,
@@ -1390,6 +1405,33 @@ const client = new ApolloClient({
                         data.storeUsdtManualRefunds = { items: [result], totalItems: 1 };
                         payment.refundedAmount = input.amount;
                         payment.netAmount = payment.amount - input.amount;
+                    } else if (field.name.value === 'migrateDigitalInventory' && legacyOwnershipFixture) {
+                        const confirmed = operation.variables.ownershipConfirmation;
+                        if (
+                            JSON.stringify(confirmed?.stockLevels) !== JSON.stringify([legacyStockLevel]) ||
+                            !confirmed?.reason?.trim() ||
+                            operation.variables.expectedAvailable !== 100 ||
+                            operation.variables.expectedReserved !== 0
+                        ) {
+                            observer.error(new Error('本地模拟要求精确历史记录和最新核对结果'));
+                            return;
+                        }
+                        const workspace = data.digitalProductWorkspace as {
+                            variants: Array<{
+                                id: string;
+                                migrationRequired: boolean;
+                                availableQuantity: number | null;
+                                stockPolicy: string;
+                            }>;
+                        };
+                        workspace.variants.forEach(variant => {
+                            if (variant.id === operation.variables.productVariantId) {
+                                variant.migrationRequired = false;
+                                variant.availableQuantity = 100;
+                                variant.stockPolicy = 'limited';
+                            }
+                        });
+                        result = { id: 'synthetic-digital-config', availableQuantity: 100 };
                     } else {
                         observer.error(new Error('未列入本地模拟写入白名单'));
                         return;
@@ -1443,6 +1485,26 @@ const client = new ApolloClient({
                           afterSalesRequests: empty,
                       }
                     : data;
+                if (
+                    legacyOwnershipFixture &&
+                    operation.operationName === 'DigitalInventoryMigrationPreview'
+                ) {
+                    const confirmation = operation.variables.ownershipConfirmation;
+                    const matches =
+                        JSON.stringify(confirmation?.stockLevels) === JSON.stringify([legacyStockLevel]) &&
+                        Boolean(confirmation?.reason?.trim());
+                    responseData = {
+                        ...responseData,
+                        digitalInventoryMigrationPreview: {
+                            productVariantId: operation.variables.productVariantId,
+                            availableQuantity: matches ? 100 : 0,
+                            reservedQuantity: 0,
+                            conflicts: matches ? [] : ['旧库存缺少店铺归属，请先核对'],
+                            alreadyMigrated: false,
+                            confirmableStockLevels: [legacyStockLevel],
+                        },
+                    };
+                }
                 if (params.has('large')) {
                     const skip = Number(operation.variables.options?.skip ?? 0);
                     const take = Math.max(
@@ -2114,7 +2176,28 @@ if (view === 'performance') {
 } else {
     createRoot(document.getElementById('root')!).render(
         <ApolloProvider client={client}>
-            <AdminPermissionsProvider permissions={['SuperAdmin']}>
+            <AdminPermissionsProvider
+                permissions={['SuperAdmin']}
+                capabilities={
+                    legacyOwnershipFixture
+                        ? {
+                              channelId: channel.id,
+                              channelCode: channel.code,
+                              scope: 'STORE',
+                              commerceMode: 'DIGITAL_ONLY',
+                              capabilities: [
+                                  {
+                                      id: '/catalog/products',
+                                      state: 'READY',
+                                      canRead: true,
+                                      canWrite: true,
+                                      canConfigure: false,
+                                  },
+                              ],
+                          }
+                        : null
+                }
+            >
                 <ConfirmDialogContext.Provider value={async () => false}>
                     <CustomFieldsContext.Provider
                         value={{
@@ -2159,7 +2242,9 @@ if (view === 'performance') {
                                         <div className="flex h-14 items-center justify-between gap-2 px-4">
                                             <strong className="text-slate-700">Vendure 管理后台</strong>
                                             <span className="rounded bg-amber-50 px-2 py-1 text-amber-900">
-                                                模拟数据 · 写入已阻止
+                                                {legacyOwnershipFixture
+                                                    ? '本地模拟操作 · 无网络写入'
+                                                    : '模拟数据 · 写入已阻止'}
                                             </span>
                                         </div>
                                         <div className="flex h-10 items-center border-t border-slate-100 bg-slate-50 px-4 font-semibold text-slate-700">
