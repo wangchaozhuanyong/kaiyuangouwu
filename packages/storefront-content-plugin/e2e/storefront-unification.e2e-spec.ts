@@ -734,12 +734,15 @@ describe('unified storefront Admin API to Shop API', () => {
                     await page.goto(
                         `http://127.0.0.1:5300/e2e/unification/index.html?channel=${store.token}&name=Store-${index}`,
                     );
-                    await browserExpect(page.locator('.home-dual-showcase button')).toHaveCount(2);
+                    await browserExpect(page.locator('.home-dual-showcase a')).toHaveCount(2);
                     await browserExpect(page.locator('.home-dual-showcase h3')).toHaveText([
                         `店${index}卡片1`,
                         `店${index}卡片2`,
                     ]);
-                    await browserExpect(page.locator('.home-dual-showcase button').first()).toBeEnabled();
+                    await browserExpect(page.locator('.home-dual-showcase a').first()).toHaveAttribute(
+                        'href',
+                        '/zh/category',
+                    );
                     await page.screenshot({
                         path: join(testOutput, `core-store-${index}-${width}.png`),
                         fullPage: true,
@@ -768,9 +771,7 @@ describe('unified storefront Admin API to Shop API', () => {
             for (const { page, index } of shops) {
                 await page.reload();
                 await browserExpect(page.locator('.home-page')).toBeVisible();
-                await browserExpect(page.locator('.home-dual-showcase button')).toHaveCount(
-                    index === 0 ? 0 : 2,
-                );
+                await browserExpect(page.locator('.home-dual-showcase a')).toHaveCount(index === 0 ? 0 : 2);
             }
             await row.getByRole('button', { name: '启用楼层', exact: true }).click();
             await browserExpect(row).toContainText('已发布');
