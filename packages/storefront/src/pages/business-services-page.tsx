@@ -5,6 +5,7 @@ import {
     BusinessServicesHero,
     resolveBusinessServicesHeroLayout,
 } from '../../../storefront-content-plugin/src/shared/business-services-hero';
+import { heroImageForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -76,7 +77,11 @@ export function BusinessServicesPage() {
             ? clientPluginBlock.targetValue?.trim() || null
             : null;
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
-    const heroImageUrl = clientPluginBlock?.enabled ? clientPluginBlock.imageUrl : null;
+    const heroImage = heroImageForViewport(
+        clientPluginBlock?.enabled ? clientPluginBlock : undefined,
+        desktop,
+    );
+    const heroImageUrl = heroImage.imageUrl;
 
     return (
         // SERVICES_SCALABLE_DESKTOP_20261003: desktop stacks the introduction above the tool grid.
@@ -102,6 +107,7 @@ export function BusinessServicesPage() {
                     body={heroDescription}
                     visual={clientPluginBlock}
                     layout={resolveBusinessServicesHeroLayout(clientPluginBlock?.settings)}
+                    imageDimensions={heroImage.imageAsset}
                     image={
                         heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined
                     }

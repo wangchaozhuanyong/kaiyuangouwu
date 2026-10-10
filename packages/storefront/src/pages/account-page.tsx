@@ -23,7 +23,6 @@ import { resolveAccountRecommendationSettings } from '../../../storefront-conten
 import { ShopApi } from '../api';
 import { AccountIdentity } from '../components/common/account-identity';
 import { AccountOrderCarousel } from '../components/common/account-order-carousel';
-import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
@@ -89,14 +88,8 @@ export function AccountPage() {
         reviewEnabled = true,
         accountRecommendations,
         storefrontName,
-        logoUrl,
         favoriteProductCount,
         couponCount,
-        displayCurrencyCode,
-        availableCurrencyCodes,
-        currencyLoading,
-        onToggleLanguage,
-        onCurrencyChange,
         onContentTarget,
         onLogout,
     } = AccountPageContext.useValue();
@@ -226,21 +219,6 @@ export function AccountPage() {
             className="page account-page lg:grid lg:content-start lg:gap-4 lg:pb-8 lg:pt-[88px]"
             data-page-pending={pagePending ? 'query' : undefined}
         >
-            {!desktop && (
-                <MobilePageHeader
-                    className="account-mobile-header"
-                    title={isZh ? '个人中心' : 'My account'}
-                    storefrontName={storefrontName}
-                    logoUrl={logoUrl}
-                    language={language}
-                    displayCurrencyCode={displayCurrencyCode ?? market.currencyCode}
-                    availableCurrencyCodes={availableCurrencyCodes ?? []}
-                    currencyLoading={currencyLoading ?? false}
-                    onToggleLanguage={onToggleLanguage}
-                    onCurrencyChange={onCurrencyChange}
-                    onNotifications={() => navigateTo({ name: 'notifications' })}
-                />
-            )}
             <AccountIdentity
                 customer={customer}
                 storefrontName={storefrontName}

@@ -12,10 +12,10 @@ import { AddressesPage } from '../../src/addresses-page';
 import { ShopApi } from '../../src/api';
 import { DesktopAccountNavigation } from '../../src/components/common/desktop-account-navigation';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
-import { DesktopAccountPage } from '../../src/pages/desktop-account-page';
+import { AccountPage } from '../../src/pages/account-page';
 import { ProductDetailPage } from '../../src/pages/product-detail-page';
 import { ReviewCenterPage } from '../../src/review-pages';
-import { ProductDetailPageContext } from '../../src/storefront-page-contexts';
+import { AccountPageContext, ProductDetailPageContext } from '../../src/storefront-page-contexts';
 import { StorefrontContext, StorefrontContextValue } from '../../src/StorefrontContext';
 import '../../src/styles.css';
 import '../../src/styles/account-catalog-surfaces.css';
@@ -160,6 +160,9 @@ const addressCustomer: ActiveCustomer = {
 };
 let fail = params.get('fail') === '1';
 const api = {
+    customerOrderCounts: () => Promise.resolve({ pending: 0, shipping: 1, receiving: 0, completed: 0 }),
+    afterSalesRequests: () => Promise.resolve([]),
+    referralProgram: () => Promise.resolve({ enabled: false }),
     activeStoreCommerceMode: () => Promise.resolve('PHYSICAL_ONLY'),
     myReviews: () => Promise.resolve([...reviews]),
     reviewCandidates: ({ skip = 0, take = 20 } = {}) => Promise.resolve(candidates.slice(skip, skip + take)),
@@ -264,29 +267,24 @@ function Fixture() {
                                 onNotify={setNotice}
                             />
                         ) : view === 'account' ? (
-                            <DesktopAccountPage
-                                api={api}
-                                customer={customer}
-                                products={[]}
-                                market={market}
-                                locale={market.locale}
-                                language={language}
-                                storefrontName="Local sample"
-                                favoriteProductCount={0}
-                                couponCount={0}
-                                onContentTarget={() => undefined}
-                                pending={false}
-                                counts={{ pending: 0, shipping: 1, receiving: 0, completed: 0 }}
-                                countsError={false}
-                                onRetryCounts={() => undefined}
-                                afterSalesCount={0}
-                                referralEnabled={false}
-                                referralPending={false}
-                                referralBalance={0}
-                                referralBalanceStatus="ready"
-                                onRetryReferral={() => undefined}
-                                navigate={route => setNotice(`Local navigation: ${route.name}`)}
-                            />
+                            <AccountPageContext.Provider
+                                value={{
+                                    api,
+                                    customer: params.get('guest') === '1' ? null : customer,
+                                    products: [],
+                                    market,
+                                    locale: market.locale,
+                                    language,
+                                    storefrontName: 'Local sample',
+                                    logoUrl: null,
+                                    favoriteProductCount: 0,
+                                    couponCount: 0,
+                                    onContentTarget: () => undefined,
+                                    onLogout: () => undefined,
+                                }}
+                            >
+                                <AccountPage />
+                            </AccountPageContext.Provider>
                         ) : (
                             <ProductDetailPageContext.Provider
                                 value={{

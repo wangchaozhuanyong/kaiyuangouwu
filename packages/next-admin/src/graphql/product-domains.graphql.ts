@@ -43,6 +43,36 @@ export const DIGITAL_PRODUCT_WORKSPACE = gql`
         }
     }
 `;
+
+export type CatalogDigitalStockResult = Record<
+    string,
+    {
+        productId: string;
+        variants: Array<
+            Pick<
+                DigitalWorkspaceVariant,
+                'id' | 'deliveryMode' | 'stockPolicy' | 'availableQuantity' | 'migrationRequired'
+            >
+        >;
+    }
+>;
+
+/** Reuse the channel-scoped workspace API for the current catalog page, without per-row requests. */
+export function catalogDigitalStockQuery(productCount: number) {
+    const aliases = Array.from({ length: Math.max(1, productCount) }, (_, index) => `product${index}`);
+    return gql(`
+        query NextAdminCatalogProductOperationsStock(${aliases.map(alias => `$${alias}: ID!`).join(', ')}) {
+            ${aliases
+                .map(
+                    alias => `${alias}: digitalProductWorkspace(productId: $${alias}) {
+                productId
+                variants { id deliveryMode stockPolicy availableQuantity migrationRequired }
+            }`,
+                )
+                .join('\n')}
+        }
+    `);
+}
 export const UPDATE_DIGITAL_VARIANT = gql`
     mutation UpdateDigitalVariant($input: UpdateDigitalVariantConfigInput!) {
         updateDigitalVariantConfig(input: $input) {

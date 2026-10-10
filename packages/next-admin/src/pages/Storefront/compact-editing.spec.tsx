@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     data: {} as Record<string, unknown>,
     mutate: vi.fn(),
     refetch: vi.fn(),
+    assetPickers: new Map<string, { onChange: (asset: unknown) => void }>(),
 }));
 vi.mock('@apollo/client/react', () => ({
     useQuery: () => ({ data: mocks.data, loading: false, refetch: mocks.refetch }),
@@ -25,13 +26,44 @@ vi.mock('../../apollo', () => ({
     getActiveChannelToken: () => 'local-fixture',
     channelRequestContext: () => ({}),
 }));
-vi.mock('./storefront-asset-picker', () => ({ AssetPicker: () => null }));
+vi.mock('./storefront-asset-picker', () => ({
+    AssetPicker: (props: { label: string; onChange: (asset: unknown) => void }) => {
+        mocks.assetPickers.set(props.label, props);
+        return null;
+    },
+}));
+vi.mock('./StorefrontDecorationPreview', async () => {
+    const { BusinessServicesHero, resolveBusinessServicesHeroLayout } =
+        await import('../../../../storefront-content-plugin/src/shared/business-services-hero');
+    return {
+        StorefrontDecorationPreview: ({
+            block,
+            language,
+        }: {
+            block: ReturnType<typeof newContentBlock>;
+            language: string;
+        }) => {
+            const translation = block.translations.find(value => value.languageCode === language)!;
+            return (
+                <BusinessServicesHero
+                    headingLevel="h3"
+                    title={translation.title}
+                    body={translation.body}
+                    layout={resolveBusinessServicesHeroLayout(block.settings)}
+                    visual={block}
+                    image={block.imageAsset?.preview ? <img src={block.imageAsset.preview} /> : undefined}
+                />
+            );
+        },
+    };
+});
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
+    mocks.assetPickers.clear();
     mocks.mutate.mockRejectedValue(new Error('Local fixture: no remote writes'));
     mocks.data = {
         activeChannel: { id: 'local', token: 'local-fixture', code: 'local' },
@@ -130,6 +162,47 @@ describe('compact editors retain drafts', () => {
         expect(colorControl('文案背景色（选填）').value).toBe('#f4eee3');
         expect(colorControl('广告标题色（选填）').value).toBe('#2457a5');
         expect(colorControl('说明文字色（选填）').value).toBe('#334155');
+    });
+
+    it('keeps independent phone artwork until its replacement is explicitly reviewed', async () => {
+        const block = newContentBlock('CLIENT_PLUGINS', 10_001, 'Existing services');
+        block.id = 'services';
+        block.code = 'storefront-client-plugins';
+        block.updatedAt = '2026-10-09T00:00:00Z';
+        block.translations[0].body = 'Existing service details';
+        block.settings = {
+            businessServicesCopyVersion: 1,
+            businessServicesHeroLayout: 'image-overlay',
+            mobileImageUrl: '/assets/phone-existing.webp',
+            mobileImageAssetId: 'phone-existing',
+            mobileImageWidth: 1254,
+            mobileImageHeight: 1254,
+            preservedSetting: true,
+        };
+        mocks.data.storefrontContentBlocks = [block];
+        await act(async () => root.render(<BusinessServicesCopyModule />));
+        expect(host.textContent).toContain('已单独设置手机配图');
+        const save = [...host.querySelectorAll('button')].find(button =>
+            button.textContent?.includes('保存并发布'),
+        )!;
+        await act(async () => mocks.assetPickers.get('手机端商业服务页首配图（可选）')!.onChange(null));
+        expect(host.textContent).toContain('未单独设置手机配图，当前沿用电脑图');
+        expect(save.disabled).toBe(true);
+        expect(mocks.mutate).not.toHaveBeenCalled();
+        const confirmation = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+        await act(async () => confirmation.click());
+        expect(save.disabled).toBe(false);
+        await act(async () => save.click());
+        expect(mocks.mutate.mock.calls[0][0].variables.input).toMatchObject({
+            settings: {
+                mobileImageUrl: null,
+                mobileImageAssetId: null,
+                mobileImageWidth: null,
+                mobileImageHeight: null,
+                preservedSetting: true,
+            },
+            allowImageReplacement: true,
+        });
     });
 
     it('keeps editing available when the current store preview theme is unavailable', async () => {

@@ -151,7 +151,10 @@
 
 /* The optional artwork layout keeps all managed copy in normal document flow. */
 .business-services-heading[data-services-hero-layout='image-overlay'] {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 62fr) minmax(0, 38fr);
+    grid-template-rows: minmax(min-content, 1fr);
+    align-items: stretch;
     width: 100%;
     box-sizing: border-box;
     padding: 0;
@@ -161,14 +164,16 @@
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-heading-copy {
-    order: 0;
+    grid-column: 1;
+    grid-row: 1;
+    align-content: center;
     flex: none;
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-12);
-    padding: var(--space-24);
+    padding: var(--space-16);
     color: var(--hero-copy-foreground, var(--text));
 }
 
@@ -209,31 +214,36 @@
     grid-column: 1;
     max-width: none;
     color: var(--hero-copy-body-foreground, var(--muted));
-    font-size: var(--type-reading-size);
-    line-height: var(--type-reading-leading);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+
+/* A complete device-specific image shares the row with editable copy. Long copy grows it. */
+.business-services-heading[data-services-hero-layout='image-overlay']::before {
+    content: '';
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding-top: calc(100% / var(--services-hero-image-ratio, 1.6));
+    pointer-events: none;
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay'] .business-services-hero-media {
-    order: 1;
-    position: relative;
-    isolation: isolate;
-    width: 100%;
-}
-
-.business-services-heading[data-services-hero-layout='image-overlay'] .business-services-hero-media::after {
-    content: '';
     position: absolute;
-    z-index: 2;
     inset: 0;
-    pointer-events: none;
-    background: linear-gradient(to bottom, var(--hero-copy-background, var(--surface)), transparent 28%);
+    width: 100%;
+    height: 100%;
 }
 
 .business-services-heading[data-services-hero-layout='image-overlay']
     .business-services-hero-media
     :is(.safe-image-frame, img) {
-    aspect-ratio: 16 / 10;
-    object-position: right center;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: contain;
+    object-position: center;
 }
 
 @media (min-width: 1024px) {
@@ -242,7 +252,7 @@
         grid-template-columns: minmax(0, 9fr) minmax(0, 11fr);
         grid-template-rows: minmax(min-content, 1fr);
         align-items: stretch;
-        min-height: 360px;
+        min-height: 320px;
     }
 
     /* Preserve the 5:2 artwork frame as a minimum; longer copy can grow the shared row. */
@@ -250,7 +260,7 @@
         content: '';
         grid-column: 1 / -1;
         grid-row: 1;
-        padding-top: 40%;
+        padding-top: calc(100% / var(--services-hero-image-ratio, 2.5));
         pointer-events: none;
     }
 
@@ -258,7 +268,7 @@
         grid-column: 1;
         grid-row: 1;
         align-content: center;
-        min-height: 360px;
+        min-height: 320px;
         padding: var(--space-32);
     }
 
@@ -281,8 +291,10 @@
         content: none;
     }
 
-    /* Keep the full artwork; protect only the editable description over coloured ribbons. */
+    /* Full text stays readable against the configured artwork colours. */
     .business-services-heading[data-services-hero-layout='image-overlay'] p {
+        font-size: var(--type-reading-size);
+        line-height: var(--type-reading-leading);
         width: fit-content;
         max-width: 100%;
         box-sizing: border-box;

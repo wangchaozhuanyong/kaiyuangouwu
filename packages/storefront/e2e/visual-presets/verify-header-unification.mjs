@@ -38,6 +38,23 @@ try {
                 ]) {
                     await page.goto(baseUrl + route);
                     const header = page.locator('.mobile-page-header');
+                    if (name === 'account') {
+                        await expect(header).toHaveCount(0);
+                        await expect(page.locator('.account-page > .account-identity')).toBeVisible();
+                        expect(
+                            await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+                        ).toBe(0);
+                        await page.locator('.account-page').screenshot({
+                            path: path.join(output, `${preset}-${width}-${language}-${name}.png`),
+                        });
+                        await page
+                            .locator('.account-service-grid')
+                            .getByRole('button', { name: language === 'zh' ? '消息通知' : 'Messages' })
+                            .click();
+                        await expect(page).toHaveURL(/\/notifications$/);
+                        results.push({ preset, width, language, name, headerRemoved: true });
+                        continue;
+                    }
                     await expect(header).toBeVisible();
                     const signature = await header.evaluate(element => {
                         const style = target => {
@@ -93,15 +110,17 @@ try {
                     await expect(page.locator('.locale-preferences-sheet')).toBeVisible();
                     await page.keyboard.press('Escape');
                     await expect(page.locator('.locale-preferences-sheet')).toHaveCount(0);
-                    if (name === 'account' && language === 'zh' && width === 390) {
-                        await header.locator('.locale-preferences-trigger').click();
-                        await page.getByRole('radio', { name: 'English', exact: true }).click();
-                        await page.getByRole('button', { name: '保存设置', exact: true }).click();
-                        await expect(header.locator('.locale-preferences-trigger')).toContainText('EN');
-                    }
                     await header.locator('.notice-button').click();
                     await expect(page).toHaveURL(/\/notifications$/);
                     results.push({ preset, width, language, name, signature });
+                }
+                if (language === 'zh' && width === 390) {
+                    await page.goto(baseUrl + '/');
+                    const preferences = page.locator('.mobile-page-header .locale-preferences-trigger');
+                    await preferences.click();
+                    await page.getByRole('radio', { name: 'English', exact: true }).click();
+                    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+                    await expect(preferences).toContainText('EN');
                 }
                 await page.unrouteAll({ behavior: 'wait' });
                 await page.close();
@@ -110,7 +129,7 @@ try {
     }
     await writeFile(path.join(output, 'header-results.json'), JSON.stringify(results, null, 2));
     process.stdout.write(
-        `Shared mobile header checks passed: ${results.length} cases, identical styles and working actions\n`,
+        `Mobile header checks passed: ${results.length} cases; home/services retain shared headers, account starts with identity and keeps notifications\n`,
     );
 } finally {
     await browser.close();

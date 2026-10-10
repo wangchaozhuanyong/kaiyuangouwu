@@ -258,8 +258,8 @@ if (params.has('services') || params.has('services-client')) {
               mimeType: 'image/png',
               preview: artworkUrl,
               source: artworkUrl,
-              width: 1983,
-              height: 793,
+              width: params.has('services-candidate') ? 2169 : 1983,
+              height: params.has('services-candidate') ? 725 : 793,
           }
         : asset;
     blocks.push({
@@ -286,6 +286,45 @@ if (params.has('services') || params.has('services-client')) {
                 title: 'Business services',
                 subtitle: '',
                 body: 'Explore our services.',
+                ctaLabel: '',
+            },
+        ],
+    });
+}
+if (params.has('services-candidate')) {
+    // Review-only snapshot of the approved visual family. This never writes merchant content.
+    const block = blocks.find(block => block.code === 'storefront-client-plugins')!;
+    const phoneArtwork = params.get('mobileArtwork');
+    if (!phoneArtwork || !/^http:\/\/127\.0\.0\.1:\d+\/@fs\/[^?#]+\.png$/u.test(phoneArtwork)) {
+        throw new Error('智能服务双端候选需要明确的本地手机 PNG');
+    }
+    Object.assign(block, {
+        backgroundColor: '#202937',
+        textColor: '#F4F7FB',
+        targetType: 'URL',
+        targetValue: 'https://codexgemini.cc',
+        settings: {
+            ...block.settings,
+            businessServicesHeroLayout: params.get('heroLayout') || 'image-overlay',
+            secondaryTextColor: '#A9B6C8',
+            mobileImageUrl: phoneArtwork,
+            mobileImageAssetId: '1072',
+            mobileImageWidth: 1254,
+            mobileImageHeight: 1254,
+        },
+        translations: [
+            {
+                languageCode: 'zh_Hans',
+                title: '模钥 AI 中转',
+                subtitle: '',
+                body: '多款模型，一站连接。Token 充值暂未开放。',
+                ctaLabel: '',
+            },
+            {
+                languageCode: 'en',
+                title: 'MOYAO AI',
+                subtitle: '',
+                body: 'AI models, one connection. Token top-ups are not yet available.',
                 ctaLabel: '',
             },
         ],
@@ -490,7 +529,12 @@ const channel = params.has('platform-channel')
       }
     : storeChannel;
 // Public Shop responses for isolated real-client previews. No real store is contacted.
-if (params.has('parity') || params.has('notice-period') || params.has('editorialHome')) {
+if (
+    params.has('parity') ||
+    params.has('notice-period') ||
+    params.has('editorialHome') ||
+    params.has('services-candidate')
+) {
     asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';
     const periodAnnouncements = [35, 49, 65].map((daysAgo, index) => {

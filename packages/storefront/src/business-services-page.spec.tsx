@@ -272,6 +272,51 @@ describe('business services page', () => {
         }
     });
 
+    it('selects independent phone artwork and preserves complete image geometry, with desktop inheritance when unset', () => {
+        const block = businessPluginBlock();
+        block.settings = {
+            businessServicesCopyVersion: 1,
+            businessServicesHeroLayout: 'image-overlay',
+            mobileImageUrl: '/assets/phone-square.webp',
+            mobileImageAssetId: 'phone',
+            mobileImageWidth: 1254,
+            mobileImageHeight: 1254,
+        };
+        block.imageUrl = '/assets/desktop-wide.webp';
+        block.imageAsset = { width: 2169, height: 725 };
+        const phone = document.createElement('div');
+        phone.innerHTML = renderPage([block], 'zh', false);
+        expect(phone.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
+            '/assets/phone-square.webp',
+        );
+        expect(
+            phone
+                .querySelector<HTMLElement>('.business-services-heading')
+                ?.style.getPropertyValue('--services-hero-image-ratio'),
+        ).toBe('1');
+        const desktop = document.createElement('div');
+        desktop.innerHTML = renderPage([block], 'en', true);
+        expect(desktop.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
+            '/assets/desktop-wide.webp',
+        );
+        expect(
+            Number(
+                desktop
+                    .querySelector<HTMLElement>('.business-services-heading')
+                    ?.style.getPropertyValue('--services-hero-image-ratio'),
+            ),
+        ).toBeCloseTo(2169 / 725);
+        block.settings.mobileImageUrl = null;
+        const inherited = document.createElement('div');
+        inherited.innerHTML = renderPage([block], 'zh', false);
+        expect(inherited.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
+            '/assets/desktop-wide.webp',
+        );
+        expect(renderPage([{ ...block, enabled: false }], 'zh', false)).not.toContain(
+            '/assets/phone-square.webp',
+        );
+    });
+
     it('retains the existing stacked image and copy until a merchant explicitly selects the new layout', () => {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1 };

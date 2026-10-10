@@ -178,6 +178,14 @@ describe('decoration drafts follow the Shop publication contract', () => {
         ).toBe(blocks);
     });
 
+    it('opens the shared services route for managed service copy without moving legacy category plugin previews', () => {
+        const block = newContentBlock('CLIENT_PLUGINS', 10_001, 'Services');
+        expect(decorationDraft(block, 'zh_Hans').route).toBe('/category');
+        block.settings = { ...block.settings, businessServicesCopyVersion: 1 };
+        expect(decorationDraft(block, 'zh_Hans').route).toBe('/services');
+        expect(decorationDraft(block, 'en').route).toBe('/services');
+    });
+
     it('opens real support, authentication and business services pages', () => {
         for (const [type, route] of [
             ['SUPPORT', '/support'],

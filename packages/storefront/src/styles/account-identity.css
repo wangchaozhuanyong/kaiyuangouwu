@@ -308,7 +308,7 @@
 }
 @media (max-width: 1023px) {
     .account-page .account-identity {
-        margin: var(--space-16) var(--page-section-inset, 12px) 0;
+        margin: 0 var(--page-section-inset, 12px);
     }
 }
 @media (min-width: 1024px) {

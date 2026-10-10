@@ -167,8 +167,8 @@ describe('account referral visibility', () => {
     it('keeps three shortcuts and a real referral balance when enabled', () => {
         const markup = renderAccount(true);
 
-        expect(markup).toContain('account-mobile-header');
-        expect(markup).toContain('locale-preferences-trigger');
+        expect(markup).not.toContain('account-mobile-header');
+        expect(markup).not.toContain('locale-preferences-trigger');
         expect(markup).toContain('我的订单');
         expect(markup).toContain('返利余额');
         expect(markup).toContain('CNY</span> <span>8.80');
