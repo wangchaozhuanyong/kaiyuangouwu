@@ -299,7 +299,11 @@ export class StorefrontPublicPageService {
                             })),
                         ),
                     ),
-                ].map(promise => publicSectionWithinBudget<unknown>(promise)),
+                ].map((promise, index) =>
+                    // Published body is required by server-rendered documents. A cold read must
+                    // finish before output; only optional recommendations may be deferred.
+                    index === 0 ? promise : publicSectionWithinBudget<unknown>(promise),
+                ),
             ),
         ]);
         const names = ['content', 'products', 'collections', 'visualPreset', 'flashSales'] as const;
