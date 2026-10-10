@@ -587,8 +587,13 @@ describe('explicit legacy digital stock ownership migration', () => {
             true,
         );
     });
-    it('retains the existing exported governance service as the runtime audit injection token', () => {
-        expect(Reflect.getMetadata('design:paramtypes', DigitalProductService)[4]).toBe(GovernanceService);
+    it('retains the existing exported governance service as the runtime audit injection token', async () => {
+        // DI metadata belongs to the production TypeScript output, not Vitest's source transform.
+        const { DigitalProductService: CompiledDigitalProductService } =
+            await import('../dist/digital-product.service');
+        expect(Reflect.getMetadata('design:paramtypes', CompiledDigitalProductService)[4]).toBe(
+            GovernanceService,
+        );
     });
     it('rejects confirmed migration outside the native transaction boundary', async () => {
         const test = migrationHarness();
