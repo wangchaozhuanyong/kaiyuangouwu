@@ -522,22 +522,68 @@ export class AutoCardService {
                 { availableState: 'AVAILABLE' },
             )
             .select('config.id', 'id')
+            .addSelect('config.productVariantId', 'productVariantId')
             .addSelect('config.lowStockThreshold', 'lowStockThreshold')
             .addSelect('COUNT(pool.id)', 'availableCount')
             .where('config.channelId = :channelId', { channelId: ctx.channelId })
             .andWhere('config.enabled = :enabled', { enabled: true })
             .groupBy('config.id')
+            .addGroupBy('config.productVariantId')
             .addGroupBy('config.lowStockThreshold')
-            .getRawMany<{ lowStockThreshold: string | number; availableCount: string | number }>();
+            .getRawMany<{
+                id: ID;
+                productVariantId: ID;
+                lowStockThreshold: string | number;
+                availableCount: string | number;
+            }>();
+        const lowStockRows = configRows.filter(
+            row => Number(row.availableCount) <= Number(row.lowStockThreshold),
+        );
+        const variants = lowStockRows.length
+            ? await this.connection.getRepository(ctx, ProductVariant).find({
+                  where: {
+                      id: In(lowStockRows.map(row => row.productVariantId)),
+                      channels: { id: ctx.channelId },
+                      deletedAt: IsNull(),
+                  },
+                  relations: ['product'],
+                  loadEagerRelations: false,
+              })
+            : [];
+        const variantById = new Map(variants.map(variant => [String(variant.id), variant]));
+        // A retained pool is historical data, not evidence that the current SKU
+        // still uses auto-card delivery. Active, store-scoped digital settings
+        // take precedence over the legacy variant fields, as in the storefront.
+        const activeLowStockRows = await Promise.all(
+            lowStockRows.map(async row => {
+                const variant = variantById.get(String(row.productVariantId));
+                if (
+                    !variant ||
+                    variant.deletedAt ||
+                    !variant.product ||
+                    variant.product.deletedAt ||
+                    variant.customFields.fulfillmentType === 'physical' ||
+                    variant.product.customFields.fulfillmentType === 'physical'
+                )
+                    return false;
+                // Product policy treats legacy missing type fields as digital;
+                // the effective auto-card mode and supply checks remain required.
+                const digital = await this.digitalProducts.configForDisplay(ctx, variant.id);
+                if ((digital?.deliveryMode ?? variant.customFields.digitalDeliveryMode) !== 'auto_card')
+                    return false;
+                // Reuse the batched supply policy for current ownership and
+                // sales authorization; a stale local pool must not bypass it.
+                const source = await this.supply.resolveForDisplay(ctx, variant.id);
+                return String(source?.config.id) === String(row.id);
+            }),
+        );
         const deliveryRepository = this.connection.getRepository(ctx, AutoCardDelivery);
         const [waitingStockDeliveryCount, manualReviewCount] = await Promise.all([
             deliveryRepository.count({ where: { channelId: ctx.channelId, state: 'WAITING_STOCK' } }),
             deliveryRepository.count({ where: { channelId: ctx.channelId, state: 'MANUAL_REVIEW' } }),
         ]);
         return {
-            lowStockSkuCount: configRows.filter(
-                row => Number(row.availableCount) <= Number(row.lowStockThreshold),
-            ).length,
+            lowStockSkuCount: activeLowStockRows.filter(Boolean).length,
             waitingStockDeliveryCount,
             manualReviewCount,
         };

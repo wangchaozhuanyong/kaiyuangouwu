@@ -2,18 +2,31 @@
 
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
+import { buildSchema, print, validate } from 'graphql';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { digitalProductAdminSchema } from '../../../../commerce-fulfillment-plugin/src/digital-product.schema';
+import { channelScopeResponseLink, setInitialActiveChannel } from '../../apollo';
+import { AdminPageWorkspace } from '../../components/AdminPageWorkspace';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
+import {
+    catalogDigitalStockQuery,
+    UPDATE_DIGITAL_VARIANT,
+    type DigitalWorkspaceVariant,
+} from '../../graphql/product-domains.graphql';
+import { queryPolicy } from '../../runtime/admin-query-runtime';
+import { createResourceInvalidationLink, resourceDomains } from '../../runtime/admin-resource-events';
 import { CatalogModule } from './CatalogModule';
 
 const cleanups: Array<() => void> = [];
 
 afterEach(async () => {
     await act(async () => cleanups.splice(0).forEach(cleanup => cleanup()));
+    sessionStorage.clear();
+    vi.useRealTimers();
 });
 
 async function renderCatalog({
@@ -23,21 +36,44 @@ async function renderCatalog({
     digital = false,
     stockAllocated = 0,
     stockUnavailable = false,
+    variantCount = 1,
+    autoCardStock = null,
+    deliveryMode = null,
+    managedWorkspace = false,
+    digitalWorkspaces,
+    workspaceFailure,
+    onClient,
+    listed = true,
     productTotal = 1,
     assignmentTotal = 1,
     requests,
 }: {
     empty?: boolean;
     initialEntry?: string;
-    channelCode?: string;
+    channelCode?: string | (() => string);
     digital?: boolean;
     stockAllocated?: number;
     stockUnavailable?: boolean;
+    variantCount?: number;
+    autoCardStock?: number | null;
+    deliveryMode?: DigitalWorkspaceVariant['deliveryMode'] | null;
+    managedWorkspace?: boolean;
+    digitalWorkspaces?: () => Array<
+        Pick<
+            DigitalWorkspaceVariant,
+            'id' | 'deliveryMode' | 'stockPolicy' | 'availableQuantity' | 'migrationRequired'
+        >
+    >;
+    workspaceFailure?: () => boolean;
+    onClient?: (client: ApolloClient, rerender: () => Promise<void>) => void;
+    listed?: boolean;
     productTotal?: number;
     assignmentTotal?: number;
     requests?: Array<{ name: string; variables: Record<string, unknown> }>;
 } = {}) {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     const rootCollection = {
         __typename: 'Collection',
         id: 'root',
@@ -51,14 +87,19 @@ async function renderCatalog({
         link: new ApolloLink(
             operation =>
                 new Observable(observer => {
-                    requests?.push({ name: operation.operationName ?? '', variables: operation.variables });
+                    const currentChannelCode =
+                        typeof channelCode === 'function' ? channelCode() : channelCode;
+                    requests?.push({
+                        name: operation.operationName ?? '',
+                        variables: operation.variables,
+                    });
                     if (operation.operationName === 'StoreCatalogStatus') {
                         observer.next({
                             data: {
                                 myStoreCatalogStatus: {
                                     authorized: empty ? 0 : 1,
-                                    listed: empty ? 0 : 1,
-                                    paused: 0,
+                                    listed: empty || !listed ? 0 : 1,
+                                    paused: !empty && !listed ? 1 : 0,
                                     pending: 0,
                                     outOfStock: stockAllocated >= 105 ? 1 : 0,
                                     items: empty
@@ -66,9 +107,9 @@ async function renderCatalog({
                                         : [
                                               {
                                                   productId: 'product-1',
-                                                  listed: true,
+                                                  listed,
                                                   pending: false,
-                                                  paused: false,
+                                                  paused: !listed,
                                                   outOfStock: stockAllocated >= 105,
                                               },
                                           ],
@@ -105,28 +146,26 @@ async function renderCatalog({
                                             },
                                             featuredAsset: null,
                                             facetValues: [],
-                                            variants: [
-                                                {
-                                                    id: 'variant-1',
-                                                    name: '白利群2',
-                                                    sku: 'WHITE-LIQUN-2',
-                                                    price: 19000,
-                                                    currencyCode: 'MYR',
-                                                    stockLevel:
-                                                        stockAllocated >= 105 ? 'OUT_OF_STOCK' : 'IN_STOCK',
-                                                    stockOnHand: stockUnavailable ? null : 105,
-                                                    stockAllocated,
-                                                    enabled: true,
-                                                    trackInventory: 'TRUE',
-                                                    autoCardAvailableStock: null,
-                                                    customFields: {
-                                                        fulfillmentType: digital ? 'digital' : 'physical',
-                                                        pricingMode: 'FIXED',
-                                                        digitalDeliveryMode: null,
-                                                        digitalStockPolicy: null,
-                                                    },
+                                            variants: Array.from({ length: variantCount }, (_, index) => ({
+                                                id: `variant-${index + 1}`,
+                                                name: '白利群2',
+                                                sku: 'WHITE-LIQUN-2',
+                                                price: 19000,
+                                                currencyCode: 'MYR',
+                                                stockLevel:
+                                                    stockAllocated >= 105 ? 'OUT_OF_STOCK' : 'IN_STOCK',
+                                                stockOnHand: stockUnavailable ? null : 105,
+                                                stockAllocated,
+                                                enabled: true,
+                                                trackInventory: 'TRUE',
+                                                autoCardAvailableStock: autoCardStock,
+                                                customFields: {
+                                                    fulfillmentType: digital ? 'digital' : 'physical',
+                                                    pricingMode: 'FIXED',
+                                                    digitalDeliveryMode: deliveryMode,
+                                                    digitalStockPolicy: null,
                                                 },
-                                            ],
+                                            })),
                                             collections: [
                                                 { ...tobacco, parent: rootCollection },
                                                 { ...cigarettes, parent: tobacco },
@@ -174,14 +213,18 @@ async function renderCatalog({
                             data: {
                                 activeChannel: {
                                     id: 'channel-1',
-                                    code: channelCode,
+                                    code: currentChannelCode,
                                     token: 'meiyijia',
                                     defaultCurrencyCode: 'MYR',
                                     customFields: {
                                         storefrontNameZh:
-                                            channelCode === '__default_channel__' ? '' : channelCode,
+                                            currentChannelCode === '__default_channel__'
+                                                ? ''
+                                                : currentChannelCode,
                                         storefrontNameEn:
-                                            channelCode === '__default_channel__' ? '' : channelCode,
+                                            currentChannelCode === '__default_channel__'
+                                                ? ''
+                                                : currentChannelCode,
                                     },
                                 },
                                 channels: {
@@ -189,19 +232,56 @@ async function renderCatalog({
                                     items: [
                                         {
                                             id: 'channel-1',
-                                            code: channelCode,
+                                            code: currentChannelCode,
                                             token: 'meiyijia',
                                             defaultCurrencyCode: 'MYR',
                                             customFields: {
                                                 storefrontNameZh:
-                                                    channelCode === '__default_channel__' ? '' : channelCode,
+                                                    currentChannelCode === '__default_channel__'
+                                                        ? ''
+                                                        : currentChannelCode,
                                                 storefrontNameEn:
-                                                    channelCode === '__default_channel__' ? '' : channelCode,
+                                                    currentChannelCode === '__default_channel__'
+                                                        ? ''
+                                                        : currentChannelCode,
                                             },
                                         },
                                     ],
                                 },
                             },
+                        });
+                    } else if (operation.operationName === 'UpdateDigitalVariant') {
+                        observer.next({
+                            data: {
+                                updateDigitalVariantConfig: {
+                                    id: 'fixture-config',
+                                    availableQuantity: operation.variables.input.availableQuantity,
+                                },
+                            },
+                        });
+                    } else if (operation.operationName === 'NextAdminCatalogProductOperationsStock') {
+                        if (workspaceFailure?.()) {
+                            observer.error(new Error('Digital stock read failed'));
+                            return;
+                        }
+                        observer.next({
+                            data: Object.fromEntries(
+                                Object.entries(operation.variables).map(([alias, productId]) => [
+                                    alias,
+                                    {
+                                        productId,
+                                        variants: digitalWorkspaces?.() ?? [
+                                            {
+                                                id: 'variant-1',
+                                                deliveryMode: 'manual_service',
+                                                stockPolicy: 'limited',
+                                                availableQuantity: null,
+                                                migrationRequired: true,
+                                            },
+                                        ],
+                                    },
+                                ]),
+                            ),
                         });
                     } else if (operation.operationName === 'NextAdminCatalogProductOperations') {
                         observer.next({
@@ -227,7 +307,7 @@ async function renderCatalog({
                     } else if (operation.operationName === 'GetCatalogChannelAssignments') {
                         const channel = {
                             id: 'channel-1',
-                            code: channelCode,
+                            code: currentChannelCode,
                             displayName: '本店',
                             isDefault: false,
                         };
@@ -264,6 +344,13 @@ async function renderCatalog({
                 }),
         ),
     });
+    client.setLink(
+        ApolloLink.from([
+            channelScopeResponseLink,
+            createResourceInvalidationLink(() => 'fixture-scope'),
+            client.link,
+        ]),
+    );
     const container = document.createElement('div');
     document.body.append(container);
     const root = createRoot(container);
@@ -273,20 +360,284 @@ async function renderCatalog({
         container.remove();
     });
 
-    await act(async () => {
-        root.render(
-            <ApolloProvider client={client}>
-                <MemoryRouter initialEntries={[initialEntry]}>
-                    <FeatureHelpProvider>
-                        <CatalogModule />
-                    </FeatureHelpProvider>
-                </MemoryRouter>
-            </ApolloProvider>,
-        );
-    });
+    const rerender = async () =>
+        act(async () => {
+            root.render(
+                <ApolloProvider client={client}>
+                    <MemoryRouter
+                        key={typeof channelCode === 'function' ? channelCode() : channelCode}
+                        initialEntries={[initialEntry]}
+                    >
+                        <FeatureHelpProvider>
+                            {managedWorkspace ? (
+                                <AdminPageWorkspace page="/catalog/list" active>
+                                    <CatalogModule />
+                                </AdminPageWorkspace>
+                            ) : (
+                                <CatalogModule />
+                            )}
+                        </FeatureHelpProvider>
+                    </MemoryRouter>
+                </ApolloProvider>,
+            );
+        });
+    onClient?.(client, rerender);
+    await rerender();
 
     return container;
 }
+
+function stockCell(container: HTMLElement) {
+    const headers = [...container.querySelectorAll('thead th')].map(cell => cell.textContent?.trim());
+    return container
+        .querySelectorAll('tbody tr:first-child td')
+        [headers.indexOf('虚拟可售库存')]?.textContent?.trim();
+}
+
+const manualWorkspace = (availableQuantity: number | null, migrationRequired = false) => [
+    {
+        id: 'variant-1',
+        deliveryMode: 'manual_service' as const,
+        stockPolicy: 'limited' as const,
+        availableQuantity,
+        migrationRequired,
+    },
+];
+
+describe('CatalogModule current-store digital stock', () => {
+    it('uses active digital quota instead of the preserved legacy warehouse', async () => {
+        const container = await renderCatalog({
+            digital: true,
+            digitalWorkspaces: () => manualWorkspace(100),
+        });
+        expect(stockCell(container)).toBe('100');
+    });
+
+    it('shows 100 → 80 → 100 from net availability without subtracting legacy allocation twice', async () => {
+        let available = 100;
+        let client!: ApolloClient;
+        const container = await renderCatalog({
+            digital: true,
+            stockAllocated: 20,
+            digitalWorkspaces: () => manualWorkspace(available),
+            onClient: value => {
+                client = value;
+            },
+        });
+        expect(stockCell(container)).toBe('100');
+        for (const value of [80, 100]) {
+            available = value;
+            await act(async () => {
+                await client.refetchQueries({ include: ['NextAdminCatalogProductOperationsStock'] });
+            });
+            expect(stockCell(container)).toBe(String(value));
+        }
+    });
+
+    it('keeps uncutover stock on the legacy available-stock path', async () => {
+        const container = await renderCatalog({
+            digital: true,
+            stockAllocated: 20,
+            digitalWorkspaces: () => manualWorkspace(null, true),
+        });
+        expect(stockCell(container)).toBe('85');
+    });
+
+    it.each([0, 80])('preserves paused/listed state independently of quota %i', async available => {
+        const container = await renderCatalog({
+            digital: true,
+            listed: false,
+            digitalWorkspaces: () => manualWorkspace(available),
+        });
+        expect(stockCell(container)).toBe(String(available));
+        expect(container.textContent).toContain('仓库中');
+    });
+
+    it('keeps unlimited and partly unlimited summaries', async () => {
+        const unlimited = { ...manualWorkspace(100)[0], stockPolicy: 'unlimited' as const };
+        const container = await renderCatalog({ digital: true, digitalWorkspaces: () => [unlimited] });
+        expect(stockCell(container)).toBe('无限');
+        const mixed = await renderCatalog({
+            digital: true,
+            variantCount: 2,
+            digitalWorkspaces: () => [unlimited, { ...manualWorkspace(20)[0], id: 'variant-2' }],
+        });
+        expect(stockCell(mixed)).toBe('部分无限');
+    });
+
+    it('keeps automatic-card stock sourced from the pool', async () => {
+        const container = await renderCatalog({
+            digital: true,
+            autoCardStock: 7,
+            digitalWorkspaces: () => [
+                { ...manualWorkspace(999)[0], deliveryMode: 'auto_card', stockPolicy: 'pool_derived' },
+            ],
+        });
+        expect(stockCell(container)).toBe('7');
+        const failedWorkspace = await renderCatalog({
+            digital: true,
+            deliveryMode: 'auto_card',
+            autoCardStock: 7,
+            workspaceFailure: () => true,
+        });
+        expect(stockCell(failedWorkspace)).toBe('7');
+    });
+
+    it('reads limited file availability through the same independent workspace', async () => {
+        const container = await renderCatalog({
+            digital: true,
+            digitalWorkspaces: () => [{ ...manualWorkspace(35)[0], deliveryMode: 'file_download' }],
+        });
+        expect(stockCell(container)).toBe('35');
+    });
+
+    it('does not disguise missing active quota data as old stock or zero', async () => {
+        const failed = await renderCatalog({ digital: true, workspaceFailure: () => true });
+        expect(stockCell(failed)).toBe('未获取');
+        const missing = await renderCatalog({ digital: true, digitalWorkspaces: () => [] });
+        expect(stockCell(missing)).toBe('未获取');
+    });
+
+    it('retains the last same-store quantity when a refresh fails', async () => {
+        let fail = false;
+        let client!: ApolloClient;
+        const container = await renderCatalog({
+            digital: true,
+            digitalWorkspaces: () => manualWorkspace(80),
+            workspaceFailure: () => fail,
+            onClient: value => {
+                client = value;
+            },
+        });
+        expect(stockCell(container)).toBe('80');
+        fail = true;
+        await act(async () => {
+            await expect(
+                client.refetchQueries({ include: ['NextAdminCatalogProductOperationsStock'] }),
+            ).rejects.toThrow('Digital stock read failed');
+        });
+        expect(stockCell(container)).toBe('80');
+    });
+
+    it('refreshes the existing stock slot after a digital workspace save through shared catalog invalidation', async () => {
+        let available = 100;
+        let client!: ApolloClient;
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            digital: true,
+            managedWorkspace: true,
+            requests,
+            digitalWorkspaces: () => manualWorkspace(available),
+            onClient: value => {
+                client = value;
+            },
+        });
+        expect(stockCell(container)).toBe('100');
+        const readsBeforeSave = requests.filter(
+            request => request.name === 'NextAdminCatalogProductOperationsStock',
+        ).length;
+        vi.useFakeTimers();
+        available = 80;
+        await act(async () => {
+            await client.mutate({
+                mutation: UPDATE_DIGITAL_VARIANT,
+                variables: {
+                    input: {
+                        productVariantId: 'variant-1',
+                        deliveryMode: 'manual_service',
+                        stockPolicy: 'limited',
+                        availableQuantity: 80,
+                        expectedAvailableQuantity: 100,
+                    },
+                },
+            });
+        });
+        await act(async () => {
+            await vi.runAllTimersAsync();
+        });
+        expect(stockCell(container)).toBe('80');
+        expect(
+            requests.filter(request => request.name === 'NextAdminCatalogProductOperationsStock'),
+        ).toHaveLength(readsBeforeSave + 1);
+    });
+
+    it('clears same-product stock when the actual Apollo cache and store scope switch', async () => {
+        let store = 'store-a';
+        let client!: ApolloClient;
+        let rerender!: () => Promise<void>;
+        setInitialActiveChannel('fixture-store-a');
+        const container = await renderCatalog({
+            digital: true,
+            channelCode: () => store,
+            digitalWorkspaces: () => manualWorkspace(store === 'store-a' ? 100 : 30),
+            onClient: (value, render) => {
+                client = value;
+                rerender = render;
+            },
+        });
+        expect(stockCell(container)).toBe('100');
+        await act(async () => {
+            await client.clearStore();
+        });
+        store = 'store-b';
+        setInitialActiveChannel('fixture-store-b');
+        await rerender();
+        expect(stockCell(container)).toBe('30');
+        expect(container.textContent).toContain('当前数据范围：store-b');
+    });
+
+    it('batches existing workspace fields and uses shared catalog invalidation/secondary refresh', () => {
+        const document = catalogDigitalStockQuery(2);
+        expect(resourceDomains(document)).toEqual(['catalog']);
+        expect(queryPolicy(document).stage).toBe(2);
+        expect(document.definitions[0]).toMatchObject({
+            kind: 'OperationDefinition',
+            operation: 'query',
+            variableDefinitions: [
+                { variable: { name: { value: 'product0' } } },
+                { variable: { name: { value: 'product1' } } },
+            ],
+            selectionSet: {
+                selections: [
+                    { alias: { value: 'product0' }, name: { value: 'digitalProductWorkspace' } },
+                    { alias: { value: 'product1' }, name: { value: 'digitalProductWorkspace' } },
+                ],
+            },
+        });
+    });
+
+    it('validates the maximum 100-row document against the existing digital Admin schema', () => {
+        const schema = buildSchema(`
+            scalar DateTime
+            scalar Upload
+            interface Node { id: ID! }
+            type CatalogSupplier { id: ID! }
+            type Product { id: ID! }
+            type Query { _empty: Boolean }
+            type Mutation { _empty: Boolean }
+            ${print(digitalProductAdminSchema)}
+        `);
+        const document = catalogDigitalStockQuery(100);
+        const operation = document.definitions[0];
+        expect(validate(schema, document)).toEqual([]);
+        expect(operation).toMatchObject({ kind: 'OperationDefinition' });
+        if (operation.kind !== 'OperationDefinition') throw new Error('Expected query');
+        expect(operation.variableDefinitions).toHaveLength(100);
+        expect(operation.selectionSet.selections).toHaveLength(100);
+        expect(operation.selectionSet.selections.at(-1)).toMatchObject({
+            alias: { value: 'product99' },
+            name: { value: 'digitalProductWorkspace' },
+        });
+    });
+
+    it('does not request digital workspaces for physical rows', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        await renderCatalog({ requests });
+        expect(requests.some(request => request.name === 'NextAdminCatalogProductOperationsStock')).toBe(
+            false,
+        );
+    });
+});
 
 describe('CatalogModule category columns', () => {
     it('shows unallocated virtual stock while physical stock remains on-hand stock', async () => {

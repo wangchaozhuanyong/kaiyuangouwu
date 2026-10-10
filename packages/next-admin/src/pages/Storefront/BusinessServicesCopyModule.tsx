@@ -1,24 +1,16 @@
 import { useMutation } from '@apollo/client/react';
-import { ExternalLink, RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
-import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { useLayoutEffect, useState, type ReactNode } from 'react';
+import { storefrontAssetUrl } from '../../../../storefront-content-plugin/src/content-image';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
-import {
-    BusinessServicesHero,
-    resolveBusinessServicesHeroLayout,
-} from '../../../../storefront-content-plugin/src/shared/business-services-hero';
-import {
-    resolveStorefrontSemanticPalette,
-    semanticPaletteCssVariables,
-    storefrontSkinCssVariables,
-} from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
-import { normalizeStorefrontVisualPreset } from '../../../../storefront-content-plugin/src/visual-presets';
-import previewFoundationStyles from '../../../../storefront/src/styles/experience-foundations.css?inline';
+import { resolveBusinessServicesHeroLayout } from '../../../../storefront-content-plugin/src/shared/business-services-hero';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { AssetPicker } from './storefront-asset-picker';
+import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
 import { StorefrontMobileViewSwitch, type StorefrontMobileView } from './StorefrontMobileViewSwitch';
 
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
@@ -35,7 +27,6 @@ import {
 } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useServerDraft } from '../../hooks/use-server-draft';
-import { AdminImage } from '../../utils/admin-image';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import {
@@ -50,7 +41,6 @@ import { verifyContentChannel, verifySavedBlock } from './storefront-save-verifi
 const BLOCK_CODE = 'storefront-client-plugins';
 const COPY_VERSION = 1;
 type Language = 'zh_Hans' | 'en';
-const previewStyles = previewFoundationStyles.replaceAll(':root', '[data-business-services-preview]');
 
 const defaults: Record<Language, { title: string; body: string; subtitle?: string; ctaLabel?: string }> = {
     zh_Hans: {
@@ -82,12 +72,6 @@ export function BusinessServicesCopyModule() {
         theme?.storefrontVisualPreset?.channelId === channel?.id &&
         theme?.storefrontPreviewBranding?.channelId === channel?.id,
     );
-    const presetId = normalizeStorefrontVisualPreset(theme?.storefrontVisualPreset?.presetId);
-    const palette = resolveStorefrontSemanticPalette(presetId, theme?.storefrontPreviewBranding);
-    const previewStyle = {
-        ...semanticPaletteCssVariables(palette),
-        ...storefrontSkinCssVariables(presetId, palette),
-    } as CSSProperties;
     const canEdit = Boolean(
         consistent &&
         !query.loading &&
@@ -216,8 +200,8 @@ export function BusinessServicesCopyModule() {
             setVerifying(false);
         }
     };
-    const preview = draft ? getTranslation(draft, previewLanguage) : defaults[previewLanguage];
-    const previewImage = draft?.imageAsset?.preview || draft?.imageUrl;
+    const phoneImageUrl =
+        typeof draft?.settings?.mobileImageUrl === 'string' ? draft.settings.mobileImageUrl.trim() : '';
     const heroLayout = resolveBusinessServicesHeroLayout(draft?.settings);
 
     return (
@@ -474,7 +458,6 @@ export function BusinessServicesCopyModule() {
                                         <option value="en">英文</option>
                                     </AdminSelect>
                                 </div>
-                                <style>{previewStyles}</style>
                                 {themeQuery.error || (!themeQuery.loading && !previewThemeReady) ? (
                                     <State
                                         tone="error"
@@ -484,38 +467,10 @@ export function BusinessServicesCopyModule() {
                                 ) : !previewThemeReady ? (
                                     <State label="正在读取店铺预览主题…" />
                                 ) : (
-                                    <div
-                                        className="mt-5"
-                                        data-business-services-preview
-                                        data-storefront-preset={presetId}
-                                        style={previewStyle}
-                                    >
-                                        <BusinessServicesHero
-                                            headingLevel="h3"
-                                            title={preview.title || '—'}
-                                            body={preview.body || '—'}
-                                            layout={heroLayout}
-                                            visual={draft}
-                                            image={
-                                                previewImage ? (
-                                                    <AdminImage
-                                                        src={previewImage}
-                                                        mediaKind="hero"
-                                                        alt="商业服务页首配图预览"
-                                                    />
-                                                ) : undefined
-                                            }
-                                            action={
-                                                linkValue.trim() && linkIsValid ? (
-                                                    <span className="business-services-heading-link">
-                                                        {preview.ctaLabel?.trim() ||
-                                                            (previewLanguage === 'zh_Hans'
-                                                                ? '打开服务网站'
-                                                                : 'Open service website')}
-                                                        <ExternalLink aria-hidden="true" />
-                                                    </span>
-                                                ) : undefined
-                                            }
+                                    <div className="mt-5" data-business-services-preview>
+                                        <StorefrontDecorationPreview
+                                            block={draft}
+                                            language={previewLanguage}
                                         />
                                     </div>
                                 )}
@@ -546,6 +501,36 @@ export function BusinessServicesCopyModule() {
                                         {heroLayout === 'image-overlay'
                                             ? '叠加模式建议使用无广告文字、左侧留空且主体在右侧的横向底图；中文与英文文字都由后台实时叠加。切换布局不会替换图片。'
                                             : '图下模式将图片与文字分开显示，可继续使用已有配图。切换布局不会替换图片。'}
+                                    </p>
+                                    <AssetPicker
+                                        label="手机端商业服务页首配图（可选）"
+                                        value={null}
+                                        fallbackUrl={phoneImageUrl || null}
+                                        onChange={asset =>
+                                            setDraft(current =>
+                                                current
+                                                    ? {
+                                                          ...current,
+                                                          settings: {
+                                                              ...(current.settings ?? {}),
+                                                              mobileImageUrl: asset
+                                                                  ? storefrontAssetUrl(asset) || null
+                                                                  : null,
+                                                              mobileImageAssetId: asset?.id ?? null,
+                                                              mobileImageWidth: asset?.width ?? null,
+                                                              mobileImageHeight: asset?.height ?? null,
+                                                          },
+                                                      }
+                                                    : current,
+                                            )
+                                        }
+                                    />
+                                    <p className="text-xs leading-5 text-slate-500">
+                                        {phoneImageUrl
+                                            ? '已单独设置手机配图，电脑端继续使用电脑图。'
+                                            : '未单独设置手机配图，当前沿用电脑图。'}
+                                        手机叠加底图应给左侧文字留空、图形放在右侧；清除手机图后恢复继承电脑图。
+                                        在客户端效果预览中分别切换电脑和手机，核对完整底图与当前语言文案。
                                     </p>
                                     {imageChanges.length > 0 && (
                                         <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">

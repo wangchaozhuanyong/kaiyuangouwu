@@ -1,14 +1,286 @@
+import {
+    CatalogResourceOwnership,
+    ProductSalesAuthorization,
+    ProductVariant,
+    RequestContextCacheService,
+} from '@vendure/core';
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { getMetadataArgsStorage } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AutoCardDeliveryReadyEvent } from './auto-card-delivery.event';
+import { AutoCardSupplyService } from './auto-card-supply.service';
 import { AutoCardService } from './auto-card.service';
+import { DigitalProductService } from './digital-product.service';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
 import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entity';
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { AutoCardSupplyGrant } from './entities/auto-card-supply-grant.entity';
+import { DigitalVariantConfig } from './entities/digital-product.entity';
+
+function todoSummaryHarness(size = 1) {
+    type Row = Record<string, any>;
+    const variants: Row[] = Array.from({ length: size }, (_, index) => ({
+        id: `variant-${index}`,
+        productId: `product-${index}`,
+        deletedAt: null,
+        channels: [{ id: 'A' }],
+        customFields: { fulfillmentType: 'digital', digitalDeliveryMode: 'auto_card' },
+        product: {
+            deletedAt: null,
+            customFields: { fulfillmentType: 'digital' },
+            channels: [{ id: 'A', code: 'store-a' }],
+        },
+    }));
+    const configs: Row[] = variants.map(variant => ({
+        id: `config-${variant.id}`,
+        channelId: 'A',
+        productVariantId: variant.id,
+        enabled: true,
+        lowStockThreshold: 5,
+    }));
+    const owners: Row[] = variants.map(variant => ({
+        resourceType: 'Product',
+        resourceId: variant.productId,
+        ownerChannelId: 'A',
+    }));
+    const digital: Row[] = [];
+    const sales: Row[] = [];
+    const pool: Row[] = [];
+    const deliveries: Row[] = [
+        { channelId: 'A', state: 'WAITING_STOCK' },
+        { channelId: 'A', state: 'MANUAL_REVIEW' },
+        { channelId: 'B', state: 'WAITING_STOCK' },
+        { channelId: 'B', state: 'MANUAL_REVIEW' },
+    ];
+    const rows = new Map<unknown, Row[]>([
+        [ProductVariant, variants],
+        [AutoCardConfig, configs],
+        [CatalogResourceOwnership, owners],
+        [DigitalVariantConfig, digital],
+        [ProductSalesAuthorization, sales],
+        [AutoCardSupplyGrant, []],
+    ]);
+    const reads: string[] = [];
+    const matches = (row: Row, where: Row): boolean =>
+        Object.entries(where).every(([key, value]) => {
+            if (value?._type === 'in') return value._value.map(String).includes(String(row[key]));
+            if (value?._type === 'isNull') return row[key] == null;
+            if (value && typeof value === 'object')
+                return Array.isArray(row[key])
+                    ? row[key].some((item: Row) => matches(item, value))
+                    : matches(row[key] ?? {}, value);
+            return row[key] === value;
+        });
+    const find = (entity: { name: string }, where: Row | Row[]) => {
+        reads.push(entity.name);
+        return Promise.resolve(
+            (rows.get(entity) ?? []).filter(row =>
+                (Array.isArray(where) ? where : [where]).some(part => matches(row, part)),
+            ),
+        );
+    };
+    const query = {
+        leftJoin: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        addSelect: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        groupBy: vi.fn().mockReturnThis(),
+        addGroupBy: vi.fn().mockReturnThis(),
+        getRawMany: vi.fn(() => {
+            reads.push('AutoCardConfig:aggregate');
+            return Promise.resolve(
+                configs
+                    .filter(config => config.channelId === 'A' && config.enabled)
+                    .map(config => ({
+                        ...config,
+                        availableCount: pool.filter(
+                            item => item.configId === config.id && item.state === 'AVAILABLE',
+                        ).length,
+                    })),
+            );
+        }),
+    };
+    const count = vi.fn(({ where }: { where: Row }) =>
+        Promise.resolve(deliveries.filter(row => matches(row, where)).length),
+    );
+    const connection = {
+        getRepository: (_ctx: unknown, entity: { name: string }) => ({
+            find: ({ where }: { where: Row | Row[] }) => find(entity, where),
+            createQueryBuilder: () => query,
+            count,
+            manager: {
+                getRepository: (target: { name: string }) => ({
+                    find: ({ where }: { where: Row | Row[] }) => find(target, where),
+                }),
+            },
+        }),
+    };
+    const cache = new RequestContextCacheService();
+    const supply = new AutoCardSupplyService(connection as any, {} as any, {} as any, cache);
+    const digitalProducts = new DigitalProductService(connection as any, {} as any, {} as any, cache);
+    const service = Object.assign(Object.create(AutoCardService.prototype), {
+        connection,
+        supply,
+        digitalProducts,
+    }) as AutoCardService;
+    const ctx = { channelId: 'A', channel: { code: 'store-a' }, apiType: 'admin' } as any;
+    return { service, ctx, variants, configs, owners, digital, sales, pool, query, count, reads };
+}
+
+describe('AutoCardService current low-stock warnings', () => {
+    it.each(['manual_service', 'file_download'])(
+        'ignores a retained pool after changing to %s',
+        async mode => {
+            const test = todoSummaryHarness();
+            test.digital.push({
+                channelId: 'A',
+                productVariantId: test.variants[0].id,
+                migrationState: 'ACTIVE',
+                deliveryMode: mode,
+            });
+
+            expect(await test.service.todoSummary(test.ctx)).toEqual({
+                lowStockSkuCount: 0,
+                waitingStockDeliveryCount: 1,
+                manualReviewCount: 1,
+            });
+            expect(test.configs[0].enabled).toBe(true);
+        },
+    );
+
+    it('uses legacy mode only when there is no active store-specific configuration', async () => {
+        const test = todoSummaryHarness();
+        test.variants[0].customFields.digitalDeliveryMode = 'manual_service';
+        test.digital.push({
+            channelId: 'A',
+            productVariantId: test.variants[0].id,
+            migrationState: 'PREPARED',
+            deliveryMode: 'auto_card',
+        });
+        test.digital.push({
+            channelId: 'B',
+            productVariantId: test.variants[0].id,
+            migrationState: 'ACTIVE',
+            deliveryMode: 'auto_card',
+        });
+
+        expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(0);
+    });
+
+    it('reports an active auto-card configuration even when the legacy field is manual', async () => {
+        const test = todoSummaryHarness();
+        test.variants[0].customFields.digitalDeliveryMode = 'manual_service';
+        test.digital.push({
+            channelId: 'A',
+            productVariantId: test.variants[0].id,
+            migrationState: 'ACTIVE',
+            deliveryMode: 'auto_card',
+        });
+
+        expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(1);
+    });
+
+    it.each(['variant', 'product'])(
+        'excludes a physical %s and retains historical delivery tasks',
+        async target => {
+            const test = todoSummaryHarness();
+            const record = target === 'product' ? test.variants[0].product : test.variants[0];
+            record.customFields.fulfillmentType = 'physical';
+            expect(await test.service.todoSummary(test.ctx)).toEqual({
+                lowStockSkuCount: 0,
+                waitingStockDeliveryCount: 1,
+                manualReviewCount: 1,
+            });
+        },
+    );
+
+    it.each(['variant', 'product', 'both'])(
+        'preserves valid auto-card warnings with missing legacy %s type',
+        async target => {
+            const test = todoSummaryHarness();
+            if (target !== 'product') delete test.variants[0].customFields.fulfillmentType;
+            if (target !== 'variant') delete test.variants[0].product.customFields.fulfillmentType;
+            expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(1);
+        },
+    );
+
+    it.each(['variant', 'product'])('excludes a deleted %s', async target => {
+        const test = todoSummaryHarness();
+        const record = target === 'product' ? test.variants[0].product : test.variants[0];
+        record.deletedAt = new Date();
+        expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(0);
+    });
+
+    it.each(['channel', 'owner', 'revoked-sale', 'pending-sale', 'ambiguous-legacy'])(
+        'rejects stale %s scope',
+        async scenario => {
+            const test = todoSummaryHarness();
+            if (scenario === 'channel') test.variants[0].channels = [{ id: 'B' }];
+            if (scenario === 'owner') test.owners[0].ownerChannelId = 'B';
+            if (scenario.endsWith('-sale'))
+                test.sales.push({
+                    productId: test.variants[0].productId,
+                    channelId: 'A',
+                    state: scenario === 'revoked-sale' ? 'REVOKED' : 'PENDING',
+                    variantIds: [test.variants[0].id],
+                    pendingVariantIds: [],
+                });
+            if (scenario === 'ambiguous-legacy') {
+                test.owners.length = 0;
+                test.variants[0].product.channels.push({ id: 'B', code: 'store-b' });
+            }
+            expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(0);
+        },
+    );
+
+    it('preserves the single-store legacy ownership fallback', async () => {
+        const test = todoSummaryHarness();
+        test.owners.length = 0;
+        expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(1);
+    });
+
+    it.each([0, 4, 5, 6])('only warns at or below the threshold with %i available cards', async available => {
+        const test = todoSummaryHarness();
+        test.pool.push(
+            ...Array.from({ length: available }, () => ({
+                configId: test.configs[0].id,
+                state: 'AVAILABLE',
+            })),
+            { configId: test.configs[0].id, state: 'ASSIGNED' },
+        );
+        expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(available <= 5 ? 1 : 0);
+        expect(test.query.where).toHaveBeenCalledWith('config.channelId = :channelId', { channelId: 'A' });
+        expect(test.query.andWhere).toHaveBeenCalledWith('config.enabled = :enabled', { enabled: true });
+    });
+
+    it('ignores disabled pools without hiding historical paid-order work', async () => {
+        const test = todoSummaryHarness();
+        test.configs[0].enabled = false;
+        expect(await test.service.todoSummary(test.ctx)).toEqual({
+            lowStockSkuCount: 0,
+            waitingStockDeliveryCount: 1,
+            manualReviewCount: 1,
+        });
+    });
+
+    it.each([1, 48])('batches current mode and ownership reads for %i low-stock SKUs', async size => {
+        const test = todoSummaryHarness(size);
+        expect((await test.service.todoSummary(test.ctx)).lowStockSkuCount).toBe(size);
+        expect(test.reads).toEqual([
+            'AutoCardConfig:aggregate',
+            'ProductVariant',
+            'DigitalVariantConfig',
+            'ProductVariant',
+            'CatalogResourceOwnership',
+            'ProductSalesAuthorization',
+            'AutoCardConfig',
+        ]);
+        expect(test.count).toHaveBeenCalledTimes(2);
+    });
+});
 
 function autoCardLine(quantity = 2) {
     return {

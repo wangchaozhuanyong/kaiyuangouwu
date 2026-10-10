@@ -61,6 +61,10 @@ import {
     type FulfillmentType,
     type StoreCommerceModeData,
 } from '../../graphql/commerce.graphql';
+import {
+    catalogDigitalStockQuery,
+    type CatalogDigitalStockResult,
+} from '../../graphql/product-domains.graphql';
 import { useUrlListState } from '../../hooks/use-url-list-state';
 import { useUrlSortState } from '../../hooks/use-url-sort-state';
 import { AdminImage } from '../../utils/admin-image';
@@ -353,6 +357,33 @@ export function CatalogModule() {
         variables: { productIds },
         skip: productIds.length === 0,
     });
+    const digitalProductIds = useMemo(
+        () =>
+            data?.products.items
+                .filter(product => product.customFields?.fulfillmentType !== 'physical')
+                .map(product => product.id) ?? [],
+        [data],
+    );
+    const digitalStockDocument = useMemo(
+        () => catalogDigitalStockQuery(digitalProductIds.length),
+        [digitalProductIds.length],
+    );
+    const digitalStockVariables = useMemo(
+        () => Object.fromEntries(digitalProductIds.map((id, index) => [`product${index}`, id])),
+        [digitalProductIds],
+    );
+    const digitalStockQuery = useQuery<CatalogDigitalStockResult>(digitalStockDocument, {
+        variables: digitalStockVariables,
+        skip: digitalProductIds.length === 0,
+    });
+    const digitalStockByProduct = useMemo(() => {
+        const workspaces = new Map<string, CatalogDigitalStockResult[string]>();
+        digitalProductIds.forEach((id, index) => {
+            const workspace = digitalStockQuery.data?.[`product${index}`];
+            if (workspace?.productId === id) workspaces.set(id, workspace);
+        });
+        return workspaces;
+    }, [digitalProductIds, digitalStockQuery.data]);
 
     const channelAssignmentsQuery = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
         variables: {
@@ -469,31 +500,46 @@ export function CatalogModule() {
                     product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital';
                 const quoteOnly = product.customFields?.pricingMode === 'QUOTE_ONLY';
                 const categories = collectionHierarchySummary(product.collections);
+                const workspaceVariants = new Map(
+                    digitalStockByProduct.get(product.id)?.variants.map(variant => [variant.id, variant]) ??
+                        [],
+                );
+                const digitalVariants = variants.map(variant => {
+                    const workspace = workspaceVariants.get(variant.id);
+                    const deliveryMode = workspace?.deliveryMode ?? variant.customFields?.digitalDeliveryMode;
+                    const stockPolicy = workspace?.stockPolicy ?? variant.customFields?.digitalStockPolicy;
+                    if (deliveryMode === 'auto_card') {
+                        return {
+                            stockPolicy: 'pool_derived',
+                            available: variant.autoCardAvailableStock ?? undefined,
+                        };
+                    }
+                    if (!workspace) return { stockPolicy, available: undefined };
+                    if (stockPolicy === 'unlimited') return { stockPolicy, available: null };
+                    // Active digital quotas already exclude held reservations. Never subtract legacy allocation again.
+                    const available = workspace.migrationRequired
+                        ? typeof variant.stockOnHand === 'number' &&
+                          typeof variant.stockAllocated === 'number'
+                            ? Math.max(0, variant.stockOnHand - variant.stockAllocated)
+                            : undefined
+                        : (workspace.availableQuantity ?? undefined);
+                    return { stockPolicy, available };
+                });
                 const unlimitedDigitalStock =
                     fulfillmentType === 'digital' &&
-                    variants.length > 0 &&
-                    variants.every(variant => variant.customFields?.digitalStockPolicy === 'unlimited');
+                    digitalVariants.length > 0 &&
+                    digitalVariants.every(variant => variant.stockPolicy === 'unlimited');
                 const hasUnlimitedDigitalStock =
                     fulfillmentType === 'digital' &&
-                    variants.some(variant => variant.customFields?.digitalStockPolicy === 'unlimited');
-                const digitalStock = variants.reduce((total, variant) => {
-                    if (variant.customFields?.digitalDeliveryMode === 'auto_card') {
-                        return total + (variant.autoCardAvailableStock ?? 0);
-                    }
-                    if (variant.customFields?.digitalStockPolicy === 'unlimited') {
-                        return total;
-                    }
-                    return total + Math.max(0, (variant.stockOnHand ?? 0) - (variant.stockAllocated ?? 0));
-                }, 0);
+                    digitalVariants.some(variant => variant.stockPolicy === 'unlimited');
+                const digitalStock = digitalVariants.reduce(
+                    (total, variant) => total + (variant.available ?? 0),
+                    0,
+                );
 
-                const stockUnavailable = variants.some(variant => {
+                const stockUnavailable = variants.some((variant, index) => {
                     if (fulfillmentType === 'physical') return typeof variant.stockOnHand !== 'number';
-                    if (variant.customFields?.digitalDeliveryMode === 'auto_card')
-                        return variant.autoCardAvailableStock == null;
-                    if (variant.customFields?.digitalStockPolicy === 'unlimited') return false;
-                    return (
-                        typeof variant.stockOnHand !== 'number' || typeof variant.stockAllocated !== 'number'
-                    );
+                    return digitalVariants[index].available === undefined;
                 });
                 const stockSummary = stockUnavailable
                     ? '未获取'
@@ -518,7 +564,7 @@ export function CatalogModule() {
                     localAssignment,
                 };
             }),
-        [displayProducts, operationsByProduct, assignmentsByProduct],
+        [displayProducts, operationsByProduct, assignmentsByProduct, digitalStockByProduct],
     );
     const rowKeys = useMemo(() => productRows.map(row => row.product.id), [productRows]);
     const tableBodyRef = useRef<HTMLTableSectionElement>(null);

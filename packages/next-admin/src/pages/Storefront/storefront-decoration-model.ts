@@ -27,7 +27,9 @@ export function decorationDraft(
               : block.type === 'AUTH_REGISTER'
                 ? '/register'
                 : block.type === 'CLIENT_PLUGINS'
-                  ? '/category'
+                  ? block.settings?.businessServicesCopyVersion === 1
+                      ? '/services'
+                      : '/category'
                   : block.type === 'LEGAL'
                     ? '/legal?id=privacy'
                     : block.settings?.purpose === 'desktop-category-banner'
