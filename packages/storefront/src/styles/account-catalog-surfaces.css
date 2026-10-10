@@ -174,9 +174,10 @@
 @media (max-width: 1023px) {
     .page.account-page {
         --page-section-inset: 12px;
+        padding-top: var(--space-16);
     }
     .account-page .account-orders.account-section {
-        margin-top: 14px;
+        margin-top: var(--space-section);
         padding: 12px 4px 10px;
         border-radius: var(--radius-md);
     }
