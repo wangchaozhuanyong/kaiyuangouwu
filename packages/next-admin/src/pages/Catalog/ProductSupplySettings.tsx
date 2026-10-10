@@ -16,33 +16,27 @@ export function ProductSupplySettings() {
     }>(CATALOG_SUPPLIERS_QUERY, { skip: !canRead, variables: { options: { skip: 0, take: 100 } } });
     if (!canRead) return null;
     return (
-        <details className="border-t border-slate-100 pt-4">
-            <summary className="cursor-pointer text-xs font-semibold text-slate-700">
-                供货来源（可选）
-            </summary>
+        <section aria-label="供货来源" className="border-t border-slate-100 pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xs font-semibold text-slate-700">供货来源（可选）</h3>
+                <FeatureHelpButton
+                    title="供货来源"
+                    content={{
+                        purpose:
+                            '记录该规格的供货商，成本在规格与价格中填写。数字供货记录独立保存，不办理实物入库。',
+                        requirements: [],
+                        example: '',
+                    }}
+                />
+            </div>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
                 {variants.map((variant, index) => (
                     <AdminField
                         key={variant.id ?? index}
+                        layout="stacked"
                         className="space-y-1.5 text-xs font-semibold text-slate-700"
-                        label={
-                            <>
-                                <span className="flex min-h-6 items-center gap-2">
-                                    {variant.name || '默认规格'}
-                                    <FeatureHelpButton
-                                        title="供货来源"
-                                        content={{
-                                            purpose:
-                                                '记录该规格的供货商，成本在规格与价格中填写。数字供货记录独立保存，不办理实物入库。',
-                                            requirements: [],
-                                            example: '',
-                                        }}
-                                    />
-                                </span>
-                            </>
-                        }
+                        label={variant.name || '默认规格'}
                     >
-                        {' '}
                         <AdminSelect
                             aria-label={`规格 ${index + 1} 供货来源`}
                             disabled={saving || suppliers.loading || Boolean(suppliers.error)}
@@ -73,6 +67,6 @@ export function ProductSupplySettings() {
                     {toUserFacingError(suppliers.error, '供货商读取失败')}
                 </p>
             )}
-        </details>
+        </section>
     );
 }

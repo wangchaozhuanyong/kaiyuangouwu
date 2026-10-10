@@ -231,6 +231,53 @@
     .desktop-store-layout .home-page .hero.hero-image-overlay .hero-rich-content {
         min-height: 280px;
     }
+    .desktop-store-layout
+        .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        .hero-rich-content {
+        width: min(400px, calc(100% - 96px));
+        margin-left: 48px;
+        padding: 56px 0 calc(var(--hero-overlay-height, 0px) + 24px);
+        gap: 20px;
+        justify-content: flex-start;
+    }
+    .desktop-store-layout
+        .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        .hero-rich-copy-region {
+        display: flex;
+        min-width: 0;
+        flex: 0 1 auto;
+        flex-direction: column;
+        gap: var(--space-12);
+    }
+    .desktop-store-layout
+        .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        :is(.hero-rich-title, .hero-rich-pill) {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+    .desktop-store-layout
+        .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        .hero-rich-cta-btn {
+        max-width: 100%;
+        margin-top: 0;
+        white-space: normal;
+    }
+    .desktop-store-layout
+        .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        .hero-rich-cta-label {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
     .home-page .hero.hero-image-overlay div.hero-scene-wrapper[data-hero-artwork-layout='editorial'] {
         grid-template-columns: minmax(0, 48fr) minmax(0, 52fr);
         aspect-ratio: 3 / 1;
@@ -296,6 +343,14 @@
         overflow-y: auto;
         overscroll-behavior: contain;
         pointer-events: auto;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        .hero-rich-copy-region {
+        flex: 0 1 auto;
     }
     .desktop-store-layout
         .home-page
@@ -1576,13 +1631,13 @@
     }
 
     .managed-ad-carousel.has-overflow .managed-ad-carousel-rail,
-    .managed-ad-carousel.has-overflow .managed-ad-carousel-rail > button {
+    .managed-ad-carousel.has-overflow .managed-ad-carousel-rail > .managed-content-card {
         cursor: grab;
         user-select: none;
     }
 
     .managed-ad-carousel.is-dragging .managed-ad-carousel-rail,
-    .managed-ad-carousel.is-dragging .managed-ad-carousel-rail > button {
+    .managed-ad-carousel.is-dragging .managed-ad-carousel-rail > .managed-content-card {
         cursor: grabbing;
     }
 }
@@ -1590,7 +1645,7 @@
 .managed-ad-carousel-rail {
     position: relative;
     display: flex;
-    gap: 12px;
+    gap: var(--space-12);
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     overscroll-behavior-inline: contain;
@@ -1619,8 +1674,8 @@
     }
 }
 
-.managed-ad-carousel-rail > button {
-    flex: 0 0 min(82%, 400px);
+.managed-ad-carousel-rail > .managed-content-card {
+    flex: 0 0 min(86%, 480px);
     min-width: 0;
     padding: 0;
     overflow: hidden;
@@ -1629,18 +1684,20 @@
     border-radius: var(--radius-md);
     background: var(--surface);
     color: var(--text);
-    display: grid;
-    grid-template-rows: auto minmax(62px, auto);
+    display: flex;
+    flex-direction: column;
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
 }
 
-.managed-ad-carousel-rail > button:disabled {
+.managed-ad-carousel-rail > .managed-content-card:disabled {
     cursor: default;
 }
 
 .managed-ad-carousel-rail .managed-content-media {
     aspect-ratio: 16 / 9;
+    flex: none;
 }
 
 .managed-ad-carousel-rail .managed-content-media img {
@@ -1655,6 +1712,19 @@
     aspect-ratio: 1;
 }
 
+/* Keep the arrow beside the title so the description can use the full card width. */
+.managed-ad-carousel-rail .managed-content-copy {
+    grid-template-columns: minmax(0, 1fr) 18px;
+    grid-template-rows: auto auto;
+    padding: var(--space-16);
+    align-items: start;
+    gap: var(--space-8);
+}
+
+.managed-ad-carousel-rail .managed-content-copy > span {
+    display: contents;
+}
+
 .managed-ad-carousel-rail .managed-content-copy strong,
 .managed-ad-carousel-rail .managed-content-copy small {
     display: block;
@@ -1662,51 +1732,88 @@
 }
 
 .managed-ad-carousel-rail .managed-content-copy strong {
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
+    grid-column: 1;
+    grid-row: 1;
+    font-size: var(--type-card-size);
+    line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
 }
 
 .managed-ad-carousel-rail .managed-content-copy small {
-    margin-top: 4px;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    margin: 0;
     color: var(--muted);
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
 }
 
-.managed-ad-carousel-rail > button:focus-visible {
+.managed-ad-carousel-rail .is-product-media .managed-content-copy small {
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+
+.managed-ad-carousel-rail .managed-content-copy > svg {
+    grid-column: 2;
+    grid-row: 1;
+    margin-top: var(--space-4);
+}
+
+.managed-ad-carousel-rail > .managed-content-card:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
 
 @media (max-width: 899px) {
     .managed-ad-carousel-rail > .is-product-media {
-        flex-basis: min(48%, 200px);
-        grid-template-rows: auto 1fr;
+        flex-basis: min(66%, 320px);
     }
 
-    .managed-ad-carousel-rail .is-product-media .managed-content-copy {
-        grid-template-columns: minmax(0, 1fr) 18px;
+    .managed-content-section:has(> .managed-ad-carousel) .section-header.has-end-subtitle {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-8);
+        margin-bottom: var(--space-16);
     }
 
-    .managed-ad-carousel-rail .is-product-media .managed-content-copy > span {
-        align-self: start;
+    .managed-content-section:has(> .managed-ad-carousel)
+        .section-header.has-end-subtitle
+        .section-header-title-lockup {
+        max-width: 100%;
+    }
+
+    .managed-content-section:has(> .managed-ad-carousel) .section-header.has-end-subtitle h2 {
+        overflow: visible;
+        white-space: normal;
+    }
+
+    .managed-content-section:has(> .managed-ad-carousel)
+        .section-header.has-end-subtitle
+        .section-header-end-subtitle {
+        width: 100%;
+        margin: 0;
+        overflow: visible;
+        text-align: left;
+        white-space: normal;
     }
 }
 
 @media (min-width: 900px) {
-    .managed-ad-carousel-rail > button {
+    .managed-ad-carousel-rail > .managed-content-card {
         flex-basis: min(78%, 900px);
     }
 
-    .managed-ad-carousel.is-product-carousel .managed-ad-carousel-rail > button {
-        flex-basis: min(32%, 360px);
-    }
-
+    .managed-ad-carousel.is-product-carousel .managed-ad-carousel-rail > .managed-content-card,
     .managed-ad-carousel:not(.is-product-carousel)
-        .managed-ad-carousel-rail:has(> button:nth-child(3))
-        > button {
-        flex-basis: calc((100% - 24px) / 3);
+        .managed-ad-carousel-rail:has(> .managed-content-card:nth-child(3))
+        > .managed-content-card {
+        flex-basis: calc((100% - 2 * var(--space-12)) / 3);
+    }
+}
+
+@media (min-width: 1200px) {
+    .managed-ad-carousel.is-product-carousel .managed-ad-carousel-rail > .managed-content-card {
+        flex-basis: calc((100% - 3 * var(--space-12)) / 4);
     }
 }
 

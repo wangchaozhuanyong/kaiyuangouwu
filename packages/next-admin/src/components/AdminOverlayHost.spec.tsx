@@ -103,6 +103,7 @@ describe('owned admin overlays', () => {
         await act(async () => pageHost.querySelector('button')!.click());
         expect(pageHost.querySelector('input')!.value).toBe('unsaved');
         expect(document.body.style.overflow).toBe('hidden');
+        expect(pageDialog.hasAttribute('data-admin-modal-active')).toBe(true);
         pageHost.querySelector('input')!.focus();
         await render(true, true);
         const globalDialog = document.querySelector<HTMLElement>('[aria-label="global"]')!;
@@ -118,11 +119,13 @@ describe('owned admin overlays', () => {
         await render(false);
         expect(pageHost.hidden).toBe(true);
         expect(pageHost.hasAttribute('inert')).toBe(true);
+        expect(pageDialog.hasAttribute('data-admin-modal-active')).toBe(false);
         expect(document.body.style.overflow).toBe('auto');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         expect(localClose).not.toHaveBeenCalled();
         await render(true);
         expect(pageHost.hidden).toBe(false);
+        expect(pageDialog.hasAttribute('data-admin-modal-active')).toBe(true);
         expect(pageHost.querySelector('[role="dialog"]')).toBe(pageDialog);
         expect(pageHost.querySelector('input')!.value).toBe('unsaved');
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -168,6 +171,9 @@ describe('owned admin overlays', () => {
             ),
         );
         expect(document.activeElement).toBe(modal);
+        expect(container.querySelector('[data-help="true"]')!.hasAttribute('data-admin-modal-active')).toBe(
+            false,
+        );
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         expect(helpClose).toHaveBeenCalledTimes(1);
         expect(modalClose).not.toHaveBeenCalled();

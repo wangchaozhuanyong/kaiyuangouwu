@@ -4,6 +4,10 @@ import { Kind, print, type FragmentDefinitionNode, type SelectionSetNode } from 
 import React, { Suspense, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Link, MemoryRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import {
+    ADMIN_CAPABILITY_DEFINITIONS,
+    adminCapabilityScopeAllows,
+} from '../../../common/src/admin-capabilities';
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import { AdminButton, PAGE_REFRESH_EVENT } from '../../src/components/AdminControls';
@@ -1647,6 +1651,40 @@ const client = new ApolloClient({
                             id: 'tabs-admin',
                             identifier: 'local@example.invalid',
                             channels: [{ ...channel, permissions: fixturePermissions }],
+                        },
+                        currentAdminCapabilities: {
+                            channelId: channel.id,
+                            channelCode: channel.code,
+                            scope: platformFixture ? 'PLATFORM' : 'STORE',
+                            commerceMode: digitalFixture ? 'DIGITAL_ONLY' : 'HYBRID',
+                            capabilities: ADMIN_CAPABILITY_DEFINITIONS.map(definition => {
+                                const scope = platformFixture ? 'PLATFORM' : 'STORE';
+                                const supported = adminCapabilityScopeAllows(
+                                    definition,
+                                    scope,
+                                    digitalFixture ? 'DIGITAL_ONLY' : 'HYBRID',
+                                );
+                                const hasPermission = (permission: string) =>
+                                    fixturePermissions.includes('SuperAdmin') ||
+                                    fixturePermissions.includes(permission);
+                                const canRead =
+                                    supported &&
+                                    (!definition.readPermissions.length ||
+                                        definition.readPermissions.some(hasPermission)) &&
+                                    (definition.readAllPermissions ?? []).every(hasPermission);
+                                const canWrite =
+                                    canRead &&
+                                    (!definition.writeScope || definition.writeScope === scope) &&
+                                    definition.writePermissions.some(hasPermission);
+                                return {
+                                    id: definition.id,
+                                    state: !supported ? 'UNSUPPORTED' : canRead ? 'READY' : 'FORBIDDEN',
+                                    canRead,
+                                    canWrite,
+                                    canConfigure:
+                                        canWrite && definition.configurePermissions.some(hasPermission),
+                                };
+                            }),
                         },
                         activeAdministrator: {
                             id: 'tabs-admin',

@@ -875,6 +875,11 @@
     overscroll-behavior: contain;
 }
 
+/* Lift inline modals over shell navigation, keeping their local layers below global confirmations. */
+.admin-tab-page:not([hidden]):has([data-admin-modal-active]) {
+    z-index: 50;
+}
+
 /* Keep an open filter sheet usable when rotating to a wider viewport. */
 .admin-dialog-surface .admin-mobile-sort {
     display: flex;

@@ -1048,28 +1048,23 @@ function AnnouncementEditor({
                     />
                 </Field>
                 <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-3">
-                        <label htmlFor="announcement-title-en" className="text-xs font-bold text-slate-700">
-                            英文标题
-                        </label>
-                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700">
-                            <AdminInput
-                                type="checkbox"
-                                checked={draft.titleEnLocked}
-                                onChange={event =>
-                                    setDraft({ ...draft, titleEnLocked: event.target.checked })
-                                }
-                            />
-                            人工锁定
-                        </label>
-                    </div>
-                    <AdminInput
-                        id="announcement-title-en"
-                        value={draft.titleEn}
-                        onChange={event => setDraft({ ...draft, titleEn: event.target.value })}
-                        disabled={!draft.titleEnLocked}
-                        className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
-                    />
+                    <Field label="英文标题">
+                        <AdminInput
+                            id="announcement-title-en"
+                            value={draft.titleEn}
+                            onChange={event => setDraft({ ...draft, titleEn: event.target.value })}
+                            disabled={!draft.titleEnLocked}
+                            className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-500`}
+                        />
+                    </Field>
+                    <label className="flex items-center justify-end gap-1.5 text-[11px] font-bold text-amber-700">
+                        <AdminInput
+                            type="checkbox"
+                            checked={draft.titleEnLocked}
+                            onChange={event => setDraft({ ...draft, titleEnLocked: event.target.checked })}
+                        />
+                        人工锁定
+                    </label>
                     <p className="text-[10px] leading-4 text-slate-400">
                         {draft.titleEnLocked
                             ? '保存后不会被自动翻译覆盖；中文变更后会标记为待复核。'

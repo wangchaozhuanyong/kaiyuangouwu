@@ -63,7 +63,7 @@ export function TabbedOutlet({
             key={page.path}
             hidden={page.path !== path}
             inert={page.path !== path}
-            className="relative isolate h-full min-h-0"
+            className="admin-tab-page relative isolate h-full min-h-0"
         >
             <TabPageContext.Provider value={{ path: page.path, basename, active: page.path === path }}>
                 <UNSAFE_LocationContext.Provider value={page.locationContext}>
