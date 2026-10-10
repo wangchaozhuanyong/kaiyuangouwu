@@ -68,6 +68,8 @@ export function useAccessibleDialog(
             returnFocusRef?.current ??
             (document.activeElement instanceof HTMLElement ? document.activeElement : null);
         const dialog = dialogRef.current;
+        // Expose the active modal lifecycle to the shared page layer, including retained drawers.
+        dialog?.toggleAttribute('data-admin-modal-active', modal);
         // Child effects mount before parent effects; an ancestor must stay below an open child.
         const childIndex = activeDialogStack.findIndex(
             entry => entry.element && dialog?.contains(entry.element),
@@ -142,6 +144,7 @@ export function useAccessibleDialog(
         document.addEventListener('keydown', handleKeyDown);
         document.addEventListener('focusin', containFocus);
         return () => {
+            dialog?.removeAttribute('data-admin-modal-active');
             document.removeEventListener('keydown', handleKeyDown);
             const wasTopDialog = activeDialogStack.at(-1)?.key === dialogKey;
             const shouldRestoreFocus = autoFocus || dialog?.contains(document.activeElement);
