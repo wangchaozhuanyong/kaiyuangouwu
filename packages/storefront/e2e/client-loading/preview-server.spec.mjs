@@ -22,6 +22,30 @@ after(async () => {
 const catalogUrl = (input = {}, extra = '') =>
     `${base}/_storefront/page-data?kind=catalog&path=/category&input=${encodeURIComponent(JSON.stringify(input))}${extra}`;
 
+test('a missing detail can remain in a cached home summary without changing the catalog', async () => {
+    const home = await (await fetch(`${base}/_storefront/page-data?kind=home&qaMissingProduct=1`)).json();
+    assert.ok(home.products.some(product => product.id === 'product-1'));
+    const detail = await (
+        await fetch(`${base}/_storefront/page-data?kind=product&id=product-1&qaMissingProduct=1`)
+    ).json();
+    assert.equal(detail.product, null);
+    assert.deepEqual(detail.failures, []);
+    const legacy = await (
+        await fetch(`${base}/shop-api`, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                referer: `${base}/product?id=product-1&qaMissingProduct=1`,
+            },
+            body: JSON.stringify({
+                query: 'query Detail($id: ID!) { product(id: $id) { id } }',
+                variables: { id: 'product-1' },
+            }),
+        })
+    ).json();
+    assert.equal(legacy.data.product, null);
+});
+
 test('fixture uses the shared canonical contract and paginates independent category filters', async () => {
     const page = await (
         await fetch(catalogUrl({ collectionId: 'collection-cups', take: 6, skip: 6 }))

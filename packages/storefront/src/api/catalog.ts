@@ -88,6 +88,7 @@ export class CatalogApi extends BaseDomainApi {
             { id },
             signal,
         );
+        if (result.product === undefined) throw new Error('Product response is missing its detail');
         return result.product;
     }
 

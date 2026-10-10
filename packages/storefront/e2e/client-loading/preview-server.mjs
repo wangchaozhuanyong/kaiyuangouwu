@@ -62,6 +62,7 @@ function optionsFor(req, url, defaults) {
         delay: Math.min(10_000, Math.max(0, Number(value('qaDelay')) || 0)),
         imageDelay: Math.min(30_000, Math.max(0, Number(value('qaImageDelay')) || 0)),
         empty: value('qaEmpty') === '1',
+        missingProduct: value('qaMissingProduct') === '1',
         ssi: value('qaSsi') === 'hot' ? 'hot' : 'cold',
         legacy: value('qaLegacy') === '1',
         preset: value('qaPreset') === 'classic' ? 'classic' : 'neo-minimalist',
@@ -190,7 +191,11 @@ export function buildPublicPage(request, host, options = {}, scope = {}) {
         request.kind === 'catalog'
             ? { catalog: fixtureCatalog(data.products.items, request.input, options.empty) }
             : request.kind === 'product'
-              ? { product: data.products.items.find(item => item.id === request.id) ?? null }
+              ? {
+                    product: options.missingProduct
+                        ? null
+                        : (data.products.items.find(item => item.id === request.id) ?? null),
+                }
               : { products: options.empty ? [] : data.products.items.slice(0, 12) };
     const media = [mediaDescriptor(config.logoUrl, 'icon')];
     for (const product of route.catalog?.items ?? route.products ?? (route.product ? [route.product] : []))
@@ -348,7 +353,9 @@ export function createPreviewServer({ dist = defaultDist, defaults = {} } = {}) 
                         ? JSON.parse(input.variables)
                         : (input.variables ?? {});
                 data.storefrontCatalog = fixtureCatalog(data.products.items, variables.input, options.empty);
-                data.product = data.products.items.find(item => item.id === variables.id) ?? data.product;
+                data.product = options.missingProduct
+                    ? null
+                    : (data.products.items.find(item => item.id === variables.id) ?? data.product);
                 if (options.empty) data.products = { items: [], totalItems: 0 };
                 const fields = operation.selectionSet.selections.filter(item => item.kind === 'Field');
                 record({
