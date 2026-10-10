@@ -150,10 +150,16 @@ export class TransactionalConnection {
             if (transactionManager) {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 repo = transactionManager.getRepository(maybeTarget!);
-            } else if (ctxOrTarget.replicationMode === 'master' || options?.replicationMode === 'master') {
+            } else if (
+                this.dataSource.driver?.isReplicated &&
+                (ctxOrTarget.replicationMode === 'master' || options?.replicationMode === 'master')
+            ) {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 repo = this.dataSource.createQueryRunner('master').manager.getRepository(maybeTarget!);
             } else {
+                // A single primary needs no pinned runner. TypeORM owns and releases
+                // each query's runner; a repository-bound runner would retain its
+                // pool connection after every fresh primary read.
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
                 repo = this.rawConnection.getRepository(maybeTarget!);
             }
@@ -163,7 +169,7 @@ export class TransactionalConnection {
             }
             return repo;
         } else {
-            if (options?.replicationMode === 'master') {
+            if (this.dataSource.driver?.isReplicated && options?.replicationMode === 'master') {
                 /* eslint-disable @typescript-eslint/no-non-null-assertion */
                 return this.dataSource
                     .createQueryRunner(options.replicationMode)
