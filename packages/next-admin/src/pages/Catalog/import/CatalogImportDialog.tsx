@@ -81,7 +81,7 @@ interface ImportContextData {
         availableCurrencyCodes: string[];
         customFields?: { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | null;
     };
-    stockLocations: { items: Array<{ id: string; name: string }> };
+    catalogProductCreationContext: { stockLocations: Array<{ id: string; name: string }> };
 }
 
 const primaryButton =
@@ -154,8 +154,8 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
 
     const activeChannel = contextQuery.data?.activeChannel;
     const locations = useMemo(
-        () => contextQuery.data?.stockLocations.items ?? [],
-        [contextQuery.data?.stockLocations.items],
+        () => contextQuery.data?.catalogProductCreationContext.stockLocations ?? [],
+        [contextQuery.data?.catalogProductCreationContext.stockLocations],
     );
     const effectiveStockLocationId = locations.some(location => location.id === stockLocationId)
         ? stockLocationId
