@@ -284,7 +284,8 @@ export function ProductEditorWorkspace() {
                                 </section>
                                 <section className="product-editor-panel">
                                     <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                        更多设置
+                                        更多设置{' '}
+                                        <FeatureHelpButton topic="catalog.product-editor" title="更多设置" />
                                     </h2>
                                     <ProductMoreSettings />
                                     <ProductSupplySettings />

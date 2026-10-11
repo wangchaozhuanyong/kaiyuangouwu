@@ -160,6 +160,26 @@ export class TranslationContentAdapter {
         state: ContentTranslationState,
         lock = false,
     ): Promise<TranslationFieldSnapshot | undefined> {
+        return this.loadSnapshot(manager, state, lock, false);
+    }
+
+    /** Manual audit reads retain ownership/row locks, without exposing automatic writeback. */
+    async loadForReview(
+        manager: EntityManager,
+        state: ContentTranslationState,
+        lock = false,
+    ): Promise<Readonly<Pick<TranslationFieldSnapshot, 'source' | 'target' | 'format'>> | undefined> {
+        const snapshot = await this.loadSnapshot(manager, state, lock, true);
+        if (!snapshot) return;
+        return { source: snapshot.source, target: snapshot.target, format: snapshot.format };
+    }
+
+    private async loadSnapshot(
+        manager: EntityManager,
+        state: ContentTranslationState,
+        lock: boolean,
+        forReview: boolean,
+    ): Promise<TranslationFieldSnapshot | undefined> {
         const metadata = manager.connection.entityMetadatas.find(
             candidate => candidate.name === state.entityType,
         );
@@ -253,7 +273,10 @@ export class TranslationContentAdapter {
                           },
                       })
                     : [];
-            if (siblingStates.some(sibling => sibling.locked && sibling.translatedHash === targetHash)) {
+            if (
+                !forReview &&
+                siblingStates.some(sibling => sibling.locked && sibling.translatedHash === targetHash)
+            ) {
                 throw new TranslationProviderError('MANUAL_REVIEW');
             }
             const reusableTarget = siblingStates.some(

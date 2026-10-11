@@ -3,10 +3,12 @@ import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { containsHanContent, isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
 import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { createHash } from 'node:crypto';
-import { Brackets, In, IsNull } from 'typeorm';
+import { Brackets, In, IsNull, SelectQueryBuilder } from 'typeorm';
 
 import { CONTENT_TRANSLATION_OPTIONS } from './constants.js';
+import { customerFacingContentRegistry } from './customer-facing-content-registry.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
+import { customerContentScopeWhere } from './translation-content-adapter.js';
 import { TranslationExecutionService } from './translation-execution.service.js';
 import { PartialTranslationProviderError, TranslationProviderError } from './translation-provider-error.js';
 import {
@@ -461,20 +463,23 @@ export class ContentTranslationService {
     }
 
     async countStale(ctx: RequestContext): Promise<number> {
-        return this.connection.getRepository(ctx, ContentTranslationState).count({
+        const repository = this.connection.getRepository(ctx, ContentTranslationState);
+        const statuses = ['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED'];
+        if (ctx.channel?.code !== DEFAULT_CHANNEL_CODE) {
+            const scope = repository
+                .createQueryBuilder('state')
+                .where('state.channelId = :channelId', { channelId: String(ctx.channelId) })
+                .andWhere('state.status IN (:...statuses)', { statuses });
+            this.applyAuditVisibility(scope, ctx.channelId);
+            return scope.getCount();
+        }
+        return repository.count({
             where: [
                 {
                     channelId: String(ctx.channelId),
-                    status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
+                    status: In(statuses),
                 },
-                ...(ctx.channel?.code === DEFAULT_CHANNEL_CODE
-                    ? [
-                          {
-                              channelId: IsNull(),
-                              status: In(['STALE', 'PENDING', 'TRANSLATING', 'NOTIFY_PENDING', 'FAILED']),
-                          },
-                      ]
-                    : []),
+                { channelId: IsNull(), status: In(statuses) },
             ],
         });
     }
@@ -502,6 +507,7 @@ export class ContentTranslationService {
                 },
             );
         }
+        if (!platform) this.applyAuditVisibility(scope, ctx.channelId);
         const records = scope.clone();
         if (options?.status) records.andWhere('state.status = :status', { status: options.status });
         if (options?.entityType)
@@ -543,6 +549,72 @@ export class ContentTranslationService {
             counts,
             states,
         };
+    }
+
+    /** Merchant queues include only entities the existing review ownership check can read. */
+    private applyAuditVisibility(
+        scope: SelectQueryBuilder<ContentTranslationState>,
+        channelId: string | number,
+    ) {
+        const predicates: string[] = [];
+        const castType = ['mysql', 'mariadb'].includes(scope.connection.options.type) ? 'CHAR' : 'TEXT';
+        for (const metadata of scope.connection.entityMetadatas) {
+            if (!Object.prototype.hasOwnProperty.call(customerFacingContentRegistry, metadata.name)) continue;
+            if (!metadata.findColumnWithPropertyName('id')) continue;
+            const index = predicates.length;
+            const alias = `audit_entity_${index}`;
+            let where = customerContentScopeWhere(metadata, channelId);
+            const hasChannels = metadata.relations.some(relation => relation.propertyName === 'channels');
+            if (
+                metadata.name === 'StorefrontContentItem' &&
+                !metadata.findColumnWithPropertyName('channelId') &&
+                !hasChannels
+            ) {
+                const block = metadata.relations.find(relation => relation.propertyName === 'block');
+                if (!block) continue;
+                where = {
+                    ...where,
+                    block: {
+                        channelId,
+                        ...(block.inverseEntityMetadata.findColumnWithPropertyName('deletedAt')
+                            ? { deletedAt: IsNull() }
+                            : {}),
+                    },
+                };
+            }
+            const entity = scope
+                .subQuery()
+                .select('1')
+                .from(metadata.target, alias)
+                .setFindOptions({ where });
+            // State identities are strings; never cast historical values to numbers/UUIDs.
+            entity.andWhere(`CAST(${alias}.id AS ${castType}) = state.entityId`);
+            if (metadata.findColumnWithPropertyName('deletedAt'))
+                entity.andWhere(`${alias}.deletedAt IS NULL`);
+            if (metadata.name === 'SystemAnnouncement') {
+                if (!hasChannels || !metadata.findColumnWithPropertyName('ownerChannelId')) continue;
+                // Merchant state scope is non-null: global announcements belong only to platform history.
+                entity.andWhere(`CAST(${alias}.ownerChannelId AS ${castType}) = state.channelId`);
+                const ownerAlias = `audit_owner_${index}`;
+                const audienceAlias = `audit_audience_${index}`;
+                const audience = scope
+                    .subQuery()
+                    .select(`COUNT(DISTINCT ${audienceAlias}.id)`)
+                    .from(metadata.target, ownerAlias)
+                    .innerJoin(`${ownerAlias}.channels`, audienceAlias)
+                    .where(`${ownerAlias}.id = ${alias}.id`);
+                entity.andWhere(`${audience.getQuery()} = 1`);
+            }
+            const parameter = `auditVisibleType${index}`;
+            scope.setParameter(parameter, metadata.name);
+            predicates.push(`(state.entityType = :${parameter} AND EXISTS ${entity.getQuery()})`);
+        }
+        scope.andWhere(
+            new Brackets(query => {
+                if (!predicates.length) query.where('1 = 0');
+                for (const predicate of predicates) query.orWhere(predicate);
+            }),
+        );
     }
 
     private stateKey(identity: TranslationStateIdentity): string {

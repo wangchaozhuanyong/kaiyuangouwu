@@ -37,7 +37,7 @@ export class ContentTranslationReviewService {
 
     async review(ctx: RequestContext, id: string) {
         const { repository, state } = await this.scopedState(ctx, id);
-        const snapshot = await this.adapter.load(repository.manager, state);
+        const snapshot = await this.adapter.loadForReview(repository.manager, state);
         if (!snapshot) throw new UserInputError('源内容已删除或暂不可读取，请刷新后重试');
         const sourceHash = contentTranslationInternals.hash(snapshot.source);
         const translatedHash = contentTranslationInternals.hash(snapshot.target);
@@ -74,7 +74,7 @@ export class ContentTranslationReviewService {
         return this.connection.withTransaction(ctx, async tx => {
             const { repository, state } = await this.scopedState(tx, input.id);
             // Business entity first, matching the outbox writeback and ordinary authoring lock order.
-            const snapshot = await this.adapter.load(repository.manager, state, true);
+            const snapshot = await this.adapter.loadForReview(repository.manager, state, true);
             if (!(await this.adapter.isVisibleInChannel(repository.manager, state, ctx.channelId))) {
                 throw new UserInputError('内容的店铺范围已变化，请重新查看');
             }

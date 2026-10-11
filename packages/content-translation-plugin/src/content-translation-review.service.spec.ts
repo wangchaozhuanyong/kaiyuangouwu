@@ -1,5 +1,14 @@
 import 'reflect-metadata';
-import { Column, DataSource, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+    Column,
+    DataSource,
+    Entity,
+    JoinTable,
+    ManyToMany,
+    ManyToOne,
+    OneToMany,
+    PrimaryGeneratedColumn,
+} from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ContentTranslationReviewService } from './content-translation-review.service.js';
@@ -21,6 +30,24 @@ class BlockTranslation {
     @Column('varchar') title: string;
     @ManyToOne(() => StorefrontContentBlock, block => block.translations) base: StorefrontContentBlock;
 }
+@Entity()
+class Channel {
+    @PrimaryGeneratedColumn() id: number;
+}
+@Entity()
+class ShippingMethod {
+    @PrimaryGeneratedColumn() id: number;
+    @ManyToMany(() => Channel) @JoinTable() channels: Channel[];
+    @OneToMany(() => ShippingMethodTranslation, row => row.base) translations: ShippingMethodTranslation[];
+}
+@Entity()
+class ShippingMethodTranslation {
+    @PrimaryGeneratedColumn() id: number;
+    @Column('varchar') languageCode: string;
+    @Column('varchar') name: string;
+    @Column('varchar') description: string;
+    @ManyToOne(() => ShippingMethod, method => method.translations) base: ShippingMethod;
+}
 PrimaryGeneratedColumn()(ContentTranslationState.prototype, 'id');
 const ctx = { channelId: '1' } as any;
 let db: DataSource;
@@ -34,7 +61,14 @@ let adapter: TranslationContentAdapter;
 beforeEach(async () => {
     db = await new DataSource({
         type: 'sqljs',
-        entities: [ContentTranslationState, StorefrontContentBlock, BlockTranslation],
+        entities: [
+            ContentTranslationState,
+            StorefrontContentBlock,
+            BlockTranslation,
+            Channel,
+            ShippingMethod,
+            ShippingMethodTranslation,
+        ],
         synchronize: true,
     }).initialize();
     const connection = {
@@ -79,7 +113,164 @@ const input = () => ({
     translatedHash: contentTranslationInternals.hash(target.title),
 });
 
+async function nativeShippingFixture(fieldPath: 'name' | 'description' = 'name') {
+    const channels = await db.getRepository(Channel).save([{ id: 1 }, { id: 2 }]);
+    const method = await db.getRepository(ShippingMethod).save({ channels });
+    const [shippingSource, shippingTarget] = await db.getRepository(ShippingMethodTranslation).save([
+        { base: method, languageCode: 'zh_Hans', name: '普通配送', description: '已核对配送说明' },
+        {
+            base: method,
+            languageCode: 'en',
+            name: 'Reviewed shipping method',
+            description: 'Reviewed shipping description',
+        },
+    ]);
+    const states: ContentTranslationState[] = [];
+    for (const channel of channels) {
+        states.push(
+            await translations.recordState({ channelId: String(channel.id) } as any, {
+                channelId: channel.id,
+                entityType: 'ShippingMethod',
+                entityId: method.id,
+                fieldPath,
+                sourceText: shippingSource[fieldPath],
+                translatedText: shippingTarget[fieldPath],
+                status: 'STALE',
+                origin: 'MANUAL',
+                locked: true,
+            }),
+        );
+    }
+    return {
+        method,
+        source: shippingSource,
+        target: shippingTarget,
+        sourceText: shippingSource[fieldPath],
+        targetText: shippingTarget[fieldPath],
+        state: states[0],
+        sibling: states[1],
+        input: {
+            id: String(states[0].id),
+            revision: states[0].revision,
+            sourceHash: contentTranslationInternals.hash(shippingSource[fieldPath]),
+            translatedHash: contentTranslationInternals.hash(shippingTarget[fieldPath]),
+        },
+    };
+}
+
 describe('versioned manual translation review', () => {
+    it.each(['name', 'description'] as const)(
+        'reads locked shared native shipping %s without changing text or either owning store audit',
+        async field => {
+            const native = await nativeShippingFixture(field);
+            for (const record of [native.state, native.sibling]) {
+                const detail = await service.review(
+                    { channelId: record.channelId } as any,
+                    String(record.id),
+                );
+                expect(detail).toMatchObject({
+                    sourceText: native.sourceText,
+                    targetText: native.targetText,
+                    canConfirm: true,
+                    editPath: null,
+                });
+                expect(
+                    await db.getRepository(ContentTranslationState).findOneByOrFail({ id: record.id }),
+                ).toEqual(record);
+            }
+            await expect(adapter.load(db.manager, native.state)).rejects.toMatchObject({
+                code: 'MANUAL_REVIEW',
+            });
+            expect(
+                (await db.getRepository(ShippingMethodTranslation).findOneByOrFail({ id: native.target.id }))[
+                    field
+                ],
+            ).toBe(native.targetText);
+        },
+    );
+    it.each(['name', 'description'] as const)(
+        'confirms locked native shipping %s audit while preserving shared text and the sibling manual lock',
+        async field => {
+            const native = await nativeShippingFixture(field);
+            expect(await service.confirm(ctx, native.input)).toMatchObject({
+                status: 'MANUAL_LOCKED',
+                origin: 'MANUAL',
+                locked: true,
+                revision: native.state.revision + 1,
+                sourceHash: native.state.sourceHash,
+                translatedHash: native.state.translatedHash,
+            });
+            expect(
+                await db.getRepository(ContentTranslationState).findOneByOrFail({ id: native.sibling.id }),
+            ).toEqual(native.sibling);
+            expect(
+                (await db.getRepository(ShippingMethodTranslation).findOneByOrFail({ id: native.source.id }))[
+                    field
+                ],
+            ).toBe(native.sourceText);
+            expect(
+                (await db.getRepository(ShippingMethodTranslation).findOneByOrFail({ id: native.target.id }))[
+                    field
+                ],
+            ).toBe(native.targetText);
+            await expect(adapter.load(db.manager, native.state)).rejects.toMatchObject({
+                code: 'MANUAL_REVIEW',
+            });
+            await expect(service.confirm(ctx, native.input)).rejects.toThrow('复核期间已变化');
+        },
+    );
+    it('keeps native shared shipping review inside the current store and its actual ownership', async () => {
+        const native = await nativeShippingFixture();
+        await expect(service.review({ channelId: '3' } as any, String(native.state.id))).rejects.toThrow(
+            '不属于',
+        );
+        await expect(service.confirm({ channelId: '3' } as any, native.input)).rejects.toThrow('不属于');
+        await db.getRepository(ShippingMethod).save({ id: native.method.id, channels: [{ id: 2 }] });
+        await expect(service.review(ctx, String(native.state.id))).rejects.toThrow('不属于');
+        await expect(service.confirm(ctx, native.input)).rejects.toThrow('不属于');
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: native.state.id }),
+        ).toEqual(native.state);
+    });
+    it.each(['source', 'target', 'revision'])(
+        'retains native review version checks after %s changes',
+        async changed => {
+            const native = await nativeShippingFixture();
+            if (changed === 'revision')
+                await db
+                    .getRepository(ContentTranslationState)
+                    .update(native.state.id, { revision: native.state.revision + 1 });
+            else
+                await db
+                    .getRepository(ShippingMethodTranslation)
+                    .update(changed === 'source' ? native.source.id : native.target.id, {
+                        name: changed === 'source' ? '更新中文' : 'Different native English',
+                    });
+            await expect(service.confirm(ctx, native.input)).rejects.toThrow('复核期间已变化');
+            expect(
+                await db.getRepository(ContentTranslationState).findOneByOrFail({ id: native.state.id }),
+            ).toMatchObject({ status: 'STALE', locked: true });
+        },
+    );
+    it('retains native review CAS protection if audit state changes after the locked snapshot read', async () => {
+        const native = await nativeShippingFixture();
+        const load = adapter.loadForReview.bind(adapter);
+        vi.spyOn(adapter, 'loadForReview').mockImplementationOnce(async (manager, record, lock) => {
+            const snapshot = await load(manager, record, lock);
+            await manager
+                .getRepository(ContentTranslationState)
+                .update(record.id, { revision: record.revision + 1 });
+            return snapshot;
+        });
+        await expect(service.confirm(ctx, native.input)).rejects.toThrow('复核状态已变化');
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: native.state.id }),
+        ).toEqual(native.state);
+        expect(
+            (await db.getRepository(ShippingMethodTranslation).findOneByOrFail({ id: native.target.id }))
+                .name,
+        ).toBe(native.target.name);
+    });
     it('loads current text and the real editor on demand without changing state', async () => {
         const detail = await service.review(ctx, String(state.id));
         expect(detail).toMatchObject({

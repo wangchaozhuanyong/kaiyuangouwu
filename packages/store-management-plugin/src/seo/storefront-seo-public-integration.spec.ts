@@ -8,6 +8,7 @@ import {
     LanguageCode,
     Product,
     ProductTranslation,
+    PUBLIC_PRODUCT_SUMMARY_READER,
     type Permission,
     type RequestContext,
     type TransactionalConnection,
@@ -15,8 +16,9 @@ import {
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import type { StorefrontPageData } from '@vendure/storefront-content-plugin';
 import { DataSource, EntitySchema } from 'typeorm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import { PublicProductSummaryService } from '../../../commerce-fulfillment-plugin/src/public-product-summary.service';
 import { StoreProfile } from '../entities/store-profile.entity';
 
 import { StorefrontPublicSeoService } from './storefront-public-seo.service';
@@ -32,6 +34,8 @@ describe('public SEO with real isolated SQL publication and catalog membership',
     let data: DataSource;
     let seo: StorefrontSeoService;
     let publicSeo: StorefrontPublicSeoService;
+    let productReader: PublicProductSummaryService;
+    let productListSpy: MockInstance<PublicProductSummaryService['list']>;
     let mode: 'LIVE' | 'PREVIEW' | 'CLOSED';
     const context = (id = 1, languageCode = 'en', admin = false): RequestContext =>
         ({
@@ -234,12 +238,45 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             activation as never,
             { publish: vi.fn().mockResolvedValue(undefined) } as never,
         );
+        // Keep the real anonymous context and <=100 pagination checks; summary projection is not used by SEO.
+        productReader = Object.assign(Object.create(PublicProductSummaryService.prototype), {
+            products: {
+                findAll: async (ctx: RequestContext, options: { take: number; skip: number }) => {
+                    const [items, totalItems] = await data
+                        .getRepository(Product)
+                        .createQueryBuilder('product')
+                        .innerJoin('product.channels', 'channel', 'channel.id = :channelId', {
+                            channelId: ctx.channelId,
+                        })
+                        .leftJoinAndSelect(
+                            'product.translations',
+                            'translation',
+                            'translation.languageCode = :code',
+                            { code: ctx.languageCode },
+                        )
+                        .where('product.enabled = :enabled', { enabled: true })
+                        .orderBy('translation.name', 'ASC')
+                        .skip(options.skip)
+                        .take(options.take)
+                        .getManyAndCount();
+                    return { items, totalItems };
+                },
+            },
+            project: (_ctx: RequestContext, products: Product[]) =>
+                Promise.resolve(products.map(product => ({ id: String(product.id) }))),
+        });
+        productListSpy = vi.spyOn(productReader, 'list');
         publicSeo = new StorefrontPublicSeoService(
             seo,
             connection,
             activation as never,
             { findPublished: vi.fn().mockResolvedValue([]) } as never,
-            {} as never,
+            {
+                get: (token: unknown) => {
+                    if (token === PUBLIC_PRODUCT_SUMMARY_READER) return productReader;
+                    throw new Error('Unexpected public SEO dependency');
+                },
+            } as never,
         );
         for (const store of [1, 2]) {
             const settings = defaultStorefrontSeoSettings();
@@ -319,6 +356,106 @@ describe('public SEO with real isolated SQL publication and catalog membership',
         targetId: '10',
         languageCode: 'en',
     };
+
+    const seedSitemapProducts = async (count: number) => {
+        await data.getRepository(Product).update({ id: 10 }, { enabled: false });
+        const ids = Array.from({ length: count }, (_, index) => 1000 + index);
+        if (ids.length) {
+            await data
+                .getRepository(Product)
+                .save(ids.map(id => ({ id, enabled: true, deletedAt: null, channels: [{ id: 1 }] })));
+            await data.getRepository(ProductTranslation).save(
+                ids.flatMap((id, index) =>
+                    [LanguageCode.zh_Hans, LanguageCode.en].map(languageCode => ({
+                        baseId: id,
+                        languageCode,
+                        name: `Product ${String(index).padStart(4, '0')}`,
+                        description: `Complete product ${id} description`,
+                    })),
+                ),
+            );
+        }
+        return ids;
+    };
+    const sitemapLocations = (xml: string) =>
+        Array.from(xml.matchAll(/<loc>(.*?)<\/loc>/gu), item => item[1]);
+    const productLocations = (ids: number[]) =>
+        ids.flatMap(id => ['zh', 'en'].map(code => `https://store-1.test/${code}/product?id=${id}`));
+    const readerPages = () => productListSpy.mock.calls.map(([, input]) => input);
+
+    it('keeps 500 products per sitemap shard within the real public reader pagination limit', async () => {
+        const ids = await seedSitemapProducts(501);
+        const index = await publicSeo.sitemap(context(), 'store-1.test');
+        expect(sitemapLocations(index)).toEqual([
+            'https://store-1.test/sitemap-pages.xml',
+            'https://store-1.test/sitemap-products-0.xml',
+            'https://store-1.test/sitemap-products-1.xml',
+        ]);
+        productListSpy.mockClear();
+        const first = sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test', 'products', 0));
+        expect(first).toEqual(productLocations(ids.slice(0, 500)));
+        expect(readerPages()).toEqual([0, 100, 200, 300, 400].map(skip => ({ take: 100, skip })));
+        productListSpy.mockClear();
+        const second = sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test', 'products', 1));
+        expect(second).toEqual(productLocations(ids.slice(500)));
+        expect(readerPages()).toEqual([{ take: 100, skip: 500 }]);
+        expect(new Set([...first, ...second]).size).toBe(1002);
+    });
+
+    it.each([0, 37, 100, 137])(
+        'stops product sitemap pagination at the actual %i-product catalog',
+        async count => {
+            const ids = await seedSitemapProducts(count);
+            const xml = await publicSeo.sitemap(context(), 'store-1.test', 'products');
+            expect(sitemapLocations(xml)).toEqual(productLocations(ids));
+            expect(readerPages()).toEqual(
+                Array.from({ length: Math.max(1, Math.ceil(count / 100)) }, (_, pageIndex) => ({
+                    take: 100,
+                    skip: pageIndex * 100,
+                })),
+            );
+        },
+    );
+
+    it('preserves language-specific NOINDEX and incomplete-body exclusions across reader and shard boundaries', async () => {
+        const ids = await seedSitemapProducts(501);
+        const exclusions = [
+            { id: 1099, code: 'zh_Hans' },
+            { id: 1100, code: 'en' },
+            { id: 1499, code: 'zh_Hans' },
+            { id: 1500, code: 'en' },
+        ] as const;
+        for (const { id, code } of exclusions) {
+            const identity: StorefrontSeoIdentity = {
+                targetType: 'PRODUCT',
+                targetId: String(id),
+                languageCode: code,
+            };
+            await seo.saveDraft(context(1, code, true), {
+                ...identity,
+                expectedVersion: 0,
+                draft: { indexMode: 'NOINDEX' },
+            });
+            await seo.publish(context(1, code, true), { ...identity, expectedVersion: 1 });
+        }
+        await data
+            .getRepository(ProductTranslation)
+            .update({ baseId: 1101, languageCode: LanguageCode.en }, { description: '' });
+        const excluded = new Set([
+            ...exclusions.map(
+                ({ id, code }) => `https://store-1.test/${code === 'zh_Hans' ? 'zh' : 'en'}/product?id=${id}`,
+            ),
+            'https://store-1.test/en/product?id=1101',
+        ]);
+        const first = sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test', 'products', 0));
+        const second = sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test', 'products', 1));
+        expect(first).toEqual(productLocations(ids.slice(0, 500)).filter(url => !excluded.has(url)));
+        expect(second).toEqual(['https://store-1.test/zh/product?id=1500']);
+        expect(readerPages()).toEqual([
+            ...[0, 100, 200, 300, 400].map(skip => ({ take: 100, skip })),
+            { take: 100, skip: 500 },
+        ]);
+    });
 
     it('reads only published metadata for the right store and retains live price facts', async () => {
         await seo.saveDraft(context(1, 'en', true), {

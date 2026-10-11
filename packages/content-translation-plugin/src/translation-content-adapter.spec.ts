@@ -1,6 +1,7 @@
 import { EntityManager, EntityMetadata, IsNull } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
+import { contentTranslationInternals } from './content-translation.service.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { customerContentScopeWhere, TranslationContentAdapter } from './translation-content-adapter.js';
 
@@ -27,6 +28,66 @@ function fixture(entityType: string, entity: Record<string, unknown>, channelOwn
 function state(entityType: string, channelId: string | null = null) {
     return { entityType, entityId: 'entity-1', channelId, fieldPath: 'title' } as ContentTranslationState;
 }
+
+function nativeFixture(currentLocked = true) {
+    const method = { id: 'entity-1', channels: [{ id: 'channel-1' }, { id: 'channel-2' }] };
+    const { metadata, manager, repository, adapter } = fixture('ShippingMethod', method);
+    const translationsTarget = class FixtureShippingMethodTranslation {};
+    metadata.relations.push({
+        propertyName: 'translations',
+        inverseEntityMetadata: { target: translationsTarget },
+    } as never);
+    const source = { id: 'source-1', name: '普通配送' };
+    const target = { id: 'target-1', name: 'Reviewed shipping method' };
+    const record = {
+        ...state('ShippingMethod', 'channel-1'),
+        fieldPath: 'name',
+        targetLanguageCode: 'en',
+        locked: currentLocked,
+        translatedHash: contentTranslationInternals.hash(target.name),
+    } as ContentTranslationState;
+    const states = {
+        find: vi.fn().mockResolvedValue([record, { ...record, channelId: 'channel-2', locked: true }]),
+    };
+    const translations = {
+        metadata: { findColumnWithPropertyName: () => ({ length: 255 }) },
+        findOne: vi.fn(({ where }: any) => Promise.resolve(where.languageCode === 'en' ? target : source)),
+        update: vi.fn().mockResolvedValue({ affected: 1 }),
+    };
+    manager.getRepository = vi.fn(entityTarget =>
+        entityTarget === ContentTranslationState
+            ? states
+            : entityTarget === translationsTarget
+              ? translations
+              : repository,
+    ) as unknown as EntityManager['getRepository'];
+    return { method, manager, adapter, record, source, target, translations };
+}
+
+describe('manual native translation snapshots', () => {
+    it('reads locked native English through a snapshot without a writeback function', async () => {
+        const { manager, adapter, record, source, target, translations } = nativeFixture();
+        expect(await adapter.loadForReview(manager, record)).toEqual({
+            source: source.name,
+            target: target.name,
+            format: 'TEXT',
+        });
+        expect(translations.update).not.toHaveBeenCalled();
+        await expect(adapter.load(manager, record)).rejects.toMatchObject({ code: 'MANUAL_REVIEW' });
+        await expect(adapter.load(manager, record, true)).rejects.toMatchObject({ code: 'MANUAL_REVIEW' });
+    });
+    it('keeps another owning store manual lock blocking automatic writeback after this state is unlocked', async () => {
+        const { manager, adapter, record } = nativeFixture(false);
+        await expect(adapter.load(manager, record)).rejects.toMatchObject({ code: 'MANUAL_REVIEW' });
+    });
+    it('does not read a foreign native owner identity during manual review', async () => {
+        const { manager, adapter, record, translations } = nativeFixture();
+        await expect(
+            adapter.loadForReview(manager, { ...record, channelId: 'channel-3' }),
+        ).resolves.toBeUndefined();
+        expect(translations.findOne).not.toHaveBeenCalled();
+    });
+});
 
 describe('translation entity scan scope', () => {
     it('excludes internal root collections while retaining their channel restriction', () => {
