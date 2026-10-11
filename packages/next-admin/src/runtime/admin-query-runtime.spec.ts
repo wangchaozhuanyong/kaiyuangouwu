@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { AdminQueryRuntime, getQueryRuntime, resourceIdentity } from './admin-query-runtime';
 
 const policy = { staleTime: 30_000, pollInterval: 0, stage: 0 };
-const owner = (fetch: () => Promise<unknown>, active = true) => ({
+const owner = (fetch: () => Promise<unknown>, active = true, refetchPeers = false) => ({
     page: '/catalog/list',
     active,
     loading: false,
     hasData: true,
+    refetchPeers,
     fetch,
 });
 
@@ -105,12 +106,121 @@ describe('shared admin query runtime', () => {
         runtime.register('products', 'widget', owner(fetch), policy);
         const first = runtime.refreshResource('products');
         const second = runtime.refreshResource('products');
+        expect(first).toBe(second);
         await Promise.resolve();
         expect(fetch).toHaveBeenCalledTimes(1);
         finish({ data: 'latest' });
         expect(await second).toEqual({ data: 'latest' });
         expect(await first).toEqual({ data: 'latest' });
         expect(runtime.state('/catalog/list').refreshing).toBe(false);
+    });
+    it('refreshes opted-in active observables once, joins callers and excludes inactive and other-scope owners', async () => {
+        const runtime = new AdminQueryRuntime();
+        let finishFirst!: (result: unknown) => void;
+        let finishSecond!: (result: unknown) => void;
+        const firstFetch = vi.fn(
+            () =>
+                new Promise(resolve => {
+                    finishFirst = resolve;
+                }),
+        );
+        const secondFetch = vi.fn(
+            () =>
+                new Promise(resolve => {
+                    finishSecond = resolve;
+                }),
+        );
+        const inactiveFetch = vi.fn(async () => 'inactive');
+        const otherScopeFetch = vi.fn(async () => 'other scope');
+        runtime.register('store-a|products', 'list', owner(firstFetch, true, true), policy);
+        runtime.register('store-a|products', 'widget', owner(secondFetch, true, true), policy);
+        runtime.register('store-a|products', 'hidden', owner(inactiveFetch, false, true), policy);
+        runtime.register('store-b|products', 'other-store', owner(otherScopeFetch, true, true), policy);
+
+        const first = runtime.refreshResource('store-a|products');
+        const second = runtime.refreshResource('store-a|products');
+        expect(first).toBe(second);
+        await Promise.resolve();
+        expect(firstFetch).toHaveBeenCalledTimes(1);
+        expect(secondFetch).toHaveBeenCalledTimes(1);
+        expect(inactiveFetch).not.toHaveBeenCalled();
+        expect(otherScopeFetch).not.toHaveBeenCalled();
+
+        const firstResult = { data: 'list receipt' };
+        finishFirst(firstResult);
+        await Promise.resolve();
+        expect(runtime.state('/catalog/list').refreshing).toBe(true);
+        expect(runtime.refreshResource('store-a|products')).toBe(first);
+        finishSecond({ data: 'widget receipt' });
+        expect(await first).toBe(firstResult);
+        expect(await second).toBe(firstResult);
+        expect(runtime.state('/catalog/list').refreshing).toBe(false);
+        expect(inactiveFetch).not.toHaveBeenCalled();
+        expect(otherScopeFetch).not.toHaveBeenCalled();
+    });
+    it('waits for all active owners after a synchronous failure and allows a later retry', async () => {
+        const runtime = new AdminQueryRuntime(() => 10_000);
+        const error = new Error('network unavailable');
+        let finishSecond!: (result: unknown) => void;
+        const firstFetch = vi
+            .fn()
+            .mockImplementationOnce(() => {
+                throw error;
+            })
+            .mockResolvedValue({ data: 'recovered list' });
+        const secondFetch = vi
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise(resolve => {
+                        finishSecond = resolve;
+                    }),
+            )
+            .mockResolvedValue({ data: 'recovered widget' });
+        runtime.register('products', 'list', owner(firstFetch, true, true), policy);
+        runtime.register('products', 'widget', owner(secondFetch, true, true), policy);
+
+        const first = runtime.refreshResource('products');
+        const outcome = first.catch(reason => reason);
+        await Promise.resolve();
+        expect(firstFetch).toHaveBeenCalledTimes(1);
+        expect(secondFetch).toHaveBeenCalledTimes(1);
+        expect(runtime.state('/catalog/list').refreshing).toBe(true);
+        expect(runtime.refreshResource('products')).toBe(first);
+        finishSecond({ data: 'other receipt' });
+        expect(await outcome).toBe(error);
+        expect(runtime.state('/catalog/list').refreshing).toBe(false);
+        expect(runtime.isStale('products')).toBe(true);
+
+        expect(await runtime.refreshResource('products')).toEqual({ data: 'recovered list' });
+        expect(firstFetch).toHaveBeenCalledTimes(2);
+        expect(secondFetch).toHaveBeenCalledTimes(2);
+        expect(runtime.isStale('products')).toBe(false);
+    });
+    it('preserves the first observable result when a peer uses a rejecting error policy', async () => {
+        const runtime = new AdminQueryRuntime();
+        const error = new Error('partial GraphQL response');
+        const result = { data: undefined, error };
+        const firstFetch = vi.fn(async () => result);
+        const secondFetch = vi.fn(async () => {
+            throw error;
+        });
+        runtime.register('products', 'list', owner(firstFetch, true, true), policy);
+        runtime.register('products', 'widget', owner(secondFetch, true, true), policy);
+        expect(await runtime.refreshResource('products')).toBe(result);
+        expect(firstFetch).toHaveBeenCalledTimes(1);
+        expect(secondFetch).toHaveBeenCalledTimes(1);
+    });
+    it('keeps non-deduplicated reads on one owner when callbacks differ', async () => {
+        const runtime = new AdminQueryRuntime();
+        const result = { data: 'one request' };
+        const firstFetch = vi.fn(async () => result);
+        const secondFetch = vi.fn(async () => ({ data: 'duplicate' }));
+        runtime.register('store-a|read:settings', 'first', owner(firstFetch), policy);
+        runtime.register('store-a|read:settings', 'second', owner(secondFetch), policy);
+        expect(await runtime.refreshResource('store-a|read:settings')).toBe(result);
+        expect(firstFetch).toHaveBeenCalledTimes(1);
+        expect(secondFetch).not.toHaveBeenCalled();
     });
     it('invalidates a hidden resource without fetching until its owner resumes', async () => {
         const runtime = new AdminQueryRuntime();

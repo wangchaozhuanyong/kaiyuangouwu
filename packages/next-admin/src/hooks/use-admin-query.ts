@@ -133,6 +133,7 @@ function useManagedResult(document: any, options: any, result: any, active: bool
     const fetch = useCallback(() => waitForQuery(latest.current.observable), []);
     const hasData = Boolean(data);
     const ownerState = useRef({ active, loading: result.loading, hasData, error: result.error });
+    const refetchPeers = client.queryDeduplication && options.context?.queryDeduplication !== false;
     useLayoutEffect(() => {
         ownerState.current = { active, loading: result.loading, hasData, error: result.error };
     }, [active, result.loading, hasData, result.error]);
@@ -144,11 +145,12 @@ function useManagedResult(document: any, options: any, result: any, active: bool
             {
                 page,
                 fetch,
+                refetchPeers,
                 ...ownerState.current,
             },
             { staleTime, pollInterval, stage },
         );
-    }, [runtime, key, ownerId, page, enabled, fetch, staleTime, pollInterval, stage]);
+    }, [runtime, key, ownerId, page, enabled, fetch, refetchPeers, staleTime, pollInterval, stage]);
     useEffect(() => {
         const completed = wasLoading.current.key === key && wasLoading.current.value && !result.loading;
         wasLoading.current = { key, value: result.loading };
