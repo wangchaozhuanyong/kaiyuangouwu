@@ -30,6 +30,23 @@ const facts = (host = 'store-a.test'): PublicSeoFacts => ({
 });
 
 describe('one public SEO policy', () => {
+    it('places the server-rendered home resource before common desktop CSS without duplicating it', () => {
+        const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
+        const html = assemblePublicHtml(
+            '<html><head><link rel="stylesheet" href="/assets/index-test.css">' +
+                '<script type="module" src="/assets/test.js"></script></head><body><div id="root"></div></body></html>',
+            { scope: {}, config: {}, seo } as never,
+            '<style data-href="storefront-home-showcase" data-precedence="commerce">.product-grid{display:grid}</style><main>Home</main>',
+        );
+        const dom = load(html);
+        expect(dom('head style[data-href="storefront-home-showcase"]')).toHaveLength(1);
+        expect(dom('#root style')).toHaveLength(0);
+        expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
+            html.indexOf('href="/assets/index-test.css"'),
+        );
+        expect(dom('#root main').text()).toBe('Home');
+        expect(dom('script[type="module"]')).toHaveLength(1);
+    });
     it.each(['store-a.test', 'store-b.test'])('preserves product identity and locale on %s', host => {
         const page = buildPublicSeoDocument({ kind: 'product', id: '123' }, facts(host), settings(), null, 4);
         expect(page.indexable).toBe(true);

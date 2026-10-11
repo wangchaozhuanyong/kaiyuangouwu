@@ -140,6 +140,12 @@ function assembleFixtureHtml(page, body) {
         );
     }
     document('#root').attr('data-public-rendered', '1').html(body);
+    const homeStyle = document('style[data-href="storefront-home-showcase"]');
+    const commonStyle = document('head link[rel="stylesheet"]').first();
+    if (homeStyle.length) {
+        if (commonStyle.length) commonStyle.before(homeStyle);
+        else document('head').append(homeStyle);
+    }
     const payload = JSON.stringify(page).replace(
         /[<>&\u2028\u2029]/gu,
         value => `\\u${value.charCodeAt(0).toString(16).padStart(4, '0')}`,
