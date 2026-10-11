@@ -20,6 +20,7 @@ import { BusinessServicesPageContext } from '../../../storefront/src/storefront-
 import { HomeDualCategoryShowcase } from '../../../storefront/src/storefront-ui/content-ui';
 import clientStyles from '../../../storefront/src/styles.css?inline';
 import desktopStyles from '../../../storefront/src/styles/desktop-layout.css?inline';
+import '../../../storefront/src/styles/service-entries.css';
 import presetStyles from '../../../storefront/src/styles/visual-presets.css?inline';
 import type { StorefrontContentBlock as ClientBlock } from '../../../storefront/src/types';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
@@ -291,6 +292,60 @@ if (params.has('services') || params.has('services-client')) {
         ],
     });
 }
+if (params.has('services-sidebar')) {
+    const block = blocks.find(block => block.code === 'storefront-client-plugins')!;
+    servicesAsset = {
+        ...asset,
+        name: '本地智能服务原图',
+        mimeType: 'image/png',
+        preview: '/assets/services-sidebar-original.png',
+        source: '/assets/services-sidebar-original.png',
+        width: 1672,
+        height: 941,
+    };
+    Object.assign(block, {
+        imageAsset: servicesAsset,
+        imageUrl: servicesAsset.preview,
+        targetType: 'URL',
+        targetValue: 'https://example.invalid/services',
+        settings: {
+            ...block.settings,
+            businessServicesHeroLayout: 'shared-banner',
+            secondaryTextColor: '#ffffff',
+        },
+        textColor: '#ffffff',
+        translations: [
+            {
+                languageCode: 'zh_Hans',
+                title: '模钥 AI 中转',
+                subtitle: '',
+                body: '多模型，充值未开放',
+                ctaLabel: '进入服务',
+            },
+            {
+                languageCode: 'en',
+                title: 'MOYAO AI Relay',
+                subtitle: '',
+                body: 'Multi-model access',
+                ctaLabel: 'Open service',
+            },
+        ],
+        items: storefrontClientPluginCatalog.map((definition, position) => ({
+            ...newContentItem(position),
+            id: definition.code,
+            enabled: true,
+            settings: { pluginCode: definition.code, placement: 'BUSINESS_SERVICES_MAIN' },
+            translations: [
+                { languageCode: 'zh_Hans', label: definition.name, description: definition.description },
+                {
+                    languageCode: 'en',
+                    label: definition.englishName,
+                    description: definition.englishDescription,
+                },
+            ],
+        })),
+    });
+}
 if (params.has('services-candidate')) {
     // Review-only snapshot of the approved visual family. This never writes merchant content.
     const block = blocks.find(block => block.code === 'storefront-client-plugins')!;
@@ -533,7 +588,8 @@ if (
     params.has('parity') ||
     params.has('notice-period') ||
     params.has('editorialHome') ||
-    params.has('services-candidate')
+    params.has('services-candidate') ||
+    params.has('services-sidebar')
 ) {
     asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';

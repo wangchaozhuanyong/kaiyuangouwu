@@ -6,7 +6,11 @@ import {
     resolveBusinessServicesHeroLayout,
 } from '../../../storefront-content-plugin/src/shared/business-services-hero';
 import { heroImageForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
-import { ClientPluginSlot, resolveClientPlugins } from '../client-plugins/client-plugin-registry';
+import {
+    ClientPluginSlot,
+    isAssistanceClientPlugin,
+    resolveClientPlugins,
+} from '../client-plugins/client-plugin-registry';
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
@@ -84,8 +88,37 @@ export function BusinessServicesPage() {
     );
     const heroImageUrl = heroImage.imageUrl;
 
+    const showAssistanceSidebar =
+        heroLayout === 'shared-banner' && !!heroImageUrl && plugins.some(isAssistanceClientPlugin);
+    const hero = (
+        <BusinessServicesHero
+            title={heroTitle}
+            body={heroDescription}
+            visual={clientPluginBlock}
+            layout={heroLayout}
+            imageDimensions={heroImage.imageAsset}
+            image={heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined}
+            decoration={<ServiceArchitectureMotif />}
+            action={
+                heroLinkTarget ? (
+                    <a
+                        href={contentTargetHref('URL', heroLinkTarget, language)}
+                        className="business-services-heading-link"
+                        onClick={event =>
+                            interceptContentNavigation(event, () => onContentTarget('URL', heroLinkTarget))
+                        }
+                    >
+                        {clientPluginBlock?.ctaLabel.trim() ||
+                            (isZh ? '打开服务网站' : 'Open service website')}
+                        <ExternalLink aria-hidden="true" />
+                    </a>
+                ) : undefined
+            }
+        />
+    );
+
     return (
-        // SERVICES_SCALABLE_DESKTOP_20261003: desktop stacks the introduction above the tool grid.
+        // The advertisement and assistance share a row; the growing tool directory stays below.
         <main className="page business-services-page" data-services-layout="directory-b">
             {!desktop && (
                 <MobilePageHeader
@@ -103,38 +136,30 @@ export function BusinessServicesPage() {
                 />
             )}
             <div className="business-services-workspace">
-                <BusinessServicesHero
-                    title={heroTitle}
-                    body={heroDescription}
-                    visual={clientPluginBlock}
-                    layout={heroLayout}
-                    imageDimensions={heroImage.imageAsset}
-                    image={
-                        heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined
-                    }
-                    decoration={<ServiceArchitectureMotif />}
-                    action={
-                        heroLinkTarget ? (
-                            <a
-                                href={contentTargetHref('URL', heroLinkTarget, language)}
-                                className="business-services-heading-link"
-                                onClick={event =>
-                                    interceptContentNavigation(event, () =>
-                                        onContentTarget('URL', heroLinkTarget),
-                                    )
-                                }
-                            >
-                                {clientPluginBlock?.ctaLabel.trim() ||
-                                    (isZh ? '打开服务网站' : 'Open service website')}
-                                <ExternalLink aria-hidden="true" />
-                            </a>
-                        ) : undefined
-                    }
-                />
+                {showAssistanceSidebar ? (
+                    <div className="business-services-advertising-row">
+                        {hero}
+                        <aside
+                            className="business-services-assistance-sidebar"
+                            aria-label={isZh ? '客服与优惠' : 'Support and coupons'}
+                        >
+                            <ClientPluginSlot
+                                block={clientPluginBlock}
+                                placement="BUSINESS_SERVICES_MAIN"
+                                group="assistance"
+                                language={language}
+                                onNavigate={onNavigate}
+                            />
+                        </aside>
+                    </div>
+                ) : (
+                    hero
+                )}
                 <ClientPluginSlot
                     block={clientPluginBlock}
                     placement="BUSINESS_SERVICES_MAIN"
                     toolsFirst
+                    group={showAssistanceSidebar ? 'tools' : undefined}
                     language={language}
                     onNavigate={onNavigate}
                 />

@@ -34,6 +34,10 @@ interface ResolvedClientPlugin {
     Component: ComponentType<ClientPluginComponentProps>;
 }
 
+export function isAssistanceClientPlugin(plugin: Pick<ResolvedClientPlugin, 'code'>): boolean {
+    return plugin.code === 'category-coupon-entry' || plugin.code === 'category-support-entry';
+}
+
 function CouponEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
     const isZh = language === 'zh';
     return (
@@ -229,28 +233,38 @@ export function ClientPluginSlot({
     language,
     onNavigate,
     toolsFirst = false,
+    group,
 }: Readonly<{
     block: StorefrontContentBlock | undefined;
     placement: ClientPluginPlacement;
     categoryContext?: CategoryClientPluginContext;
     toolsFirst?: boolean;
+    group?: 'tools' | 'assistance';
     language: StorefrontLanguage;
     onNavigate: (route: RouteState) => void;
 }>) {
-    const plugins = resolveClientPlugins(block, placement, categoryContext);
+    const plugins = resolveClientPlugins(block, placement, categoryContext).filter(
+        plugin => !group || isAssistanceClientPlugin(plugin) === (group === 'assistance'),
+    );
     if (!plugins.length) return null;
     const renderPlugins = (entries: ResolvedClientPlugin[]) =>
         entries.map(({ code, item, Component }) => (
             <Component key={item.id || code} language={language} onNavigate={onNavigate} />
         ));
     // Keep managed order within each group, including when a merchant hides an entry.
-    const isAssistance = (plugin: ResolvedClientPlugin) =>
-        plugin.code === 'category-coupon-entry' || plugin.code === 'category-support-entry';
-    const tools = plugins.filter(plugin => !isAssistance(plugin));
-    const assistance = plugins.filter(isAssistance);
+    const tools = plugins.filter(plugin => !isAssistanceClientPlugin(plugin));
+    const assistance = plugins.filter(isAssistanceClientPlugin);
+    // The advertisement sidebar has fixed support / coupon positions. Other slots retain managed order.
+    if (group === 'assistance') {
+        assistance.sort(
+            (left, right) =>
+                Number(right.code === 'category-support-entry') -
+                Number(left.code === 'category-support-entry'),
+        );
+    }
     return (
         <div className={`category-client-plugin-slot is-${placement.toLowerCase().replaceAll('_', '-')}`}>
-            {toolsFirst ? (
+            {toolsFirst || group ? (
                 <>
                     {tools.length > 0 && (
                         <section
