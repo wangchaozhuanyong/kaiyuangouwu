@@ -383,6 +383,163 @@ describe('public SEO with real isolated SQL publication and catalog membership',
         ids.flatMap(id => ['zh', 'en'].map(code => `https://store-1.test/${code}/product?id=${id}`));
     const readerPages = () => productListSpy.mock.calls.map(([, input]) => input);
 
+    it('omits a collection shard whose real SQL catalog has no indexable language entries', async () => {
+        const entities = [
+            { id: 101, isRoot: true, isPrivate: false, channels: [{ id: 1 }] },
+            { id: 102, isRoot: false, isPrivate: false, channels: [{ id: 1 }] },
+            { id: 103, isRoot: false, isPrivate: false, channels: [{ id: 1 }] },
+            { id: 104, isRoot: false, isPrivate: true, channels: [{ id: 1 }] },
+            { id: 105, isRoot: false, isPrivate: false, channels: [{ id: 2 }] },
+        ];
+        await data.getRepository(Collection).save(entities);
+        await data.getRepository(CollectionTranslation).save(
+            entities.flatMap(entity =>
+                [LanguageCode.zh_Hans, LanguageCode.en].map(languageCode => ({
+                    baseId: entity.id,
+                    languageCode,
+                    name: `Collection ${entity.id}`,
+                    description: entity.id === 102 ? '<p> </p>' : `Complete collection ${entity.id}`,
+                })),
+            ),
+        );
+        for (const languageCode of ['zh_Hans', 'en'] as const) {
+            const identity: StorefrontSeoIdentity = {
+                targetType: 'COLLECTION',
+                targetId: '103',
+                languageCode,
+            };
+            await seo.saveDraft(context(1, languageCode, true), {
+                ...identity,
+                expectedVersion: 0,
+                draft: { indexMode: 'NOINDEX' },
+            });
+            await seo.publish(context(1, languageCode, true), { ...identity, expectedVersion: 1 });
+        }
+        expect(sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test', 'collections'))).toEqual(
+            [],
+        );
+        expect(sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test'))).toEqual([
+            'https://store-1.test/sitemap-pages.xml',
+            'https://store-1.test/sitemap-products-0.xml',
+        ]);
+    });
+
+    it('keeps nonempty collection shard numbers, language filtering and primary canonical URLs', async () => {
+        const ids = Array.from({ length: 1001 }, (_, index) => 1000 + index);
+        await data.getRepository(Collection).save(
+            ids.map(id => ({
+                id,
+                isRoot: false,
+                isPrivate: false,
+                channels: [{ id: 1 }],
+            })),
+        );
+        await data.getRepository(CollectionTranslation).save(
+            ids.flatMap(id =>
+                [LanguageCode.zh_Hans, LanguageCode.en].map(languageCode => ({
+                    baseId: id,
+                    languageCode,
+                    name: `Collection ${id}`,
+                    description:
+                        id === 1000 || (id === 2000 && languageCode === LanguageCode.en)
+                            ? `Complete collection ${id}`
+                            : '',
+                })),
+            ),
+        );
+        const identity: StorefrontSeoIdentity = {
+            targetType: 'COLLECTION',
+            targetId: '1000',
+            languageCode: 'en',
+        };
+        await seo.saveDraft(context(1, 'en', true), {
+            ...identity,
+            expectedVersion: 0,
+            draft: { indexMode: 'NOINDEX' },
+        });
+        await seo.publish(context(1, 'en', true), { ...identity, expectedVersion: 1 });
+        expect(sitemapLocations(await publicSeo.sitemap(context(), 'alias.test'))).toEqual([
+            'https://store-1.test/sitemap-pages.xml',
+            'https://store-1.test/sitemap-products-0.xml',
+            'https://store-1.test/sitemap-collections-0.xml',
+            'https://store-1.test/sitemap-collections-2.xml',
+        ]);
+        const shards = await Promise.all(
+            [0, 1, 2].map(shard => publicSeo.sitemap(context(), 'alias.test', 'collections', shard)),
+        );
+        expect(shards.map(sitemapLocations)).toEqual([
+            ['https://store-1.test/zh/category?collectionId=1000'],
+            [],
+            ['https://store-1.test/en/category?collectionId=2000'],
+        ]);
+        expect(shards[0]).toContain('<lastmod>');
+        expect(shards[2]).toContain('<lastmod>');
+    });
+
+    it('does not list collection shards for complete content in a disabled language', async () => {
+        await data.getRepository(Collection).save({
+            id: 101,
+            isRoot: false,
+            isPrivate: false,
+            channels: [{ id: 1 }],
+        });
+        await data.getRepository(CollectionTranslation).save({
+            baseId: 101,
+            languageCode: LanguageCode.en,
+            name: 'Complete English collection',
+            description: 'Complete English description',
+        });
+        await seo.saveDraft(context(1, 'en', true), {
+            ...storefrontSeoSettingsIdentity,
+            expectedVersion: 2,
+            draft: { indexingEnabled: true, enabledLanguages: ['zh_Hans'] },
+        });
+        await seo.publish(context(1, 'en', true), {
+            ...storefrontSeoSettingsIdentity,
+            expectedVersion: 3,
+        });
+        expect(await publicSeo.sitemap(context(), 'store-1.test')).not.toContain('sitemap-collections');
+        expect(sitemapLocations(await publicSeo.sitemap(context(), 'store-1.test', 'collections'))).toEqual(
+            [],
+        );
+    });
+
+    it('rejects a collection index if its SQL-published NOINDEX changes during discovery', async () => {
+        await data.getRepository(Collection).save({
+            id: 101,
+            isRoot: false,
+            isPrivate: false,
+            channels: [{ id: 1 }],
+        });
+        await data.getRepository(CollectionTranslation).save({
+            baseId: 101,
+            languageCode: LanguageCode.en,
+            name: 'Complete English collection',
+            description: 'Complete English description',
+        });
+        const listPublished = seo.listPublished.bind(seo);
+        let reads = 0;
+        vi.spyOn(seo, 'listPublished').mockImplementation(async (...args) => {
+            if (++reads === 2) {
+                const identity: StorefrontSeoIdentity = {
+                    targetType: 'COLLECTION',
+                    targetId: '101',
+                    languageCode: 'en',
+                };
+                await seo.saveDraft(context(1, 'en', true), {
+                    ...identity,
+                    expectedVersion: 0,
+                    draft: { indexMode: 'NOINDEX' },
+                });
+                await seo.publish(context(1, 'en', true), { ...identity, expectedVersion: 1 });
+            }
+            return listPublished(...args);
+        });
+        await expect(publicSeo.sitemap(context(), 'store-1.test')).rejects.toThrow(
+            'Published discovery pages changed during read',
+        );
+    });
+
     it('keeps 500 products per sitemap shard within the real public reader pagination limit', async () => {
         const ids = await seedSitemapProducts(501);
         const index = await publicSeo.sitemap(context(), 'store-1.test');

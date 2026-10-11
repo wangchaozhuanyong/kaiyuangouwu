@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { ConfirmDialogContext } from '../../components/confirm-dialog-context';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
+import { hasAdminDrafts, requestDiscardAdminDrafts } from '../../hooks/use-unsaved-changes-warning';
 import { CategoriesModule } from './CategoriesModule';
 
 const oldImage = { __typename: 'Asset', id: 'old-image', name: '原分类图', preview: '/old.png' };
@@ -54,6 +55,7 @@ interface RenderCategoriesOptions {
     canReadAssets?: boolean;
     assetError?: boolean;
     saveError?: boolean;
+    readErrorAfterSave?: boolean;
     moveError?: boolean;
     optionGroups?: TestOptionGroup[];
     linkedProducts?: TestLinkedProduct[];
@@ -91,6 +93,7 @@ async function renderCategories({
     canReadAssets = true,
     assetError = false,
     saveError = false,
+    readErrorAfterSave = false,
     moveError = false,
     optionGroups = [],
     linkedProducts = [],
@@ -102,6 +105,7 @@ async function renderCategories({
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     let featuredAsset: typeof oldImage | null = oldImage;
     let channelId = 'channel-1';
+    let collectionWritten = false;
     const requests = vi.fn();
     const client = new ApolloClient({
         cache: new InMemoryCache(),
@@ -115,6 +119,10 @@ async function renderCategories({
                         return;
                     }
                     if (operation.operationName === 'GetCatalogTaxonomy') {
+                        if (readErrorAfterSave && collectionWritten) {
+                            observer.error(new Error('本次列表读取失败，请刷新重试'));
+                            return;
+                        }
                         const items = customCollections ?? [
                             {
                                 __typename: 'Collection',
@@ -179,7 +187,23 @@ async function renderCategories({
                                 },
                                 facets: { totalItems: 0, items: [] },
                                 activeChannel: { id: channelId, defaultLanguageCode: 'zh_Hans' },
-                                collectionFilters: [],
+                                collectionFilters: (customCollections ?? []).flatMap(collection =>
+                                    collection.filters.map(filter => ({
+                                        __typename: 'ConfigurableOperationDefinition',
+                                        code: filter.code,
+                                        description: '按商品筛选',
+                                        args: filter.args.map(arg => ({
+                                            name: arg.name,
+                                            type: 'ID',
+                                            list: true,
+                                            required: true,
+                                            defaultValue: null,
+                                            label: '商品',
+                                            description: '',
+                                            ui: null,
+                                        })),
+                                    })),
+                                ),
                             },
                         });
                     } else if (operation.operationName === 'GetProductsByOptionGroup') {
@@ -211,18 +235,40 @@ async function renderCategories({
                             observer.error(new Error('保存失败，请稍后重试'));
                             return;
                         }
-                        featuredAsset =
-                            operation.variables.input.featuredAssetId === newImage.id
-                                ? newImage
-                                : operation.variables.input.featuredAssetId === oldImage.id
-                                  ? oldImage
-                                  : null;
+                        collectionWritten = true;
+                        if (
+                            Object.prototype.hasOwnProperty.call(operation.variables.input, 'featuredAssetId')
+                        ) {
+                            featuredAsset =
+                                operation.variables.input.featuredAssetId === newImage.id
+                                    ? newImage
+                                    : operation.variables.input.featuredAssetId === oldImage.id
+                                      ? oldImage
+                                      : null;
+                        }
+                        const collection = customCollections?.find(
+                            item => item.id === operation.variables.input.id,
+                        );
+                        if (collection) {
+                            for (const translation of operation.variables.input.translations ?? []) {
+                                const current = collection.translations.find(
+                                    item => item.languageCode === translation.languageCode,
+                                );
+                                if (current) Object.assign(current, translation);
+                            }
+                        }
                         const field =
                             operation.operationName === 'UpdateCatalogCollection'
                                 ? 'updateCollection'
                                 : 'createCollection';
                         observer.next({
-                            data: { [field]: { __typename: 'Collection', id: 'category-1', name: '茶叶' } },
+                            data: {
+                                [field]: {
+                                    __typename: 'Collection',
+                                    id: collection?.id ?? 'category-1',
+                                    name: collection?.name ?? '茶叶',
+                                },
+                            },
                         });
                     } else if (operation.operationName === 'MoveCatalogCollection') {
                         if (moveError) {
@@ -289,9 +335,13 @@ async function renderCategories({
         expect(button, `button: ${label}`).toBeTruthy();
         await act(async () => button!.click());
     };
-    const changeInput = async (input: HTMLInputElement, value: string) => {
+    const changeInput = async (input: HTMLInputElement | HTMLTextAreaElement, value: string) => {
         await act(async () => {
-            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+            const prototype =
+                input instanceof HTMLTextAreaElement
+                    ? HTMLTextAreaElement.prototype
+                    : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(input, value);
             input.dispatchEvent(new Event('input', { bubbles: true }));
         });
     };
@@ -301,8 +351,321 @@ async function renderCategories({
             await client.refetchQueries({ include: ['GetCatalogTaxonomy'] });
         });
     };
-    return { container, requests, click, changeInput, changeChannel };
+    const refreshTaxonomy = async () => {
+        await act(async () => {
+            await client.refetchQueries({ include: ['GetCatalogTaxonomy'] });
+        });
+    };
+    return { container, requests, click, changeInput, changeChannel, refreshTaxonomy };
 }
+
+describe('category English editing', () => {
+    const collectionFixture = () => ({
+        __typename: 'Collection',
+        id: 'category-services',
+        name: '签证留学',
+        slug: 'qianzheng-liuxue',
+        description: '查看签证与留学相关服务',
+        isPrivate: false,
+        parentId: 'root',
+        position: 3,
+        productVariantCount: 2,
+        inheritFilters: false,
+        filters: [{ code: 'product-id-filter', args: [{ name: 'productIds', value: '["p-1"]' }] }],
+        featuredAsset: oldImage,
+        translations: [
+            {
+                id: 'tr-zh',
+                languageCode: 'zh_Hans',
+                name: '签证留学',
+                slug: 'qianzheng-liuxue',
+                description: '查看签证与留学相关服务',
+            },
+            {
+                id: 'tr-en',
+                languageCode: 'en',
+                name: 'Business services',
+                slug: 'business-services',
+                description: 'Existing service description',
+            },
+            {
+                id: 'tr-ms',
+                languageCode: 'ms',
+                name: 'Perkhidmatan',
+                slug: 'perkhidmatan',
+                description: 'Maklumat perkhidmatan',
+            },
+        ],
+    });
+
+    it('saves an English correction without changing Chinese, other translations, URLs or category bindings', async () => {
+        const category = collectionFixture();
+        const originalTranslations = structuredClone(category.translations);
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        const englishName = container.querySelector<HTMLInputElement>('[aria-label="英文名称"]');
+        const englishDescription = container.querySelector<HTMLTextAreaElement>('[aria-label="英文描述"]');
+        expect(englishName?.value).toBe('Business services');
+        expect(englishDescription?.value).toBe('Existing service description');
+        await changeInput(englishName!, 'Visa and Study Abroad');
+        await changeInput(englishDescription!, 'Explore visa and study abroad services.');
+        await click('保存');
+        const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+        expect(input, container.textContent ?? '').toBeDefined();
+        expect(input).toEqual({
+            id: category.id,
+            translations: [
+                {
+                    languageCode: 'en',
+                    name: 'Visa and Study Abroad',
+                    description: 'Explore visa and study abroad services.',
+                },
+            ],
+        });
+        expect(input).not.toHaveProperty('assetIds');
+        expect(input.translations).toHaveLength(1);
+        expect(input.translations[0].languageCode).toBe('en');
+        expect(
+            input.translations.find((item: { languageCode: string }) => item.languageCode === 'en'),
+        ).toEqual({
+            languageCode: 'en',
+            name: 'Visa and Study Abroad',
+            description: 'Explore visa and study abroad services.',
+        });
+        expect(category.translations[1].slug).toBe(originalTranslations[1].slug);
+        expect(category.translations[0]).toEqual(originalTranslations[0]);
+        expect(category.translations[2]).toEqual(originalTranslations[2]);
+        await click('编辑分类 签证留学');
+        expect(container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')?.value).toBe(
+            'Visa and Study Abroad',
+        );
+        expect(container.querySelector<HTMLTextAreaElement>('[aria-label="英文描述"]')?.value).toBe(
+            'Explore visa and study abroad services.',
+        );
+    });
+
+    it('does not clear existing English or submit unchanged translations when English fields are blank', async () => {
+        const category = collectionFixture();
+        const originalEnglish = structuredClone(category.translations[1]);
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!, '   ');
+        await changeInput(container.querySelector<HTMLTextAreaElement>('[aria-label="英文描述"]')!, '');
+        await click('保存');
+        expect(requests.mock.calls.some(([name]) => name === 'UpdateCatalogCollection')).toBe(false);
+        expect(category.translations[1]).toEqual(originalEnglish);
+        expect(container.textContent).toContain('没有需要保存的修改');
+    });
+
+    it.each([
+        ['英文名称', 'name', 'Visa and Study Abroad'],
+        ['英文描述', 'description', 'Explore visa and study abroad services.'],
+    ])(
+        'submits only the edited %s field so other English fields keep their review state',
+        async (label, field, value) => {
+            const category = collectionFixture();
+            const originalEnglish = structuredClone(category.translations[1]);
+            const { container, requests, click, changeInput } = await renderCategories({
+                customCollections: [category],
+            });
+            await click('编辑分类 签证留学');
+            await changeInput(
+                container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${label}"]`)!,
+                value,
+            );
+            await click('保存');
+            const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+            expect(input).toEqual({
+                id: category.id,
+                translations: [{ languageCode: 'en', [field]: value }],
+            });
+            expect(category.translations[1]).toEqual({ ...originalEnglish, [field]: value });
+        },
+    );
+
+    it('preserves untouched automatic English during a Chinese-name edit', async () => {
+        const category = collectionFixture();
+        category.translations[1].name = '  Business services  ';
+        const originalEnglish = structuredClone(category.translations[1]);
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(container.querySelector<HTMLInputElement>('[role="dialog"] input')!, '签证与留学');
+        await click('保存');
+        const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+        expect(input.translations).toHaveLength(1);
+        expect(input.translations[0]).toMatchObject({
+            languageCode: 'zh_Hans',
+            name: '签证与留学',
+            slug: 'qianzheng-liuxue',
+        });
+        expect(category.translations[1]).toEqual(originalEnglish);
+    });
+
+    it('preserves the exact untouched Chinese source even when its name and URL contain surrounding spaces', async () => {
+        const category = collectionFixture();
+        category.translations[0].name = '  签证留学  ';
+        category.translations[0].slug = '  qianzheng-liuxue  ';
+        const originalChinese = structuredClone(category.translations[0]);
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        await click('保存');
+        const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+        expect(input.translations).toEqual([{ languageCode: 'en', name: 'Visa and Study Abroad' }]);
+        expect(category.translations[0]).toEqual(originalChinese);
+    });
+
+    it('saves simultaneous Chinese and English corrections with their existing language-specific URLs', async () => {
+        const category = collectionFixture();
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(container.querySelector<HTMLInputElement>('[role="dialog"] input')!, '签证与留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        await click('保存');
+        const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+        expect(input.translations).toHaveLength(2);
+        expect(input.translations[0]).toMatchObject({
+            languageCode: 'zh_Hans',
+            name: '签证与留学',
+            slug: 'qianzheng-liuxue',
+        });
+        expect(input.translations[1]).toMatchObject({
+            languageCode: 'en',
+            name: 'Visa and Study Abroad',
+        });
+        expect(input.translations[1]).toEqual({ languageCode: 'en', name: 'Visa and Study Abroad' });
+        expect(category.translations[1].slug).toBe('business-services');
+        expect(category.translations[2].languageCode).toBe('ms');
+        expect(category.translations[2].name).toBe('Perkhidmatan');
+    });
+
+    it('retains the existing settings update branch when an image replacement accompanies an English edit', async () => {
+        const category = collectionFixture();
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        await click('更换图片');
+        await click('选择图片：新分类图');
+        await click('保存');
+        const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+        expect(input).toMatchObject({
+            id: category.id,
+            featuredAssetId: newImage.id,
+            parentId: category.parentId,
+            inheritFilters: category.inheritFilters,
+            filters: category.filters.map(filter => ({ code: filter.code, arguments: filter.args })),
+            customFields: {},
+            translations: [{ languageCode: 'en', name: 'Visa and Study Abroad' }],
+        });
+        expect(input).not.toHaveProperty('assetIds');
+    });
+
+    it('does not submit Chinese text as manually protected English', async () => {
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [collectionFixture()],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!, '签证服务');
+        await click('保存');
+        expect(requests.mock.calls.some(([name]) => name === 'UpdateCatalogCollection')).toBe(false);
+        expect(container.textContent).toContain('不含中文的英文名称与描述');
+    });
+
+    it('protects English drafts from discard and keeps them visible after a failed save', async () => {
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [collectionFixture()],
+            saveError: true,
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        expect(hasAdminDrafts()).toBe(true);
+        const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+        expect(requestDiscardAdminDrafts()).toBe(false);
+        confirm.mockRestore();
+        await click('取消');
+        expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+        await click('保存');
+        expect(requests.mock.calls.filter(([name]) => name === 'UpdateCatalogCollection')).toHaveLength(1);
+        expect(container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')?.value).toBe(
+            'Visa and Study Abroad',
+        );
+        expect(container.textContent).toContain('保存失败');
+    });
+
+    it('reports a completed English save separately from a failed list refresh without replaying the write', async () => {
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [collectionFixture()],
+            readErrorAfterSave: true,
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        await click('保存');
+        expect(container.querySelector('[role="dialog"]')).toBeNull();
+        expect(container.textContent).toContain('已保存《签证留学》，但列表更新失败');
+        expect(requests.mock.calls.filter(([name]) => name === 'UpdateCatalogCollection')).toHaveLength(1);
+    });
+
+    it('retains dirty English and blocks saving after the category source changes', async () => {
+        const category = collectionFixture();
+        const { container, requests, click, changeInput, refreshTaxonomy } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        category.translations[0].name = '更新后的服务名称';
+        await refreshTaxonomy();
+        expect(container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')?.value).toBe(
+            'Visa and Study Abroad',
+        );
+        expect(container.textContent).toContain('分类内容已更新');
+        await click('保存');
+        expect(requests.mock.calls.some(([name]) => name === 'UpdateCatalogCollection')).toBe(false);
+    });
+
+    it('does not save a retained English draft to a different active store', async () => {
+        const { container, requests, click, changeInput, changeChannel } = await renderCategories({
+            customCollections: [collectionFixture()],
+        });
+        await click('编辑分类 签证留学');
+        await changeInput(
+            container.querySelector<HTMLInputElement>('[aria-label="英文名称"]')!,
+            'Visa and Study Abroad',
+        );
+        await changeChannel('channel-2');
+        await click('保存');
+        expect(requests.mock.calls.some(([name]) => name === 'UpdateCatalogCollection')).toBe(false);
+    });
+});
 
 describe('category tree expansion', () => {
     it('starts collapsed and expands children only after an explicit action', async () => {
@@ -452,7 +815,7 @@ describe('category image editing', () => {
     });
 
     it('discards an unsaved replacement and preserves the original image on a normal save', async () => {
-        const { container, requests, click } = await renderCategories();
+        const { container, requests, click } = await renderCategories({ confirmationResult: {} });
         await click('编辑分类 茶叶');
         await click('更换图片');
         await click('选择图片：新分类图');
@@ -461,12 +824,8 @@ describe('category image editing', () => {
         await click('编辑分类 茶叶');
         expect(container.querySelector('img[alt="原分类图"]')).not.toBeNull();
         await click('保存');
-        expect(requests).toHaveBeenCalledWith(
-            'UpdateCatalogCollection',
-            expect.objectContaining({
-                input: expect.objectContaining({ featuredAssetId: oldImage.id }),
-            }),
-        );
+        expect(requests.mock.calls.some(([name]) => name === 'UpdateCatalogCollection')).toBe(false);
+        expect(container.textContent).toContain('没有需要保存的修改');
     });
 
     it('clears only the featured image and starts a new category with no inherited image', async () => {

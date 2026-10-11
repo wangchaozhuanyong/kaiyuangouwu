@@ -1,6 +1,18 @@
+import { CurrencyCode, LanguageCode, Permission } from '@vendure/common/lib/generated-types';
 import 'reflect-metadata';
-import { describe, expect, it, vi } from 'vitest';
+import { DataSource, EntitySchema } from 'typeorm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RequestContext } from '../../api/common/request-context';
+import { ensureConfigLoaded } from '../../config/config-helpers';
+import { ConfigService } from '../../config/config.service';
+import { TransactionWrapper } from '../../connection/transaction-wrapper';
+import { TransactionalConnection } from '../../connection/transactional-connection';
+import { Channel } from '../../entity/channel/channel.entity';
+import { SettingsStoreEntry } from '../../entity/settings-store-entry/settings-store-entry.entity';
+import { ShippingMethodTranslation } from '../../entity/shipping-method/shipping-method-translation.entity';
+import { ShippingMethod } from '../../entity/shipping-method/shipping-method.entity';
+import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
 import { ShippingCalculator } from '../helpers/shipping-calculator/shipping-calculator';
 import {
     PLATFORM_SHIPPING_TEMPLATES_KEY,
@@ -69,7 +81,14 @@ function fixture({
         translations: [{ languageCode: 'zh_Hans', name: id, description: '' }],
     }));
     const ownershipEntries: any[] = [];
+    const legacyQuery = {
+        setFindOptions: vi.fn().mockReturnThis(),
+        innerJoin: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        getMany: vi.fn().mockResolvedValue([]),
+    };
     const repo = {
+        createQueryBuilder: vi.fn(() => legacyQuery),
         find: vi
             .fn()
             .mockImplementation(({ where }: any) =>
@@ -525,5 +544,300 @@ describe('shipping template store ownership and switches', () => {
             'store-shipping-zone-eligibility-checker',
         );
         expect(JSON.stringify(PLATFORM_SHIPPING_TEMPLATE_INPUTS)).not.toContain('200');
+    });
+});
+
+describe('shipping template management with real channel membership SQL', () => {
+    const idColumn = { type: Number, primary: true } as const;
+    const entities = [
+        new EntitySchema<Channel>({
+            name: 'Channel',
+            target: Channel,
+            columns: {
+                id: idColumn,
+                code: { type: String },
+                defaultCurrencyCode: { type: String },
+            },
+            relations: {
+                shippingMethods: {
+                    type: 'many-to-many',
+                    target: 'ShippingMethod',
+                    inverseSide: 'channels',
+                },
+            },
+        }),
+        new EntitySchema<ShippingMethod>({
+            name: 'ShippingMethod',
+            target: ShippingMethod,
+            columns: {
+                id: idColumn,
+                code: { type: String },
+                deletedAt: { type: Date, nullable: true },
+                checker: { type: 'simple-json' },
+                calculator: { type: 'simple-json' },
+                fulfillmentHandlerCode: { type: String },
+            },
+            relations: {
+                channels: {
+                    type: 'many-to-many',
+                    target: 'Channel',
+                    inverseSide: 'shippingMethods',
+                    joinTable: true,
+                },
+                translations: {
+                    type: 'one-to-many',
+                    target: 'ShippingMethodTranslation',
+                    inverseSide: 'base',
+                    eager: true,
+                },
+            },
+        }),
+        new EntitySchema<ShippingMethodTranslation>({
+            name: 'ShippingMethodTranslation',
+            target: ShippingMethodTranslation,
+            columns: {
+                id: idColumn,
+                languageCode: { type: String },
+                name: { type: String },
+                description: { type: String },
+            },
+            relations: {
+                base: { type: 'many-to-one', target: 'ShippingMethod', inverseSide: 'translations' },
+            },
+        }),
+        new EntitySchema<SettingsStoreEntry>({
+            name: 'SettingsStoreEntry',
+            target: SettingsStoreEntry,
+            columns: {
+                id: idColumn,
+                key: { type: String },
+                scope: { type: String },
+                value: { type: 'simple-json' },
+            },
+        }),
+    ];
+    let db: DataSource;
+    let service: ShippingMethodService;
+    let settings: { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> };
+    const applyAccessControl = vi.fn();
+    const statements: string[] = [];
+
+    const context = (channel: Channel, superAdmin = false, apiType: 'admin' | 'shop' = 'admin') =>
+        new RequestContext({
+            apiType,
+            channel,
+            languageCode: LanguageCode.zh_Hans,
+            isAuthorized: true,
+            authorizedAsOwnerOnly: false,
+            session: {
+                user: {
+                    channelPermissions: [
+                        {
+                            id: channel.id,
+                            permissions: [
+                                Permission.ReadShippingMethod,
+                                ...(superAdmin ? [Permission.SuperAdmin] : []),
+                            ],
+                        },
+                    ],
+                },
+            } as any,
+        });
+    const ids = (management: Awaited<ReturnType<ShippingMethodService['getShippingTemplateManagement']>>) =>
+        management.items.map(item => Number(item.method.id)).sort((a, b) => a - b);
+    const databaseSnapshot = async () =>
+        JSON.stringify({
+            methods: (
+                await db.getRepository(ShippingMethod).find({ relations: ['channels'], order: { id: 'ASC' } })
+            ).map(method => ({
+                id: method.id,
+                code: method.code,
+                deletedAt: method.deletedAt,
+                calculator: method.calculator,
+                checker: method.checker,
+                fulfillmentHandlerCode: method.fulfillmentHandlerCode,
+                channels: method.channels.map(channel => channel.id).sort(),
+                translations: method.translations.map(translation => ({
+                    languageCode: translation.languageCode,
+                    name: translation.name,
+                    description: translation.description,
+                })),
+            })),
+            settings: await db.getRepository(SettingsStoreEntry).find({ order: { id: 'ASC' } }),
+        });
+
+    beforeEach(async () => {
+        statements.length = 0;
+        applyAccessControl.mockReset();
+        await ensureConfigLoaded();
+        db = await new DataSource({
+            type: 'sqljs',
+            entities,
+            synchronize: true,
+            logging: ['query'],
+            logger: {
+                logQuery: query => statements.push(query),
+                logQueryError: () => undefined,
+                logQuerySlow: () => undefined,
+                logSchemaBuild: () => undefined,
+                logMigration: () => undefined,
+                log: () => undefined,
+            },
+        }).initialize();
+        await db.getRepository(Channel).save([
+            { id: 1, code: '__default_channel__', defaultCurrencyCode: CurrencyCode.MYR },
+            { id: 2, code: 'store-a', defaultCurrencyCode: CurrencyCode.MYR },
+            { id: 3, code: 'store-b', defaultCurrencyCode: CurrencyCode.CNY },
+        ]);
+        const memberships = new Map([
+            [10, [1]],
+            [11, [1, 2, 3]],
+            [12, [2]],
+            [13, [3]],
+            [14, [2, 3]],
+            [15, [2]],
+            [16, [2]],
+            [17, []],
+            [18, [2]],
+        ]);
+        for (const [id, channelIds] of memberships) {
+            await db.getRepository(ShippingMethod).save({
+                id,
+                code: `shipping-${id}`,
+                deletedAt: id === 16 ? new Date('2026-01-01T00:00:00Z') : null,
+                checker: { code: 'store-shipping-zone-eligibility-checker', args: [] },
+                calculator: {
+                    code: 'default-shipping-calculator',
+                    args: [{ name: 'rate', value: id === 12 ? '0' : '5000' }],
+                },
+                fulfillmentHandlerCode: 'manual-fulfillment',
+                channels: channelIds.map(channelId => ({ id: channelId })),
+            });
+            await db.getRepository(ShippingMethodTranslation).save({
+                id,
+                languageCode: 'zh_Hans',
+                name: `配送 ${id}`,
+                description: `原说明 ${id}`,
+                base: { id },
+            });
+        }
+        await db.getRepository(SettingsStoreEntry).save([
+            { id: 1, key: PLATFORM_SHIPPING_TEMPLATES_KEY, scope: '', value: { freeShippingId: '11' } },
+            { id: 2, key: STORE_SHIPPING_METHODS_KEY, scope: 'channel:1', value: {} },
+            {
+                id: 3,
+                key: STORE_SHIPPING_METHODS_KEY,
+                scope: 'channel:2',
+                value: {
+                    ownedIds: ['15', '18'],
+                    disabledIds: ['18'],
+                    sourceCurrencyCodes: { '15': 'MYR', '18': 'MYR' },
+                },
+            },
+            { id: 4, key: STORE_SHIPPING_METHODS_KEY, scope: 'channel:3', value: {} },
+        ]);
+        const config = {
+            authOptions: {
+                entityAccessControlStrategy: { platformStoreGovernance: true, applyAccessControl },
+            },
+            customFields: {},
+            apiOptions: { adminListQueryLimit: 100, shopListQueryLimit: 100 },
+        } as unknown as ConfigService;
+        const connection = new TransactionalConnection(db, new TransactionWrapper(), config);
+        settings = {
+            get: vi.fn(async (ctx, key: string) => {
+                const entry = await db.getRepository(SettingsStoreEntry).findOneBy({
+                    key,
+                    scope: key === PLATFORM_SHIPPING_TEMPLATES_KEY ? '' : `channel:${ctx.channelId}`,
+                });
+                return entry?.value;
+            }),
+            set: vi.fn(() => {
+                throw new Error('management reads must not write settings');
+            }),
+        };
+        service = new ShippingMethodService(
+            connection,
+            config,
+            {} as any,
+            new ListQueryBuilder(connection, config),
+            { getDefaultChannel: () => db.getRepository(Channel).findOneByOrFail({ id: 1 }) } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            { translate: (method: ShippingMethod) => method } as any,
+            settings as any,
+        );
+    });
+
+    afterEach(async () => {
+        if (db?.isInitialized) await db.destroy();
+    });
+
+    it('exposes operating-store unclaimed originals to the platform SuperAdmin without changing stored rules', async () => {
+        const before = await databaseSnapshot();
+        const platform = await db.getRepository(Channel).findOneByOrFail({ id: 1 });
+        const management = await service.getShippingTemplateManagement(context(platform, true));
+        expect(ids(management)).toEqual([10, 11, 12, 13, 14]);
+        expect(management.items.find(item => Number(item.method.id) === 12)?.assignedStoreChannels).toEqual([
+            { id: 2, code: 'store-a' },
+        ]);
+        expect(management.items.find(item => Number(item.method.id) === 14)?.assignedStoreChannels).toEqual([
+            { id: 2, code: 'store-a' },
+            { id: 3, code: 'store-b' },
+        ]);
+        expect(statements.some(query => query.includes('lqb__channel') && query.includes('INNER JOIN'))).toBe(
+            true,
+        );
+        expect(statements.some(query => query.includes('legacyOperatingChannel'))).toBe(true);
+        expect(await databaseSnapshot()).toBe(before);
+        expect(settings.set).not.toHaveBeenCalled();
+    });
+
+    it('does not expand the platform list for an ordinary administrator with existing read permission', async () => {
+        const platform = await db.getRepository(Channel).findOneByOrFail({ id: 1 });
+        expect(ids(await service.getShippingTemplateManagement(context(platform)))).toEqual([10, 11]);
+        expect(statements.some(query => query.includes('legacyOperatingChannel'))).toBe(false);
+    });
+
+    it.each([false, true])('keeps operating-store membership even when SuperAdmin=%s', async superAdmin => {
+        const store = await db.getRepository(Channel).findOneByOrFail({ id: 2 });
+        const management = await service.getShippingTemplateManagement(context(store, superAdmin));
+        expect(ids(management)).toEqual([11, 12, 14, 15, 18]);
+        expect(management.items.find(item => Number(item.method.id) === 11)?.assignedStoreChannels).toEqual([
+            { id: 2, code: 'store-a' },
+        ]);
+        expect(management.items.find(item => Number(item.method.id) === 18)?.enabled).toBe(false);
+        expect(management.items.find(item => Number(item.method.id) === 15)?.ownedByStore).toBe(true);
+        expect(statements.some(query => query.includes('legacyOperatingChannel'))).toBe(false);
+    });
+
+    it('keeps the other operating-store membership separate', async () => {
+        const store = await db.getRepository(Channel).findOneByOrFail({ id: 3 });
+        expect(ids(await service.getShippingTemplateManagement(context(store)))).toEqual([11, 13, 14]);
+        expect(statements.some(query => query.includes('legacyOperatingChannel'))).toBe(false);
+    });
+
+    it('retains the configured row access hook on the extra platform query', async () => {
+        applyAccessControl.mockImplementation((query, entity) => {
+            if (entity === ShippingMethod) {
+                query.andWhere(`${query.alias}.id <> :blockedMethodId`, { blockedMethodId: 12 });
+            }
+        });
+        const platform = await db.getRepository(Channel).findOneByOrFail({ id: 1 });
+        expect(ids(await service.getShippingTemplateManagement(context(platform, true)))).toEqual([
+            10, 11, 13, 14,
+        ]);
+        expect(applyAccessControl.mock.calls.some(([query]) => query.alias === 'legacyShippingMethod')).toBe(
+            true,
+        );
+    });
+
+    it('rejects Shop API access even for a platform SuperAdmin', async () => {
+        const platform = await db.getRepository(Channel).findOneByOrFail({ id: 1 });
+        await expect(service.getShippingTemplateManagement(context(platform, true, 'shop'))).rejects.toThrow(
+            '管理后台',
+        );
     });
 });

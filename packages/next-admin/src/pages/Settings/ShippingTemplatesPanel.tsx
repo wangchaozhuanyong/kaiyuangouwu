@@ -68,6 +68,7 @@ export function ShippingTemplatesPanel({
         creatingVersion.loading ||
         deleting;
     const management = query.data?.shippingTemplateManagement;
+    const platformMethodIds = new Set(data.shippingMethods.items.map(method => method.id));
     const items =
         management?.items ??
         data.shippingMethods.items.map(method => ({
@@ -166,7 +167,7 @@ export function ShippingTemplatesPanel({
                 {items.map(option => {
                     const method = option.method;
                     const name = getLocalizedEntityName(method);
-                    const editable = isPlatform || option.ownedByStore;
+                    const editable = option.ownedByStore || (isPlatform && platformMethodIds.has(method.id));
                     return (
                         <article
                             key={method.id}
@@ -208,7 +209,9 @@ export function ShippingTemplatesPanel({
                                 )}
                                 {!editable && !option.platformTemplate && (
                                     <p className="text-xs text-slate-500">
-                                        继续按原规则结算；修改或启停前请平台确认维护归属。
+                                        {isPlatform
+                                            ? '跨店历史模板保持原规则；归属确认后请切换到所属店铺维护。'
+                                            : '继续按原规则结算；修改或启停前请平台确认维护归属。'}
                                     </p>
                                 )}
                             </div>
