@@ -8,6 +8,7 @@ import {
 import { fixtureKinds, fixtureLanguages, fixtureStores, syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { renderPublicPage } from './entry-public-server';
+import { type StorefrontFlashSale, type StorefrontSystemAnnouncement } from './types';
 
 function fixtureValue<T>(value: T | null | undefined): T {
     if (value == null) throw new Error('Expected the synthetic fixture value');
@@ -20,6 +21,87 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    it.each(fixtureLanguages)(
+        '%s keeps the initial flash-sale countdown identical after a hydration delay',
+        async languageCode => {
+            const generatedAt = Date.parse('2026-10-11T12:00:00.000Z');
+            const clock = vi.spyOn(Date, 'now').mockReturnValue(generatedAt);
+            const page = syntheticPage(fixtureStores[0], languageCode, 'home', { generatedAt });
+            const content = fixtureValue(page.content);
+            const product = fixtureValue(page.products)[0];
+            const flashSale: StorefrontFlashSale = {
+                id: 'synthetic-hydration-flash-sale',
+                startsAt: null,
+                endsAt: new Date(generatedAt + 120_000).toISOString(),
+                items: [
+                    {
+                        productId: product.id,
+                        productVariantId: product.variants[0].id,
+                        productName: product.name,
+                        variantName: product.variants[0].name,
+                        originalPrice: product.variants[0].priceWithTax,
+                        salePrice: 1_200,
+                        currencyCode: product.variants[0].currencyCode,
+                        imageUrl: fixtureValue(product.featuredAsset).preview,
+                    },
+                ],
+            };
+            content.blocks.push({
+                ...content.blocks[0],
+                id: 'synthetic-hydration-flash-sale-block',
+                code: 'synthetic-hydration-flash-sale-block',
+                type: 'FLASH_SALE',
+                title: languageCode === 'zh_Hans' ? '合成秒杀' : 'Synthetic flash sale',
+                items: [],
+            });
+            fixtureValue(content.settings.configuredBlockTypes).push('FLASH_SALE');
+            page.flashSales = [flashSale];
+            const serverHtml = await renderPublicPage(page);
+            expect(serverHtml).toContain('class="flash-sale-card"');
+            expect(serverHtml).toContain('<strong>0 : 02 : 00</strong>');
+
+            clock.mockReturnValue(generatedAt + 2_500);
+            const hydrationHtml = await renderPublicPage(page);
+            expect(hydrationHtml).toBe(serverHtml);
+        },
+    );
+
+    it.each(fixtureLanguages)(
+        '%s keeps an expiring announcement in the same initial snapshot after a hydration delay',
+        async languageCode => {
+            const generatedAt = Date.parse('2026-10-11T12:00:00.000Z');
+            const clock = vi.spyOn(Date, 'now').mockReturnValue(generatedAt);
+            const page = syntheticPage(fixtureStores[0], languageCode, 'home', { generatedAt });
+            const content = fixtureValue(page.content);
+            const announcement: StorefrontSystemAnnouncement = {
+                id: 'synthetic-hydration-announcement',
+                createdAt: new Date(generatedAt - 60_000).toISOString(),
+                title: languageCode === 'zh_Hans' ? '合成到期公告' : 'Synthetic expiring announcement',
+                content: languageCode === 'zh_Hans' ? '合成公告正文' : 'Synthetic announcement body',
+                linkUrl: null,
+                startsAt: new Date(generatedAt - 60_000).toISOString(),
+                endsAt: new Date(generatedAt + 1_000).toISOString(),
+            };
+            content.blocks.push({
+                ...content.blocks[0],
+                id: 'synthetic-hydration-notice-block',
+                code: 'synthetic-hydration-notice-block',
+                type: 'NOTICE',
+                title: '',
+                items: [],
+            });
+            fixtureValue(content.settings.configuredBlockTypes).push('NOTICE');
+            content.systemAnnouncements = [announcement];
+            const serverHtml = await renderPublicPage(page);
+            expect(serverHtml).toContain(announcement.title);
+            expect(serverHtml).toContain(announcement.content);
+
+            clock.mockReturnValue(generatedAt + 2_500);
+            const hydrationHtml = await renderPublicPage(page);
+            expect(hydrationHtml).toBe(serverHtml);
+        },
+    );
+
     it.each(fixtureLanguages)(
         '%s keeps the brand introduction without restoring a configured disabled or unpublished footer',
         async languageCode => {

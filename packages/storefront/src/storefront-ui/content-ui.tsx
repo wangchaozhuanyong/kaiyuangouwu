@@ -246,6 +246,7 @@ export function FlashSaleSection({
     locale,
     language,
     endsAt,
+    initialRenderTime,
     onMore,
     onProduct,
     layout = 'carousel',
@@ -255,12 +256,13 @@ export function FlashSaleSection({
     locale: string;
     language: StorefrontLanguage;
     endsAt: string | null;
+    initialRenderTime?: number;
     onMore?: () => void;
     onProduct: (productId: string, variantId?: string) => void;
     layout?: 'carousel' | 'grid';
 }) {
     const isZh = language === 'zh';
-    const countdown = useFlashSaleCountdown(endsAt, language);
+    const countdown = useFlashSaleCountdown(endsAt, language, initialRenderTime);
     const sectionRef = useRef<HTMLElement>(null);
     const [nearViewport, setNearViewport] = useState(false);
     useEffect(() => {
@@ -532,10 +534,15 @@ export function RecommendationPage({
     );
 }
 
-export function useFlashSaleCountdown(endsAt: string | null, language: StorefrontLanguage): string {
-    const [now, setNow] = useState(() => Date.now());
+export function useFlashSaleCountdown(
+    endsAt: string | null,
+    language: StorefrontLanguage,
+    initialRenderTime?: number,
+): string {
+    const [now, setNow] = useState(() => initialRenderTime ?? Date.now());
     useEffect(() => {
         if (!endsAt) return;
+        setNow(Date.now());
         const timer = window.setInterval(() => setNow(Date.now()), 1_000);
         return () => window.clearInterval(timer);
     }, [endsAt]);

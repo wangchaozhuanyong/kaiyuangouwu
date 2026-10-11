@@ -19,26 +19,46 @@ const OPERATION_DEFINITION_FIELDS = gql`
 
 export const GENERIC_PROMOTIONS_QUERY = gql`
     ${OPERATION_DEFINITION_FIELDS}
-    query NextAdminGenericPromotions($options: PromotionListOptions) {
+    query NextAdminGenericPromotions($options: PromotionListOptions, $storeChannelId: ID) {
         activeChannel {
             id
+            code
             defaultLanguageCode
         }
-        promotions(options: $options) {
+        adminPromotionManagement(options: $options, storeChannelId: $storeChannelId) {
             items {
-                id
-                createdAt
-                updatedAt
-                name
-                enabled
-                description
-                couponCode
-                startsAt
-                endsAt
-                usageLimit
-                perCustomerUsageLimit
+                promotion {
+                    id
+                    createdAt
+                    updatedAt
+                    name
+                    enabled
+                    description
+                    couponCode
+                    startsAt
+                    endsAt
+                    usageLimit
+                    perCustomerUsageLimit
+                }
+                stores {
+                    id
+                    code
+                    nameZh
+                    nameEn
+                }
+                shared
+                ownershipKnown
+                archivedAt
+                claimStartsAt
+                claimEndsAt
             }
             totalItems
+            stores {
+                id
+                code
+                nameZh
+                nameEn
+            }
         }
         promotionConditions {
             ...NextAdminOperationDefinitionFields
@@ -159,10 +179,29 @@ export interface GenericPromotionListRecord {
     perCustomerUsageLimit: number | null;
 }
 export interface GenericPromotionsData {
-    activeChannel: { id: string; defaultLanguageCode: string };
-    promotions: { items: GenericPromotionListRecord[]; totalItems: number };
+    activeChannel: { id: string; code: string; defaultLanguageCode: string };
+    adminPromotionManagement: {
+        items: GenericPromotionManagementRecord[];
+        totalItems: number;
+        stores: GenericPromotionStore[];
+    };
     promotionConditions: OperationDefinition[];
     promotionActions: OperationDefinition[];
+}
+export interface GenericPromotionStore {
+    id: string;
+    code: string;
+    nameZh: string | null;
+    nameEn: string | null;
+}
+export interface GenericPromotionManagementRecord {
+    promotion: GenericPromotionListRecord;
+    stores: GenericPromotionStore[];
+    shared: boolean;
+    ownershipKnown: boolean;
+    archivedAt: string | null;
+    claimStartsAt: string | null;
+    claimEndsAt: string | null;
 }
 export interface GenericPromotionDetailData {
     promotion:

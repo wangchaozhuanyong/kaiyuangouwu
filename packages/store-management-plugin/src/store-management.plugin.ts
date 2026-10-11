@@ -147,6 +147,7 @@ import { StorefrontMediaDeliveryService } from './performance/storefront-media-d
 import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import { PermissionPolicyRegistry } from './permission-policy';
+import { AdminPromotionManagementService } from './promotion/admin-promotion-management.service';
 import { CartCouponCommandAdapter } from './promotion/cart-coupon-command.adapter';
 import {
     collectionPercentageDiscount,
@@ -369,6 +370,7 @@ import {
         StorefrontPublicSeoService,
         StorefrontSeoHtmlService,
         StorePromotionCampaignService,
+        AdminPromotionManagementService,
         StoreCouponLifecycleService,
         StoreCouponRepairService,
         StoreCouponClosureRepairService,

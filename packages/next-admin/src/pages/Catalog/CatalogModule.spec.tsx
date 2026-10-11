@@ -2,10 +2,10 @@
 
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
-import { buildSchema, print, validate } from 'graphql';
+import { buildSchema, GraphQLError, print, validate } from 'graphql';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { digitalProductAdminSchema } from '../../../../commerce-fulfillment-plugin/src/digital-product.schema';
@@ -33,6 +33,8 @@ async function renderCatalog({
     empty = false,
     initialEntry = '/',
     channelCode = 'meiyijia',
+    channelReadFailure = false,
+    onChannelRead,
     digital = false,
     stockAllocated = 0,
     stockUnavailable = false,
@@ -44,6 +46,7 @@ async function renderCatalog({
     workspaceFailure,
     onClient,
     listed = true,
+    productEnabled = true,
     productTotal = 1,
     assignmentTotal = 1,
     requests,
@@ -51,6 +54,8 @@ async function renderCatalog({
     empty?: boolean;
     initialEntry?: string;
     channelCode?: string | (() => string);
+    channelReadFailure?: boolean;
+    onChannelRead?: (resolve: () => void) => void;
     digital?: boolean;
     stockAllocated?: number;
     stockUnavailable?: boolean;
@@ -67,6 +72,7 @@ async function renderCatalog({
     workspaceFailure?: () => boolean;
     onClient?: (client: ApolloClient, rerender: () => Promise<void>) => void;
     listed?: boolean;
+    productEnabled?: boolean;
     productTotal?: number;
     assignmentTotal?: number;
     requests?: Array<{ name: string; variables: Record<string, unknown> }>;
@@ -93,6 +99,25 @@ async function renderCatalog({
                         name: operation.operationName ?? '',
                         variables: operation.variables,
                     });
+                    if (
+                        currentChannelCode === '__default_channel__' &&
+                        ['StoreCatalogStatus', 'GetCatalogChannelAssignments'].includes(
+                            operation.operationName ?? '',
+                        )
+                    ) {
+                        observer.next({
+                            errors: [
+                                new GraphQLError(
+                                    operation.operationName === 'StoreCatalogStatus'
+                                        ? '平台请使用商品分配中心'
+                                        : '平台汇总请使用平台商品分配中心',
+                                    { extensions: { code: 'USER_INPUT_ERROR' } },
+                                ),
+                            ],
+                        });
+                        observer.complete();
+                        return;
+                    }
                     if (operation.operationName === 'StoreCatalogStatus') {
                         observer.next({
                             data: {
@@ -134,7 +159,7 @@ async function renderCatalog({
                                             id: 'product-1',
                                             createdAt: '2026-09-07T00:00:00.000Z',
                                             updatedAt: '2026-09-07T00:00:00.000Z',
-                                            enabled: true,
+                                            enabled: productEnabled,
                                             name: '白利群2',
                                             slug: 'white-liqun-2',
                                             description: '',
@@ -209,47 +234,57 @@ async function renderCatalog({
                             },
                         });
                     } else if (operation.operationName === 'GetCatalogChannels') {
-                        observer.next({
-                            data: {
-                                activeChannel: {
-                                    id: 'channel-1',
-                                    code: currentChannelCode,
-                                    token: 'meiyijia',
-                                    defaultCurrencyCode: 'MYR',
-                                    customFields: {
-                                        storefrontNameZh:
-                                            currentChannelCode === '__default_channel__'
-                                                ? ''
-                                                : currentChannelCode,
-                                        storefrontNameEn:
-                                            currentChannelCode === '__default_channel__'
-                                                ? ''
-                                                : currentChannelCode,
+                        if (channelReadFailure) {
+                            observer.error(new Error('Current channel read failed'));
+                            return;
+                        }
+                        const resolveChannel = () => {
+                            observer.next({
+                                data: {
+                                    activeChannel: {
+                                        id: 'channel-1',
+                                        code: currentChannelCode,
+                                        token: 'meiyijia',
+                                        defaultCurrencyCode: 'MYR',
+                                        customFields: {
+                                            storefrontNameZh:
+                                                currentChannelCode === '__default_channel__'
+                                                    ? ''
+                                                    : currentChannelCode,
+                                            storefrontNameEn:
+                                                currentChannelCode === '__default_channel__'
+                                                    ? ''
+                                                    : currentChannelCode,
+                                        },
+                                    },
+                                    channels: {
+                                        totalItems: 1,
+                                        items: [
+                                            {
+                                                id: 'channel-1',
+                                                code: currentChannelCode,
+                                                token: 'meiyijia',
+                                                defaultCurrencyCode: 'MYR',
+                                                customFields: {
+                                                    storefrontNameZh:
+                                                        currentChannelCode === '__default_channel__'
+                                                            ? ''
+                                                            : currentChannelCode,
+                                                    storefrontNameEn:
+                                                        currentChannelCode === '__default_channel__'
+                                                            ? ''
+                                                            : currentChannelCode,
+                                                },
+                                            },
+                                        ],
                                     },
                                 },
-                                channels: {
-                                    totalItems: 1,
-                                    items: [
-                                        {
-                                            id: 'channel-1',
-                                            code: currentChannelCode,
-                                            token: 'meiyijia',
-                                            defaultCurrencyCode: 'MYR',
-                                            customFields: {
-                                                storefrontNameZh:
-                                                    currentChannelCode === '__default_channel__'
-                                                        ? ''
-                                                        : currentChannelCode,
-                                                storefrontNameEn:
-                                                    currentChannelCode === '__default_channel__'
-                                                        ? ''
-                                                        : currentChannelCode,
-                                            },
-                                        },
-                                    ],
-                                },
-                            },
-                        });
+                            });
+                            observer.complete();
+                        };
+                        if (onChannelRead) onChannelRead(resolveChannel);
+                        else resolveChannel();
+                        return;
                     } else if (operation.operationName === 'UpdateDigitalVariant') {
                         observer.next({
                             data: {
@@ -369,6 +404,7 @@ async function renderCatalog({
                         initialEntries={[initialEntry]}
                     >
                         <FeatureHelpProvider>
+                            <CurrentCatalogPath />
                             {managedWorkspace ? (
                                 <AdminPageWorkspace page="/catalog/list" active>
                                     <CatalogModule />
@@ -385,6 +421,11 @@ async function renderCatalog({
     await rerender();
 
     return container;
+}
+
+function CurrentCatalogPath() {
+    const location = useLocation();
+    return <output data-current-catalog-path={location.pathname} />;
 }
 
 function stockCell(container: HTMLElement) {
@@ -726,6 +767,190 @@ describe('CatalogModule category columns', () => {
         expect(container.textContent).toContain('已选 1 个商品');
         expect(container.textContent).toContain('跨店销售授权由平台管理中心分配');
         expect(container.textContent).not.toContain('批量上架到店铺');
+    });
+});
+
+describe('CatalogModule platform read scope', () => {
+    const storeReads = ['StoreCatalogStatus', 'GetCatalogChannelAssignments'];
+
+    it('keeps platform products and manual refresh available without requesting store-only resources', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            channelCode: '__default_channel__',
+            managedWorkspace: true,
+            requests,
+        });
+
+        expect(container.textContent).toContain('白利群2');
+        expect(requests.filter(request => storeReads.includes(request.name))).toEqual([]);
+        expect(container.querySelector('[aria-label="本店经营统计"]')).toBeNull();
+        expect(container.textContent).not.toContain('数据更新失败');
+        expect(container.textContent).not.toContain('本店统计未获取');
+        const beforeRefresh = requests.filter(request => request.name === 'GetProducts').length;
+        const refresh = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+            button => button.textContent?.trim() === '刷新',
+        );
+        expect(refresh).toBeDefined();
+        if (!refresh) throw new Error('Catalog refresh button missing');
+        vi.useFakeTimers();
+        await act(async () => {
+            refresh.click();
+            await Promise.resolve();
+        });
+        await act(async () => vi.runAllTimersAsync());
+
+        expect(requests.filter(request => request.name === 'GetProducts')).toHaveLength(beforeRefresh + 1);
+        expect(requests.filter(request => storeReads.includes(request.name))).toEqual([]);
+        expect(container.textContent).toContain('白利群2');
+        expect(container.textContent).not.toContain('数据更新失败');
+        expect(container.textContent).not.toContain('本店经营设置');
+        const platformAllocation = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+            button => button.textContent?.trim() === '平台商品分配',
+        );
+        expect(platformAllocation).toBeDefined();
+        if (!platformAllocation) throw new Error('Platform catalog allocation button missing');
+        await act(async () => {
+            platformAllocation.click();
+            await Promise.resolve();
+        });
+        expect(
+            container.querySelector('[data-current-catalog-path]')?.getAttribute('data-current-catalog-path'),
+        ).toBe('/platform/catalog');
+    });
+
+    it('does not request store-only resources when current channel scope cannot be read', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            channelReadFailure: true,
+            managedWorkspace: true,
+            requests,
+        });
+
+        expect(requests.some(request => request.name === 'GetCatalogChannels')).toBe(true);
+        expect(requests.filter(request => storeReads.includes(request.name))).toEqual([]);
+        expect(container.textContent).not.toContain('本店已授权：1');
+    });
+
+    it.each(['store-a', '__default_channel__'])(
+        'waits for actual channel scope before enabling store resources in %s',
+        async channelCode => {
+            const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+            let resolveChannel!: () => void;
+            const container = await renderCatalog({
+                channelCode,
+                requests,
+                onChannelRead: resolve => {
+                    resolveChannel = resolve;
+                },
+            });
+
+            expect(resolveChannel).toBeDefined();
+            expect(requests.filter(request => storeReads.includes(request.name))).toEqual([]);
+            expect(container.textContent).not.toContain('本店已授权：1');
+            await act(async () => {
+                resolveChannel();
+                await Promise.resolve();
+            });
+            if (channelCode === '__default_channel__') {
+                expect(requests.filter(request => storeReads.includes(request.name))).toEqual([]);
+            } else {
+                expect(requests.some(request => request.name === 'StoreCatalogStatus')).toBe(true);
+                expect(requests.some(request => request.name === 'GetCatalogChannelAssignments')).toBe(true);
+                expect(container.textContent).toContain('本店已授权：1');
+            }
+        },
+    );
+
+    it.each([
+        ['enabled', true],
+        ['disabled', false],
+    ] as const)('filters platform %s products by core enabled state', async (status, enabled) => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            channelCode: '__default_channel__',
+            initialEntry: `/catalog/list?status=${status}`,
+            productEnabled: enabled,
+            managedWorkspace: true,
+            requests,
+        });
+
+        expect(requests.filter(request => storeReads.includes(request.name))).toEqual([]);
+        expect(requests.filter(request => request.name === 'GetProducts').at(-1)?.variables).toMatchObject({
+            options: { filter: { enabled: { eq: enabled } } },
+        });
+        const filter = requests.filter(request => request.name === 'GetProducts').at(-1)?.variables
+            .options as { filter?: { id?: unknown } } | undefined;
+        expect(filter?.filter?.id).toBeUndefined();
+        expect(container.textContent).toContain('白利群2');
+        expect(container.textContent).toContain('已启用');
+        expect(container.textContent).toContain('已停用');
+        expect(container.textContent).not.toContain('数据更新失败');
+    });
+
+    it('keeps store listing filters based on store authorization rather than core enabled state', async () => {
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        const container = await renderCatalog({
+            initialEntry: '/catalog/list?status=enabled',
+            listed: true,
+            productEnabled: false,
+            requests,
+        });
+
+        expect(requests.some(request => request.name === 'StoreCatalogStatus')).toBe(true);
+        expect(requests.some(request => request.name === 'GetCatalogChannelAssignments')).toBe(true);
+        expect(requests.findIndex(request => request.name === 'GetCatalogChannels')).toBeLessThan(
+            requests.findIndex(request => request.name === 'StoreCatalogStatus'),
+        );
+        expect(requests.filter(request => request.name === 'GetProducts').at(-1)?.variables).toMatchObject({
+            options: { filter: { id: { in: ['product-1'] } } },
+        });
+        const filter = requests.filter(request => request.name === 'GetProducts').at(-1)?.variables
+            .options as { filter?: { enabled?: unknown } } | undefined;
+        expect(filter?.filter?.enabled).toBeUndefined();
+        expect(container.textContent).toContain('本店已授权：1');
+        expect(container.textContent).toContain('已上架');
+    });
+
+    it('does not restore store-only reads when the actual Apollo cache switches to platform scope', async () => {
+        let channelCode = 'store-a';
+        let client!: ApolloClient;
+        let rerender!: () => Promise<void>;
+        const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+        setInitialActiveChannel('fixture-platform-scope-store-a');
+        const container = await renderCatalog({
+            channelCode: () => channelCode,
+            managedWorkspace: true,
+            requests,
+            onClient: (value, render) => {
+                client = value;
+                rerender = render;
+            },
+        });
+        expect(requests.some(request => request.name === 'StoreCatalogStatus')).toBe(true);
+        expect(container.textContent).toContain('本店已授权：1');
+        await act(async () => client.clearStore());
+        channelCode = '__default_channel__';
+        setInitialActiveChannel('fixture-platform-scope-platform');
+        const platformStart = requests.length;
+        await rerender();
+
+        expect(requests.slice(platformStart).filter(request => storeReads.includes(request.name))).toEqual(
+            [],
+        );
+        expect(container.textContent).toContain('白利群2');
+        expect(container.querySelector('[aria-label="本店经营统计"]')).toBeNull();
+        expect(container.textContent).not.toContain('数据更新失败');
+        await act(async () => client.clearStore());
+        channelCode = 'store-b';
+        setInitialActiveChannel('fixture-platform-scope-store-b');
+        const storeStart = requests.length;
+        await rerender();
+
+        expect(requests.slice(storeStart).some(request => request.name === 'StoreCatalogStatus')).toBe(true);
+        expect(
+            requests.slice(storeStart).some(request => request.name === 'GetCatalogChannelAssignments'),
+        ).toBe(true);
+        expect(container.textContent).toContain('本店已授权：1');
     });
 });
 

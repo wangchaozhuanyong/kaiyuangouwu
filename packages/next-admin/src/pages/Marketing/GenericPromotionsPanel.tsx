@@ -5,6 +5,7 @@ import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminCont
 import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { usePageSize } from '../../hooks/use-page-size';
 import { useServerDraft } from '../../hooks/use-server-draft';
 import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getLocalizedEntityTranslation } from '../../utils/localized-entity-display';
@@ -25,11 +26,14 @@ import {
     UPDATE_GENERIC_PROMOTION_MUTATION,
     type GenericPromotionDetailData,
     type GenericPromotionListRecord,
+    type GenericPromotionManagementRecord,
     type GenericPromotionsData,
+    type GenericPromotionStore,
     type OperationArgDefinition,
     type OperationDefinition,
     type OperationValue,
 } from '../../graphql/generic-promotions.graphql';
+import { getChannelDisplayName } from '../../utils/channel-display';
 import {
     configurableArgumentLabel,
     configurableOperationLabel,
@@ -37,6 +41,7 @@ import {
 } from '../../utils/configurable-operation-localization';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatDateTime, getMutationError } from '../Sales/sales-utils';
+import { SimplePagination } from './promotion-ui';
 
 interface PromotionDraft {
     id?: string;
@@ -65,9 +70,18 @@ const emptyDraft = (): PromotionDraft => ({
 });
 
 export function GenericPromotionsPanel() {
+    const [storeChannelId, setStoreChannelId] = useState('ALL');
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = usePageSize(setPage);
     const query = useQuery<GenericPromotionsData>(GENERIC_PROMOTIONS_QUERY, {
-        variables: { options: { take: 100, sort: { createdAt: 'DESC', id: 'DESC' } } },
+        variables: {
+            options: { skip: page * pageSize, take: pageSize, sort: { createdAt: 'DESC', id: 'DESC' } },
+            storeChannelId: storeChannelId === 'ALL' ? null : storeChannelId,
+        },
     });
+    const management = query.data?.adminPromotionManagement;
+    const totalPages = Math.max(1, Math.ceil((management?.totalItems ?? 0) / pageSize));
+    if (management && page >= totalPages) setPage(totalPages - 1);
     const [editingId, setEditingId] = useState<string | 'new' | null>(null);
     const [deleting, setDeleting] = useState<GenericPromotionListRecord | null>(null);
     const [notice, setNotice] = useState('');
@@ -87,13 +101,13 @@ export function GenericPromotionsPanel() {
             if (result?.result !== 'DELETED') throw new Error(result?.message || '后端拒绝删除促销');
             setNotice(`通用促销「${deleting.name}」已删除`);
             setDeleting(null);
-            await query.refetch();
+            await refreshAfterAdminWrite(() => query.refetch());
         } catch (cause) {
             setError(toUserFacingError(cause, '促销删除失败'));
         }
     };
     if (query.loading && !query.data) return <State label="正在读取 Vendure 通用促销…" />;
-    if ((query.error && !query.data) || !query.data)
+    if ((query.error && !query.data) || !management || !query.data)
         return <State tone="error" label="通用促销加载失败" action={() => void query.refetch()} />;
     return (
         <div className="space-y-4">
@@ -109,7 +123,7 @@ export function GenericPromotionsPanel() {
                                 topic="marketing.generic-promotions"
                                 title="Vendure 通用促销"
                                 description={
-                                    '管理当前服务端支持的全部促销条件与优惠动作，不限制为优惠券或秒杀模板。'
+                                    '统一查看促销规则及关联的经营店铺。优惠券按实际归属店铺显示，多店关联活动列出全部店铺；优惠仍按时间、领取与商品规则生效。'
                                 }
                             />
                         </h2>
@@ -134,12 +148,36 @@ export function GenericPromotionsPanel() {
                         </AdminButton>
                     </div>
                 </div>
+                <div className="mt-4 grid gap-3 sm:flex sm:items-center">
+                    <AdminField label="关联店铺" className="max-w-md text-xs font-bold text-slate-600">
+                        <AdminSelect
+                            aria-label="按店铺筛选"
+                            value={storeChannelId}
+                            onChange={event => {
+                                setPage(0);
+                                setStoreChannelId(event.target.value);
+                            }}
+                            className={inputClass}
+                        >
+                            <option value="ALL">全部关联店铺</option>
+                            {management.stores.map(store => (
+                                <option key={store.id} value={store.id}>
+                                    {promotionStoreName(store)}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </AdminField>
+                    <p className="text-xs text-slate-500">
+                        多店关联活动会列出全部店铺；实际优惠按活动规则和商品范围生效。
+                    </p>
+                </div>
                 <div className="mt-5 overflow-x-auto rounded-lg border border-slate-200">
                     <table className="admin-mobile-record-table min-w-[920px] w-full text-left text-xs">
                         <thead className="bg-slate-50 text-slate-500">
                             <tr>
                                 {[
                                     '名称',
+                                    '关联店铺',
                                     '状态',
                                     '优惠码',
                                     '时间范围',
@@ -154,56 +192,88 @@ export function GenericPromotionsPanel() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {query.data.promotions.items.map(item => (
-                                <tr key={item.id}>
-                                    <td data-label="名称" className="px-3 py-3">
-                                        <strong>{item.name}</strong>
-                                        <small className="mt-1 block max-w-64 truncate text-slate-500">
-                                            {item.description || '无描述'}
-                                        </small>
-                                    </td>
-                                    <td data-label="状态" className="px-3 py-3">
-                                        {item.enabled ? '启用' : '停用'}
-                                    </td>
-                                    <td data-label="优惠码" className="px-3 py-3 font-mono">
-                                        {item.couponCode ?? '—'}
-                                    </td>
-                                    <td data-label="时间范围" className="px-3 py-3">
-                                        {dateRange(item)}
-                                    </td>
-                                    <td data-label="用量限制" className="px-3 py-3">
-                                        总 {item.usageLimit ?? '∞'} · 每客 {item.perCustomerUsageLimit ?? '∞'}
-                                    </td>
-                                    <td data-label="条件 / 动作" className="px-3 py-3 text-slate-500">
-                                        进入编辑器查看
-                                    </td>
-                                    <td data-label="操作" className="px-3 py-3">
-                                        <div className="flex gap-2">
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() => setEditingId(item.id)}
-                                                className="inline-flex items-center gap-1 font-bold text-blue-600"
-                                            >
-                                                <Edit3 className="h-3.5 w-3.5" />
-                                                编辑
-                                            </AdminButton>
-                                            <AdminButton
-                                                type="button"
-                                                onClick={() => setDeleting(item)}
-                                                className="inline-flex items-center gap-1 font-bold text-rose-600"
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                                删除
-                                            </AdminButton>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                            {management.items.map(record => {
+                                const item = record.promotion;
+                                return (
+                                    <tr key={item.id}>
+                                        <td data-label="名称" className="px-3 py-3">
+                                            <strong>{item.name}</strong>
+                                            <small className="mt-1 block max-w-64 truncate text-slate-500">
+                                                {item.description || '无描述'}
+                                            </small>
+                                        </td>
+                                        <td data-label="关联店铺" className="px-3 py-3">
+                                            {record.ownershipKnown && record.stores.length
+                                                ? record.stores.map(promotionStoreName).join('、')
+                                                : '归属待核对'}
+                                            {record.shared && (
+                                                <small className="mt-1 block text-slate-500">多店关联</small>
+                                            )}
+                                        </td>
+                                        <td data-label="状态" className="px-3 py-3">
+                                            {promotionManagementStatus(record)}
+                                        </td>
+                                        <td data-label="优惠码" className="px-3 py-3 font-mono">
+                                            {item.couponCode ?? '—'}
+                                        </td>
+                                        <td data-label="时间范围" className="px-3 py-3">
+                                            {dateRange(item)}
+                                            {(record.claimStartsAt || record.claimEndsAt) && (
+                                                <small className="mt-1 block text-slate-500">
+                                                    领取：
+                                                    {dateRange({
+                                                        startsAt: record.claimStartsAt,
+                                                        endsAt: record.claimEndsAt,
+                                                    })}
+                                                </small>
+                                            )}
+                                        </td>
+                                        <td data-label="用量限制" className="px-3 py-3">
+                                            总 {item.usageLimit ?? '∞'} · 每客{' '}
+                                            {item.perCustomerUsageLimit ?? '∞'}
+                                        </td>
+                                        <td data-label="条件 / 动作" className="px-3 py-3 text-slate-500">
+                                            进入编辑器查看
+                                        </td>
+                                        <td data-label="操作" className="px-3 py-3">
+                                            <div className="flex gap-2">
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() => setEditingId(item.id)}
+                                                    className="inline-flex items-center gap-1 font-bold text-blue-600"
+                                                >
+                                                    <Edit3 className="h-3.5 w-3.5" />
+                                                    编辑
+                                                </AdminButton>
+                                                <AdminButton
+                                                    type="button"
+                                                    onClick={() => setDeleting(item)}
+                                                    className="inline-flex items-center gap-1 font-bold text-rose-600"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    删除
+                                                </AdminButton>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
-                    {!query.data.promotions.items.length && (
-                        <p className="p-8 text-center text-xs text-slate-500">暂无通用促销</p>
+                    {!management.items.length && (
+                        <p className="p-8 text-center text-xs text-slate-500">
+                            {storeChannelId === 'ALL' ? '暂无通用促销' : '当前店铺暂无关联促销'}
+                        </p>
                     )}
+                    <SimplePagination
+                        page={page}
+                        pageSize={pageSize}
+                        onPageSizeChange={setPageSize}
+                        totalPages={totalPages}
+                        totalItems={management.totalItems}
+                        onPageChange={setPage}
+                        loading={query.loading}
+                    />
                 </div>
             </section>
             {editingId && (
@@ -633,7 +703,27 @@ function defaultArgValue(arg: OperationArgDefinition) {
     if (arg.defaultValue == null) return arg.type === 'boolean' ? 'false' : arg.list ? '[]' : '';
     return typeof arg.defaultValue === 'string' ? arg.defaultValue : JSON.stringify(arg.defaultValue);
 }
-function dateRange(value: GenericPromotionListRecord) {
+function promotionStoreName(store: GenericPromotionStore) {
+    return getChannelDisplayName({
+        code: store.code,
+        customFields: { storefrontNameZh: store.nameZh, storefrontNameEn: store.nameEn },
+    });
+}
+function promotionManagementStatus(record: GenericPromotionManagementRecord) {
+    const now = Date.now();
+    const { promotion } = record;
+    if (record.archivedAt) return '已归档';
+    if (!promotion.enabled) return '已停用';
+    if (promotion.endsAt && new Date(promotion.endsAt).getTime() <= now) return '已结束';
+    if (record.claimEndsAt && new Date(record.claimEndsAt).getTime() <= now) return '已停止发放';
+    if (
+        (promotion.startsAt && new Date(promotion.startsAt).getTime() > now) ||
+        (record.claimStartsAt && new Date(record.claimStartsAt).getTime() > now)
+    )
+        return '待开始';
+    return '进行中';
+}
+function dateRange(value: Pick<GenericPromotionListRecord, 'startsAt' | 'endsAt'>) {
     return `${value.startsAt ? formatDateTime(value.startsAt) : '即时'} → ${value.endsAt ? formatDateTime(value.endsAt) : '不限'}`;
 }
 function dateInput(value: string | null) {

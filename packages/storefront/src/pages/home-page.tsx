@@ -131,8 +131,8 @@ export function buildHomeNoticeItems(
     systemAnnouncements: StorefrontSystemAnnouncement[],
     noticeBlock: StorefrontContentBlock | undefined,
     language: StorefrontLanguage,
+    now = Date.now(),
 ): HomeNoticeItem[] {
-    const now = Date.now();
     let recentCutoff = now - 30 * 24 * 60 * 60 * 1000;
     if (noticeBlock?.settings?.announcementDisplayPeriod !== '30_DAYS') {
         const cutoff = new Date(now);
@@ -352,6 +352,8 @@ export interface HomePageProps {
     couponCampaignsError: string;
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
+    /** Shared snapshot time keeps server and browser first renders identical. */
+    initialRenderTime?: number;
     bestSellerProducts: Product[];
     recommendationProducts: Product[];
     bestSellersLoading?: boolean;
@@ -416,6 +418,7 @@ export function HomePage() {
         couponCampaignsError,
         flashSales,
         systemAnnouncements,
+        initialRenderTime,
         bestSellerProducts,
         recommendationProducts,
         bestSellersLoading = false,
@@ -537,7 +540,7 @@ export function HomePage() {
         heroMotion?.phase === 'settling' && heroMotion.completed ? heroMotion.nextIndex : heroIndex;
     const managedHero = managedHeroes[heroIndex];
     const heroImage = managedHero?.imageUrl ?? '';
-    const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language);
+    const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language, initialRenderTime);
     const openNoticeItem = noticeItems.find(item => item.id === openNoticeId);
     const showFooter = !footerConfigured && (Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL'));
     const activeFooter = footerBlock && hasHomepageModule('FOOTER') ? footerBlock : undefined;
@@ -1536,6 +1539,7 @@ export function HomePage() {
                                     locale={locale}
                                     language={language}
                                     endsAt={flashSales[0]?.endsAt ?? null}
+                                    initialRenderTime={initialRenderTime}
                                     onMore={() => navigateTo({ name: 'flash-sale' })}
                                     onProduct={(productId, variantId) =>
                                         navigateTo({ name: 'product', id: productId, variantId })

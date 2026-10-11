@@ -72,6 +72,7 @@ import {
     getCatalogEmptyStateDescription,
     getChannelDisplayLabel,
     getChannelDisplayName,
+    isDefaultChannelCode,
 } from '../../utils/channel-display';
 import { collectionHierarchySummary } from '../../utils/commerce-mode';
 
@@ -217,6 +218,11 @@ export function CatalogModule() {
     const categoryId = searchParams.get('category') ?? '';
     const statusFilter: 'ALL' | 'ENABLED' | 'DISABLED' =
         statusParameter === 'enabled' ? 'ENABLED' : statusParameter === 'disabled' ? 'DISABLED' : 'ALL';
+    const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {});
+    const activeChannel = activeChannelQuery.data?.activeChannel;
+    const isPlatformContext = Boolean(activeChannel && isDefaultChannelCode(activeChannel.code));
+    // Resolve the actual Channel before enabling APIs that only accept a merchant store.
+    const isStoreContext = Boolean(activeChannel && !isPlatformContext);
     const statusQuery = useQuery<{
         myStoreCatalogStatus: {
             authorized: number;
@@ -238,9 +244,9 @@ export function CatalogModule() {
                 myStoreCatalogStatus
             }
         `,
-        {},
+        { skip: !isStoreContext },
     );
-    const storeStatus = statusQuery.data?.myStoreCatalogStatus;
+    const storeStatus = isStoreContext ? statusQuery.data?.myStoreCatalogStatus : undefined;
     const setStatusFilter = (status: 'ALL' | 'ENABLED' | 'DISABLED') => {
         setFilter('status', status.toLowerCase(), 'all');
     };
@@ -284,13 +290,15 @@ export function CatalogModule() {
 
     // 商品归属异常必须先在服务端筛选，再分页；当前页内过滤会漏掉后续页的异常商品。
     const assignmentMode = channelParameter === 'UNASSIGNED' ? 'UNASSIGNED' : 'MULTI';
-    const isAssignmentFilter = channelParameter !== 'ALL';
+    const isAssignmentFilter = isStoreContext && channelParameter !== 'ALL';
     const baseFilter = useMemo(() => {
         const filter: Record<string, unknown> = {};
         if (deferredSearchTerm.trim()) {
             filter.name = { contains: deferredSearchTerm.trim() };
         }
-        if (statusFilter === 'ENABLED') {
+        if (isPlatformContext && statusFilter !== 'ALL') {
+            filter.enabled = { eq: statusFilter === 'ENABLED' };
+        } else if (statusFilter === 'ENABLED') {
             filter.id = {
                 in: storeStatus?.items.filter(item => item.listed).map(item => item.productId) ?? [],
             };
@@ -304,7 +312,7 @@ export function CatalogModule() {
         }
 
         return Object.keys(filter).length > 0 ? filter : undefined;
-    }, [categoryId, deferredSearchTerm, statusFilter, storeStatus]);
+    }, [categoryId, deferredSearchTerm, isPlatformContext, statusFilter, storeStatus]);
     const assignmentQuery = useQuery<CatalogChannelAssignmentsData>(GET_CATALOG_CHANNEL_ASSIGNMENTS, {
         variables: {
             options: {
@@ -338,20 +346,24 @@ export function CatalogModule() {
     const productQuery = useQuery<GetProductsData>(GET_PRODUCTS, {
         variables: queryVariables,
         skip:
-            (statusFilter !== 'ALL' && !storeStatus) ||
+            !activeChannel ||
+            (isStoreContext && statusFilter !== 'ALL' && !storeStatus) ||
             (isAssignmentFilter && (assignmentQuery.loading || assignmentIds.length === 0)),
 
         notifyOnNetworkStatusChange: true,
     });
     const { data } = productQuery;
     const loading =
-        assignmentQuery.loading || productQuery.loading || (statusFilter !== 'ALL' && statusQuery.loading);
+        activeChannelQuery.loading ||
+        assignmentQuery.loading ||
+        productQuery.loading ||
+        (statusFilter !== 'ALL' && statusQuery.loading);
     const error =
+        activeChannelQuery.error ??
         (statusFilter !== 'ALL' ? statusQuery.error : undefined) ??
         (isAssignmentFilter ? assignmentQuery.error : undefined) ??
         productQuery.error;
     const refetch = useAdminPageRefresh();
-    const activeChannelQuery = useQuery<GetCatalogChannelsData>(GET_CATALOG_CHANNELS, {});
     const productIds = useMemo(() => data?.products.items.map(product => product.id) ?? [], [data]);
     const operationsQuery = useQuery<CatalogProductOperationsResult>(CATALOG_PRODUCT_OPERATIONS_QUERY, {
         variables: { productIds },
@@ -392,7 +404,7 @@ export function CatalogModule() {
                 filter: productIds.length > 0 ? { id: { in: productIds } } : undefined,
             },
         },
-        skip: productIds.length === 0,
+        skip: !isStoreContext || productIds.length === 0,
     });
 
     const channelAssignmentsByProduct = useMemo(() => {
@@ -460,8 +472,11 @@ export function CatalogModule() {
         () => new Map(storeStatus?.items.map(item => [item.productId, item]) ?? []),
         [storeStatus],
     );
-    const activeChannel = activeChannelQuery.data?.activeChannel;
     const activeChannelLabel = activeChannel ? getChannelDisplayLabel(activeChannel) : '当前店铺';
+    const openProductSales = (productId: string) => {
+        if (isPlatformContext) void navigate('/platform/catalog');
+        else setOfferProductId(productId);
+    };
 
     const handleDeleteConfirm = () => {
         if (!productToDelete) return;
@@ -551,6 +566,16 @@ export function CatalogModule() {
                           ? '部分无限'
                           : digitalStock;
                 const localAssignment = assignmentsByProduct.get(product.id);
+                const catalogEnabled = isPlatformContext ? product.enabled : localAssignment?.listed;
+                const catalogStatus = isPlatformContext
+                    ? product.enabled
+                        ? '已启用'
+                        : '已停用'
+                    : !localAssignment
+                      ? '未获取'
+                      : localAssignment.listed
+                        ? '已上架'
+                        : '仓库中';
                 return {
                     product,
                     operations,
@@ -561,10 +586,17 @@ export function CatalogModule() {
                     quoteOnly,
                     categories,
                     stockSummary,
-                    localAssignment,
+                    catalogEnabled,
+                    catalogStatus,
                 };
             }),
-        [displayProducts, operationsByProduct, assignmentsByProduct, digitalStockByProduct],
+        [
+            displayProducts,
+            operationsByProduct,
+            assignmentsByProduct,
+            digitalStockByProduct,
+            isPlatformContext,
+        ],
     );
     const rowKeys = useMemo(() => productRows.map(row => row.product.id), [productRows]);
     const tableBodyRef = useRef<HTMLTableSectionElement>(null);
@@ -646,7 +678,11 @@ export function CatalogModule() {
                     <span>
                         当前数据范围：<strong>{activeChannelLabel}</strong>
                     </span>
-                    <span className="text-[11px] text-blue-700">仅显示分配到当前店铺的商品、库存和价格</span>
+                    <span className="text-[11px] text-blue-700">
+                        {isPlatformContext
+                            ? '平台商品资料；销售授权与店铺上架状态请在商品分配中心及对应店铺查看'
+                            : '仅显示分配到当前店铺的商品、库存和价格'}
+                    </span>
                 </div>
                 {notification && (
                     <div
@@ -662,39 +698,43 @@ export function CatalogModule() {
                     </div>
                 )}
 
-                <AdminButton
-                    type="button"
-                    className="flex w-full items-center justify-between rounded-lg bg-white px-4 py-2 text-sm md:hidden"
-                    aria-expanded={mobileStatsExpanded}
-                    onClick={() => setMobileStatsExpanded(value => !value)}
-                >
-                    <span>本店经营统计</span>
-                    <span>{mobileStatsExpanded ? '收起' : '展开'}</span>
-                </AdminButton>
-                <section
-                    className={`${mobileStatsExpanded ? 'flex' : 'hidden md:flex'} flex-wrap gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs`}
-                    aria-label="本店经营统计"
-                >
-                    <span>本店已授权：{storeStatus?.authorized ?? '未获取'}</span>
-                    <span>上架：{storeStatus?.listed ?? '未获取'}</span>
-                    <span>暂停：{storeStatus?.paused ?? '未获取'}</span>
-                    <span>待配置：{storeStatus?.pending ?? '未获取'}</span>
-                    <span>缺货：{storeStatus?.outOfStock ?? '未获取'}</span>
-                    <span>
-                        本店上架率：
-                        {storeStatus
-                            ? storeStatus.authorized
-                                ? `${Math.round((storeStatus.listed / storeStatus.authorized) * 100)}%`
-                                : '无授权商品'
-                            : '未获取'}
-                    </span>
-                    <p className="w-full text-xs text-slate-500">
-                        范围为本店已授权商品；上架要求本店售价与交付配置完整，缺货单列。其他店铺统计请在平台管理中心查看。
-                    </p>
-                    {statusQuery.error && !storeStatus && (
-                        <p className="w-full text-xs text-rose-600">本店统计未获取，请刷新重试。</p>
-                    )}
-                </section>
+                {isStoreContext && (
+                    <>
+                        <AdminButton
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-lg bg-white px-4 py-2 text-sm md:hidden"
+                            aria-expanded={mobileStatsExpanded}
+                            onClick={() => setMobileStatsExpanded(value => !value)}
+                        >
+                            <span>本店经营统计</span>
+                            <span>{mobileStatsExpanded ? '收起' : '展开'}</span>
+                        </AdminButton>
+                        <section
+                            className={`${mobileStatsExpanded ? 'flex' : 'hidden md:flex'} flex-wrap gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs`}
+                            aria-label="本店经营统计"
+                        >
+                            <span>本店已授权：{storeStatus?.authorized ?? '未获取'}</span>
+                            <span>上架：{storeStatus?.listed ?? '未获取'}</span>
+                            <span>暂停：{storeStatus?.paused ?? '未获取'}</span>
+                            <span>待配置：{storeStatus?.pending ?? '未获取'}</span>
+                            <span>缺货：{storeStatus?.outOfStock ?? '未获取'}</span>
+                            <span>
+                                本店上架率：
+                                {storeStatus
+                                    ? storeStatus.authorized
+                                        ? `${Math.round((storeStatus.listed / storeStatus.authorized) * 100)}%`
+                                        : '无授权商品'
+                                    : '未获取'}
+                            </span>
+                            <p className="w-full text-xs text-slate-500">
+                                范围为本店已授权商品；上架要求本店售价与交付配置完整，缺货单列。其他店铺统计请在平台管理中心查看。
+                            </p>
+                            {statusQuery.error && !storeStatus && (
+                                <p className="w-full text-xs text-rose-600">本店统计未获取，请刷新重试。</p>
+                            )}
+                        </section>
+                    </>
+                )}
                 {/* 错误态：真实 API 错误提示 (杜绝假数据回退) */}
                 {error && !data && (
                     <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-center justify-between text-rose-800 text-xs animate-fadeIn">
@@ -737,7 +777,7 @@ export function CatalogModule() {
                                 }}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'ENABLED' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
-                                已上架
+                                {isPlatformContext ? '已启用' : '已上架'}
                             </AdminButton>
                             <AdminButton
                                 type="button"
@@ -746,7 +786,7 @@ export function CatalogModule() {
                                 }}
                                 className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${statusFilter === 'DISABLED' ? 'bg-blue-600 text-white shadow-2xs' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
                             >
-                                未上架
+                                {isPlatformContext ? '已停用' : '未上架'}
                             </AdminButton>
                         </div>
 
@@ -925,7 +965,7 @@ export function CatalogModule() {
                                         quoteOnly,
                                         categories,
                                         stockSummary,
-                                        localAssignment,
+                                        catalogStatus,
                                     }) => (
                                         <AdminMobileRecord
                                             key={product.id}
@@ -941,13 +981,7 @@ export function CatalogModule() {
                                                     <span className="break-words">{product.name}</span>
                                                 </div>
                                             }
-                                            status={
-                                                !localAssignment
-                                                    ? '未获取'
-                                                    : localAssignment.listed
-                                                      ? '已上架'
-                                                      : '仓库中'
-                                            }
+                                            status={catalogStatus}
                                             selection={
                                                 <AdminInput
                                                     type="checkbox"
@@ -964,10 +998,8 @@ export function CatalogModule() {
                                                     >
                                                         编辑商品
                                                     </AdminButton>
-                                                    <AdminButton
-                                                        onClick={() => setOfferProductId(product.id)}
-                                                    >
-                                                        本店经营设置
+                                                    <AdminButton onClick={() => openProductSales(product.id)}>
+                                                        {isPlatformContext ? '平台商品分配' : '本店经营设置'}
                                                     </AdminButton>
                                                     <AdminButton
                                                         onClick={() => requestDeleteProduct(product)}
@@ -1154,7 +1186,8 @@ export function CatalogModule() {
                                                     quoteOnly,
                                                     categories,
                                                     stockSummary,
-                                                    localAssignment,
+                                                    catalogEnabled,
+                                                    catalogStatus,
                                                 },
                                                 rowOffset,
                                             ) => {
@@ -1256,11 +1289,14 @@ export function CatalogModule() {
                                                         <td className="h-[52px] px-3 py-0 whitespace-nowrap">
                                                             <AdminButton
                                                                 className="mr-2 text-xs font-medium text-blue-600"
-                                                                onClick={() => setOfferProductId(product.id)}
+                                                                onClick={() => openProductSales(product.id)}
                                                             >
-                                                                本店经营设置
+                                                                {isPlatformContext
+                                                                    ? '平台商品分配'
+                                                                    : '本店经营设置'}
                                                             </AdminButton>
                                                             {(() => {
+                                                                if (isPlatformContext) return null;
                                                                 const assigned =
                                                                     channelAssignmentsByProduct.get(
                                                                         product.id,
@@ -1310,17 +1346,19 @@ export function CatalogModule() {
 
                                                         {/* Status */}
                                                         <td className="h-[52px] whitespace-nowrap px-3 py-0">
-                                                            {!localAssignment ? (
+                                                            {catalogEnabled == null ? (
                                                                 <span className="text-xs text-slate-400">
                                                                     未获取
                                                                 </span>
-                                                            ) : localAssignment.listed ? (
+                                                            ) : catalogEnabled ? (
                                                                 <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded flex items-center gap-1 w-max">
-                                                                    <CheckCircle className="w-3 h-3" /> 已上架
+                                                                    <CheckCircle className="w-3 h-3" />{' '}
+                                                                    {catalogStatus}
                                                                 </span>
                                                             ) : (
                                                                 <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[11px] font-bold rounded flex items-center gap-1 w-max">
-                                                                    <Package className="w-3 h-3" /> 仓库中
+                                                                    <Package className="w-3 h-3" />{' '}
+                                                                    {catalogStatus}
                                                                 </span>
                                                             )}
                                                         </td>

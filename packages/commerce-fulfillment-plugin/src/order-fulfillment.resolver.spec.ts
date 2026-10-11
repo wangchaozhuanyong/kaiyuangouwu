@@ -39,6 +39,7 @@ describe('OrderFulfillmentResolver', () => {
             }),
         };
         const getEntityOrThrow = vi.fn().mockResolvedValue({
+            active: true,
             currencyCode: CurrencyCode.CNY,
             shippingLines: [{ shippingMethod, discountedPriceWithTax: 123 }],
         });
@@ -121,6 +122,7 @@ describe('OrderFulfillmentResolver', () => {
             };
             const order = {
                 id: 'order-1',
+                active: true,
                 currencyCode: fixture.orderCurrency,
                 lines: [
                     {
@@ -150,4 +152,90 @@ describe('OrderFulfillmentResolver', () => {
             expect(ctx.currencyCode).toBe(fixture.requestCurrency);
         },
     );
+
+    it.each(['PaymentAuthorized', 'PaymentSettled', 'Shipped', 'Delivered', 'Cancelled'])(
+        'reads saved shipping for a %s order without requiring current currency rates',
+        async state => {
+            const shippingMethod = {
+                code: 'standard-delivery',
+                translations: [{ languageCode: 'zh_Hans', name: '标准配送' }],
+                apply: vi.fn(() => {
+                    throw new Error('运费币种汇率配置无效');
+                }),
+            };
+            const order = {
+                id: 'historical-order',
+                active: false,
+                state,
+                currencyCode: CurrencyCode.USD,
+                shippingLines: [{ shippingMethod, discountedPriceWithTax: 450 }],
+            };
+            const resolver = new OrderFulfillmentResolver(
+                { getEntityOrThrow: vi.fn().mockResolvedValue(order) } as any,
+                {} as any,
+            );
+
+            await expect(
+                resolver.checkoutShipping(requestContext(CurrencyCode.MYR), order as any),
+            ).resolves.toEqual({
+                methodCode: 'standard-delivery',
+                methodName: '标准配送',
+                priceWithTax: 450,
+                estimateMinDays: null,
+                estimateMaxDays: null,
+                freeShippingThreshold: null,
+                freeShippingApplied: false,
+            });
+            expect(shippingMethod.apply).not.toHaveBeenCalled();
+        },
+    );
+
+    it('uses saved zero shipping on a placed order instead of current shipping rules', async () => {
+        const shippingMethod = {
+            code: 'standard-delivery',
+            name: 'Standard delivery',
+            apply: vi.fn().mockResolvedValue({
+                metadata: { freeShippingApplied: false, freeShippingThreshold: 10000 },
+            }),
+        };
+        const order = {
+            id: 'historical-free-shipping-order',
+            active: false,
+            currencyCode: CurrencyCode.CNY,
+            shippingLines: [{ shippingMethod, discountedPriceWithTax: 0 }],
+        };
+        const resolver = new OrderFulfillmentResolver(
+            { getEntityOrThrow: vi.fn().mockResolvedValue(order) } as any,
+            {} as any,
+        );
+
+        await expect(
+            resolver.checkoutShipping(requestContext(CurrencyCode.CNY), order as any),
+        ).resolves.toMatchObject({ priceWithTax: 0, freeShippingApplied: true, freeShippingThreshold: null });
+        expect(shippingMethod.apply).not.toHaveBeenCalled();
+    });
+
+    it('still rejects an active cart when its current shipping calculation fails', async () => {
+        const shippingMethod = {
+            code: 'standard-delivery',
+            apply: vi.fn(() => {
+                throw new Error('运费币种汇率配置无效');
+            }),
+        };
+        const order = {
+            id: 'active-cart',
+            active: true,
+            currencyCode: CurrencyCode.USD,
+            shippingLines: [{ shippingMethod, discountedPriceWithTax: 450 }],
+        };
+        const resolver = new OrderFulfillmentResolver(
+            { getEntityOrThrow: vi.fn().mockResolvedValue(order) } as any,
+            {} as any,
+        );
+
+        await expect(
+            resolver.checkoutShipping(requestContext(CurrencyCode.MYR), order as any),
+        ).rejects.toThrow('运费币种汇率配置无效');
+        expect(shippingMethod.apply).toHaveBeenCalledOnce();
+    });
 });
