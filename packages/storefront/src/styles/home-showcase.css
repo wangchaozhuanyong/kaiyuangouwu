@@ -713,30 +713,45 @@
 }
 
 .coupon-hub-scroll {
-    display: flex;
-    gap: 10px;
+    display: grid;
+    align-items: start;
+    grid-auto-flow: column;
+    grid-auto-columns: 300px;
+    gap: 12px;
     overflow-x: auto;
+    overflow-y: hidden;
     overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    padding: 2px 0 4px;
+    scroll-snap-type: x proximity;
+    padding: 6px 0;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+    cursor: grab;
 }
-
 .coupon-hub-scroll::-webkit-scrollbar {
     display: none;
 }
-
+.coupon-hub-scroll.is-dragging {
+    cursor: grabbing;
+    scroll-snap-type: none;
+    user-select: none;
+}
 .coupon-hub-scroll > .desktop-coupon-ticket {
-    flex: 0 0 100%;
     scroll-snap-align: start;
 }
-.coupon-hub-scroll:has(> :nth-child(2)) > .desktop-coupon-ticket {
-    flex-basis: calc(100% - 18px);
+.coupon-hub-scroll:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+}
+@media (max-width: 359px) {
+    .coupon-hub-scroll {
+        grid-auto-columns: 280px;
+    }
 }
 @media (min-width: 1024px) {
-    .coupon-hub-scroll:has(> :nth-child(2)) > .desktop-coupon-ticket {
-        flex-basis: calc(50% - 5px);
+    .coupon-hub-scroll {
+        grid-auto-columns: calc((100% - 48px) / 4);
+        gap: 16px;
     }
 }
 

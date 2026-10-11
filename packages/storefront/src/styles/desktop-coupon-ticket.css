@@ -262,3 +262,80 @@
         background: var(--surface);
     }
 }
+
+/* Approved homepage rail: original ticket face, compact three-column geometry. */
+.coupon-hub-scroll .desktop-coupon-main {
+    grid-template-columns: 80px minmax(0, 1fr) 64px;
+    min-height: 106px;
+}
+.coupon-hub-scroll .desktop-coupon-ticket:not(.has-long-value) .desktop-coupon-main {
+    height: 106px;
+}
+.coupon-hub-scroll .desktop-coupon-info {
+    padding: 8px 8px 8px 12px;
+    gap: 2px;
+}
+.coupon-hub-scroll .desktop-coupon-info > strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+.coupon-hub-scroll .desktop-coupon-threshold,
+.coupon-hub-scroll .desktop-coupon-scope {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    overflow: hidden;
+}
+.coupon-hub-scroll .desktop-coupon-value {
+    padding: 8px 6px;
+    gap: 2px;
+}
+.coupon-hub-scroll .desktop-coupon-value > .is-unit-before {
+    flex-direction: row;
+    align-items: baseline;
+    flex-wrap: nowrap;
+    gap: 3px;
+}
+.coupon-hub-scroll .desktop-coupon-action {
+    padding: 12px 12px 12px 0;
+}
+.coupon-hub-scroll .desktop-coupon-action button {
+    border-radius: 999px;
+    min-height: 44px;
+    padding-inline: 2px;
+}
+.coupon-hub-scroll .coupon-btn-text-wrap {
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
+.coupon-hub-scroll .coupon-claim-btn:is(.is-claimed, .is-claiming) .coupon-btn-text-wrap {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.coupon-hub-scroll .has-long-value .desktop-coupon-main {
+    grid-template-columns: minmax(0, 1fr) 64px;
+}
+@media (min-width: 1024px) and (max-width: 1199px) {
+    .coupon-hub-scroll .desktop-coupon-main {
+        grid-template-columns: 72px minmax(0, 1fr) 56px;
+    }
+    .coupon-hub-scroll .desktop-coupon-value {
+        padding-inline: 4px;
+    }
+    .coupon-hub-scroll .desktop-coupon-info {
+        padding: 8px 6px;
+    }
+    .coupon-hub-scroll .desktop-coupon-action {
+        padding-right: 8px;
+    }
+    .coupon-hub-scroll .desktop-coupon-threshold {
+        white-space: nowrap;
+    }
+}
+@media (max-width: 359px) {
+    .coupon-hub-scroll .desktop-coupon-info {
+        padding-inline: 8px;
+    }
+}
