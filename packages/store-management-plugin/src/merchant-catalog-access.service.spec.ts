@@ -782,6 +782,66 @@ describe('MerchantCatalogAccessService', () => {
         ).rejects.toThrow('敏感店铺财务权限');
     });
 
+    it('allows only the two order supplement fields for an existing SuperAdmin in the owning store', async () => {
+        const { service } = createService({ merchant: false, visibleEntityIds: ['order-a'] });
+        const ctx = {
+            ...merchantContext,
+            userHasPermissions: (permissions: Permission[]) => permissions.includes(Permission.SuperAdmin),
+        };
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'setOrderCustomFields', {
+                input: {
+                    id: 'order-a',
+                    customFields: { customerNote: 'QA note', deliveryEmail: 'qa@example.invalid' },
+                },
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'setOrderCustomFields', {
+                input: { id: 'order-a', customFields: { customerNote: null, deliveryEmail: '' } },
+            }),
+        ).resolves.toBeUndefined();
+        await expect(
+            service.assertRootFieldAccess(merchantContext, 'Mutation', 'setOrderCustomFields', {
+                input: { id: 'order-a', customFields: { deliveryEmail: 'qa@example.invalid' } },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it.each([
+        undefined,
+        [],
+        { customFields: { customerNote: 'note' } },
+        { id: '', customFields: { customerNote: 'note' } },
+        { id: 'order-a' },
+        { id: 'order-a', customFields: null },
+        { id: 'order-a', customFields: {} },
+        { id: 'order-a', customFields: [] },
+        { id: 'order-a', customFields: { paymentCurrencyCode: 'CNY' } },
+        { id: 'order-a', customFields: { deliveryEmail: 'qa@example.invalid', paymentCurrencyCode: 'CNY' } },
+        { id: 'order-a', customFields: { customerNote: { text: 'note' } } },
+        { id: 'order-a', customFields: { deliveryEmail: false } },
+    ])('rejects malformed or broader order supplement inputs: %j', async input => {
+        const { service } = createService({ merchant: false, visibleEntityIds: ['order-a'] });
+        const ctx = { ...merchantContext, userHasPermissions: () => true };
+        await expect(
+            service.assertRootFieldAccess(ctx, 'Mutation', 'setOrderCustomFields', { input }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it.each(['setOrderCustomer', 'updateOrderNote', 'deleteOrderNote'])(
+        'retains the platform-only restriction for %s even for SuperAdmin in a store',
+        async field => {
+            const { service } = createService({ merchant: false, visibleEntityIds: ['order-a'] });
+            const ctx = { ...merchantContext, userHasPermissions: () => true };
+            await expect(
+                service.assertRootFieldAccess(ctx, 'Mutation', field, {
+                    input: { id: 'order-a', customFields: { customerNote: 'note' } },
+                }),
+            ).rejects.toBeInstanceOf(ForbiddenError);
+        },
+    );
+
     it('allows explicitly authorized sensitive finance only for this store', async () => {
         const sensitiveContext = {
             ...merchantContext,
@@ -1219,6 +1279,22 @@ describe('draft order immutable sale scope with real SQLjs membership', () => {
         );
         return fixture.service;
     }
+    it('uses sales ownership for order supplements even when both stores share channel memberships', async () => {
+        const guard = service();
+        const ctx = { ...merchantContext, userHasPermissions: () => true };
+        for (const id of ['own-draft', 'own-placed']) {
+            await expect(
+                guard.assertRootFieldAccess(ctx, 'Mutation', 'setOrderCustomFields', {
+                    input: { id, customFields: { deliveryEmail: 'qa@example.invalid' } },
+                }),
+            ).resolves.toBeUndefined();
+        }
+        await expect(
+            guard.assertRootFieldAccess(ctx, 'Mutation', 'setOrderCustomFields', {
+                input: { id: 'foreign-draft', customFields: { deliveryEmail: 'qa@example.invalid' } },
+            }),
+        ).rejects.toBeInstanceOf(ForbiddenError);
+    });
     it.each(draftFields)(
         'allows only own Draft state for %s even when memberships expose both shops',
         async field => {
