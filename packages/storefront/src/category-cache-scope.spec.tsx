@@ -81,7 +81,7 @@ it('keeps the target skeleton while the store identity is unresolved', () => {
 it.each([
     { language: 'zh', name: '马来西亚特色食品与日常生活用品' },
     { language: 'en', name: 'Everyday essentials and travel accessories' },
-])('queries the complete catalog and preserves the $language category label', async ({ language, name }) => {
+])('queries the selected catalog and preserves the $language category label', async ({ language, name }) => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const container = document.createElement('div');
     const root = createRoot(container);
@@ -103,7 +103,7 @@ it.each([
                                 market: { code: 'my-malaysia', currencyCode: 'MYR' },
                                 locale: 'en-MY',
                                 language,
-                                activeCollectionId: 'all',
+                                activeCollectionId: 'long-category',
                                 activeChildId: 'all',
                                 sortMode: 'recommended',
                                 fulfillmentFilter: 'all',
@@ -127,11 +127,14 @@ it.each([
         });
         expect(api.catalog).toHaveBeenCalled();
         expect(api.catalog.mock.calls[0][0]).toMatchObject({
-            collectionId: undefined,
+            collectionId: 'long-category',
             sort: 'recommended',
         });
         expect(container.querySelectorAll('.primary-category-label')[0]?.textContent).toBe(name);
         expect(container.querySelectorAll('.primary-categories button')).toHaveLength(1);
+        expect(container.querySelector('.primary-categories button')?.getAttribute('aria-pressed')).toBe(
+            'true',
+        );
         const trigger = container.querySelector<HTMLButtonElement>('.primary-categories-all');
         if (!trigger) throw new Error('Missing category dropdown trigger');
         act(() => trigger.click());
@@ -154,6 +157,106 @@ it.each([
         client.clear();
     }
 });
+
+it.each([
+    { state: 'loading', loading: true, error: null },
+    { state: 'empty', loading: false, error: null },
+    { state: 'failure', loading: true, error: 'Categories could not be loaded' },
+])(
+    'ignores the unfiltered catalog cache while category state is $state',
+    async ({ state, loading, error }) => {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        const api = { catalog: vi.fn() };
+        const onRetry = vi.fn();
+        const noop = () => undefined;
+        const product = {
+            id: 'cached-unfiltered-product',
+            name: 'Unfiltered cached product',
+            slug: 'cached-unfiltered-product',
+            assets: [],
+            featuredAsset: null,
+            collections: [{ id: 'different-category' }],
+            customFields: {},
+            variants: [{ id: 'cached-variant', priceWithTax: 1000, currencyCode: 'MYR', customFields: {} }],
+        };
+        const key = storefrontQueryKeys.catalog('my-malaysia:MYR', 'en', { take: 12 });
+        const cached = { pages: [{ items: [product], totalItems: 1 }], pageParams: [0] };
+        client.setQueryData(key, cached);
+
+        try {
+            await act(async () => {
+                root.render(
+                    <QueryClientProvider client={client}>
+                        <CategoryPageContext.Provider
+                            value={
+                                {
+                                    api,
+                                    contextResolved: true,
+                                    products: [],
+                                    collections: [],
+                                    contentBlocks: [],
+                                    loading,
+                                    error,
+                                    market: { code: 'my-malaysia', currencyCode: 'MYR' },
+                                    locale: 'en-MY',
+                                    language: 'en',
+                                    activeCollectionId: 'all',
+                                    activeChildId: 'all',
+                                    sortMode: 'recommended',
+                                    fulfillmentFilter: 'all',
+                                    inStockOnly: false,
+                                    minimumPrice: '',
+                                    maximumPrice: '',
+                                    onCollectionChange: noop,
+                                    onChildChange: noop,
+                                    onSortChange: noop,
+                                    onFilterChange: noop,
+                                    onNotify: noop,
+                                    onRetry,
+                                } as any
+                            }
+                        >
+                            <CategoryPage />
+                        </CategoryPageContext.Provider>
+                    </QueryClientProvider>,
+                );
+                await Promise.resolve();
+            });
+            expect(api.catalog).not.toHaveBeenCalled();
+            expect(client.getQueryData(key)).toEqual(cached);
+            expect(client.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount()).toBe(1);
+            expect(container.querySelector('.category-product-list')).toBeNull();
+            expect(container.textContent).not.toContain(product.name);
+
+            if (state === 'loading') {
+                expect(container.querySelector('[aria-label="Loading products"]')).not.toBeNull();
+                expect(container.querySelector('.empty-state')).toBeNull();
+            } else {
+                expect(container.querySelector('[aria-label="Loading products"]')).toBeNull();
+                expect(container.querySelector('.empty-state')).not.toBeNull();
+                if (state === 'empty') {
+                    expect(container.textContent).toContain('No products in this category');
+                    expect(container.textContent).not.toContain('Could not load products');
+                } else {
+                    expect(container.textContent).toContain('Could not load products');
+                    expect(container.textContent).toContain(error);
+                    const retry = Array.from(container.querySelectorAll('button')).find(
+                        button => button.textContent?.trim() === 'Retry',
+                    );
+                    if (!retry) throw new Error('Missing category retry control');
+                    act(() => retry.click());
+                    expect(onRetry).toHaveBeenCalledOnce();
+                    expect(api.catalog).not.toHaveBeenCalled();
+                }
+            }
+        } finally {
+            act(() => root.unmount());
+            client.clear();
+        }
+    },
+);
 
 it('uses the server catalog total in the filter confirmation action', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

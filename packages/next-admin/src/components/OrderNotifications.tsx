@@ -180,7 +180,9 @@ export function OrderNotifications({
                     );
                     utterance.voice = matching.find(voice => voice.default) ?? matching[0] ?? null;
                     utterance.onstart = begin;
-                    utterance.onend = cleanup;
+                    // Some engines finish an unavailable voice without a start/error event.
+                    // Keep the attempt retryable and use the same localized audio fallback.
+                    utterance.onend = () => (began ? cleanup() : playRecording());
                     utterance.onerror = event => {
                         if (!current()) return;
                         if (

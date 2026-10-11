@@ -1,5 +1,6 @@
 import { ShopApi } from '../api';
 import { ProductRow } from '../components/common/product-row';
+import { SearchRecommendationSkeleton } from '../components/common/search-loading';
 import { useDailyRecommendations } from '../hooks/useDailyRecommendations';
 import { MarketConfig, Product, StorefrontLanguage } from '../types';
 
@@ -52,27 +53,40 @@ export function DailyRecommendationSection({
                 />
             </section>
         );
-    if (compact && data)
+    if (compact)
         return (
-            <section className={`product-section ${className ?? ''}`}>
+            <section
+                className={`product-section ${className ?? ''}`}
+                aria-busy={!data || undefined}
+                data-page-pending={!data ? 'data' : undefined}
+            >
                 <SectionHeader title={title} icon={false} />
-                <div className="search-recommendation-list">
-                    {products.map(product => (
-                        <ProductRow
-                            key={product.id}
-                            product={product}
-                            market={market}
-                            locale={locale}
-                            language={language}
-                            layout="compact"
-                            showDescription={false}
-                            onOpen={() => onProduct(product)}
-                        />
-                    ))}
-                    {!data.items.length && (
-                        <p>{language === 'zh' ? '暂无可推荐商品' : 'No products available'}</p>
-                    )}
-                </div>
+                {!data ? (
+                    <>
+                        <SearchRecommendationSkeleton count={limit} />
+                        <span className="visually-hidden" role="status">
+                            {language === 'zh' ? '正在加载商品' : 'Loading products'}
+                        </span>
+                    </>
+                ) : (
+                    <div className="search-recommendation-list">
+                        {products.map(product => (
+                            <ProductRow
+                                key={product.id}
+                                product={product}
+                                market={market}
+                                locale={locale}
+                                language={language}
+                                layout="compact"
+                                showDescription={false}
+                                onOpen={() => onProduct(product)}
+                            />
+                        ))}
+                        {!data.items.length && (
+                            <p>{language === 'zh' ? '暂无可推荐商品' : 'No products available'}</p>
+                        )}
+                    </div>
+                )}
             </section>
         );
     return (

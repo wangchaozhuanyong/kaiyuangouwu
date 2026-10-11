@@ -488,17 +488,19 @@ export function CouponCenterPage() {
                     className="coupon-center-guide"
                     aria-label={isZh ? '使用说明' : 'Using your coupons'}
                 >
-                    <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
-                    <p>
-                        {isZh
-                            ? '请查看券面的使用门槛、适用范围和有效期。'
-                            : 'Check the minimum spend, eligible items and validity on each coupon.'}
-                    </p>
-                    <p>
-                        {isZh
-                            ? '可用优惠及折扣明细可在购物车查看，最终应付金额以结算页为准。'
-                            : 'Review available coupons and savings in your cart. Checkout confirms the final amount.'}
-                    </p>
+                    <div className="coupon-center-guide-copy">
+                        <h2>{isZh ? '使用说明' : 'Using your coupons'}</h2>
+                        <p>
+                            {isZh
+                                ? '请查看券面的使用门槛、适用范围和有效期。'
+                                : 'Check the minimum spend, eligible items and validity on each coupon.'}
+                        </p>
+                        <p>
+                            {isZh
+                                ? '可用优惠及折扣明细可在购物车查看，最终应付金额以结算页为准。'
+                                : 'Review available coupons and savings in your cart. Checkout confirms the final amount.'}
+                        </p>
+                    </div>
                     <button
                         className="coupon-center-cart-link"
                         type="button"

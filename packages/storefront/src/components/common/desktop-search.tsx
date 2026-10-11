@@ -16,6 +16,8 @@ import { SearchPageContext } from '../../storefront-page-contexts';
 import { routeHref } from '../../storefront-router';
 import { useStorefront } from '../../StorefrontContext';
 
+import { EmbeddedSearchLoading } from './search-loading';
+
 const SearchPage = lazy(() =>
     import('../../pages/search-page').then(module => ({ default: module.SearchPage })),
 );
@@ -186,7 +188,24 @@ export default function DesktopSearch() {
                             <X size={18} />
                         </button>
                     </div>
-                    <Suspense fallback={<p role="status">{isZh ? '正在加载搜索' : 'Loading search'}</p>}>
+                    <Suspense
+                        fallback={
+                            <EmbeddedSearchLoading
+                                isZh={isZh}
+                                results={Boolean(submittedQuery.trim())}
+                                categoryCount={
+                                    1 +
+                                    context.collections.filter(
+                                        collection =>
+                                            !collection.parentId ||
+                                            !context.collections.some(
+                                                parent => parent.id === collection.parentId,
+                                            ),
+                                    ).length
+                                }
+                            />
+                        }
+                    >
                         <SearchPageContext.Provider
                             value={{
                                 api: context.api,

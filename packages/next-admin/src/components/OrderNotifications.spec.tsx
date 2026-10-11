@@ -363,6 +363,28 @@ describe('event-driven order announcements', () => {
             localStorage.getItem(`next-admin:order-announced:${administratorId}:store-a:fallback-order`),
         ).toBe('spoken');
     });
+    it('uses recording when synthesis ends without ever starting', async () => {
+        play.mockImplementation(utterance => utterance.onend?.());
+        await render();
+        await send(frame('premature-end'));
+        expect(audioPlay).toHaveBeenCalledTimes(1);
+        expect(audioInstances[0].src).toMatch(/\/audio\/new-order-zh\.mp3$/);
+        expect(container.querySelector('button')?.getAttribute('aria-pressed')).toBe('true');
+        expect(localStorage.getItem(`next-admin:order-announced:${administratorId}:premature-end`)).toBe(
+            'spoken',
+        );
+    });
+    it('keeps premature synthesis completion retryable when recording is blocked', async () => {
+        play.mockImplementation(utterance => utterance.onend?.());
+        audioPlay.mockRejectedValue(new DOMException('Blocked', 'NotAllowedError'));
+        await render();
+        await send(frame('premature-blocked'));
+        expect(container.querySelector('button')?.getAttribute('aria-pressed')).toBe('false');
+        expect(
+            localStorage.getItem(`next-admin:order-announced:${administratorId}:premature-blocked`),
+        ).toBeNull();
+        expect(events.at(-1)?.title).toContain('启用订单语音');
+    });
     it('waits for a delayed voice list and selects a matching voice without changing store text', async () => {
         voices = [];
         await render();

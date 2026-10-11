@@ -8,7 +8,12 @@ import {
     type AuthOverlayMode,
     type AuthOverlayRequest,
 } from '../auth-overlay-navigation';
-import { catalogRouteSearch, catalogRouteState, type CatalogRouteState } from '../catalog-route-query';
+import {
+    catalogRouteSearch,
+    catalogRouteState,
+    resolveCategoryRoute,
+    type CatalogRouteState,
+} from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
@@ -89,7 +94,7 @@ export function useStorefrontNavigation({
     const displayedRouterLocation =
         isNavigationPending && resolvedRouterLocation ? resolvedRouterLocation : routerLocation;
 
-    const route = useMemo(
+    const rawRoute = useMemo(
         () =>
             routeFromRouterLocation(
                 routerLocation.pathname,
@@ -97,6 +102,17 @@ export function useStorefrontNavigation({
             ),
         [routerLocation.pathname, routerLocation.search],
     );
+    const route = useMemo(() => resolveCategoryRoute(rawRoute, collections), [rawRoute, collections]);
+    useEffect(() => {
+        if (route === rawRoute) return;
+        const options = routeNavigateOptions(route);
+        void tanstackNavigate({
+            ...options,
+            search: { ...routerLocation.search, ...options.search },
+            replace: true,
+            resetScroll: false,
+        } as never);
+    }, [route, rawRoute, routerLocation.search, tanstackNavigate]);
 
     const displayedRoute = useMemo(
         () =>
@@ -133,7 +149,10 @@ export function useStorefrontNavigation({
     const navigatePage = useCallback(
         (next: RouteState, replace = false) => {
             navigationIntent.current++;
-            const resolvedNext = next.name === 'category' ? { ...categoryStateRef.current, ...next } : next;
+            const resolvedNext = resolveCategoryRoute(
+                next.name === 'category' ? { ...categoryStateRef.current, ...next } : next,
+                collections,
+            );
             if (resolvedNext.name === 'category') {
                 categoryStateRef.current = catalogRouteSearch(resolvedNext);
             }
@@ -164,7 +183,7 @@ export function useStorefrontNavigation({
                     : {}),
             } as never);
         },
-        [prepareProduct, router, tanstackNavigate],
+        [collections, prepareProduct, router, tanstackNavigate],
     );
 
     const applyAuthAction = useCallback(

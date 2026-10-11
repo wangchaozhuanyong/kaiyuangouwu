@@ -1,7 +1,7 @@
-/* Full managed copy stays inside the photograph and determines the scene's natural height. */
+/* Mobile photographs prefer 16:10; complete managed copy can still grow the scene. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
-        min-height: 280px;
+        min-height: 0;
         aspect-ratio: auto;
         background: var(--surface);
     }
@@ -16,6 +16,10 @@
         width: 100%;
         height: auto;
         background: var(--hero-copy-background);
+    }
+
+    .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='overlay'] {
+        aspect-ratio: 16 / 10;
     }
 
     .hero.hero-image-overlay .hero-rich-media {
@@ -53,7 +57,7 @@
         width: calc(82% - 20px);
         max-width: 450px;
         height: auto;
-        min-height: 280px;
+        min-height: 0;
         max-height: none;
         margin: 0 0 0 20px;
         padding: 24px 0 calc(var(--hero-overlay-height, 0px) + 32px);
