@@ -346,7 +346,9 @@ jobs:
               run: bun run --cwd packages/operations-dashboard-plugin test
             - name: Build storefront integration acceptance harness
               if: needs.detect-changes.outputs.storefrontIntegration == 'true'
-              run: bun run --cwd packages/testing build
+              run: |
+                  bun run --cwd packages/testing build
+                  bun run --cwd packages/store-domain-plugin build
             - name: Install browser for storefront configuration acceptance
               if: needs.detect-changes.outputs.storefrontIntegration == 'true'
               run: bunx playwright install --with-deps chromium
