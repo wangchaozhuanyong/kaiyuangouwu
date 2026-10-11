@@ -10,6 +10,8 @@ import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { adminCapabilitiesSchema } from './admin-capabilities.schema';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
 
+vi.mock('@vendure/common/lib/admin-capabilities', () => import('../../common/src/admin-capabilities'));
+
 function fixture(
     permissions: string[] = [Permission.SuperAdmin],
     code = 'store-a',
@@ -65,6 +67,26 @@ async function status(f: ReturnType<typeof fixture>, id: string) {
 }
 
 describe('current administrator capabilities', () => {
+    it('returns a usable current-store risk-review capability only for existing SuperAdmin accounts', async () => {
+        const store = fixture([Permission.SuperAdmin], 'store-a', 'DIGITAL_ONLY');
+        expect(await status(store, '/settings/governance-risk/cases')).toMatchObject({
+            state: 'READY',
+            canRead: true,
+            canWrite: true,
+            canConfigure: true,
+        });
+        expect(await status(store, '/settings/governance-risk/rules')).toMatchObject({
+            state: 'UNSUPPORTED',
+            canRead: false,
+            canWrite: false,
+        });
+        const reader = fixture([Permission.ReadOrder, Permission.UpdateOrder], 'store-a', 'DIGITAL_ONLY');
+        expect(await status(reader, '/settings/governance-risk/cases')).toMatchObject({
+            state: 'FORBIDDEN',
+            canRead: false,
+            canWrite: false,
+        });
+    });
     it('keeps review navigation aligned with the actual review API permissions', async () => {
         const readPermissions = Reflect.getMetadata(
             '__permissions__',

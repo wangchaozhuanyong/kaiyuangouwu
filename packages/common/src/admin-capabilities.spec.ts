@@ -16,6 +16,22 @@ describe('store capability boundaries', () => {
         expect(adminCapabilityForPath('/catalog/products/new')?.readPermissions).toEqual(['CreateProduct']);
         expect(adminCapabilityForPath('/catalog/products/42?tab=variants')?.id).toBe('/catalog/products');
     });
+    it('classifies only risk cases as channel-scoped oversight with unchanged SuperAdmin permissions', () => {
+        const cases = adminCapabilityForPath('/settings/governance-risk/cases');
+        expect(cases?.scope).toBe('BOTH');
+        expect(cases?.readPermissions).toEqual(['SuperAdmin']);
+        expect(cases?.writePermissions).toEqual(['SuperAdmin']);
+        for (const mode of ['DIGITAL_ONLY', 'PHYSICAL_ONLY', 'HYBRID'] as const)
+            expect(adminCapabilityScopeAllows(cases, 'STORE', mode)).toBe(true);
+        for (const key of ['rules', 'approvals', 'audit', 'reports', 'report-schedule'])
+            expect(
+                adminCapabilityScopeAllows(
+                    adminCapabilityForPath(`/settings/governance-risk/${key}`),
+                    'STORE',
+                    'HYBRID',
+                ),
+            ).toBe(false);
+    });
     it.each([
         '/settings/system-ops/settings',
         '/settings/system-ops/schedules',
