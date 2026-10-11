@@ -607,7 +607,18 @@ export class ContentTranslationService {
             }
             const parameter = `auditVisibleType${index}`;
             scope.setParameter(parameter, metadata.name);
-            predicates.push(`(state.entityType = :${parameter} AND EXISTS ${entity.getQuery()})`);
+            let entityQuery = entity.getQuery();
+            // STI values are added by getParameters(), outside normal parent parameter propagation.
+            const discriminatorValues = entity.getParameters().discriminatorColumnValues;
+            if (discriminatorValues !== undefined) {
+                const discriminatorParameter = `auditDiscriminator${index}`;
+                scope.setParameter(discriminatorParameter, discriminatorValues);
+                entityQuery = entityQuery.replace(
+                    /:\.\.\.discriminatorColumnValues\b/g,
+                    `:...${discriminatorParameter}`,
+                );
+            }
+            predicates.push(`(state.entityType = :${parameter} AND EXISTS ${entityQuery})`);
         }
         scope.andWhere(
             new Brackets(query => {

@@ -247,9 +247,31 @@ describe('translation audit actionable entity visibility', () => {
         columns: { id: { type: Number, primary: true }, isRoot: { type: Boolean } },
         relations: channelRelations,
     });
+    // Production Country/Province share the Region table and need distinct STI parameters.
+    class Region {
+        id: string;
+    }
+    class Country extends Region {}
+    class Province extends Region {}
+    const regionSchema = new EntitySchema({
+        name: 'Region',
+        target: Region,
+        columns: { id: { type: String, primary: true } },
+        inheritance: { pattern: 'STI', column: { type: 'varchar', name: 'discriminator' } },
+    });
     const countrySchema = new EntitySchema({
         name: 'Country',
-        columns: { id: { type: String, primary: true } },
+        target: Country,
+        type: 'entity-child',
+        columns: {},
+        discriminatorValue: 'Country',
+    });
+    const provinceSchema = new EntitySchema({
+        name: 'Province',
+        target: Province,
+        type: 'entity-child',
+        columns: {},
+        discriminatorValue: 'Province',
     });
     const announcementSchema = new EntitySchema({
         name: 'SystemAnnouncement',
@@ -268,7 +290,9 @@ describe('translation audit actionable entity visibility', () => {
         blockSchema,
         itemSchema,
         collectionSchema,
+        regionSchema,
         countrySchema,
+        provinceSchema,
         announcementSchema,
     ];
     const database = new DataSource({ type: 'sqljs', entities, synchronize: true });
@@ -313,6 +337,7 @@ describe('translation audit actionable entity visibility', () => {
             { id: 2, isRoot: false, channels: [one] },
         ]);
         await database.getRepository(countrySchema).save({ id: 'country-uuid' });
+        await database.getRepository(provinceSchema).save({ id: 'province-uuid' });
         await database.getRepository(announcementSchema).save([
             { id: 1, ownerChannelId: 1, targetMode: 'SINGLE', channels: [one] },
             { id: 2, ownerChannelId: 1, targetMode: 'MULTIPLE', channels: [one, two] },
@@ -344,6 +369,9 @@ describe('translation audit actionable entity visibility', () => {
             ['SystemAnnouncement', '5', 'STALE'],
             ['ImageModelConfig', 'missing-metadata', 'STALE'],
             ['UnregisteredEntity', '1', 'STALE'],
+            ['Province', 'province-uuid', 'PENDING'],
+            ['Country', 'province-uuid', 'PENDING'],
+            ['Province', 'country-uuid', 'PENDING'],
         ];
         const rows = identities.map(([entityType, entityId, status], index) => ({
             channelId: '1',
@@ -376,7 +404,7 @@ describe('translation audit actionable entity visibility', () => {
             )
                 visibleIds.push(Number(row.id));
         }
-        expect(visibleIds).toHaveLength(7);
+        expect(visibleIds).toHaveLength(8);
     });
     afterAll(async () => {
         if (database.isInitialized) await database.destroy();
@@ -385,90 +413,111 @@ describe('translation audit actionable entity visibility', () => {
     it('matches actual adapter ownership before pagination and all audit counts', async () => {
         const result = await service.audit(ctx, '1', { take: 100 });
         expect(result.states.map(state => Number(state.id)).sort((a, b) => a - b)).toEqual(visibleIds);
-        expect(result.total).toBe(7);
-        expect(result.filteredTotal).toBe(7);
-        expect(result.counts.reduce((sum, row) => sum + row.count, 0)).toBe(7);
-        expect(await service.countStale(ctx)).toBe(5);
+        expect(result.total).toBe(8);
+        expect(result.filteredTotal).toBe(8);
+        expect(result.counts.reduce((sum, row) => sum + row.count, 0)).toBe(8);
+        expect(await service.countStale(ctx)).toBe(6);
     });
     it('does not leave holes or repeats when newer historical orphan rows precede visible rows', async () => {
         const ids: number[] = [];
         for (let skip = 0; skip < 8; skip += 2) {
             const page = await service.audit(ctx, '1', { skip, take: 2 });
-            expect(page.total).toBe(7);
-            expect(page.filteredTotal).toBe(7);
+            expect(page.total).toBe(8);
+            expect(page.filteredTotal).toBe(8);
             ids.push(...page.states.map(state => Number(state.id)));
         }
-        expect(ids).toHaveLength(7);
-        expect(new Set(ids).size).toBe(7);
+        expect(ids).toHaveLength(8);
+        expect(new Set(ids).size).toBe(8);
         expect([...ids].sort((a, b) => a - b)).toEqual(visibleIds);
     });
     it('counts only visible actionable states in the merchant pending badge', async () => {
-        expect(await service.countStale(ctx)).toBe(5);
+        expect(await service.countStale(ctx)).toBe(6);
     });
     it('keeps search and status filters consistent without orphan counts', async () => {
         const pending = await service.audit(ctx, '1', { status: 'STALE', take: 100 });
         expect(pending.filteredTotal).toBe(1);
         expect(pending.states.map(state => state.entityId)).toEqual(['1']);
         expect(pending.counts).toContainEqual({ status: 'STALE', count: 1 });
-        expect(pending.total).toBe(7);
+        expect(pending.total).toBe(8);
         const orphan = await service.audit(ctx, '1', { search: '196' });
         expect(orphan.states).toEqual([]);
         expect(orphan.filteredTotal).toBe(0);
-        expect(orphan.total).toBe(7);
+        expect(orphan.total).toBe(8);
+    });
+    it('keeps Country and Province visible without accepting another Region child identity', async () => {
+        const countries = await service.audit(ctx, '1', { entityType: 'Country', take: 100 });
+        const provinces = await service.audit(ctx, '1', { entityType: 'Province', take: 100 });
+        expect(countries.states.map(state => state.entityId)).toEqual(['country-uuid']);
+        expect(provinces.states.map(state => state.entityId)).toEqual(['province-uuid']);
+        for (const result of [countries, provinces]) {
+            expect(result.filteredTotal).toBe(1);
+            expect(result.total).toBe(8);
+            expect(result.counts).toContainEqual({ status: 'PENDING', count: 2 });
+        }
     });
     it('preserves complete platform history and leaves all audit rows unchanged', async () => {
         const all = await service.audit(platform, undefined, { take: 100 });
-        expect(all.states).toHaveLength(25);
-        expect(all.total).toBe(25);
+        expect(all.states).toHaveLength(28);
+        expect(all.total).toBe(28);
         expect(all.states.some(state => state.entityId === '196')).toBe(true);
-        expect((await service.audit(platform, '1', { take: 100 })).total).toBe(24);
+        expect((await service.audit(platform, '1', { take: 100 })).total).toBe(27);
         await service.countStale(ctx);
         expect(await database.getRepository(stateSchema).find({ order: { id: 'ASC' } })).toEqual(
             historyBefore,
         );
     });
-    it('generates PostgreSQL visibility queries without casting historical identifiers to numbers', async () => {
-        const postgres = new DataSource({ type: 'postgres', entities });
-        // Build driver metadata only; no connection to a PostgreSQL server is made.
-        await (postgres as any).buildMetadatas();
-        const queries: string[] = [];
-        const many = vi
-            .spyOn(SelectQueryBuilder.prototype, 'getManyAndCount')
-            .mockImplementation(function () {
-                queries.push(this.getSql());
-                return Promise.resolve([[], 0] as [never[], number]);
+    it.each(['postgres', 'mysql'] as const)(
+        'binds %s visibility queries without casting historical identifiers to numbers',
+        async type => {
+            const driver = new DataSource({ type, database: 'offline_metadata_only', entities });
+            // Build driver metadata only; no database connection is made.
+            await (driver as any).buildMetadatas();
+            const queries: Array<[string, unknown[]]> = [];
+            const many = vi
+                .spyOn(SelectQueryBuilder.prototype, 'getManyAndCount')
+                .mockImplementation(function () {
+                    queries.push(this.getQueryAndParameters());
+                    return Promise.resolve([[], 0] as [never[], number]);
+                });
+            const raw = vi.spyOn(SelectQueryBuilder.prototype, 'getRawMany').mockImplementation(function () {
+                queries.push(this.getQueryAndParameters());
+                return Promise.resolve([]);
             });
-        const raw = vi.spyOn(SelectQueryBuilder.prototype, 'getRawMany').mockImplementation(function () {
-            queries.push(this.getSql());
-            return Promise.resolve([]);
-        });
-        const count = vi.spyOn(SelectQueryBuilder.prototype, 'getCount').mockImplementation(function () {
-            queries.push(this.getSql());
-            return Promise.resolve(0);
-        });
-        try {
-            const postgresService = new ContentTranslationService(
-                {
-                    rawConnection: postgres,
-                    getRepository: () => postgres.getRepository(stateSchema),
-                } as any,
-                translationOptions,
-            );
-            await postgresService.audit(ctx, '1', { take: 20 });
-            await postgresService.countStale(ctx);
-            expect(queries).toHaveLength(3);
-            for (const query of queries) {
-                expect(query).toContain('EXISTS');
-                expect(query).toMatch(/CAST\("audit_entity_\d+"\."id" AS TEXT\)/);
-                expect(query).not.toMatch(/CAST\("state"\."entityId"/);
-                expect(query).toContain('COUNT(DISTINCT');
+            const count = vi.spyOn(SelectQueryBuilder.prototype, 'getCount').mockImplementation(function () {
+                queries.push(this.getQueryAndParameters());
+                return Promise.resolve(0);
+            });
+            try {
+                const driverService = new ContentTranslationService(
+                    {
+                        rawConnection: driver,
+                        getRepository: () => driver.getRepository(stateSchema),
+                    } as any,
+                    translationOptions,
+                );
+                await driverService.audit(ctx, '1', { take: 20 });
+                await driverService.countStale(ctx);
+                expect(queries).toHaveLength(3);
+                for (const [query, parameters] of queries) {
+                    expect(query).toContain('EXISTS');
+                    if (type === 'postgres') {
+                        expect(query).toMatch(/CAST\("audit_entity_\d+"\."id" AS TEXT\)/);
+                    } else {
+                        expect(query).toMatch(/CAST\(`audit_entity_\d+`\.`id` AS CHAR\)/);
+                    }
+                    expect(query).not.toMatch(/CAST\(["`]state["`]\.["`]entityId["`]/);
+                    expect(query).toContain('COUNT(DISTINCT');
+                    expect(query).not.toMatch(/:(?:\.\.\.)?[A-Za-z][A-Za-z0-9_]*/);
+                    expect(parameters.filter(value => value === 'Country')).toHaveLength(2);
+                    expect(parameters.filter(value => value === 'Province')).toHaveLength(2);
+                }
+            } finally {
+                many.mockRestore();
+                raw.mockRestore();
+                count.mockRestore();
             }
-        } finally {
-            many.mockRestore();
-            raw.mockRestore();
-            count.mockRestore();
-        }
-    });
+        },
+    );
 });
 
 describe('content translation hashing', () => {
