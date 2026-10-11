@@ -688,6 +688,21 @@ export interface ReferralBalancePaymentResult {
     amount: number;
 }
 
+export interface StorefrontPaymentAttemptInput {
+    requestId: string;
+    orderId: string;
+    kind: 'payment' | 'balance';
+    method: string;
+    currencyCode: string;
+    amount: number;
+}
+
+export interface StorefrontPaymentAttemptReceipt {
+    requestId: string;
+    status: 'NOT_FOUND' | 'PROCESSING' | 'APPLIED' | 'REJECTED' | 'NOT_EXECUTED' | 'UNKNOWN';
+    errorCode: string | null;
+}
+
 export interface ActiveCustomer {
     id: string;
     firstName: string;

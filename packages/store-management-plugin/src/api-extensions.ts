@@ -1350,7 +1350,10 @@ export const shopApiExtensions = gql`
             inviteCode: String
             source: String
         ): RegisterCustomerAccountResult!
-        useMyReferralBalance(amount: Money!): ReferralBalancePaymentResult!
+        useMyReferralBalance(
+            amount: Money!
+            paymentAttempt: StorefrontPaymentAttemptInput
+        ): ReferralBalancePaymentResult!
         recordStorefrontVisit(visitorId: String): StorefrontVisitResult!
         recordStorefrontPageView(input: StorefrontPageViewInput!): StorefrontVisitResult!
         appealMyFraudRiskCase(input: AppealFraudRiskCaseInput!): CustomerFraudRiskAppeal!

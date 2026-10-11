@@ -196,6 +196,14 @@ export class StorefrontCartService implements OnApplicationBootstrap {
             .existsBy({ channelId: ctx.channelId, ...owner });
     }
 
+    /** Read ownership without initializing a cart or changing the active order session. */
+    async findOwnedCart(ctx: RequestContext): Promise<StorefrontCart | null> {
+        const owner = await this.getOwner(ctx);
+        return this.connection
+            .getRepository(ctx, StorefrontCart)
+            .findOneBy({ channelId: ctx.channelId, ...owner });
+    }
+
     async getCart(ctx: RequestContext): Promise<StorefrontCart> {
         const owner = await this.getOwner(ctx);
         const cart = await this.findOrCreateCart(ctx, owner);

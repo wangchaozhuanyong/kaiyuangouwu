@@ -1,3 +1,4 @@
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PluginCommonModule, VendurePlugin } from '@vendure/core';
 
 import { shopApiExtensions } from './api-extensions';
@@ -7,6 +8,7 @@ import { StorefrontCartCheckout } from './entities/storefront-cart-checkout.enti
 import { StorefrontCartCommandReceipt } from './entities/storefront-cart-command-receipt.entity';
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
+import { StorefrontPaymentAttempt } from './entities/storefront-payment-attempt.entity';
 import { StorefrontCartLifecycleService } from './storefront-cart-lifecycle.service';
 import { storefrontCartOrderProcess } from './storefront-cart-order-process';
 import { reconcileStorefrontCartCheckoutsTask } from './storefront-cart-tasks';
@@ -16,6 +18,9 @@ import {
     StorefrontCartShopResolver,
 } from './storefront-cart.resolver';
 import { StorefrontCartService } from './storefront-cart.service';
+import { StorefrontPaymentAttemptInterceptor } from './storefront-payment-attempt.interceptor';
+import { StorefrontPaymentAttemptResolver } from './storefront-payment-attempt.resolver';
+import { StorefrontPaymentAttemptService } from './storefront-payment-attempt.service';
 
 @VendurePlugin({
     imports: [PluginCommonModule],
@@ -25,15 +30,23 @@ import { StorefrontCartService } from './storefront-cart.service';
         StorefrontCartLine,
         StorefrontCartCheckout,
         StorefrontCartCheckoutLine,
+        StorefrontPaymentAttempt,
     ],
     exports: [CartCommandService, StorefrontCartService, StorefrontCartLifecycleService],
-    providers: [CartCommandService, StorefrontCartService, StorefrontCartLifecycleService],
+    providers: [
+        CartCommandService,
+        StorefrontCartService,
+        StorefrontCartLifecycleService,
+        StorefrontPaymentAttemptService,
+        { provide: APP_INTERCEPTOR, useClass: StorefrontPaymentAttemptInterceptor },
+    ],
     shopApiExtensions: {
         schema: shopApiExtensions,
         resolvers: [
             StorefrontCartShopResolver,
             StorefrontCartEntityResolver,
             StorefrontCartLineEntityResolver,
+            StorefrontPaymentAttemptResolver,
         ],
     },
     configuration: config => {

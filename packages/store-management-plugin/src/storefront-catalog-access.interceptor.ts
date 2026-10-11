@@ -38,6 +38,8 @@ const publicQueries = new Set([
     'validateReferralInviteCode',
     'referralProgram',
     'storefrontCart',
+    // Receipts are bound to the existing session/customer cart by the service.
+    'storefrontPaymentAttempt',
     'activeOrder',
     'eligibleShippingMethods',
     'eligiblePaymentMethods',
@@ -62,6 +64,7 @@ const publicMutations = new Set([
     'resetPassword',
     'applyStorefrontCartCommand',
     'recoverStorefrontCartCommand',
+    'fenceUnstartedStorefrontPaymentAttempt',
     'addStorefrontCartItem',
     'setStorefrontCartLineQuantity',
     'removeStorefrontCartLines',

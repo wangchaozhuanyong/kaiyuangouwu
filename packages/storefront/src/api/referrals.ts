@@ -276,18 +276,21 @@ export class ReferralsApi extends BaseDomainApi {
         this.assertNoError(result.registerCustomerWithReferral);
     }
 
-    async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
+    async useReferralBalance(
+        amount: number,
+        paymentAttempt?: import('../types').StorefrontPaymentAttemptInput,
+    ): Promise<ReferralBalancePaymentResult> {
         const result = await this.request<{ useMyReferralBalance: ReferralBalancePaymentResult }>(
             `
-                mutation UseStorefrontReferralBalance($amount: Money!) {
-                    useMyReferralBalance(amount: $amount) {
+                mutation UseStorefrontReferralBalance($amount: Money!, $paymentAttempt: StorefrontPaymentAttemptInput) {
+                    useMyReferralBalance(amount: $amount, paymentAttempt: $paymentAttempt) {
                         amount
                         wallet { ${referralWalletFields} }
                         order { ${orderFields} }
                     }
                 }
             `,
-            { amount },
+            { amount, paymentAttempt },
             undefined,
             20_000,
             true,
