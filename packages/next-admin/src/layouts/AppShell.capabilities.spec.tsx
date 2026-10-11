@@ -5,7 +5,11 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { AdminCapabilitySnapshot } from '../../../common/src/admin-capabilities';
+import {
+    adminCapabilityForPath,
+    adminCapabilityScopeAllows,
+    type AdminCapabilitySnapshot,
+} from '../../../common/src/admin-capabilities';
 import { AppShell } from './AppShell';
 
 const mountedBusinessPaths = vi.hoisted(() => [] as string[]);
@@ -34,6 +38,7 @@ let host: HTMLDivElement;
 let root: Root;
 let client: ApolloClient;
 let snapshot: AdminCapabilitySnapshot;
+let permissions: string[];
 let failBootstrap: boolean;
 let bootstrapRequests: number;
 beforeEach(() => {
@@ -53,6 +58,7 @@ beforeEach(() => {
     mountedBusinessPaths.length = 0;
     failBootstrap = false;
     bootstrapRequests = 0;
+    permissions = ['ReadProduct'];
     snapshot = {
         channelId: 'a',
         channelCode: 'store-a',
@@ -115,7 +121,7 @@ beforeEach(() => {
                                 me: {
                                     id: 'u',
                                     identifier: 'reader',
-                                    channels: [{ ...channel, permissions: ['ReadProduct'] }],
+                                    channels: [{ ...channel, permissions }],
                                 },
                                 activeAdministrator: {
                                     id: 'admin',
@@ -170,6 +176,24 @@ it('redirects unsupported store URLs before the business page mounts', async () 
     expect(mountedBusinessPaths).not.toContain('/settings/store-profile/shipping');
     expect(mountedBusinessPaths).toContain('/dashboard');
     expect(host.querySelector('a[href="/settings/system-ops/settings"]')).toBeNull();
+});
+it('mounts current-store risk review from the shared capability contract while hiding platform governance', async () => {
+    permissions = ['SuperAdmin'];
+    const definition = adminCapabilityForPath('/settings/governance-risk/cases')!;
+    const allowed = adminCapabilityScopeAllows(definition, snapshot.scope, snapshot.commerceMode);
+    snapshot.capabilities = [
+        ...snapshot.capabilities,
+        {
+            id: definition.id,
+            state: allowed ? 'READY' : 'UNSUPPORTED',
+            canRead: allowed,
+            canWrite: allowed,
+            canConfigure: allowed,
+        },
+    ];
+    await render('/settings/governance-risk/cases');
+    expect(mountedBusinessPaths).toContain('/settings/governance-risk/cases');
+    expect(host.querySelector('a[href="/settings/governance-risk/rules"]')).toBeNull();
 });
 it('does not mount a create page with read permission alone', async () => {
     await render('/catalog/products/new');

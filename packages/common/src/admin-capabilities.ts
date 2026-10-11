@@ -246,11 +246,12 @@ export const ADMIN_CAPABILITY_DEFINITIONS: readonly AdminCapabilityDefinition[] 
     page('/settings/system-ops/api-keys', 'PLATFORM', ['ReadApiKey'], ['CreateApiKey', 'UpdateApiKey']),
     ...section(
         '/settings/governance-risk',
-        ['rules', 'approvals', 'cases', 'report-schedule', 'audit', 'reports'],
+        ['rules', 'approvals', 'report-schedule', 'audit', 'reports'],
         'PLATFORM',
         ['SuperAdmin'],
         ['SuperAdmin'],
     ),
+    page('/settings/governance-risk/cases', 'BOTH', ['SuperAdmin'], ['SuperAdmin']),
     page(
         '/settings/store-profile/stores',
         'BOTH',
