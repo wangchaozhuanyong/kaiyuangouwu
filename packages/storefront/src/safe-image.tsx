@@ -56,6 +56,8 @@ export function ImagePlaceholder({
 
 export type SafeImageProps = {
     src: string;
+    /** Native art direction keeps SSR and the browser on the same image candidate. */
+    mediaSources?: Array<{ media: string; src: string; sizes?: string; width?: number; height?: number }>;
     fallbackSrc?: string;
     errorFallback?: ReactNode;
     placeholderSrc?: string;
@@ -76,6 +78,7 @@ export function SafeImage(props: SafeImageProps) {
         props.imageKind ?? '',
         props.srcSet ?? '',
         props.sizes ?? '',
+        JSON.stringify(props.mediaSources ?? []),
     ].join('\u0000');
     const [previous, setPrevious] = useState({ identity: '', source: '' });
     return (
@@ -118,6 +121,7 @@ export function clearDecodedImageCache(): void {
 
 function SafeImageSource({
     src,
+    mediaSources,
     fallbackSrc,
     errorFallback,
     placeholderSrc,
@@ -142,12 +146,18 @@ function SafeImageSource({
     const [previewReady, setPreviewReady] = useState(false);
     const previewRef = useRef<HTMLImageElement>(null);
     const sources = imageSources(currentSrc, responsive ? imageKind : undefined, imageProps.sizes);
-    const sourceKey = [sources.src, sources.srcSet ?? imageProps.srcSet ?? '', sources.sizes ?? ''].join(
-        '\u0000',
-    );
+    const sourceKey = [
+        sources.src,
+        sources.srcSet ?? imageProps.srcSet ?? '',
+        sources.sizes ?? '',
+        JSON.stringify(mediaSources ?? []),
+    ].join('\u0000');
     // A decoded small srcset candidate does not make a larger candidate ready.
     const initiallyDecoded =
-        !sources.srcSet && !imageProps.srcSet && isImageAlreadyDecoded(sources.src, currentSrc, sourceKey);
+        !mediaSources?.length &&
+        !sources.srcSet &&
+        !imageProps.srcSet &&
+        isImageAlreadyDecoded(sources.src, currentSrc, sourceKey);
     const [loadedCandidate, setLoadedCandidate] = useState(() =>
         initiallyDecoded ? sourceKey + '\u0001cached' : '',
     );
@@ -172,7 +182,11 @@ function SafeImageSource({
     function useFallback() {
         if (!active.current) return;
         setLoadedCandidate('');
-        const recovery = sources.recoverySrc;
+        const selected = mediaSources?.find(source => window.matchMedia(source.media).matches);
+        const recovery =
+            selected && responsive
+                ? imageSources(selected.src, imageKind, selected.sizes).recoverySrc
+                : sources.recoverySrc;
         const failedUrl = imageRef.current?.currentSrc || imageRef.current?.src;
         const fallback = fallbackSrc ? imageSources(fallbackSrc, imageKind, imageProps.sizes) : undefined;
         const fallbackUrl = fallback?.recoverySrc ?? fallback?.src;
@@ -201,9 +215,11 @@ function SafeImageSource({
                 )
                     return;
                 markImageDecoded(image.currentSrc || image.src);
-                markImageDecoded(sources.src);
-                markImageDecoded(currentSrc);
-                markImageDecoded(sourceKey);
+                if (!mediaSources?.length) {
+                    markImageDecoded(sources.src);
+                    markImageDecoded(currentSrc);
+                    markImageDecoded(sourceKey);
+                }
                 markImageDecoded(candidate);
                 if (notifiedCandidate.current !== candidate) {
                     notifiedCandidate.current = candidate;
@@ -317,20 +333,22 @@ function SafeImageSource({
             style={{ minHeight: failed ? fallbackHeight : undefined }}
         >
             {!failed ? (
-                <img
-                    {...imageProps}
-                    ref={imageRef}
-                    src={sources.src}
-                    srcSet={sources.srcSet ?? imageProps.srcSet}
-                    sizes={sources.sizes}
-                    width={imageProps.width ?? sources.width}
-                    height={imageProps.height ?? sources.height}
-                    alt={alt}
-                    decoding={imageProps.decoding ?? 'async'}
-                    className={`safe-image${loaded ? ' is-loaded' : ''}${className ? ' ' + className : ''}`}
-                    onLoad={event => reveal(event.currentTarget, () => onLoad?.(event))}
-                    onError={useFallback}
-                />
+                <SafeImageElement mediaSources={responsive ? mediaSources : undefined} imageKind={imageKind}>
+                    <img
+                        {...imageProps}
+                        ref={imageRef}
+                        src={sources.src}
+                        srcSet={sources.srcSet ?? imageProps.srcSet}
+                        sizes={sources.sizes}
+                        width={imageProps.width ?? sources.width}
+                        height={imageProps.height ?? sources.height}
+                        alt={alt}
+                        decoding={imageProps.decoding ?? 'async'}
+                        className={`safe-image${loaded ? ' is-loaded' : ''}${className ? ' ' + className : ''}`}
+                        onLoad={event => reveal(event.currentTarget, () => onLoad?.(event))}
+                        onError={useFallback}
+                    />
+                </SafeImageElement>
             ) : (
                 <span
                     className="safe-image-unavailable"
@@ -386,5 +404,36 @@ function SafeImageSource({
                 )}
             </span>
         </span>
+    );
+}
+
+/** A picture adds no layout box; all geometry remains owned by the existing media frame. */
+function SafeImageElement({
+    children,
+    mediaSources,
+    imageKind,
+}: {
+    children: ReactNode;
+    mediaSources: SafeImageProps['mediaSources'];
+    imageKind?: StorefrontImageKind;
+}) {
+    if (!mediaSources?.length) return <>{children}</>;
+    return (
+        <picture className="safe-image-art-direction">
+            {mediaSources.map(source => {
+                const descriptor = imageSources(source.src, imageKind, source.sizes);
+                return (
+                    <source
+                        key={source.media}
+                        media={source.media}
+                        srcSet={descriptor.srcSet ?? descriptor.src}
+                        sizes={descriptor.sizes}
+                        width={source.width}
+                        height={source.height}
+                    />
+                );
+            })}
+            {children}
+        </picture>
     );
 }

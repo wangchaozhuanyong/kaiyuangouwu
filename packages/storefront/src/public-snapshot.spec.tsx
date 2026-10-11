@@ -21,6 +21,132 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    for (const languageCode of fixtureLanguages)
+        for (const id of ['services', 'support', 'terms', 'privacy'] as const) {
+            it(`${languageCode}/${id} loads the requested public page rather than homepage dependencies`, async () => {
+                const page = syntheticPage(fixtureStores[0], languageCode, 'home');
+                page.request = { kind: 'page', id };
+                page.requestKey = publicPageRequestKey(page.request);
+                page.route = `/${languageCode === 'zh_Hans' ? 'zh' : 'en'}/${id}`;
+                const html = await renderPublicPage(page);
+                expect(html).not.toContain('class="page home-page"');
+                expect(html).toContain('id="storefront-content"');
+                if (id === 'terms' || id === 'privacy') expect(html).toContain('legal-page');
+                else if (id === 'services') expect(html).toContain('business-services-page');
+                else
+                    expect(html).toContain(
+                        languageCode === 'zh_Hans' ? '客服信息暂未配置' : 'Support is not configured yet',
+                    );
+            });
+        }
+
+    it.each(fixtureLanguages)(
+        '%s keeps the initial flash-sale countdown identical after a hydration delay',
+        async languageCode => {
+            const generatedAt = Date.parse('2026-10-11T12:00:00.000Z');
+            const clock = vi.spyOn(Date, 'now').mockReturnValue(generatedAt);
+            const page = syntheticPage(fixtureStores[0], languageCode, 'home', { generatedAt });
+            const content = fixtureValue(page.content);
+            const product = fixtureValue(page.products)[0];
+            const flashSale: StorefrontFlashSale = {
+                id: 'synthetic-hydration-flash-sale',
+                startsAt: null,
+                endsAt: new Date(generatedAt + 120_000).toISOString(),
+                items: [
+                    {
+                        productId: product.id,
+                        productVariantId: product.variants[0].id,
+                        productName: product.name,
+                        variantName: product.variants[0].name,
+                        originalPrice: product.variants[0].priceWithTax,
+                        salePrice: 1_200,
+                        currencyCode: product.variants[0].currencyCode,
+                        imageUrl: fixtureValue(product.featuredAsset).preview,
+                    },
+                ],
+            };
+            content.blocks.push({
+                ...content.blocks[0],
+                id: 'synthetic-hydration-flash-sale-block',
+                code: 'synthetic-hydration-flash-sale-block',
+                type: 'FLASH_SALE',
+                title: languageCode === 'zh_Hans' ? '合成秒杀' : 'Synthetic flash sale',
+                items: [],
+            });
+            fixtureValue(content.settings.configuredBlockTypes).push('FLASH_SALE');
+            page.flashSales = [flashSale];
+            const serverHtml = await renderPublicPage(page);
+            expect(serverHtml).toContain('class="flash-sale-card"');
+            expect(serverHtml).toContain('<strong>0 : 02 : 00</strong>');
+
+            clock.mockReturnValue(generatedAt + 2_500);
+            const hydrationHtml = await renderPublicPage(page);
+            expect(hydrationHtml).toBe(serverHtml);
+        },
+    );
+
+    it.each(fixtureLanguages)(
+        '%s keeps an expiring announcement in the same initial snapshot after a hydration delay',
+        async languageCode => {
+            const generatedAt = Date.parse('2026-10-11T12:00:00.000Z');
+            const clock = vi.spyOn(Date, 'now').mockReturnValue(generatedAt);
+            const page = syntheticPage(fixtureStores[0], languageCode, 'home', { generatedAt });
+            const content = fixtureValue(page.content);
+            const announcement: StorefrontSystemAnnouncement = {
+                id: 'synthetic-hydration-announcement',
+                createdAt: new Date(generatedAt - 60_000).toISOString(),
+                title: languageCode === 'zh_Hans' ? '合成到期公告' : 'Synthetic expiring announcement',
+                content: languageCode === 'zh_Hans' ? '合成公告正文' : 'Synthetic announcement body',
+                linkUrl: null,
+                startsAt: new Date(generatedAt - 60_000).toISOString(),
+                endsAt: new Date(generatedAt + 1_000).toISOString(),
+            };
+            content.blocks.push({
+                ...content.blocks[0],
+                id: 'synthetic-hydration-notice-block',
+                code: 'synthetic-hydration-notice-block',
+                type: 'NOTICE',
+                title: '',
+                items: [],
+            });
+            fixtureValue(content.settings.configuredBlockTypes).push('NOTICE');
+            content.systemAnnouncements = [announcement];
+            const serverHtml = await renderPublicPage(page);
+            expect(serverHtml).toContain(announcement.title);
+            expect(serverHtml).toContain(announcement.content);
+
+            clock.mockReturnValue(generatedAt + 2_500);
+            const hydrationHtml = await renderPublicPage(page);
+            expect(hydrationHtml).toBe(serverHtml);
+        },
+    );
+
+    it('sends homepage critical styles with the actual first HTML and reserves deferred catalogs', async () => {
+        const page = syntheticPage(fixtureStores[0], 'zh_Hans', 'home');
+        const content = fixtureValue(page.content);
+        for (const type of ['BEST_SELLERS', 'RECOMMENDATIONS'] as const) {
+            content.blocks.push({ ...content.blocks[0], id: type, type, items: [] });
+            fixtureValue(content.settings.configuredBlockTypes).push(type);
+        }
+        const html = await renderPublicPage(page);
+        expect(html).toContain('data-href="storefront-home-showcase"');
+        expect(html.indexOf('storefront-home-showcase')).toBeLessThan(html.indexOf('class="page home-page"'));
+        expect(html).toContain('data-home-catalog="sales"');
+        expect(html).toContain('data-home-catalog="recommended"');
+    });
+
+    it('does not call unavailable managed selections an empty collection during the snapshot', async () => {
+        const page = syntheticPage(fixtureStores[0], 'zh_Hans', 'home');
+        const block = fixtureValue(page.content).blocks.find(
+            candidate => candidate.type === 'FEATURED_COLLECTION',
+        );
+        fixtureValue(block).settings = { selectedProductIds: ['not-in-bootstrap'], displayCount: 4 };
+        const html = await renderPublicPage(page);
+        expect(html).not.toContain('精选商品即将上架');
+        expect(html).toContain('featured-collection-mosaic');
+        expect(html).toContain('aria-busy="true"');
+    });
+
     it.each(fixtureLanguages)(
         '%s keeps the initial flash-sale countdown identical after a hydration delay',
         async languageCode => {

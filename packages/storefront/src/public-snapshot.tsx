@@ -9,15 +9,9 @@ import {
 import { useEffect } from 'react';
 
 import { ShopApi } from './api';
+import { ResponsiveHomeHeaderPlaceholder } from './components/common/responsive-home-header-placeholder';
 import { DesktopLayoutContext } from './desktop-layout';
 import { localeFor, marketForStorefrontConfig } from './i18n';
-import { BusinessServicesPage } from './pages/business-services-page';
-import { CategoryPage } from './pages/category-page';
-import { GuideContent } from './pages/guide-page';
-import { HomePage } from './pages/home-page';
-import { ManagedLegalPage } from './pages/legal-page';
-import { ProductDetailPage } from './pages/product-detail-page';
-import { SupportPage } from './pages/support-page';
 import { publicRouteRewrite } from './public-route-rewrite';
 import {
     BusinessServicesPageContext,
@@ -28,12 +22,48 @@ import {
 } from './storefront-page-contexts';
 import { seedPublicPage, type PublicPageData } from './storefront-page-data';
 import { type RouteState } from './storefront-router';
+import { contentStringArraySetting } from './storefront-utils';
 import { type StorefrontContentTargetType, type StorefrontFlashSale, type StorefrontLanguage } from './types';
+
+type SnapshotComponents = {
+    BusinessServicesPage?: (typeof import('./pages/business-services-page'))['BusinessServicesPage'];
+    CategoryPage?: (typeof import('./pages/category-page'))['CategoryPage'];
+    GuideContent?: (typeof import('./pages/guide-page'))['GuideContent'];
+    HomePage?: (typeof import('./pages/home-page'))['HomePage'];
+    ManagedLegalPage?: (typeof import('./pages/legal-page'))['ManagedLegalPage'];
+    ProductDetailPage?: (typeof import('./pages/product-detail-page'))['ProductDetailPage'];
+    SupportPage?: (typeof import('./pages/support-page'))['SupportPage'];
+};
+
+async function loadSnapshotComponents(page: PublicPageData): Promise<SnapshotComponents> {
+    const request = page.request;
+    if (request?.kind === 'article' && page.publicContent) return import('./pages/guide-page');
+    if (request?.kind === 'product' && page.product) return import('./pages/product-detail-page');
+    if (request?.kind === 'catalog') return import('./pages/category-page');
+    if (request?.kind === 'page' && request.id === 'services')
+        return import('./pages/business-services-page');
+    if (request?.kind === 'page' && request.id === 'support') return import('./pages/support-page');
+    if (request?.kind === 'page') return import('./pages/legal-page');
+    return import('./pages/home-page');
+}
+
+function requiredComponent<T>(component: T | undefined): T {
+    if (!component) throw new Error('Missing public snapshot component');
+    return component;
+}
 
 const idle = () => undefined;
 
 /** The existing public page components consume the same anonymous facts on the server and browser. */
-function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () => void }) {
+function SnapshotPage({
+    page,
+    onReady,
+    components,
+}: {
+    page: PublicPageData;
+    onReady?: () => void;
+    components: SnapshotComponents;
+}) {
     useEffect(() => {
         onReady?.();
     }, [onReady]);
@@ -67,8 +97,10 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
     const request = page.request;
     let body;
     if (request?.kind === 'article' && page.publicContent) {
+        const GuideContent = requiredComponent(components.GuideContent);
         body = <GuideContent content={page.publicContent} language={language} />;
     } else if (request?.kind === 'product' && page.product) {
+        const ProductDetailPage = requiredComponent(components.ProductDetailPage);
         body = (
             <ProductDetailPageContext.Provider
                 value={{
@@ -98,6 +130,7 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
             </ProductDetailPageContext.Provider>
         );
     } else if (request?.kind === 'catalog') {
+        const CategoryPage = requiredComponent(components.CategoryPage);
         const input = request.input;
         body = (
             <CategoryPageContext.Provider
@@ -144,6 +177,7 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
             </CategoryPageContext.Provider>
         );
     } else if (request?.kind === 'page' && request.id === 'services') {
+        const BusinessServicesPage = requiredComponent(components.BusinessServicesPage);
         body = (
             <BusinessServicesPageContext.Provider
                 value={{
@@ -156,6 +190,7 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
             </BusinessServicesPageContext.Provider>
         );
     } else if (request?.kind === 'page' && request.id === 'support') {
+        const SupportPage = requiredComponent(components.SupportPage);
         body = (
             <SupportPageContext.Provider
                 value={{ language, content: contentBlocks.find(block => block.type === 'SUPPORT') }}
@@ -164,6 +199,7 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
             </SupportPageContext.Provider>
         );
     } else if (request?.kind === 'page') {
+        const ManagedLegalPage = requiredComponent(components.ManagedLegalPage);
         body = (
             <ManagedLegalPage
                 kind={request.id === 'privacy' ? 'privacy' : 'terms'}
@@ -184,6 +220,7 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
             />
         );
     } else {
+        const HomePage = requiredComponent(components.HomePage);
         body = (
             <HomePageContext.Provider
                 value={{
@@ -191,7 +228,12 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
                     products,
                     collections: page.collections ?? [],
                     managedContentProducts: products,
-                    managedContentLoading: false,
+                    responsiveIntro: true,
+                    managedContentLoading: contentBlocks.some(block =>
+                        contentStringArraySetting(block.settings?.selectedProductIds).some(
+                            id => !products.some(product => product.id === id),
+                        ),
+                    ),
                     heroAutoplayIntervalSeconds: 5,
                     configuredBlockTypes:
                         page.content?.settings?.configuredBlockTypes ??
@@ -203,6 +245,8 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
                     systemAnnouncements: page.content?.systemAnnouncements ?? [],
                     initialRenderTime: page.generatedAt,
                     bestSellerProducts: [],
+                    bestSellersLoading: true,
+                    recommendationsLoading: true,
                     recommendationProducts: [],
                     contentError: '',
                     loading: false,
@@ -233,7 +277,13 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
     }
     return (
         <DesktopLayoutContext.Provider value={false}>
-            <div className="storefront-app" data-route={request?.kind ?? 'home'}>
+            <div
+                className={`storefront-app${request?.kind === 'home' ? ' desktop-store-layout' : ''}`}
+                data-route={request?.kind ?? 'home'}
+            >
+                {request?.kind === 'home' && (
+                    <ResponsiveHomeHeaderPlaceholder name={storefrontName} logoUrl={config.logoUrl ?? null} />
+                )}
                 <div id="storefront-content" tabIndex={-1}>
                     {body}
                 </div>
@@ -243,11 +293,14 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
 }
 
 export async function createPublicSnapshotApp(page: PublicPageData, onReady?: () => void) {
+    const components = await loadSnapshotComponents(page);
     const queryClient = new QueryClient({
         defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     });
     seedPublicPage(queryClient, page);
-    const root = createRootRoute({ component: () => <SnapshotPage page={page} onReady={onReady} /> });
+    const root = createRootRoute({
+        component: () => <SnapshotPage page={page} onReady={onReady} components={components} />,
+    });
     const catchAll = createRoute({ getParentRoute: () => root, path: '$' });
     const router = createRouter({
         routeTree: root.addChildren([catchAll]),

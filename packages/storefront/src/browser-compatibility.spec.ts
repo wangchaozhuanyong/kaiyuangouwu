@@ -49,7 +49,7 @@ describe('browser compatibility policy', () => {
 
     it('keeps section actions large enough for touch input', () => {
         expect(stylesheet).toMatch(
-            /\.section-header-action-btn,[\s\S]*?\.section-header > button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*32px;/u,
+            /\.section-header-action-btn,[\s\S]*?\.section-header > button\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/u,
         );
     });
 
