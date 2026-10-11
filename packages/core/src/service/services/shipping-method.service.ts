@@ -419,7 +419,7 @@ export class ShippingMethodService {
         );
     }
 
-    /** Lists explicit platform templates and this store's methods, including disabled store methods. */
+    /** Lists this store's methods; platform SuperAdmins can also review unclaimed historical originals. */
     async getShippingTemplateManagement(ctx: RequestContext) {
         this.assertShippingManagementContext(ctx);
         const [platform, storeSettings, local, defaultChannel] = await Promise.all([
@@ -438,8 +438,39 @@ export class ShippingMethodService {
             : [];
         const isPlatform = ctx.channel.code === DEFAULT_CHANNEL_CODE;
         const ownershipEntries = isPlatform ? await this.shippingOwnershipEntries(ctx) : [];
+        let legacyOriginals: ShippingMethod[] = [];
+        if (isPlatform && ctx.userHasPermissions([Permission.SuperAdmin])) {
+            const excludedIds = [
+                ...new Set([
+                    ...templateIds,
+                    ...ownershipEntries.flatMap(entry => storeShippingMethodSettings(entry.value).ownedIds),
+                ]),
+            ];
+            const query = this.connection
+                .getRepository(ctx, ShippingMethod)
+                .createQueryBuilder('legacyShippingMethod')
+                .setFindOptions({
+                    where: { deletedAt: IsNull() },
+                    relations: ['channels'],
+                    relationLoadStrategy: 'query',
+                })
+                .innerJoin(
+                    'legacyShippingMethod.channels',
+                    'legacyOperatingChannel',
+                    'legacyOperatingChannel.id <> :legacyDefaultChannelId',
+                    { legacyDefaultChannelId: defaultChannel.id },
+                );
+            if (excludedIds.length) {
+                query.andWhere('legacyShippingMethod.id NOT IN (:...legacyExcludedIds)', {
+                    legacyExcludedIds: excludedIds,
+                });
+            }
+            legacyOriginals = await query.getMany();
+        }
         const items = [
-            ...new Map([...templates, ...local.items].map(method => [String(method.id), method])).values(),
+            ...new Map(
+                [...templates, ...local.items, ...legacyOriginals].map(method => [String(method.id), method]),
+            ).values(),
         ];
         return {
             isPlatform,

@@ -444,38 +444,11 @@ export class StorefrontPublicSeoService {
         const reader = this.moduleRef.get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
             strict: false,
         });
-        if (kind === 'index') {
-            const products = await reader.list(ctx, { take: 1 });
-            const collections = await this.connection
-                .getRepository(ctx, Collection)
-                .createQueryBuilder('collection')
-                .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
-                    channelId: ctx.channelId,
-                })
-                .where('collection.isPrivate = :private', { private: false })
-                .getCount();
-            const paths = [
-                '/sitemap-pages.xml',
-                ...Array.from(
-                    { length: Math.ceil(products.totalItems / SHARD_SIZE) },
-                    (_, number) => `/sitemap-products-${number}.xml`,
-                ),
-                ...Array.from(
-                    { length: Math.ceil(collections / SHARD_SIZE) },
-                    (_, number) => `/sitemap-collections-${number}.xml`,
-                ),
-            ];
-            await this.assertDiscovery(ctx, primary, configuration.version);
-            return sitemapXml(
-                paths.map(path => ({ url: `https://${primary}${path}` })),
-                true,
-            );
-        }
         const overrides = await this.seo.listPublished(
             ctx,
             kind === 'products'
                 ? ['PRODUCT']
-                : kind === 'collections'
+                : kind === 'collections' || kind === 'index'
                   ? ['COLLECTION']
                   : ['HOME', 'PAGE', 'ARTICLE'],
         );
@@ -492,6 +465,41 @@ export class StorefrontPublicSeoService {
                     item.languageCode === code &&
                     item.payload.indexMode === 'NOINDEX',
             );
+        if (kind === 'index') {
+            const products = await reader.list(ctx, { take: 1 });
+            const collections = await this.connection
+                .getRepository(ctx, Collection)
+                .createQueryBuilder('collection')
+                .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
+                    channelId: ctx.channelId,
+                })
+                .where('collection.isPrivate = :private', { private: false })
+                .getCount();
+            const paths = [
+                '/sitemap-pages.xml',
+                ...Array.from(
+                    { length: Math.ceil(products.totalItems / SHARD_SIZE) },
+                    (_, number) => `/sitemap-products-${number}.xml`,
+                ),
+            ];
+            for (let number = 0; number < Math.ceil(collections / SHARD_SIZE); number++) {
+                const shardEntries = await this.collectionSitemapEntries(
+                    ctx,
+                    primary,
+                    settings.enabledLanguages,
+                    number,
+                    noindex,
+                );
+                if (shardEntries.length) paths.push(`/sitemap-collections-${number}.xml`);
+            }
+            await this.assertDiscovery(ctx, primary, configuration.version);
+            if (overrideVersion(await this.seo.listPublished(ctx, ['COLLECTION'])) !== initialOverrideVersion)
+                throw new ServiceUnavailableException('Published discovery pages changed during read');
+            return sitemapXml(
+                paths.map(path => ({ url: `https://${primary}${path}` })),
+                true,
+            );
+        }
         const entries: Array<{ url: string; lastmod?: string }> = [];
         if (kind === 'pages') {
             const requests: PublicPageRequest[] = [
@@ -594,36 +602,15 @@ export class StorefrontPublicSeoService {
                     });
                 }
         } else {
-            const entities = await this.connection
-                .getRepository(ctx, Collection)
-                .createQueryBuilder('collection')
-                .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
-                    channelId: ctx.channelId,
-                })
-                .leftJoinAndSelect('collection.translations', 'translation')
-                .where('collection.isPrivate = :private', { private: false })
-                .orderBy('collection.id', 'ASC')
-                .skip(shard * SHARD_SIZE)
-                .take(SHARD_SIZE)
-                .getMany();
-            for (const entity of entities)
-                for (const code of settings.enabledLanguages) {
-                    if (
-                        entity.isRoot ||
-                        !entity.translations.some(
-                            item =>
-                                item.languageCode === (code as LanguageCode) &&
-                                plain(item.name) &&
-                                plain(item.description),
-                        ) ||
-                        noindex('COLLECTION', String(entity.id), code)
-                    )
-                        continue;
-                    entries.push({
-                        url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}/category?collectionId=${encodeURIComponent(entity.id)}`,
-                        lastmod: entity.updatedAt.toISOString(),
-                    });
-                }
+            entries.push(
+                ...(await this.collectionSitemapEntries(
+                    ctx,
+                    primary,
+                    settings.enabledLanguages,
+                    shard,
+                    noindex,
+                )),
+            );
         }
         await this.assertDiscovery(ctx, primary, configuration.version);
         const currentOverrides = await this.seo.listPublished(
@@ -637,5 +624,47 @@ export class StorefrontPublicSeoService {
         if (overrideVersion(currentOverrides) !== initialOverrideVersion)
             throw new ServiceUnavailableException('Published discovery pages changed during read');
         return sitemapXml(entries);
+    }
+
+    private async collectionSitemapEntries(
+        ctx: RequestContext,
+        primary: string,
+        languages: StorefrontSeoLanguage[],
+        shard: number,
+        noindex: (target: string, id: string, code: string) => boolean,
+    ) {
+        // Keep the index and shard filters identical, without renumbering raw catalog pages.
+        const entities = await this.connection
+            .getRepository(ctx, Collection)
+            .createQueryBuilder('collection')
+            .innerJoin('collection.channels', 'channel', 'channel.id = :channelId', {
+                channelId: ctx.channelId,
+            })
+            .leftJoinAndSelect('collection.translations', 'translation')
+            .where('collection.isPrivate = :private', { private: false })
+            .orderBy('collection.id', 'ASC')
+            .skip(shard * SHARD_SIZE)
+            .take(SHARD_SIZE)
+            .getMany();
+        const entries: Array<{ url: string; lastmod: string }> = [];
+        for (const entity of entities)
+            for (const code of languages) {
+                if (
+                    entity.isRoot ||
+                    !entity.translations.some(
+                        item =>
+                            item.languageCode === (code as LanguageCode) &&
+                            plain(item.name) &&
+                            plain(item.description),
+                    ) ||
+                    noindex('COLLECTION', String(entity.id), code)
+                )
+                    continue;
+                entries.push({
+                    url: `https://${primary}/${code === 'zh_Hans' ? 'zh' : 'en'}/category?collectionId=${encodeURIComponent(entity.id)}`,
+                    lastmod: entity.updatedAt.toISOString(),
+                });
+            }
+        return entries;
     }
 }

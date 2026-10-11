@@ -66,6 +66,7 @@ import type {
 } from '../../graphql/generic-promotions.graphql';
 import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
 import {
     configurableArgumentLabel,
@@ -160,6 +161,18 @@ const getSourceTranslation = (item: { translations: TranslationItem[] }) =>
 const getSourceName = (item: { name: string; translations: TranslationItem[] }) =>
     getSourceTranslation(item)?.name ?? '';
 
+const collectionEditorSourceSignature = (item: CollectionItem) =>
+    JSON.stringify({
+        id: item.id,
+        translations: item.translations,
+        featuredAsset: item.featuredAsset,
+        isPrivate: item.isPrivate,
+        parentId: item.parentId,
+        inheritFilters: item.inheritFilters,
+        filters: item.filters,
+        customFields: item.customFields,
+    });
+
 const splitValues = (value: string) =>
     value
         .split(/[，,\n]/)
@@ -198,6 +211,8 @@ export function CategoriesModule() {
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<EditableItem | null>(null);
     const [formName, setFormName] = useState('');
+    const [formEnglishName, setFormEnglishName] = useState('');
+    const [formEnglishDescription, setFormEnglishDescription] = useState('');
     const [formCode, setFormCode] = useState('');
     const [formValues, setFormValues] = useState('');
     const [formParentId, setFormParentId] = useState('');
@@ -207,6 +222,8 @@ export function CategoriesModule() {
     const [formFilters, setFormFilters] = useState<OperationValue[]>([]);
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [saving, setSaving] = useState(false);
+    const [initialEditorDraft, setInitialEditorDraft] = useState('');
+    const [editorScope, setEditorScope] = useState<string | undefined>(undefined);
     const [expandedCollectionIds, setExpandedCollectionIds] = useState<Set<string>>(() => new Set());
     const [selectedCollectionIds, setSelectedCollectionIds] = useState<Set<string>>(() => new Set());
     const [bulkDeletingCollections, setBulkDeletingCollections] = useState(false);
@@ -333,8 +350,42 @@ export function CategoriesModule() {
         // oxlint-disable-next-line react/set-state-in-effect
         setSelectedCollectionIds(new Set());
     }, [data?.activeChannel.id]);
-    // 内容翻译插件要求所有原生目录内容都从简体中文源语言写入。
+    // 中文来源固定为简体中文；已有英文修订单独沿用原生人工翻译保护。
     const languageCode = SOURCE_LANGUAGE_CODE;
+
+    const serializedEditorDraft = JSON.stringify({
+        name: formName,
+        englishName: formEnglishName,
+        englishDescription: formEnglishDescription,
+        code: formCode,
+        values: formValues,
+        parentId: formParentId,
+        featuredAssetId: formFeaturedAsset?.id ?? null,
+        isPrivate: formIsPrivate,
+        inheritFilters: formInheritFilters,
+        filters: formFilters,
+        customFields: customFieldValues,
+    });
+    const categoryEditorDirty =
+        isEditorOpen && activeTab === 'CATEGORIES' && serializedEditorDraft !== initialEditorDraft;
+    useUnsavedChangesWarning(
+        categoryEditorDirty || (isEditorOpen && activeTab === 'CATEGORIES' && saving),
+        '分类还有未保存的修改，确定放弃吗？',
+    );
+    const currentEditingCollection =
+        editingItem && 'slug' in editingItem
+            ? collections.find(item => item.id === editingItem.id)
+            : undefined;
+    const categorySourceChanged = Boolean(
+        isEditorOpen &&
+        activeTab === 'CATEGORIES' &&
+        (editorScope !== data?.activeChannel.id ||
+            (editingItem &&
+                'slug' in editingItem &&
+                (!currentEditingCollection ||
+                    collectionEditorSourceSignature(currentEditingCollection) !==
+                        collectionEditorSourceSignature(editingItem)))),
+    );
 
     const matchingOptionGroups = useMemo(() => {
         const search = optionGroupSearch.trim().toLocaleLowerCase();
@@ -476,35 +527,70 @@ export function CategoriesModule() {
     const openEditor = (item: EditableItem | null = null) => {
         setEditingItem(item);
         const sourceTranslation = item ? getSourceTranslation(item) : undefined;
-        setFormName(item ? getSourceName(item) : '');
-        setFormCode(item ? ('slug' in item ? sourceTranslation?.slug || item.slug : item.code) : '');
-        setFormValues(
+        const englishTranslation =
+            item && 'slug' in item ? getLocalizedEntityTranslation(item.translations, 'en') : undefined;
+        const name = item ? getSourceName(item) : '';
+        const code = item ? ('slug' in item ? sourceTranslation?.slug || item.slug : item.code) : '';
+        const values =
             item && 'options' in item
                 ? item.options.map(getSourceName).join('，')
                 : item && 'values' in item
                   ? item.values.map(getSourceName).join('，')
-                  : '',
-        );
-        setFormParentId(item && 'parentId' in item ? (item.parentId ?? '') : '');
-        setFormFeaturedAsset(item && 'slug' in item ? (item.featuredAsset ?? null) : null);
-        setFormIsPrivate(item && 'isPrivate' in item ? item.isPrivate : false);
-        setFormInheritFilters(item && 'filters' in item ? item.inheritFilters : true);
-        setFormFilters(
+                  : '';
+        const parentId = item && 'parentId' in item ? (item.parentId ?? '') : '';
+        const featuredAsset = item && 'slug' in item ? (item.featuredAsset ?? null) : null;
+        const isPrivate = item && 'isPrivate' in item ? item.isPrivate : false;
+        const inheritFilters = item && 'filters' in item ? item.inheritFilters : true;
+        const filters =
             item && 'filters' in item
                 ? item.filters.map(filter => ({ code: filter.code, arguments: filter.args }))
-                : [],
-        );
-        setCustomFieldValues(
+                : [];
+        const customFields =
             item && 'filters' in item
                 ? customFieldValuesFromEntity(collectionCustomFields, item.customFields, item.translations)
-                : customFieldValuesFromEntity(collectionCustomFields, null),
+                : customFieldValuesFromEntity(collectionCustomFields, null);
+        setFormName(name);
+        setFormEnglishName(englishTranslation?.name ?? '');
+        setFormEnglishDescription(englishTranslation?.description ?? '');
+        setFormCode(code);
+        setFormValues(values);
+        setFormParentId(parentId);
+        setFormFeaturedAsset(featuredAsset);
+        setFormIsPrivate(isPrivate);
+        setFormInheritFilters(inheritFilters);
+        setFormFilters(filters);
+        setCustomFieldValues(customFields);
+        setInitialEditorDraft(
+            JSON.stringify({
+                name,
+                englishName: englishTranslation?.name ?? '',
+                englishDescription: englishTranslation?.description ?? '',
+                code,
+                values,
+                parentId,
+                featuredAssetId: featuredAsset?.id ?? null,
+                isPrivate,
+                inheritFilters,
+                filters,
+                customFields,
+            }),
         );
+        setEditorScope(data?.activeChannel.id);
         setActionError('');
         setIsEditorOpen(true);
     };
 
-    const closeEditor = () => {
+    const closeEditor = async () => {
         if (saving) return;
+        if (
+            categoryEditorDirty &&
+            !(await requestConfirmation({
+                title: '放弃分类修改？',
+                description: '尚未保存的中文、英文及分类设置将被放弃。',
+                confirmLabel: '放弃修改',
+            }))
+        )
+            return;
         setIsEditorOpen(false);
         setEditingItem(null);
     };
@@ -585,6 +671,10 @@ export function CategoriesModule() {
     };
 
     const handleSave = async () => {
+        if (categorySourceChanged) {
+            showError('分类内容已更新或当前店铺已切换，请关闭编辑并重新打开后保存。');
+            return;
+        }
         const name = formName.trim();
         if (!name) {
             showError('名称不能为空');
@@ -634,31 +724,107 @@ export function CategoriesModule() {
         try {
             if (activeTab === 'CATEGORIES') {
                 if (editingItem && 'slug' in editingItem) {
+                    const englishTranslation = getLocalizedEntityTranslation(editingItem.translations, 'en');
+                    // Blank fields retain existing English. Submit changed English only so an ordinary
+                    // Chinese save does not convert automatic translations into manual edits.
+                    const englishName =
+                        formEnglishName === englishTranslation?.name
+                            ? englishTranslation.name
+                            : formEnglishName.trim() || englishTranslation?.name || '';
+                    const englishDescription =
+                        formEnglishDescription === englishTranslation?.description
+                            ? englishTranslation.description
+                            : formEnglishDescription.trim() || englishTranslation?.description || '';
+                    const englishChanges = {
+                        ...(englishTranslation && englishName !== englishTranslation.name
+                            ? { name: englishName }
+                            : {}),
+                        ...(englishTranslation &&
+                        englishDescription !== (englishTranslation.description ?? '')
+                            ? { description: englishDescription }
+                            : {}),
+                    };
+                    const englishChanged = Object.keys(englishChanges).length > 0;
+                    if (englishChanged && /\p{Script=Han}/u.test(Object.values(englishChanges).join(''))) {
+                        showError('请填写不含中文的英文名称与描述；留空会保留原文。');
+                        return;
+                    }
+                    const sourceTranslation = getSourceTranslation(editingItem);
+                    const chineseChanged =
+                        formName !== getSourceName(editingItem) ||
+                        formCode !== (sourceTranslation?.slug || editingItem.slug) ||
+                        JSON.stringify(customFieldValues) !==
+                            JSON.stringify(
+                                customFieldValuesFromEntity(
+                                    collectionCustomFields,
+                                    editingItem.customFields,
+                                    editingItem.translations,
+                                ),
+                            );
+                    const otherFormChanged =
+                        chineseChanged ||
+                        (formFeaturedAsset?.id ?? null) !== (editingItem.featuredAsset?.id ?? null) ||
+                        formIsPrivate !== editingItem.isPrivate ||
+                        formParentId !== (editingItem.parentId ?? '') ||
+                        formInheritFilters !== editingItem.inheritFilters ||
+                        JSON.stringify(formFilters) !==
+                            JSON.stringify(
+                                editingItem.filters.map(filter => ({
+                                    code: filter.code,
+                                    arguments: filter.args,
+                                })),
+                            );
+                    if (!englishChanged && !otherFormChanged) {
+                        setIsEditorOpen(false);
+                        setEditingItem(null);
+                        showNotice('没有需要保存的修改');
+                        return;
+                    }
                     await updateCollection({
                         variables: {
                             input: {
                                 id: editingItem.id,
-                                featuredAssetId: formFeaturedAsset?.id ?? null,
-                                isPrivate: formIsPrivate,
-                                parentId: formParentId || null,
-                                inheritFilters: formInheritFilters,
-                                filters: collectionFilterInput(formFilters, data?.collectionFilters ?? []),
-                                customFields: customFieldInputFromValues(
-                                    collectionCustomFields,
-                                    customFieldValues,
-                                ),
+                                ...(otherFormChanged
+                                    ? {
+                                          featuredAssetId: formFeaturedAsset?.id ?? null,
+                                          isPrivate: formIsPrivate,
+                                          parentId: formParentId || null,
+                                          inheritFilters: formInheritFilters,
+                                          filters: collectionFilterInput(
+                                              formFilters,
+                                              data?.collectionFilters ?? [],
+                                          ),
+                                          customFields: customFieldInputFromValues(
+                                              collectionCustomFields,
+                                              customFieldValues,
+                                          ),
+                                      }
+                                    : {}),
                                 translations: [
-                                    {
-                                        languageCode,
-                                        name,
-                                        slug: code,
-                                        description: getSourceTranslation(editingItem)?.description ?? '',
-                                        customFields: localizedCustomFieldInputFromValues(
-                                            collectionCustomFields,
-                                            customFieldValues,
-                                            languageCode,
-                                        ),
-                                    },
+                                    ...(!englishChanged || chineseChanged
+                                        ? [
+                                              {
+                                                  languageCode,
+                                                  name,
+                                                  slug: code,
+                                                  description:
+                                                      getSourceTranslation(editingItem)?.description ?? '',
+                                                  customFields: localizedCustomFieldInputFromValues(
+                                                      collectionCustomFields,
+                                                      customFieldValues,
+                                                      languageCode,
+                                                  ),
+                                              },
+                                          ]
+                                        : []),
+                                    ...(englishChanged
+                                        ? [
+                                              {
+                                                  languageCode: 'en',
+                                                  ...englishChanges,
+                                              },
+                                          ]
+                                        : []),
                                 ],
                             },
                         },
@@ -747,6 +913,19 @@ export function CategoriesModule() {
                 });
             }
 
+            if (activeTab === 'CATEGORIES') {
+                setIsEditorOpen(false);
+                setEditingItem(null);
+                try {
+                    await refetch();
+                    showNotice(`${editingItem ? '已保存' : '已创建'}《${name}》`);
+                } catch (readError) {
+                    showError(
+                        `已保存《${name}》，但列表更新失败。${toUserFacingError(readError, '请刷新本页重试读取')}`,
+                    );
+                }
+                return;
+            }
             await refetch();
             setIsEditorOpen(false);
             setEditingItem(null);
@@ -1513,7 +1692,7 @@ export function CategoriesModule() {
                             description={
                                 <>
                                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                                        英文由翻译引擎生成，并可在“多语言翻译”中复核。
+                                        英文由翻译引擎生成；已有英文可在下方修订，并在“多语言翻译”中复核。
                                     </p>
                                 </>
                             }
@@ -1541,6 +1720,51 @@ export function CategoriesModule() {
                         </AdminField>
                         {activeTab === 'CATEGORIES' ? (
                             <>
+                                {editingItem &&
+                                    'slug' in editingItem &&
+                                    getLocalizedEntityTranslation(editingItem.translations, 'en') && (
+                                        <>
+                                            <AdminField
+                                                label="英文名称"
+                                                description="留空保留原文；保存修订后的英文会沿用人工翻译保护。"
+                                            >
+                                                <AdminInput
+                                                    aria-label="英文名称"
+                                                    value={formEnglishName}
+                                                    onChange={event => setFormEnglishName(event.target.value)}
+                                                    disabled={saving}
+                                                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
+                                                />
+                                            </AdminField>
+                                            <AdminField label="中文描述（参照）" layout="stacked">
+                                                <AdminTextArea
+                                                    aria-label="中文描述（参照）"
+                                                    value={
+                                                        getSourceTranslation(editingItem)?.description ?? ''
+                                                    }
+                                                    readOnly
+                                                    rows={3}
+                                                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
+                                                />
+                                            </AdminField>
+                                            <AdminField
+                                                label="英文描述"
+                                                layout="stacked"
+                                                description="留空保留原文，不改动英文网址。"
+                                            >
+                                                <AdminTextArea
+                                                    aria-label="英文描述"
+                                                    value={formEnglishDescription}
+                                                    onChange={event =>
+                                                        setFormEnglishDescription(event.target.value)
+                                                    }
+                                                    disabled={saving}
+                                                    rows={3}
+                                                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
+                                                />
+                                            </AdminField>
+                                        </>
+                                    )}
                                 <CategoryImageField
                                     value={formFeaturedAsset}
                                     onChange={setFormFeaturedAsset}
@@ -1617,6 +1841,11 @@ export function CategoriesModule() {
                                 {actionError}
                             </div>
                         )}
+                        {categorySourceChanged && (
+                            <div role="alert" className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                                分类内容已更新或当前店铺已切换。当前输入已保留，请关闭编辑并重新打开后保存。
+                            </div>
+                        )}
                         <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                             <AdminButton
                                 type="button"
@@ -1629,7 +1858,7 @@ export function CategoriesModule() {
                             <AdminButton
                                 type="button"
                                 onClick={handleSave}
-                                disabled={saving}
+                                disabled={saving || categorySourceChanged}
                                 className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
                             >
                                 {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}保存

@@ -29,10 +29,15 @@ const option = (id: string, name: string, flags: Record<string, unknown>) => ({
     assignedStoreChannels: [{ id: 'store-2', code: '本店' }],
     ...flags,
 });
-function render(platform = false) {
+function render(platform = false, permissions = ['SuperAdmin']) {
     return renderToStaticMarkup(
         <AdminPermissionsContext.Provider
-            value={{ permissions: ['SuperAdmin'], hasAnyPermission: () => true }}
+            value={{
+                permissions,
+                hasAnyPermission: requested =>
+                    permissions.includes('SuperAdmin') ||
+                    requested.some(permission => permissions.includes(permission)),
+            }}
         >
             <FeatureHelpProvider>
                 <ShippingTemplatesPanel
@@ -136,5 +141,37 @@ describe('store shipping template controls', () => {
         const store = render();
         expect(store).toContain('复制旧模板到本店');
         expect(store).toContain('新模板默认关闭');
+    });
+
+    it('keeps cross-store originals claimable without offering current-channel edit or delete actions', () => {
+        mocks.query.mockReturnValue({
+            data: {
+                shippingTemplateManagement: {
+                    isPlatform: true,
+                    missingPlatformTemplates: 0,
+                    items: [option('legacy', '平台旧模板', {}), option('cross', '跨店旧模板', {})],
+                },
+            },
+            loading: false,
+        });
+        const html = render(true);
+        expect(html).toContain('跨店旧模板');
+        expect(html).toContain('确认此旧模板归属');
+        expect(html).toContain('归属确认后请切换到所属店铺维护');
+        expect(html).not.toContain('编辑配送方式跨店旧模板');
+        expect(html).not.toContain('删除配送方式跨店旧模板');
+        expect(html).toContain('编辑配送方式平台旧模板');
+        expect(html).toContain('删除配送方式平台旧模板');
+    });
+
+    it('does not offer ownership confirmation to an ordinary platform administrator', () => {
+        mocks.query.mockReturnValue({
+            data: { shippingTemplateManagement: { items: [option('cross', '跨店旧模板', {})] } },
+            loading: false,
+        });
+        const html = render(true, ['ReadShippingMethod']);
+        expect(html).not.toContain('确认此旧模板归属');
+        expect(html).not.toContain('编辑配送方式跨店旧模板');
+        expect(html).not.toContain('删除配送方式跨店旧模板');
     });
 });
