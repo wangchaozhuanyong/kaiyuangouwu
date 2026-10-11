@@ -803,16 +803,18 @@ export function PaymentPage({
                             ? void checkPendingPayment()
                             : navigateTo({ name: 'orders' })
                     }
+                    secondaryAction={
+                        paymentOutcomePending && !recoveredOrder ? (
+                            <button
+                                type="button"
+                                className="payment-secondary-action min-h-11 px-4 type-action"
+                                onClick={() => navigateTo({ name: 'orders' })}
+                            >
+                                {isZh ? '查看我的订单' : 'View my orders'}
+                            </button>
+                        ) : undefined
+                    }
                 />
-                {paymentOutcomePending && !recoveredOrder ? (
-                    <button
-                        type="button"
-                        className="payment-secondary-action min-h-11 px-4 type-action"
-                        onClick={() => navigateTo({ name: 'orders' })}
-                    >
-                        {isZh ? '查看我的订单' : 'View my orders'}
-                    </button>
-                ) : null}
             </Subpage>
         );
     }

@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { ShopApi, ShopApiTimeoutError } from '../../src/api';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { PaymentPage } from '../../src/payment-pages';
-import { createStorefrontQueryClient, storefrontQueryKeys } from '../../src/query-client';
+import { createStorefrontQueryClient } from '../../src/query-client';
 import '../../src/styles.css';
 import '../../src/styles/control-surfaces.css';
 import '../../src/styles/desktop-commerce.css';
@@ -57,7 +57,7 @@ const method = {
 const client = createStorefrontQueryClient();
 applyStorefrontVisualPreset(document.documentElement, 'neo-minimalist');
 if (scenario === 'legacy') {
-    const marketScope = storefrontQueryKeys.market(market);
+    const marketScope = market.code;
     const marker = {
         scope: JSON.stringify([marketScope, '', original.id]),
         orderId: original.id,
@@ -77,7 +77,7 @@ if (scenario === 'legacy') {
 
 function Fixture() {
     const desktop = useDesktopViewport();
-    const [order, setOrder] = useState(original);
+    const [order, setOrder] = useState<Order | null>(scenario === 'legacy' ? null : original);
     const [calls, setCalls] = useState({ payments: 0, reads: 0, fences: 0 });
     const [api] = useState(
         () =>
