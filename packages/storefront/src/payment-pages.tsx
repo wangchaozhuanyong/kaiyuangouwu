@@ -41,6 +41,7 @@ import {
     Order,
     StorefrontCart,
     StorefrontLanguage,
+    StorefrontPaymentAttemptInput,
     StorefrontUsdtCheckoutQuote,
 } from './types';
 
@@ -49,6 +50,7 @@ const referralCurrencyBadgeClassName =
     'payment-balance-currency grid min-h-11 place-items-center px-3 type-body weight-bold';
 
 type PaymentAttempt = {
+    requestId?: string;
     scope: string;
     orderId: string;
     orderCode: string;
@@ -63,6 +65,18 @@ type PaymentAttempt = {
 };
 type PaymentAttemptMarker = Omit<PaymentAttempt, 'token' | 'acknowledged'>;
 
+function paymentAttemptInput(attempt: PaymentAttempt): StorefrontPaymentAttemptInput {
+    if (!attempt.requestId) throw new Error('Missing payment request identifier');
+    return {
+        requestId: attempt.requestId,
+        orderId: attempt.orderId,
+        kind: attempt.kind,
+        method: attempt.method,
+        currencyCode: attempt.currencyCode,
+        amount: attempt.amount,
+    };
+}
+
 class PaymentAttemptStorageError extends Error {}
 
 function paymentMarkerKey(marketScope: string, customerId: string): string {
@@ -70,7 +84,7 @@ function paymentMarkerKey(marketScope: string, customerId: string): string {
 }
 
 function readPaymentMarkers(marketScope: string, customerId: string): PaymentAttemptMarker[] {
-    if (!customerId || typeof sessionStorage === 'undefined') return [];
+    if (typeof sessionStorage === 'undefined') return [];
     try {
         const stored: unknown = JSON.parse(
             sessionStorage.getItem(paymentMarkerKey(marketScope, customerId)) ?? '[]',
@@ -82,6 +96,7 @@ function readPaymentMarkers(marketScope: string, customerId: string): PaymentAtt
                 const marker = value as Partial<PaymentAttemptMarker>;
                 return (
                     typeof marker.orderId === 'string' &&
+                    (marker.requestId === undefined || /^[a-zA-Z0-9_-]{16,80}$/.test(marker.requestId)) &&
                     marker.orderId.length > 0 &&
                     typeof marker.orderCode === 'string' &&
                     marker.orderCode.length > 0 &&
@@ -100,6 +115,7 @@ function readPaymentMarkers(marketScope: string, customerId: string): PaymentAtt
             .map(marker => ({
                 // Explicit fields prevent a stored token or unrelated data from entering this recovery path.
                 scope: marker.scope,
+                requestId: marker.requestId,
                 orderId: marker.orderId,
                 orderCode: marker.orderCode,
                 currencyCode: marker.currencyCode,
@@ -115,8 +131,8 @@ function readPaymentMarkers(marketScope: string, customerId: string): PaymentAtt
 }
 
 function savePaymentMarker(marketScope: string, customerId: string, attempt: PaymentAttempt): void {
-    if (!customerId) return;
     const marker: PaymentAttemptMarker = {
+        requestId: attempt.requestId,
         scope: attempt.scope,
         orderId: attempt.orderId,
         orderCode: attempt.orderCode,
@@ -141,7 +157,6 @@ function savePaymentMarker(marketScope: string, customerId: string, attempt: Pay
 }
 
 function removePaymentMarker(marketScope: string, customerId: string, attempt: PaymentAttempt): void {
-    if (!customerId) return;
     try {
         const key = paymentMarkerKey(marketScope, customerId);
         const markers = readPaymentMarkers(marketScope, customerId).filter(
@@ -528,7 +543,7 @@ export function PaymentPage({
                 payment.method === attempt.method &&
                 payment.state === 'Declined',
         );
-        if (declined) {
+        if (declined && !attempt.requestId) {
             forgetAttempt(attempt);
             onOrderChange(latest);
             setPaymentError(
@@ -544,10 +559,71 @@ export function PaymentPage({
     };
     const readAttemptOutcome = async (attempt: PaymentAttempt) => {
         try {
+            let receipt;
+            if (attempt.requestId) {
+                const input = paymentAttemptInput(attempt);
+                receipt = await api.paymentAttempt(input);
+                if (receipt.requestId !== attempt.requestId) throw new Error('Payment receipt scope changed');
+                if (receipt.status === 'NOT_FOUND') receipt = await api.paymentAttempt(input, true);
+                if (receipt.requestId !== attempt.requestId) throw new Error('Payment receipt scope changed');
+                if (['REJECTED', 'NOT_EXECUTED'].includes(receipt.status)) {
+                    const refreshedOrder = attempt.token
+                        ? await api.orderByConfirmationToken(attempt.token, undefined, attempt.currencyCode)
+                        : await api.order(attempt.orderId, undefined, attempt.currencyCode);
+                    if (!isCurrentAttempt(attempt)) return false;
+                    if (
+                        !refreshedOrder ||
+                        refreshedOrder.id !== attempt.orderId ||
+                        refreshedOrder.code !== attempt.orderCode ||
+                        refreshedOrder.currencyCode !== attempt.currencyCode
+                    )
+                        throw new Error('Order scope changed');
+                    onOrderChange(refreshedOrder);
+                    forgetAttempt(attempt);
+                    if (isCurrentAttempt(attempt))
+                        setPaymentError(
+                            isZh
+                                ? '原付款请求已明确结束且未成功。请核对订单后重新选择付款方式。'
+                                : 'The original payment request has ended without a successful payment. Review the order before trying again.',
+                        );
+                    return true;
+                }
+            }
             const latest = attempt.token
                 ? await api.orderByConfirmationToken(attempt.token, undefined, attempt.currencyCode)
                 : await api.order(attempt.orderId, undefined, attempt.currencyCode);
-            return await acceptAttemptOutcome(attempt, latest);
+            if (await acceptAttemptOutcome(attempt, latest)) return true;
+            if (
+                receipt?.status === 'APPLIED' &&
+                attempt.kind === 'balance' &&
+                latest?.id === attempt.orderId &&
+                latest.code === attempt.orderCode &&
+                latest.currencyCode === attempt.currencyCode
+            ) {
+                forgetAttempt(attempt);
+                if (isCurrentAttempt(attempt)) {
+                    onOrderChange(latest);
+                    setPaymentError('');
+                    if (attempt.kind === 'balance')
+                        void referralOverviewQuery.refetch({ cancelRefetch: false }).catch(() => undefined);
+                }
+                return true;
+            }
+            if (isCurrentAttempt(attempt) && receipt?.status === 'APPLIED') {
+                setPaymentError(
+                    isZh
+                        ? '付款请求已提交，原订单仍在处理中。请从我的订单查看或联系客服，勿再次付款。'
+                        : 'The payment request was submitted and the original order is still processing. View your orders or contact support without paying again.',
+                );
+            }
+            if (isCurrentAttempt(attempt) && (receipt?.status === 'UNKNOWN' || !attempt.requestId)) {
+                setPaymentError(
+                    isZh
+                        ? '这笔付款需要人工核对。请从我的订单查看并联系客服，核对期间请勿再次付款。'
+                        : 'This payment needs manual review. View the original order and contact support without paying again.',
+                );
+            }
+            return false;
         } catch {
             if (isCurrentAttempt(attempt)) setPaymentError(unknownPaymentMessage);
             return false;
@@ -572,6 +648,7 @@ export function PaymentPage({
         if (!token) throw new Error('Missing order confirmation token');
         if (mountedRef.current && scopeRef.current === paymentScope) confirmationTokenRef.current = token;
         return {
+            requestId: crypto.randomUUID(),
             scope: paymentScope,
             orderId: order.id,
             orderCode: order.code,
@@ -589,8 +666,10 @@ export function PaymentPage({
         if (
             !attempt ||
             (!attempt.acknowledged &&
+                !attempt.requestId &&
                 (paymentDefinitelyRejected(requestError) ||
-                    requestError instanceof PaymentAttemptStorageError))
+                    requestError instanceof PaymentAttemptStorageError)) ||
+            requestError instanceof PaymentAttemptStorageError
         ) {
             if (attempt) forgetAttempt(attempt);
             setPaymentError(
@@ -630,7 +709,7 @@ export function PaymentPage({
             attempt = await createAttempt('balance', amount);
             if (!isCurrentAttempt(attempt)) return;
             rememberAttempt(attempt);
-            const result = await api.useReferralBalance(amount);
+            const result = await api.useReferralBalance(amount, paymentAttemptInput(attempt));
             if (!isCurrentAttempt(attempt)) return;
             attempt.acknowledged = true;
             if (!(await acceptAttemptOutcome(attempt, result.order))) await readAttemptOutcome(attempt);
@@ -660,7 +739,9 @@ export function PaymentPage({
             rememberAttempt(attempt);
             // Preload failures are display failures, never proof that payment did not execute.
             void preloadStorefrontRouteComponent('order-confirmation').catch(() => undefined);
-            const paidOrder = await api.addPaymentToOrder(selectedMethod);
+            const paidOrder = await api.addPaymentToOrder(selectedMethod, {
+                storefrontPaymentAttempt: paymentAttemptInput(attempt),
+            });
             if (!isCurrentAttempt(attempt)) return;
             attempt.acknowledged = true;
             if (!(await acceptAttemptOutcome(attempt, paidOrder))) await readAttemptOutcome(attempt);
@@ -703,7 +784,7 @@ export function PaymentPage({
                                 ? `订单 ${recoveredOrder.code} 的付款已确认，请从我的订单查看最新状态。`
                                 : `Payment for ${recoveredOrder.code} is confirmed. View the latest status in your orders.`
                             : hasUnresolvedPayment
-                              ? unknownPaymentMessage
+                              ? paymentError || unknownPaymentMessage
                               : isZh
                                 ? '请从我的订单查看最新状态，或返回购物车结算。'
                                 : 'View the latest status in your orders, or return to checkout.'
@@ -1068,7 +1149,7 @@ export function PaymentPage({
                     {isUsdtPayment && paymentError ? <InlineError message={paymentError} /> : null}
                     {paymentOutcomePending ? (
                         <InlineError
-                            message={unknownPaymentMessage}
+                            message={paymentError || unknownPaymentMessage}
                             action={isZh ? '查看我的订单' : 'View my orders'}
                             onAction={() => navigateTo({ name: 'orders' })}
                         />

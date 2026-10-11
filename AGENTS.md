@@ -4,8 +4,16 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 
 ## Mandatory Task Preflight
 
-- Read this `AGENTS.md` before starting every task in this repository. Do not rely on memory from an earlier task.
-- Confirm the current project path, branch, package scope, package manager, relevant commands, and working-tree state before editing.
+- On first entry to a task, read the applicable `AGENTS.md` and confirm the project path, branch, package scope, package manager, relevant commands, and working-tree state before editing.
+- Reuse these confirmed facts within the same task. Recheck only facts that have actually changed; do not restart the preflight on each fix or continuation.
+
+## Repair execution priority
+
+- 发现已经定位的问题，立即在现有授权范围内修复并继续完成任务。不要停留在反复检查、报告错误或撤回修改上。
+- 先保存失败证据，再修复代码、配置或测试数据中的实际原因；修复后只验证失败项及其直接依赖。原因和输入未变时不得重跑，不得回退有效修复、放宽断言或关闭检查来换取通过。
+- 已通过且相关输入未变的检查直接复用。执行前确认测试用例的最小依赖范围，避免反复拆分执行制造假失败；不把无关失败扩成全仓重跑。
+- 已获得的修复和发布授权持续有效。普通失败、重试耗尽或避免第二次全量 CI 的要求，只限制重复动作，不得被解释为停止修复或再次索要同一授权。
+- 优先向前修复。回退仅用于实际需要恢复服务的故障，不作为本地测试失败或普通界面问题的默认处理；回退后必须修复原因，禁止原样重发。
 
 ## CI Scope
 
@@ -57,9 +65,9 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 - Workflow/release/backup controls do not select business packages or database matrices. Unknown executable paths fail scope mapping instead of enabling full CI. Core/shared changes follow actual dependencies; default database coverage is production MySQL plus explicitly changed drivers. Only an explicit `full=true` enables the complete compatibility matrix.
 - Keep one validation ledger per release. After passing an unchanged check, do not repeat it locally, in CI or after deployment without changed inputs or a concrete new failure. Post-release verification reads the deployment restore result and checks affected functions; it does not repeat a full database restore or download the whole artifact again. Report stalled runner queues instead of re-dispatching or continually polling.
 - A full CI run is opt-in for ordinary changes. Never create an empty commit, re-dispatch the same failed SHA, or repeatedly run all jobs to force a green result. Keep one fixed release run and preserve its successful stages.
-- Within an authorized release, diagnose failures and continue fixing affected code instead of stopping at an error report. A code or configuration fix requires a new SHA and the affected checks. Repeat failures must lead to diagnosis, not another unchanged attempt.
-- `node deploy/release-recovery.mjs report <run-id>` reports failed stages. Its `retry` command permits one failed-job retry only for a proven temporary infrastructure fault on the first attempt. Vulnerabilities, assertions, permissions, checksum errors and migration failures require repair. Exhausted retries stop the unchanged candidate; repair may continue within the existing authorization.
-- Keep the last healthy version serving. Static deployment rolls back every switched frontend if acceptance fails. Runtime rollback retains its database compatibility restrictions; never force an incompatible rollback or delete production data to unblock a release.
+- Within an authorized release, immediately repair a confirmed failure in the affected code, configuration or fixture before the next verification. Preserve passed stages and valid fixes. A changed candidate requires a new SHA and only the affected checks; do not stop at an error report, repeatedly revert, or retry unchanged inputs.
+- `node deploy/release-recovery.mjs report <run-id>` reports failed stages. Its `retry` command permits one failed-job retry only for a proven temporary infrastructure fault on the first attempt. Vulnerabilities, assertions, permissions, checksum errors and migration failures require immediate repair. Exhausted retries prohibit another unchanged attempt; continue repairing the cause within the existing authorization.
+- Keep the last healthy version serving while repairing a failed pre-switch gate. Do not manually roll back valid fixes because of local test or ordinary interface failures. Existing automatic availability recovery and runtime database compatibility protections remain in force; after an automatic rollback, repair its cause before another deployment. Never force an incompatible rollback or delete production data to unblock a release.
 - Finish only after the deployed component versions and affected functions are verified. Report local validation, GitHub checks, deployment, and browser/business acceptance separately.
 - These rules apply to this repository and its stores. Do not change other projects or global GitHub/organization policies. Local implementation authorization does not authorize pushing, merging, deploying, or deleting branches/worktrees.
 
@@ -92,7 +100,7 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 2. Build it (or `bun run watch` for continuous)
 3. Update `packages/dev-server/dev-config.ts` if needed
 4. Restart dev server
-5. Run e2e tests from the package dir
+5. Run only the checks affected by this change; use package E2E tests when the changed behavior requires them, and reuse unchanged passed results.
 
 - When editing `@vendure/core`, you usually need to watch `@vendure/common` too: `bun run watch:core-common`
 - The dev-server imports packages via TypeScript paths, so rebuilds are picked up on restart

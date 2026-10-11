@@ -26,7 +26,6 @@ import type {
     Product,
     ProductSearchPage,
     ProductSearchSort,
-    ReferralBalancePaymentResult,
     ReferralProgram,
     RegisterCustomerInput,
     StoreCommerceMode,
@@ -88,6 +87,7 @@ export class ShopApi {
     private readonly createMailQueryApi: () => Promise<MailQueryApi>;
     readonly watchMailEvents: MailQueryApi['watchMailEvents'];
     private readonly cartCheckoutApi: CartCheckoutApi;
+    readonly paymentAttempt: CartCheckoutApi['paymentAttempt'];
     private readonly createRealtimeApi: () => Promise<RealtimeApi>;
     constructor(
         private readonly market: MarketConfig,
@@ -133,6 +133,7 @@ export class ShopApi {
             return mail.watchMailEvents(code, callbacks, signal);
         };
         this.cartCheckoutApi = new CartCheckoutApi(ctx);
+        this.paymentAttempt = this.cartCheckoutApi.paymentAttempt.bind(this.cartCheckoutApi);
         this.createRealtimeApi = async () => {
             const { RealtimeApi } = await import('./api/realtime');
             return new RealtimeApi(ctx);
@@ -354,9 +355,8 @@ export class ShopApi {
         return (await this.createReferralsApi()).registerCustomerAccount(input, consent, inviteCode, source);
     }
 
-    async useReferralBalance(amount: number): Promise<ReferralBalancePaymentResult> {
-        return (await this.createReferralsApi()).useReferralBalance(amount);
-    }
+    useReferralBalance: ReferralsApi['useReferralBalance'] = async (...args) =>
+        (await this.createReferralsApi()).useReferralBalance(...args);
 
     imageStudioConfig: ImageStudioApi['imageStudioConfig'] = async (...args) =>
         (await this.createImageStudioApi()).imageStudioConfig(...args);

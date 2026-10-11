@@ -234,7 +234,10 @@ describe('balance payment completion', () => {
                     button?.click();
                     await Promise.resolve();
                 });
-                expect(api.useReferralBalance).toHaveBeenCalledExactlyOnceWith(113);
+                expect(api.useReferralBalance).toHaveBeenCalledExactlyOnceWith(
+                    113,
+                    expect.objectContaining({ kind: 'balance', orderId: 'sim', amount: 113 }),
+                );
                 expect(onOrderChange).toHaveBeenCalledWith(paidOrder);
                 if (state === 'ArrangingPayment') expect(onComplete).not.toHaveBeenCalled();
                 else expect(onComplete).toHaveBeenCalledExactlyOnceWith(paidOrder, 'synthetic-test-token');
@@ -283,6 +286,7 @@ async function renderPayment(
         onComplete?: ReturnType<typeof vi.fn>;
         onOrderChange?: ReturnType<typeof vi.fn>;
         marketCode?: string;
+        customer?: { id: string } | null;
     } = {},
 ) {
     mocks.methods = [syntheticMethod];
@@ -295,7 +299,7 @@ async function renderPayment(
         api,
         order: options.order === undefined ? syntheticOrder : options.order,
         cart: { state: 'PAYMENT_PENDING' },
-        customer: { id: 'synthetic-customer' },
+        customer: options.customer === undefined ? { id: 'synthetic-customer' } : options.customer,
         market: { code: options.marketCode ?? 'synthetic', currencyCode: 'CNY' },
         displayCurrencyCode: 'CNY',
         locale: 'zh-CN',
@@ -334,6 +338,13 @@ async function renderPayment(
 }
 function syntheticApi(overrides: Record<string, unknown> = {}) {
     return {
+        paymentAttempt: vi.fn((input: { requestId: string }) =>
+            Promise.resolve({
+                requestId: input.requestId,
+                status: 'PROCESSING',
+                errorCode: null,
+            }),
+        ),
         createOrderConfirmationToken: vi.fn().mockResolvedValue({ token: 'synthetic-original-token' }),
         addPaymentToOrder: vi.fn().mockRejectedValue(new ShopApiTimeoutError('synthetic timeout', true)),
         useReferralBalance: vi.fn(),
@@ -522,7 +533,16 @@ describe('payment response recovery', () => {
         new ShopApiError('PAYMENT_DECLINED_ERROR', 'synthetic decline'),
         new ShopApiGraphQlError(['synthetic validation failure'], 400, 'GRAPHQL_VALIDATION_FAILED', true),
     ])('releases only a definitively rejected initial payment', async rejection => {
-        const api = syntheticApi({ addPaymentToOrder: vi.fn().mockRejectedValue(rejection) });
+        const api = syntheticApi({
+            addPaymentToOrder: vi.fn().mockRejectedValue(rejection),
+            paymentAttempt: vi.fn((input: { requestId: string }) =>
+                Promise.resolve({
+                    requestId: input.requestId,
+                    status: 'REJECTED',
+                    errorCode: 'PAYMENT_DECLINED_ERROR',
+                }),
+            ),
+        });
         const view = await renderPayment(api);
         try {
             await act(async () => {
@@ -532,7 +552,7 @@ describe('payment response recovery', () => {
                 await Promise.resolve();
             });
             expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
-            expect(api.orderByConfirmationToken).not.toHaveBeenCalled();
+            expect(api.orderByConfirmationToken).toHaveBeenCalledTimes(1);
             expect(view.host.querySelector('button[type=submit]')?.textContent).toContain('确认支付');
             await act(async () => {
                 view.submit();
@@ -600,7 +620,10 @@ describe('payment response recovery', () => {
 
                 await Promise.resolve();
             });
-            expect(api.useReferralBalance).toHaveBeenCalledExactlyOnceWith(50);
+            expect(api.useReferralBalance).toHaveBeenCalledExactlyOnceWith(
+                50,
+                expect.objectContaining({ kind: 'balance', orderId: syntheticOrder.id, amount: 50 }),
+            );
             expect(api.orderByConfirmationToken).toHaveBeenCalledExactlyOnceWith(
                 'synthetic-original-token',
                 undefined,
@@ -820,6 +843,188 @@ describe('payment response recovery', () => {
             );
         } finally {
             await view.unmount();
+        }
+    });
+});
+
+describe('canonical payment request recovery', () => {
+    it('keeps an acknowledged payment pending while the original order is still processing', async () => {
+        const api = syntheticApi({
+            addPaymentToOrder: vi.fn().mockResolvedValue(syntheticOrder),
+            paymentAttempt: vi.fn((input: { requestId: string }) =>
+                Promise.resolve({
+                    requestId: input.requestId,
+                    status: 'APPLIED',
+                    errorCode: null,
+                }),
+            ),
+        });
+        const view = await renderPayment(api);
+        try {
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(view.host.textContent).toContain('原订单仍在处理中');
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(sessionStorage.length).toBe(1);
+        } finally {
+            await view.unmount();
+        }
+    });
+    it('fences only the original unstarted request, refreshes the order and allows a new request', async () => {
+        const calls: Array<{ requestId: string; fence: boolean }> = [];
+        const api = syntheticApi({
+            paymentAttempt: vi.fn((input: { requestId: string }, fence = false) => {
+                calls.push({ requestId: input.requestId, fence });
+                return Promise.resolve({
+                    requestId: input.requestId,
+                    status: fence ? 'NOT_EXECUTED' : 'NOT_FOUND',
+                    errorCode: null,
+                });
+            }),
+        });
+        const view = await renderPayment(api);
+        try {
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(calls).toHaveLength(2);
+            expect(calls[0].requestId).toBe(calls[1].requestId);
+            expect(calls.map(call => call.fence)).toEqual([false, true]);
+            expect(view.onOrderChange).toHaveBeenCalledWith(syntheticOrder);
+            expect(sessionStorage.length).toBe(0);
+            expect(view.host.textContent).toContain('原付款请求已明确结束');
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(2);
+            expect(calls[2].requestId).not.toBe(calls[0].requestId);
+        } finally {
+            await view.unmount();
+        }
+    });
+
+    it('keeps an ambiguous request locked and displays manual review instead of repeated checking indefinitely', async () => {
+        const api = syntheticApi({
+            paymentAttempt: vi.fn((input: { requestId: string }) =>
+                Promise.resolve({
+                    requestId: input.requestId,
+                    status: 'UNKNOWN',
+                    errorCode: 'PAYMENT_ATTEMPT_REVIEW_REQUIRED',
+                }),
+            ),
+        });
+        const view = await renderPayment(api);
+        try {
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(view.host.textContent).toContain('需要人工核对');
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(sessionStorage.length).toBe(1);
+        } finally {
+            await view.unmount();
+        }
+    });
+
+    it('never fences or clears a request when the server returns another request id', async () => {
+        const api = syntheticApi({
+            paymentAttempt: vi.fn().mockResolvedValue({
+                requestId: 'different-request-00001',
+                status: 'NOT_FOUND',
+                errorCode: null,
+            }),
+        });
+        const view = await renderPayment(api);
+        try {
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(api.paymentAttempt).toHaveBeenCalledTimes(1);
+            expect(sessionStorage.length).toBe(1);
+            expect(view.host.textContent).toContain('核对付款结果');
+        } finally {
+            await view.unmount();
+        }
+    });
+
+    it('recovers a guest request after a full reload using the same id and no confirmation token in storage', async () => {
+        const api = syntheticApi();
+        const first = await renderPayment(api, { customer: null });
+        await act(async () => {
+            first.submit();
+            await Promise.resolve();
+        });
+        const marker = JSON.parse(sessionStorage.getItem(sessionStorage.key(0) ?? '') ?? '[]')[0];
+        expect(marker.requestId).toMatch(/^[a-zA-Z0-9_-]{16,80}$/);
+        expect(marker).not.toHaveProperty('token');
+        await first.unmount();
+        queryClient.clear();
+        api.paymentAttempt.mockImplementation(input =>
+            Promise.resolve({
+                requestId: input.requestId,
+                status: 'APPLIED',
+                errorCode: null,
+            }),
+        );
+        api.order.mockResolvedValue({ ...syntheticOrder, state: 'PaymentSettled' });
+        const second = await renderPayment(api, { customer: null });
+        try {
+            await act(async () => {
+                second.submit();
+                await Promise.resolve();
+            });
+            expect(api.paymentAttempt).toHaveBeenLastCalledWith(
+                expect.objectContaining({ requestId: marker.requestId }),
+            );
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(sessionStorage.length).toBe(0);
+            expect(second.host.textContent).toContain('付款已确认');
+        } finally {
+            await second.unmount();
+        }
+    });
+
+    it('preserves a legacy marker without an id for manual review and never creates a fence for it', async () => {
+        const api = syntheticApi();
+        const first = await renderPayment(api);
+        await act(async () => {
+            first.submit();
+            await Promise.resolve();
+        });
+        const key = sessionStorage.key(0) ?? '';
+        const markers = JSON.parse(sessionStorage.getItem(key) ?? '[]');
+        delete markers[0].requestId;
+        sessionStorage.setItem(key, JSON.stringify(markers));
+        await first.unmount();
+        queryClient.clear();
+        api.paymentAttempt.mockClear();
+        const second = await renderPayment(api);
+        try {
+            await act(async () => {
+                second.submit();
+                await Promise.resolve();
+            });
+            expect(api.paymentAttempt).not.toHaveBeenCalled();
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(sessionStorage.length).toBe(1);
+            expect(second.host.textContent).toContain('需要人工核对');
+        } finally {
+            await second.unmount();
         }
     });
 });

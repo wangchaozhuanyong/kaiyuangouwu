@@ -982,6 +982,32 @@ export class CartCheckoutApi extends BaseDomainApi {
             throw new ShopApiError('PAYMENT_REVIEW_REQUIRED', 'PAYMENT_REVIEW_REQUIRED');
         return this.assertOrder(result.addPaymentToOrder);
     }
+
+    async paymentAttempt(
+        input: import('../types').StorefrontPaymentAttemptInput,
+        fenceUnstarted = false,
+    ): Promise<import('../types').StorefrontPaymentAttemptReceipt> {
+        const field = fenceUnstarted ? 'fenceUnstartedStorefrontPaymentAttempt' : 'storefrontPaymentAttempt';
+        const result = await this.request<Record<string, import('../types').StorefrontPaymentAttemptReceipt>>(
+            `${fenceUnstarted ? 'mutation' : 'query'} StorefrontPaymentAttempt($input: StorefrontPaymentAttemptInput!) {
+                ${field}(input: $input) { requestId status errorCode }
+            }`,
+            { input },
+            undefined,
+            20_000,
+            fenceUnstarted,
+        );
+        const receipt = result[field];
+        if (
+            !receipt ||
+            receipt.requestId !== input.requestId ||
+            !['NOT_FOUND', 'PROCESSING', 'APPLIED', 'REJECTED', 'NOT_EXECUTED', 'UNKNOWN'].includes(
+                receipt.status,
+            )
+        )
+            throw new Error('The server did not return a valid payment receipt.');
+        return receipt;
+    }
 }
 
 const commandResultFields = `commandId status appliedRevision errorCode message

@@ -1,4 +1,6 @@
 import type { Type } from '@nestjs/common';
+import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
+import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
 import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
     ContentTranslationPlugin,
@@ -18,6 +20,7 @@ import {
     Role,
     RoleService,
     ShippingMethod,
+    ShippingMethodService,
     StockLocation,
     TransactionalConnection,
     User,
@@ -25,6 +28,18 @@ import {
     type RequestContext,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import {
+    DataConsentRecord,
+    DataConsentService,
+    ReferralAccount,
+    ReferralLedgerEntry,
+    ReferralProgramConfig,
+    ReferralRelationship,
+    ReferralService,
+    StoreManagementPlugin,
+    StoreProfile,
+} from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontContentBlock, StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 import { createTestEnvironment } from '@vendure/testing';
@@ -34,17 +49,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
-import { DataConsentService } from '../src/data-consent.service';
-import { DataConsentRecord } from '../src/entities/data-consent-record.entity';
-import { ReferralAccount } from '../src/entities/referral-account.entity';
-import { ReferralBalanceUse } from '../src/entities/referral-balance-use.entity';
-import { ReferralLedgerEntry } from '../src/entities/referral-ledger-entry.entity';
-import { ReferralProgramConfig } from '../src/entities/referral-program-config.entity';
-import { ReferralRelationship } from '../src/entities/referral-relationship.entity';
-import { StoreProfile } from '../src/entities/store-profile.entity';
 import { referralPosterCopy } from '../src/referral/referral-poster-presets';
-import { ReferralService } from '../src/referral/referral.service';
-import { StoreManagementPlugin } from '../src/store-management.plugin';
+
+type ReferralBalanceUse = import('../dist/entities/referral-balance-use.entity.js').ReferralBalanceUse;
 
 const externalPaymentHandler = new PaymentMethodHandler({
     code: 'referral-e2e-payment',
@@ -79,7 +86,9 @@ const config = mergeConfig(testConfig(), {
     paymentOptions: { paymentMethodHandlers: [externalPaymentHandler] },
     plugins: [
         OperationsDashboardPlugin,
+        StoreDomainPlugin,
         StorefrontCartPlugin,
+        CatalogManagementPlugin,
         StorefrontContentPlugin,
         ContentTranslationPlugin.init({
             provider: passthroughTranslationProvider,
@@ -88,6 +97,7 @@ const config = mergeConfig(testConfig(), {
             enabled: false,
             signingSecret: 'referral-e2e-signing-secret-at-least-32-characters',
         }),
+        CommerceFulfillmentPlugin,
     ],
 });
 
@@ -298,8 +308,8 @@ const PAY = gql`
 
 const USE_BALANCE = gql`
     ${ORDER_FIELDS}
-    mutation ReferralUseBalanceE2E($amount: Money!) {
-        useMyReferralBalance(amount: $amount) {
+    mutation ReferralUseBalanceE2E($amount: Money!, $paymentAttempt: StorefrontPaymentAttemptInput) {
+        useMyReferralBalance(amount: $amount, paymentAttempt: $paymentAttempt) {
             amount
             wallet {
                 currencyCode
@@ -532,6 +542,7 @@ describe('referral rebate closed loop', () => {
             pricesIncludeTax: platformCtx.channel.pricesIncludeTax,
             defaultTaxZoneId: defaultTaxZone.id,
             defaultShippingZoneId: defaultShippingZone.id,
+            customFields: { commerceMode: 'HYBRID' },
         });
         if (!('id' in primary)) throw new Error(primary.message);
         const roles = server.app.get(RoleService);
@@ -558,6 +569,42 @@ describe('referral rebate closed loop', () => {
         const ctx = await server.app
             .get(RequestContextService)
             .create({ apiType: 'admin', channelOrToken: primaryChannelToken });
+        // Native shared templates are not store-owned shipping methods. Seed a valid
+        // isolated store method so the payment test reaches the real checkout validator.
+        await connection.withTransaction(ctx, txCtx =>
+            server.app.get(ShippingMethodService).create(txCtx, {
+                code: 'referral-fixture-shipping',
+                fulfillmentHandler: 'manual-fulfillment',
+                translations: [LanguageCode.en, LanguageCode.zh_Hans].map(languageCode => ({
+                    languageCode,
+                    name: 'Synthetic store shipping',
+                    description: '',
+                })),
+                checker: {
+                    code: 'default-shipping-eligibility-checker',
+                    arguments: [{ name: 'orderMinimum', value: '0' }],
+                },
+                calculator: {
+                    code: 'default-shipping-calculator',
+                    arguments: [
+                        { name: 'rate', value: '500' },
+                        { name: 'includesTax', value: 'auto' },
+                        { name: 'taxRate', value: '0' },
+                    ],
+                },
+            }),
+        );
+        await connection.getRepository(ctx, StoreDomain).save(
+            new StoreDomain({
+                channelId: ctx.channelId,
+                domain: 'referral-fixture.example.invalid',
+                status: 'ACTIVE',
+                isPrimary: true,
+                primaryChannelId: ctx.channelId,
+                verificationToken: randomUUID(),
+                verifiedAt: new Date(),
+            }),
+        );
         await connection.getRepository(ctx, StoreProfile).save(
             new StoreProfile({
                 channelId: ctx.channelId,
@@ -613,6 +660,7 @@ describe('referral rebate closed loop', () => {
         const productResult = await adminClient.query(CREATE_PRODUCT, {
             input: {
                 enabled: true,
+                customFields: { fulfillmentType: 'physical' },
                 translations: [
                     {
                         languageCode: LanguageCode.zh_Hans,
@@ -755,11 +803,42 @@ describe('referral rebate closed loop', () => {
         );
 
         const inviterOrder = await createOrderAtPayment();
-        const balanceResult = await shopClient.query(USE_BALANCE, { amount: expectedReward });
+        const paymentAttempt = {
+            requestId: randomUUID(),
+            orderId: inviterOrder.id,
+            kind: 'balance',
+            method: 'referral-balance',
+            currencyCode: inviterOrder.currencyCode,
+            amount: expectedReward,
+        };
+        const balanceResult = await shopClient.query(USE_BALANCE, { amount: expectedReward, paymentAttempt });
         expect(balanceResult.useMyReferralBalance).toMatchObject({
             amount: expectedReward,
             wallet: { availableBalance: 0, pendingBalance: 0, reservedBalance: 0 },
         });
+        const acknowledged = await shopClient.query(
+            gql`
+                query ($input: StorefrontPaymentAttemptInput!) {
+                    storefrontPaymentAttempt(input: $input) {
+                        requestId
+                        status
+                    }
+                }
+            `,
+            { input: paymentAttempt },
+        );
+        expect(acknowledged.storefrontPaymentAttempt).toEqual({
+            requestId: paymentAttempt.requestId,
+            status: 'APPLIED',
+        });
+        await expect(
+            shopClient.query(USE_BALANCE, { amount: expectedReward, paymentAttempt }),
+        ).rejects.toThrow('PAYMENT_REQUEST_ALREADY_APPLIED');
+        expect(
+            balanceResult.useMyReferralBalance.order.payments.filter(
+                (payment: { method: string }) => payment.method === 'referral-balance',
+            ),
+        ).toHaveLength(1);
         const completedInviterOrder = await shopClient.query(PAY, { method: externalPaymentHandler.code });
         assertSuccess(completedInviterOrder.addPaymentToOrder);
         expect(completedInviterOrder.addPaymentToOrder.state).toBe('PaymentSettled');
@@ -824,8 +903,11 @@ describe('referral rebate closed loop', () => {
             }),
         ).rejects.toThrow('referral rollback probe');
         expect(
-            (await connection.getRepository(ctx, ReferralBalanceUse).findOneByOrFail(useWhere))
-                .refundedAmount,
+            (
+                await connection
+                    .getRepository<ReferralBalanceUse>(ctx, 'ReferralBalanceUse')
+                    .findOneByOrFail(useWhere)
+            ).refundedAmount,
         ).toBe(0);
         expect(
             await connection.getRepository(ctx, ReferralLedgerEntry).countBy({
@@ -856,7 +938,9 @@ describe('referral rebate closed loop', () => {
                 idStrategy.decodeId(firstBalanceRefund.refundOrder.id),
             ),
         );
-        const afterReplay = await connection.getRepository(ctx, ReferralBalanceUse).findOneByOrFail(useWhere);
+        const afterReplay = await connection
+            .getRepository<ReferralBalanceUse>(ctx, 'ReferralBalanceUse')
+            .findOneByOrFail(useWhere);
         expect(afterReplay.refundedAmount).toBe(firstBalanceRefundAmount);
         expect(afterReplay.status).toBe('PARTIALLY_REFUNDED');
         const afterPartial = await shopClient.query(OVERVIEW);
@@ -882,7 +966,7 @@ describe('referral rebate closed loop', () => {
         const afterBalanceRefund = await shopClient.query(OVERVIEW);
         expect(walletFor(afterBalanceRefund, inviteeOrder.currencyCode).availableBalance).toBe(0);
         const fullyRefunded = await connection
-            .getRepository(ctx, ReferralBalanceUse)
+            .getRepository<ReferralBalanceUse>(ctx, 'ReferralBalanceUse')
             .findOneByOrFail(useWhere);
         expect(fullyRefunded.refundedAmount).toBe(expectedReward);
         expect(fullyRefunded.status).toBe('REFUNDED');
@@ -1030,8 +1114,39 @@ describe('referral rebate closed loop', () => {
     );
 
     it("keeps one customer's referral overview separate across two stores", async () => {
+        await adminClient.asSuperAdmin();
+        adminClient.setChannelToken(primaryChannelToken);
         shopClient.setChannelToken(primaryChannelToken);
-        await loginShopCustomer('inviter@example.com', 'ReferralPass123!');
+        // This case owns its data and must not depend on running the payment loop first.
+        const primaryProgram = (await adminClient.query(PROGRAM)).referralProgram;
+        await adminClient.query(UPDATE_PROGRAM, {
+            input: {
+                expectedUpdatedAt: primaryProgram.updatedAt,
+                enabled: true,
+                rewardRate: 10,
+                releaseDelayDays: 0,
+                minimumOrderAmount: 0,
+                maxRewardPerOrder: null,
+                allowBalanceSpend: true,
+                attributionWindowDays: 30,
+                defaultPosterTemplate: 'BRAND_MINIMAL',
+            },
+        });
+        const inviterEmail = 'inviter-isolation@example.invalid';
+        await register(inviterEmail);
+        await loginShopCustomer(inviterEmail, 'ReferralPass123!');
+        const inviteCode = (await shopClient.query(OVERVIEW)).myReferralOverview.inviteCode;
+        await register('invitee-isolation@example.invalid', inviteCode, 'LINK');
+        await loginShopCustomer(inviterEmail, 'ReferralPass123!');
+        const inviter = (await adminClient.query(FIND_CUSTOMER, { email: inviterEmail })).customers.items[0];
+        const primaryCtx = await server.app
+            .get(RequestContextService)
+            .create({ apiType: 'admin', channelOrToken: primaryChannelToken });
+        await adminClient.query(ADJUST_BALANCE, {
+            customerId: inviter.id,
+            currencyCode: primaryCtx.channel.defaultCurrencyCode,
+            amount: 500,
+        });
         const primaryOverview = (await shopClient.query(OVERVIEW)).myReferralOverview;
         expect(primaryOverview.invitedCount).toBeGreaterThan(0);
         expect(primaryOverview.ledger.length).toBeGreaterThan(0);
@@ -1085,7 +1200,7 @@ describe('referral rebate closed loop', () => {
         });
         const connection = server.app.get(TransactionalConnection);
         const customer = await connection.getRepository(context, Customer).findOneOrFail({
-            where: { emailAddress: 'inviter@example.com' },
+            where: { emailAddress: inviterEmail },
             relations: ['user', 'user.roles', 'user.roles.channels'],
         });
         await server.app
@@ -1097,6 +1212,17 @@ describe('referral rebate closed loop', () => {
                 status: 'ACTIVE',
                 descriptionZh: '',
                 descriptionEn: '',
+            }),
+        );
+        await connection.getRepository(foreignContext, StoreDomain).save(
+            new StoreDomain({
+                channelId: foreignContext.channelId,
+                domain: 'referral-isolation.example.invalid',
+                status: 'ACTIVE',
+                isPrimary: true,
+                primaryChannelId: foreignContext.channelId,
+                verificationToken: randomUUID(),
+                verifiedAt: new Date(),
             }),
         );
         for (const role of customer.user?.roles ?? []) {
@@ -1140,7 +1266,7 @@ describe('referral rebate closed loop', () => {
 
         try {
             shopClient.setChannelToken(token);
-            await loginShopCustomer('inviter@example.com', 'ReferralPass123!', token);
+            await loginShopCustomer(inviterEmail, 'ReferralPass123!', token);
             const foreignOverview = (await shopClient.query(OVERVIEW)).myReferralOverview;
             expect(foreignOverview).toMatchObject({
                 invitedCount: 0,
@@ -1155,7 +1281,7 @@ describe('referral rebate closed loop', () => {
             ).toBe(false);
         } finally {
             shopClient.setChannelToken(primary.token);
-            await loginShopCustomer('inviter@example.com', 'ReferralPass123!');
+            await loginShopCustomer(inviterEmail, 'ReferralPass123!');
         }
         const restored = (await shopClient.query(OVERVIEW)).myReferralOverview;
         expect(restored.inviteCode).toBe(primaryOverview.inviteCode);
@@ -1168,6 +1294,9 @@ describe('referral rebate closed loop', () => {
     }, 30_000);
 
     it('preserves poster copy, keeps defaults enabled and persists an explicit all-hidden configuration', async () => {
+        await adminClient.asSuperAdmin();
+        adminClient.setChannelToken(primaryChannelToken);
+        shopClient.setChannelToken(primaryChannelToken);
         const posterProgram = gql`
             query PosterProgramRegression {
                 referralProgram {
@@ -1663,10 +1792,10 @@ async function createOrderAtPayment(): Promise<any> {
             shippingAddress: {
                 fullName: 'Referral Test',
                 streetLine1: '100 Test Street',
-                city: 'Los Angeles',
-                province: 'California',
-                postalCode: '90001',
-                countryCode: 'US',
+                city: 'London',
+                province: 'London',
+                postalCode: 'SW1A 1AA',
+                countryCode: 'GB',
                 phoneNumber: '10000000000',
             },
         },
@@ -1690,6 +1819,22 @@ async function createOrderAtPayment(): Promise<any> {
         });
         expect(reviewed.reviewFraudRiskCase.status).toBe('APPROVED');
         await apply({ reopen: true });
+        // Reopening clears the checkout snapshot. Re-establish the same checkout/shipping
+        // selections as the real storefront before retrying payment preparation.
+        await apply({ beginCheckout: true });
+        await apply({
+            prepareShipping: {
+                shippingAddress: {
+                    fullName: 'Referral Test',
+                    streetLine1: '100 Test Street',
+                    city: 'London',
+                    province: 'London',
+                    postalCode: 'SW1A 1AA',
+                    countryCode: 'GB',
+                    phoneNumber: '10000000000',
+                },
+            },
+        });
         prepared = await command({ preparePayment: true });
     }
     expect(prepared.status, prepared.message ?? prepared.errorCode).toBe('APPLIED');

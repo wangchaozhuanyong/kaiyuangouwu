@@ -183,9 +183,28 @@ export const shopApiExtensions = gql`
 
     extend type Query {
         storefrontCart: StorefrontCart!
+        storefrontPaymentAttempt(input: StorefrontPaymentAttemptInput!): StorefrontPaymentAttemptReceipt!
+    }
+
+    input StorefrontPaymentAttemptInput {
+        requestId: String!
+        orderId: ID!
+        kind: String!
+        method: String!
+        currencyCode: String!
+        amount: Int!
+    }
+
+    type StorefrontPaymentAttemptReceipt {
+        requestId: String!
+        status: String!
+        errorCode: String
     }
 
     extend type Mutation {
+        fenceUnstartedStorefrontPaymentAttempt(
+            input: StorefrontPaymentAttemptInput!
+        ): StorefrontPaymentAttemptReceipt!
         applyStorefrontCartCommand(input: StorefrontCartCommandInput!): StorefrontCartCommandResult!
         recoverStorefrontCartCommand(
             cartId: ID!
