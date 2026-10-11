@@ -42,10 +42,14 @@ export function DesktopCouponTicket({
                     <span>{card.tag}</span>
                 </div>
                 <div className="desktop-coupon-info">
-                    <strong>{card.title}</strong>
-                    <span className="desktop-coupon-threshold">{card.description}</span>
+                    <strong title={card.title}>{card.title}</strong>
+                    <span className="desktop-coupon-threshold" title={card.description}>
+                        {card.description}
+                    </span>
                     {(scope ?? card.scope) && (
-                        <span className="desktop-coupon-scope">{scope ?? card.scope}</span>
+                        <span className="desktop-coupon-scope" title={scope ?? card.scope}>
+                            {scope ?? card.scope}
+                        </span>
                     )}
                 </div>
                 <div className="desktop-coupon-action">{action}</div>
