@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopLayoutContext } from './desktop-layout';
 import { BusinessServicesPage } from './pages/business-services-page';
 import { BusinessServicesPageContext } from './storefront-page-contexts';
+import { type RouteState } from './storefront-router';
 import {
     type StorefrontContentBlock,
     type StorefrontContentItem,
@@ -93,6 +94,7 @@ function pageElement(
     language: 'zh' | 'en' = 'zh',
     desktop = false,
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void = vi.fn(),
+    onNavigate: (route: RouteState) => void = vi.fn(),
 ) {
     return (
         <BusinessServicesPageContext.Provider
@@ -108,7 +110,7 @@ function pageElement(
                 onToggleLanguage: vi.fn(),
                 onCurrencyChange: vi.fn(),
                 onNotifications: vi.fn(),
-                onNavigate: () => undefined,
+                onNavigate,
                 onContentTarget,
             }}
         >
@@ -124,6 +126,110 @@ function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'e
 }
 
 describe('business services page', () => {
+    function sidebarBlock(): StorefrontContentBlock {
+        const block = businessPluginBlock();
+        block.settings = { businessServicesCopyVersion: 1, businessServicesHeroLayout: 'shared-banner' };
+        block.imageUrl = '/assets/shared-banner.png';
+        block.imageAsset = { width: 1600, height: 900 };
+        block.items = [
+            'category-coupon-entry',
+            'two-factor-code-tool',
+            'category-support-entry',
+            'ai-image-studio-entry',
+            'icloud-mail-query-entry',
+        ].map((pluginCode, position) => ({
+            ...block.items[0],
+            id: pluginCode,
+            position,
+            settings: { ...block.items[0].settings, pluginCode },
+        }));
+        return block;
+    }
+
+    it('places support above coupons beside the shared image and keeps tools below without duplication', () => {
+        const block = sidebarBlock();
+        for (const language of ['zh', 'en'] as const) {
+            for (const desktop of [false, true]) {
+                const host = document.createElement('div');
+                host.innerHTML = renderPage([block], language, desktop);
+                const row = host.querySelector('.business-services-advertising-row');
+                const sidebar = row?.querySelector('aside');
+                if (!row || !sidebar) throw new Error('Shared banner assistance is missing');
+                expect(row.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
+                    block.imageUrl,
+                );
+                expect(sidebar.querySelectorAll('button')).toHaveLength(2);
+                expect(
+                    sidebar.querySelector('button')?.classList.contains('category-client-plugin-support'),
+                ).toBe(true);
+                expect(sidebar.querySelector('.is-tools')).toBeNull();
+                expect(host.querySelectorAll('.category-client-plugin')).toHaveLength(5);
+                const tools = host.querySelector('.is-tools');
+                if (!tools) throw new Error('Tool directory is missing');
+                expect(row.contains(tools)).toBe(false);
+                expect(tools.querySelectorAll('button')).toHaveLength(3);
+                expect(
+                    tools.querySelector('button')?.classList.contains('category-client-plugin-two-factor'),
+                ).toBe(true);
+                expect(row.compareDocumentPosition(tools)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+            }
+        }
+    });
+
+    it('omits disabled assistance and removes the sidebar when no eligible assistance or banner is enabled', () => {
+        const block = sidebarBlock();
+        block.items[0].enabled = false;
+        const host = document.createElement('div');
+        host.innerHTML = renderPage([block], 'zh', true);
+        expect(host.querySelectorAll('aside button')).toHaveLength(1);
+        expect(host.querySelector('.category-client-plugin-coupon')).toBeNull();
+        block.items[2].enabled = false;
+        expect(renderPage([block], 'zh', true)).not.toContain('business-services-assistance-sidebar');
+        block.items[2].enabled = true;
+        block.items[2].settings = { ...block.items[2].settings, placement: 'BEFORE_PRODUCT_LIST' };
+        expect(renderPage([block], 'zh', true)).not.toContain('business-services-assistance-sidebar');
+        block.items[2].settings.placement = 'BUSINESS_SERVICES_MAIN';
+        for (const fallback of [
+            { ...block, imageUrl: null, imageAsset: undefined },
+            { ...block, enabled: false },
+        ]) {
+            expect(renderPage([fallback], 'zh', true)).not.toContain('business-services-assistance-sidebar');
+        }
+    });
+
+    it('preserves the existing support, coupon and tool destinations after relocation', async () => {
+        vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const navigate = vi.fn();
+        try {
+            await act(async () => {
+                root.render(pageElement([sidebarBlock()], 'zh', true, vi.fn(), navigate));
+                await Promise.resolve();
+            });
+            for (const [className, route] of [
+                ['support', 'support'],
+                ['coupon', 'coupons'],
+                ['two-factor', 'two-factor'],
+                ['image-studio', 'image-studio'],
+                ['mail-query', 'mail-query'],
+            ]) {
+                await act(async () => {
+                    (host.querySelector(`.category-client-plugin-${className}`) as HTMLButtonElement).click();
+                    await Promise.resolve();
+                });
+                expect(navigate).toHaveBeenLastCalledWith({ name: route });
+            }
+            expect(navigate).toHaveBeenCalledTimes(5);
+        } finally {
+            await act(async () => {
+                root.unmount();
+                await Promise.resolve();
+            });
+            vi.unstubAllGlobals();
+        }
+    });
+
     it('puts enabled tools before assistance on both layouts and retains managed copy beside the title', () => {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1 };

@@ -34,6 +34,18 @@
     margin: var(--space-section) 0 0;
 }
 
+.business-services-advertising-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-section);
+    min-width: 0;
+}
+
+.business-services-assistance-sidebar {
+    min-width: 0;
+    min-height: 0;
+}
+
 .business-services-architecture {
     position: absolute;
     right: -24px;
@@ -63,6 +75,20 @@
 
     .business-services-page {
         --services-tool-icon-size: 64px;
+    }
+
+    .business-services-advertising-row {
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        align-items: stretch;
+    }
+
+    .business-services-advertising-row .business-services-heading[data-services-hero-layout='shared-banner'] {
+        max-width: none;
+        margin-inline: 0;
+    }
+
+    .business-services-assistance-sidebar {
+        display: grid;
     }
 
     .business-services-architecture {
