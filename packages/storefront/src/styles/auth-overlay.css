@@ -366,3 +366,10 @@
         transition: none;
     }
 }
+
+/* Loading reuses the real form boxes and their typography; no independent fixed height. */
+.auth-overlay-loading .skeleton-block {
+    background: var(--soft);
+    color: transparent;
+    border-radius: var(--skin-control-radius);
+}

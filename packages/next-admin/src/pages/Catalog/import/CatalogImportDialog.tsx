@@ -24,12 +24,9 @@ import {
     ChevronLeft,
     ChevronRight,
     Download,
-    FileSpreadsheet,
-    History,
     LoaderCircle,
     Play,
     RotateCcw,
-    Upload,
     X,
     XCircle,
 } from 'lucide-react';
@@ -43,7 +40,6 @@ import {
     type RefObject,
 } from 'react';
 
-import { AccessibleDialogSurface } from '../../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../../components/FeatureHelp';
 import { useConfirmDialog } from '../../../components/confirm-dialog-context';
 import {
@@ -69,6 +65,7 @@ import { getChannelDisplayName } from '../../../utils/channel-display';
 import { toUserFacingError } from '../../../utils/user-facing-error';
 import { formatDateTime } from '../../Sales/sales-utils';
 import { CatalogExportAction } from '../CatalogExportAction';
+import { CatalogImportDialogFrame } from './CatalogImportDialogFrame';
 
 import { parseCatalogFile } from './catalog-import-file';
 
@@ -525,179 +522,141 @@ export function CatalogImportDialog({ open, onClose }: { open: boolean; onClose:
     const closeAllowed = busy === null;
     if (!open) return null;
     return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-2 backdrop-blur-sm sm:p-5"
-            onMouseDown={event => {
-                if (event.target === event.currentTarget && closeAllowed) onClose();
-            }}
+        <CatalogImportDialogFrame
+            onClose={onClose}
+            closeAllowed={closeAllowed}
+            tab={tab}
+            onTabChange={setTab}
         >
-            <AccessibleDialogSurface
-                accessibleName="商品安全导入中心"
-                onRequestClose={() => closeAllowed && onClose()}
-                className="flex h-[96vh] w-full max-w-[1680px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-2xl sm:h-[92vh]"
-            >
-                <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
-                    <div>
-                        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-                            <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-                            商品安全导入中心
-                            <FeatureHelpButton
-                                topic="catalog.products"
-                                title="商品安全导入中心"
-                                description={'先本地解析和预览差异，只有点击“确认执行”后才会写入数据库。'}
-                            />
-                        </h2>
+            <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                {notice && (
+                    <Message kind="success" onClose={() => setNotice('')}>
+                        {notice}
+                    </Message>
+                )}
+                {actionError && (
+                    <Message kind="error" onClose={() => setActionError('')}>
+                        {actionError}
+                    </Message>
+                )}
+                {!canUpdate && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
+                        当前角色可创建和查看导入预览，但没有 “更新商品导入” 权限，无法处理冲突或确认执行。
                     </div>
-                    <AdminButton
-                        type="button"
-                        onClick={onClose}
-                        disabled={!closeAllowed}
-                        aria-label="关闭商品导入工作区"
-                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
-                    >
-                        <X className="h-5 w-5" />
-                    </AdminButton>
-                </header>
+                )}
 
-                <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-white px-5 py-2 sm:px-6">
-                    <TabButton active={tab === 'IMPORT'} onClick={() => setTab('IMPORT')}>
-                        <Upload className="h-3.5 w-3.5" /> 导入工作区
-                    </TabButton>
-                    <TabButton active={tab === 'HISTORY'} onClick={() => setTab('HISTORY')}>
-                        <History className="h-3.5 w-3.5" /> 导入历史
-                    </TabButton>
-                </div>
-
-                <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-                    {notice && (
-                        <Message kind="success" onClose={() => setNotice('')}>
-                            {notice}
-                        </Message>
-                    )}
-                    {actionError && (
-                        <Message kind="error" onClose={() => setActionError('')}>
-                            {actionError}
-                        </Message>
-                    )}
-                    {!canUpdate && (
-                        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-800">
-                            当前角色可创建和查看导入预览，但没有 “更新商品导入” 权限，无法处理冲突或确认执行。
-                        </div>
-                    )}
-
-                    {tab === 'HISTORY' ? (
-                        <ImportHistory
-                            jobs={historyQuery.data?.catalogImportJobs.items ?? []}
-                            loading={historyQuery.loading && !historyQuery.data}
-                            error={
-                                historyQuery.error
-                                    ? toUserFacingError(historyQuery.error, '导入历史加载失败')
-                                    : ''
-                            }
-                            onRetry={() => void historyQuery.refetch()}
-                            onOpenJob={id => {
-                                setJobId(id);
-                                setActionFilter('ALL');
-                                setRowPage(0);
-                                setTab('IMPORT');
-                            }}
-                        />
-                    ) : !jobId ? (
-                        <UploadPanel
-                            contextLoading={contextQuery.loading && !contextQuery.data}
-                            contextError={
-                                contextQuery.error
-                                    ? toUserFacingError(contextQuery.error, '导入上下文加载失败')
-                                    : ''
-                            }
-                            channelCode={activeChannel?.code ?? ''}
-                            channelName={activeChannel ? getChannelDisplayName(activeChannel) : ''}
-                            availableCurrencyCodes={activeChannel?.availableCurrencyCodes ?? []}
-                            locations={locations}
-                            stockLocationId={effectiveStockLocationId}
-                            currencyCode={effectiveCurrencyCode}
-                            file={file}
-                            preview={localPreview}
-                            fieldMapping={fieldMapping}
-                            mappingDirty={mappingDirty}
-                            clearBlankFields={clearBlankFields}
-                            transferProgress={transferProgress}
-                            transferStage={transferStage}
-                            receivedRows={receivedRows}
-                            busy={busy}
-                            fileInputRef={fileInputRef}
-                            onRetryContext={() => void contextQuery.refetch()}
-                            onFileChange={event => {
-                                setFile(event.target.files?.[0] ?? null);
-                                setLocalPreview(null);
-                                setFieldMapping({});
-                                setMappingDirty(false);
-                                setTransferProgress(0);
-                                setTransferStage('');
-                                setReceivedRows(0);
-                                setActionError('');
-                            }}
-                            onStockLocationChange={setStockLocationId}
-                            onCurrencyCodeChange={setCurrencyCode}
-                            onClearBlankFieldsChange={setClearBlankFields}
-                            onFieldMappingChange={(header, value) => {
-                                setFieldMapping(current => ({ ...current, [header]: value }));
-                                setMappingDirty(true);
-                            }}
-                            onParse={() => void handleLocalParse()}
-                            onCreatePreview={() => void handleCreatePreview()}
-                            onDownloadTemplate={domain => downloadTemplate(activeChannel?.code ?? '', domain)}
-                        />
-                    ) : jobQuery.loading && !job ? (
-                        <LoadingState label="正在读取导入任务" />
-                    ) : jobQuery.error || !job ? (
-                        <ErrorState
-                            message={toUserFacingError(jobQuery.error, '导入任务加载失败')}
-                            onRetry={() => void jobQuery.refetch()}
-                        />
-                    ) : (
-                        <JobWorkspace
-                            pageSize={pageSize}
-                            onPageSizeChange={setPageSize}
-                            job={job}
-                            rows={rows}
-                            totalRows={totalRows}
-                            rowPage={rowPage}
-                            totalPages={totalPages}
-                            actionFilter={actionFilter}
-                            rowsLoading={rowsQuery.loading && !rowsQuery.data}
-                            rowsError={
-                                rowsQuery.error ? toUserFacingError(rowsQuery.error, '预览行加载失败') : ''
-                            }
-                            busy={busy}
-                            running={running}
-                            canUpdate={canUpdate}
-                            canRollback={canRollback}
-                            canExecute={canExecute}
-                            targetVariantByRow={targetVariantByRow}
-                            onReset={resetWorkbench}
-                            onDownloadReport={() => void downloadReport()}
-                            onExecute={() => void executeImport()}
-                            onRollback={() => void rollbackImport()}
-                            onRetryRows={() => void rowsQuery.refetch()}
-                            onFilterChange={filter => {
-                                setActionFilter(filter);
-                                setRowPage(0);
-                            }}
-                            onPageChange={setRowPage}
-                            onTargetVariantChange={(rowId, value) =>
-                                setTargetVariantByRow(current => ({ ...current, [rowId]: value }))
-                            }
-                            onResolve={(rowId, resolution, targetVariantId) =>
-                                void resolveRow(rowId, resolution, targetVariantId)
-                            }
-                            onBatchApply={() => void resolveAllRows('APPLY')}
-                            onBatchSkip={() => void resolveAllRows('SKIP')}
-                        />
-                    )}
-                </main>
-            </AccessibleDialogSurface>
-        </div>
+                {tab === 'HISTORY' ? (
+                    <ImportHistory
+                        jobs={historyQuery.data?.catalogImportJobs.items ?? []}
+                        loading={historyQuery.loading && !historyQuery.data}
+                        error={
+                            historyQuery.error
+                                ? toUserFacingError(historyQuery.error, '导入历史加载失败')
+                                : ''
+                        }
+                        onRetry={() => void historyQuery.refetch()}
+                        onOpenJob={id => {
+                            setJobId(id);
+                            setActionFilter('ALL');
+                            setRowPage(0);
+                            setTab('IMPORT');
+                        }}
+                    />
+                ) : !jobId ? (
+                    <UploadPanel
+                        contextLoading={contextQuery.loading && !contextQuery.data}
+                        contextError={
+                            contextQuery.error
+                                ? toUserFacingError(contextQuery.error, '导入上下文加载失败')
+                                : ''
+                        }
+                        channelCode={activeChannel?.code ?? ''}
+                        channelName={activeChannel ? getChannelDisplayName(activeChannel) : ''}
+                        availableCurrencyCodes={activeChannel?.availableCurrencyCodes ?? []}
+                        locations={locations}
+                        stockLocationId={effectiveStockLocationId}
+                        currencyCode={effectiveCurrencyCode}
+                        file={file}
+                        preview={localPreview}
+                        fieldMapping={fieldMapping}
+                        mappingDirty={mappingDirty}
+                        clearBlankFields={clearBlankFields}
+                        transferProgress={transferProgress}
+                        transferStage={transferStage}
+                        receivedRows={receivedRows}
+                        busy={busy}
+                        fileInputRef={fileInputRef}
+                        onRetryContext={() => void contextQuery.refetch()}
+                        onFileChange={event => {
+                            setFile(event.target.files?.[0] ?? null);
+                            setLocalPreview(null);
+                            setFieldMapping({});
+                            setMappingDirty(false);
+                            setTransferProgress(0);
+                            setTransferStage('');
+                            setReceivedRows(0);
+                            setActionError('');
+                        }}
+                        onStockLocationChange={setStockLocationId}
+                        onCurrencyCodeChange={setCurrencyCode}
+                        onClearBlankFieldsChange={setClearBlankFields}
+                        onFieldMappingChange={(header, value) => {
+                            setFieldMapping(current => ({ ...current, [header]: value }));
+                            setMappingDirty(true);
+                        }}
+                        onParse={() => void handleLocalParse()}
+                        onCreatePreview={() => void handleCreatePreview()}
+                        onDownloadTemplate={domain => downloadTemplate(activeChannel?.code ?? '', domain)}
+                    />
+                ) : jobQuery.loading && !job ? (
+                    <LoadingState label="正在读取导入任务" />
+                ) : jobQuery.error || !job ? (
+                    <ErrorState
+                        message={toUserFacingError(jobQuery.error, '导入任务加载失败')}
+                        onRetry={() => void jobQuery.refetch()}
+                    />
+                ) : (
+                    <JobWorkspace
+                        pageSize={pageSize}
+                        onPageSizeChange={setPageSize}
+                        job={job}
+                        rows={rows}
+                        totalRows={totalRows}
+                        rowPage={rowPage}
+                        totalPages={totalPages}
+                        actionFilter={actionFilter}
+                        rowsLoading={rowsQuery.loading && !rowsQuery.data}
+                        rowsError={
+                            rowsQuery.error ? toUserFacingError(rowsQuery.error, '预览行加载失败') : ''
+                        }
+                        busy={busy}
+                        running={running}
+                        canUpdate={canUpdate}
+                        canRollback={canRollback}
+                        canExecute={canExecute}
+                        targetVariantByRow={targetVariantByRow}
+                        onReset={resetWorkbench}
+                        onDownloadReport={() => void downloadReport()}
+                        onExecute={() => void executeImport()}
+                        onRollback={() => void rollbackImport()}
+                        onRetryRows={() => void rowsQuery.refetch()}
+                        onFilterChange={filter => {
+                            setActionFilter(filter);
+                            setRowPage(0);
+                        }}
+                        onPageChange={setRowPage}
+                        onTargetVariantChange={(rowId, value) =>
+                            setTargetVariantByRow(current => ({ ...current, [rowId]: value }))
+                        }
+                        onResolve={(rowId, resolution, targetVariantId) =>
+                            void resolveRow(rowId, resolution, targetVariantId)
+                        }
+                        onBatchApply={() => void resolveAllRows('APPLY')}
+                        onBatchSkip={() => void resolveAllRows('SKIP')}
+                    />
+                )}
+            </main>
+        </CatalogImportDialogFrame>
     );
 }
 
@@ -1678,26 +1637,6 @@ function ImportHistory({
                 </tbody>
             </table>
         </div>
-    );
-}
-
-function TabButton({
-    active,
-    onClick,
-    children,
-}: {
-    active: boolean;
-    onClick: () => void;
-    children: ReactNode;
-}) {
-    return (
-        <AdminButton
-            type="button"
-            onClick={onClick}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition ${active ? 'bg-blue-50 text-blue-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'}`}
-        >
-            {children}
-        </AdminButton>
     );
 }
 

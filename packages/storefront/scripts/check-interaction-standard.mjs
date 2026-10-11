@@ -18,6 +18,20 @@ export function checkInteractionSource(file, source) {
         violations.push('数据重试不得整页 reload；使用当前作用域 refreshStorefrontQueries');
     const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const visit = node => {
+        if (
+            ts.isJsxAttribute(node) &&
+            node.name.text === 'fallback' &&
+            node.initializer &&
+            ts.isJsxExpression(node.initializer)
+        ) {
+            const fallback = node.initializer.expression;
+            if (
+                fallback &&
+                ts.isJsxElement(fallback) &&
+                ['p', 'span'].includes(fallback.openingElement.tagName.getText(parsed))
+            )
+                violations.push('懒加载占位必须使用对应布局骨架，不能只显示一行文字');
+        }
         if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
             const method = node.expression.name.text;
             const receiver = node.expression.expression;

@@ -47,6 +47,7 @@ import { readStoredStrings, scopedStorageKey, SEARCH_HISTORY_STORAGE_KEY } from 
 import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
 import { ProductSection } from '../storefront-ui/product-section';
+import '../styles/search-layout.css';
 import '../styles/search-surfaces.css';
 import { CollectionSummary, MarketConfig, Product, ProductSearchPage, StorefrontLanguage } from '../types';
 
@@ -705,7 +706,28 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                         </div>
                     )}
                     {searching ? (
-                        <ListSkeleton label={isZh ? '正在搜索商品' : 'Searching products'} />
+                        desktop && !embedded ? (
+                            <div className="product-list">
+                                <ProductSection
+                                    products={[]}
+                                    loading
+                                    skeletonCount={STOREFRONT_CATALOG_PAGE_SIZE}
+                                    appearance="plain"
+                                    market={market}
+                                    locale={locale}
+                                    language={language}
+                                    onProduct={() => undefined}
+                                />
+                            </div>
+                        ) : (
+                            <ListSkeleton
+                                className="product-list"
+                                layout={embedded ? 'compact' : 'rows'}
+                                count={STOREFRONT_CATALOG_PAGE_SIZE}
+                                showDescription={false}
+                                label={isZh ? '正在搜索商品' : 'Searching products'}
+                            />
+                        )
                     ) : searchError && !results.length ? (
                         <EmptyState
                             compact

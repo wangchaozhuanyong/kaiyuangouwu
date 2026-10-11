@@ -1,12 +1,12 @@
-import { Check, Copy, Download, Sparkles, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useEffect, useRef, useState } from 'react';
 
-import './styles/modals-and-support.css';
-
+import { SharePosterSurface } from './components/common/share-poster-surface';
 import { Overlay } from './overlay-host';
 import { productImage } from './product-media';
 import { storefrontWebpUrl } from './responsive-image';
+import './styles/modals-and-support.css';
 import { Product, StorefrontLanguage } from './types';
 
 export async function createQrCodeSvgDataUrl(value: string): Promise<string> {
@@ -181,71 +181,19 @@ export function SharePosterModal({
     };
 
     const content = (
-        <>
-            <div className="poster-preview-wrapper" ref={posterRef}>
-                <div className="poster-brand-row">
-                    {storefrontLogo ? (
-                        <img className="poster-brand-logo" src={storefrontLogo} alt={storefrontName} />
-                    ) : null}
-                    <div className="poster-brand-info">
-                        <span className="poster-brand-name">{storefrontName}</span>
-                        <span className="poster-brand-trust">
-                            <Sparkles size={11} />
-                            {isZh ? '商品分享' : 'Product share'}
-                        </span>
-                    </div>
-                </div>
-
-                <div className="poster-image-box">
-                    {mainImage ? (
-                        <img src={mainImage} alt={product.name} crossOrigin="anonymous" />
-                    ) : (
-                        <div className="poster-image-fallback" />
-                    )}
-                </div>
-
-                <div className="poster-info-row">
-                    <div className="poster-price-badge">{formattedPrice}</div>
-                    <h3 className="poster-title">{product.name}</h3>
-                </div>
-
-                <div className="poster-footer-row">
-                    <div className="poster-scan-prompt">
-                        <strong>{isZh ? '扫码直达选购' : 'Scan to explore'}</strong>
-                        <small>{isZh ? '支持微信 / 浏览器扫码' : 'WeChat / Browser direct scan'}</small>
-                    </div>
-                    {qrCodeUrl && <img className="poster-qrcode" src={qrCodeUrl} alt="QR Code" />}
-                </div>
-            </div>
-
-            <div className="poster-actions-row">
-                <button
-                    type="button"
-                    className="poster-action-btn primary"
-                    onClick={() => void downloadPoster()}
-                    disabled={downloading}
-                >
-                    <Download size={16} />
-                    <span>
-                        {downloading
-                            ? isZh
-                                ? '正在生成...'
-                                : 'Generating...'
-                            : isZh
-                              ? '保存海报图片'
-                              : 'Save poster'}
-                    </span>
-                </button>
-                <button
-                    type="button"
-                    className="poster-action-btn secondary"
-                    onClick={() => void copyShareText()}
-                >
-                    {copied ? <Check size={16} /> : <Copy size={16} />}
-                    <span>{copied ? (isZh ? '已复制' : 'Copied') : isZh ? '复制图文口令' : 'Copy text'}</span>
-                </button>
-            </div>
-        </>
+        <SharePosterSurface
+            product={product}
+            storefrontName={storefrontName}
+            logoUrl={logoUrl}
+            language={language}
+            formattedPrice={formattedPrice}
+            previewRef={posterRef}
+            qrCodeUrl={qrCodeUrl}
+            copied={copied}
+            downloading={downloading}
+            onDownload={() => void downloadPoster()}
+            onCopy={() => void copyShareText()}
+        />
     );
     if (embedded) return content;
     return (

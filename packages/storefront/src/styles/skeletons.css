@@ -1,7 +1,6 @@
 /* One centered stage for initial, route and local waits. Available content stays outside it. */
 .page-skeleton,
-.route-transition,
-.list-skeleton {
+.route-transition {
     display: grid;
     place-items: center;
     width: 100%;
@@ -30,7 +29,8 @@
 }
 
 .list-skeleton {
-    min-height: 220px;
+    width: 100%;
+    min-width: 0;
 }
 
 .page-loading-indicator {

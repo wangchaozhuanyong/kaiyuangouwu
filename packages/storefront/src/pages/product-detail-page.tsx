@@ -17,6 +17,7 @@ import { ContentText } from '../../../storefront-content-plugin/src/shared/conte
 import { ShopApi } from '../api';
 import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { QuantityControl } from '../components/common/quantity-control';
+import { SharePosterSurface } from '../components/common/share-poster-surface';
 import { useDesktopLayout } from '../desktop-layout';
 import { LazySharePosterModal } from '../lazy-storefront-pages';
 import { Overlay } from '../overlay-host';
@@ -178,6 +179,13 @@ export function ProductDetailPage() {
     const availability = productAvailability(variant);
     const purchaseQuantity = Math.min(quantity, Math.max(1, availability.stock ?? quantity));
     const activeFlashItem = flashSaleItems.find(item => item.productVariantId === variant?.id);
+    const posterFormattedPrice = quoteOnly
+        ? quoteLabel
+        : activeFlashItem
+          ? formatMoney(activeFlashItem.salePrice, activeFlashItem.currencyCode, locale)
+          : variant
+            ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
+            : '--';
     const displayedPrice = activeFlashItem?.salePrice ?? variant?.priceWithTax ?? null;
     const displayedCurrencyCode =
         activeFlashItem?.currencyCode ?? variant?.currencyCode ?? market.currencyCode;
@@ -864,7 +872,14 @@ export function ProductDetailPage() {
                         </button>
                         <Suspense
                             fallback={
-                                <p role="status">{isZh ? '正在加载分享海报…' : 'Loading share poster…'}</p>
+                                <SharePosterSurface
+                                    pending
+                                    product={product}
+                                    storefrontName={storefrontName}
+                                    logoUrl={logoUrl}
+                                    language={language}
+                                    formattedPrice={posterFormattedPrice}
+                                />
                             }
                         >
                             <LazySharePosterModal
@@ -873,19 +888,7 @@ export function ProductDetailPage() {
                                 storefrontName={storefrontName}
                                 logoUrl={logoUrl}
                                 language={language}
-                                formattedPrice={
-                                    quoteOnly
-                                        ? quoteLabel
-                                        : activeFlashItem
-                                          ? formatMoney(
-                                                activeFlashItem.salePrice,
-                                                activeFlashItem.currencyCode,
-                                                locale,
-                                            )
-                                          : variant
-                                            ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                                            : '--'
-                                }
+                                formattedPrice={posterFormattedPrice}
                                 onClose={() => setPosterOpen(false)}
                                 onNotify={onNotify}
                             />

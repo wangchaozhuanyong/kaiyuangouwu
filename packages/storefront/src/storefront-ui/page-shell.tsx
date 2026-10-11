@@ -21,9 +21,9 @@ import {
 import { CSSProperties, HTMLAttributes, ReactNode, Suspense, useId } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
-import { BrandLoadingIndicator } from '../brand-loading';
 import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { PageBackButton } from '../components/common/page-back-button';
+import { ProductSkeletonItems } from '../components/common/product-skeleton';
 import { QueryLoadState } from '../loading-state';
 import { Overlay } from '../overlay-host';
 import { PageSkeleton } from '../route-loading';
@@ -586,18 +586,32 @@ export function InlineError({
 export function ListSkeleton({
     label = 'Loading',
     layout = 'rows',
+    className,
+    count = layout === 'products' ? 12 : 3,
+    appearance,
+    showDescription = true,
 }: {
     label?: string;
-    layout?: 'rows' | 'products';
+    layout?: 'rows' | 'products' | 'compact';
+    className?: string;
+    count?: number;
+    appearance?: 'card' | 'plain';
+    showDescription?: boolean;
 }) {
     return (
         <div
             data-page-pending="data"
-            className={`list-skeleton${layout === 'products' ? ' is-product-grid' : ''}`}
+            className={`list-skeleton ${className ?? (layout === 'products' ? 'product-grid' : 'product-list')}`}
             role="status"
             aria-label={label}
+            aria-busy="true"
         >
-            <BrandLoadingIndicator />
+            <ProductSkeletonItems
+                count={count}
+                layout={layout}
+                appearance={appearance}
+                showDescription={showDescription}
+            />
         </div>
     );
 }

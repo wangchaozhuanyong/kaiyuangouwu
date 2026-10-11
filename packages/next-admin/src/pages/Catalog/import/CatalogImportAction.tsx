@@ -1,6 +1,8 @@
 import { Upload } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { AdminButton } from '../../../components/AdminControls';
+import { PageSkeleton } from '../../../components/AdminPageWorkspace';
+import { CatalogImportDialogFrame } from './CatalogImportDialogFrame';
 
 import { useAdminPermissions } from '../../../hooks/use-admin-permissions';
 
@@ -29,9 +31,11 @@ export function CatalogImportAction() {
             {open && (
                 <Suspense
                     fallback={
-                        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/55 text-sm text-white">
-                            正在加载商品导入工作区…
-                        </div>
+                        <CatalogImportDialogFrame onClose={() => setOpen(false)}>
+                            <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                                <PageSkeleton label="正在加载商品导入工作区" />
+                            </main>
+                        </CatalogImportDialogFrame>
                     }
                 >
                     <CatalogImportDialog open={open} onClose={() => setOpen(false)} />

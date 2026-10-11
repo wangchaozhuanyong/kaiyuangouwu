@@ -68,6 +68,19 @@ describe('Admin mandatory architecture gate', () => {
         expect(violations[0]).toContain('短字段标题与控件须使用 AdminField');
     });
 
+    it('rejects bare text lazy fallbacks and accepts structural or nonblocking fallbacks', () => {
+        const { sourceRoot } = fixture({
+            'features/new-business/loading.tsx': `
+                const bad = <Suspense fallback={<p role="status">加载中</p>} />;
+                const good = <Suspense fallback={<PageSkeleton />} />;
+                const optional = <Suspense fallback={null} />;
+            `,
+        });
+        const violations = auditAdminInteraction(sourceRoot).violations;
+        expect(violations).toHaveLength(1);
+        expect(violations[0]).toContain('懒加载占位必须使用对应布局骨架');
+    });
+
     it('accepts shared integration in a newly named production directory', () => {
         const { sourceRoot } = fixture({
             'features/new-business/write.ts':

@@ -93,3 +93,10 @@
 这些规则用于持续防止架构回退；新增业务仍需受影响测试与验收，不能以静态检查替代行为验证。
 
 官方依据：[Apollo 缓存字段合并](https://www.apollographql.com/docs/react/caching/cache-field-behavior)、[Apollo 查询状态](https://www.apollographql.com/docs/react/data/queries)、[Apollo 刷新](https://www.apollographql.com/docs/react/data/refetching)。本项目具体行为以上述标准及实现为准。
+
+## 2026-10-11 共用占位布局补充
+
+- 配置首读等待统一由 `SettingsContentSkeleton` 承载，旧 `LoadingState` 入口委托同一组件；刷新和保存后的后台更新仍保留现有配置与草稿。
+- 大型懒加载弹窗先提供完整且可关闭的共用外壳。商品导入使用 `CatalogImportDialogFrame` 承载等待与完成状态，并通过所属页面的 `AdminOverlayPortal` 管理遮罩、键盘焦点和生命周期；真正导入时仍遵守原有 busy 关闭限制。
+- `check:feedback` 内的交互门禁拒绝直接以 `<p>` / `<span>` 作为懒加载 fallback。静态规则不替代慢加载下的尺寸、关闭、Escape 和焦点回归验收。
+- 不改变权限、Apollo 查询与事件刷新、数据写入或目标店铺和仓库选择规则。

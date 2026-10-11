@@ -227,7 +227,7 @@ it.each([
             expect(api.catalog).not.toHaveBeenCalled();
             expect(client.getQueryData(key)).toEqual(cached);
             expect(client.getQueryCache().find({ queryKey: key, exact: true })?.getObserversCount()).toBe(1);
-            expect(container.querySelector('.category-product-list')).toBeNull();
+            expect(container.querySelector('.category-product-list:not([aria-busy])')).toBeNull();
             expect(container.textContent).not.toContain(product.name);
 
             if (state === 'loading') {

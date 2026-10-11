@@ -611,7 +611,11 @@ export function CategoryPage() {
                     />
 
                     {categoryLoading ? (
-                        <ListSkeleton label={isZh ? '正在加载商品' : 'Loading products'} />
+                        <ListSkeleton
+                            className="category-product-list"
+                            count={12}
+                            label={isZh ? '正在加载商品' : 'Loading products'}
+                        />
                     ) : categoryError && !categoryProducts.length ? (
                         <EmptyState
                             icon={<WifiOff />}
