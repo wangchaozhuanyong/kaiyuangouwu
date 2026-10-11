@@ -1134,7 +1134,10 @@ describe('storefront skin system', () => {
         expect(mobile).toMatch(/\.hero-carousel-stage[^}]*position:\s*relative;/);
         expect(mobile).toMatch(/\.hero-scene-wrapper[^}]*display:\s*block;[^}]*height:\s*auto;/);
         expect(mobile).toMatch(/\.hero-rich-media[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
-        expect(mobile).toMatch(/\.hero-rich-backdrop[^}]*height:\s*100%;[^}]*object-fit:\s*cover;/);
+        // Growing copy must not enlarge the phone artwork through height-driven cover cropping.
+        expect(mobile).toMatch(
+            /data-hero-artwork-layout='overlay'[^}]*:is\(\.hero-rich-backdrop, \.safe-image-preview\)[^}]*width:\s*100%;[^}]*height:\s*auto;[^}]*object-fit:\s*contain;/,
+        );
         expect(mobile).toMatch(
             /\.hero-rich-content[^}]*position:\s*relative;[^}]*height:\s*auto;[^}]*background:\s*transparent;/,
         );

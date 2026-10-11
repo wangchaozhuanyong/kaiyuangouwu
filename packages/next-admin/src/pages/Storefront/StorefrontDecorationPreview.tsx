@@ -2,6 +2,10 @@ import { AdminButton, AdminSelect } from '../../components/AdminControls';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+    measureServicesBanner,
+    servicesBannerReviewKey,
+} from '../../../../storefront-content-plugin/src/shared/business-services-banner';
 import type { StorefrontVisualPresetId } from '../../../../storefront-content-plugin/src/visual-presets';
 import { getActiveChannelToken } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
@@ -23,6 +27,13 @@ import {
 } from './storefront-decoration-model';
 import { contentPublicationLabels, contentPublicationStatus } from './storefront-publication';
 
+export interface ServicesBannerLayoutReport {
+    language: StorefrontLanguageCode;
+    viewport: 'mobile' | 'desktop';
+    reviewKey: string;
+    issues: string[];
+}
+
 function ClientFrame({
     block,
     language,
@@ -30,6 +41,7 @@ function ClientFrame({
     expanded = false,
     presetId,
     route = '/',
+    onServicesBannerCheck,
 }: {
     block?: StorefrontContentBlock;
     language: StorefrontLanguageCode;
@@ -37,6 +49,7 @@ function ClientFrame({
     expanded?: boolean;
     presetId?: StorefrontVisualPresetId;
     route?: '/' | '/account';
+    onServicesBannerCheck?: (report: ServicesBannerLayoutReport) => void;
 }) {
     const query = useQuery<StorefrontContentResult>(STOREFRONT_CONTENT_QUERY, { fetchPolicy: 'no-cache' });
     const channel = query.data?.activeChannel;
@@ -86,6 +99,56 @@ function ClientFrame({
     const width = viewport === 'desktop' ? 1440 : 390;
     const height = viewport === 'desktop' ? 900 : 844;
     const scale = Math.min(1, hostWidth / width);
+
+    useEffect(() => {
+        if (!onServicesBannerCheck || block?.settings?.businessServicesHeroLayout !== 'shared-banner') return;
+        const copy = block.translations.find(value => value.languageCode === language);
+        if (!copy) return;
+        const imageUrl = block.imageAsset?.source || block.imageAsset?.preview || block.imageUrl || '';
+        const reviewKey = servicesBannerReviewKey(copy, imageUrl, Boolean(block.targetValue));
+        const report = (issues: string[]) => onServicesBannerCheck({ language, viewport, reviewKey, issues });
+        report(['正在检查实际广告排版']);
+        const doc = ready && !error ? frame.current?.contentDocument : null;
+        if (!doc?.body) return;
+        let active = true;
+        const check = () => {
+            if (!active) return;
+            const hero = doc.querySelector<HTMLElement>('[data-services-hero-layout="shared-banner"]');
+            if (
+                !hero ||
+                hero.querySelector('.business-services-page-title')?.textContent?.trim() !==
+                    copy.title.trim() ||
+                hero.querySelector('p')?.textContent?.trim() !== copy.body.trim()
+            ) {
+                report(['等待当前草稿完成预览']);
+                return;
+            }
+            const action = hero.querySelector('.business-services-heading-link');
+            const expectedAction =
+                copy.ctaLabel?.trim() || (language === 'en' ? 'Open service website' : '打开服务网站');
+            if (
+                Boolean(action) !== Boolean(block.targetValue) ||
+                (action && action.textContent?.trim() !== expectedAction)
+            ) {
+                report(['等待按钮文案完成预览']);
+                return;
+            }
+            report(measureServicesBanner(hero));
+        };
+        const observer = new MutationObserver(check);
+        observer.observe(doc.body, { subtree: true, childList: true, characterData: true, attributes: true });
+        const resize = new ResizeObserver(check);
+        resize.observe(doc.documentElement);
+        doc.fonts?.addEventListener('loadingdone', check);
+        void doc.fonts?.ready.then(check);
+        check();
+        return () => {
+            active = false;
+            observer.disconnect();
+            resize.disconnect();
+            doc.fonts?.removeEventListener('loadingdone', check);
+        };
+    }, [block, language, viewport, ready, error, onServicesBannerCheck]);
 
     useEffect(() => {
         const element = host.current;
@@ -276,11 +339,13 @@ export function StorefrontDecorationPreview({
     language,
     fixedViewport,
     presetId,
+    onServicesBannerCheck,
 }: {
     block?: StorefrontContentBlock;
     language: StorefrontLanguageCode;
     fixedViewport?: 'mobile' | 'desktop';
     presetId?: StorefrontVisualPresetId;
+    onServicesBannerCheck?: (report: ServicesBannerLayoutReport) => void;
 }) {
     const [viewport, setViewport] = useState<'mobile' | 'desktop'>('mobile');
     const [expanded, setExpanded] = useState(false);
@@ -356,6 +421,7 @@ export function StorefrontDecorationPreview({
                 viewport={selectedViewport}
                 presetId={presetId}
                 route={route}
+                onServicesBannerCheck={onServicesBannerCheck}
             />
             {expanded && (
                 <AccessibleDialogSurface

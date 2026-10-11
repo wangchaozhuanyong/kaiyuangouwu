@@ -18,6 +18,7 @@ import { sampleImageTone, type ImageTone } from './image-tone';
 export const heroArtworkLayouts = [
     { value: 'overlay', label: '原图文字覆盖' },
     { value: 'editorial', label: '图文分离' },
+    { value: 'campaign', label: '固定广告框架，短文案覆盖' },
 ] as const;
 
 export type HeroArtworkLayout = (typeof heroArtworkLayouts)[number]['value'];
@@ -25,7 +26,11 @@ export type HeroArtworkLayout = (typeof heroArtworkLayouts)[number]['value'];
 export function resolveHeroArtworkLayout(
     settings: Record<string, unknown> | null | undefined,
 ): HeroArtworkLayout {
-    return settings?.heroArtworkLayout === 'editorial' ? 'editorial' : 'overlay';
+    return settings?.heroArtworkLayout === 'campaign'
+        ? 'campaign'
+        : settings?.heroArtworkLayout === 'editorial'
+          ? 'editorial'
+          : 'overlay';
 }
 
 export interface HeroSceneData extends HeroThemeData {

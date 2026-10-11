@@ -3,6 +3,7 @@ import {
     STOREFRONT_FOOTER_CODE,
 } from '../../../../storefront-content-plugin/src/homepage-manifest';
 import { imageBindingKey } from '../../../../storefront-content-plugin/src/image-replacement-policy';
+import { mobileHeroTranslation } from '../../../../storefront-content-plugin/src/shared/hero-image';
 import { supportFaqValidation } from '../../../../storefront-content-plugin/src/support-faq';
 import type {
     StorefrontBlockTranslation,
@@ -482,6 +483,36 @@ export function storefrontBlockInput(
 export function storefrontBlockValidation(block: StorefrontContentBlock): string | null {
     if (!block.internalName.trim()) return '请填写内部管理名称';
     if (!block.code.trim()) return '缺少区块编码';
+    if (block.type === 'HERO' && block.settings?.heroArtworkLayout === 'campaign') {
+        const copies = [
+            ...block.translations,
+            ...(['zh_Hans', 'en'] as const).map(language => mobileHeroTranslation(block.settings, language)),
+        ];
+        for (const copy of copies) {
+            const zh = copy.languageCode === 'zh_Hans';
+            const title = copy.title?.trim() ?? '';
+            const body = copy.body?.trim() ?? '';
+            const ctaLabel = copy.ctaLabel?.trim() ?? '';
+            if (Array.from(title).length > (zh ? 16 : 28))
+                return '固定轮播广告标题过长，请缩短标题，不要扩大图片框架';
+            if (Array.from(body).length > (zh ? 18 : 26) || /[\r\n]/u.test(body))
+                return '固定轮播广告说明过长，请保持一行短文案';
+            if (Array.from(ctaLabel).length > (zh ? 6 : 12) || /[\r\n]/u.test(ctaLabel))
+                return '固定轮播广告按钮文案过长';
+        }
+    }
+    if (block.type === 'CATEGORY_AD' && block.settings?.categoryArtworkLayout === 'scene-poster') {
+        for (const copy of block.translations) {
+            const zh = copy.languageCode === 'zh_Hans';
+            const headline = copy.body.trim() || copy.title.trim();
+            if (Array.from(headline).length > (zh ? 5 : 12) || /[\r\n]/u.test(headline))
+                return '精选海报主标题过长，请缩短正文中的广告标题';
+            if (Array.from(copy.subtitle.trim()).length > (zh ? 9 : 18) || /[\r\n]/u.test(copy.subtitle))
+                return '精选海报说明过长，请缩短副标题';
+            if (Array.from(copy.ctaLabel.trim()).length > (zh ? 4 : 8) || /[\r\n]/u.test(copy.ctaLabel))
+                return '精选海报按钮文案过长';
+        }
+    }
     if (
         !['AUTH_LOGIN', 'AUTH_REGISTER', 'FOOTER'].includes(block.type) &&
         !blockTranslation(block, 'zh_Hans').title.trim()

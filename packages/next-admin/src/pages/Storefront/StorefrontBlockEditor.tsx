@@ -170,6 +170,7 @@ export function StorefrontBlockEditor({
         }));
     const phoneTranslation = mobileHeroTranslation(draft.settings, language);
     const editorialHero = draft.type === 'HERO' && resolveHeroArtworkLayout(draft.settings) === 'editorial';
+    const campaignHero = draft.type === 'HERO' && resolveHeroArtworkLayout(draft.settings) === 'campaign';
     const phoneImageUrl = stringSetting(draft.settings?.mobileImageUrl, '').trim();
     const updatePhoneTranslation = (patch: Partial<MobileHeroTranslation>) => {
         const translations = (['zh_Hans', 'en'] as const).map(code => {
@@ -473,9 +474,26 @@ export function StorefrontBlockEditor({
                                         </>
                                     )}
                                     {!isFooter && (
-                                        <Field label={isSupport ? '客服说明' : '正文'}>
+                                        <Field
+                                            label={
+                                                draft.type === 'CATEGORY_AD' &&
+                                                draft.settings?.categoryArtworkLayout === 'scene-poster'
+                                                    ? '横幅主标题（中文最多5字）'
+                                                    : isSupport
+                                                      ? '客服说明'
+                                                      : '正文'
+                                            }
+                                        >
                                             <AdminTextArea
                                                 rows={5}
+                                                maxLength={
+                                                    draft.type === 'CATEGORY_AD' &&
+                                                    draft.settings?.categoryArtworkLayout === 'scene-poster'
+                                                        ? language === 'zh_Hans'
+                                                            ? 5
+                                                            : 12
+                                                        : undefined
+                                                }
                                                 data-translation-field="body"
                                                 value={translation.body}
                                                 onChange={event =>
@@ -675,6 +693,32 @@ export function StorefrontBlockEditor({
                                                 </p>
                                             </div>
                                         )}
+                                        {draft.type === 'CATEGORY_AD' && (
+                                            <Field label="精选图片布局">
+                                                <AdminSelect
+                                                    className={inputClass}
+                                                    value={
+                                                        draft.settings?.categoryArtworkLayout ===
+                                                        'scene-poster'
+                                                            ? 'scene-poster'
+                                                            : 'original'
+                                                    }
+                                                    onChange={event =>
+                                                        updateSettings({
+                                                            categoryArtworkLayout: event.target.value,
+                                                        })
+                                                    }
+                                                >
+                                                    <option value="original">原图展示</option>
+                                                    <option value="scene-poster">
+                                                        紧凑 16∶9 广告，文案独立编辑
+                                                    </option>
+                                                </AdminSelect>
+                                                <p className="mt-2 text-xs text-slate-500">
+                                                    电脑手机共用16∶9横图。正文用作短标题，副标题用作短说明，按钮文案保持简短；文字位于左侧60%，图片不叠加遮罩。更换布局会保留原图。
+                                                </p>
+                                            </Field>
+                                        )}
                                         {['QUICK_LINKS', 'TRUST_BAR', 'CATEGORY_AD'].includes(draft.type) && (
                                             <Field label="卡片样式">
                                                 <AdminSelect
@@ -723,7 +767,9 @@ export function StorefrontBlockEditor({
                                                     helpText={
                                                         editorialHero
                                                             ? '电脑与手机均为左侧网页文字、右侧完整主体，底图左侧请留空；电脑图建议 3:1，手机图建议 3:2，可分别设置。'
-                                                            : '保留现有图片上的网页文字布局；选择左右构图后，电脑与手机会使用共用的图文分离布局。'
+                                                            : campaignHero
+                                                              ? '保留电脑轮播框架，手机框架固定255px高；文字限左侧60%，请使用短标题、一行说明和短按钮，图片完整显示。'
+                                                              : '保留现有图片上的网页文字布局；选择左右构图后，电脑与手机会使用共用的图文分离布局。'
                                                     }
                                                 >
                                                     <AdminSelect
@@ -739,6 +785,9 @@ export function StorefrontBlockEditor({
                                                     >
                                                         <option value="overlay">原图文叠加</option>
                                                         <option value="editorial">无文字底图·左右构图</option>
+                                                        <option value="campaign">
+                                                            固定广告框架，短文案覆盖
+                                                        </option>
                                                     </AdminSelect>
                                                 </Field>
                                                 <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">

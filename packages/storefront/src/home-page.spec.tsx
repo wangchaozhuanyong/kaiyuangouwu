@@ -2205,6 +2205,25 @@ describe('HomePage core category cards', () => {
 });
 
 describe('HomePage category promotion', () => {
+    it('renders editable scene-poster copy only when selected and keeps its image binding', () => {
+        const markup = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],
+            contentBlocks: [
+                {
+                    ...categoryAdBlock,
+                    body: 'AI 好物，一站精选',
+                    ctaLabel: '查看精选',
+                    textColor: '#FFFFFF',
+                    settings: { ...categoryAdBlock.settings, categoryArtworkLayout: 'scene-poster' },
+                },
+            ],
+        });
+        expect(markup).toContain('category-promotion-visual is-scene-poster');
+        expect(markup).toContain('AI 好物，一站精选');
+        expect(markup).toContain('category-promotion-poster-action');
+        expect(markup).toContain('/assets/category-ad.jpg');
+        expect(markup).toContain('color:#FFFFFF');
+    });
     it('places the subtitle at the end of the heading and omits the CTA copy', () => {
         const markup = renderHome({
             configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],

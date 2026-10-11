@@ -334,6 +334,23 @@
         .home-page
         .home-intro-grid.is-grouped-intro:has(> .quick-grid)
         .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='editorial']
+        .hero-rich-content {
+        /* The pager sits on the artwork side; keep the copy's full height available. */
+        padding: var(--space-12) var(--space-16);
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='editorial']
+        .hero-rich-copy-region {
+        gap: var(--space-8);
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
         .hero-rich-copy-region {
         display: flex;
         min-height: var(--experience-control-min, 44px);
@@ -343,6 +360,21 @@
         overflow-y: auto;
         overscroll-behavior: contain;
         pointer-events: auto;
+    }
+    /* Keep long copy scrollable without a prominent scrollbar over the artwork. */
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        :is(.hero-rich-content, .hero-rich-copy-region) {
+        scrollbar-width: none;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        :is(.hero-rich-content, .hero-rich-copy-region)::-webkit-scrollbar {
+        display: none;
     }
     .desktop-store-layout
         .home-page
@@ -3934,5 +3966,166 @@ html[lang='en'] .primary-category-image {
     .responsive-home-header-placeholder {
         display: block;
         height: var(--desktop-header-height, 72px);
+    }
+}
+
+/* Compact campaign artwork shares one 16:9 frame across desktop and mobile. */
+.category-promotion-visual.is-scene-poster {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    min-height: 0;
+}
+.category-promotion-visual.is-scene-poster > .responsive-picture,
+.category-promotion-visual.is-scene-poster > .responsive-picture > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: none;
+}
+.category-promotion-poster-copy {
+    position: absolute;
+    z-index: 2;
+    inset: var(--space-16) auto auto var(--space-16);
+    width: calc(60% - var(--space-16) * 2);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-8);
+    color: inherit;
+    background: none;
+    text-shadow: none;
+}
+.category-promotion-poster-copy strong {
+    font-size: var(--type-page-size);
+    line-height: var(--type-page-leading);
+    font-weight: var(--font-weight-bold);
+}
+.category-promotion-poster-copy > span {
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.category-promotion-poster-action {
+    position: absolute;
+    z-index: 2;
+    inset: auto auto var(--space-16) var(--space-16);
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: var(--space-8) var(--space-12);
+    box-sizing: border-box;
+    border-radius: var(--skin-control-radius);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+    background: var(--accent);
+    color: var(--accent-foreground);
+}
+
+/* Explicit fixed advertising mode; legacy heroes keep their existing geometry. */
+.home-page .hero.hero-image-overlay:has(.hero-scene-wrapper[data-hero-artwork-layout='campaign']) {
+    min-height: 0;
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    .hero-rich-content {
+    height: 100%;
+    min-height: 0;
+    justify-content: center;
+    padding: var(--space-24) 0;
+    gap: var(--space-16);
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    .hero-rich-copy-region {
+    flex: 0 1 auto;
+    overflow: visible;
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    .hero-rich-copy-surface {
+    gap: var(--space-12);
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    .hero-rich-cta-btn {
+    margin-top: 0;
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    :is(.hero-rich-backdrop, .safe-image-preview) {
+    object-fit: contain;
+    filter: none;
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    .hero-rich-image-link::after {
+    content: none;
+    background: none;
+}
+.home-page
+    .hero.hero-image-overlay
+    .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+    :is(.hero-rich-title, .hero-rich-desc) {
+    text-shadow: none;
+}
+.home-page .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='campaign'] .hero-rich-desc {
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+@media (min-width: 1024px) {
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+        .hero-rich-content {
+        justify-content: center;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+        .hero-rich-copy-region {
+        flex: 0 1 auto;
+    }
+    .desktop-store-layout
+        .home-page
+        .home-intro-grid.is-grouped-intro:has(> .quick-grid)
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+        :is(.hero-rich-backdrop, .safe-image-preview) {
+        object-fit: contain;
+    }
+}
+@media (max-width: 1023px) {
+    .home-page .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='campaign'] {
+        height: 255px;
+        min-height: 0;
+    }
+    .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+        .hero-rich-content {
+        width: calc(60% - 20px);
+        margin-left: 20px;
+        max-height: 100%;
+    }
+}
+@media (max-width: 389px) {
+    .home-page
+        .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='campaign']
+        .hero-rich-content {
+        width: calc(60% - 16px);
+        margin-left: 16px;
     }
 }
