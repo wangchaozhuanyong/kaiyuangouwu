@@ -23,6 +23,7 @@ import {
     PointerEvent as ReactPointerEvent,
     useCallback,
     useEffect,
+    useInsertionEffect,
     useLayoutEffect,
     useMemo,
     useRef,
@@ -404,6 +405,13 @@ function subscribeToPhoneHero(onChange: () => void) {
 }
 
 export function HomePage() {
+    useInsertionEffect(() => {
+        // Client-only entries (including Admin preview) must retain the same
+        // cascade as the server's first response and lazy commerce routes.
+        const homeStyle = document.head.querySelector('style[data-href="storefront-home-showcase"]');
+        const commonStyle = document.head.querySelector('link[rel="stylesheet"], style[data-vite-dev-id]');
+        if (homeStyle && commonStyle) document.head.insertBefore(homeStyle, commonStyle);
+    }, []);
     const phoneHero = useSyncExternalStore(
         subscribeToPhoneHero,
         () => window.matchMedia(phoneHeroQuery).matches,

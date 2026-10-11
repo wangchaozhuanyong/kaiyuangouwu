@@ -100,6 +100,20 @@ const baseProps: HomePageProps = {
 
 // Exercise actual React pointer handlers rather than only the swipe threshold helper.
 describe('HomePage carousel pointer interactions', () => {
+    it('keeps client-rendered home CSS before the common desktop overrides', async () => {
+        const commonStyle = document.createElement('link');
+        commonStyle.rel = 'stylesheet';
+        commonStyle.href = '/assets/index-cascade-test.css';
+        document.head.prepend(commonStyle);
+        try {
+            await render(true);
+            const homeStyle = requiredElement(document.head, 'style[data-href="storefront-home-showcase"]');
+            const resources = [...document.head.children];
+            expect(resources.indexOf(homeStyle)).toBeLessThan(resources.indexOf(commonStyle));
+        } finally {
+            commonStyle.remove();
+        }
+    });
     let host: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     let reducedMotion: boolean;
