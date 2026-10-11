@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ShopApi } from '../api';
 import { enabledMarkets } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { refreshStorefrontAssociations } from '../realtime-updates';
 import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
 import { MarketConfig } from '../types';
 
@@ -27,6 +28,9 @@ describe('shared daily recommendation query', () => {
     });
 
     function mount(api: ShopApi, markets: MarketConfig[]) {
+        if (typeof api.productsByIds !== 'function') {
+            api.productsByIds = vi.fn((ids: string[]) => Promise.resolve(ids.map(id => ({ id }) as never)));
+        }
         const host = document.createElement('div');
         const root = createRoot(host);
         const client = new QueryClient();
@@ -35,7 +39,7 @@ describe('shared daily recommendation query', () => {
         function Consumer({ market }: { market: MarketConfig }) {
             const query = useDailyRecommendations(api, market, 'zh');
             return (
-                <button onClick={() => void query.refetch()}>
+                <button onClick={() => void query.retry()}>
                     {query.status}:{query.data?.items.map(product => product.id).join(',')}
                 </button>
             );
@@ -63,6 +67,59 @@ describe('shared daily recommendation query', () => {
         await act(() => vi.waitFor(() => expect(host.textContent).toBe('success:11,7success:11,7')));
         expect(dailyRecommendations).toHaveBeenCalledTimes(1);
         expect(dailyRecommendations.mock.calls[0][0]).toBeInstanceOf(AbortSignal);
+    });
+    it('reconciles eight saved identities to six and restores the original order without re-reading recommendation selection', async () => {
+        const ids = Array.from({ length: 8 }, (_, index) => String(index));
+        let available = ids;
+        const dailyRecommendations = vi.fn(() =>
+            Promise.resolve({
+                items: ids.map(id => ({ id })),
+                businessDate: '2026-10-11',
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            }),
+        );
+        const productsByIds = vi.fn((requested: string[]) =>
+            Promise.resolve(
+                requested
+                    .filter(id => available.includes(id))
+                    .reverse()
+                    .map(id => ({ id })),
+            ),
+        );
+        const market = enabledMarkets[0];
+        const fixture = mount({ dailyRecommendations, productsByIds } as unknown as ShopApi, [
+            market,
+            market,
+        ]);
+        const scope = { marketCode: storefrontQueryKeys.market(market), languageCode: 'zh_Hans' };
+        await act(() =>
+            vi.waitFor(() =>
+                expect(fixture.host.textContent).toBe(`success:${ids.join(',')}success:${ids.join(',')}`),
+            ),
+        );
+        available = ids.filter(id => !['1', '5'].includes(id));
+        await act(async () => {
+            await refreshStorefrontAssociations(fixture.client, scope);
+        });
+        await act(() =>
+            vi.waitFor(() =>
+                expect(fixture.host.textContent).toBe(
+                    `success:${available.join(',')}success:${available.join(',')}`,
+                ),
+            ),
+        );
+        available = ids;
+        await act(async () => {
+            await refreshStorefrontAssociations(fixture.client, scope);
+        });
+        await act(() =>
+            vi.waitFor(() =>
+                expect(fixture.host.textContent).toBe(`success:${ids.join(',')}success:${ids.join(',')}`),
+            ),
+        );
+        expect(dailyRecommendations).toHaveBeenCalledTimes(1);
+        expect(productsByIds).toHaveBeenCalledTimes(3);
+        expect(productsByIds.mock.calls.every(call => call[0].join() === ids.join())).toBe(true);
     });
 
     it('keeps order across background updates, focus, reconnect, route remount and midnight; reload selects again', async () => {

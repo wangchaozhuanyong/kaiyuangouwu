@@ -27,8 +27,9 @@ export class VariantCostRecord extends VendureEntity {
     @Column({ type: 'varchar', length: 3 })
     currencyCode: CurrencyCode;
 
-    @Column({ type: 'bigint' })
-    costMicrounits: string;
+    /** Null closes the current cost interval without deleting earlier purchase costs. */
+    @Column({ type: 'bigint', nullable: true })
+    costMicrounits: string | null;
 
     @Column({ type: Date })
     effectiveAt: Date;

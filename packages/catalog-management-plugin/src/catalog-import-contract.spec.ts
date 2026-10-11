@@ -4,6 +4,13 @@ import { describe, expect, it } from 'vitest';
 import { adminApiExtensions } from './api-extensions';
 
 describe('catalog import privacy contract', () => {
+    it('accepts omitted or null cost input without changing existing non-null callers', () => {
+        const schema = print(adminApiExtensions);
+        expect(schema).toMatch(
+            /input CreateCatalogInitialVariantInput \{[^}]*purchaseCostMicrounits: Float\n/u,
+        );
+        expect(schema).toMatch(/updateProductVariantCost\([^)]*costMicrounits: Float\s*\)/u);
+    });
     it('accepts only metadata and normalized chunk rows, never uploaded file bytes', () => {
         const schema = print(adminApiExtensions);
 

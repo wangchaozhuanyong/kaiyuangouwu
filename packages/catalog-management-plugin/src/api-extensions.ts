@@ -879,7 +879,7 @@ export const adminApiExtensions = gql`
         packageQuantity: Float!
         shelfLifeDays: Int
         sellingPrice: Money!
-        purchaseCostMicrounits: Float!
+        purchaseCostMicrounits: Float
         stockOnHand: Int!
         minimumStock: Int
         maximumStock: Int
@@ -1141,7 +1141,7 @@ export const adminApiExtensions = gql`
         updateProductVariantCost(
             productVariantId: ID!
             currencyCode: CurrencyCode!
-            costMicrounits: Float!
+            costMicrounits: Float
         ): Boolean!
         applyCatalogVariantMatrix(input: ApplyCatalogVariantMatrixInput!): Product!
         beginCatalogImport(input: BeginCatalogImportInput!): CatalogImportJob!

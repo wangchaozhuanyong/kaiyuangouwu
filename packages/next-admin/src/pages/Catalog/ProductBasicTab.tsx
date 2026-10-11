@@ -37,7 +37,7 @@ export function ProductBasicTab() {
     if (!isCreateMode && !productData?.product) return null;
 
     return (
-        <div className="product-editor-basic min-w-0 space-y-5">
+        <div className="product-editor-basic min-w-0">
             <section className="product-editor-panel">
                 <div className="product-editor-panel-heading">
                     <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
@@ -71,7 +71,7 @@ export function ProductBasicTab() {
                     >
                         {' '}
                         <AdminTextArea
-                            rows={14}
+                            rows={6}
                             id={`${fieldId}-description`}
                             aria-label="商品描述"
                             value={description}

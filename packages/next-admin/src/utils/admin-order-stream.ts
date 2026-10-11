@@ -4,6 +4,7 @@ export interface AdminOrderNotification {
     id: string;
     orderId: string;
     occurredAt: string;
+    store?: { id: string; nameZh?: string; nameEn?: string };
 }
 
 export async function readAdminOrderStream(
@@ -77,7 +78,29 @@ function dispatchFrame(frame: string, handlers: Parameters<typeof readAdminOrder
         typeof payload.occurredAt === 'string' &&
         Number.isFinite(Date.parse(payload.occurredAt))
     ) {
-        handlers.order({ ...payload, kind: event } as unknown as AdminOrderNotification);
+        const rawStore = payload.store;
+        let store: AdminOrderNotification['store'];
+        if (rawStore && typeof rawStore === 'object' && validId((rawStore as Record<string, unknown>).id)) {
+            const value = rawStore as Record<string, unknown>;
+            const name = (entry: unknown) =>
+                typeof entry === 'string' && entry.trim() && entry.length <= 500 ? entry.trim() : undefined;
+            const nameZh = name(value.nameZh);
+            const nameEn = name(value.nameEn);
+            if (nameZh || nameEn)
+                store = {
+                    id: value.id as string,
+                    ...(nameZh ? { nameZh } : {}),
+                    ...(nameEn ? { nameEn } : {}),
+                };
+        }
+        handlers.order({
+            kind: event,
+            version: 1,
+            id,
+            orderId: payload.orderId,
+            occurredAt: payload.occurredAt,
+            ...(store ? { store } : {}),
+        });
     }
 }
 

@@ -94,3 +94,67 @@ it('the same administrator loses unsupported store business operations', async (
     expect(result.hasAnyPermission(['ReadCatalogOperations'])).toBe(false);
     expect(result.hasAnyPermission(['UpdateCatalogOperations'])).toBe(false);
 });
+
+it('keeps the permission callback and result stable until capability or administrator permissions change', async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    const initialPermissions = ['SuperAdmin'];
+    const context = {
+        permissions: initialPermissions,
+        hasAnyPermission: (required: readonly string[]) =>
+            hasAnyAdminPermission(initialPermissions, required),
+    };
+    const snapshot: AdminCapabilitySnapshot = {
+        channelId: 'a',
+        channelCode: 'a',
+        scope: 'STORE',
+        commerceMode: 'DIGITAL_ONLY',
+        capabilities: [
+            { id: '/catalog/products', state: 'READY', canRead: true, canWrite: true, canConfigure: true },
+        ],
+    };
+    let result!: ReturnType<typeof useAdminPermissions>;
+    function Probe({ revision }: { revision: number }) {
+        const permissions = useAdminPermissions();
+        useLayoutEffect(() => {
+            result = permissions;
+        }, [permissions]);
+        return <span>{revision}</span>;
+    }
+    const render = async (revision: number, current = snapshot, permissions = context) =>
+        act(async () =>
+            root.render(
+                <AdminPermissionsContext.Provider value={permissions}>
+                    <AdminCapabilitiesContext.Provider value={current}>
+                        <MemoryRouter initialEntries={['/catalog/products/11']}>
+                            <Probe revision={revision} />
+                        </MemoryRouter>
+                    </AdminCapabilitiesContext.Provider>
+                </AdminPermissionsContext.Provider>,
+            ),
+        );
+    try {
+        await render(0);
+        const original = result;
+        await render(1);
+        expect(result).toBe(original);
+        expect(result.hasAnyPermission).toBe(original.hasAnyPermission);
+        expect(result.hasAnyPermission(['UpdateCatalog'])).toBe(true);
+        await render(2, {
+            ...snapshot,
+            capabilities: snapshot.capabilities.map(item => ({
+                ...item,
+                canWrite: false,
+                canConfigure: false,
+            })),
+        });
+        expect(result).not.toBe(original);
+        expect(result.hasAnyPermission(['ReadCatalog'])).toBe(true);
+        expect(result.hasAnyPermission(['UpdateCatalog'])).toBe(false);
+        await render(3, snapshot, { permissions: [], hasAnyPermission: required => required.length === 0 });
+        expect(result.hasAnyPermission(['ReadCatalog'])).toBe(false);
+    } finally {
+        await act(async () => root.unmount());
+    }
+});

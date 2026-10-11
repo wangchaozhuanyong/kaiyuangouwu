@@ -74,6 +74,8 @@ interface ProductEditorSaveInput {
         setSaving: (saving: boolean) => void;
         showError: (message: string) => void;
         showNotice: (message: string) => void;
+        acceptSavedDraft?: (saved: ProductEditorSaveDraft) => void;
+        acceptSavedVariantIdentities?: (saved: Array<{ id: string; sku: string }>) => void;
     };
 }
 
@@ -91,16 +93,33 @@ export interface ProductEditorChangeSet {
 
 const sameValue = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 const sortedIds = (ids: string[]) => [...ids].sort();
+const costDraftValue = (value: string | undefined) => {
+    const text = value?.trim() ?? '';
+    if (!text) return null;
+    const microunits = Math.round(Number(text) * 1_000);
+    return Number.isFinite(microunits) ? microunits : text;
+};
+const digitalQuantity = (variant: ProductEditorSaveDraft['variants'][number]) =>
+    variant.digitalStockPolicy === 'limited' ? (variant.digitalAvailableQuantity ?? 0) : undefined;
+const digitalConfigurationChanged = (
+    variant: ProductEditorSaveDraft['variants'][number],
+    original: ProductEditorSaveDraft['variants'][number] | undefined,
+) =>
+    !original ||
+    variant.digitalDeliveryMode !== original.digitalDeliveryMode ||
+    variant.digitalStockPolicy !== original.digitalStockPolicy ||
+    digitalQuantity(variant) !== digitalQuantity(original) ||
+    (variant.digitalFileVersionId ?? null) !== (original.digitalFileVersionId ?? null);
 const comparableVariant = (variant: ProductEditorSaveDraft['variants'][number]) => ({
     id: variant.id ?? null,
     sku: variant.sku,
     name: variant.name,
     price: variant.price,
-    costPrice: variant.costPrice ?? '',
+    costPrice: costDraftValue(variant.costPrice),
     supplierId: variant.supplierId ?? null,
     physicalSettings: variant.physicalSettings,
-    digitalAvailableQuantity: variant.digitalAvailableQuantity,
-    digitalFileVersionId: variant.digitalFileVersionId,
+    digitalAvailableQuantity: digitalQuantity(variant),
+    digitalFileVersionId: variant.digitalFileVersionId ?? null,
     stockOnHand: variant.stockOnHand,
     enabled: variant.enabled,
     digitalDeliveryMode: variant.digitalDeliveryMode,
@@ -113,6 +132,22 @@ export const productVariantChanged = (
     variant: ProductEditorSaveDraft['variants'][number],
     baselineVariant: ProductEditorSaveDraft['variants'][number] | undefined,
 ) => !baselineVariant || !sameValue(comparableVariant(variant), comparableVariant(baselineVariant));
+
+const productVariantCoreChanged = (
+    variant: ProductEditorSaveDraft['variants'][number],
+    original: ProductEditorSaveDraft['variants'][number] | undefined,
+    fulfillmentType: ProductEditorSaveDraft['fulfillmentType'],
+) => {
+    const input = (row: ProductEditorSaveDraft['variants'][number]) => ({
+        sku: row.sku.trim(),
+        name: row.name.trim(),
+        price: Math.round(parseFloat(row.price) * 100),
+        enabled: row.enabled,
+        optionIds: sortedIds(row.optionIds),
+        ...variantFulfillmentInput(row, fulfillmentType),
+    });
+    return !original || !sameValue(input(variant), input(original));
+};
 
 export function productEditorChanges(
     draft: ProductEditorSaveDraft,
@@ -180,6 +215,8 @@ export function useProductEditorSave({
     const isCreateMode = !productId || productId === 'new';
     const { canUseCapability } = useAdminCapabilities();
     const saveScope = useRef({ queryScope: getAdminQueryScope(), channelToken: getActiveChannelToken() });
+    const saveInFlight = useRef(false);
+    const pendingReadback = useRef<{ productId: string; name: string; partial?: boolean } | null>(null);
     const writeAccess = useRef(canUseCapability);
     useLayoutEffect(() => {
         writeAccess.current = canUseCapability;
@@ -239,6 +276,8 @@ export function useProductEditorSave({
         setSaving,
         showError,
         showNotice,
+        acceptSavedDraft,
+        acceptSavedVariantIdentities,
     } = controls;
     const [createProductMutation] = useMutation<{ createProduct: { id: string } }>(CREATE_PRODUCT);
 
@@ -265,19 +304,15 @@ export function useProductEditorSave({
 
     const [removeProductsFromChannel] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
 
-    const saveDomainConfiguration = async (savedVariants: Array<{ id: string; sku: string }>) => {
+    const saveDomainConfiguration = async (
+        savedVariants: Array<{ id: string; sku: string }>,
+        recordCompleted?: (stage: string) => void,
+    ) => {
         for (const variant of variants) {
             const id = variant.id ?? savedVariants.find(item => item.sku === variant.sku.trim())?.id;
             if (!id) throw new Error(`规格 ${variant.sku} 未返回保存结果`);
             const original = baselineDraft?.variants.find(item => item.id === id);
-            if (
-                effectiveFulfillmentType === 'digital' &&
-                (!original ||
-                    variant.digitalDeliveryMode !== original.digitalDeliveryMode ||
-                    variant.digitalStockPolicy !== original.digitalStockPolicy ||
-                    variant.digitalAvailableQuantity !== original.digitalAvailableQuantity ||
-                    variant.digitalFileVersionId !== original.digitalFileVersionId)
-            ) {
+            if (effectiveFulfillmentType === 'digital' && digitalConfigurationChanged(variant, original)) {
                 if (variant.digitalMigrationRequired) throw new Error('请先核对并迁移该规格的旧数字库存');
                 await client.mutate({
                     context: saveMutationContext(),
@@ -288,19 +323,20 @@ export function useProductEditorSave({
                             deliveryMode: variant.digitalDeliveryMode,
                             stockPolicy: variant.digitalStockPolicy,
                             ...(variant.digitalStockPolicy === 'limited' &&
-                            (!original ||
-                                variant.digitalAvailableQuantity !== original.digitalAvailableQuantity)
+                            (!original || digitalQuantity(variant) !== digitalQuantity(original))
                                 ? {
                                       availableQuantity: variant.digitalAvailableQuantity ?? 0,
                                       expectedAvailableQuantity: original?.digitalAvailableQuantity ?? 0,
                                   }
                                 : {}),
-                            ...(!original || variant.digitalFileVersionId !== original.digitalFileVersionId
+                            ...(!original ||
+                            (variant.digitalFileVersionId ?? null) !== (original.digitalFileVersionId ?? null)
                                 ? { fileVersionId: variant.digitalFileVersionId ?? null }
                                 : {}),
                         },
                     },
                 });
+                recordCompleted?.(`SKU ${variant.sku.trim()} 交付配置`);
             }
             if (
                 effectiveFulfillmentType === 'physical' &&
@@ -319,6 +355,7 @@ export function useProductEditorSave({
                         },
                     },
                 });
+                recordCompleted?.(`SKU ${variant.sku.trim()} 经营资料`);
             }
             if (variant.supplierId !== original?.supplierId && variant.supplierId !== undefined) {
                 await client.mutate({
@@ -326,22 +363,40 @@ export function useProductEditorSave({
                     mutation: UPDATE_VARIANT_SUPPLIER,
                     variables: { productVariantId: id, supplierId: variant.supplierId || null },
                 });
+                recordCompleted?.(`SKU ${variant.sku.trim()} 供应商`);
             }
-            if (variant.costPrice !== original?.costPrice && variant.costPrice?.trim()) {
+            const costText = variant.costPrice?.trim();
+            const originalCostText = original?.costPrice?.trim() ?? '';
+            if (
+                costText !== undefined &&
+                costDraftValue(costText) !== costDraftValue(originalCostText) &&
+                (costText !== '' || original)
+            ) {
                 await client.mutate({
                     context: saveMutationContext(),
                     mutation: UPDATE_VARIANT_COST,
                     variables: {
                         productVariantId: id,
                         currencyCode: activeCurrencyCode,
-                        costMicrounits: Math.round(Number(variant.costPrice) * 1_000),
+                        costMicrounits: costText === '' ? null : Math.round(Number(costText) * 1_000),
                     },
                 });
+                recordCompleted?.(`SKU ${variant.sku.trim()} 成本`);
             }
         }
     };
 
-    const syncProductOptionGroups = async (targetProductId: string, originalGroupIds: string[]) => {
+    const settleWrites = async (writes: Array<Promise<unknown>>) => {
+        const results = await Promise.allSettled(writes);
+        const failed = results.find(result => result.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
+    };
+
+    const syncProductOptionGroups = async (
+        targetProductId: string,
+        originalGroupIds: string[],
+        recordCompleted?: (stage: string) => void,
+    ) => {
         const isSingleProductWithoutOptions =
             variants.length <= 1 && (variants[0]?.optionIds.length ?? 0) === 0;
         const effectiveGroupIds = isSingleProductWithoutOptions ? [] : selectedOptionGroupIds;
@@ -352,6 +407,7 @@ export function useProductEditorSave({
                 variables: { productId: targetProductId, optionGroupId },
                 context: saveMutationContext(),
             });
+            recordCompleted?.('规格模板关联');
         }
         for (const optionGroupId of removedGroupIds) {
             const result = await removeOptionGroupFromProduct({
@@ -363,10 +419,14 @@ export function useProductEditorSave({
                     result.data.removeOptionGroupFromProduct.message || '规格模板仍被 SKU 使用，无法移除',
                 );
             }
+            recordCompleted?.('规格模板关联');
         }
     };
 
-    const syncProductCollections = async (targetProductId: string) => {
+    const syncProductCollections = async (
+        targetProductId: string,
+        recordCompleted?: (stage: string) => void,
+    ) => {
         const originalIds = (productData?.product?.collections ?? [])
             .filter(collection => hasDirectProductAssignment(collection.filters, targetProductId))
             .map(collection => collection.id);
@@ -381,7 +441,7 @@ export function useProductEditorSave({
                 .map(collectionId => ({ collectionId, assigned: false })),
         ];
 
-        await Promise.all(
+        await settleWrites(
             changes.map(async change => {
                 const detail = await client.query<{
                     collection: { id: string; filters: CollectionFilterValue[] } | null;
@@ -406,13 +466,18 @@ export function useProductEditorSave({
                         },
                     },
                 });
+                recordCompleted?.('商品分类');
             }),
         );
 
         if (changes.length > 0) await refetchCollections();
     };
 
-    const syncProductChannels = async (targetProductId: string, originalChannelIds: string[]) => {
+    const syncProductChannels = async (
+        targetProductId: string,
+        originalChannelIds: string[],
+        recordCompleted?: (stage: string) => void,
+    ) => {
         const activeChannelId = catalogChannelsData?.activeChannel.id;
         const nextChannelIds =
             activeChannelId && !selectedChannelIds.includes(activeChannelId)
@@ -425,18 +490,18 @@ export function useProductEditorSave({
             channelId => channelId !== activeChannelId && !nextIdSet.has(channelId),
         );
 
-        await Promise.all([
+        await settleWrites([
             ...addedChannelIds.map(channelId =>
                 assignProductsToChannel({
                     context: saveMutationContext(),
                     variables: { input: { productIds: [targetProductId], channelId, priceFactor: 1 } },
-                }),
+                }).then(() => recordCompleted?.('销售店铺')),
             ),
             ...removedChannelIds.map(channelId =>
                 removeProductsFromChannel({
                     context: saveMutationContext(),
                     variables: { input: { productIds: [targetProductId], channelId } },
-                }),
+                }).then(() => recordCompleted?.('销售店铺')),
             ),
         ]);
     };
@@ -446,6 +511,29 @@ export function useProductEditorSave({
 
     const validateForm = (): boolean => {
         const errors: ProductEditorFormErrors = {};
+        for (const variant of variants) {
+            const original = baselineDraft?.variants.find(item => item.id === variant.id);
+            if (
+                effectiveFulfillmentType === 'digital' &&
+                variant.digitalMigrationRequired &&
+                digitalConfigurationChanged(variant, original)
+            ) {
+                setActiveTab('DELIVERY');
+                showError(`SKU ${variant.sku.trim()}：请先核对并迁移该规格的旧数字库存`);
+                return false;
+            }
+            const costText = variant.costPrice?.trim();
+            if (
+                costText &&
+                (!Number.isFinite(Number(costText)) ||
+                    Number(costText) < 0 ||
+                    !Number.isSafeInteger(Math.round(Number(costText) * 1_000)))
+            ) {
+                setActiveTab('VARIANTS');
+                showError(`SKU ${variant.sku.trim()}：请输入有效的 ${activeCurrencyCode} 非负成本价`);
+                return false;
+            }
+        }
         if (isCreateMode || changes.translations) {
             if (!productName.trim()) {
                 errors.name = '请输入名称';
@@ -597,9 +685,36 @@ export function useProductEditorSave({
     };
 
     const handleSave = async () => {
+        if (saveInFlight.current) return;
         const accessError = saveAccessError();
         if (accessError) {
             showError(accessError);
+            return;
+        }
+        const savedReadback = pendingReadback.current;
+        if (savedReadback && savedReadback.productId === productId) {
+            const saved = savedReadback;
+            saveInFlight.current = true;
+            setSaving(true);
+            setErrorMessage('');
+            try {
+                await Promise.all([refetchProduct(), data.refetchWorkspace?.()]);
+                assertSaveAccess();
+                pendingReadback.current = null;
+                showNotice(
+                    saved.partial
+                        ? `商品《${saved.name}》已保存的部分已重新读取；请继续保存尚未完成的修改。`
+                        : `商品《${saved.name}》已保存，最新数据已重新读取；如有新修改，可继续保存。`,
+                );
+            } catch (failure) {
+                if (isCurrentSaveScope())
+                    showError(
+                        `${saved.partial ? '部分内容已保存' : '商品已保存'}，但最新数据仍未读取成功：${toUserFacingError(failure, '请稍后重试读取')}。再次点击保存只会重新读取，不会重复写入。`,
+                    );
+            } finally {
+                saveInFlight.current = false;
+                setSaving(false);
+            }
             return;
         }
         if (!isCreateMode && !hasChanges) {
@@ -620,9 +735,13 @@ export function useProductEditorSave({
             }
         }
 
+        saveInFlight.current = true;
         setSaving(true);
         setErrorMessage('');
         const completedStages: string[] = [];
+        const recordCompleted = (stage: string) => {
+            if (!completedStages.includes(stage)) completedStages.push(stage);
+        };
 
         const generatedSlug = slug.trim() || createSlugFromName(productName);
         const localizedFieldsFor = (languageCode: string) => {
@@ -796,9 +915,10 @@ export function useProductEditorSave({
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
                 const changedExistingVariants = existingVariants.filter(variant =>
-                    productVariantChanged(
+                    productVariantCoreChanged(
                         variant,
                         baselineDraft?.variants.find(original => original.id === variant.id),
+                        effectiveFulfillmentType,
                     ),
                 );
                 const changesVariantEnabledState = changedExistingVariants.some(
@@ -934,6 +1054,7 @@ export function useProductEditorSave({
                                     };
                                 }
                             )?.applyCatalogVariantMatrix?.variants ?? [];
+                        acceptSavedVariantIdentities?.(createdVariantList);
                         completedStages.push('规格模板与 SKU（事务）');
                     } catch (err: unknown) {
                         throw new Error(
@@ -946,8 +1067,7 @@ export function useProductEditorSave({
                             const originalGroupIds = Array.isArray(productData?.product?.optionGroups)
                                 ? productData.product.optionGroups.map(group => group.id)
                                 : [];
-                            await syncProductOptionGroups(productId, originalGroupIds);
-                            completedStages.push('规格模板关联');
+                            await syncProductOptionGroups(productId, originalGroupIds, recordCompleted);
                         } catch (err: unknown) {
                             throw new Error(`[规格模板关联更新失败] ${toUserFacingError(err, '请稍后重试')}`);
                         }
@@ -979,6 +1099,7 @@ export function useProductEditorSave({
                                         createProductVariants?: Array<{ id: string; sku: string }>;
                                     }
                                 )?.createProductVariants ?? [];
+                            acceptSavedVariantIdentities?.(createdVariantList);
                             completedStages.push('新增 SKU');
                         } catch (err: unknown) {
                             throw new Error(`[新 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`);
@@ -987,8 +1108,7 @@ export function useProductEditorSave({
                 }
 
                 if (changes.variants && variants.length) {
-                    await saveDomainConfiguration(createdVariantList);
-                    completedStages.push('业务配置与成本');
+                    await saveDomainConfiguration(createdVariantList, recordCompleted);
                 }
 
                 if (changes.channels || changes.collections) {
@@ -997,14 +1117,10 @@ export function useProductEditorSave({
                             await syncProductChannels(
                                 productId,
                                 productData?.product?.channels.map(channel => channel.id) ?? [],
+                                recordCompleted,
                             );
                         }
-                        if (changes.collections) await syncProductCollections(productId);
-                        completedStages.push(
-                            [changes.channels ? '销售店铺' : '', changes.collections ? '商品分类' : '']
-                                .filter(Boolean)
-                                .join('、'),
-                        );
+                        if (changes.collections) await syncProductCollections(productId, recordCompleted);
                     } catch (err: unknown) {
                         throw new Error(
                             `[销售店铺或商品分类更新失败] ${toUserFacingError(err, '请稍后重试')}`,
@@ -1013,29 +1129,51 @@ export function useProductEditorSave({
                 }
 
                 assertSaveAccess();
-                await refetchProduct();
-                await data.refetchWorkspace?.();
-                assertSaveAccess();
-                showNotice(
-                    completedStages.length > 0
-                        ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
-                        : '商品数据已同步至最新状态',
-                );
+                const confirmedDraft: ProductEditorSaveDraft = {
+                    ...draft,
+                    variants: variants.map(variant => ({
+                        ...variant,
+                        id:
+                            variant.id ??
+                            createdVariantList.find(item => item.sku === variant.sku.trim())?.id,
+                        isNew: false,
+                    })),
+                };
+                acceptSavedDraft?.(confirmedDraft);
+                pendingReadback.current = { productId, name: productName };
+                try {
+                    await Promise.all([refetchProduct(), data.refetchWorkspace?.()]);
+                    assertSaveAccess();
+                    pendingReadback.current = null;
+                    showNotice(
+                        completedStages.length > 0
+                            ? `商品《${productName}》已保存（${completedStages.join('、')}）！`
+                            : '商品数据已同步至最新状态',
+                    );
+                } catch (failure) {
+                    if (isCurrentSaveScope())
+                        showError(
+                            `商品已保存，但最新数据读取失败：${toUserFacingError(failure, '请稍后重试读取')}。再次点击保存只会重新读取，不会重复写入。`,
+                        );
+                }
             }
         } catch (err: unknown) {
             if (!isCurrentSaveScope()) return;
             if (!isCreateMode && completedStages.length > 0) {
-                const reloaded = await refetchProduct().then(
+                const reloaded = await Promise.all([refetchProduct(), data.refetchWorkspace?.()]).then(
                     () => true,
                     () => false,
                 );
+                if (!reloaded)
+                    pendingReadback.current = { productId: productId!, name: productName, partial: true };
                 showError(
-                    `部分内容已保存（${completedStages.join('、')}），但后续步骤失败：${toUserFacingError(err, '请稍后重试')}。${reloaded ? '页面已按后端当前数据重新加载。' : '重新加载失败，请刷新页面核对已保存内容后再操作。'}`,
+                    `部分内容已保存（${completedStages.join('、')}），但后续步骤失败：${toUserFacingError(err, '请稍后重试')}。${reloaded ? '页面已按后端当前数据重新加载。' : '重新加载失败，再次点击保存只会重新读取，请先核对已保存内容。'}`,
                 );
             } else {
                 showError(toUserFacingError(err, '商品保存失败，请稍后重试'));
             }
         } finally {
+            saveInFlight.current = false;
             setSaving(false);
         }
     };

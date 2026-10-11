@@ -5,14 +5,33 @@ import {
     catalogImportOptionGroupCode,
     changed,
     changedOptional,
+    createChanges,
     hasPlannedStockAdjustment,
     isCatalogImportResolutionState,
     productDescriptionForCreate,
 } from './catalog-import-planning';
+import { CatalogImportPreview } from './catalog-import-preview';
 import { CatalogImportService, clearsVariantIdentity, shouldClear } from './catalog-import.service';
 import { NormalizedCatalogRow } from './types';
 
 describe('catalog import blank clearing rules', () => {
+    it.each([null, 0, 1.25])('keeps optional CREATE cost distinct from zero: %s', async purchaseCost => {
+        const row = { ...normalizedRow(), fulfillmentType: 'physical' as const, purchaseCost };
+        const result = await new CatalogImportPreview(undefined as never, undefined as never).planRow(
+            { channel: { customFields: { commerceMode: 'HYBRID' } } } as never,
+            row,
+            { currencyCode: 'MYR' } as never,
+            { products: [], categoryPaths: new Set(['原分类']), childCategoryParents: new Map() },
+        );
+        expect(['CREATE', 'WARNING']).toContain(result.action);
+        expect(result.plannedChanges?.safeAction).toBe('CREATE');
+        expect(result.plannedChanges?.purchaseCostMicrounits).toBe(
+            purchaseCost == null ? null : purchaseCost * 1_000,
+        );
+        expect(createChanges(row, 'MYR' as never).purchaseCostMicrounits).toBe(
+            purchaseCost == null ? null : purchaseCost * 1_000,
+        );
+    });
     it('does not rewrite human-readable fields solely because import normalizes Unicode punctuation', () => {
         const changes: Record<string, unknown> = {};
         changed(changes, 'productName', '商品(A)', '商品（A）');

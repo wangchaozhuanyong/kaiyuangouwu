@@ -20,8 +20,8 @@
     z-index: 20;
     display: flex;
     gap: 24px;
-    min-height: 64px;
-    margin-bottom: 24px;
+    min-height: 52px;
+    margin-bottom: 16px;
     border-bottom: 1px solid var(--admin-border-subtle);
     background: var(--admin-surface-subtle);
 }
@@ -32,7 +32,7 @@
     justify-content: center;
     gap: 8px;
     flex-shrink: 0;
-    padding: 16px 2px;
+    padding: 12px 2px;
     border-radius: 0;
     color: var(--admin-text-secondary);
     font-size: 13px;
@@ -61,21 +61,41 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
     align-items: start;
-    gap: 24px;
+    gap: 20px;
 }
 .product-editor-main {
     min-width: 0;
+    container-type: inline-size;
+    container-name: product-editor-main;
+}
+.product-editor-basic,
+.product-editor-settings-grid,
+.product-editor-identity {
+    display: grid;
+    min-width: 0;
+    gap: 16px;
+}
+@container product-editor-main (min-width: 40rem) {
+    .product-editor-basic {
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        align-items: start;
+    }
+    .product-editor-identity,
+    .product-editor-settings-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
 }
 .product-editor-tab-panel:not([hidden]) {
     display: grid;
-    gap: 20px;
+    gap: 16px;
 }
 .product-editor-tab-panel[hidden] {
     display: none;
 }
 .product-editor-panel {
     min-width: 0;
-    padding: 20px;
+    padding: 16px;
     border: 1px solid var(--admin-border-subtle);
     border-radius: var(--admin-radius-surface);
     background: var(--admin-surface);
@@ -85,19 +105,19 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
 }
 .product-editor-description-field .admin-field-label {
     display: none;
 }
 .product-editor-description {
-    min-height: 330px;
+    min-height: 150px;
     line-height: 1.9;
     font-size: 13px;
     resize: vertical;
 }
 .product-editor-description-reader {
-    min-height: 330px;
+    min-height: 150px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     line-height: 1.9;
@@ -168,7 +188,7 @@
 .product-editor-independent-fields > div > section {
     min-width: 0;
     margin: 0;
-    padding: 20px;
+    padding: 16px;
     border: 1px solid var(--admin-border-subtle);
     border-radius: var(--admin-radius-surface);
     background: var(--admin-surface);
@@ -221,9 +241,12 @@
         margin-bottom: 16px;
     }
     .product-editor-tab {
+        flex: 1;
+        min-width: 0;
         gap: 4px;
-        padding: 12px 0;
+        padding: 12px 4px;
         font-size: 12px;
+        white-space: normal;
     }
     .product-editor-tab-number {
         display: none;

@@ -9,6 +9,7 @@ import {
 } from '../../components/AdminMobileList';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
 import { useAdminPageRefresh, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
 import { StoreOfferDialog } from './StoreOfferDialog';
 /* eslint-disable max-len -- Tailwind utility lists are intentionally kept as single JSX attributes. */
 import { useMutation } from '@apollo/client/react';
@@ -253,6 +254,7 @@ export function CatalogModule() {
 
     const [offerProductId, setOfferProductId] = useState<string | null>(null);
     const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+    const selectedProductReferences = useCatalogReferences(selectedProductIds);
 
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(
         null,
@@ -418,10 +420,8 @@ export function CatalogModule() {
         return map;
     }, [channelAssignmentsQuery.data]);
 
-    const [prevFilterKey, setPrevFilterKey] = useState(
-        `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`,
-    );
-    const currentFilterKey = `${page}-${pageSize}-${statusFilter}-${categoryId}-${searchTerm}-${channelParameter}`;
+    const [prevFilterKey, setPrevFilterKey] = useState(channelParameter);
+    const currentFilterKey = channelParameter;
     if (prevFilterKey !== currentFilterKey) {
         setPrevFilterKey(currentFilterKey);
         setSelectedProductIds([]);
@@ -876,7 +876,13 @@ export function CatalogModule() {
                     {selectedProductIds.length > 0 && (
                         <div className="flex items-center justify-between border-b border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800">
                             <span>
-                                已选 {selectedProductIds.length} 个商品。跨店销售授权由平台管理中心分配。
+                                已选 {selectedProductIds.length} 个商品，有效{' '}
+                                {selectedProductReferences.available.length} 个
+                                {selectedProductReferences.unavailable.length > 0 &&
+                                    `，暂不可用 ${selectedProductReferences.unavailable.length} 个`}
+                                {selectedProductReferences.unknown.length > 0 &&
+                                    `，待核对 ${selectedProductReferences.unknown.length} 个`}
+                                。跨店销售授权由平台管理中心分配。
                             </span>
                             <AdminButton
                                 type="button"

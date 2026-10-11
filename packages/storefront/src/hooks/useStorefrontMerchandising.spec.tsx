@@ -289,7 +289,13 @@ it('publishes merchandising only after its catalog, ranking and selected product
             input.sort === 'sales' ? best.promise : recommendations.promise,
         ),
         productSales: vi.fn(() => sales.promise),
-        productsByIds: vi.fn((ids: string[]) => (ids.includes('pinned') ? pinned.promise : source.promise)),
+        productsByIds: vi.fn((ids: string[]) =>
+            ids.length === 1 && ids[0] === 'pinned'
+                ? pinned.promise
+                : ids.length === 1 && ids[0] === 'recent'
+                  ? source.promise
+                  : Promise.resolve(ids.map(product)),
+        ),
     };
     const fixture = mount(api, { pinned: true, recent: true });
     const latest = () => fixture.history[fixture.history.length - 1];
@@ -372,7 +378,9 @@ it.each(['empty', 'error', 'offline'] as const)(
                     : Promise.resolve({ items: [], totalItems: 0 }),
             ),
             productSales: vi.fn(() => Promise.resolve({})),
-            productsByIds: vi.fn(() => Promise.resolve([])),
+            productsByIds: vi.fn(() =>
+                mode === 'error' ? Promise.reject(new Error('Unavailable')) : Promise.resolve([]),
+            ),
         };
         const fixture = mount(api);
         try {

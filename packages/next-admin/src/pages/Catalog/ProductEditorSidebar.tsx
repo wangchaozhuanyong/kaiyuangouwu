@@ -41,9 +41,8 @@ export function ProductEditorIdentityFields() {
     }
 
     return (
-        <div className="product-editor-identity min-w-0 space-y-4">
+        <div className="product-editor-identity min-w-0">
             <AdminField
-                layout="stacked"
                 htmlFor={`${fieldId}-name`}
                 label={
                     <span className="text-xs font-semibold text-slate-700">
@@ -80,7 +79,6 @@ export function ProductEditorIdentityFields() {
                 />
             </AdminField>
             <AdminField
-                layout="stacked"
                 htmlFor={`${fieldId}-slug`}
                 label={
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">

@@ -47,6 +47,7 @@ export function HomeRoutePage() {
                 contentBlocks: runtime.contentBlocks,
                 managedContentProducts: runtime.managedContentProducts,
                 managedContentLoading: runtime.managedContentLoading,
+                managedContentResolved: runtime.managedContentResolved,
                 heroAutoplayIntervalSeconds: runtime.heroAutoplayIntervalSeconds,
                 configuredBlockTypes: runtime.configuredBlockTypes,
                 coupons: runtime.activeCoupons,

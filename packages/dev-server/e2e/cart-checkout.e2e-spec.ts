@@ -1,8 +1,9 @@
-import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
+import { CatalogManagementPlugin, VariantCostRecord } from '@vendure/catalog-management-plugin';
 import { CommerceFulfillmentPlugin } from '@vendure/commerce-fulfillment-plugin';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     ConfigService,
+    CurrencyCode,
     EventBus,
     LanguageCode,
     mergeConfig,
@@ -12,6 +13,7 @@ import {
     PaymentMethodHandler,
     RequestContextService,
     RoleService,
+    ShippingMethod,
     TransactionalConnection,
     User,
 } from '@vendure/core';
@@ -24,11 +26,14 @@ import {
     StoreProfile,
 } from '@vendure/store-management-plugin';
 import {
+    CartCommandService,
+    StorefrontCartCommandReceipt,
     StorefrontCartLifecycleService,
     StorefrontCartPlugin,
     StorefrontCartService,
 } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
+import { print } from 'graphql';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -39,6 +44,7 @@ import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { cartFields } from '../../storefront/src/api/fragments';
 import { AddCartCommandReceipts1788678060000 } from '../migrations/1788678060000-add-cart-command-receipts';
+import { AllowUnsetCatalogCost1791676800000 } from '../migrations/1791676800000-allow-unset-catalog-cost';
 
 const localPayment = new PaymentMethodHandler({
     code: 'cart-local-fixture',
@@ -430,7 +436,97 @@ beforeAll(async () => {
 }, TEST_SETUP_TIMEOUT_MS);
 afterAll(() => server.destroy());
 
-describe('complete cart domain on MySQL', () => {
+describe(`complete cart domain on ${config.dbConnectionOptions.type}`, () => {
+    it('persists optional cost, explicit clear and zero through the real Admin API and workspace', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const idStrategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        if (!idStrategy) throw new Error('The optional cost fixture requires an entity ID strategy.');
+        const repository = connection.rawConnection.getRepository(VariantCostRecord);
+        const storedCosts = () =>
+            repository.find({
+                where: { variantId: idStrategy.decodeId(variants[0]), currencyCode: CurrencyCode.USD },
+                order: { effectiveAt: 'ASC', id: 'ASC' },
+            });
+        const update = gql`
+            mutation ($id: ID!, $cost: Float) {
+                updateProductVariantCost(productVariantId: $id, currencyCode: USD, costMicrounits: $cost)
+            }
+        `;
+        const updateCost = (cost?: number | null) =>
+            adminClient.query(update, {
+                id: variants[0],
+                ...(cost === undefined ? {} : { cost }),
+            });
+        const workspaceCost = async () => {
+            const product = await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        productVariant(id: $id) {
+                            product {
+                                id
+                            }
+                        }
+                    }
+                `,
+                { id: variants[0] },
+            );
+            const workspace = await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        digitalProductWorkspace(productId: $id) {
+                            variants {
+                                id
+                                purchaseCostMicrounits
+                            }
+                        }
+                    }
+                `,
+                { id: product.productVariant.product.id },
+            );
+            return workspace.digitalProductWorkspace.variants.find(
+                (variant: any) => variant.id === variants[0],
+            ).purchaseCostMicrounits;
+        };
+        await updateCost();
+        expect(await storedCosts()).toHaveLength(0);
+        expect(await workspaceCost()).toBeNull();
+        await updateCost(12_500);
+        await updateCost();
+        expect(await storedCosts()).toHaveLength(1);
+        const runner = connection.rawConnection.createQueryRunner();
+        const costMigration = new AllowUnsetCatalogCost1791676800000();
+        try {
+            const table = await runner.getTable('catalog_variant_cost_record');
+            const column = table?.findColumnByName('costMicrounits');
+            if (!table || !column) throw new Error('The isolated cost fixture schema is missing');
+            // Rehearse the deployed NOT NULL schema on this disposable DB while keeping its old record.
+            const legacyColumn = column.clone();
+            legacyColumn.isNullable = false;
+            await runner.changeColumn(table, column, legacyColumn);
+            await costMigration.up(runner);
+            await costMigration.up(runner);
+            expect((await runner.getTable(table.name))?.findColumnByName(column.name)?.isNullable).toBe(true);
+        } finally {
+            await runner.release();
+        }
+        await updateCost(null);
+        expect(await workspaceCost()).toBeNull();
+        const cleared = await storedCosts();
+        expect(
+            cleared.map(record => (record.costMicrounits == null ? null : String(record.costMicrounits))),
+        ).toEqual(['12500', null]);
+        expect(cleared[1].source).toBe('MANUAL');
+        expect(cleared[1].actorId).toBeTruthy();
+        await costMigration.down();
+        await updateCost(0);
+        expect(await workspaceCost()).toBe(0);
+        expect(
+            (await storedCosts()).map(record =>
+                record.costMicrounits == null ? null : String(record.costMicrounits),
+            ),
+        ).toEqual(['12500', null, '0']);
+    });
+
     it('rehearses the additive migration and retains receipt fences on rollback', async () => {
         const connection = server.app.get(TransactionalConnection);
         const runner = connection.rawConnection.createQueryRunner();
@@ -735,13 +831,275 @@ describe('complete cart domain on MySQL', () => {
         expect(adjust).toHaveBeenCalled();
         const output = path.join(__dirname, '../../../artifacts/cart-commands');
         mkdirSync(output, { recursive: true });
-        writeFileSync(path.join(output, 'mysql-performance.json'), JSON.stringify(measurements, null, 2));
-        process.stdout.write(JSON.stringify({ mysqlCartMeasurements: measurements }) + '\n');
+        writeFileSync(
+            path.join(output, `${connection.rawConnection.options.type}-performance.json`),
+            JSON.stringify(measurements, null, 2),
+        );
+        process.stdout.write(
+            JSON.stringify({
+                database: connection.rawConnection.options.type,
+                cartMeasurements: measurements,
+            }) + '\n',
+        );
         logger.logQuery = originalLogQuery;
         pricing.mockRestore();
         removeAll.mockRestore();
         adjust.mockRestore();
     }, 120000);
+    it('recovers a compact receipt after shipping projection fails without repeating the command', async () => {
+        const client = newCartShopClient();
+        const readClient = async () => (await client.query(query)).storefrontCart;
+        const change = async (operation: object) => {
+            const cart = await readClient();
+            return (
+                await client.query(mutation, {
+                    input: {
+                        commandId: randomUUID(),
+                        cartId: cart.id,
+                        expectedRevision: cart.revision,
+                        ...operation,
+                    },
+                })
+            ).applyStorefrontCartCommand;
+        };
+        const product = await adminClient.query(gql`
+            mutation {
+                createProduct(
+                    input: {
+                        translations: [
+                            {
+                                languageCode: zh_Hans
+                                name: "回执恢复验证商品"
+                                slug: "cart-receipt-recovery-local"
+                                description: "只用于独立本地数据库"
+                            }
+                        ]
+                        customFields: { fulfillmentType: "physical" }
+                    }
+                ) {
+                    id
+                }
+            }
+        `);
+        const variantsResult = await adminClient.query(
+            gql`
+                mutation ($input: [CreateProductVariantInput!]!) {
+                    createProductVariants(input: $input) {
+                        id
+                    }
+                }
+            `,
+            {
+                input: [
+                    {
+                        productId: product.createProduct.id,
+                        sku: 'CART-RECEIPT-RECOVERY-LOCAL',
+                        price: 1500,
+                        stockOnHand: 100,
+                        translations: [{ languageCode: 'zh_Hans', name: '回执恢复规格' }],
+                    },
+                ],
+            },
+        );
+        expect(
+            (
+                await change({
+                    changes: {
+                        add: [{ productVariantId: variantsResult.createProductVariants[0].id, quantity: 1 }],
+                    },
+                })
+            ).status,
+        ).toBe('APPLIED');
+        expect(
+            (
+                await change({
+                    prepareShipping: {
+                        shippingAddress: {
+                            fullName: 'Local Recovery Fixture',
+                            streetLine1: '100 Test Street',
+                            city: 'London',
+                            postalCode: 'SW1A 1AA',
+                            province: 'London',
+                            phoneNumber: '10000000000',
+                            countryCode: 'GB',
+                        },
+                        defaultShippingCode: 'cart-fixture-shipping',
+                    },
+                })
+            ).status,
+        ).toBe('APPLIED');
+        const before = await readClient();
+        const input = {
+            commandId: randomUUID(),
+            cartId: before.id,
+            expectedRevision: before.revision,
+            changes: { lines: [{ lineId: before.lines[0].id, quantity: 2 }] },
+        };
+        const receiptFields = `commandId status appliedRevision errorCode message cart { id revision }
+            session { order { id } checkout { id cartRevision state completedAt } }
+            shippingMethods { id code name description priceWithTax metadata } selectedShippingMethodId`;
+        const compactCommand = gql`mutation($input: StorefrontCartCommandInput!) {
+            applyStorefrontCartCommand(input: $input) { ${receiptFields} }
+        }`;
+        const recoverReceipt = gql`mutation($cartId: ID!, $commandId: String!) {
+            recoverStorefrontCartCommand(cartId: $cartId, commandId: $commandId, cancel: false) { ${receiptFields} }
+        }`;
+        const apply: ShippingMethod['apply'] | undefined = Object.getOwnPropertyDescriptor(
+            ShippingMethod.prototype,
+            'apply',
+        )?.value;
+        if (!apply) throw new Error('The local shipping fixture has no calculator implementation.');
+        const connection = server.app.get(TransactionalConnection);
+        const execute = vi.spyOn(server.app.get(CartCommandService), 'execute');
+        const paymentHandlers = server.app.get(ConfigService).paymentOptions.paymentMethodHandlers;
+        const paymentCreates = paymentHandlers.map(handler => vi.spyOn(handler, 'createPayment'));
+        const requestOrigins: string[] = [];
+        const originalFetch = globalThis.fetch;
+        const requests = vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => {
+            requestOrigins.push(new URL(url instanceof Request ? url.url : String(url)).origin);
+            return originalFetch(url, options);
+        });
+        const logger = connection.rawConnection.logger;
+        const originalLogQuery = logger.logQuery.bind(logger);
+        let queryCount = 0;
+        logger.logQuery = (...args) => {
+            queryCount++;
+            originalLogQuery.apply(logger, args);
+        };
+        let phase = '';
+        let failProjection = false;
+        const shippingCalculations: Array<{ phase: string; durationMs: number; failed: boolean }> = [];
+        const stages: Array<{ phase: string; durationMs: number; sqlQueries: number }> = [];
+        const shipping = vi.spyOn(ShippingMethod.prototype, 'apply');
+        shipping.mockImplementation(async function (this: ShippingMethod, ctx, order) {
+            const start = performance.now();
+            try {
+                if (failProjection && this.code === 'cart-fixture-shipping') {
+                    throw new Error('LOCAL_FIXTURE_SHIPPING_PROJECTION_UNAVAILABLE');
+                }
+                return await apply.call(this, ctx, order);
+            } finally {
+                shippingCalculations.push({
+                    phase,
+                    durationMs: performance.now() - start,
+                    failed: failProjection,
+                });
+            }
+        });
+        const measure = async <T>(name: string, operation: () => Promise<T>): Promise<T> => {
+            phase = name;
+            const start = performance.now();
+            const beforeQueries = queryCount;
+            try {
+                return await operation();
+            } finally {
+                stages.push({
+                    phase: name,
+                    durationMs: performance.now() - start,
+                    sqlQueries: queryCount - beforeQueries,
+                });
+            }
+        };
+        try {
+            const receipt = (
+                await measure('compact-command-submit', () => client.query(compactCommand, { input }))
+            ).applyStorefrontCartCommand;
+            expect(receipt).toMatchObject({
+                commandId: input.commandId,
+                status: 'APPLIED',
+                appliedRevision: before.revision + 1,
+            });
+            failProjection = true;
+            const failedRead = await measure('full-cart-read-with-shipping-failure', async () => {
+                const response = await client.fetch(`http://127.0.0.1:${config.apiOptions.port}/shop-api`, {
+                    method: 'POST',
+                    body: JSON.stringify({ query: print(query) }),
+                });
+                expect(response.status).toBe(200);
+                return response.json();
+            });
+            expect(failedRead.errors).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        message: 'LOCAL_FIXTURE_SHIPPING_PROJECTION_UNAVAILABLE',
+                        path: ['storefrontCart', 'checkoutOrder', 'checkoutShipping'],
+                    }),
+                ]),
+            );
+            expect(failedRead.data.storefrontCart.revision).toBe(receipt.appliedRevision);
+            expect(failedRead.data.storefrontCart.checkoutOrder.checkoutShipping).toBeNull();
+            const recovered = (
+                await measure('same-id-receipt-recovery', () =>
+                    client.query(recoverReceipt, {
+                        cartId: input.cartId,
+                        commandId: input.commandId,
+                    }),
+                )
+            ).recoverStorefrontCartCommand;
+            expect(recovered).toMatchObject({
+                commandId: input.commandId,
+                status: 'APPLIED',
+                appliedRevision: receipt.appliedRevision,
+            });
+            failProjection = false;
+            const cart = await measure('full-cart-read-retry', readClient);
+            expect(cart.revision).toBe(receipt.appliedRevision);
+            expect(cart.lines).toHaveLength(1);
+            expect(cart.lines[0].quantity).toBe(2);
+            expect(cart.checkoutOrder.checkoutShipping.methodCode).toBe('cart-fixture-shipping');
+            expect(cart.checkoutOrder.payments).toEqual([]);
+            expect(execute).toHaveBeenCalledTimes(1);
+            const paymentCreateCalls = paymentCreates.reduce(
+                (count, spy) => count + spy.mock.calls.length,
+                0,
+            );
+            expect(paymentCreateCalls).toBe(0);
+            expect(requestOrigins.length).toBeGreaterThan(0);
+            expect(
+                requestOrigins.every(origin => origin === `http://127.0.0.1:${config.apiOptions.port}`),
+            ).toBe(true);
+            const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+            if (!strategy) throw new Error('The local recovery fixture requires an entity ID strategy.');
+            const receipts = await connection.rawConnection.getRepository(StorefrontCartCommandReceipt).find({
+                where: { cartId: strategy.decodeId(input.cartId), commandId: input.commandId },
+            });
+            expect(receipts).toHaveLength(1);
+            expect(receipts[0]).toMatchObject({
+                status: 'APPLIED',
+                appliedRevision: receipt.appliedRevision,
+            });
+            const result = {
+                database: connection.rawConnection.options.type,
+                commandId: input.commandId,
+                receipt: {
+                    status: recovered.status,
+                    appliedRevision: recovered.appliedRevision,
+                    count: receipts.length,
+                },
+                graphQlErrorPaths: failedRead.errors.map((error: { path?: string[] }) => error.path),
+                executeCalls: execute.mock.calls.length,
+                finalQuantity: cart.lines[0].quantity,
+                paymentCreateCalls,
+                registeredPaymentHandlers: paymentHandlers.map(handler => handler.code),
+                requestOrigins: [...new Set(requestOrigins)],
+                stages,
+                shippingCalculations,
+            };
+            const output = path.join(__dirname, '../../../artifacts/cart-commands');
+            mkdirSync(output, { recursive: true });
+            writeFileSync(
+                path.join(output, `command-recovery-stages-${connection.rawConnection.options.type}.json`),
+                JSON.stringify(result, null, 2),
+            );
+        } finally {
+            failProjection = false;
+            shipping.mockRestore();
+            execute.mockRestore();
+            paymentCreates.forEach(spy => spy.mockRestore());
+            requests.mockRestore();
+            logger.logQuery = originalLogQuery;
+        }
+    });
     it('quotes a mixed cart with physical shipping and digital delivery requirements', async () => {
         await adminClient.query(gql`
             mutation {

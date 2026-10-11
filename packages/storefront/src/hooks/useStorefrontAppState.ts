@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApiError } from '../api';
 import { subscribeAuthSessionChanges } from '../auth-session-sync';
-import { CartCommandAcknowledgedReadError } from '../cart/cart-repository';
 import { clearStudioCache } from '../pages/ai-image-studio-cache';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
@@ -17,7 +16,7 @@ import {
     refreshStorefrontQueries,
     storefrontQueryKeys,
 } from '../query-client';
-import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
+import { invalidateStorefrontRealtimeQueries, refreshStorefrontAssociations } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
 import { storefrontErrorMessage } from '../storefront-errors';
@@ -232,6 +231,26 @@ export function useStorefrontAppState() {
     const { favoriteProductIds, recentProductIds } = productActivity;
 
     const cart = cartState.cart;
+    const checkoutOwnerRef = useRef({ api, cartController, customerId: customer?.id, cartId: cart?.id });
+    const checkoutMountedRef = useRef(false);
+    useEffect(() => {
+        checkoutMountedRef.current = true;
+        return () => {
+            checkoutMountedRef.current = false;
+        };
+    }, []);
+    const checkoutOwner = checkoutOwnerRef.current;
+    if (
+        checkoutOwner.api !== api ||
+        checkoutOwner.cartController !== cartController ||
+        checkoutOwner.customerId !== customer?.id ||
+        checkoutOwner.cartId !== cart?.id
+    )
+        checkoutOwnerRef.current = { api, cartController, customerId: customer?.id, cartId: cart?.id };
+    useEffect(() => {
+        checkoutStartingRef.current = false;
+        setCheckoutStarting(false);
+    }, [api, cartController, customer?.id, cart?.id]);
     useEffect(() => {
         if (cartState.confirmed) queryClient.setQueryData(cartQueryKey, cartState.confirmed);
     }, [cartState.confirmed, queryClient, market.code, market.currencyCode, vendureLanguageCode]);
@@ -239,12 +258,20 @@ export function useStorefrontAppState() {
     useEffect(() => {
         if (!storefrontContextResolved) return;
         const controller = new AbortController();
-        const scheduler = publicRefreshScheduler(() => {
-            void refreshStorefrontQueries(queryClient, {
-                marketCode: storefrontQueryKeys.market(market),
-                languageCode: vendureLanguageCode,
-            });
-        });
+        const scheduler = publicRefreshScheduler(
+            () => {
+                void refreshStorefrontQueries(queryClient, {
+                    marketCode: storefrontQueryKeys.market(market),
+                    languageCode: vendureLanguageCode,
+                });
+            },
+            () => {
+                void refreshStorefrontAssociations(queryClient, {
+                    marketCode: storefrontQueryKeys.market(market),
+                    languageCode: vendureLanguageCode,
+                });
+            },
+        );
         void api.watchRealtime(
             event => {
                 void invalidateStorefrontRealtimeQueries(queryClient, event, {
@@ -556,19 +583,28 @@ export function useStorefrontAppState() {
         checkoutStartingRef.current = true;
         setCheckoutStarting(true);
         setCartError(null);
-        const checkoutRouteRequest = preloadStorefrontRouteComponent('checkout');
+        const requestOwner = checkoutOwnerRef.current;
+        const isCurrent = () => checkoutMountedRef.current && checkoutOwnerRef.current === requestOwner;
+        void preloadStorefrontRouteComponent('checkout');
         try {
-            const [session] = await Promise.all([api.beginCheckout(cart.revision), checkoutRouteRequest]);
+            const session = await api.runWithinDeadline(async signal => {
+                const confirmedSession = await api.beginCheckout(cart.revision);
+                signal.throwIfAborted();
+                return confirmedSession;
+            });
+            if (!isCurrent()) return;
             setCart(session.cart);
             setCheckoutOrder(session.order);
             navigate({ name: 'checkout' });
         } catch (requestError) {
+            if (!isCurrent()) return;
             if (
                 requestError instanceof ShopApiError &&
                 requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
             ) {
                 checkoutStartingRef.current = false;
                 await refreshCart().catch(() => undefined);
+                if (!isCurrent()) return;
                 setCartError(
                     isZh
                         ? '购物车已更新，请确认后重新结算'
@@ -578,8 +614,10 @@ export function useStorefrontAppState() {
                 setCartError(storefrontErrorMessage(requestError, language, text.loadError));
             }
         } finally {
-            checkoutStartingRef.current = false;
-            setCheckoutStarting(false);
+            if (isCurrent()) {
+                checkoutStartingRef.current = false;
+                setCheckoutStarting(false);
+            }
         }
     }, [
         api,
@@ -755,6 +793,7 @@ export function useStorefrontAppState() {
         reviewSettingsQuery,
         managedContentProducts,
         managedContentLoading: managedContentProductsQuery.isLoading || productsQuery.isLoading,
+        managedContentResolved: managedContentProductsQuery.data !== undefined,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         authSettings,
@@ -801,7 +840,7 @@ export function useStorefrontAppState() {
         cartRecoveryPending: cartRecoveryPending || cartState.phase === 'recovering',
         cartEditingBlocked: cartState.editingBlocked,
         cartCommandUnknown: cartState.phase === 'unknown' || cartState.phase === 'recovering',
-        cartCommandAcknowledged: cartState.error instanceof CartCommandAcknowledgedReadError,
+        cartCommandAcknowledged: cartState.commandAcknowledged,
         cancelPendingCartCommand,
         selectCartLines: (ids: string[], selected: boolean) => {
             void api.setLinesSelected(ids, selected, cart?.revision ?? 0).catch(() => undefined);

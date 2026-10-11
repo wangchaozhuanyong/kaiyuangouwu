@@ -453,9 +453,9 @@ export class ShopApi {
         return this.accountApi.deleteAddress(id);
     }
 
-    async cart(signal?: AbortSignal): Promise<StorefrontCart> {
-        return this.cartCheckoutApi.cart(signal);
-    }
+    cart = (signal?: AbortSignal) => this.cartCheckoutApi.cart(signal);
+    runWithinDeadline: CartController['runWithinDeadline'] = (operation, timeoutMs) =>
+        this.cartCheckoutApi.runWithinDeadline(operation, timeoutMs);
 
     async addItem(productVariantId: string, expectedRevision: number, quantity = 1): Promise<StorefrontCart> {
         return this.cartCheckoutApi.addItem(productVariantId, expectedRevision, quantity);
@@ -593,8 +593,8 @@ export class ShopApi {
         return this.cartCheckoutApi.setCurrencyForOrder(currencyCode);
     }
 
-    setPaymentCurrencyForOrder = (currencyCode: string) =>
-        this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode);
+    setPaymentCurrencyForOrder = (currencyCode: string, signal?: AbortSignal) =>
+        this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode, signal);
     eligiblePaymentMethods = (signal?: AbortSignal, orderId?: string) =>
         this.cartCheckoutApi.eligiblePaymentMethods(signal, orderId);
     prefetchEligiblePaymentMethods = (orderId: string) =>

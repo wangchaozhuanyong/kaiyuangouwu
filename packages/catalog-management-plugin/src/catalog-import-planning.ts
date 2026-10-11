@@ -289,8 +289,8 @@ export function money(value: number | null): number {
     return Math.round((value ?? 0) * 100);
 }
 
-export function microunits(value: number | null): number {
-    return Math.round((value ?? 0) * 1_000);
+export function microunits(value: number | null): number | null {
+    return value == null ? null : Math.round(value * 1_000);
 }
 
 export function variantDisplayName(row: NormalizedCatalogRow): string {

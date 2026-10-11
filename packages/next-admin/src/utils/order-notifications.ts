@@ -2,6 +2,23 @@ export function orderNotificationLanguage(language: string): 'zh' | 'en' {
     return /^en(?:[-_]|$)/i.test(language) ? 'en' : 'zh';
 }
 
+export function orderAnnouncementText(
+    language: 'zh' | 'en',
+    kind: 'order-placed' | 'order-pending',
+    store?: { nameZh?: string; nameEn?: string },
+): string {
+    const name = (language === 'zh' ? store?.nameZh : store?.nameEn)?.trim();
+    const copy = ORDER_NOTIFICATION_COPY[language];
+    if (!name) return kind === 'order-pending' ? copy.pending : copy.message;
+    if (language === 'en')
+        return kind === 'order-pending'
+            ? `${name} has pending orders. Please process them promptly.`
+            : `${name} has a new order. Please check it.`;
+    return kind === 'order-pending'
+        ? `${name}有未处理的订单，请您及时处理。`
+        : `${name}有新的订单，请您查看。`;
+}
+
 export const ORDER_NOTIFICATION_COPY = {
     zh: {
         message: '您有新的订单，请您查看。',

@@ -923,18 +923,6 @@ export function AppShell() {
                     </AdminButton>
 
                     <div className="admin-header-actions flex min-w-0 items-center justify-end gap-2 sm:gap-4">
-                        {activeAdministrator &&
-                            channelData?.activeChannel &&
-                            !isChannelSwitching &&
-                            !isLoggingOut &&
-                            hasAnyAdminPermission(activePermissions, ['ReadOrder']) && (
-                                <OrderNotifications
-                                    key={`${activeAdministrator.id}:${channelData.activeChannel.id}`}
-                                    administratorId={activeAdministrator.id}
-                                    channelId={channelData.activeChannel.id}
-                                    channelToken={channelData.activeChannel.token}
-                                />
-                            )}
                         <AdminField
                             className="admin-store-selector relative flex min-w-0 items-center gap-1.5 text-xs font-bold text-slate-600"
                             label={
@@ -994,6 +982,31 @@ export function AppShell() {
                         >
                             <Search className="h-4 w-4" />
                         </AdminButton>
+                        {activeAdministrator &&
+                            channelData?.activeChannel &&
+                            !isChannelSwitching &&
+                            !isLoggingOut &&
+                            hasAnyAdminPermission(activePermissions, ['ReadOrder']) && (
+                                <OrderNotifications
+                                    key={`${activeAdministrator.id}:${channelData.activeChannel.id}`}
+                                    administratorId={activeAdministrator.id}
+                                    channelId={channelData.activeChannel.id}
+                                    channelToken={channelData.activeChannel.token}
+                                    store={
+                                        isPlatformContext
+                                            ? undefined
+                                            : {
+                                                  id: channelData.activeChannel.id,
+                                                  nameZh:
+                                                      channelData.activeChannel.customFields
+                                                          ?.storefrontNameZh ?? undefined,
+                                                  nameEn:
+                                                      channelData.activeChannel.customFields
+                                                          ?.storefrontNameEn ?? undefined,
+                                              }
+                                    }
+                                />
+                            )}
                         <ThemeToggleButton className="hidden md:flex" />
                         {/* 右上角用户菜单 (包含个人中心与退出) */}
                         <div className="relative">

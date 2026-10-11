@@ -15,11 +15,13 @@ export function useProductsByIdsQuery({
     productIds,
     market,
     language,
+    enabled = true,
 }: {
     api: ShopApi;
     productIds: string[];
     market: MarketConfig;
     language: StorefrontLanguage;
+    enabled?: boolean;
 }) {
     return useQuery({
         queryKey: storefrontQueryKeys.productsByIds(
@@ -28,7 +30,7 @@ export function useProductsByIdsQuery({
             productIds,
         ),
         queryFn: ({ signal }) => api.productsByIds(productIds, signal),
-        enabled: productIds.length > 0,
+        enabled: enabled && productIds.length > 0,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),

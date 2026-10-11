@@ -350,6 +350,7 @@ export interface HomePageProps {
     contentBlocks: StorefrontContentBlock[];
     managedContentProducts: Product[];
     managedContentLoading?: boolean;
+    managedContentResolved?: boolean;
     /** Anonymous SSR emits both shortcut geometries for native media-query selection. */
     responsiveIntro?: boolean;
     heroAutoplayIntervalSeconds: number;
@@ -425,6 +426,7 @@ export function HomePage() {
         contentBlocks,
         managedContentProducts,
         managedContentLoading = false,
+        managedContentResolved = false,
         responsiveIntro = false,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
@@ -500,8 +502,23 @@ export function HomePage() {
             ? [entry.block]
             : [],
     );
+    const managedIds = new Set(
+        contentBlocks.flatMap(block => [
+            ...contentStringArraySetting(block.settings?.selectedProductIds),
+            ...contentStringArraySetting(block.settings?.pinnedProductIds),
+            ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
+            ...block.items.flatMap(item =>
+                item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+            ),
+        ]),
+    );
     const managedContentProductPool = Array.from(
-        new Map([...products, ...managedContentProducts].map(product => [product.id, product])).values(),
+        new Map(
+            [
+                ...products.filter(product => !managedContentResolved || !managedIds.has(product.id)),
+                ...managedContentProducts,
+            ].map(product => [product.id, product]),
+        ).values(),
     );
     const [heroIndex, setHeroIndex] = useState(0);
     const [readyHeroImage, setReadyHeroImage] = useState('');
@@ -1526,6 +1543,7 @@ export function HomePage() {
                                     block={block}
                                     products={managedContentProductPool}
                                     loading={managedContentLoading}
+                                    productsResolved={managedContentResolved}
                                     language={language}
                                     locale={locale}
                                     market={market}
@@ -1787,6 +1805,7 @@ function ManagedContentSection({
     block,
     products,
     loading = false,
+    productsResolved = false,
     language,
     locale,
     market,
@@ -1795,12 +1814,25 @@ function ManagedContentSection({
     block: StorefrontContentBlock;
     products: Product[];
     loading?: boolean;
+    productsResolved?: boolean;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
-    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const blockHasTarget =
+        block.targetType !== 'NONE' &&
+        Boolean(block.targetValue) &&
+        (!productsResolved ||
+            block.targetType !== 'PRODUCT' ||
+            products.some(product => product.id === block.targetValue));
+    const visibleItems = block.items.filter(
+        item =>
+            item.enabled !== false &&
+            (!productsResolved ||
+                item.targetType !== 'PRODUCT' ||
+                products.some(product => product.id === item.targetValue)),
+    );
     const displayCount = Math.min(50, Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)));
     const selectedProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
     const selectedProducts = selectManagedProducts({
@@ -1906,11 +1938,12 @@ function ManagedContentSection({
                     products={products}
                     language={language}
                     onContentTarget={onContentTarget}
+                    productsResolved={productsResolved}
                 />
             ) : (
                 !!(block.items.length || additionalSelectedProducts.length) && (
                     <div className="managed-content-grid">
-                        {block.items.map(item => (
+                        {visibleItems.map(item => (
                             <ManagedContentItemButton
                                 key={item.id}
                                 item={item}

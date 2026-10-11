@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
@@ -43,16 +43,37 @@ export function useStorefrontCartActions({
     setAddingVariantId,
 }: StorefrontCartActionOptions) {
     const recoveryRequestRef = useRef<Promise<StorefrontCart> | null>(null);
+    const recoveredNavigationRef = useRef<string | null>(null);
+    const actionOwnerRef = useRef({ api, cartController, customerId: customer?.id });
+    const owner = actionOwnerRef.current;
+    if (owner.api !== api || owner.cartController !== cartController || owner.customerId !== customer?.id) {
+        actionOwnerRef.current = { api, cartController, customerId: customer?.id };
+        recoveryRequestRef.current = null;
+        recoveredNavigationRef.current = null;
+    }
+    const mountedRef = useRef(false);
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
     const [cartRecoveryPending, setCartRecoveryPending] = useState(false);
+    useEffect(() => setCartRecoveryPending(false), [api, cartController, customer?.id]);
     const pendingResultMessage = isZh
         ? '结果待确认，请核对购物车。'
         : 'Result unconfirmed. Review your cart.';
+    const acknowledgedResultMessage = isZh
+        ? '操作已确认，请重试读取购物车。'
+        : 'The operation is confirmed. Retry loading your cart.';
     const cartErrorMessage = useCallback(
         (error: unknown, fallback = text.loadError) =>
-            storefrontErrorCode(error) === 'UNKNOWN_RESULT'
-                ? pendingResultMessage
-                : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback),
-        [isZh, pendingResultMessage, text.loadError],
+            cartController.getSnapshot().commandAcknowledged
+                ? acknowledgedResultMessage
+                : storefrontErrorCode(error) === 'UNKNOWN_RESULT'
+                  ? pendingResultMessage
+                  : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback),
+        [acknowledgedResultMessage, cartController, isZh, pendingResultMessage, text.loadError],
     );
     const cartActionsBlocked = useCallback(
         () =>
@@ -64,7 +85,8 @@ export function useStorefrontCartActions({
     const refreshCart = useCallback(
         (cancelPending = false): Promise<StorefrontCart> => {
             if (recoveryRequestRef.current) return recoveryRequestRef.current;
-            const phase = cartController.getSnapshot().phase;
+            const beforeRecovery = cartController.getSnapshot();
+            const phase = beforeRecovery.phase;
             if (checkoutStartingRef?.current || phase === 'queued' || phase === 'saving') {
                 return Promise.reject(
                     new Error(
@@ -72,42 +94,85 @@ export function useStorefrontCartActions({
                     ),
                 );
             }
+            const requestOwner = actionOwnerRef.current;
+            const isCurrent = () => mountedRef.current && actionOwnerRef.current === requestOwner;
+            const hadPendingCommand = phase === 'unknown' || phase === 'recovering';
             setCartRecoveryPending(true);
             const request = (async () => {
                 const recovered = await cartController.recoverPending(cancelPending);
-                const latest = await api.cart();
+                const state = cartController.getSnapshot();
+                const latest = hadPendingCommand
+                    ? (state.lastRecovery?.result.cart ?? state.confirmed)
+                    : await api.cart();
+                if (!isCurrent()) throw new Error('Cart session changed.');
+                if (!latest) throw new Error(pendingResultMessage);
                 setCart(latest);
                 setCheckoutOrder(latest.checkoutOrder);
                 const currentPhase = cartController.getSnapshot().phase;
                 setCartError(
                     !recovered || currentPhase === 'unknown' || currentPhase === 'recovering'
-                        ? pendingResultMessage
+                        ? state.commandAcknowledged
+                            ? acknowledgedResultMessage
+                            : pendingResultMessage
                         : null,
                 );
+                const recovery = state.lastRecovery;
+                const session = recovery?.result.session;
+                if (
+                    hadPendingCommand &&
+                    recovered &&
+                    !state.pending &&
+                    state.phase !== 'unknown' &&
+                    state.phase !== 'recovering' &&
+                    requestOwner.customerId &&
+                    recovery?.status === 'APPLIED' &&
+                    recovery.checkoutIntent &&
+                    session &&
+                    session.cart.id === latest.id &&
+                    session.order.id === latest.checkoutOrder?.id &&
+                    recoveredNavigationRef.current !== recovery.commandId
+                ) {
+                    recoveredNavigationRef.current = recovery.commandId;
+                    setCheckoutOrder(session.order);
+                    const destination =
+                        recovery.checkoutIntent === 'beginCheckout'
+                            ? 'checkout'
+                            : recovery.checkoutIntent === 'buyNow'
+                              ? 'purchase'
+                              : 'payment';
+                    void preloadStorefrontRouteComponent(destination);
+                    navigate({ name: destination }, true);
+                }
                 return latest;
             })()
                 .catch(requestError => {
-                    const failedPhase = cartController.getSnapshot().phase;
+                    if (!isCurrent()) throw requestError;
+                    const failedState = cartController.getSnapshot();
+                    const failedPhase = failedState.phase;
                     setCartError(
                         failedPhase === 'unknown' || failedPhase === 'recovering'
-                            ? pendingResultMessage
+                            ? failedState.commandAcknowledged
+                                ? acknowledgedResultMessage
+                                : pendingResultMessage
                             : cartErrorMessage(requestError),
                     );
                     throw requestError;
                 })
                 .finally(() => {
-                    recoveryRequestRef.current = null;
-                    setCartRecoveryPending(false);
+                    if (recoveryRequestRef.current === request) recoveryRequestRef.current = null;
+                    if (isCurrent()) setCartRecoveryPending(false);
                 });
             recoveryRequestRef.current = request;
             return request;
         },
         [
             api,
+            acknowledgedResultMessage,
             cartController,
             cartErrorMessage,
             checkoutStartingRef,
             isZh,
+            navigate,
             pendingResultMessage,
             setCart,
             setCartError,
@@ -194,12 +259,15 @@ export function useStorefrontCartActions({
             setAddingVariantId(variant.id);
             setCartLoading(true);
             setCartError(null);
+            const requestOwner = actionOwnerRef.current;
+            const isCurrent = () => mountedRef.current && actionOwnerRef.current === requestOwner;
             try {
                 void preloadStorefrontRouteComponent('purchase');
                 const result = await cartController.execute({
                     buyNow: { productVariantId: variant.id, quantity },
                 });
                 const session = result.session;
+                if (!isCurrent()) return;
                 if (!session)
                     throw new Error(
                         isZh ? '结算会话已变更，请重新确认' : 'Checkout changed. Please review again.',
@@ -209,12 +277,14 @@ export function useStorefrontCartActions({
                 notify(isZh ? '已准备本次购买' : 'Your purchase is ready to review');
                 navigate({ name: 'purchase' });
             } catch (requestError) {
+                if (!isCurrent()) return;
                 if (
                     requestError instanceof ShopApiError &&
                     requestError.errorCode === 'CART_REVISION_CONFLICT_ERROR'
                 ) {
                     await refreshCart().catch(() => undefined);
                 }
+                if (!isCurrent()) return;
                 const errorMessage = cartErrorMessage(
                     requestError,
                     isZh ? '暂时无法发起购买' : 'Could not start the purchase',
@@ -222,8 +292,10 @@ export function useStorefrontCartActions({
                 setCartError(errorMessage);
                 notify(errorMessage);
             } finally {
-                setAddingVariantId(null);
-                setCartLoading(false);
+                if (isCurrent()) {
+                    setAddingVariantId(null);
+                    setCartLoading(false);
+                }
             }
         },
         [

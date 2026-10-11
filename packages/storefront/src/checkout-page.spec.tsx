@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi, ShopApiError } from './api';
+import { CartController } from './cart/cart-controller';
 import { CheckoutPage, selectBestShippingMethod } from './checkout-page';
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import {
@@ -431,6 +432,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         document.body.append(container);
         root = createRoot(container);
         navigate.mockClear();
+        preloadRoute.mockReset().mockResolvedValue(undefined);
     });
     afterEach(() => {
         act(() => root.unmount());
@@ -499,6 +501,9 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             cart: vi.fn().mockResolvedValue(cartFor(order)),
             preparePayment: vi.fn().mockResolvedValue({ cart: cartFor(order), order }),
             prefetchEligiblePaymentMethods: vi.fn().mockResolvedValue([]),
+            runWithinDeadline: vi.fn((callback: (signal: AbortSignal) => Promise<unknown>) =>
+                callback(new AbortController().signal),
+            ),
         };
         const onCartChange = vi.fn();
         const props = {
@@ -598,7 +603,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
         );
         expect(api.preparePayment).toHaveBeenCalledTimes(1);
-        expect(api.setPaymentCurrencyForOrder).toHaveBeenCalledWith('MYR');
+        expect(api.setPaymentCurrencyForOrder).toHaveBeenCalledWith('MYR', expect.any(AbortSignal));
         expect(api.setPaymentCurrencyForOrder.mock.invocationCallOrder[0]).toBeLessThan(
             api.preparePayment.mock.invocationCallOrder[0],
         );
@@ -608,6 +613,146 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(api.prefetchEligiblePaymentMethods).toHaveBeenCalledWith('order-1');
         expect(preloadRoute).toHaveBeenCalledWith('payment');
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
+    });
+
+    it.each(['zh', 'en'] as const)(
+        'enters payment immediately while the module and methods take ten seconds: %s',
+        async language => {
+            const { api, props } = mount({ methods: [methods[1]] });
+            await flush(() => root.render(createElement(CheckoutPage, { ...props, language })));
+            let moduleLoaded = false;
+            let methodsLoaded = false;
+            preloadRoute.mockImplementation(
+                () =>
+                    new Promise<void>(resolve => {
+                        setTimeout(() => {
+                            moduleLoaded = true;
+                            resolve();
+                        }, 10_000);
+                    }),
+            );
+            api.prefetchEligiblePaymentMethods.mockImplementation(
+                () =>
+                    new Promise(resolve => {
+                        setTimeout(() => {
+                            methodsLoaded = true;
+                            resolve([]);
+                        }, 10_000);
+                    }),
+            );
+            await flush(() =>
+                element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+            );
+            expect(api.preparePayment).toHaveBeenCalledOnce();
+            expect(navigate).toHaveBeenCalledExactlyOnceWith({ to: '/payment', search: {}, replace: true });
+            expect(moduleLoaded).toBe(false);
+            expect(methodsLoaded).toBe(false);
+            expect(submitButton().disabled).toBe(false);
+            expect(props.onNotify).toHaveBeenCalledWith(
+                language === 'zh'
+                    ? '订单已准备，请继续选择支付方式'
+                    : 'Order prepared. Continue with a payment method.',
+            );
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10_000);
+            });
+            expect(moduleLoaded).toBe(true);
+            expect(methodsLoaded).toBe(true);
+        },
+    );
+
+    it('submits only once when two form events arrive before React renders busy state', async () => {
+        const { api } = mount({ methods: [methods[1]] });
+        await flush();
+        let resolvePayment!: (session: { cart: StorefrontCart; order: Order }) => void;
+        api.preparePayment.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    resolvePayment = resolve;
+                }),
+        );
+        await flush(() => {
+            const form = element('form');
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        });
+        expect(api.preparePayment).toHaveBeenCalledOnce();
+        expect(api.setPaymentCurrencyForOrder).toHaveBeenCalledOnce();
+        await flush(() => {
+            const order = orderFor('PHYSICAL');
+            resolvePayment({ cart: cartFor(order), order });
+        });
+        expect(navigate).toHaveBeenCalledOnce();
+    });
+
+    it('does not navigate or publish a late prepared order after the customer changes', async () => {
+        const { api, props, order } = mount({ methods: [methods[1]] });
+        await flush();
+        let resolvePayment!: (session: { cart: StorefrontCart; order: Order }) => void;
+        api.preparePayment.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    resolvePayment = resolve;
+                }),
+        );
+        await flush(() =>
+            element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        await flush(() =>
+            root.render(
+                createElement(CheckoutPage, {
+                    ...props,
+                    customer: { ...props.customer, id: 'customer-other' },
+                }),
+            ),
+        );
+        await flush(() => resolvePayment({ cart: cartFor(order), order }));
+        expect(props.onSessionChange).not.toHaveBeenCalled();
+        expect(navigate).not.toHaveBeenCalled();
+        expect(api.prefetchEligiblePaymentMethods).not.toHaveBeenCalled();
+    });
+
+    it('keeps the form on a preparation error without issuing another recovery read', async () => {
+        const { api } = mount({ methods: [methods[1]] });
+        await flush();
+        api.preparePayment.mockRejectedValue(new ShopApiError('UNKNOWN_RESULT', 'Unknown acknowledgement'));
+        await flush(() =>
+            element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        expect(api.cart).toHaveBeenCalledOnce();
+        expect(api.preparePayment).toHaveBeenCalledOnce();
+        expect(navigate).not.toHaveBeenCalled();
+        expect(submitButton().disabled).toBe(false);
+    });
+
+    it('ends the whole submission at twenty seconds and never continues a late response into payment', async () => {
+        const { api } = mount({ methods: [methods[1]] });
+        await flush();
+        const controller = new CartController('checkout-deadline-fixture');
+        api.runWithinDeadline.mockImplementation(callback => controller.runWithinDeadline(callback));
+        api.setPaymentCurrencyForOrder.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    setTimeout(() => resolve(orderFor('PHYSICAL')), 25_000);
+                }),
+        );
+        await flush(() =>
+            element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        expect(submitButton().disabled).toBe(true);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(20_000);
+        });
+        expect(submitButton().disabled).toBe(false);
+        expect(api.cart).not.toHaveBeenCalled();
+        expect(api.preparePayment).not.toHaveBeenCalled();
+        expect(navigate).not.toHaveBeenCalled();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(5_000);
+        });
+        expect(api.cart).not.toHaveBeenCalled();
+        expect(api.preparePayment).not.toHaveBeenCalled();
+        expect(navigate).not.toHaveBeenCalled();
     });
 
     it('blocks payment on an unavailable quote and retries only delivery', async () => {
@@ -842,6 +987,8 @@ describe('CheckoutPage submission authentication and recovery', () => {
                                 setDeliveryEmail,
                                 cart: refreshCart,
                                 preparePayment,
+                                runWithinDeadline: (callback: (signal: AbortSignal) => Promise<unknown>) =>
+                                    callback(new AbortController().signal),
                                 myDeliveryEmails: vi.fn().mockResolvedValue([]),
                             } as unknown as ShopApi,
                             cart: cartFor(order),

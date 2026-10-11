@@ -1,4 +1,4 @@
-import { AdminInput, AdminSelect } from '../../components/AdminControls';
+import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { Search } from 'lucide-react';
@@ -6,6 +6,7 @@ import { useDeferredValue, useState } from 'react';
 import { GET_COLLECTIONS, GET_PRODUCTS } from '../../graphql/catalog.graphql';
 import { type StorefrontTargetType } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
 import { navigationTargets } from './storefront-content-utils';
 import { inputClass } from './storefront-editor-model';
 
@@ -30,11 +31,19 @@ export function TargetValueInput({
             options: {
                 take: 20,
                 sort: { name: 'ASC', id: 'ASC' },
-                filter: deferredLookupSearch ? { name: { contains: deferredLookupSearch } } : {},
+                filter: {
+                    enabled: { eq: true },
+                    ...(deferredLookupSearch ? { name: { contains: deferredLookupSearch } } : {}),
+                },
             },
         },
         skip: type !== 'PRODUCT' || !canReadProducts,
     });
+    const selectedProduct = useCatalogReferences(
+        value ? [value] : [],
+        'products',
+        type === 'PRODUCT' && canReadProducts,
+    );
     const collectionLookup = useQuery<{
         collections: { items: Array<{ id: string; name: string }>; totalItems: number };
     }>(GET_COLLECTIONS, {
@@ -105,7 +114,9 @@ export function TargetValueInput({
                         {query.loading ? '正在查询…' : `请选择（匹配 ${totalItems} 条）`}
                     </option>
                     {value && !items.some(item => item.id === value) && (
-                        <option value={value}>已选目标 · {value}</option>
+                        <option value={value}>
+                            已选目标 · {selectedProduct.references[0]?.entity?.name ?? value}
+                        </option>
                     )}
                     {items.map(item => (
                         <option key={item.id} value={item.id}>
@@ -115,6 +126,22 @@ export function TargetValueInput({
                 </AdminSelect>
                 {query.error && (
                     <p className="text-[10px] text-rose-600">目标列表读取失败，可保留原选择后重试</p>
+                )}
+                {type === 'PRODUCT' && selectedProduct.references[0]?.state !== 'available' && value && (
+                    <p role="status" className="text-xs text-slate-500">
+                        {selectedProduct.unavailable.length
+                            ? '原商品暂不可用，关联已保留，恢复后继续使用。'
+                            : '原商品待核对，关联已保留。'}
+                        {selectedProduct.error && (
+                            <AdminButton
+                                type="button"
+                                onClick={() => void selectedProduct.refetch()}
+                                className="ml-2 underline"
+                            >
+                                重试核对
+                            </AdminButton>
+                        )}
+                    </p>
                 )}
             </div>
         );

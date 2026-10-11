@@ -13,10 +13,15 @@ const mocks = vi.hoisted(() => ({
     scope: 'fixture-store-a',
     productId: '6',
     dirty: false,
+    deliveryMode: 'manual_service',
+    draftOverrides: {} as Record<string, unknown>,
+    baselineOverrides: {} as Record<string, unknown>,
+    setVariants: vi.fn(),
+    upload: vi.fn(),
 }));
 vi.mock('../../apollo', () => ({
     getAdminQueryScope: () => mocks.scope,
-    uploadAdminFile: vi.fn(),
+    uploadAdminFile: mocks.upload,
 }));
 vi.mock('@apollo/client/react', () => ({
     useMutation: () => [mocks.mutate, { loading: false }],
@@ -30,26 +35,29 @@ vi.mock('../../hooks/use-admin-capabilities', () => ({
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('./ProductAutoCardSetupPanel', () => ({ ProductAutoCardSetupPanel: () => null }));
 vi.mock('./ProductEditorContext', () => ({
-    useProductEditor: () => ({
-        productId: mocks.productId,
-        variants: [
-            {
-                id: '12',
-                sku: 'fixture-sku',
-                name: '默认规格',
-                digitalDeliveryMode: 'manual_service',
-                digitalMigrationRequired: true,
-            },
-        ],
-        setVariants: vi.fn(),
-        handleVariantFieldChange: vi.fn(),
-        formErrors: {},
-        saving: false,
-        isDirty: mocks.dirty,
-        refetchWorkspace: mocks.refetch,
-        handleSave: vi.fn(),
-        refetchProduct: vi.fn(),
-    }),
+    useProductEditor: () => {
+        const variant = {
+            id: '12',
+            sku: 'fixture-sku',
+            name: '默认规格',
+            digitalDeliveryMode: mocks.deliveryMode,
+            digitalMigrationRequired: true,
+            ...mocks.draftOverrides,
+        };
+        return {
+            productId: mocks.productId,
+            variants: [variant],
+            baselineVariants: [{ ...variant, ...mocks.baselineOverrides }],
+            setVariants: mocks.setVariants,
+            handleVariantFieldChange: vi.fn(),
+            formErrors: {},
+            saving: false,
+            isDirty: mocks.dirty,
+            refetchWorkspace: mocks.refetch,
+            handleSave: vi.fn(),
+            refetchProduct: vi.fn(),
+        };
+    },
 }));
 
 const row = { id: '23', stockLocationId: '1', stockOnHand: 100, stockAllocated: 0 };
@@ -77,6 +85,9 @@ beforeEach(async () => {
     mocks.scope = 'fixture-store-a';
     mocks.productId = '6';
     mocks.dirty = false;
+    mocks.deliveryMode = 'manual_service';
+    mocks.draftOverrides = {};
+    mocks.baselineOverrides = {};
     mocks.read.mockImplementation(({ variables }) =>
         Promise.resolve(response(Boolean(variables.ownershipConfirmation))),
     );
@@ -163,6 +174,82 @@ it('disables migration if the product draft becomes dirty after preview', async 
     await act(async () => root.render(<DigitalProductWorkspace />));
     expect(button('确认核对并切换').disabled).toBe(true);
     await click('确认核对并切换');
+    expect(mocks.mutate).not.toHaveBeenCalled();
+});
+
+it('allows a dirty draft to review inventory and ownership without allowing migration writes', async () => {
+    mocks.dirty = true;
+    await act(async () => root.render(<DigitalProductWorkspace />));
+    expect(button('核对旧库存').disabled).toBe(false);
+    await confirmPreview();
+    expect(button('核验归属与库存').disabled).toBe(false);
+    expect(button('确认核对并切换').disabled).toBe(true);
+    expect(mocks.mutate).not.toHaveBeenCalled();
+});
+
+it('disables unified file binding while any target SKU still has legacy inventory', async () => {
+    mocks.deliveryMode = 'file_download';
+    await act(async () => root.render(<DigitalProductWorkspace />));
+    expect(host.querySelector<HTMLInputElement>('[aria-label="上传统一交付文件"]')?.disabled).toBe(true);
+});
+
+it('explicitly undoes legacy delivery input without writing or discarding name and cost drafts', async () => {
+    mocks.dirty = true;
+    mocks.draftOverrides = {
+        name: 'Draft name',
+        costPrice: '',
+        supplierId: 'draft-supplier',
+        digitalFileVersionId: 'draft-file',
+        digitalFileName: 'draft.pdf',
+        digitalAvailableQuantity: 99,
+    };
+    mocks.baselineOverrides = {
+        name: 'Server name',
+        costPrice: '5.00',
+        digitalFileVersionId: 'old-file',
+        digitalFileName: 'old.pdf',
+        digitalAvailableQuantity: 14,
+    };
+    await act(async () => root.render(<DigitalProductWorkspace />));
+    expect(host.textContent).toContain('仅撤回本规格的交付方式、销售数量、可售份数和文件绑定');
+    await click('撤回未保存的交付修改');
+    const update = mocks.setVariants.mock.calls[0][0];
+    const current: Record<string, unknown> = {
+        id: '12',
+        sku: 'fixture-sku',
+        digitalDeliveryMode: 'manual_service',
+        digitalMigrationRequired: true,
+        ...mocks.draftOverrides,
+    };
+    const restored = update([current]);
+    expect(restored[0]).toMatchObject({
+        name: 'Draft name',
+        costPrice: '',
+        supplierId: 'draft-supplier',
+        digitalFileVersionId: 'old-file',
+        digitalFileName: 'old.pdf',
+        digitalAvailableQuantity: 14,
+    });
+    expect(current.digitalFileVersionId).toBe('draft-file');
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.upload).not.toHaveBeenCalled();
+    expect(mocks.read).not.toHaveBeenCalled();
+});
+
+it('does not offer delivery undo against a different store SKU baseline', async () => {
+    mocks.draftOverrides = { digitalFileVersionId: 'draft-file' };
+    mocks.baselineOverrides = { id: 'another-store-sku', digitalFileVersionId: 'old-file' };
+    await act(async () => root.render(<DigitalProductWorkspace />));
+    expect(host.textContent).not.toContain('撤回未保存的交付修改');
+});
+
+it('ignores a delivery undo click after store scope changed before rendering', async () => {
+    mocks.draftOverrides = { digitalFileVersionId: 'draft-file' };
+    mocks.baselineOverrides = { digitalFileVersionId: 'old-file' };
+    await act(async () => root.render(<DigitalProductWorkspace />));
+    mocks.scope = 'fixture-store-b';
+    await click('撤回未保存的交付修改');
+    expect(mocks.setVariants).not.toHaveBeenCalled();
     expect(mocks.mutate).not.toHaveBeenCalled();
 });
 

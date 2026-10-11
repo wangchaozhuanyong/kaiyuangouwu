@@ -811,13 +811,21 @@ export function ManagedAdCarousel({
     products,
     language,
     onContentTarget,
+    productsResolved = false,
 }: {
     block: StorefrontContentBlock;
     products: Product[];
     language: StorefrontLanguage;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
+    productsResolved?: boolean;
 }) {
-    const items = block.items.filter(item => item.enabled !== false);
+    const items = block.items.filter(
+        item =>
+            item.enabled !== false &&
+            (!productsResolved ||
+                item.targetType !== 'PRODUCT' ||
+                products.some(product => product.id === item.targetValue)),
+    );
     if (!items.length) return null;
     const productMedia = items.every(item => item.targetType === 'PRODUCT');
     const cards = items.map(item => (

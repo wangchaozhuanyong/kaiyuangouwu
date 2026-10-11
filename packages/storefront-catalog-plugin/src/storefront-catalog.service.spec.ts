@@ -1,6 +1,9 @@
 import 'reflect-metadata';
 
+import { LanguageCode } from '@vendure/common/lib/generated-types';
+import { Channel, Product, ProductVariant, SearchIndexItem } from '@vendure/core';
 import { createRequire } from 'node:module';
+import { DataSource, EntitySchema, In } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 // The workspace's Node type declarations predate node:sqlite, while CI runs Node 24.
@@ -319,4 +322,117 @@ describe('StorefrontCatalogService query construction', () => {
         ).resolves.toEqual({ items: [], totalItems: 0 });
         expect(productService.findByIds).not.toHaveBeenCalled();
     });
+});
+
+it('uses live product and SKU channel/deletion/enable SQL joins before count and paging', async () => {
+    const db = await new DataSource({
+        type: 'sqljs',
+        synchronize: true,
+        entities: [
+            new EntitySchema<Channel>({
+                name: 'Channel',
+                target: Channel,
+                columns: { id: { type: String, primary: true } },
+            }),
+            new EntitySchema<Product>({
+                name: 'Product',
+                target: Product,
+                columns: {
+                    id: { type: String, primary: true },
+                    enabled: { type: Boolean },
+                    deletedAt: { type: Date, nullable: true },
+                    createdAt: { type: Date },
+                },
+                relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
+            }),
+            new EntitySchema<ProductVariant>({
+                name: 'ProductVariant',
+                target: ProductVariant,
+                columns: {
+                    id: { type: String, primary: true },
+                    enabled: { type: Boolean },
+                    deletedAt: { type: Date, nullable: true },
+                },
+                relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
+            }),
+            new EntitySchema<SearchIndexItem & { id: number }>({
+                name: 'SearchIndexItem',
+                target: SearchIndexItem,
+                columns: {
+                    id: { type: Number, primary: true },
+                    productId: { type: String },
+                    productVariantId: { type: String },
+                    priceWithTax: { type: Number },
+                    productName: { type: String },
+                    enabled: { type: Boolean },
+                    channelId: { type: String },
+                    languageCode: { type: String },
+                },
+            }),
+        ],
+    }).initialize();
+    try {
+        await db.getRepository(Channel).save([{ id: 'a' }, { id: 'b' }]);
+        const createdAt = new Date('2026-10-11T00:00:00Z');
+        await db.getRepository(Product).save(
+            Array.from({ length: 8 }, (_, index) => ({
+                id: `p${index + 1}`,
+                enabled: index !== 1,
+                deletedAt: index === 2 ? createdAt : null,
+                createdAt,
+                channels: [{ id: index === 3 ? 'b' : 'a' }],
+            })),
+        );
+        await db.getRepository(ProductVariant).save(
+            Array.from({ length: 8 }, (_, index) => ({
+                id: `v${index + 1}`,
+                enabled: index !== 4,
+                deletedAt: index === 5 ? createdAt : null,
+                channels: [{ id: index === 6 ? 'b' : 'a' }],
+            })),
+        );
+        await db.getRepository(SearchIndexItem).save(
+            Array.from({ length: 8 }, (_, index) => ({
+                id: index + 1,
+                productId: `p${index + 1}`,
+                productVariantId: `v${index + 1}`,
+                priceWithTax: index === 0 ? 0 : 250,
+                productName: index === 0 ? 'Eligible A' : index === 7 ? 'Eligible B' : `Invalid ${index}`,
+                enabled: true,
+                channelId: 'a',
+                languageCode: LanguageCode.en,
+            })),
+        );
+        const service = new StorefrontCatalogService(
+            {
+                rawConnection: db,
+                getRepository: (_ctx: unknown, entity: any) => db.getRepository(entity),
+            } as never,
+            {
+                findByIds: (_ctx: unknown, ids: string[]) =>
+                    db.getRepository(Product).findBy({ id: In(ids) }),
+            } as never,
+            {} as never,
+        );
+        const context = {
+            channelId: 'a',
+            languageCode: 'en',
+            currencyCode: 'CNY',
+            channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+        } as never;
+        const first = await service.find(context, { take: 1, sort: 'NAME' });
+        expect(first.totalItems).toBe(2);
+        expect(first.items.map(product => String(product.id))).toEqual(['p1']);
+        const second = await service.find(context, { skip: 1, take: 1, sort: 'NAME' });
+        expect(second.totalItems).toBe(2);
+        expect(second.items.map(product => String(product.id))).toEqual(['p8']);
+        expect(await service.recommendationProductIds(context)).toEqual(['p1', 'p8']);
+        // Restoring the same identity recovers its original query eligibility without deleting associations.
+        await db.getRepository(Product).update({ id: 'p3' }, { deletedAt: null });
+        const restored = await service.find(context, { take: 48, sort: 'NAME' });
+        expect(restored.totalItems).toBe(3);
+        expect(restored.items.map(product => String(product.id))).toContain('p3');
+    } finally {
+        await db.destroy();
+    }
 });

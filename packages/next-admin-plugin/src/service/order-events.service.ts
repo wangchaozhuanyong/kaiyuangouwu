@@ -22,6 +22,7 @@ export interface AdminOrderEvent {
     id: string;
     orderId: string;
     occurredAt: string;
+    store?: { id: string; nameZh?: string; nameEn?: string };
 }
 
 interface BufferedOrderEvent {
@@ -33,7 +34,7 @@ interface BufferedOrderEvent {
 const REMINDER_INTERVAL = 30 * 60 * 1000;
 // Matches the Admin's pending fulfillment states, including partially handled orders.
 const PENDING_STATES = ['PaymentAuthorized', 'PaymentSettled', 'PartiallyShipped', 'PartiallyDelivered'];
-const ORDER_RELATIONS = { lines: true, fulfillments: { lines: true } } as const;
+const ORDER_RELATIONS = { lines: true, fulfillments: { lines: true }, salesChannel: true } as const;
 
 function needsProcessing(order: Order): boolean {
     if (order.active || !order.orderPlacedAt || !PENDING_STATES.includes(order.state)) return false;
@@ -277,12 +278,26 @@ export class OrderEventsService implements OnApplicationBootstrap, OnApplication
 
     private publish(order: Order, kind: AdminOrderEvent['kind'], occurredAt: Date): void {
         const channelIds = order.salesChannelId == null ? [] : [String(order.salesChannelId)];
+        const owner = order.salesChannel;
+        const fields = owner?.customFields as
+            { storefrontNameZh?: string | null; storefrontNameEn?: string | null } | undefined;
+        const nameZh = fields?.storefrontNameZh?.trim();
+        const nameEn = fields?.storefrontNameEn?.trim();
+        const store =
+            owner && String(owner.id) === String(order.salesChannelId) && (nameZh || nameEn)
+                ? {
+                      id: String(owner.id),
+                      ...(nameZh ? { nameZh } : {}),
+                      ...(nameEn ? { nameEn } : {}),
+                  }
+                : undefined;
         const payload: AdminOrderEvent = {
             version: 1,
             kind,
             id: `${this.instance}:${++this.sequence}`,
             orderId: String(order.id),
             occurredAt: new Date(occurredAt).toISOString(),
+            ...(store ? { store } : {}),
         };
         this.recent.push({ payload, channelIds, sequence: this.sequence });
         if (this.recent.length > 200) this.recent.shift();

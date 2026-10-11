@@ -65,7 +65,7 @@ export interface ImportCatalogOrderProfitExpensesInput {
 
 export interface CostPoint {
     effectiveAt: Date;
-    costMicrounits: number;
+    costMicrounits: number | null;
 }
 
 interface ExpenseOrderLineSource {
@@ -563,7 +563,7 @@ export class CatalogProfitService {
             const current = costsByVariant.get(key) ?? [];
             current.push({
                 effectiveAt: record.effectiveAt,
-                costMicrounits: Number(record.costMicrounits),
+                costMicrounits: record.costMicrounits == null ? null : Number(record.costMicrounits),
             });
             costsByVariant.set(key, current);
         }
@@ -1017,15 +1017,24 @@ function assertExpectedUpdatedAt(
     }
 }
 
-function costAt(costs: CostPoint[], at: Date): (CostPoint & { estimated: boolean }) | null {
+function costAt(
+    costs: CostPoint[],
+    at: Date,
+): { effectiveAt: Date; costMicrounits: number; estimated: boolean } | null {
     let historical: CostPoint | null = null;
     for (const cost of costs) {
         if (cost.effectiveAt.getTime() <= at.getTime()) historical = cost;
         else break;
     }
-    if (historical) return { ...historical, estimated: false };
+    if (historical) {
+        return historical.costMicrounits == null
+            ? null
+            : { ...historical, costMicrounits: historical.costMicrounits, estimated: false };
+    }
     const current = costs[costs.length - 1];
-    return current ? { ...current, estimated: true } : null;
+    return current?.costMicrounits == null
+        ? null
+        : { ...current, costMicrounits: current.costMicrounits, estimated: true };
 }
 
 function normalizeRange(input: CatalogProfitReportInput) {

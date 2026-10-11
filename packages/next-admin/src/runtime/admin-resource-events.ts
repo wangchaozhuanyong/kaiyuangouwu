@@ -1,6 +1,6 @@
 import { ApolloLink, Observable } from '@apollo/client';
 import { getOperationAST, type DocumentNode } from 'graphql';
-import { extractMutationFailureDetails } from '../utils/admin-mutation-feedback';
+import { hasAcceptedMutationResult } from '../utils/admin-mutation-feedback';
 
 export const RESOURCE_INVALIDATION_EVENT = 'vendure:admin-resources-invalidated';
 export type ResourceDomain =
@@ -85,13 +85,11 @@ export function createResourceInvalidationLink(scope: () => string) {
             try {
                 subscription = forward(operation).subscribe({
                     next: result => {
-                        const errors = (result as { errors?: unknown[] }).errors;
                         if (
                             !emitted &&
                             initialScope === scope() &&
                             result.data &&
-                            !errors?.length &&
-                            !extractMutationFailureDetails(result.data)
+                            hasAcceptedMutationResult(result.data)
                         ) {
                             emitted = true;
                             invalidateAdminResources(resourceDomains(operation.query));

@@ -95,23 +95,34 @@ export class CatalogApi extends BaseDomainApi {
     async productsByIds(ids: string[], signal?: AbortSignal): Promise<Product[]> {
         const uniqueIds = [...new Set(ids)];
         if (!uniqueIds.length) return [];
-        const result = await this.request<{ products: { items: Product[] } }>(
-            `
+        const products: Product[] = [];
+        for (let offset = 0; offset < uniqueIds.length; offset += NATIVE_CATALOG_BATCH_SIZE) {
+            const batch = uniqueIds.slice(offset, offset + NATIVE_CATALOG_BATCH_SIZE);
+            const result = await this.request<{ products: { items: Product[]; totalItems: number } }>(
+                `
                 query StorefrontProductsByIds($options: ProductListOptions) {
                     products(options: $options) {
+                        totalItems
                         items { ${productFields} }
                     }
                 }
             `,
-            {
-                options: {
-                    take: uniqueIds.length,
-                    filter: { id: { in: uniqueIds } },
+                {
+                    options: {
+                        take: batch.length,
+                        filter: { id: { in: batch } },
+                    },
                 },
-            },
-            signal,
-        );
-        const productsById = new Map(result.products.items.map(product => [product.id, product]));
+                signal,
+            );
+            if (
+                !Array.isArray(result.products?.items) ||
+                result.products.items.length !== result.products.totalItems
+            )
+                throw new Error('Product references response is incomplete');
+            products.push(...result.products.items);
+        }
+        const productsById = new Map(products.map(product => [product.id, product]));
         return uniqueIds.flatMap(id => {
             const product = productsById.get(id);
             return product ? [product] : [];

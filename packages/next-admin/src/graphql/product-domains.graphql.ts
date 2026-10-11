@@ -82,11 +82,7 @@ export const UPDATE_DIGITAL_VARIANT = gql`
     }
 `;
 export const UPDATE_VARIANT_COST = gql`
-    mutation UpdateVariantCost(
-        $productVariantId: ID!
-        $currencyCode: CurrencyCode!
-        $costMicrounits: Float!
-    ) {
+    mutation UpdateVariantCost($productVariantId: ID!, $currencyCode: CurrencyCode!, $costMicrounits: Float) {
         updateProductVariantCost(
             productVariantId: $productVariantId
             currencyCode: $currencyCode

@@ -133,6 +133,54 @@ function authorizedContext(
 }
 
 describe('CatalogOperationsService', () => {
+    it('appends a cost clear with audit metadata and preserves zero as a new value', async () => {
+        const { connection, service } = createService();
+        const history: Array<{ costMicrounits: string | null }> = [{ costMicrounits: '12000' }];
+        const repository = {
+            findOne: vi.fn(() => Promise.resolve(history.at(-1))),
+            save: vi.fn(value => {
+                history.push(value);
+                return Promise.resolve(value);
+            }),
+        };
+        connection.getRepository.mockReturnValue(repository);
+        const ctx = { channelId: 'channel-1', activeUserId: 'admin-1' } as never;
+        await service.recordCost(ctx, 'variant-1', CurrencyCode.MYR, null, 'MANUAL', null);
+        expect(history[0].costMicrounits).toBe('12000');
+        expect(repository.save).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                costMicrounits: null,
+                actorId: 'admin-1',
+                source: 'MANUAL',
+                channelId: 'channel-1',
+                currencyCode: CurrencyCode.MYR,
+                effectiveAt: expect.any(Date),
+            }),
+        );
+        await service.recordCost(ctx, 'variant-1', CurrencyCode.MYR, null, 'MANUAL', null);
+        expect(repository.save).toHaveBeenCalledTimes(1);
+        await service.recordCost(ctx, 'variant-1', CurrencyCode.MYR, 0, 'MANUAL', null);
+        expect(repository.save).toHaveBeenLastCalledWith(expect.objectContaining({ costMicrounits: '0' }));
+        expect(history).toHaveLength(3);
+    });
+
+    it('does not create a cost record for an already unset variant', async () => {
+        const { connection, service } = createService();
+        const repository = { findOne: vi.fn().mockResolvedValue(null), save: vi.fn() };
+        connection.getRepository.mockReturnValue(repository);
+        await expect(
+            service.recordCost(
+                { channelId: 'channel-1' } as never,
+                'variant-1',
+                CurrencyCode.MYR,
+                null,
+                'MANUAL',
+                null,
+            ),
+        ).resolves.toBeNull();
+        expect(repository.save).not.toHaveBeenCalled();
+    });
+
     it('builds full-store alerts once per SKU and separates out-of-stock from low stock', () => {
         const overview = buildInventoryAlertOverview(
             [
@@ -255,92 +303,100 @@ describe('CatalogOperationsService', () => {
         ).rejects.toThrow('所选库存点不属于当前店铺');
     });
 
-    it('creates the product, first SKU, cost, stock policy and category in one transaction', async () => {
-        const {
-            collectionRepository,
-            connection,
-            eventBus,
-            productService,
-            productVariantService,
-            relationAdd,
-            service,
-            txCtx,
-        } = createService();
-        const collection = { id: 'collection-1', filters: [] };
-        connection.getEntityOrThrow.mockResolvedValue(collection);
-        productVariantService.create.mockResolvedValue([{ id: 'variant-new' }]);
-        vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
-        const savePolicy = vi.spyOn(service, 'savePolicy').mockResolvedValue({} as never);
-        const recordCost = vi.spyOn(service, 'recordCost').mockResolvedValue({} as never);
+    it.each([7_000, 0, null, undefined])(
+        'creates a product transaction with optional initial cost %s',
+        async purchaseCostMicrounits => {
+            const {
+                collectionRepository,
+                connection,
+                eventBus,
+                productService,
+                productVariantService,
+                relationAdd,
+                service,
+                txCtx,
+            } = createService();
+            const collection = { id: 'collection-1', filters: [] };
+            connection.getEntityOrThrow.mockResolvedValue(collection);
+            productVariantService.create.mockResolvedValue([{ id: 'variant-new' }]);
+            vi.spyOn(service, 'requireStockLocation').mockResolvedValue({} as never);
+            const savePolicy = vi.spyOn(service, 'savePolicy').mockResolvedValue({} as never);
+            const recordCost = vi.spyOn(service, 'recordCost').mockResolvedValue({} as never);
 
-        await expect(
-            service.createProduct(
-                authorizedContext([
-                    Permission.CreateProduct,
-                    manageCatalogOperationsPermission.Update,
-                ]) as never,
-                {
-                    product: {
-                        enabled: true,
-                        translations: [
-                            {
-                                languageCode: LanguageCode.zh_Hans,
-                                name: '新商品',
-                                slug: 'new-product',
-                                description: '说明',
-                            },
-                        ],
+            await expect(
+                service.createProduct(
+                    authorizedContext([
+                        Permission.CreateProduct,
+                        manageCatalogOperationsPermission.Update,
+                    ]) as never,
+                    {
+                        product: {
+                            enabled: true,
+                            translations: [
+                                {
+                                    languageCode: LanguageCode.zh_Hans,
+                                    name: '新商品',
+                                    slug: 'new-product',
+                                    description: '说明',
+                                },
+                            ],
+                        },
+                        variant: {
+                            stockLocationId: 'stock-1',
+                            sku: 'NEW-001',
+                            enabled: true,
+                            packageQuantity: 1,
+                            sellingPrice: 1_000,
+                            purchaseCostMicrounits,
+                            stockOnHand: 5,
+                            minimumStock: 2,
+                            maximumStock: 20,
+                        },
+                        collectionIds: ['collection-1'],
                     },
-                    variant: {
-                        stockLocationId: 'stock-1',
-                        sku: 'NEW-001',
-                        enabled: true,
-                        packageQuantity: 1,
-                        sellingPrice: 1_000,
-                        purchaseCostMicrounits: 7_000,
-                        stockOnHand: 5,
-                        minimumStock: 2,
-                        maximumStock: 20,
-                    },
-                    collectionIds: ['collection-1'],
-                },
-            ),
-        ).resolves.toEqual({ id: 'product-new', name: '新商品' });
+                ),
+            ).resolves.toEqual({ id: 'product-new', name: '新商品' });
 
-        expect(connection.withTransaction).toHaveBeenCalledOnce();
-        expect(productService.create).toHaveBeenCalledWith(txCtx, expect.objectContaining({ enabled: true }));
-        expect(productVariantService.create).toHaveBeenCalledWith(
-            txCtx,
-            expect.arrayContaining([
-                expect.objectContaining({
-                    productId: 'product-new',
-                    sku: 'NEW-001',
-                    prices: [{ currencyCode: CurrencyCode.CNY, price: 1_000 }],
-                    stockLevels: [{ stockLocationId: 'stock-1', stockOnHand: 5 }],
-                }),
-            ]),
-        );
-        expect(savePolicy).toHaveBeenCalledWith(txCtx, 'variant-new', 'stock-1', 2, 20);
-        expect(recordCost).toHaveBeenCalledWith(
-            txCtx,
-            'variant-new',
-            CurrencyCode.CNY,
-            7_000,
-            'MANUAL',
-            null,
-        );
-        expect(collectionRepository.save).toHaveBeenCalledWith(
-            expect.objectContaining({
-                filters: [
+            expect(connection.withTransaction).toHaveBeenCalledOnce();
+            expect(productService.create).toHaveBeenCalledWith(
+                txCtx,
+                expect.objectContaining({ enabled: true }),
+            );
+            expect(productVariantService.create).toHaveBeenCalledWith(
+                txCtx,
+                expect.arrayContaining([
                     expect.objectContaining({
-                        code: 'product-id-filter',
+                        productId: 'product-new',
+                        sku: 'NEW-001',
+                        prices: [{ currencyCode: CurrencyCode.CNY, price: 1_000 }],
+                        stockLevels: [{ stockLocationId: 'stock-1', stockOnHand: 5 }],
                     }),
-                ],
-            }),
-        );
-        expect(relationAdd).toHaveBeenCalledWith('variant-new');
-        expect(eventBus.publish).toHaveBeenCalledOnce();
-    });
+                ]),
+            );
+            expect(savePolicy).toHaveBeenCalledWith(txCtx, 'variant-new', 'stock-1', 2, 20);
+            if (purchaseCostMicrounits == null) expect(recordCost).not.toHaveBeenCalled();
+            else
+                expect(recordCost).toHaveBeenCalledWith(
+                    txCtx,
+                    'variant-new',
+                    CurrencyCode.CNY,
+                    purchaseCostMicrounits,
+                    'MANUAL',
+                    null,
+                );
+            expect(collectionRepository.save).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    filters: [
+                        expect.objectContaining({
+                            code: 'product-id-filter',
+                        }),
+                    ],
+                }),
+            );
+            expect(relationAdd).toHaveBeenCalledWith('variant-new');
+            expect(eventBus.publish).toHaveBeenCalledOnce();
+        },
+    );
 
     it('rejects product creation without a category before opening a transaction', async () => {
         const { connection, service } = createService();

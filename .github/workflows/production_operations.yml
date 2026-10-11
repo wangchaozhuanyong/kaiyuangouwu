@@ -309,6 +309,7 @@ jobs:
                       lines.append(transport('deploy/notification-configuration-guard.mjs', 'notification-configuration-guard.mjs'))
                   if operation_name == 'diagnose':
                       lines.append(transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'))
+                      lines.append(transport('deploy/production-order-error-summary.cjs', 'production-order-error-summary.cjs'))
                   if operation_name == 'preflight-release':
                       lines.extend([
                           transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),

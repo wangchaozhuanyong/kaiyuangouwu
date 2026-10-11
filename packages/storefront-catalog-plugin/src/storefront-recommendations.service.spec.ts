@@ -202,4 +202,31 @@ describe('shared daily recommendations', () => {
         eligible = [];
         expect((await service.find(ctx, now)).items).toEqual([]);
     });
+
+    it('filters stale deleted/disabled products before applying the ten-product display limit', async () => {
+        eligible = Array.from({ length: 110 }, (_, index) => String(index + 1));
+        const ranked = rankDailyRecommendations(eligible, new Map(), '1:2026-10-02', eligible.length);
+        const unavailable = new Set(ranked.slice(0, 100));
+        const products = (service as any).products.findByIds;
+        products.mockImplementation((_ctx: unknown, ids: string[]) =>
+            Promise.resolve(
+                ids.map(id => ({
+                    id,
+                    enabled: id !== ranked[99],
+                    deletedAt: unavailable.has(id) && id !== ranked[99] ? new Date() : null,
+                })),
+            ),
+        );
+        const result = await service.find(ctx, now);
+        expect(result.items.map(product => String(product.id))).toEqual(ranked.slice(100));
+        expect(products.mock.calls.map((call: any[]) => call[1].length)).toEqual([100, 10]);
+        expect(result.items).toHaveLength(10);
+    });
+
+    it('does not treat hydration read failure as confirmed product deletion', async () => {
+        const products = (service as any).products.findByIds;
+        products.mockRejectedValue(new Error('synthetic hydration read failed'));
+        await expect(service.find(ctx, now)).rejects.toThrow('synthetic hydration read failed');
+        expect(eligible).toHaveLength(25);
+    });
 });

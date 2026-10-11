@@ -256,15 +256,36 @@ export function useStorefrontPublicData({
               }
             : configuredNavigationBlock;
 
-    const activeFlashSales =
+    const publishedFlashSales =
         flashSalesQuery.data ??
         (contentQuery.data?.flashSalesDeferred ? [] : (contentQuery.data?.flashSales ?? []));
+
+    // Check original campaign/SKU eligibility without downloading the public page again.
+    const flashSaleReferencesQuery = useQuery({
+        queryKey: [
+            ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
+            'flash-sale-associations',
+        ],
+        queryFn: ({ signal }) => api.activeFlashSales(signal),
+        enabled: storefrontContextResolved && publishedFlashSales.some(sale => sale.items.length > 0),
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+        meta: publicQueryMeta(),
+    });
+    const activeFlashSales = flashSaleReferencesQuery.data ?? publishedFlashSales;
 
     const systemAnnouncements = contentQuery.data?.systemAnnouncements ?? [];
 
     const managedContentProductIds = Array.from(
         new Set(
-            contentBlocks.flatMap(block => contentStringArraySetting(block.settings?.selectedProductIds)),
+            contentBlocks.flatMap(block => [
+                ...contentStringArraySetting(block.settings?.selectedProductIds),
+                ...contentStringArraySetting(block.settings?.pinnedProductIds),
+                ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
+                ...(block.items ?? []).flatMap(item =>
+                    item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+                ),
+            ]),
         ),
     );
 

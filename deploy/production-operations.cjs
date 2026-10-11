@@ -1418,6 +1418,12 @@ function diagnose(request) {
         rootBlockDevices: readCommand('lsblk', ['-b', '-n', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,FSTYPE']),
         journalDiskUsage: readCommand('journalctl', ['--disk-usage']),
         fixedLogInventory: inspectFixedLogInventory(),
+        ...(request.operation === 'diagnose'
+            ? {
+                  recentOrderErrorSummary:
+                      require('./production-order-error-summary.cjs').inspectRecentOrderErrors(),
+              }
+            : {}),
         releaseSize: readCommand('du', ['-skx', '/var/www/kaiyuangouwu-releases']),
         diskFootprintKib: Object.fromEntries(
             Object.entries(diskFootprintPaths).map(([label, directory]) => [

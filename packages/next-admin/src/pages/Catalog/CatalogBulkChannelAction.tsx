@@ -4,6 +4,8 @@ import { useDeferredValue, useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
+import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -48,12 +50,14 @@ export function CatalogBulkChannelAction() {
     }>(REMOVE_PRODUCTS_FROM_CHANNEL);
     const busy = pending || assignState.loading || removeState.loading;
     const page = products.data?.catalogProductChannelAssignments;
+    const selectedReferences = useCatalogReferences(selectedIds, 'catalogProductChannelAssignments', open);
     const target = page?.channels.find(channel => channel.id === channelId);
     const ready = !products.loading && !products.error && deferredSearch === search.trim();
     const belongsToTarget = (item: ProductChannelAssignment) =>
         item.channels.some(channel => channel.id === channelId);
     const eligible = (item: ProductChannelAssignment) =>
         Boolean(target) &&
+        (mode !== 'assign' || item.enabled) &&
         !(mode === 'remove' && item.channels.length <= 1) &&
         (mode === 'assign' ? !belongsToTarget(item) : belongsToTarget(item));
     const items = (page?.items ?? []).filter(
@@ -63,7 +67,13 @@ export function CatalogBulkChannelAction() {
             (assignmentFilter === 'assigned' ? belongsToTarget(item) : !belongsToTarget(item)),
     );
     const selectable = items.filter(eligible);
-    const selected = selectable.filter(item => selectedIds.includes(item.id));
+    const selected = selectedReferences.references.flatMap(reference =>
+        reference.entity &&
+        reference.state !== 'unknown' &&
+        eligible(reference.entity as ProductChannelAssignment)
+            ? [reference.entity as ProductChannelAssignment]
+            : [],
+    );
     const resetSelection = () => {
         setSelectedIds([]);
         setError('');
@@ -78,45 +88,63 @@ export function CatalogBulkChannelAction() {
             if (!selected.length) throw new Error('请至少选择一个可操作的商品');
             if (!target) throw new Error('请选择目标店铺');
             // Recheck membership immediately before applying a price factor or removing access.
-            const latest = (await products.refetch()).data?.catalogProductChannelAssignments;
-            if (!latest) throw new Error('无法核对最新店铺分配，请重试');
-            if (selected.some(item => !latest.items.some(current => current.id === item.id))) {
-                setSelectedIds([]);
-                throw new Error('商品列表已变化，请根据刷新后的结果重新选择');
-            }
-            const ids = latest.items
-                .filter(item => selectedIds.includes(item.id) && eligible(item))
-                .map(item => item.id);
-            const skipped = selected.length - ids.length;
+            const latest = await selectedReferences.recheck();
+            if (latest.some(reference => reference.state === 'unknown'))
+                throw new Error('无法核对已选商品，原选择已保留，请重试');
+            const ids = latest.flatMap(reference =>
+                reference.entity && eligible(reference.entity as ProductChannelAssignment)
+                    ? [reference.id]
+                    : [],
+            );
+            const skipped = selectedIds.length - ids.length;
             if (!ids.length) {
-                setSelectedIds([]);
-                setNotice('分配状态已变化，本次无需操作，列表已刷新');
+                setNotice('分配状态已变化，本次无需操作，原选择已保留');
                 return;
             }
+            let acceptedIds: string[];
             if (mode === 'assign') {
                 const factor = Number(priceFactor);
                 if (!Number.isFinite(factor) || factor <= 0) throw new Error('价格系数必须大于 0');
-                await assign({
+                const receipt = await assign({
                     variables: { input: { productIds: ids, channelId, priceFactor: factor } },
+                    errorPolicy: 'all',
                 });
+                acceptedIds =
+                    receipt.data?.assignProductsToChannel.flatMap(item =>
+                        item?.id && ids.includes(item.id) ? [item.id] : [],
+                    ) ?? [];
             } else {
-                await remove({ variables: { input: { productIds: ids, channelId } } });
+                const receipt = await remove({
+                    variables: { input: { productIds: ids, channelId } },
+                    errorPolicy: 'all',
+                });
+                acceptedIds =
+                    receipt.data?.removeProductsFromChannel.flatMap(item =>
+                        item?.id && ids.includes(item.id) ? [item.id] : [],
+                    ) ?? [];
             }
-            const verified = (await products.refetch()).data?.catalogProductChannelAssignments;
-            if (
-                !verified ||
-                !ids.every(id => {
-                    const item = verified.items.find(product => product.id === id);
-                    return mode === 'assign'
-                        ? Boolean(item && belongsToTarget(item))
-                        : !item || !belongsToTarget(item);
-                })
-            )
-                throw new Error('操作已返回，但最新分配状态未能确认，请刷新后核对');
+            const accepted = new Set(acceptedIds);
+            const remaining = selectedIds.filter(id => !accepted.has(id));
             setNotice(
-                `已${mode === 'assign' ? '分配到' : '从'}「${getChannelDisplayName(target)}」${mode === 'remove' ? '移除' : ''} ${ids.length} 个商品${skipped ? `，跳过 ${skipped} 个状态已变化的商品` : ''}`,
+                `已${mode === 'assign' ? '分配到' : '从'}「${getChannelDisplayName(target)}」${mode === 'remove' ? '移除' : ''} ${acceptedIds.length} 个商品${skipped ? `，跳过 ${skipped} 个状态已变化的商品` : ''}`,
             );
-            setSelectedIds([]);
+            if (ids.some(id => !accepted.has(id)))
+                setError('部分商品未确认成功，已保留待处理选择；再次操作只提交剩余商品。');
+            await refreshAfterAdminWrite(async () => {
+                const verified = await selectedReferences.recheck();
+                if (
+                    !acceptedIds.every(id => {
+                        const reference = verified.find(item => item.id === id);
+                        if (!reference?.entity || reference.state === 'unknown') return false;
+                        return mode === 'assign'
+                            ? belongsToTarget(reference.entity as ProductChannelAssignment)
+                            : !belongsToTarget(reference.entity as ProductChannelAssignment);
+                    })
+                )
+                    throw new Error('分配状态读取未确认');
+                await products.refetch();
+            }, setError);
+            setSelectedIds(remaining);
         } catch (cause) {
             setError(toUserFacingError(cause, '商品批量店铺操作失败'));
             await products.refetch().catch(() => undefined);
@@ -230,7 +258,6 @@ export function CatalogBulkChannelAction() {
                                         disabled={busy}
                                         onChange={event => {
                                             setSearch(event.target.value);
-                                            resetSelection();
                                         }}
                                         placeholder="按名称搜索（最多返回 100 条）"
                                         className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-xs"
@@ -242,7 +269,6 @@ export function CatalogBulkChannelAction() {
                                     disabled={busy || !target || !ready}
                                     onChange={event => {
                                         setAssignmentFilter(event.target.value);
-                                        resetSelection();
                                     }}
                                     className={inputClass}
                                 >
@@ -266,10 +292,17 @@ export function CatalogBulkChannelAction() {
                                             }
                                             disabled={busy || !ready || !selectable.length}
                                             onChange={event =>
-                                                setSelectedIds(
+                                                setSelectedIds(current =>
                                                     event.target.checked
-                                                        ? selectable.map(item => item.id)
-                                                        : [],
+                                                        ? [
+                                                              ...new Set([
+                                                                  ...current,
+                                                                  ...selectable.map(item => item.id),
+                                                              ]),
+                                                          ]
+                                                        : current.filter(
+                                                              id => !selectable.some(item => item.id === id),
+                                                          ),
                                                 )
                                             }
                                         />
@@ -344,7 +377,20 @@ export function CatalogBulkChannelAction() {
                             )}
                         </div>
                         <div className="flex items-center justify-between border-t p-5">
-                            <span className="text-xs text-slate-500">已选 {selected.length} 个商品</span>
+                            <span className="text-xs text-slate-500">
+                                已选 {selectedIds.length} 个商品，有效 {selected.length} 个，暂不可用{' '}
+                                {selectedReferences.unavailable.length} 个，待核对{' '}
+                                {selectedReferences.unknown.length} 个
+                            </span>
+                            {selectedReferences.error ? (
+                                <AdminButton
+                                    type="button"
+                                    disabled={busy || selectedReferences.loading}
+                                    onClick={() => void selectedReferences.refetch()}
+                                >
+                                    重试核对
+                                </AdminButton>
+                            ) : null}
                             <div className="flex gap-2">
                                 <AdminButton
                                     type="button"

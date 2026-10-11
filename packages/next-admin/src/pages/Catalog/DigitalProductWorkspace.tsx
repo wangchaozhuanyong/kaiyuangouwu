@@ -15,6 +15,7 @@ import {
 } from '../../graphql/product-domains.graphql';
 import { useAdminLazyQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { hasPendingDigitalDeliveryDraft, revertPendingDigitalDeliveryDraft } from './product-editor-draft';
 import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { useProductEditor } from './ProductEditorContext';
 
@@ -68,6 +69,7 @@ export function DigitalProductWorkspace() {
     const {
         productId,
         variants,
+        baselineVariants,
         setVariants,
         handleVariantFieldChange,
         formErrors,
@@ -128,7 +130,29 @@ export function DigitalProductWorkspace() {
             previewRequestRef.current = null;
         };
     }, [identity]);
+    const revertDeliveryDraft = (variantId: string) => {
+        if (
+            pending ||
+            saving ||
+            readbackFailed ||
+            identityRef.current !== identity ||
+            getAdminQueryScope() !== scope
+        )
+            return;
+        const baseline = baselineVariants?.find(variant => variant.id === variantId);
+        setVariants(current =>
+            current.map(variant =>
+                variant.id === variantId ? revertPendingDigitalDeliveryDraft(variant, baseline) : variant,
+            ),
+        );
+        setError('');
+        setNotice('已撤回本规格未保存的交付修改，名称、成本和其他输入仍保留。请先保存其余修改后再切换库存。');
+    };
     const upload = async (file: File, index: number | null) => {
+        if (
+            variants.some((variant, i) => (index === null || i === index) && variant.digitalMigrationRequired)
+        )
+            return;
         setBusy(true);
         setError('');
         setNotice('');
@@ -345,7 +369,7 @@ export function DigitalProductWorkspace() {
                         aria-label="上传统一交付文件"
                         type="file"
                         accept=".zip,.pdf,.txt,.md"
-                        disabled={saving || busy}
+                        disabled={saving || busy || variants.some(v => v.digitalMigrationRequired)}
                         onChange={event => {
                             const file = event.target.files?.[0];
                             if (file) void upload(file, null);
@@ -363,15 +387,33 @@ export function DigitalProductWorkspace() {
                     </strong>
                     {variant.digitalMigrationRequired ? (
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800">
-                            <span>该规格仍使用旧数字库存，需要先核对迁移。</span>
+                            <span>本店数字库存尚未启用，请先核对旧库存，再确认切换。</span>
                             <AdminButton
                                 type="button"
-                                disabled={pending || saving || isDirty || readbackFailed}
+                                disabled={pending || saving || readbackFailed}
                                 onClick={() => variant.id && void reviewMigration(variant.id)}
                                 className="font-semibold text-blue-700 disabled:opacity-50"
                             >
                                 核对旧库存
                             </AdminButton>
+                            {hasPendingDigitalDeliveryDraft(
+                                variant,
+                                baselineVariants?.find(baseline => baseline.id === variant.id),
+                            ) && (
+                                <>
+                                    <AdminButton
+                                        type="button"
+                                        disabled={pending || saving || readbackFailed}
+                                        onClick={() => variant.id && revertDeliveryDraft(variant.id)}
+                                        className="font-semibold text-blue-700 disabled:opacity-50"
+                                    >
+                                        撤回未保存的交付修改
+                                    </AdminButton>
+                                    <p className="basis-full text-xs">
+                                        仅撤回本规格的交付方式、销售数量、可售份数和文件绑定，名称、成本及其他输入保留。
+                                    </p>
+                                </>
+                            )}
                         </div>
                     ) : (
                         <>
@@ -568,13 +610,7 @@ export function DigitalProductWorkspace() {
                             </AdminField>
                             <AdminButton
                                 type="button"
-                                disabled={
-                                    pending ||
-                                    !ownershipChecked ||
-                                    !ownershipReason.trim() ||
-                                    isDirty ||
-                                    saving
-                                }
+                                disabled={pending || !ownershipChecked || !ownershipReason.trim() || saving}
                                 onClick={() =>
                                     void reviewMigration(activePreview.id, {
                                         stockLevels: activePreview.ownershipRows,

@@ -1,7 +1,7 @@
 import { useMutation } from '@apollo/client/react';
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { sensitiveActionContext } from '../../apollo';
+import { getAdminQueryScope, sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import { addCustomFieldsToDocument } from '../../custom-fields/custom-field-utils';
@@ -34,6 +34,59 @@ import { applyNewOptionGroupToVariants } from './product-variant-matrix';
 import { useProductEditorData } from './useProductEditorData';
 import type { ProductEditorSaveDraft } from './useProductEditorSave';
 import { useProductEditorSave } from './useProductEditorSave';
+
+export function mergeWorkspaceReadbackVariants(
+    current: ProductEditorSaveDraft['variants'],
+    previous: ProductEditorSaveDraft['variants'],
+    incoming: ProductEditorSaveDraft['variants'],
+): ProductEditorSaveDraft['variants'] {
+    return current.map(variant => {
+        const before = previous.find(item =>
+            variant.id ? item.id === variant.id : item.sku.trim() === variant.sku.trim(),
+        );
+        const next = incoming.find(item =>
+            variant.id ? item.id === variant.id : item.sku.trim() === variant.sku.trim(),
+        );
+        if (!before || !next) return variant;
+        const merged = { ...variant };
+        for (const key of Object.keys(next) as Array<keyof typeof next>) {
+            if (
+                key === 'digitalMigrationRequired' ||
+                (key === 'id' && !variant.id) ||
+                JSON.stringify(variant[key]) === JSON.stringify(before[key])
+            ) {
+                Object.assign(merged, { [key]: next[key] });
+            }
+        }
+        return merged;
+    });
+}
+
+export function mergeProductEditorReadbackDraft(
+    current: ProductEditorSaveDraft,
+    previous: ProductEditorSaveDraft,
+    incoming: ProductEditorSaveDraft,
+): ProductEditorSaveDraft {
+    const merged = { ...current };
+    for (const key of Object.keys(incoming) as Array<keyof ProductEditorSaveDraft>) {
+        if (key === 'variants') {
+            const knownVariant = (rows: ProductEditorSaveDraft['variants'], variant: ProductVariantState) =>
+                rows.some(row =>
+                    row.id && variant.id ? row.id === variant.id : row.sku.trim() === variant.sku.trim(),
+                );
+            merged.variants = [
+                ...mergeWorkspaceReadbackVariants(current.variants, previous.variants, incoming.variants),
+                ...incoming.variants.filter(
+                    variant =>
+                        !knownVariant(current.variants, variant) && !knownVariant(previous.variants, variant),
+                ),
+            ];
+        } else if (JSON.stringify(current[key]) === JSON.stringify(previous[key])) {
+            Object.assign(merged, { [key]: incoming[key] });
+        }
+    }
+    return merged;
+}
 
 export function useProductEditorForm() {
     const requestConfirmation = useConfirmDialog();
@@ -180,6 +233,14 @@ export function useProductEditorForm() {
     });
 
     const effectiveFulfillmentType = fixedFulfillmentType ?? fulfillmentType;
+    const editorIdentity = `${getAdminQueryScope()}:${productId ?? 'new'}`;
+    const initializedEditorIdentity = useRef<string | null>(null);
+    const latestEditorDraft = useRef<ProductEditorSaveDraft | null>(null);
+    const hydratedEditor = useRef<{
+        identity: string;
+        product: NonNullable<typeof productData>['product'];
+        draft: ProductEditorSaveDraft;
+    } | null>(null);
 
     // 绑定从后端查询到的真实商品数据；查询结果到达后需要初始化可编辑表单。
     /* oxlint-disable react/set-state-in-effect */
@@ -192,23 +253,32 @@ export function useProductEditorForm() {
                 productExtensionFields,
                 workspaceVariants,
             );
-            setProductName(draft.productName);
-            setSlug(draft.slug);
-            setEnabled(draft.enabled ?? true);
-            setDescription(draft.description);
-            setFulfillmentType(draft.fulfillmentType);
-            setRefundPolicy(draft.refundPolicy);
-            setManualDeliverySlaMinutes(draft.manualDeliverySlaMinutes);
-            setFeaturedAssetId(draft.featuredAssetId);
-            setSelectedAssetIds(draft.selectedAssetIds);
-            setSelectedFacetValueIds(draft.selectedFacetValueIds);
-            setSelectedCollectionIds(draft.selectedCollectionIds);
-            setSelectedOptionGroupIds(draft.selectedOptionGroupIds);
+            const previous = hydratedEditor.current;
+            const nextDraft =
+                previous?.identity === editorIdentity && latestEditorDraft.current
+                    ? mergeProductEditorReadbackDraft(latestEditorDraft.current, previous.draft, draft)
+                    : draft;
+            hydratedEditor.current = { identity: editorIdentity, product: p, draft };
+            initializedEditorIdentity.current = editorIdentity;
+            // Compare against the previous server/save snapshot, so a late read cannot replace newer input.
+            setProductName(nextDraft.productName);
+            setSlug(nextDraft.slug);
+            setEnabled(nextDraft.enabled ?? true);
+            setDescription(nextDraft.description);
+            setFulfillmentType(nextDraft.fulfillmentType);
+            setRefundPolicy(nextDraft.refundPolicy);
+            setManualDeliverySlaMinutes(nextDraft.manualDeliverySlaMinutes);
+            setFeaturedAssetId(nextDraft.featuredAssetId);
+            setSelectedAssetIds(nextDraft.selectedAssetIds);
+            setSelectedFacetValueIds(nextDraft.selectedFacetValueIds);
+            setSelectedCollectionIds(nextDraft.selectedCollectionIds);
+            setSelectedChannelIds(nextDraft.selectedChannelIds);
+            setSelectedOptionGroupIds(nextDraft.selectedOptionGroupIds);
             if (draft.selectedOptionGroupIds.length > 0) {
                 setIsOptionTemplatesOpen(true);
             }
-            setVariants(draft.variants);
-            setDynamicCustomFieldValues(draft.dynamicCustomFields ?? {});
+            setVariants(nextDraft.variants);
+            setDynamicCustomFieldValues(nextDraft.dynamicCustomFields ?? {});
             setFeaturedAssetPreview(p.featuredAsset?.preview ?? null);
             setKnownAssets(
                 Object.fromEntries(
@@ -217,6 +287,9 @@ export function useProductEditorForm() {
             );
             setKnownOptionGroups(Object.fromEntries(p.optionGroups.map(group => [group.id, group])));
         } else if (isCreateMode) {
+            if (initializedEditorIdentity.current === editorIdentity) return;
+            initializedEditorIdentity.current = editorIdentity;
+            hydratedEditor.current = null;
             setProductName('');
             setSlug('');
             setEnabled(true);
@@ -231,6 +304,7 @@ export function useProductEditorForm() {
             setKnownAssets({});
             setSelectedFacetValueIds([]);
             setSelectedCollectionIds([]);
+            setSelectedChannelIds([]);
             setSelectedOptionGroupIds([]);
             setKnownOptionGroups({});
             setVariants([{ ...initialVariant }]);
@@ -243,6 +317,7 @@ export function useProductEditorForm() {
         productExtensionFields,
         workspaceVariants,
         initialVariant,
+        editorIdentity,
     ]);
 
     useEffect(() => {
@@ -250,12 +325,12 @@ export function useProductEditorForm() {
     }, [fixedFulfillmentType]);
 
     useEffect(() => {
-        if (productData?.product) {
-            setSelectedChannelIds(productData.product.channels.map(channel => channel.id));
-        } else if (isCreateMode && catalogChannelsData?.activeChannel.id) {
-            setSelectedChannelIds([catalogChannelsData.activeChannel.id]);
+        if (isCreateMode && catalogChannelsData?.activeChannel.id) {
+            setSelectedChannelIds(current =>
+                current.length ? current : [catalogChannelsData.activeChannel.id],
+            );
         }
-    }, [catalogChannelsData?.activeChannel.id, isCreateMode, productData]);
+    }, [catalogChannelsData?.activeChannel.id, isCreateMode]);
     /* oxlint-enable react/set-state-in-effect */
 
     const currentEditorDraft = useMemo(
@@ -295,6 +370,9 @@ export function useProductEditorForm() {
             variants,
         ],
     );
+    useLayoutEffect(() => {
+        latestEditorDraft.current = currentEditorDraft;
+    }, [currentEditorDraft]);
     const currentEditorSnapshot = useMemo(
         () => serializeProductEditor(currentEditorDraft),
         [currentEditorDraft],
@@ -337,9 +415,7 @@ export function useProductEditorForm() {
         [baselineEditorDraft],
     );
     const hasUnsavedChanges =
-        !productLoading &&
-        baselineEditorSnapshot !== null &&
-        currentEditorSnapshot !== baselineEditorSnapshot;
+        baselineEditorSnapshot !== null && currentEditorSnapshot !== baselineEditorSnapshot;
     const confirmLeave = useUnsavedChangesWarning(
         hasUnsavedChanges && !saving,
         '当前商品还有未保存的修改，离开后这些内容将丢失。确定离开吗？',
@@ -619,6 +695,24 @@ export function useProductEditorForm() {
             setSaving,
             showError,
             showNotice,
+            acceptSavedDraft: saved => {
+                const previous = hydratedEditor.current;
+                if (previous?.identity !== editorIdentity) return;
+                setVariants(current =>
+                    mergeWorkspaceReadbackVariants(current, currentEditorDraft.variants, saved.variants),
+                );
+                hydratedEditor.current = { ...previous, draft: saved };
+            },
+            acceptSavedVariantIdentities: saved => {
+                if (hydratedEditor.current?.identity !== editorIdentity) return;
+                setVariants(current =>
+                    current.map(variant => {
+                        if (variant.id || !variant.isNew) return variant;
+                        const confirmed = saved.find(item => item.sku === variant.sku.trim());
+                        return confirmed ? { ...variant, id: confirmed.id, isNew: false } : variant;
+                    }),
+                );
+            },
         },
     });
 
@@ -683,6 +777,7 @@ export function useProductEditorForm() {
         toggleFacetValue,
         variants,
         setVariants,
+        baselineVariants: baselineEditorDraft?.variants ?? [],
         selectedOptionGroupIds,
         setSelectedOptionGroupIds,
         optionGroupSearch,

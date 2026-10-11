@@ -7,7 +7,42 @@ import {
     serializeProductEditor,
     SOURCE_LANGUAGE_CODE,
     type ProductDetailRecord,
+    type ProductVariantState,
 } from './product-editor-types';
+
+const digitalDraftFields = [
+    'digitalDeliveryMode',
+    'digitalStockPolicy',
+    'digitalAvailableQuantity',
+    'digitalFileVersionId',
+    'digitalFileName',
+] as const;
+
+export function hasPendingDigitalDeliveryDraft(
+    variant: ProductVariantState,
+    baseline: ProductVariantState | undefined,
+): boolean {
+    if (
+        !variant.id ||
+        !baseline ||
+        baseline.id !== variant.id ||
+        !variant.digitalMigrationRequired ||
+        !baseline.digitalMigrationRequired
+    )
+        return false;
+    return digitalDraftFields.some(field => variant[field] !== baseline[field]);
+}
+
+/** A deliberate local undo never updates inventory or replaces unrelated product input. */
+export function revertPendingDigitalDeliveryDraft(
+    variant: ProductVariantState,
+    baseline: ProductVariantState | undefined,
+): ProductVariantState {
+    if (!hasPendingDigitalDeliveryDraft(variant, baseline) || !baseline) return variant;
+    const restored = { ...variant };
+    for (const field of digitalDraftFields) Object.assign(restored, { [field]: baseline[field] });
+    return restored;
+}
 
 export function productEditorDraft(
     product: ProductDetailRecord,
@@ -25,14 +60,21 @@ export function productEditorDraft(
     >,
 ): Parameters<typeof serializeProductEditor>[0] {
     const sourceTranslation = getLocalizedEntityTranslation(product.translations, SOURCE_LANGUAGE_CODE);
+    const fulfillmentType =
+        fixedFulfillmentType ??
+        (product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital');
+    const visibleVariants =
+        fulfillmentType === 'digital'
+            ? product.variants.filter(variant =>
+                  workspaceVariants?.some(workspace => workspace.id === variant.id),
+              )
+            : product.variants;
     return {
         productName: sourceTranslation?.name ?? '',
         slug: sourceTranslation?.slug || product.slug || '',
         enabled: product.enabled,
         description: sourceTranslation?.description ?? '',
-        fulfillmentType:
-            fixedFulfillmentType ??
-            (product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital'),
+        fulfillmentType,
         refundPolicy:
             product.customFields?.refundPolicy === 'SEVEN_DAY_NO_REASON' ||
             product.customFields?.refundPolicy === 'NON_REFUNDABLE'
@@ -50,7 +92,7 @@ export function productEditorDraft(
             .map(collection => collection.id),
         selectedChannelIds: product.channels.map(channel => channel.id),
         selectedOptionGroupIds: product.optionGroups.map(group => group.id),
-        variants: product.variants.map(variant => {
+        variants: visibleVariants.map(variant => {
             const wsVariant = workspaceVariants?.find(w => w.id === variant.id);
             const costPrice =
                 wsVariant?.purchaseCostMicrounits != null

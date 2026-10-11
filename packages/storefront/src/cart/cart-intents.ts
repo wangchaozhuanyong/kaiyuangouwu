@@ -62,6 +62,67 @@ export interface CartCommandResult {
     selectedShippingMethodId?: string | null;
 }
 
+export type CartCheckoutIntent = 'beginCheckout' | 'buyNow' | 'preparePayment';
+
+/** The recovery journal contains identities and revisions, never a command payload or an order. */
+export interface CartTerminalReceipt {
+    commandId: string;
+    status: Exclude<CartCommandResult['status'], 'NOT_FOUND'>;
+    cart: { id: string; revision: number };
+    appliedRevision: number | null;
+    errorCode: string | null;
+    session: {
+        orderId: string;
+        checkout: StorefrontCheckoutSession['checkout'];
+    } | null;
+}
+
+export interface CartRecoveryResult {
+    commandId: string;
+    status: CartCommandResult['status'];
+    checkoutIntent: CartCheckoutIntent | null;
+    result: CartCommandResult;
+}
+
+export function cartCheckoutIntent(operation: CartOperation): CartCheckoutIntent | null {
+    if ('beginCheckout' in operation) return 'beginCheckout';
+    if ('buyNow' in operation) return 'buyNow';
+    if ('preparePayment' in operation) return 'preparePayment';
+    return null;
+}
+
+export function cartReceiptMatchesRead(receipt: CartTerminalReceipt, cart: StorefrontCart): boolean {
+    return (
+        receipt.cart.id === cart.id &&
+        cart.revision >= receipt.cart.revision &&
+        (receipt.appliedRevision == null || cart.revision >= receipt.appliedRevision)
+    );
+}
+
+export function hydrateCartReceipt(receipt: CartTerminalReceipt, cart: StorefrontCart): CartCommandResult {
+    const checkout = receipt.session?.checkout;
+    const sessionCurrent = checkout
+        ? cart.state === 'PAYMENT_PENDING' &&
+          checkout.state === 'PREPARED' &&
+          checkout.cartRevision === cart.revision
+        : cart.state === 'OPEN';
+    return {
+        commandId: receipt.commandId,
+        status: receipt.status,
+        appliedRevision: receipt.appliedRevision,
+        errorCode: receipt.errorCode,
+        message: null,
+        cart,
+        session:
+            receipt.session &&
+            cart.checkoutOrder &&
+            receipt.session.orderId === cart.checkoutOrder.id &&
+            sessionCurrent
+                ? { cart, order: cart.checkoutOrder, checkout: checkout ?? null }
+                : null,
+    };
+}
+
 /** Only adjacent, unsent line edits coalesce. Additions and order operations are barriers. */
 export function mergeChanges(previous: CartChanges, incoming: CartChanges): CartChanges {
     const remove = new Set([...(previous.remove ?? []), ...(incoming.remove ?? [])]);

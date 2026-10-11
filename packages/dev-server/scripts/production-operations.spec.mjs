@@ -25,6 +25,7 @@ import { gzipSync } from 'node:zlib';
 const require = createRequire(import.meta.url);
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = require('../../../deploy/production-operations.cjs');
+const orderErrorSummary = require('../../../deploy/production-order-error-summary.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
@@ -277,6 +278,15 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /gzip\.compress\(Path\(path\)\.read_bytes\(\), mtime=0\)/u);
     assert.match(workflow, /\| base64 -d \| gzip -d >/u);
     assert.match(workflow, /len\(payload\.encode\('utf-8'\)\) <= 80_000/u);
+    assert.match(
+        workflow,
+        new RegExp(
+            String.raw`if operation_name == 'diagnose':\n[^\n]+usdt-migration-guard[^\n]+\n` +
+                String.raw`[^\n]+transport\('deploy\/production-order-error-summary\.cjs', ` +
+                String.raw`'production-order-error-summary\.cjs'\)`,
+            'u',
+        ),
+    );
     assert.match(workflow, /git merge-base --is-ancestor "\$OPS_EXPECTED_RUNTIME_SHA" "\$OPS_SOURCE_SHA"/u);
     assert.match(workflow, /audit-administrator-product-readiness/u);
     assert.match(workflow, /plan-asset-webp-migration/u);
@@ -306,6 +316,7 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         'deploy/systemd/vendure-production-release-retention.cjs',
     ];
     const bundles = [
+        [...commonFiles, 'deploy/usdt-migration-guard.cjs', 'deploy/production-order-error-summary.cjs'],
         [...commonFiles, 'deploy/icloud-relay-diagnostic.mjs', 'deploy/icloud-relay-receipt.cjs'],
         [...commonFiles, ...backupFiles.map(file => `deploy/systemd/${file}`)],
         [
@@ -357,9 +368,10 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         files.reduce(
             (total, file) =>
                 total +
-                gzipSync(readFileSync(path.join(repositoryRoot, file), 'utf8'), { mtime: 0 }).toString(
-                    'base64',
-                ).length,
+                gzipSync(readFileSync(path.join(repositoryRoot, file), 'utf8'), {
+                    mtime: 0,
+                    level: 9,
+                }).toString('base64').length,
             0,
         ),
     );
@@ -367,6 +379,76 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         Math.max(...encodedBytes) < 78_000,
         `Largest compressed production operation bundle uses ${Math.max(...encodedBytes)} bytes`,
     );
+});
+
+void test('every existing production operation fits both unchanged transport budgets', t => {
+    const workflow = readFileSync(
+        path.join(repositoryRoot, '.github/workflows/production_operations.yml'),
+        'utf8',
+    );
+    const generator = workflow.match(/python3 - <<'PY'\n([\s\S]*?)\n\s+PY/u)?.[1];
+    assert.ok(generator?.includes('def encode_file(path):'));
+    const source = readFileSync(path.join(repositoryRoot, 'deploy/production-operations.cjs'), 'utf8');
+    const allowed = source.match(
+        /function validateRequest\(environment\)[\s\S]*?\[([\s\S]*?)\]\.includes\(operation\)/u,
+    )?.[1];
+    assert.ok(allowed);
+    const operationNames = [...allowed.matchAll(/'([^']+)'/gu)].map(match => match[1]);
+    const temporary = controlledDiagnosticFixture('transport-');
+    t.after(() => rmSync(temporary, { recursive: true, force: true }));
+    const result = spawnSync(
+        'python3',
+        [
+            '-c',
+            `import json, os, re, sys, textwrap
+from pathlib import Path
+request = json.load(sys.stdin)
+generator = compile(textwrap.dedent(request['generator']), '<existing-transport>', 'exec')
+os.environ.update(request['environment'])
+budgets = []
+for operation in request['operations']:
+    os.environ['OPS_OPERATION'] = operation
+    os.environ['OPS_NOTIFICATION_PUBLIC_KEY'] = 'A' * 1000 if operation == 'prepare-notification-secret-transfer' else ''
+    exec(generator, {})
+    payload = Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').read_bytes()
+    command = json.loads(payload)['commands'][0]
+    encoded = re.findall(r"printf '%s' '([A-Za-z0-9+/=]+)'", command)
+    budgets.append({
+        'operation': operation, 'payloadBytes': len(payload),
+        'encodedSourceBytes': sum(map(len, encoded)),
+        'hasErrorSummary': 'production-order-error-summary.cjs' in command,
+    })
+print(json.dumps(budgets))`,
+        ],
+        {
+            cwd: repositoryRoot,
+            input: JSON.stringify({
+                generator,
+                operations: operationNames,
+                environment: {
+                    RUNNER_TEMP: temporary,
+                    OPS_SOURCE_SHA: sourceSha,
+                    OPS_EXPECTED_RUNTIME_SHA: 'b'.repeat(40),
+                    OPS_EXPECTED_PLAN_SHA256: 'c'.repeat(64),
+                    OPS_EXPECTED_CHANNEL_CODES: 'fixture-channel',
+                    OPS_PRODUCT_ID: '1',
+                    OPS_NOTIFICATION_PUBLIC_KEY: 'A'.repeat(1000),
+                },
+            }),
+            encoding: 'utf8',
+        },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const budgets = JSON.parse(result.stdout);
+    assert.equal(budgets.length, operationNames.length);
+    for (const budget of budgets) {
+        assert.ok(budget.payloadBytes <= 80_000, `${budget.operation} SSM request exceeds 80000 bytes`);
+        assert.ok(
+            budget.encodedSourceBytes < 78_000,
+            `${budget.operation} source bundle reaches 78000 bytes`,
+        );
+        assert.equal(budget.hasErrorSummary, budget.operation === 'diagnose');
+    }
 });
 
 void test('asset WebP migration requires a pinned runtime, reviewed plan and verified backup', () => {
@@ -614,6 +696,109 @@ void test(
 
 void test('oversized diagnostic evidence fails before any retention can start', () => {
     assert.throws(() => operations.encodeBeforeReport({ data: 'x'.repeat(18000) }), /evidence limit/u);
+});
+
+function controlledDiagnosticFixture(prefix) {
+    const directory = path.join(
+        repositoryRoot,
+        'reports/order-recovery-release-20261011/release-coverage/control-fixtures',
+    );
+    mkdirSync(directory, { recursive: true });
+    return mkdtempSync(path.join(directory, prefix));
+}
+
+function errorLogFixture(t, contents = '') {
+    const root = controlledDiagnosticFixture('order-error-');
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const file = path.join(root, 'error.log');
+    writeFileSync(file, contents);
+    return { root, file };
+}
+
+void test('diagnose reads only the two fixed error logs and makes no screenshot-correlation claim', () => {
+    const reads = [];
+    const summary = orderErrorSummary.inspectRecentOrderErrors(file => {
+        reads.push(file);
+        return { status: 'missing' };
+    });
+    assert.deepEqual(reads, [
+        '/home/ubuntu/.pm2/logs/vendure-api-error.log',
+        '/home/ubuntu/.pm2/logs/vendure-worker-error.log',
+    ]);
+    assert.equal(summary.maxBytesPerFile, 128 * 1024);
+    assert.equal(summary.countsAreMatchingLogLines, true);
+    assert.equal(summary.screenshotCorrelation, 'not-established');
+    const source = readFileSync(path.join(repositoryRoot, 'deploy/production-operations.cjs'), 'utf8');
+    assert.match(
+        source,
+        new RegExp(
+            String.raw`request\.operation === 'diagnose'\s*\?\s*\{\s*recentOrderErrorSummary:\s*` +
+                String.raw`require\('\.\/production-order-error-summary\.cjs'\)\.inspectRecentOrderErrors\(\)` +
+                String.raw`,?\s*\}\s*:\s*\{\s*\}`,
+            'u',
+        ),
+    );
+});
+
+void test('error summaries strip private values and dynamic messages, cap categories and permit only shipped frames', t => {
+    const secret = 'PRIVATE-ORDER-123 customer@example.invalid token=PRIVATE-TOKEN';
+    const known = 'packages/core/dist/service/services/order.service.js';
+    const frames = Array.from(
+        { length: 7 },
+        (_, index) => `    at PRIVATE-CUSTOMER (/private/PRIVATE-TOKEN/${known}:${index + 1}:3)`,
+    );
+    const contents = [
+        `OrderModificationError ${secret}`,
+        `InsufficientStockError ${secret}`,
+        `PaymentFailedError ${secret}`,
+        `QueryFailedError ${secret}`,
+        `TypeError ${secret}`,
+        '    at Object.call (/runtime/packages/core/src/PRIVATE-ORDER-123.ts:1:2)',
+        '    at Object.call (/runtime/packages/core/src/../PRIVATE-TOKEN.ts:1:2)',
+        '    at Object.call (/runtime/packages/unapproved/src/private.ts:1:2)',
+        ...frames,
+    ].join('\n');
+    const f = errorLogFixture(t, contents);
+    const before = statSync(f.file);
+    const summary = orderErrorSummary.summarizeRecentOrderErrors(f.file);
+    assert.equal(summary.status, 'available');
+    assert.equal(summary.modifiedAt, before.mtime.toISOString());
+    assert.equal(summary.categories.length, 5);
+    assert.ok(summary.categories.every(value => value.count === 1));
+    assert.equal(summary.frames.length, 5);
+    assert.deepEqual(summary.frames[0], { file: known, line: 1, column: 3 });
+    assert.doesNotMatch(JSON.stringify(summary), /PRIVATE|customer@|token=|Object\.call|private\.ts/u);
+    assert.equal(readFileSync(f.file, 'utf8'), contents);
+    assert.equal(statSync(f.file).mtimeMs, before.mtimeMs);
+});
+
+void test('error summaries read at most the last 128 KiB and discard the first partial record', t => {
+    const f = errorLogFixture(
+        t,
+        'OrderModificationError OLD-PRIVATE\n' + 'x'.repeat(128 * 1024) + '\nTypeError RECENT-PRIVATE\n',
+    );
+    const summary = orderErrorSummary.summarizeRecentOrderErrors(f.file);
+    assert.equal(summary.status, 'available');
+    assert.equal(summary.bytesInspected, 128 * 1024);
+    assert.equal(summary.truncated, true);
+    assert.deepEqual(summary.categories, [{ category: 'INTERNAL_ERROR', count: 1 }]);
+    assert.doesNotMatch(JSON.stringify(summary), /PRIVATE/u);
+});
+
+void test('error summaries distinguish empty and missing files, refuse symlinks and avoid non-file reads', t => {
+    const f = errorLogFixture(t);
+    assert.equal(orderErrorSummary.summarizeRecentOrderErrors(f.file).status, 'empty');
+    assert.equal(
+        orderErrorSummary.summarizeRecentOrderErrors(path.join(f.root, 'missing.log')).status,
+        'missing',
+    );
+    const link = path.join(f.root, 'symlink.log');
+    symlinkSync(f.file, link);
+    assert.deepEqual(orderErrorSummary.summarizeRecentOrderErrors(link), { status: 'symlink-refused' });
+    assert.deepEqual(orderErrorSummary.summarizeRecentOrderErrors(f.root), { status: 'not-regular-file' });
+    assert.deepEqual(orderErrorSummary.summarizeRecentOrderErrors({ secret: 'PRIVATE-TOKEN' }), {
+        status: 'unavailable',
+    });
 });
 
 void test('deployment cache cleanup is reviewed, source-pinned and limited to planned directories', t => {

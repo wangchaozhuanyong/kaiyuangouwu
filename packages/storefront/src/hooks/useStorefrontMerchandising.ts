@@ -153,7 +153,7 @@ export function useStorefrontMerchandising({
     const day = new Date().toISOString().slice(0, 10);
     const bestSellerProducts = buildBestSellerProducts({
         pinnedProducts: pinnedBestSellerQuery.data ?? [],
-        candidates: bestSellerCandidates,
+        candidates: [...bestSellerCandidates, ...(pinnedBestSellerQuery.data ?? [])],
         salesByProductId: bestSellerSalesQuery.data ?? {},
         count: bestSellerDisplayCount,
         seed: `${market.code}:${day}:best-sellers`,
@@ -179,7 +179,7 @@ export function useStorefrontMerchandising({
         scope,
         kind: 'best-sellers',
         ready: bestSellersEnabled && !bestSellersLoading,
-        candidates: bestSellerCandidates,
+        candidates: [...bestSellerCandidates, ...(pinnedBestSellerQuery.data ?? [])],
         select: () => bestSellerProducts,
     });
     const recommendations = usePageLoadProductOrder({
@@ -197,9 +197,42 @@ export function useStorefrontMerchandising({
                 seed: `${market.code}:${day}:recommendations`,
             }),
     });
+    const visibleReferenceQuery = useProductsByIdsQuery({
+        api,
+        market,
+        language,
+        enabled: bestSellersEnabled || recommendationsEnabled,
+        productIds: [
+            ...new Set([
+                ...bestSellers.selectedIds,
+                ...recommendations.selectedIds,
+                ...bestSellers.products.map(product => product.id),
+                ...recommendations.products.map(product => product.id),
+            ]),
+        ],
+    });
+    const currentProducts =
+        visibleReferenceQuery.data === undefined
+            ? null
+            : new Map(visibleReferenceQuery.data.map(product => [product.id, product]));
+    const resolvedProducts = (selected: Product[], candidateUpdatedAt: number) =>
+        currentProducts
+            ? selected.flatMap(product => {
+                  const current = currentProducts.get(product.id);
+                  return current
+                      ? [candidateUpdatedAt >= visibleReferenceQuery.dataUpdatedAt ? product : current]
+                      : [];
+              })
+            : selected;
     return {
-        bestSellerProducts: bestSellers.products,
-        recommendationProducts: recommendations.products,
+        bestSellerProducts: resolvedProducts(
+            bestSellers.products,
+            Math.max(bestSellerCatalogQuery.dataUpdatedAt, pinnedBestSellerQuery.dataUpdatedAt),
+        ),
+        recommendationProducts: resolvedProducts(
+            recommendations.products,
+            recommendationCatalogQuery.dataUpdatedAt,
+        ),
         recommendationsBlock,
         bestSellersLoading:
             storefrontContextResolved &&

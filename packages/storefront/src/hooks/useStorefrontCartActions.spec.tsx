@@ -49,7 +49,11 @@ describe('storefront cart action boundaries', () => {
         vi.resetAllMocks();
         root = createRoot(document.createElement('div'));
         controller = new CartController('fixture-store');
-        vi.spyOn(controller, 'getSnapshot').mockReturnValue({ ...controller.getSnapshot(), cart });
+        vi.spyOn(controller, 'getSnapshot').mockReturnValue({
+            ...controller.getSnapshot(),
+            cart,
+            confirmed: cart,
+        });
         recoverPendingSpy = vi.spyOn(controller, 'recoverPending').mockResolvedValue(true);
         api.cart.mockResolvedValue(cart);
         api.addItem.mockResolvedValue(cart);
@@ -175,7 +179,7 @@ describe('storefront cart action boundaries', () => {
     });
 
     it.each([true, false])(
-        'refreshes the server snapshot but preserves the warning when recovery is unresolved: zh=%s',
+        'preserves the confirmed contents without an extra read when recovery is unresolved: zh=%s',
         async isZh => {
             options.isZh = isZh;
             const latest = { ...cart, revision: 8 };
@@ -184,13 +188,14 @@ describe('storefront cart action boundaries', () => {
                 ...controller.getSnapshot(),
                 phase: 'unknown',
                 editingBlocked: true,
+                confirmed: latest,
             });
             api.cart.mockResolvedValue(latest);
             render();
             await act(async () => {
                 expect(await value.refreshCart()).toEqual(latest);
             });
-            expect(api.cart).toHaveBeenCalledOnce();
+            expect(api.cart).not.toHaveBeenCalled();
             expect(options.setCart).toHaveBeenCalledWith(latest);
             expect(options.setCartError).toHaveBeenLastCalledWith(
                 isZh ? '结果待确认，请核对购物车。' : 'Result unconfirmed. Review your cart.',
@@ -215,13 +220,12 @@ describe('storefront cart action boundaries', () => {
     });
 
     it('retains the unknown warning and confirmed contents when the recovery refresh fails', async () => {
-        recoverPendingSpy.mockResolvedValue(false);
+        recoverPendingSpy.mockRejectedValue(new Error('Network unavailable'));
         vi.mocked(controller.getSnapshot).mockReturnValue({
             ...controller.getSnapshot(),
             phase: 'unknown',
             editingBlocked: true,
         });
-        api.cart.mockRejectedValue(new Error('Network unavailable'));
         render();
         await act(async () => {
             await expect(value.refreshCart()).rejects.toThrow('Network unavailable');
@@ -229,6 +233,202 @@ describe('storefront cart action boundaries', () => {
         expect(options.setCart).not.toHaveBeenCalled();
         expect(options.setCheckoutOrder).not.toHaveBeenCalled();
         expect(options.setCartError).toHaveBeenLastCalledWith('结果待确认，请核对购物车。');
+        expect(value.cartRecoveryPending).toBe(false);
+    });
+
+    it.each([
+        ['beginCheckout', 'checkout', true],
+        ['beginCheckout', 'checkout', false],
+        ['buyNow', 'purchase', true],
+        ['buyNow', 'purchase', false],
+        ['preparePayment', 'payment', true],
+        ['preparePayment', 'payment', false],
+    ] as const)(
+        'resumes confirmed %s at %s from the recovered snapshot: zh=%s',
+        async (checkoutIntent, destination, isZh) => {
+            options.isZh = isZh;
+            const order = { id: 'order-a' } as Order;
+            const latest = { ...cart, revision: 8, checkoutOrder: order };
+            const session = { cart: latest, order, checkout: null };
+            const recoveredState = {
+                ...controller.getSnapshot(),
+                phase: checkoutIntent === 'preparePayment' ? ('locked' as const) : ('idle' as const),
+                editingBlocked: checkoutIntent === 'preparePayment',
+                confirmed: latest,
+                cart: latest,
+                lastRecovery: {
+                    commandId: acknowledgement.commandId,
+                    status: 'APPLIED' as const,
+                    checkoutIntent,
+                    result: { ...acknowledgement, cart: latest, session },
+                },
+            };
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: 'unknown',
+                editingBlocked: true,
+                commandAcknowledged: true,
+                pendingCheckoutIntent: checkoutIntent,
+            });
+            recoverPendingSpy.mockImplementation(() => {
+                vi.mocked(controller.getSnapshot).mockReturnValue(recoveredState);
+                return Promise.resolve(true);
+            });
+            render();
+            await act(async () => {
+                expect(await value.refreshCart()).toEqual(latest);
+            });
+            expect(api.cart).not.toHaveBeenCalled();
+            expect(options.setCart).toHaveBeenCalledWith(latest);
+            expect(options.setCheckoutOrder).toHaveBeenLastCalledWith(order);
+            expect(options.navigate).toHaveBeenCalledExactlyOnceWith({ name: destination }, true);
+            expect(options.setCartError).toHaveBeenLastCalledWith(null);
+            await act(async () => {
+                await value.refreshCart();
+            });
+            expect(options.navigate).toHaveBeenCalledOnce();
+        },
+    );
+
+    it.each(['CANCELLED', 'REJECTED'] as const)(
+        'keeps %s recovery in the cart without starting a checkout',
+        async status => {
+            const recoveredState = {
+                ...controller.getSnapshot(),
+                lastRecovery: {
+                    commandId: acknowledgement.commandId,
+                    status,
+                    checkoutIntent: 'beginCheckout' as const,
+                    result: { ...acknowledgement, status, cart, session: null },
+                },
+            };
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: 'unknown',
+                editingBlocked: true,
+            });
+            recoverPendingSpy.mockImplementation(() => {
+                vi.mocked(controller.getSnapshot).mockReturnValue(recoveredState);
+                return Promise.resolve(true);
+            });
+            render();
+            await act(async () => {
+                await value.refreshCart();
+            });
+            expect(options.navigate).not.toHaveBeenCalled();
+            expect(api.cart).not.toHaveBeenCalled();
+        },
+    );
+
+    it('keeps a confirmed operation distinct from an unknown result when its latest read fails', async () => {
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            phase: 'unknown',
+            editingBlocked: true,
+            commandAcknowledged: true,
+        });
+        recoverPendingSpy.mockRejectedValue(new Error('Read failed'));
+        render();
+        await act(async () => {
+            await expect(value.refreshCart()).rejects.toThrow('Read failed');
+        });
+        expect(options.setCartError).toHaveBeenLastCalledWith('操作已确认，请重试读取购物车。');
+        expect(api.cart).not.toHaveBeenCalled();
+    });
+
+    it.each([null, 'beginCheckout'] as const)(
+        'stays on the cart when a recovered edit has no checkout intent or no session: %s',
+        async checkoutIntent => {
+            const recoveredState = {
+                ...controller.getSnapshot(),
+                lastRecovery: {
+                    commandId: acknowledgement.commandId,
+                    status: 'APPLIED' as const,
+                    checkoutIntent,
+                    result: { ...acknowledgement, cart, session: null },
+                },
+            };
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: 'unknown',
+                editingBlocked: true,
+            });
+            recoverPendingSpy.mockImplementation(() => {
+                vi.mocked(controller.getSnapshot).mockReturnValue(recoveredState);
+                return Promise.resolve(true);
+            });
+            render();
+            await act(async () => {
+                await value.refreshCart();
+            });
+            expect(options.navigate).not.toHaveBeenCalled();
+            expect(options.setCart).toHaveBeenCalledWith(cart);
+            expect(api.cart).not.toHaveBeenCalled();
+        },
+    );
+
+    it('resumes an already applied checkout when cancellation arrived after its commit', async () => {
+        const order = { id: 'order-a' } as Order;
+        const latest = { ...cart, checkoutOrder: order };
+        const recoveredState = {
+            ...controller.getSnapshot(),
+            cart: latest,
+            confirmed: latest,
+            lastRecovery: {
+                commandId: acknowledgement.commandId,
+                status: 'APPLIED' as const,
+                checkoutIntent: 'beginCheckout' as const,
+                result: {
+                    ...acknowledgement,
+                    cart: latest,
+                    session: { cart: latest, order, checkout: null },
+                },
+            },
+        };
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            phase: 'unknown',
+            editingBlocked: true,
+        });
+        recoverPendingSpy.mockImplementation(() => {
+            vi.mocked(controller.getSnapshot).mockReturnValue(recoveredState);
+            return Promise.resolve(true);
+        });
+        render();
+        await act(async () => {
+            await value.cancelPendingCartCommand();
+        });
+        expect(recoverPendingSpy).toHaveBeenCalledExactlyOnceWith(true);
+        expect(options.navigate).toHaveBeenCalledExactlyOnceWith({ name: 'checkout' }, true);
+        expect(api.cart).not.toHaveBeenCalled();
+    });
+
+    it('ignores recovery completed after the signed-in customer changes', async () => {
+        let finish!: (recovered: boolean) => void;
+        recoverPendingSpy.mockReturnValue(
+            new Promise(resolve => {
+                finish = resolve;
+            }),
+        );
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            phase: 'unknown',
+            editingBlocked: true,
+        });
+        render();
+        let pending!: Promise<StorefrontCart>;
+        act(() => {
+            pending = value.refreshCart();
+        });
+        options.customer = { id: 'customer-b' } as ActiveCustomer;
+        render();
+        await act(async () => {
+            finish(true);
+            await expect(pending).rejects.toThrow('Cart session changed.');
+        });
+        expect(options.setCart).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+        expect(options.navigate).not.toHaveBeenCalled();
         expect(value.cartRecoveryPending).toBe(false);
     });
 

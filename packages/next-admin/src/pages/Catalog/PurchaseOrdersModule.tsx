@@ -5,6 +5,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -263,6 +264,10 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
     const [error, setError] = useState('');
     const [skuSearch, setSkuSearch] = useState('');
     const [selectedVariants, setSelectedVariants] = useState<Record<string, PurchaseVariant>>({});
+    const selectedReferences = useCatalogReferences(
+        draft.lines.map(line => line.variantId),
+        'productVariants',
+    );
     const deferredSkuSearch = useDeferredValue(skuSearch.trim());
     const suppliers = useQuery<{ catalogSuppliers: { items: CatalogSupplierRecord[] } }>(
         CATALOG_SUPPLIERS_QUERY,
@@ -294,7 +299,11 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
         draft.stockLocationId &&
         draft.lines.length &&
         draft.lines.every(
-            line => line.variantId && positiveInteger(line.quantity) && nonNegative(line.unitCost),
+            line =>
+                line.variantId &&
+                positiveInteger(line.quantity) &&
+                nonNegative(line.unitCost) &&
+                selectedReferences.available.some(reference => reference.id === line.variantId),
         ),
     );
     const save = async () => {
@@ -440,14 +449,28 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                             className={inputClass}
                         >
                             <option value="">{deferredSkuSearch ? '选择 SKU' : '先搜索 SKU'}</option>
-                            {line.variantId &&
-                                selectedVariants[line.variantId] &&
-                                !variants.some(item => item.id === line.variantId) && (
-                                    <option value={line.variantId}>
-                                        {selectedVariants[line.variantId].name} ·{' '}
-                                        {selectedVariants[line.variantId].sku}
-                                    </option>
-                                )}
+                            {line.variantId && !variants.some(item => item.id === line.variantId) && (
+                                <option value={line.variantId}>
+                                    {selectedReferences.references.find(
+                                        reference => reference.id === line.variantId,
+                                    )?.entity?.name ??
+                                        selectedVariants[line.variantId]?.name ??
+                                        line.variantId}{' '}
+                                    ·{' '}
+                                    {selectedReferences.references.find(
+                                        reference => reference.id === line.variantId,
+                                    )?.entity?.sku ?? selectedVariants[line.variantId]?.sku}
+                                    {selectedReferences.unavailable.some(
+                                        reference => reference.id === line.variantId,
+                                    )
+                                        ? ' · 暂不可用'
+                                        : selectedReferences.unknown.some(
+                                                reference => reference.id === line.variantId,
+                                            )
+                                          ? ' · 待核对'
+                                          : ''}
+                                </option>
+                            )}
                             {variants
                                 .filter(
                                     item =>
@@ -463,6 +486,27 @@ function CreateOrderDialog({ onClose, onSaved }: { onClose: () => void; onSaved:
                                     </option>
                                 ))}
                         </AdminSelect>
+                        {line.variantId &&
+                            !selectedReferences.available.some(
+                                reference => reference.id === line.variantId,
+                            ) && (
+                                <p role="status" className="text-xs text-amber-700 sm:col-span-4">
+                                    原 SKU{' '}
+                                    {selectedReferences.unavailable.some(
+                                        reference => reference.id === line.variantId,
+                                    )
+                                        ? '暂不可用'
+                                        : '待核对'}
+                                    ，数量与进价已保留。核对完成前不能提交。
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => void selectedReferences.refetch()}
+                                        className="ml-2 underline"
+                                    >
+                                        重试核对
+                                    </AdminButton>
+                                </p>
+                            )}
                         <AdminInput
                             type="number"
                             min="1"

@@ -20,6 +20,7 @@ const GLOBAL_PUBLIC_EVENTS = new Set([
     'ChannelEvent',
     'PromotionEvent',
     'StockMovementEvent',
+    'SearchIndexCompletedEvent',
     'StoreDomainChangedEvent',
     'StorefrontTranslationChangedEvent',
 ]);
@@ -94,9 +95,12 @@ export class StorefrontCacheInvalidationService implements OnApplicationBootstra
         // Stock, price and translated copy updates refresh public data without evicting every
         // catalog image from the CDN on each order. Publication and permission changes do purge.
         if (
-            ['StockMovementEvent', 'ProductVariantPriceEvent', 'StorefrontTranslationChangedEvent'].includes(
-                event.constructor.name,
-            )
+            [
+                'StockMovementEvent',
+                'ProductVariantPriceEvent',
+                'StorefrontTranslationChangedEvent',
+                'SearchIndexCompletedEvent',
+            ].includes(event.constructor.name)
         )
             return false;
         if ((event as any).realtimeEventKind?.startsWith('storefront-review')) return false;
@@ -139,7 +143,15 @@ export class StorefrontCacheInvalidationService implements OnApplicationBootstra
                         ? ['reviews' as const]
                         : kind === 'storefront-content-changed'
                           ? ['content' as const]
-                          : ['ProductVariantPriceEvent', 'PromotionEvent'].includes(event.constructor.name)
+                          : [
+                                  'ProductEvent',
+                                  'ProductVariantEvent',
+                                  'ProductChannelEvent',
+                                  'ProductVariantChannelEvent',
+                                  'ProductVariantPriceEvent',
+                                  'PromotionEvent',
+                                  'SearchIndexCompletedEvent',
+                              ].includes(event.constructor.name)
                             ? [...PUBLIC_TOPICS, 'cart' as const]
                             : [...PUBLIC_TOPICS];
             this.realtime.publish({
@@ -170,7 +182,7 @@ export class StorefrontCacheInvalidationService implements OnApplicationBootstra
                         if (revision) this.revisions.set(channelId, revision);
                     }),
                 );
-                this.realtime.publish({ allChannels: true, topics: [...PUBLIC_TOPICS] });
+                this.realtime.publish({ allChannels: true, topics: [...PUBLIC_TOPICS, 'cart'] });
             }
             if (this.processContext.isWorker) return;
             const observed = this.cache.observedChannels();
@@ -181,7 +193,9 @@ export class StorefrontCacheInvalidationService implements OnApplicationBootstra
                 const previous = this.revisions.get(channelId);
                 this.revisions.set(channelId, revision);
                 if (previous && previous !== revision)
-                    this.realtime.publish({ channelIds: [channelId], topics: [...PUBLIC_TOPICS] });
+                    // Worker index-completion events reach API processes through this
+                    // durable revision; their cart eligibility must also be re-read.
+                    this.realtime.publish({ channelIds: [channelId], topics: [...PUBLIC_TOPICS, 'cart'] });
             }
         } finally {
             this.polling = false;

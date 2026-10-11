@@ -14,6 +14,7 @@ import {
     StoreCouponRecord,
 } from '../../graphql/marketing.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
 import { dataTableSortPolicy } from '../../utils/data-table-sort-policy';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney, majorInputToMoney } from '../Sales/sales-utils';
@@ -38,6 +39,33 @@ import {
     ModalFooter,
     MultiSelector,
 } from './promotion-ui';
+
+function SelectedProductStatus({ references }: { references: ReturnType<typeof useCatalogReferences> }) {
+    if (!references.references.length) return null;
+    return (
+        <div className="mt-2 space-y-1 text-xs text-slate-500" aria-label="已选营销商品核对">
+            <p>
+                有效 {references.available.length} 个，暂不可用 {references.unavailable.length} 个，待核对{' '}
+                {references.unknown.length} 个；原顺序与草稿已保留。
+            </p>
+            {references.references.map(reference => (
+                <p key={reference.id}>
+                    {reference.entity?.name ?? reference.id}
+                    {reference.state === 'available'
+                        ? ''
+                        : reference.state === 'unavailable'
+                          ? ' · 暂不可用'
+                          : ' · 待核对'}
+                </p>
+            ))}
+            {(references.error || references.unknown.length > 0) && (
+                <AdminButton type="button" onClick={() => void references.refetch()} className="underline">
+                    重试核对
+                </AdminButton>
+            )}
+        </div>
+    );
+}
 
 export function CouponEditor({
     currencyCode,
@@ -77,19 +105,36 @@ export function CouponEditor({
             productOptions: {
                 take: draft.kind === 'PRODUCT_PERCENTAGE' ? 30 : 1,
                 sort: dataTableSortPolicy.alphabeticalName,
-                filter:
-                    draft.kind === 'PRODUCT_PERCENTAGE' && deferredSearch
+                filter: {
+                    enabled: { eq: true },
+                    ...(draft.kind === 'PRODUCT_PERCENTAGE' && deferredSearch
                         ? { name: { contains: deferredSearch } }
-                        : {},
+                        : {}),
+                },
             },
         },
         skip: !hasScope,
     });
     const [create, state] = useMutation(CREATE_COUPON_CAMPAIGN_MUTATION);
-    const validation = couponDraftError(draft);
+    const selectedReferences = useCatalogReferences(
+        draft.productIds,
+        'products',
+        draft.kind === 'PRODUCT_PERCENTAGE',
+    );
+    const validation =
+        couponDraftError(draft) ||
+        (draft.kind === 'PRODUCT_PERCENTAGE' &&
+        (selectedReferences.unavailable.length || selectedReferences.unknown.length)
+            ? '已选商品暂不可用或待核对，原选择已保留，请核对后提交'
+            : '');
     const submit = async () => {
         if (validation) return onError(validation);
         try {
+            if (
+                draft.kind === 'PRODUCT_PERCENTAGE' &&
+                (await selectedReferences.recheck()).some(reference => reference.state !== 'available')
+            )
+                throw new Error('已选商品资格变化，请核对后提交');
             const minimumSpend = majorInputToMoney(draft.minimumSpend || '0', currencyCode);
             const discountAmount =
                 draft.kind === 'ORDER_FIXED' ? majorInputToMoney(draft.discountValue, currencyCode) : null;
@@ -288,6 +333,7 @@ export function CouponEditor({
                     onChange={updateSelected}
                 />
             )}
+            {draft.kind === 'PRODUCT_PERCENTAGE' && <SelectedProductStatus references={selectedReferences} />}
             <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs">
                 <label className="flex items-center justify-between gap-3">
                     <span>
@@ -352,22 +398,47 @@ export function FlashEditor({
             productOptions: {
                 take: 30,
                 sort: dataTableSortPolicy.alphabeticalName,
-                filter: deferredSearch ? { name: { contains: deferredSearch } } : {},
+                filter: {
+                    enabled: { eq: true },
+                    ...(deferredSearch ? { name: { contains: deferredSearch } } : {}),
+                },
             },
         },
     });
     const products = catalog.data?.products.items ?? [];
     const [create, state] = useMutation(CREATE_FLASH_SALE_MUTATION);
-    const productMap = new Map(
-        [...Object.values(knownProducts), ...products].map(product => [product.id, product]),
+    const selectedReferences = useCatalogReferences(draft.productIds, 'products', true, true);
+    const selectedProducts = selectedReferences.available.flatMap(reference =>
+        reference.entity?.variants
+            ? [
+                  {
+                      ...reference.entity,
+                      variants: reference.entity.variants.filter(variant => variant.enabled !== false),
+                  } as PromotionProductRecord,
+              ]
+            : [],
     );
-    const selectedProducts = draft.productIds
-        .map(id => productMap.get(id))
-        .filter((product): product is PromotionProductRecord => Boolean(product));
-    const validation = flashDraftError(draft, selectedProducts, currencyCode);
+    const invalidOverride = Object.values(knownProducts).some(
+        product =>
+            draft.productIds.includes(product.id) &&
+            product.variants.some(
+                variant =>
+                    draft.variantPrices[variant.id]?.trim() &&
+                    !selectedProducts.some(current => current.variants.some(item => item.id === variant.id)),
+            ),
+    );
+    const validation =
+        flashDraftError(draft, selectedProducts, currencyCode) ||
+        (selectedReferences.unavailable.length || selectedReferences.unknown.length
+            ? '已选商品暂不可用或待核对，原选择和价格草稿已保留'
+            : invalidOverride
+              ? '单独定价的原 SKU 暂不可用，请核对；不会自动替换成其他 SKU'
+              : '');
     const submit = async () => {
         if (validation) return onError(validation);
         try {
+            if ((await selectedReferences.recheck()).some(reference => reference.state !== 'available'))
+                throw new Error('已选商品资格变化，请核对后提交');
             const variantPrices = selectedProducts.flatMap(product =>
                 product.variants.flatMap(variant => {
                     const value = draft.variantPrices[variant.id]?.trim();
@@ -443,6 +514,7 @@ export function FlashEditor({
                     setDraft({ ...draft, productIds: ids.slice(0, 50) });
                 }}
             />
+            <SelectedProductStatus references={selectedReferences} />
             {selectedProducts.length > 0 && (
                 <div className="mt-4">
                     <h3 className="flex items-center gap-2 text-xs font-bold text-slate-800">
