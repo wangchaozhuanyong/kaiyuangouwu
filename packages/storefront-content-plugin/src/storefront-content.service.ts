@@ -200,7 +200,11 @@ export class StorefrontContentService {
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
-        normalized.settings = await this.resolveHeroImageSettings(ctx, normalized.type, normalized.settings);
+        normalized.settings = await this.resolveDeviceImageSettings(
+            ctx,
+            normalized.type,
+            normalized.settings,
+        );
         const block = await this.connection.getRepository(ctx, StorefrontContentBlock).save(
             new StorefrontContentBlock({
                 ...normalized,
@@ -323,7 +327,7 @@ export class StorefrontContentService {
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
         const image = await this.resolveImage(ctx, next.imageAssetId, requestedImageUrl, '区块图片');
         this.assertEnabledHeroHasImage(next.type, next.enabled, image);
-        next.settings = await this.resolveHeroImageSettings(ctx, next.type, next.settings);
+        next.settings = await this.resolveDeviceImageSettings(ctx, next.type, next.settings);
         Object.assign(block, {
             code: next.code,
             internalName: next.internalName,
@@ -771,7 +775,11 @@ export class StorefrontContentService {
         translated.imageUrl =
             (translated.imageAsset ? this.externalImageService.storefrontUrl(translated.imageAsset) : null) ??
             (publishedOnly ? this.publishedLegacyImageUrl(translated.imageUrl) : translated.imageUrl);
-        if (publishedOnly && translated.type === 'HERO' && translated.settings?.mobileImageUrl) {
+        if (
+            publishedOnly &&
+            ['HERO', 'CATEGORY_AD'].includes(translated.type) &&
+            translated.settings?.mobileImageUrl
+        ) {
             translated.settings = {
                 ...translated.settings,
                 mobileImageUrl:
@@ -959,6 +967,7 @@ export class StorefrontContentService {
         this.validateColor(input.textColor, '文字颜色');
         const settings = this.normalizeSettings(input.settings, '模块设置');
         if (input.type === 'HERO') this.validateHeroMobileSettings(settings);
+        if (input.type === 'CATEGORY_AD') this.validateMobileImageSettings(settings, '手机精选图');
         const targetType = input.targetType ?? 'NONE';
         return {
             code,
@@ -1340,20 +1349,7 @@ export class StorefrontContentService {
             }
             this.validateColor(settings[field], '手机轮播文字颜色');
         }
-        const imageId = settings.mobileImageAssetId;
-        if (
-            imageId != null &&
-            !(
-                (typeof imageId === 'string' && imageId.trim()) ||
-                (typeof imageId === 'number' && Number.isInteger(imageId) && imageId > 0)
-            )
-        ) {
-            throw new UserInputError('手机轮播图素材编号格式不正确');
-        }
-        if (settings.mobileImageUrl != null && typeof settings.mobileImageUrl !== 'string') {
-            throw new UserInputError('手机轮播图地址格式不正确');
-        }
-        this.validateImageUrl(settings.mobileImageUrl, '手机轮播图');
+        this.validateMobileImageSettings(settings, '手机轮播图');
         if (settings.mobileHeroTranslations == null) return;
         if (!Array.isArray(settings.mobileHeroTranslations) || settings.mobileHeroTranslations.length > 2) {
             throw new UserInputError('手机轮播文案仅支持中英文语言设置');
@@ -1378,13 +1374,34 @@ export class StorefrontContentService {
         }
     }
 
-    private async resolveHeroImageSettings(
+    private validateMobileImageSettings(
+        settings: StorefrontContentSettingsValue | null,
+        label: string,
+    ): void {
+        if (!settings) return;
+        const imageId = settings.mobileImageAssetId;
+        if (
+            imageId != null &&
+            !(
+                (typeof imageId === 'string' && imageId.trim()) ||
+                (typeof imageId === 'number' && Number.isInteger(imageId) && imageId > 0)
+            )
+        ) {
+            throw new UserInputError(`${label}素材编号格式不正确`);
+        }
+        if (settings.mobileImageUrl != null && typeof settings.mobileImageUrl !== 'string') {
+            throw new UserInputError(`${label}地址格式不正确`);
+        }
+        this.validateImageUrl(settings.mobileImageUrl, label);
+    }
+
+    private async resolveDeviceImageSettings(
         ctx: RequestContext,
         type: StorefrontContentBlockType,
         settings: StorefrontContentSettingsValue | null,
     ): Promise<StorefrontContentSettingsValue | null> {
         if (
-            type !== 'HERO' ||
+            !['HERO', 'CATEGORY_AD'].includes(type) ||
             !settings ||
             (!Object.prototype.hasOwnProperty.call(settings, 'mobileImageAssetId') &&
                 !Object.prototype.hasOwnProperty.call(settings, 'mobileImageUrl'))
@@ -1395,7 +1412,7 @@ export class StorefrontContentService {
             ctx,
             settings.mobileImageAssetId as ID | null | undefined,
             settings.mobileImageUrl as string | null | undefined,
-            '手机轮播图',
+            type === 'HERO' ? '手机轮播图' : '手机精选图',
         );
         return {
             ...settings,

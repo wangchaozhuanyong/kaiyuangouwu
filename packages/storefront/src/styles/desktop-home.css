@@ -542,6 +542,24 @@
     .desktop-store-layout .home-page .category-promotion-visual.is-scene-poster {
         align-self: start;
     }
+    /* Device artwork follows the product row; the portrait never dictates card height. */
+    .desktop-store-layout .home-page .category-promotion-visual.is-device-poster {
+        align-self: stretch;
+        aspect-ratio: auto;
+    }
+    .desktop-store-layout
+        .home-page
+        .category-promotion-visual.is-device-poster
+        .category-promotion-poster-copy {
+        width: calc(100% - var(--space-16) * 2);
+    }
+    .desktop-store-layout
+        .home-page
+        .category-promotion-layout.is-visual-only
+        .category-promotion-visual.is-device-poster {
+        aspect-ratio: 5 / 6;
+        max-width: 320px;
+    }
     .desktop-store-layout .home-page .category-promotion-products {
         padding-block: 0;
     }

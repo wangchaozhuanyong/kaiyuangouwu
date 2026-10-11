@@ -501,7 +501,10 @@ export function storefrontBlockValidation(block: StorefrontContentBlock): string
                 return '固定轮播广告按钮文案过长';
         }
     }
-    if (block.type === 'CATEGORY_AD' && block.settings?.categoryArtworkLayout === 'scene-poster') {
+    if (
+        block.type === 'CATEGORY_AD' &&
+        ['scene-poster', 'device-poster'].includes(String(block.settings?.categoryArtworkLayout))
+    ) {
         for (const copy of block.translations) {
             const zh = copy.languageCode === 'zh_Hans';
             const headline = copy.body.trim() || copy.title.trim();

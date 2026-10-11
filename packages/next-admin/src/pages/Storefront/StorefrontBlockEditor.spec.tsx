@@ -39,6 +39,96 @@ vi.mock('./storefront-asset-picker', () => ({
 }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+it.each(['desktop', 'phone'])(
+    'preserves category artwork on layout changes and independently reviews %s replacement',
+    async device => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createFixtureRoot(host);
+        const onSave = vi.fn().mockResolvedValue(undefined);
+        const value = {
+            ...newContentBlock('CATEGORY_AD', 0),
+            id: 'daily-selection',
+            imageAssetId: 'desktop',
+            imageUrl: '/assets/desktop.png',
+            settings: {
+                categoryArtworkLayout: 'scene-poster',
+                mobileImageAssetId: 'phone',
+                mobileImageUrl: '/assets/phone.png',
+                mobileImageWidth: 1672,
+                mobileImageHeight: 941,
+            },
+            translations: [
+                {
+                    languageCode: 'zh_Hans' as const,
+                    title: '每日精选',
+                    body: 'AI 精选',
+                    subtitle: '账号 · 订阅',
+                    ctaLabel: '查看精选',
+                },
+                {
+                    languageCode: 'en' as const,
+                    title: 'Daily selection',
+                    body: 'AI picks',
+                    subtitle: 'Accounts · Plans',
+                    ctaLabel: 'Explore',
+                },
+            ],
+        };
+        try {
+            await fixtureAct(() =>
+                root.render(
+                    <StorefrontBlockEditor
+                        value={value}
+                        saving={false}
+                        onClose={() => undefined}
+                        onSave={onSave}
+                    />,
+                ),
+            );
+            const select = Array.from(host.querySelectorAll('select')).find(el =>
+                Array.from(el.options).some(option => option.value === 'device-poster'),
+            )!;
+            await fixtureAct(() => {
+                select.value = 'device-poster';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+            expect(onSave).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    imageAssetId: 'desktop',
+                    imageUrl: '/assets/desktop.png',
+                    settings: { ...value.settings, categoryArtworkLayout: 'device-poster' },
+                }),
+                false,
+            );
+            await fixtureAct(() =>
+                fixtureButton(
+                    host,
+                    device === 'desktop' ? '电脑端精选海报换图' : '手机端精选横图（可选）换图',
+                ).click(),
+            );
+            expect(fixtureButton(host, '保存并核对').disabled).toBe(true);
+            await fixtureAct(() => fixtureInput(host, '我确认替换或清除以上图片').click());
+            await fixtureAct(() => fixtureButton(host, '保存并核对').click());
+            const saved = onSave.mock.calls.at(-1)![0];
+            expect(onSave.mock.calls.at(-1)![1]).toBe(true);
+            if (device === 'desktop') {
+                expect(saved.imageAssetId).toBe('replacement');
+                expect(saved.settings.mobileImageAssetId).toBe('phone');
+                expect(saved.settings.mobileImageUrl).toBe('/assets/phone.png');
+            } else {
+                expect(saved.imageAssetId).toBe('desktop');
+                expect(saved.imageUrl).toBe('/assets/desktop.png');
+                expect(saved.settings.mobileImageAssetId).toBe('replacement');
+            }
+        } finally {
+            await fixtureAct(() => root.unmount());
+            host.remove();
+        }
+    },
+);
+
 function createFixtureRoot(host: HTMLElement) {
     const mount = document.createElement('div');
     host.append(mount);

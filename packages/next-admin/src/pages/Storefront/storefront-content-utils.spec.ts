@@ -48,23 +48,26 @@ it('limits fixed carousel copy in both desktop and phone translations while reta
     expect(storefrontBlockValidation(block)).toBeNull();
 });
 
-it('keeps compact banner copy short while retaining legacy category copy', () => {
-    const block = newContentBlock('CATEGORY_AD', 1, '精选');
-    block.settings = { categoryArtworkLayout: 'scene-poster' };
-    block.translations[0].body = 'AI 精选';
-    block.translations[0].subtitle = '账号 · 订阅';
-    block.translations[0].ctaLabel = '查看精选';
-    Object.assign(block.translations[1], {
-        body: 'AI picks',
-        subtitle: 'Accounts · Plans',
-        ctaLabel: 'Explore',
-    });
-    expect(storefrontBlockValidation(block)).toBeNull();
-    block.translations[0].body = '长'.repeat(6);
-    expect(storefrontBlockValidation(block)).toContain('主标题过长');
-    block.settings = {};
-    expect(storefrontBlockValidation(block)).toBeNull();
-});
+it.each(['scene-poster', 'device-poster'])(
+    'keeps compact %s copy short while retaining legacy category copy',
+    layout => {
+        const block = newContentBlock('CATEGORY_AD', 1, '精选');
+        block.settings = { categoryArtworkLayout: layout };
+        block.translations[0].body = 'AI 精选';
+        block.translations[0].subtitle = '账号 · 订阅';
+        block.translations[0].ctaLabel = '查看精选';
+        Object.assign(block.translations[1], {
+            body: 'AI picks',
+            subtitle: 'Accounts · Plans',
+            ctaLabel: 'Explore',
+        });
+        expect(storefrontBlockValidation(block)).toBeNull();
+        block.translations[0].body = '长'.repeat(6);
+        expect(storefrontBlockValidation(block)).toContain('主标题过长');
+        block.settings = {};
+        expect(storefrontBlockValidation(block)).toBeNull();
+    },
+);
 
 it('creates an independent footer with optional bilingual brand names and editable legal links', () => {
     const footer = newContentBlock('FOOTER', 130);

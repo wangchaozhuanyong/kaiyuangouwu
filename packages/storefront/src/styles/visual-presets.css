@@ -75,9 +75,9 @@ html[data-storefront-preset] {
     --skin-coupon-pending-ink: initial;
     --skin-coupon-focus: initial;
     --coupon-rose-ink: #9b432c;
-    --coupon-gold-ink: #9b432c;
-    --coupon-blue-ink: #9b432c;
-    --coupon-emerald-ink: #9b432c;
+    --coupon-gold-ink: #84600e;
+    --coupon-blue-ink: #245f92;
+    --coupon-emerald-ink: #236b50;
 }
 /* Match the runtime classic outline before cached content is painted. Without
    this token, hydration adds two pixels to each auto-height bordered module. */

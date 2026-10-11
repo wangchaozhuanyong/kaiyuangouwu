@@ -95,7 +95,7 @@ export function verifySavedBlock(
                 ? new Date(String(value)).toISOString()
                 : value;
         const matches =
-            field === 'settings' && saved.type === 'HERO'
+            field === 'settings' && ['HERO', 'CATEGORY_AD'].includes(saved.type)
                 ? heroSettingsMatch(input.settings, actual.settings)
                 : canonical(normalize(expected)) === canonical(normalize(received));
         if (!matches) {

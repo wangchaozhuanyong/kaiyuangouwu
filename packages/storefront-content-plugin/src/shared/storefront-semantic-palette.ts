@@ -554,21 +554,21 @@ export function storefrontSkinCssVariables(
             '--coupon-',
             '#d8bc80',
             {
-                'gold-ink': '#9b432c',
+                'gold-ink': '#84600e',
             },
         ],
         [
             '--coupon-',
             '#91bfc9',
             {
-                'blue-ink': '#9b432c',
+                'blue-ink': '#245f92',
             },
         ],
         [
             '--coupon-',
             '#88c8b1',
             {
-                'emerald-ink': '#9b432c',
+                'emerald-ink': '#236b50',
             },
         ],
     ];
