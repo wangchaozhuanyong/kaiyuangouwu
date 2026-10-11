@@ -561,10 +561,18 @@ export class StorefrontPublicSeoService {
                 }
             }
         } else if (kind === 'products') {
-            const items = await reader.list(ctx, { take: SHARD_SIZE, skip: shard * SHARD_SIZE });
-            const entities = items.items.length
+            const productIds: Array<Product['id']> = [];
+            // The public reader caps a page at 100, independently of the sitemap shard size.
+            for (let offset = 0; offset < SHARD_SIZE; offset += 100) {
+                const take = Math.min(100, SHARD_SIZE - offset);
+                const skip = shard * SHARD_SIZE + offset;
+                const items = await reader.list(ctx, { take, skip });
+                productIds.push(...items.items.map(item => item.id));
+                if (items.items.length < take || skip + items.items.length >= items.totalItems) break;
+            }
+            const entities = productIds.length
                 ? await this.connection.getRepository(ctx, Product).find({
-                      where: { id: In(items.items.map(item => item.id)), enabled: true, deletedAt: IsNull() },
+                      where: { id: In(productIds), enabled: true, deletedAt: IsNull() },
                       relations: ['translations'],
                   })
                 : [];

@@ -1,4 +1,4 @@
-import { DataSource, EntitySchema } from 'typeorm';
+import { DataSource, EntitySchema, SelectQueryBuilder } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -6,6 +6,8 @@ import {
     ContentTranslationService,
     isUsableEnglishTranslation,
 } from './content-translation.service.js';
+import { ContentTranslationState } from './entities/content-translation-state.entity.js';
+import { TranslationContentAdapter } from './translation-content-adapter.js';
 
 describe('translation audit database pagination', () => {
     // A disposable SQL database verifies actual filter grouping and LIKE escaping.
@@ -31,11 +33,34 @@ describe('translation audit database pagination', () => {
             updatedAt: { type: Date },
         },
     });
-    const database = new DataSource({ type: 'sqljs', entities: [schema], synchronize: true });
+    const channelSchema = new EntitySchema({
+        name: 'Channel',
+        columns: { id: { type: String, primary: true } },
+    });
+    const productSchema = new EntitySchema({
+        name: 'Product',
+        columns: { id: { type: String, primary: true } },
+        relations: {
+            channels: { type: 'many-to-many', target: 'Channel', joinTable: true },
+        },
+    });
+    const database = new DataSource({
+        type: 'sqljs',
+        entities: [schema, channelSchema, productSchema],
+        synchronize: true,
+    });
     let service: ContentTranslationService;
     beforeAll(async () => {
         await database.initialize();
         const repository = database.getRepository(schema);
+        const productIds = Array.from({ length: 1105 }, (_, i) => (i === 0 ? 'old-target' : `item-${i}`));
+        await database.getRepository(channelSchema).insert([{ id: 'channel-a' }, { id: 'channel-b' }]);
+        await database.getRepository(productSchema).insert(productIds.map(id => ({ id })));
+        await database
+            .createQueryBuilder()
+            .relation(productSchema, 'channels')
+            .of(productIds)
+            .add('channel-a');
         await repository.insert([
             ...Array.from({ length: 1105 }, (_, i) => ({
                 channelId: 'channel-a',
@@ -162,6 +187,287 @@ describe('translation audit database pagination', () => {
                 })
             ).states,
         ).toHaveLength(100);
+    });
+});
+
+describe('translation audit actionable entity visibility', () => {
+    const stateSchema = new EntitySchema({
+        name: 'VisibilityAuditState',
+        columns: {
+            id: { type: Number, primary: true, generated: true },
+            channelId: { type: String, nullable: true },
+            entityType: { type: String },
+            entityId: { type: String },
+            fieldPath: { type: String },
+            status: { type: String },
+            origin: { type: String },
+            locked: { type: Boolean },
+            revision: { type: Number },
+            error: { type: String, nullable: true },
+            updatedAt: { type: Date },
+        },
+    });
+    const channelSchema = new EntitySchema({
+        name: 'Channel',
+        columns: { id: { type: Number, primary: true } },
+    });
+    const channelRelations = {
+        channels: { type: 'many-to-many' as const, target: 'Channel', joinTable: true },
+    };
+    const productSchema = new EntitySchema({
+        name: 'Product',
+        columns: {
+            id: { type: Number, primary: true },
+            deletedAt: { type: Date, nullable: true, deleteDate: true },
+        },
+        relations: channelRelations,
+    });
+    const shippingSchema = new EntitySchema({
+        name: 'ShippingMethod',
+        columns: { id: { type: Number, primary: true } },
+        relations: channelRelations,
+    });
+    const blockSchema = new EntitySchema({
+        name: 'StorefrontContentBlock',
+        columns: {
+            id: { type: Number, primary: true },
+            channelId: { type: Number },
+            deletedAt: { type: Date, nullable: true },
+        },
+    });
+    const itemSchema = new EntitySchema({
+        name: 'StorefrontContentItem',
+        columns: { id: { type: Number, primary: true }, blockId: { type: Number } },
+        relations: {
+            block: { type: 'many-to-one', target: 'StorefrontContentBlock', joinColumn: { name: 'blockId' } },
+        },
+    });
+    const collectionSchema = new EntitySchema({
+        name: 'Collection',
+        columns: { id: { type: Number, primary: true }, isRoot: { type: Boolean } },
+        relations: channelRelations,
+    });
+    const countrySchema = new EntitySchema({
+        name: 'Country',
+        columns: { id: { type: String, primary: true } },
+    });
+    const announcementSchema = new EntitySchema({
+        name: 'SystemAnnouncement',
+        columns: {
+            id: { type: Number, primary: true },
+            ownerChannelId: { type: Number, nullable: true },
+            targetMode: { type: String },
+        },
+        relations: channelRelations,
+    });
+    const entities = [
+        stateSchema,
+        channelSchema,
+        productSchema,
+        shippingSchema,
+        blockSchema,
+        itemSchema,
+        collectionSchema,
+        countrySchema,
+        announcementSchema,
+    ];
+    const database = new DataSource({ type: 'sqljs', entities, synchronize: true });
+    const ctx = { channelId: '1', channel: { code: 'merchant-one' } } as any;
+    const platform = { channelId: '1', channel: { code: '__default_channel__' } } as any;
+    const translationOptions = {
+        provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
+        glossary: {},
+        sourceLanguageCode: 'zh_Hans',
+        targetLanguageCode: 'en',
+    };
+    let service: ContentTranslationService;
+    let adapter: TranslationContentAdapter;
+    let historyBefore: unknown;
+    let visibleIds: number[];
+
+    beforeAll(async () => {
+        await database.initialize();
+        const channelRepo = database.getRepository(channelSchema);
+        const [one, two] = await channelRepo.save([{ id: 1 }, { id: 2 }]);
+        await database.getRepository(productSchema).save([
+            { id: 1, channels: [one, two] },
+            { id: 2, channels: [two] },
+            { id: 3, channels: [one], deletedAt: new Date('2026-01-01') },
+        ]);
+        await database.getRepository(shippingSchema).save([
+            { id: 8, channels: [one, two] },
+            { id: 9, channels: [two] },
+        ]);
+        await database.getRepository(blockSchema).save([
+            { id: 1, channelId: 1 },
+            { id: 2, channelId: 2 },
+            { id: 3, channelId: 1, deletedAt: new Date('2026-01-01') },
+        ]);
+        await database.getRepository(itemSchema).save([
+            { id: 1, blockId: 1 },
+            { id: 2, blockId: 2 },
+            { id: 3, blockId: 3 },
+        ]);
+        await database.getRepository(collectionSchema).save([
+            { id: 1, isRoot: true, channels: [one] },
+            { id: 2, isRoot: false, channels: [one] },
+        ]);
+        await database.getRepository(countrySchema).save({ id: 'country-uuid' });
+        await database.getRepository(announcementSchema).save([
+            { id: 1, ownerChannelId: 1, targetMode: 'SINGLE', channels: [one] },
+            { id: 2, ownerChannelId: 1, targetMode: 'MULTIPLE', channels: [one, two] },
+            { id: 3, ownerChannelId: null, targetMode: 'ALL', channels: [] },
+            { id: 4, ownerChannelId: 2, targetMode: 'SINGLE', channels: [one] },
+            { id: 5, ownerChannelId: 1, targetMode: 'SINGLE', channels: [one, two] },
+        ]);
+        const identities = [
+            ['StorefrontContentItem', '1', 'STALE'],
+            ['StorefrontContentItem', '196', 'STALE'],
+            ['StorefrontContentItem', '2', 'STALE'],
+            ['StorefrontContentItem', '3', 'STALE'],
+            ['StorefrontContentBlock', '1', 'AUTO_TRANSLATED'],
+            ['StorefrontContentBlock', '2', 'STALE'],
+            ['StorefrontContentBlock', '3', 'STALE'],
+            ['Product', '1', 'FAILED'],
+            ['Product', '2', 'FAILED'],
+            ['Product', '3', 'FAILED'],
+            ['Product', 'invalid-id', 'FAILED'],
+            ['ShippingMethod', '8', 'TRANSLATING'],
+            ['ShippingMethod', '9', 'STALE'],
+            ['Country', 'country-uuid', 'PENDING'],
+            ['Collection', '1', 'STALE'],
+            ['Collection', '2', 'NOTIFY_PENDING'],
+            ['SystemAnnouncement', '1', 'MANUAL_LOCKED'],
+            ['SystemAnnouncement', '2', 'STALE'],
+            ['SystemAnnouncement', '3', 'STALE'],
+            ['SystemAnnouncement', '4', 'STALE'],
+            ['SystemAnnouncement', '5', 'STALE'],
+            ['ImageModelConfig', 'missing-metadata', 'STALE'],
+            ['UnregisteredEntity', '1', 'STALE'],
+        ];
+        const rows = identities.map(([entityType, entityId, status], index) => ({
+            channelId: '1',
+            entityType,
+            entityId,
+            status,
+            fieldPath: 'description',
+            origin: 'MANUAL',
+            locked: true,
+            revision: 4,
+            error: null,
+            updatedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+        }));
+        await database
+            .getRepository(stateSchema)
+            .insert([...rows, { ...rows[7], channelId: '2' }, { ...rows[13], channelId: null }]);
+        const connection = {
+            rawConnection: database,
+            getRepository: () => database.getRepository(stateSchema),
+        } as any;
+        service = new ContentTranslationService(connection, translationOptions);
+        adapter = new TranslationContentAdapter(connection);
+        const history = await database.getRepository(stateSchema).find({ order: { id: 'ASC' } });
+        historyBefore = structuredClone(history);
+        visibleIds = [];
+        for (const row of history) {
+            if (
+                row.channelId === '1' &&
+                (await adapter.isVisibleInChannel(database.manager, row as ContentTranslationState, '1'))
+            )
+                visibleIds.push(Number(row.id));
+        }
+        expect(visibleIds).toHaveLength(7);
+    });
+    afterAll(async () => {
+        if (database.isInitialized) await database.destroy();
+    });
+
+    it('matches actual adapter ownership before pagination and all audit counts', async () => {
+        const result = await service.audit(ctx, '1', { take: 100 });
+        expect(result.states.map(state => Number(state.id)).sort((a, b) => a - b)).toEqual(visibleIds);
+        expect(result.total).toBe(7);
+        expect(result.filteredTotal).toBe(7);
+        expect(result.counts.reduce((sum, row) => sum + row.count, 0)).toBe(7);
+        expect(await service.countStale(ctx)).toBe(5);
+    });
+    it('does not leave holes or repeats when newer historical orphan rows precede visible rows', async () => {
+        const ids: number[] = [];
+        for (let skip = 0; skip < 8; skip += 2) {
+            const page = await service.audit(ctx, '1', { skip, take: 2 });
+            expect(page.total).toBe(7);
+            expect(page.filteredTotal).toBe(7);
+            ids.push(...page.states.map(state => Number(state.id)));
+        }
+        expect(ids).toHaveLength(7);
+        expect(new Set(ids).size).toBe(7);
+        expect([...ids].sort((a, b) => a - b)).toEqual(visibleIds);
+    });
+    it('counts only visible actionable states in the merchant pending badge', async () => {
+        expect(await service.countStale(ctx)).toBe(5);
+    });
+    it('keeps search and status filters consistent without orphan counts', async () => {
+        const pending = await service.audit(ctx, '1', { status: 'STALE', take: 100 });
+        expect(pending.filteredTotal).toBe(1);
+        expect(pending.states.map(state => state.entityId)).toEqual(['1']);
+        expect(pending.counts).toContainEqual({ status: 'STALE', count: 1 });
+        expect(pending.total).toBe(7);
+        const orphan = await service.audit(ctx, '1', { search: '196' });
+        expect(orphan.states).toEqual([]);
+        expect(orphan.filteredTotal).toBe(0);
+        expect(orphan.total).toBe(7);
+    });
+    it('preserves complete platform history and leaves all audit rows unchanged', async () => {
+        const all = await service.audit(platform, undefined, { take: 100 });
+        expect(all.states).toHaveLength(25);
+        expect(all.total).toBe(25);
+        expect(all.states.some(state => state.entityId === '196')).toBe(true);
+        expect((await service.audit(platform, '1', { take: 100 })).total).toBe(24);
+        await service.countStale(ctx);
+        expect(await database.getRepository(stateSchema).find({ order: { id: 'ASC' } })).toEqual(
+            historyBefore,
+        );
+    });
+    it('generates PostgreSQL visibility queries without casting historical identifiers to numbers', async () => {
+        const postgres = new DataSource({ type: 'postgres', entities });
+        // Build driver metadata only; no connection to a PostgreSQL server is made.
+        await (postgres as any).buildMetadatas();
+        const queries: string[] = [];
+        const many = vi
+            .spyOn(SelectQueryBuilder.prototype, 'getManyAndCount')
+            .mockImplementation(function () {
+                queries.push(this.getSql());
+                return Promise.resolve([[], 0] as [never[], number]);
+            });
+        const raw = vi.spyOn(SelectQueryBuilder.prototype, 'getRawMany').mockImplementation(function () {
+            queries.push(this.getSql());
+            return Promise.resolve([]);
+        });
+        const count = vi.spyOn(SelectQueryBuilder.prototype, 'getCount').mockImplementation(function () {
+            queries.push(this.getSql());
+            return Promise.resolve(0);
+        });
+        try {
+            const postgresService = new ContentTranslationService(
+                {
+                    rawConnection: postgres,
+                    getRepository: () => postgres.getRepository(stateSchema),
+                } as any,
+                translationOptions,
+            );
+            await postgresService.audit(ctx, '1', { take: 20 });
+            await postgresService.countStale(ctx);
+            expect(queries).toHaveLength(3);
+            for (const query of queries) {
+                expect(query).toContain('EXISTS');
+                expect(query).toMatch(/CAST\("audit_entity_\d+"\."id" AS TEXT\)/);
+                expect(query).not.toMatch(/CAST\("state"\."entityId"/);
+                expect(query).toContain('COUNT(DISTINCT');
+            }
+        } finally {
+            many.mockRestore();
+            raw.mockRestore();
+            count.mockRestore();
+        }
     });
 });
 
@@ -394,7 +700,7 @@ describe('ContentTranslationService localized fields', () => {
         ).rejects.toThrow('必须填写不含中文的英文内容');
     });
 
-    it('counts stale translations in the active channel', async () => {
+    it('preserves platform stale counts including global historical records', async () => {
         const repository = {
             count: vi.fn().mockResolvedValue(3),
         };
@@ -405,18 +711,9 @@ describe('ContentTranslationService localized fields', () => {
             targetLanguageCode: 'en',
         });
 
-        await expect(service.countStale({ channelId: 'channel-1' } as any)).resolves.toBe(3);
-        expect(repository.count).toHaveBeenCalledWith({
-            where: [
-                {
-                    channelId: 'channel-1',
-                    status: expect.objectContaining({
-                        _value: expect.arrayContaining(['STALE', 'PENDING', 'NOTIFY_PENDING', 'FAILED']),
-                    }),
-                },
-            ],
-        });
-        await service.countStale({ channelId: 'default', channel: { code: '__default_channel__' } } as any);
+        await expect(
+            service.countStale({ channelId: 'default', channel: { code: '__default_channel__' } } as any),
+        ).resolves.toBe(3);
         expect(repository.count).toHaveBeenLastCalledWith({
             where: [
                 { channelId: 'default', status: expect.anything() },
