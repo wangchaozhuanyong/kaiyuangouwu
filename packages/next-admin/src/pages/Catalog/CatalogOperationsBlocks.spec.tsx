@@ -132,6 +132,26 @@ describe('digital product inventory controls', () => {
         });
     });
 
+    it.each([
+        ['', null],
+        ['0', 0],
+    ])('persists cleared and zero cost from the existing operations editor: %s', async (value, expected) => {
+        await mount(<CatalogOperationsBlock context={context('physical')} />);
+        const costInput = [...host.querySelectorAll<HTMLInputElement>('input')].find(input =>
+            input.closest('label')?.textContent?.includes('采购成本'),
+        )!;
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(costInput, value);
+            costInput.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        const save = [...host.querySelectorAll('button')].find(button =>
+            button.textContent?.includes('保存供应链信息'),
+        )!;
+        expect(host.textContent).toContain(expected == null ? '毛利 —' : '毛利 100.0%');
+        await act(async () => save.click());
+        expect(mocks.update.mock.calls[0][0].variables.input.purchaseCostMicrounits).toBe(expected);
+    });
+
     it('does not display or load automatic unpacking for digital products', () => {
         expect(renderToStaticMarkup(<ProductPackagingBlock context={context('digital')} />)).toBe('');
         expect(mocks.query).toHaveBeenCalledWith(

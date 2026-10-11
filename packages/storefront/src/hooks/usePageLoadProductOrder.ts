@@ -30,10 +30,19 @@ export function usePageLoadProductOrder({
         client.setQueryData(queryKey, selection);
     }, [client, queryKey, selection, fixed, previous]);
 
+    const candidatesById = new Map(candidates.map(product => [product.id, product]));
+    const settled =
+        selection?.flatMap(product => {
+            const latest = candidatesById.get(product.id);
+            return latest ? [latest] : ready ? [] : [product];
+        }) ?? [];
+    // Keep the original identity order for restoration. Confirmed unavailable identities
+    // do not occupy the visible quota; any current fallback candidates follow that order.
+    const originalIds = new Set(selection?.map(product => product.id));
+    const replacements = ready && fixed ? select().filter(product => !originalIds.has(product.id)) : [];
     return {
-        products:
-            selection?.map(product => candidates.find(candidate => candidate.id === product.id) ?? product) ??
-            [],
+        products: [...settled, ...replacements].slice(0, selection?.length ?? 0),
+        selectedIds: selection?.map(product => product.id) ?? [],
         loading: !selection,
     };
 }

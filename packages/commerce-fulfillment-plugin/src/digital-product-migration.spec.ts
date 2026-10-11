@@ -2,6 +2,7 @@ import { Product, ProductVariant, StockLevel } from '@vendure/core';
 import { GovernanceService } from '@vendure/store-management-plugin';
 import { buildSchema, parse, print, validate } from 'graphql';
 import 'reflect-metadata';
+import { FindOperator } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DigitalProductAdminResolver } from './digital-product.resolver';
@@ -24,6 +25,7 @@ function migrationHarness(variantId = '12', productId = '6', stockId = '23') {
             channels: [defaultChannel, current],
             customFields: { fulfillmentType: 'digital' },
         },
+        otherVariants: [] as any[],
         variant: {
             id: variantId,
             productId,
@@ -70,6 +72,7 @@ function migrationHarness(variantId = '12', productId = '6', stockId = '23') {
     let onLock: (() => void) | undefined;
     let staleStockRead: typeof state.stocks | undefined;
     const table = (entity: any): any[] => {
+        if (entity === ProductVariant) return [state.variant, ...state.otherVariants];
         if (entity === StockLevel) return state.stocks;
         if (entity === DigitalVariantConfig) return state.configurations;
         if (entity === DigitalQuotaMovement) return state.movements;
@@ -78,10 +81,21 @@ function migrationHarness(variantId = '12', productId = '6', stockId = '23') {
         if (entity.name === 'FulfillmentLine') return state.fulfillments;
         return [];
     };
-    const matches = (row: any, where: any = {}) =>
-        Object.entries(where as Record<string, string | number>).every(
-            ([key, value]) => typeof value === 'object' || String(row[key]) === String(value),
-        );
+    const matches = (row: any, where: any = {}): boolean =>
+        Object.entries(where).every(([key, value]) => {
+            if (value instanceof FindOperator) {
+                if (value.type === 'in')
+                    return value.value.some((id: unknown) => String(row[key]) === String(id));
+                if (value.type === 'isNull') return row[key] == null;
+                return true;
+            }
+            if (value && typeof value === 'object') {
+                return Array.isArray(row[key])
+                    ? row[key].some((item: unknown) => matches(item, value))
+                    : matches(row[key] ?? {}, value);
+            }
+            return String(row[key]) === String(value);
+        });
     const connection = {
         getEntityOrThrow: vi.fn((request: any, entity: any, id: any, options: any = {}) => {
             calls.push(`read:${entity.name}`);
@@ -243,6 +257,39 @@ function migrationHarness(variantId = '12', productId = '6', stockId = '23') {
 }
 
 describe('explicit legacy digital stock ownership migration', () => {
+    it('counts only currently assigned operating stores before switching native tracking off', async () => {
+        const test = migrationHarness();
+        test.state.variant.channels.push(test.other);
+        test.state.configurations.push(
+            { productVariantId: '12', channelId: '5', migrationState: 'ACTIVE' },
+            { productVariantId: '12', channelId: 'removed-store', migrationState: 'ACTIVE' },
+            { productVariantId: '12', channelId: '1', migrationState: 'ACTIVE' },
+        );
+        await expect(test.service.allStoresMigrated(test.ctx, '12')).resolves.toBe(false);
+        test.state.configurations.push({ productVariantId: '12', channelId: '8', migrationState: 'ACTIVE' });
+        await expect(test.service.allStoresMigrated(test.ctx, '12')).resolves.toBe(true);
+        test.state.variant.channels = [{ id: '1', code: '__default_channel__' }];
+        await expect(test.service.allStoresMigrated(test.ctx, '12')).resolves.toBe(false);
+    });
+
+    it('limits digital workspace SKUs and cost reads to the current store and keeps cleared cost null', async () => {
+        const test = migrationHarness();
+        test.state.otherVariants.push(
+            { ...test.state.variant, id: 'other-store-variant', channels: [test.other] },
+            { ...test.state.variant, id: 'deleted-variant', deletedAt: new Date() },
+            { ...test.state.variant, id: 'different-product', productId: 'other-product' },
+        );
+        const catalog = {
+            latestCost: vi.fn().mockResolvedValue({ costMicrounits: null }),
+            variantSupplier: vi.fn().mockResolvedValue(null),
+        };
+        const service = new DigitalProductService(test.connection as never, {} as never, catalog as never);
+        const result = await service.workspace(test.ctx, '6');
+        expect(result.variants.map(variant => variant.id)).toEqual(['12']);
+        expect(result.variants[0].purchaseCostMicrounits).toBeNull();
+        expect(catalog.latestCost).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps unconfirmed rows blocked, exposes only complete confirmable rows, and never mutates preview data', async () => {
         const test = migrationHarness();
         const original = structuredClone(test.state);
@@ -590,7 +637,7 @@ describe('explicit legacy digital stock ownership migration', () => {
     it('retains the existing exported governance service as the runtime audit injection token', async () => {
         // DI metadata belongs to the production TypeScript output, not Vitest's source transform.
         const { DigitalProductService: CompiledDigitalProductService } =
-            await import('../dist/digital-product.service');
+            await import('../dist/digital-product.service.js');
         expect(Reflect.getMetadata('design:paramtypes', CompiledDigitalProductService)[4]).toBe(
             GovernanceService,
         );

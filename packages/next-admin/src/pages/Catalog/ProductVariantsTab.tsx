@@ -279,7 +279,7 @@ export function ProductVariantsTab() {
                             <AdminField
                                 layout="stacked"
                                 className="block space-y-1.5 text-xs font-semibold text-slate-700"
-                                label={<>成本 ({activeCurrencyCode})</>}
+                                label={<>成本 ({activeCurrencyCode}，选填)</>}
                             >
                                 {' '}
                                 <AdminInput

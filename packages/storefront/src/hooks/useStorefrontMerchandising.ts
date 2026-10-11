@@ -19,6 +19,7 @@ import {
 } from '../types';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
+import { useDeferredHomeCatalogs } from './useDeferredHomeCatalogs';
 import { usePageLoadProductOrder } from './usePageLoadProductOrder';
 export function useStorefrontMerchandising({
     api,
@@ -62,8 +63,17 @@ export function useStorefrontMerchandising({
     const homeContentReady = activeRoute === 'home' && contentReady;
     const recommendationsReady =
         (activeRoute === 'home' || activeRoute === 'recommendations') && contentReady;
-    const bestSellersEnabled = storefrontContextResolved && homeContentReady && showBestSellers;
-    const recommendationsEnabled = storefrontContextResolved && recommendationsReady && showRecommendations;
+    const deferred = useDeferredHomeCatalogs(
+        JSON.stringify([storefrontQueryKeys.market(market), vendureLanguageCode]),
+        homeContentReady,
+    );
+    const bestSellersEnabled =
+        storefrontContextResolved && homeContentReady && deferred.sales && showBestSellers;
+    const recommendationsEnabled =
+        storefrontContextResolved &&
+        recommendationsReady &&
+        (activeRoute !== 'home' || deferred.recommended) &&
+        showRecommendations;
 
     // Keep enough variety for configured sections without loading the previous
     // 48-product ceiling on every home visit. Larger managed sections still
@@ -111,7 +121,7 @@ export function useStorefrontMerchandising({
 
     const pinnedBestSellerQuery = useProductsByIdsQuery({
         api,
-        productIds: homeContentReady ? pinnedBestSellerIds : [],
+        productIds: bestSellersEnabled ? pinnedBestSellerIds : [],
         market,
         language,
     });
@@ -124,7 +134,7 @@ export function useStorefrontMerchandising({
 
     const personalizationSourceQuery = useProductsByIdsQuery({
         api,
-        productIds: recommendationsReady ? personalizationSourceIds : [],
+        productIds: recommendationsEnabled ? personalizationSourceIds : [],
         market,
         language,
     });
@@ -143,7 +153,7 @@ export function useStorefrontMerchandising({
     const day = new Date().toISOString().slice(0, 10);
     const bestSellerProducts = buildBestSellerProducts({
         pinnedProducts: pinnedBestSellerQuery.data ?? [],
-        candidates: bestSellerCandidates,
+        candidates: [...bestSellerCandidates, ...(pinnedBestSellerQuery.data ?? [])],
         salesByProductId: bestSellerSalesQuery.data ?? {},
         count: bestSellerDisplayCount,
         seed: `${market.code}:${day}:best-sellers`,
@@ -169,7 +179,7 @@ export function useStorefrontMerchandising({
         scope,
         kind: 'best-sellers',
         ready: bestSellersEnabled && !bestSellersLoading,
-        candidates: bestSellerCandidates,
+        candidates: [...bestSellerCandidates, ...(pinnedBestSellerQuery.data ?? [])],
         select: () => bestSellerProducts,
     });
     const recommendations = usePageLoadProductOrder({
@@ -187,11 +197,52 @@ export function useStorefrontMerchandising({
                 seed: `${market.code}:${day}:recommendations`,
             }),
     });
+    const visibleReferenceQuery = useProductsByIdsQuery({
+        api,
+        market,
+        language,
+        enabled: bestSellersEnabled || recommendationsEnabled,
+        productIds: [
+            ...new Set([
+                ...bestSellers.selectedIds,
+                ...recommendations.selectedIds,
+                ...bestSellers.products.map(product => product.id),
+                ...recommendations.products.map(product => product.id),
+            ]),
+        ],
+    });
+    const currentProducts =
+        visibleReferenceQuery.data === undefined
+            ? null
+            : new Map(visibleReferenceQuery.data.map(product => [product.id, product]));
+    const resolvedProducts = (selected: Product[], candidateUpdatedAt: number) =>
+        currentProducts
+            ? selected.flatMap(product => {
+                  const current = currentProducts.get(product.id);
+                  return current
+                      ? [candidateUpdatedAt >= visibleReferenceQuery.dataUpdatedAt ? product : current]
+                      : [];
+              })
+            : selected;
     return {
-        bestSellerProducts: bestSellers.products,
-        recommendationProducts: recommendations.products,
+        bestSellerProducts: resolvedProducts(
+            bestSellers.products,
+            Math.max(bestSellerCatalogQuery.dataUpdatedAt, pinnedBestSellerQuery.dataUpdatedAt),
+        ),
+        recommendationProducts: resolvedProducts(
+            recommendations.products,
+            recommendationCatalogQuery.dataUpdatedAt,
+        ),
         recommendationsBlock,
-        bestSellersLoading: bestSellersEnabled && bestSellers.loading,
-        recommendationsLoading: recommendationsEnabled && recommendations.loading,
+        bestSellersLoading:
+            storefrontContextResolved &&
+            homeContentReady &&
+            showBestSellers &&
+            (!deferred.sales || bestSellers.loading),
+        recommendationsLoading:
+            storefrontContextResolved &&
+            recommendationsReady &&
+            showRecommendations &&
+            ((activeRoute === 'home' && !deferred.recommended) || recommendations.loading),
     };
 }

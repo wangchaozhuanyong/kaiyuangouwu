@@ -8,12 +8,13 @@ import {
     Collection,
     EntityNotFoundError,
     EventBus,
+    Product,
     RequestContext,
     TransactionalConnection,
     TranslatorService,
     UserInputError,
 } from '@vendure/core';
-import { In, LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
+import { In, IsNull, LockNotSupportedOnGivenDriverError, Not } from 'typeorm';
 
 import {
     authVisualCodeByType,
@@ -195,6 +196,7 @@ export class StorefrontContentService {
         this.validateAccountHero(normalized, input.items ?? []);
         this.assertEnabledCoreHasItems(normalized.type, normalized.enabled, input.items ?? []);
         await this.validateDesktopCategoryBanner(ctx, normalized, input.items ?? []);
+        await this.validateNewProductReferences(ctx, normalized, input.items ?? []);
         await this.assertUniqueCode(ctx, normalized.code);
         const image = await this.resolveImage(ctx, normalized.imageAssetId, normalized.imageUrl, '区块图片');
         this.assertEnabledHeroHasImage(normalized.type, normalized.enabled, image);
@@ -315,6 +317,7 @@ export class StorefrontContentService {
         );
         this.assertEnabledCoreHasItems(next.type, next.enabled, input.items ?? block.items);
         await this.validateDesktopCategoryBanner(ctx, next, input.items ?? block.items);
+        await this.validateNewProductReferences(ctx, next, input.items ?? block.items, block);
         await this.assertUniqueCode(ctx, next.code, block.id);
         const requestedImageUrl =
             input.imageAssetId === null && input.imageUrl === undefined ? null : next.imageUrl;
@@ -1031,6 +1034,44 @@ export class StorefrontContentService {
         }
         if (items.length) {
             throw new UserInputError('个人中心头图不支持配置子项');
+        }
+    }
+
+    private async validateNewProductReferences(
+        ctx: RequestContext,
+        next: {
+            targetType: string;
+            targetValue?: string | null;
+            settings?: StorefrontContentSettingsValue | null;
+        },
+        items: Array<{ targetType?: string | null; targetValue?: string | null }>,
+        previous?: StorefrontContentBlock,
+    ): Promise<void> {
+        const identities = (block: typeof next, rows: typeof items) => [
+            ...new Set([
+                ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
+                ...rows.flatMap(item =>
+                    item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+                ),
+                ...['selectedProductIds', 'pinnedProductIds'].flatMap(key => {
+                    const value = block.settings?.[key];
+                    return Array.isArray(value)
+                        ? value.filter((id): id is string => typeof id === 'string' && Boolean(id))
+                        : [];
+                }),
+            ]),
+        ];
+        const retained = new Set(previous ? identities(previous, previous.items) : []);
+        const added = identities(next, items).filter(id => !retained.has(id));
+        for (let offset = 0; offset < added.length; offset += 100) {
+            const batch = added.slice(offset, offset + 100);
+            const products = await this.connection.getRepository(ctx, Product).find({
+                where: { id: In(batch), channels: { id: ctx.channelId }, enabled: true, deletedAt: IsNull() },
+            });
+            if (products.length !== batch.length)
+                throw new UserInputError(
+                    '新增关联必须选择当前店铺中已启用的有效商品；原有暂不可用关联可继续保留',
+                );
         }
     }
 

@@ -32,7 +32,10 @@ import {
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
-import { heroContentForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
+import {
+    heroContentForViewport,
+    heroImageForViewport,
+} from '../../../storefront-content-plugin/src/shared/hero-image';
 import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
@@ -85,6 +88,7 @@ import {
     trimText,
 } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
+import homeStyles from '../styles/home-showcase.css?inline';
 import {
     CollectionSummary,
     MarketConfig,
@@ -345,6 +349,9 @@ export interface HomePageProps {
     contentBlocks: StorefrontContentBlock[];
     managedContentProducts: Product[];
     managedContentLoading?: boolean;
+    managedContentResolved?: boolean;
+    /** Anonymous SSR emits both shortcut geometries for native media-query selection. */
+    responsiveIntro?: boolean;
     heroAutoplayIntervalSeconds: number;
     configuredBlockTypes: Array<StorefrontContentBlock['type']>;
     coupons: StorefrontCouponCampaign[];
@@ -411,6 +418,8 @@ export function HomePage() {
         contentBlocks,
         managedContentProducts,
         managedContentLoading = false,
+        managedContentResolved = false,
+        responsiveIntro = false,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         coupons,
@@ -485,8 +494,23 @@ export function HomePage() {
             ? [entry.block]
             : [],
     );
+    const managedIds = new Set(
+        contentBlocks.flatMap(block => [
+            ...contentStringArraySetting(block.settings?.selectedProductIds),
+            ...contentStringArraySetting(block.settings?.pinnedProductIds),
+            ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
+            ...block.items.flatMap(item =>
+                item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+            ),
+        ]),
+    );
     const managedContentProductPool = Array.from(
-        new Map([...products, ...managedContentProducts].map(product => [product.id, product])).values(),
+        new Map(
+            [
+                ...products.filter(product => !managedContentResolved || !managedIds.has(product.id)),
+                ...managedContentProducts,
+            ].map(product => [product.id, product]),
+        ).values(),
     );
     const [heroIndex, setHeroIndex] = useState(0);
     const [readyHeroImage, setReadyHeroImage] = useState('');
@@ -958,10 +982,11 @@ export function HomePage() {
     const visibleQuickLinks = desktop
         ? quickLinks.slice(activeQuickPage * 5, activeQuickPage * 5 + 5)
         : quickLinks;
+    const desktopQuickLinks = quickLinks.slice(activeQuickPage * 5, activeQuickPage * 5 + 5);
     const desktopQuickRows =
-        visibleQuickLinks.length > 3
-            ? [visibleQuickLinks.slice(0, 2), visibleQuickLinks.slice(2)]
-            : [visibleQuickLinks];
+        desktopQuickLinks.length > 3
+            ? [desktopQuickLinks.slice(0, 2), desktopQuickLinks.slice(2)]
+            : [desktopQuickLinks];
     const trustIcons = [ShieldCheck, Zap, Lock, Headphones];
     const trustItems = (trustBlock?.items ?? [])
         .filter(item => item.enabled && (item.label.trim() || item.description.trim()))
@@ -1017,7 +1042,7 @@ export function HomePage() {
         .map(type => homepageModuleOrder(type as StorefrontContentBlock['type']))
         .filter(order => order >= 0);
     const groupedIntro =
-        desktop &&
+        (desktop || responsiveIntro) &&
         introOrders.length > 0 &&
         homepageModules
             .slice(Math.min(...introOrders), Math.max(...introOrders) + 1)
@@ -1025,6 +1050,10 @@ export function HomePage() {
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
+            <style href="storefront-home-showcase" precedence="commerce">
+                {homeStyles}
+            </style>
+
             <MobilePageHeader
                 title={storefrontName}
                 storefrontName={storefrontName}
@@ -1191,6 +1220,11 @@ export function HomePage() {
                                                           ? `calc(${direction * 100}% + ${offset}px)`
                                                           : `${offset}px`;
                                                     const slideImage = slide.imageUrl ?? '';
+                                                    const artwork =
+                                                        contentBlocks.find(block => block.id === slide.id) ??
+                                                        slide;
+                                                    const desktopImage = heroImageForViewport(artwork, true);
+                                                    const mobileImage = heroImageForViewport(artwork, false);
                                                     return (
                                                         <div
                                                             key={slide.id}
@@ -1268,7 +1302,25 @@ export function HomePage() {
                                                                 onOpen={() => openHero(slide)}
                                                                 image={
                                                                     <SafeImage
-                                                                        src={slideImage}
+                                                                        src={desktopImage.imageUrl}
+                                                                        mediaSources={
+                                                                            mobileImage.imageUrl !==
+                                                                            desktopImage.imageUrl
+                                                                                ? [
+                                                                                      {
+                                                                                          media: phoneHeroQuery,
+                                                                                          src: mobileImage.imageUrl,
+                                                                                          sizes: 'calc(100vw - 20px)',
+                                                                                          width: mobileImage
+                                                                                              .imageAsset
+                                                                                              ?.width,
+                                                                                          height: mobileImage
+                                                                                              .imageAsset
+                                                                                              ?.height,
+                                                                                      },
+                                                                                  ]
+                                                                                : undefined
+                                                                        }
                                                                         alt={
                                                                             slide.title ||
                                                                             (isZh
@@ -1336,77 +1388,77 @@ export function HomePage() {
                                               : 'Quick links'
                                     }
                                 >
-                                    {desktop
-                                        ? desktopQuickRows.map((row, rowIndex) => (
-                                              <div
-                                                  className="desktop-quick-row"
-                                                  key={rowIndex}
-                                                  style={{
-                                                      gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
-                                                  }}
-                                              >
-                                                  {row.map(item => {
-                                                      const Target = item.href ? 'a' : 'button';
-                                                      return (
-                                                          <Target
-                                                              type={item.href ? undefined : 'button'}
-                                                              href={item.href}
-                                                              className="desktop-quick-tile"
-                                                              key={item.id}
-                                                              onClick={event =>
-                                                                  item.href
-                                                                      ? interceptContentNavigation(
-                                                                            event,
-                                                                            item.onClick,
-                                                                        )
-                                                                      : item.onClick()
-                                                              }
-                                                              disabled={item.href ? undefined : item.disabled}
-                                                          >
-                                                              <span
-                                                                  className="desktop-quick-media"
-                                                                  aria-hidden="true"
-                                                              >
-                                                                  {item.imageUrl ? (
-                                                                      <SafeImage
-                                                                          src={item.imageUrl}
-                                                                          alt=""
-                                                                          imageKind="card"
-                                                                          sizes="(min-width: 1400px) 210px, 20vw"
-                                                                      />
-                                                                  ) : (
-                                                                      item.icon
-                                                                  )}
-                                                              </span>
-                                                              <b>{item.label}</b>
-                                                          </Target>
-                                                      );
-                                                  })}
-                                              </div>
-                                          ))
-                                        : visibleQuickLinks.map(item => {
-                                              const Target = item.href ? 'a' : 'button';
-                                              return (
-                                                  <Target
-                                                      type={item.href ? undefined : 'button'}
-                                                      href={item.href}
-                                                      key={item.id}
-                                                      onClick={event =>
-                                                          item.href
-                                                              ? interceptContentNavigation(
-                                                                    event,
-                                                                    item.onClick,
-                                                                )
-                                                              : item.onClick()
-                                                      }
-                                                      disabled={item.href ? undefined : item.disabled}
-                                                  >
-                                                      <span>{item.icon}</span>
-                                                      <b>{item.label}</b>
-                                                  </Target>
-                                              );
-                                          })}
-                                    {desktop && quickPageCount > 1 && (
+                                    {!desktop &&
+                                        visibleQuickLinks.map(item => {
+                                            const Target = item.href ? 'a' : 'button';
+                                            return (
+                                                <Target
+                                                    type={item.href ? undefined : 'button'}
+                                                    href={item.href}
+                                                    className="mobile-quick-tile"
+                                                    key={item.id}
+                                                    onClick={event =>
+                                                        item.href
+                                                            ? interceptContentNavigation(event, item.onClick)
+                                                            : item.onClick()
+                                                    }
+                                                    disabled={item.href ? undefined : item.disabled}
+                                                >
+                                                    <span>{item.icon}</span>
+                                                    <b>{item.label}</b>
+                                                </Target>
+                                            );
+                                        })}
+                                    {(desktop || responsiveIntro) &&
+                                        desktopQuickRows.map((row, rowIndex) => (
+                                            <div
+                                                className="desktop-quick-row"
+                                                key={rowIndex}
+                                                style={{
+                                                    gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))`,
+                                                }}
+                                            >
+                                                {row.map(item => {
+                                                    const Target = item.href ? 'a' : 'button';
+                                                    return (
+                                                        <Target
+                                                            type={item.href ? undefined : 'button'}
+                                                            href={item.href}
+                                                            className="desktop-quick-tile"
+                                                            key={item.id}
+                                                            onClick={event =>
+                                                                item.href
+                                                                    ? interceptContentNavigation(
+                                                                          event,
+                                                                          item.onClick,
+                                                                      )
+                                                                    : item.onClick()
+                                                            }
+                                                            disabled={item.href ? undefined : item.disabled}
+                                                        >
+                                                            <span
+                                                                className="desktop-quick-media"
+                                                                aria-hidden="true"
+                                                            >
+                                                                {item.imageUrl ? (
+                                                                    <SafeImage
+                                                                        src={item.imageUrl}
+                                                                        alt=""
+                                                                        imageKind="card"
+                                                                        loading="lazy"
+                                                                        sizes="(min-width: 1400px) 210px, 20vw"
+                                                                    />
+                                                                ) : (
+                                                                    item.icon
+                                                                )}
+                                                            </span>
+                                                            <b>{item.label}</b>
+                                                        </Target>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))}
+                                    {(desktop || responsiveIntro) && quickPageCount > 1 && (
                                         <div className="desktop-quick-pagination">
                                             <button
                                                 type="button"
@@ -1483,6 +1535,7 @@ export function HomePage() {
                                     block={block}
                                     products={managedContentProductPool}
                                     loading={managedContentLoading}
+                                    productsResolved={managedContentResolved}
                                     language={language}
                                     locale={locale}
                                     market={market}
@@ -1553,6 +1606,7 @@ export function HomePage() {
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('BEST_SELLERS') }}
+                                data-home-catalog="sales"
                             >
                                 <ProductSection
                                     kind="best-sellers"
@@ -1583,6 +1637,7 @@ export function HomePage() {
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
+                                data-home-catalog="recommended"
                             >
                                 <ProductSection
                                     kind="recommendations"
@@ -1742,6 +1797,7 @@ function ManagedContentSection({
     block,
     products,
     loading = false,
+    productsResolved = false,
     language,
     locale,
     market,
@@ -1750,12 +1806,25 @@ function ManagedContentSection({
     block: StorefrontContentBlock;
     products: Product[];
     loading?: boolean;
+    productsResolved?: boolean;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
 }) {
-    const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
+    const blockHasTarget =
+        block.targetType !== 'NONE' &&
+        Boolean(block.targetValue) &&
+        (!productsResolved ||
+            block.targetType !== 'PRODUCT' ||
+            products.some(product => product.id === block.targetValue));
+    const visibleItems = block.items.filter(
+        item =>
+            item.enabled !== false &&
+            (!productsResolved ||
+                item.targetType !== 'PRODUCT' ||
+                products.some(product => product.id === item.targetValue)),
+    );
     const displayCount = Math.min(50, Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)));
     const selectedProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
     const selectedProducts = selectManagedProducts({
@@ -1791,6 +1860,7 @@ function ManagedContentSection({
             <FeaturedCollectionSection
                 block={block}
                 products={selectedProducts}
+                loading={loading}
                 market={market}
                 language={language}
                 locale={locale}
@@ -1860,11 +1930,12 @@ function ManagedContentSection({
                     products={products}
                     language={language}
                     onContentTarget={onContentTarget}
+                    productsResolved={productsResolved}
                 />
             ) : (
                 !!(block.items.length || additionalSelectedProducts.length) && (
                     <div className="managed-content-grid">
-                        {block.items.map(item => (
+                        {visibleItems.map(item => (
                             <ManagedContentItemButton
                                 key={item.id}
                                 item={item}
@@ -2028,6 +2099,7 @@ function CategoryPromotionSection({
 function FeaturedCollectionSection({
     block,
     products,
+    loading = false,
     language,
     locale,
     market,
@@ -2035,6 +2107,7 @@ function FeaturedCollectionSection({
 }: {
     block: StorefrontContentBlock;
     products: Product[];
+    loading?: boolean;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -2076,7 +2149,32 @@ function FeaturedCollectionSection({
                         </button>
                     ) : null}
                 </div>
-                {featuredProduct ? (
+                {loading && !featuredProduct ? (
+                    <div
+                        className="featured-collection-mosaic"
+                        aria-busy="true"
+                        data-product-count={Math.min(
+                            50,
+                            Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)),
+                        )}
+                    >
+                        <ProductCardSkeleton />
+                        <div className="featured-collection-supporting-products">
+                            {Array.from(
+                                {
+                                    length: Math.max(
+                                        0,
+                                        Math.min(50, contentNumberSetting(block.settings?.displayCount, 8)) -
+                                            1,
+                                    ),
+                                },
+                                (_, index) => (
+                                    <ProductCardSkeleton key={index} />
+                                ),
+                            )}
+                        </div>
+                    </div>
+                ) : featuredProduct ? (
                     <div
                         className="featured-collection-mosaic"
                         data-product-count={products.length}

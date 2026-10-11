@@ -1,8 +1,9 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { isUsableEnglishTranslation } from '@vendure/common/lib/translation-validation';
+import { Channel, Product } from '@vendure/core';
 import { Kind } from 'graphql';
 import 'reflect-metadata';
-import { Not } from 'typeorm';
+import { DataSource, EntitySchema, Not } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
@@ -16,6 +17,148 @@ import { CreateStorefrontContentBlockInput } from './types';
 import { STOREFRONT_VISUAL_PRESET_CODE } from './visual-presets';
 
 const contentPublicationStatus = createContentPublicationChecker(isUsableEnglishTranslation);
+
+describe('new product association qualification', () => {
+    it('checks enabled, non-deleted current-channel products with a real SQL relation filter', async () => {
+        const db = await new DataSource({
+            type: 'sqljs',
+            synchronize: true,
+            entities: [
+                new EntitySchema<Channel>({
+                    name: 'Channel',
+                    target: Channel,
+                    columns: { id: { type: String, primary: true } },
+                }),
+                new EntitySchema<Product>({
+                    name: 'Product',
+                    target: Product,
+                    columns: {
+                        id: { type: String, primary: true },
+                        enabled: { type: Boolean },
+                        deletedAt: { type: Date, nullable: true },
+                    },
+                    relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
+                }),
+            ],
+        }).initialize();
+        try {
+            await db.getRepository(Channel).save([{ id: 'a' }, { id: 'b' }]);
+            await db.getRepository(Product).save([
+                { id: 'valid', enabled: true, deletedAt: null, channels: [{ id: 'a' }] },
+                { id: 'disabled', enabled: false, deletedAt: null, channels: [{ id: 'a' }] },
+                { id: 'deleted', enabled: true, deletedAt: new Date(), channels: [{ id: 'a' }] },
+                { id: 'other', enabled: true, deletedAt: null, channels: [{ id: 'b' }] },
+            ]);
+            const service = new StorefrontContentService(
+                { getRepository: (_ctx: unknown, entity: any) => db.getRepository(entity) } as never,
+                {} as never,
+                {} as never,
+                {} as never,
+            );
+            const qualify = (id: string) =>
+                (service as any).validateNewProductReferences(
+                    { channelId: 'a' },
+                    { targetType: 'PRODUCT', targetValue: id },
+                    [],
+                );
+            await expect(qualify('valid')).resolves.toBeUndefined();
+            for (const id of ['disabled', 'deleted', 'other', 'unknown'])
+                await expect(qualify(id)).rejects.toThrow('新增关联必须选择当前店铺');
+        } finally {
+            await db.destroy();
+        }
+    });
+
+    it('preserves all previous references and order even when they are no longer eligible', async () => {
+        const find = vi
+            .fn()
+            .mockRejectedValue(new Error('This retained association must not be re-resolved'));
+        const service = new StorefrontContentService(
+            { getRepository: () => ({ find }) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        const previous = new StorefrontContentBlock({
+            targetType: 'PRODUCT',
+            targetValue: 'p1',
+            settings: { selectedProductIds: ['p2', 'p3'], pinnedProductIds: ['p4'] },
+            items: [
+                { targetType: 'PRODUCT', targetValue: 'p5' },
+                { targetType: 'PRODUCT', targetValue: 'p6' },
+            ] as never,
+        });
+        const before = JSON.stringify(previous);
+        await expect(
+            (service as any).validateNewProductReferences(
+                { channelId: 'a' },
+                previous,
+                previous.items,
+                previous,
+            ),
+        ).resolves.toBeUndefined();
+        expect(find).not.toHaveBeenCalled();
+        expect(JSON.stringify(previous)).toBe(before);
+    });
+
+    it('deduplicates complete IDs across target, items and settings and batches only newly added references', async () => {
+        const find = vi.fn(options => Promise.resolve(options.where.id._value.map((id: string) => ({ id }))));
+        const service = new StorefrontContentService(
+            { getRepository: () => ({ find }) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        const ids = Array.from({ length: 123 }, (_, index) => String(index));
+        await (service as any).validateNewProductReferences(
+            { channelId: 'a' },
+            {
+                targetType: 'PRODUCT',
+                targetValue: '0',
+                settings: { selectedProductIds: ids, pinnedProductIds: ['0', '1'] },
+            },
+            [{ targetType: 'PRODUCT', targetValue: '0' }],
+        );
+        expect(find.mock.calls.map(([options]) => options.where.id._value.length)).toEqual([100, 23]);
+        expect(find.mock.calls[0][0].where).toMatchObject({ channels: { id: 'a' }, enabled: true });
+        expect(find.mock.calls[0][0].where.deletedAt._type).toBe('isNull');
+    });
+
+    it('fails closed on unknown/new references and read failure without deleting retained associations', async () => {
+        const find = vi.fn().mockRejectedValue(new Error('synthetic product read failed'));
+        const save = vi.fn();
+        const service = new StorefrontContentService(
+            { getRepository: () => ({ find, save }) } as never,
+            {} as never,
+            {} as never,
+            {} as never,
+        );
+        const previous = new StorefrontContentBlock({
+            targetType: 'NONE',
+            items: [{ targetType: 'PRODUCT', targetValue: 'retained' }] as never,
+        });
+        await expect(
+            (service as any).validateNewProductReferences(
+                { channelId: 'a' },
+                { targetType: 'NONE', settings: { selectedProductIds: ['retained', 'new'] } },
+                previous.items,
+                previous,
+            ),
+        ).rejects.toThrow('synthetic product read failed');
+        expect(previous.items.map(item => item.targetValue)).toEqual(['retained']);
+        expect(save).not.toHaveBeenCalled();
+        find.mockResolvedValue([]);
+        await expect(
+            (service as any).validateNewProductReferences(
+                { channelId: 'a' },
+                { targetType: 'PRODUCT', targetValue: 'new' },
+                previous.items,
+                previous,
+            ),
+        ).rejects.toThrow('新增关联必须选择当前店铺');
+        expect(save).not.toHaveBeenCalled();
+    });
+});
 
 describe('StorefrontContentService image replacement guard', () => {
     for (const channelId of ['damatong', 'moyao']) {

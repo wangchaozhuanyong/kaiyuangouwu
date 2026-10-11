@@ -39,6 +39,7 @@ import {
 } from '../../graphql/fulfillment.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUrlTab } from '../../hooks/use-url-tab';
@@ -88,9 +89,21 @@ export function CardPoolModule() {
                 },
             },
         },
+        pollInterval: 30_000,
     });
     const variants = variantsQuery.data?.productVariants.items ?? [];
-    const selectedVariant = variants.find(item => item.id === selectedVariantId) ?? variants[0] ?? null;
+    const selectedReference = useCatalogReferences(
+        selectedVariantId ? [selectedVariantId] : [],
+        'productVariants',
+    );
+    const explicitVariant = selectedReference.available[0]?.entity as
+        AutoCardVariantsResult['productVariants']['items'][number] | undefined;
+    const selectedVariant = selectedVariantId
+        ? explicitVariant?.customFields?.fulfillmentType === 'digital' &&
+          explicitVariant.customFields.digitalDeliveryMode === 'auto_card'
+            ? explicitVariant
+            : null
+        : (variants[0] ?? null);
     const workspaceQuery = useQuery<AutoCardWorkspaceResult>(
         standalonePage
             ? selectQueryFields(
@@ -139,7 +152,7 @@ export function CardPoolModule() {
             pollInterval: 15000,
         },
     );
-    const config = workspaceQuery.data?.autoCardConfig ?? null;
+    const config = selectedVariant ? (workspaceQuery.data?.autoCardConfig ?? null) : null;
     const completed = async (message: string) => {
         setNotice(message);
         setActionError('');
@@ -232,7 +245,7 @@ export function CardPoolModule() {
                         message={toUserFacingError(variantsQuery.error, '卡密商品读取失败')}
                         onRetry={() => void variantsQuery.refetch()}
                     />
-                ) : !variants.length ? (
+                ) : !variants.length && !selectedVariantId ? (
                     <EmptyState />
                 ) : (
                     <>
@@ -242,7 +255,7 @@ export function CardPoolModule() {
                                 className="w-full xl:max-w-xl text-[10px] font-bold text-slate-400"
                             >
                                 <AdminSelect
-                                    value={selectedVariant?.id ?? ''}
+                                    value={selectedVariantId || selectedVariant?.id || ''}
                                     onChange={event => {
                                         setSelectedVariantId(event.target.value);
                                         setPoolPage(0);
@@ -250,6 +263,17 @@ export function CardPoolModule() {
                                     }}
                                     className={inputClass}
                                 >
+                                    {selectedVariantId &&
+                                        !variants.some(item => item.id === selectedVariantId) && (
+                                            <option value={selectedVariantId}>
+                                                {explicitVariant?.name ?? selectedVariantId} ·{' '}
+                                                {selectedVariant
+                                                    ? '已选 SKU'
+                                                    : selectedReference.unavailable.length
+                                                      ? '暂不可用'
+                                                      : '待核对'}
+                                            </option>
+                                        )}
                                     {variants.map(item => (
                                         <option key={item.id} value={item.id}>
                                             {item.product.name} / {item.name} · {item.sku}
@@ -275,7 +299,7 @@ export function CardPoolModule() {
                                         格式：{config.formatName} · 分隔符 {config.delimiter}
                                     </span>
                                 </div>
-                            ) : (
+                            ) : selectedVariant ? (
                                 <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
                                     <span>该 SKU 尚未完成自动发卡设置。</span>
                                     <Link
@@ -285,6 +309,18 @@ export function CardPoolModule() {
                                         回到商品页继续设置
                                     </Link>
                                 </div>
+                            ) : (
+                                <p role="status" className="text-xs text-amber-800">
+                                    原 SKU {selectedReference.unavailable.length ? '暂不可用' : '待核对'}
+                                    ，已保留选择，请核对或重新选择。
+                                    <AdminButton
+                                        type="button"
+                                        onClick={() => void selectedReference.refetch()}
+                                        className="ml-2 underline"
+                                    >
+                                        重试核对
+                                    </AdminButton>
+                                </p>
                             )}
                         </section>
                         {config && (
@@ -385,7 +421,7 @@ export function CardPoolModule() {
                                 </div>
                             )}
                         </div>
-                        {workspaceQuery.loading && !workspaceQuery.data ? (
+                        {!selectedVariant ? null : workspaceQuery.loading && !workspaceQuery.data ? (
                             <LoadingState text="正在读取真实卡密库存…" />
                         ) : workspaceQuery.error && !workspaceQuery.data ? (
                             <ErrorState

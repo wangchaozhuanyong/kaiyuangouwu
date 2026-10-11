@@ -34,6 +34,7 @@ describe('coupon category selection', () => {
             breadcrumbs: [...parents[0].breadcrumbs, { id: 'child', name: '二级分类' }],
         };
         mocks.query.mockImplementation((_document, { variables }) => {
+            if (!variables.collectionOptions) return { data: undefined, loading: false };
             const options = variables.collectionOptions;
             const search = options.filter?.name?.contains ?? '';
             const items = (options.topLevelOnly ? parents : [child, ...parents]).filter(item =>
@@ -94,7 +95,10 @@ describe('coupon category selection', () => {
             expect(host.textContent).toContain('第 2 / 2 页');
             await act(async () => field('一级分类 30').querySelector('input')!.click());
             await change(host.querySelector('input[aria-label="搜索适用分类 *"]')!, '一级分类 0');
-            expect(mocks.query.mock.calls.at(-1)![1].variables.collectionOptions).toMatchObject({
+            expect(
+                mocks.query.mock.calls.filter(call => call[1].variables.collectionOptions).at(-1)![1]
+                    .variables.collectionOptions,
+            ).toMatchObject({
                 skip: 0,
                 topLevelOnly: true,
                 filter: { name: { contains: '一级分类 0' } },

@@ -217,7 +217,7 @@ export interface CreateCatalogInitialVariantInput {
     packageQuantity: number;
     shelfLifeDays?: number | null;
     sellingPrice: number;
-    purchaseCostMicrounits: number;
+    purchaseCostMicrounits?: number | null;
     stockOnHand: number;
     minimumStock?: number | null;
     maximumStock?: number | null;

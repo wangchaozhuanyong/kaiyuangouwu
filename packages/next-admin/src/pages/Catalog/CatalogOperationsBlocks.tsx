@@ -1,10 +1,12 @@
 import { useMutation } from '@apollo/client/react';
 import { Boxes, CalendarClock, CircleDollarSign, PackageOpen, Plus, RefreshCw, Save, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { systemStatusDisplayLabel } from '../../../../common/src/system-display-labels';
+import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useServerDraft } from '../../hooks/use-server-draft';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -950,29 +952,50 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
         fetchPolicy: 'cache-and-network',
     });
     const [selectedId, setSelectedId] = useState('');
-    const [sourceSignature, setSourceSignature] = useState('');
-    const [values, setValues] = useState<CustomFieldValueMap>({});
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
+    const [readFailure, setReadFailure] = useState('');
+    const [readbackPending, setReadbackPending] = useState(false);
+    const saving = useRef(false);
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
     const [update, updateState] = useMutation<{
         updateProductVariants: Array<{ id: string }>;
     }>(UPDATE_PRODUCT_VARIANT_CUSTOM_FIELDS_MUTATION);
     const variants = query.data?.product?.variants ?? [];
-    const selected = variants.find(variant => variant.id === selectedId) ?? variants[0];
+    const selected = selectedId ? variants.find(variant => variant.id === selectedId) : variants[0];
+    const firstVariantId = variants[0]?.id;
+    /* oxlint-disable react/set-state-in-effect -- remember the initial SKU so its removal cannot silently select another SKU. */
+    useEffect(() => {
+        if (!selectedId && firstVariantId) setSelectedId(firstVariantId);
+    }, [firstVariantId, selectedId]);
+    /* oxlint-enable react/set-state-in-effect */
     const nextSignature = selected
         ? `${selected.id}:${JSON.stringify([selected.customFields ?? {}, selected.translations])}`
         : '';
-
-    /* oxlint-disable react/set-state-in-effect -- GraphQL result initializes the selected SKU draft. */
+    const identity = JSON.stringify([getAdminQueryScope(), productId, selectedId || selected?.id || '']);
+    const currentIdentity = useRef(identity);
     useEffect(() => {
-        if (!selected || nextSignature === sourceSignature) return;
-        setSelectedId(selected.id);
-        setValues(
-            customFieldValuesFromEntity(visibleDefinitions, selected.customFields, selected.translations),
-        );
-        setSourceSignature(nextSignature);
-    }, [nextSignature, selected, sourceSignature, visibleDefinitions]);
-    /* oxlint-enable react/set-state-in-effect */
+        currentIdentity.current = identity;
+    }, [identity]);
+    const source = useMemo(
+        () =>
+            selected
+                ? customFieldValuesFromEntity(
+                      visibleDefinitions,
+                      selected.customFields,
+                      selected.translations,
+                  )
+                : null,
+        [selected, visibleDefinitions],
+    );
+    const draft = useServerDraft<CustomFieldValueMap>(identity, nextSignature, source);
+    const values = draft.draft ?? {};
 
     if (!productId || visibleDefinitions.length === 0) return null;
     if (query.loading && !query.data) {
@@ -982,30 +1005,48 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             />
         );
     }
-    if (query.error || !query.data?.product) {
+    if (!query.data?.product) {
         return <PanelState tone="error" label="SKU 扩展字段加载失败" action={() => void query.refetch()} />;
     }
     if (variants.length === 0) return null;
     const selectVariant = (id: string) => {
         const variant = variants.find(item => item.id === id);
         if (!variant) return;
+        if (readbackPending || (selected && draft.dirty)) {
+            setError('请先保存并确认当前规格的补充资料，再切换规格');
+            return;
+        }
+        if (
+            !selected &&
+            draft.dirty &&
+            !window.confirm('当前规格已不可用。切换将放弃该规格的未保存字段，确定继续吗？')
+        )
+            return;
         setSelectedId(id);
-        setValues(
-            customFieldValuesFromEntity(visibleDefinitions, variant.customFields, variant.translations),
-        );
-        setSourceSignature(
-            `${variant.id}:${JSON.stringify([variant.customFields ?? {}, variant.translations])}`,
-        );
         setNotice('');
         setError('');
     };
+    const read = async () => {
+        const readIdentity = identity;
+        try {
+            await query.refetch();
+            if (!mounted.current || currentIdentity.current !== readIdentity) return;
+            setReadFailure('');
+            setReadbackPending(false);
+        } catch (cause) {
+            if (!mounted.current || currentIdentity.current !== readIdentity) return;
+            setReadFailure(toUserFacingError(cause, 'SKU 扩展字段读取失败，请重试读取'));
+        }
+    };
     const save = async () => {
-        if (!selected) return;
+        if (!selected || saving.current || readbackPending || draft.sourceChanged) return;
         const validation = validateCustomFieldValues(visibleDefinitions, values);
         if (Object.keys(validation).length > 0) {
             setError(Object.values(validation)[0] ?? 'SKU 扩展字段校验失败');
             return;
         }
+        saving.current = true;
+        const savedIdentity = identity;
         try {
             const result = await update({
                 variables: {
@@ -1029,12 +1070,18 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             if (result.data?.updateProductVariants[0]?.id !== selected.id) {
                 throw new Error('后端未返回更新后的 SKU');
             }
+            if (!mounted.current || currentIdentity.current !== savedIdentity) return;
+            draft.accept(values, nextSignature);
             setNotice(`SKU ${selected.sku} 的扩展字段已保存`);
             setError('');
-            setSourceSignature('');
-            await query.refetch();
+            setReadbackPending(true);
+            // The write receipt is final. A failed read must never offer to replay it.
+            await read();
         } catch (cause) {
-            setError(toUserFacingError(cause, 'SKU 扩展字段保存失败'));
+            if (mounted.current && currentIdentity.current === savedIdentity)
+                setError(toUserFacingError(cause, 'SKU 扩展字段保存失败'));
+        } finally {
+            saving.current = false;
         }
     };
     return (
@@ -1054,10 +1101,13 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                 <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2 sm:w-auto sm:max-w-full sm:flex-[0_1_28rem]">
                     <AdminSelect
                         aria-label="选择补充资料规格"
-                        value={selected?.id ?? ''}
+                        value={selectedId || selected?.id || ''}
                         onChange={event => selectVariant(event.target.value)}
                         className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                     >
+                        {selectedId && !selected && (
+                            <option value={selectedId}>当前规格已不可用，请重新选择</option>
+                        )}
                         {variants.map(variant => (
                             <option key={variant.id} value={variant.id}>
                                 {variant.name} · {variant.sku}
@@ -1067,7 +1117,7 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                     <AdminButton
                         type="button"
                         onClick={() => void save()}
-                        disabled={!selected || updateState.loading}
+                        disabled={!selected || updateState.loading || readbackPending || draft.sourceChanged}
                         className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
                     >
                         <Save className="h-4 w-4" />
@@ -1077,13 +1127,37 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
             </div>
             {notice && <InlineNotice tone="success" message={notice} />}
             {error && <InlineNotice tone="error" message={error} />}
+            {(readFailure || query.error) && (
+                <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-rose-600">
+                    <span>
+                        {readbackPending
+                            ? '字段已保存，但最新数据读取失败。'
+                            : '字段更新失败，已保留当前输入。'}
+                    </span>
+                    <span>{readFailure || toUserFacingError(query.error, 'SKU 扩展字段读取失败')}</span>
+                    <AdminButton type="button" disabled={query.loading} onClick={() => void read()}>
+                        重试读取
+                    </AdminButton>
+                </div>
+            )}
+            {draft.sourceChanged && (
+                <div role="alert" className="flex flex-wrap items-center gap-2 text-xs text-amber-700">
+                    <span>服务器字段已更新，已保留未保存输入。请核对后重新读取最新值。</span>
+                    <AdminButton type="button" onClick={() => draft.reload()}>
+                        放弃字段草稿并读取最新值
+                    </AdminButton>
+                </div>
+            )}
             <DynamicCustomFieldsForm
                 embedded
                 compact
                 title=""
                 fields={visibleDefinitions}
                 values={values}
-                onChange={setValues}
+                onChange={value => {
+                    draft.setDraft(value);
+                    setError('');
+                }}
                 disabled={updateState.loading}
             />
         </section>
@@ -1282,8 +1356,9 @@ function operationInput(
         input.packageQuantity = packageQuantity;
         input.shelfLifeDays = optionalInteger(draft.shelfLifeDays, '保质期');
     }
-    if (draft.purchaseCost.trim())
-        input.purchaseCostMicrounits = Math.round(number(draft.purchaseCost, '采购成本') * 1_000);
+    input.purchaseCostMicrounits = draft.purchaseCost.trim()
+        ? Math.round(number(draft.purchaseCost, '采购成本') * 1_000)
+        : null;
     return input;
 }
 

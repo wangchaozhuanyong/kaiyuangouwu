@@ -13,7 +13,15 @@ let container: HTMLDivElement;
 let root: Root;
 let events: AdminFeedback[];
 let unsubscribe: () => void;
-let play: ReturnType<typeof vi.spyOn>;
+let play: ReturnType<typeof vi.fn>;
+let cancelSpeech: ReturnType<typeof vi.fn>;
+let audioPlay: ReturnType<typeof vi.fn>;
+let audioPause: ReturnType<typeof vi.fn>;
+let audioInstances: Array<{ src: string; onplaying?: () => void }>;
+let voices: SpeechSynthesisVoice[];
+let voiceEvents: EventTarget;
+let administratorId: string;
+let sequence = 0;
 let streams: ReturnType<typeof stream>[];
 let invalidations: Array<{ domains: ResourceDomain[]; reason: 'write' | 'event' }>;
 const recordInvalidation = (event: Event) => {
@@ -42,7 +50,7 @@ async function render(channelId = '1') {
         root.render(
             <OrderNotifications
                 key={channelId}
-                administratorId="admin-1"
+                administratorId={administratorId}
                 channelId={channelId}
                 channelToken={`channel-${channelId}`}
             />,
@@ -64,6 +72,7 @@ beforeEach(() => {
     vi.useFakeTimers();
     environment.IS_REACT_ACT_ENVIRONMENT = true;
     localStorage.clear();
+    administratorId = `admin-${++sequence}`;
     document.documentElement.lang = 'zh-CN';
     container = document.createElement('div');
     document.body.append(container);
@@ -78,8 +87,52 @@ beforeEach(() => {
         streams.push(next);
         return Promise.resolve(next.response);
     });
-    play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    vi.stubGlobal(
+        'SpeechSynthesisUtterance',
+        class {
+            lang = '';
+            onstart?: () => void;
+            onend?: () => void;
+            constructor(public text: string) {}
+        },
+    );
+    play = vi.fn().mockImplementation(utterance => {
+        utterance.onstart?.();
+        utterance.onend?.();
+    });
+    cancelSpeech = vi.fn();
+    voices = [
+        { lang: 'zh-CN', name: 'Synthetic Chinese', default: true },
+        { lang: 'en-US', name: 'Synthetic English', default: true },
+    ] as SpeechSynthesisVoice[];
+    voiceEvents = new EventTarget();
+    vi.stubGlobal('speechSynthesis', {
+        speak: play,
+        cancel: cancelSpeech,
+        getVoices: () => voices,
+        addEventListener: voiceEvents.addEventListener.bind(voiceEvents),
+        removeEventListener: voiceEvents.removeEventListener.bind(voiceEvents),
+    });
+    audioPlay = vi.fn().mockResolvedValue(undefined);
+    audioPause = vi.fn();
+    audioInstances = [];
+    vi.stubGlobal(
+        'Audio',
+        class {
+            preload = '';
+            onplaying?: () => void;
+            onended?: () => void;
+            onerror?: () => void;
+            constructor(public src: string) {
+                audioInstances.push(this);
+            }
+            play = audioPlay;
+            pause = audioPause;
+            removeAttribute(name: string) {
+                if (name === 'src') this.src = '';
+            }
+        },
+    );
 });
 afterEach(() => {
     act(() => root.unmount());
@@ -87,6 +140,7 @@ afterEach(() => {
     unsubscribe();
     window.removeEventListener(RESOURCE_INVALIDATION_EVENT, recordInvalidation);
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
     environment.IS_REACT_ACT_ENVIRONMENT = false;
 });
@@ -109,7 +163,8 @@ describe('event-driven order announcements', () => {
         await send(frame());
         await send(frame('new', 'server:2'));
         expect(play).toHaveBeenCalledTimes(1);
-        expect((play.mock.instances[0] as HTMLAudioElement).src).toMatch(/new-order-zh\.mp3$/);
+        expect(play.mock.calls[0][0].lang).toBe('zh-CN');
+        expect(play.mock.calls[0][0].text).toBe('您有新的订单，请您查看。');
         expect(events.filter(event => event.id === 'new-order-notification')).toHaveLength(1);
     });
     it('selects English using the page language at delivery time', async () => {
@@ -118,29 +173,27 @@ describe('event-driven order announcements', () => {
             document.documentElement.lang = 'en-GB';
         });
         await send(frame());
-        expect((play.mock.instances[0] as HTMLAudioElement).src).toMatch(/new-order-en\.mp3$/);
+        expect(play.mock.calls[0][0].lang).toBe('en-US');
         expect(events.at(-1)?.title).toBe('You have a new order. Please check it.');
     });
-    it('announces successive pending reminders for the same order and deduplicates identical events', async () => {
+    it('keeps successive pending reminder text but announces an order only once', async () => {
         await render();
         await send(frame());
         const reminder = frame('new', 'server:2').replace('event: order-placed', 'event: order-pending');
         await send(reminder);
         await send(reminder);
-        expect(play).toHaveBeenCalledTimes(2);
-        expect((play.mock.instances.at(-1) as HTMLAudioElement).src).toMatch(/pending-order-zh\.mp3$/);
+        expect(play).toHaveBeenCalledTimes(1);
         expect(events.at(-1)?.title).toBe('您有未处理的订单，请您及时处理。');
         await act(async () => {
             document.documentElement.lang = 'en-US';
         });
         await send(reminder.replaceAll('server:2', 'server:3'));
-        expect(play).toHaveBeenCalledTimes(3);
-        expect((play.mock.instances.at(-1) as HTMLAudioElement).src).toMatch(/pending-order-en\.mp3$/);
+        expect(play).toHaveBeenCalledTimes(1);
         expect(events.at(-1)?.title).toBe('You have pending orders. Please process them promptly.');
         expect(openStream).toHaveBeenCalledTimes(1);
     });
     it('shows pending reminder text while muted without playing audio', async () => {
-        localStorage.setItem('next-admin:order-voice:admin-1', 'muted');
+        localStorage.setItem(`next-admin:order-voice:${administratorId}`, 'muted');
         await render();
         await send(frame().replace('event: order-placed', 'event: order-pending'));
         expect(play).not.toHaveBeenCalled();
@@ -230,7 +283,9 @@ describe('event-driven order announcements', () => {
     });
     it('handles autoplay blocking and retries from the sound button', async () => {
         await render();
-        play.mockRejectedValueOnce(new DOMException('Blocked', 'NotAllowedError'));
+        play.mockImplementationOnce(() => {
+            throw new DOMException('Blocked', 'NotAllowedError');
+        });
         await send(frame());
         expect(events.at(-1)?.title).toContain('点击顶部声音按钮');
         await click();
@@ -242,7 +297,7 @@ describe('event-driven order announcements', () => {
         await click();
         play.mockClear();
         await send(frame());
-        expect(localStorage.getItem('next-admin:order-voice:admin-1')).toBe('muted');
+        expect(localStorage.getItem(`next-admin:order-voice:${administratorId}`)).toBe('muted');
         expect(play).not.toHaveBeenCalled();
         expect(events.at(-1)?.id).toBe('new-order-notification');
         await click();
@@ -250,7 +305,7 @@ describe('event-driven order announcements', () => {
         expect(play).toHaveBeenCalledTimes(1);
     });
     it('restores a muted preference', async () => {
-        localStorage.setItem('next-admin:order-voice:admin-1', 'muted');
+        localStorage.setItem(`next-admin:order-voice:${administratorId}`, 'muted');
         await render();
         await send(frame());
         expect(play).not.toHaveBeenCalled();
@@ -281,9 +336,206 @@ describe('event-driven order announcements', () => {
     });
     it('keeps a visible order notification if audio fails', async () => {
         await render();
-        play.mockRejectedValue(new DOMException('Missing', 'NotSupportedError'));
+        play.mockImplementation(() => {
+            throw new DOMException('Missing', 'NotSupportedError');
+        });
+        audioPlay.mockRejectedValue(new DOMException('Missing recording', 'NotSupportedError'));
         await send(frame());
         expect(events.some(event => event.id === 'new-order-notification')).toBe(true);
         expect(events.at(-1)?.title).toContain('订单语音播放失败');
+    });
+    it('uses the existing localized recording when synthesis is unavailable and keeps the store name in text', async () => {
+        vi.stubGlobal('speechSynthesis', undefined);
+        document.documentElement.lang = 'en-US';
+        await render();
+        const named = frame('fallback-order')
+            .replace('event: order-placed', 'event: order-pending')
+            .replace(
+                '"occurredAt":',
+                '"store":{"id":"store-a","nameZh":"真实网店","nameEn":"Real Store"},"occurredAt":',
+            );
+        await send(named);
+        expect(play).not.toHaveBeenCalled();
+        expect(audioPlay).toHaveBeenCalledTimes(1);
+        expect(audioInstances[0].src).toMatch(/\/audio\/pending-order-en\.mp3$/);
+        expect(events.at(-1)?.title).toBe('Real Store has pending orders. Please process them promptly.');
+        expect(
+            localStorage.getItem(`next-admin:order-announced:${administratorId}:store-a:fallback-order`),
+        ).toBe('spoken');
+    });
+    it('waits for a delayed voice list and selects a matching voice without changing store text', async () => {
+        voices = [];
+        await render();
+        await send(frame('delayed-voices'));
+        expect(play).not.toHaveBeenCalled();
+        expect(container.querySelector('button')).not.toBeNull();
+        voices = [
+            { lang: 'en-US', default: true },
+            { lang: 'zh-CN', default: false },
+        ] as SpeechSynthesisVoice[];
+        await act(async () => voiceEvents.dispatchEvent(new Event('voiceschanged')));
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(play.mock.calls[0][0].voice).toBe(voices[1]);
+        expect(audioPlay).not.toHaveBeenCalled();
+    });
+    it('falls back after a bounded voice wait while the page and connection remain usable', async () => {
+        voices = [];
+        await render();
+        await send(frame('empty-voices'));
+        expect(events.at(-1)?.id).toBe('new-order-notification');
+        expect(openStream).toHaveBeenCalledTimes(1);
+        await act(async () => vi.advanceTimersByTimeAsync(1499));
+        expect(audioPlay).not.toHaveBeenCalled();
+        await act(async () => vi.advanceTimersByTimeAsync(1));
+        expect(audioPlay).toHaveBeenCalledTimes(1);
+        expect(audioInstances[0].src).toMatch(/\/audio\/new-order-zh\.mp3$/);
+        expect(play).not.toHaveBeenCalled();
+    });
+    it('cancels delayed voice resolution on scope change without playback or receipt', async () => {
+        voices = [];
+        await render();
+        await send(frame('cancelled-voice-list'));
+        await render('2');
+        voices = [{ lang: 'zh-CN', default: true }] as SpeechSynthesisVoice[];
+        await act(async () => {
+            voiceEvents.dispatchEvent(new Event('voiceschanged'));
+            await vi.advanceTimersByTimeAsync(10000);
+        });
+        expect(play).not.toHaveBeenCalled();
+        expect(audioPlay).not.toHaveBeenCalled();
+        expect(
+            localStorage.getItem(`next-admin:order-announced:${administratorId}:cancelled-voice-list`),
+        ).toBeNull();
+    });
+    it('ignores late recording promises and callbacks after switching channel', async () => {
+        vi.stubGlobal('speechSynthesis', undefined);
+        let finishPlayback!: () => void;
+        audioPlay.mockImplementation(
+            () =>
+                new Promise<void>(resolve => {
+                    finishPlayback = resolve;
+                }),
+        );
+        await render();
+        await send(frame('late-recording'));
+        const late = audioInstances[0].onplaying!;
+        await render('2');
+        const pauses = audioPause.mock.calls.length;
+        await act(async () => {
+            finishPlayback();
+            late();
+        });
+        expect(audioPause).toHaveBeenCalled();
+        expect(audioPause).toHaveBeenCalledTimes(pauses);
+        expect(
+            localStorage.getItem(`next-admin:order-announced:${administratorId}:late-recording`),
+        ).toBeNull();
+        expect(container.querySelector('button')?.getAttribute('aria-pressed')).toBe('false');
+    });
+    it('deduplicates named events by administrator, sales store and order across platform/store streams', async () => {
+        const named = (storeId: string, eventId: string) =>
+            frame('shared-order', eventId).replace(
+                '"occurredAt":',
+                `"store":{"id":"${storeId}","nameZh":"当前销售店","nameEn":"Selling Store"},"occurredAt":`,
+            );
+        await render();
+        await send(named('sales-store-a', 'platform:1'));
+        await render('2');
+        await send(named('sales-store-a', 'store:1'));
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(
+            localStorage.getItem(`next-admin:order-announced:${administratorId}:sales-store-a:shared-order`),
+        ).toBe('spoken');
+        await render('3');
+        await send(named('sales-store-b', 'other-store:1'));
+        expect(play).toHaveBeenCalledTimes(2);
+    });
+    it('speaks the event owner name on a platform page and uses fresh localized text', async () => {
+        await render();
+        const named = (id: string) =>
+            frame(id).replace(
+                '"occurredAt":',
+                '"store":{"id":"store-a","nameZh":"真实网店","nameEn":"Real Store"},"occurredAt":',
+            );
+        await send(named('named-zh'));
+        expect(play.mock.calls[0][0].text).toBe('真实网店有新的订单，请您查看。');
+        await act(async () => {
+            document.documentElement.lang = 'en';
+        });
+        await send(named('named-en'));
+        expect(play.mock.calls[1][0].text).toBe('Real Store has a new order. Please check it.');
+        expect(events.at(-1)?.title).toBe(play.mock.calls[1][0].text);
+    });
+    it('deduplicates the same order after switching from platform to store', async () => {
+        await render();
+        await send(frame('one-order'));
+        await render('2');
+        await send(frame('one-order', 'other-server:1'));
+        expect(play).toHaveBeenCalledTimes(1);
+        expect(events.filter(event => event.id === 'new-order-notification')).toHaveLength(2);
+    });
+    it('never confirms or resumes late playback after the previous channel unmounts', async () => {
+        play.mockImplementation(() => {});
+        await render();
+        await send(frame('late-voice'));
+        const utterance = play.mock.calls[0][0];
+        await render('2');
+        const cancellations = cancelSpeech.mock.calls.length;
+        await act(async () => {
+            utterance.onstart();
+        });
+        expect(localStorage.getItem(`next-admin:order-announced:${administratorId}:late-voice`)).toBeNull();
+        expect(container.querySelector('button')?.getAttribute('aria-pressed')).toBe('false');
+        expect(cancelSpeech).toHaveBeenCalled();
+        expect(cancelSpeech).toHaveBeenCalledTimes(cancellations);
+    });
+    it('synchronizes mute from another tab and stops pending speech immediately', async () => {
+        play.mockImplementation(() => {});
+        await render();
+        await send(frame('pending-voice'));
+        const utterance = play.mock.calls[0][0];
+        await act(async () => {
+            window.dispatchEvent(
+                new StorageEvent('storage', {
+                    key: `next-admin:order-voice:${administratorId}`,
+                    newValue: 'muted',
+                }),
+            );
+            utterance.onstart();
+        });
+        expect(cancelSpeech).toHaveBeenCalled();
+        expect(container.querySelector('button')?.getAttribute('aria-pressed')).toBe('false');
+        expect(
+            localStorage.getItem(`next-admin:order-announced:${administratorId}:pending-voice`),
+        ).toBeNull();
+    });
+    it('honors 429 Retry-After instead of reconnecting every second', async () => {
+        openStream.mockResolvedValueOnce(
+            new Response(null, { status: 429, headers: { 'retry-after': '90' } }),
+        );
+        await render();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(89999);
+        });
+        expect(openStream).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(openStream).toHaveBeenCalledTimes(2);
+    });
+    it('backs off rate limiting from thirty seconds to a maximum of five minutes', async () => {
+        openStream.mockResolvedValue(new Response(null, { status: 429 }));
+        await render();
+        for (const delay of [30000, 60000, 120000, 240000, 300000, 300000]) {
+            const count = openStream.mock.calls.length;
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(delay - 1);
+            });
+            expect(openStream).toHaveBeenCalledTimes(count);
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(1);
+            });
+            expect(openStream).toHaveBeenCalledTimes(count + 1);
+        }
     });
 });

@@ -158,6 +158,43 @@ describe('accepted writes and bounded reads', () => {
         subscription.unsubscribe();
         window.removeEventListener(RESOURCE_INVALIDATION_EVENT, events);
     });
+    it('invalidates accepted parts of a mixed bulk receipt without replaying any writes', () => {
+        const events = vi.fn();
+        window.addEventListener(RESOURCE_INVALIDATION_EVENT, events);
+        const forward = vi.fn(
+            () =>
+                new Observable<FormattedExecutionResult>(observer => {
+                    observer.next({
+                        data: {
+                            deleteProducts: [
+                                { result: 'DELETED' },
+                                { result: 'NOT_DELETED', message: 'in use' },
+                            ],
+                        },
+                    });
+                    observer.complete();
+                }),
+        );
+        try {
+            const subscription = execute(
+                createResourceInvalidationLink(() => 'store-a').concat(new ApolloLink(forward)),
+                gql`
+                    mutation Bulk {
+                        deleteProducts {
+                            result
+                            message
+                        }
+                    }
+                `,
+            ).subscribe({});
+            expect(events).toHaveBeenCalledTimes(1);
+            expect(forward).toHaveBeenCalledTimes(1);
+            expect((events.mock.calls[0][0] as CustomEvent).detail.domains).toContain('catalog');
+            subscription.unsubscribe();
+        } finally {
+            window.removeEventListener(RESOURCE_INVALIDATION_EVENT, events);
+        }
+    });
     it('does not invalidate rejected or old-scope writes and never replays them', () => {
         const events = vi.fn();
         let scope = 'a';

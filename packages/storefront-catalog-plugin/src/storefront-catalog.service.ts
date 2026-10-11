@@ -188,6 +188,17 @@ export class StorefrontCatalogService {
             .getRepository(ctx, SearchIndexItem)
             .createQueryBuilder('si')
             .innerJoin(Product, 'catalog_product', 'catalog_product.id = si.productId')
+            .innerJoin(
+                'catalog_product.channels',
+                'catalog_product_channel',
+                'catalog_product_channel.id = :catalogChannelId',
+            )
+            .innerJoin(ProductVariant, 'catalog_variant', 'catalog_variant.id = si.productVariantId')
+            .innerJoin(
+                'catalog_variant.channels',
+                'catalog_variant_channel',
+                'catalog_variant_channel.id = :catalogChannelId',
+            )
             .select('si.productId', 'productId')
             .addSelect('MIN(si.priceWithTax)', 'minimumPriceWithTax')
             .addSelect('MIN(si.productName)', 'catalogProductName')
@@ -198,6 +209,9 @@ export class StorefrontCatalogService {
             })
             .andWhere('si.enabled = :catalogEnabled', { catalogEnabled: true })
             .andWhere('catalog_product.deletedAt IS NULL')
+            .andWhere('catalog_product.enabled = :catalogEnabled')
+            .andWhere('catalog_variant.deletedAt IS NULL')
+            .andWhere('catalog_variant.enabled = :catalogEnabled')
             .groupBy('si.productId')
             .addGroupBy('catalog_product.createdAt');
         if (
@@ -234,9 +248,6 @@ export class StorefrontCatalogService {
             );
         }
 
-        if (input.collectionId != null || input.fulfillmentType != null || input.inStockOnly) {
-            qb.innerJoin(ProductVariant, 'catalog_variant', 'catalog_variant.id = si.productVariantId');
-        }
         if (input.collectionId != null) {
             qb.innerJoin(
                 'catalog_variant.collections',

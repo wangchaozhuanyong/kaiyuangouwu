@@ -411,14 +411,16 @@ export class CatalogOperationsService {
             variantInput.minimumStock ?? null,
             variantInput.maximumStock ?? null,
         );
-        await this.recordCost(
-            ctx,
-            variant.id,
-            ctx.channel.defaultCurrencyCode,
-            variantInput.purchaseCostMicrounits,
-            'MANUAL',
-            null,
-        );
+        if (variantInput.purchaseCostMicrounits != null) {
+            await this.recordCost(
+                ctx,
+                variant.id,
+                ctx.channel.defaultCurrencyCode,
+                variantInput.purchaseCostMicrounits,
+                'MANUAL',
+                null,
+            );
+        }
         return variant;
     }
 
@@ -488,7 +490,7 @@ export class CatalogOperationsService {
             variants: variants.items.map(variant => {
                 const customFields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
-                const costMicrounits = cost ? Number(cost.costMicrounits) : null;
+                const costMicrounits = cost?.costMicrounits == null ? null : Number(cost.costMicrounits);
                 const margin = calculateMargin(variant.price, costMicrounits);
                 const supplier = supplierByVariant.get(String(variant.id));
                 return {
@@ -647,7 +649,7 @@ export class CatalogOperationsService {
                 const fields = (variant.customFields ?? {}) as unknown as Record<string, unknown>;
                 const productFields = (product.customFields ?? {}) as unknown as Record<string, unknown>;
                 const cost = latestCost.get(`${String(variant.id)}:${variant.currencyCode}`);
-                const costMicrounits = cost ? Number(cost.costMicrounits) : null;
+                const costMicrounits = cost?.costMicrounits == null ? null : Number(cost.costMicrounits);
                 const importCategoryMarker =
                     facetValueNames(product, 'catalog-import-category', ctx.languageCode)[0] ?? null;
                 const collectionPaths = uniqueNames(
@@ -867,10 +869,14 @@ export class CatalogOperationsService {
                   }),
               ])
             : [[], []];
-        const latestCostByVariant = new Map<string, number>();
+        const latestCostByVariant = new Map<string, number | null>();
         for (const cost of costs) {
             const key = String(cost.variantId);
-            if (!latestCostByVariant.has(key)) latestCostByVariant.set(key, Number(cost.costMicrounits));
+            if (!latestCostByVariant.has(key))
+                latestCostByVariant.set(
+                    key,
+                    cost.costMicrounits == null ? null : Number(cost.costMicrounits),
+                );
         }
         const policyByVariantAndLocation = new Map(
             policies.map(policy => [`${String(policy.variantId)}:${String(policy.stockLocationId)}`, policy]),
@@ -1074,7 +1080,7 @@ export class CatalogOperationsService {
                 input.maximumStock ?? null,
             );
         }
-        if (input.purchaseCostMicrounits != null) {
+        if (input.purchaseCostMicrounits !== undefined) {
             await this.recordCost(
                 ctx,
                 variant.id,
@@ -1373,12 +1379,12 @@ export class CatalogOperationsService {
         ctx: RequestContext,
         variantId: ID,
         currencyCode: CurrencyCode,
-        costMicrounits: number,
+        costMicrounits: number | null,
         source: string,
         sourceReference: string | null,
     ): Promise<VariantCostRecord | null> {
         await this.connection.getEntityOrThrow(ctx, ProductVariant, variantId, { channelId: ctx.channelId });
-        if (!Number.isInteger(costMicrounits) || costMicrounits < 0) {
+        if (costMicrounits !== null && (!Number.isSafeInteger(costMicrounits) || costMicrounits < 0)) {
             throw new UserInputError('进货价精度必须是千分之一货币单位');
         }
         const repository = this.connection.getRepository(ctx, VariantCostRecord);
@@ -1386,13 +1392,20 @@ export class CatalogOperationsService {
             where: { variantId, channelId: ctx.channelId, currencyCode },
             order: { effectiveAt: 'DESC', id: 'DESC' },
         });
-        if (latest && Number(latest.costMicrounits) === costMicrounits) return null;
+        if (
+            (!latest && costMicrounits === null) ||
+            (latest &&
+                (latest.costMicrounits === null
+                    ? costMicrounits === null
+                    : costMicrounits !== null && Number(latest.costMicrounits) === costMicrounits))
+        )
+            return null;
         return repository.save(
             new VariantCostRecord({
                 variantId,
                 channelId: ctx.channelId,
                 currencyCode,
-                costMicrounits: String(costMicrounits),
+                costMicrounits: costMicrounits === null ? null : String(costMicrounits),
                 effectiveAt: new Date(),
                 source,
                 sourceReference,
@@ -1495,7 +1508,10 @@ function validateInitialProductInput(input: CreateCatalogProductInput): void {
     if (!Number.isInteger(variant.sellingPrice) || variant.sellingPrice < 0) {
         throw new UserInputError('销售价必须是非负整数货币单位');
     }
-    if (!Number.isInteger(variant.purchaseCostMicrounits) || variant.purchaseCostMicrounits < 0) {
+    if (
+        variant.purchaseCostMicrounits != null &&
+        (!Number.isSafeInteger(variant.purchaseCostMicrounits) || variant.purchaseCostMicrounits < 0)
+    ) {
         throw new UserInputError('进货价精度必须是千分之一货币单位');
     }
     if (!Number.isInteger(variant.stockOnHand) || variant.stockOnHand < 0) {

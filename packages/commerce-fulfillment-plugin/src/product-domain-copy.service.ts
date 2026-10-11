@@ -86,7 +86,7 @@ export class ProductDomainCopyService {
             ]);
             await this.catalog.assignInitialCollections(ctx, created.id, variant.id, collectionIds);
             const cost = await this.catalog.latestCost(ctx, original.id, ctx.currencyCode);
-            if (cost)
+            if (cost?.costMicrounits != null)
                 await this.catalog.recordCost(
                     ctx,
                     variant.id,

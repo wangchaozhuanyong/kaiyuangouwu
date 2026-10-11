@@ -118,6 +118,47 @@ describe('order placement push', () => {
         expect(findOne).not.toHaveBeenCalled();
         expect(find).not.toHaveBeenCalled();
     });
+    it('names the actual sale owner for both store and platform listeners without channel secrets', async () => {
+        const { service, findOne } = harness();
+        findOne.mockResolvedValue({
+            ...order('named'),
+            salesChannel: {
+                id: 'a',
+                code: 'technical-a',
+                token: 'fixture-private',
+                customFields: { storefrontNameZh: ' 真实网店 ', storefrontNameEn: 'Real Store' },
+            },
+        });
+        const store = vi.fn();
+        const platform = vi.fn();
+        service.subscribe('a', undefined, store, vi.fn());
+        service.subscribe('platform', undefined, platform, vi.fn(), true);
+        await service.publishPlacedOrder('named');
+        expect(store.mock.calls[0][0].store).toEqual({ id: 'a', nameZh: '真实网店', nameEn: 'Real Store' });
+        expect(platform.mock.calls[0][0]).toEqual(store.mock.calls[0][0]);
+        expect(findOne.mock.calls[0][0].relations.salesChannel).toBe(true);
+        await vi.advanceTimersByTimeAsync(HALF_HOUR);
+        const pendingCall = store.mock.calls.at(-1);
+        if (!pendingCall) {
+            throw new Error('Expected a pending-order notification');
+        }
+        expect(pendingCall[0]).toMatchObject({
+            kind: 'order-pending',
+            store: { id: 'a', nameZh: '真实网店', nameEn: 'Real Store' },
+        });
+    });
+    it.each([
+        undefined,
+        { id: 'a', code: 'technical-a', customFields: {} },
+        { id: 'other', customFields: { storefrontNameZh: '其他店' } },
+    ])('keeps missing or mismatched owner names absent', async salesChannel => {
+        const { service, findOne } = harness();
+        findOne.mockResolvedValue({ ...order('legacy'), salesChannel });
+        const platform = vi.fn();
+        service.subscribe('platform', undefined, platform, vi.fn(), true);
+        await service.publishPlacedOrder('legacy');
+        expect(platform.mock.calls[0][0].store).toBeUndefined();
+    });
     it('replays missed events for the same Channel only and gives fresh connections no history', async () => {
         const { service } = harness();
         const first = service.subscribe('a', undefined, vi.fn(), vi.fn());

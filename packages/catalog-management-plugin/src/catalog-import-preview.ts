@@ -230,7 +230,6 @@ export class CatalogImportPreview {
                 !row.name ? '名称' : null,
                 !row.fulfillmentType ? '商品类型' : null,
                 !row.category ? '分类' : null,
-                row.pricingMode !== 'QUOTE_ONLY' && row.purchaseCost == null ? '进货价' : null,
                 row.pricingMode !== 'QUOTE_ONLY' && row.sellingPrice == null ? '销售价' : null,
             ].filter((value): value is string => Boolean(value));
             if (missingCreateFields.length > 0) {
@@ -440,7 +439,7 @@ export class CatalogImportPreview {
             supplierEnabled: supplierBinding?.supplier.enabled ?? null,
             sellingPrice: price?.price ?? null,
             currencyCode: job.currencyCode,
-            purchaseCostMicrounits: cost ? Number(cost.costMicrounits) : null,
+            purchaseCostMicrounits: cost?.costMicrounits == null ? null : Number(cost.costMicrounits),
             stockOnHand: stock?.stockOnHand ?? 0,
             minimumStock: policy?.minimumStock ?? null,
             maximumStock: policy?.maximumStock ?? null,

@@ -99,8 +99,9 @@ export class CatalogManagementAdminResolver {
         @Ctx() ctx: RequestContext,
         @Args('productVariantId') id: ID,
         @Args('currencyCode') currency: CurrencyCode,
-        @Args('costMicrounits') cost: number,
+        @Args('costMicrounits') cost: number | null | undefined,
     ) {
+        if (cost === undefined) return true;
         await this.operations.recordCost(ctx, id, currency, cost, 'MANUAL', null);
         return true;
     }

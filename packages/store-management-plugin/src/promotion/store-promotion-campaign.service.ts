@@ -16,6 +16,8 @@ import {
     EventBus,
     idsAreEqual,
     isGraphQlErrorResult,
+    Product,
+    ProductVariant as ProductVariantEntity,
     ProductVariantService,
     Promotion,
     PromotionService,
@@ -336,7 +338,9 @@ export class StorePromotionCampaignService {
             )
             .slice(0, activeOnly ? 10 : 1_000);
         return Promise.all(
-            promotions.map(promotion => this.toFlashSaleView(ctx, promotion, activeOnly ? 100 : 1_000)),
+            promotions.map(promotion =>
+                this.toFlashSaleView(ctx, promotion, activeOnly ? 100 : 1_000, activeOnly),
+            ),
         );
     }
 
@@ -426,7 +430,8 @@ export class StorePromotionCampaignService {
             throw new UserInputError('找不到该营销活动');
         }
         await this.assertExclusivePromotionOwner(ctx, existingPromotion.id);
-        if (this.toCouponView(existingPromotion)) await this.lockOwnedCampaign(ctx, existingPromotion);
+        if (!enabled && this.toCouponView(existingPromotion))
+            await this.lockOwnedCampaign(ctx, existingPromotion);
         if (!enabled && this.toCouponView(existingPromotion)) {
             const issuedCount = await this.connection
                 .getRepository(ctx, CustomerCoupon)
@@ -438,6 +443,19 @@ export class StorePromotionCampaignService {
         if (enabled) {
             const promotion = existingPromotion;
             const flashAction = promotion.actions.find(action => action.code === 'store_flash_sale_price');
+            const productCoupon = promotion.actions.find(
+                action => action.code === 'products_percentage_discount',
+            );
+            // Re-enable the original SKU contract. Never expand a persisted promotion
+            // to newly added variants or change its discount and validity window.
+            if (flashAction || productCoupon) {
+                const variantIds = flashAction
+                    ? parseFlashSaleVariantRules(stringArg(flashAction, 'variantRules')).map(
+                          rule => rule.variantId,
+                      )
+                    : idListArg(productCoupon, 'productVariantIds');
+                await this.assertEligiblePromotionVariants(ctx, variantIds);
+            }
             if (flashAction) {
                 await this.assertNoOverlappingFlashSale(
                     ctx,
@@ -450,6 +468,8 @@ export class StorePromotionCampaignService {
                 );
             }
         }
+        if (enabled && this.toCouponView(existingPromotion))
+            await this.lockOwnedCampaign(ctx, existingPromotion);
         const result = await this.promotionService.updatePromotion(ctx, { id, enabled });
         if (isGraphQlErrorResult(result)) {
             throw new UserInputError(result.message);
@@ -827,40 +847,58 @@ export class StorePromotionCampaignService {
         ctx: RequestContext,
         promotion: Promotion,
         itemLimit = 1_000,
+        publicOnly = false,
     ): Promise<StoreFlashSaleView> {
         const action = promotion.actions.find(candidate => candidate.code === 'store_flash_sale_price');
         const rules = parseFlashSaleVariantRules(stringArg(action, 'variantRules'));
+        const eligible = publicOnly
+            ? await this.eligiblePromotionVariantIds(
+                  ctx,
+                  rules.map(rule => rule.variantId),
+              )
+            : undefined;
         const mappedItems: Array<StoreFlashSaleItemView | null> = await Promise.all(
-            rules.slice(0, itemLimit).map(async rule => {
-                const variant = await this.productVariantService.findOne(ctx, rule.variantId);
-                if (!variant) return null;
-                const originalPrice = variant.priceWithTax;
-                const convertedSalePrice =
-                    rule.salePrice == null
-                        ? null
-                        : convertChannelAmount(
-                              ctx,
-                              rule.salePrice,
-                              rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
-                              ctx.currencyCode,
-                          );
-                if (rule.salePrice != null && convertedSalePrice == null) return null;
-                const salePrice =
-                    convertedSalePrice ??
-                    Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
-                const imageIdentifier =
-                    variant.product.featuredAsset?.preview ?? variant.featuredAsset?.preview ?? null;
-                return {
-                    productId: String(variant.product.id),
-                    productVariantId: String(variant.id),
-                    productName: String(variant.product.name),
-                    variantName: String(variant.name),
-                    originalPrice,
-                    salePrice,
-                    currencyCode: variant.currencyCode,
-                    imageUrl: imageIdentifier ? this.mediaUrl(ctx, imageIdentifier) : null,
-                };
-            }),
+            rules
+                .filter(rule => !eligible || eligible.has(String(rule.variantId)))
+                .slice(0, itemLimit)
+                .map(async rule => {
+                    const variant = await this.productVariantService.findOne(ctx, rule.variantId);
+                    if (!variant) return null;
+                    if (
+                        publicOnly &&
+                        (!variant.enabled ||
+                            variant.deletedAt ||
+                            !variant.product?.enabled ||
+                            variant.product.deletedAt)
+                    )
+                        return null;
+                    const originalPrice = variant.priceWithTax;
+                    const convertedSalePrice =
+                        rule.salePrice == null
+                            ? null
+                            : convertChannelAmount(
+                                  ctx,
+                                  rule.salePrice,
+                                  rule.currencyCode ?? ctx.channel.defaultCurrencyCode,
+                                  ctx.currencyCode,
+                              );
+                    if (rule.salePrice != null && convertedSalePrice == null) return null;
+                    const salePrice =
+                        convertedSalePrice ??
+                        Math.round(originalPrice * (1 - Math.min(100, rule.percentageOff ?? 0) / 100));
+                    const imageIdentifier =
+                        variant.product.featuredAsset?.preview ?? variant.featuredAsset?.preview ?? null;
+                    return {
+                        productId: String(variant.product.id),
+                        productVariantId: String(variant.id),
+                        productName: String(variant.product.name),
+                        variantName: String(variant.name),
+                        originalPrice,
+                        salePrice,
+                        currencyCode: variant.currencyCode,
+                        imageUrl: imageIdentifier ? this.mediaUrl(ctx, imageIdentifier) : null,
+                    };
+                }),
         );
         const items = mappedItems.filter((item): item is StoreFlashSaleItemView => item != null);
         return {
@@ -960,15 +998,89 @@ export class StorePromotionCampaignService {
     }
 
     private async loadProductVariants(ctx: RequestContext, productId: ID): Promise<ProductVariant[]> {
+        const products = await this.connection.findByIdsInChannel(
+            ctx,
+            Product,
+            [productId],
+            ctx.channelId,
+            {},
+        );
+        if (
+            !products.some(
+                product => idsAreEqual(product.id, productId) && product.enabled && !product.deletedAt,
+            )
+        )
+            throw new UserInputError('请选择当前店铺中已启用的有效商品');
         const items: ProductVariant[] = [];
         while (true) {
             const page = await this.productVariantService.getVariantsByProductId(ctx, productId, {
                 take: 100,
                 skip: items.length,
+                filter: { enabled: { eq: true } },
             });
             items.push(...page.items);
-            if (items.length >= page.totalItems || page.items.length === 0) return items;
+            if (items.length >= page.totalItems || page.items.length === 0) break;
         }
+        const qualified: ProductVariant[] = [];
+        for (let offset = 0; offset < items.length; offset += 100) {
+            const batch = await this.connection.findByIdsInChannel(
+                ctx,
+                ProductVariantEntity,
+                items.slice(offset, offset + 100).map(variant => variant.id),
+                ctx.channelId,
+                {},
+            );
+            const valid = new Set(
+                batch
+                    .filter(variant => variant.enabled && !variant.deletedAt)
+                    .map(variant => String(variant.id)),
+            );
+            qualified.push(
+                ...items.slice(offset, offset + 100).filter(variant => valid.has(String(variant.id))),
+            );
+        }
+        return qualified;
+    }
+
+    private async assertEligiblePromotionVariants(ctx: RequestContext, ids: ID[]): Promise<void> {
+        const variantIds = uniqueIds(ids);
+        if (!variantIds.length) throw new UserInputError('该活动没有可用的原始规格，请先核对活动商品');
+        const eligible = await this.eligiblePromotionVariantIds(ctx, variantIds);
+        if (variantIds.some(id => !eligible.has(String(id))))
+            throw new UserInputError('活动原有商品或规格已停用、删除或移出当前店铺，请先核对后再启用');
+    }
+
+    private async eligiblePromotionVariantIds(ctx: RequestContext, ids: ID[]): Promise<Set<string>> {
+        const variantIds = uniqueIds(ids);
+        const parentsByVariant = new Map<string, ID>();
+        for (let offset = 0; offset < variantIds.length; offset += 100) {
+            const batch = variantIds.slice(offset, offset + 100);
+            const variants = await this.connection.findByIdsInChannel(
+                ctx,
+                ProductVariantEntity,
+                batch,
+                ctx.channelId,
+                { relations: ['product'] },
+            );
+            for (const variant of variants) {
+                const productId = variant.productId ?? variant.product?.id;
+                if (variant.enabled && !variant.deletedAt && productId != null)
+                    parentsByVariant.set(String(variant.id), productId);
+            }
+        }
+        const parentIds = [...new Set(parentsByVariant.values())];
+        const validProducts = new Set<string>();
+        for (let offset = 0; offset < parentIds.length; offset += 100) {
+            const batch = parentIds.slice(offset, offset + 100);
+            const products = await this.connection.findByIdsInChannel(ctx, Product, batch, ctx.channelId, {});
+            for (const product of products)
+                if (product.enabled && !product.deletedAt) validProducts.add(String(product.id));
+        }
+        return new Set(
+            [...parentsByVariant]
+                .filter(([, productId]) => validProducts.has(String(productId)))
+                .map(([variantId]) => variantId),
+        );
     }
 
     private async assertNoOverlappingFlashSale(

@@ -132,6 +132,29 @@ export function CheckoutPage({
     const compactCopy = compactUiCopy[language];
     const directPurchase = mode === 'purchase';
     const [submitting, setSubmitting] = useState(false);
+    const submittingRef = useRef(false);
+    const submissionOwnerRef = useRef({
+        api,
+        customerId: customer?.id,
+        cartId: cart?.id,
+        orderId: confirmedOrder?.id,
+    });
+    const submissionOwner = submissionOwnerRef.current;
+    if (
+        submissionOwner.api !== api ||
+        submissionOwner.customerId !== customer?.id ||
+        submissionOwner.cartId !== cart?.id ||
+        submissionOwner.orderId !== confirmedOrder?.id
+    ) {
+        submissionOwnerRef.current = {
+            api,
+            customerId: customer?.id,
+            cartId: cart?.id,
+            orderId: confirmedOrder?.id,
+        };
+        submittingRef.current = false;
+    }
+    useEffect(() => setSubmitting(false), [api, customer?.id, cart?.id, confirmedOrder?.id]);
     const [formError, setFormError] = useState<string | null>(null);
     const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
     const [selectedShippingId, setSelectedShippingId] = useState('');
@@ -430,7 +453,7 @@ export function CheckoutPage({
             if (!customerLoading) manageAddress();
             return;
         }
-        if (submitting || cartPending || cartUnknown || shippingUpdating) return;
+        if (submittingRef.current || cartPending || cartUnknown || shippingUpdating) return;
         if (requiresShipping && !shippingReady) {
             setFormError(
                 isZh
@@ -440,79 +463,95 @@ export function CheckoutPage({
             return;
         }
         const data = new FormData(event.currentTarget);
+        submittingRef.current = true;
         setSubmitting(true);
         setFormError(null);
-        const paymentRouteRequest = preloadStorefrontRouteComponent('payment');
+        const requestOwner = submissionOwnerRef.current;
+        const isCurrent = () => shippingMountedRef.current && submissionOwnerRef.current === requestOwner;
+        void preloadStorefrontRouteComponent('payment');
         try {
-            const getString = (key: string, fallback = '') => {
-                const val = data.get(key);
-                return typeof val === 'string' ? val : fallback;
-            };
+            await api.runWithinDeadline(async signal => {
+                const getString = (key: string, fallback = '') => {
+                    const val = data.get(key);
+                    return typeof val === 'string' ? val : fallback;
+                };
 
-            if (hasDigitalProducts) {
-                const selectedContactId = selectedDeliveryEmailId;
-                if (selectedContactId) {
-                    await api.setDeliveryEmail({ contactId: selectedContactId });
-                } else {
-                    const deliveryEmail = normalizeDeliveryEmail(getString('deliveryEmail'));
-                    const confirmationEmail = normalizeDeliveryEmail(getString('confirmDeliveryEmail'));
-                    if (!deliveryEmail) {
-                        throw new Error(
-                            isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address',
-                        );
+                if (hasDigitalProducts) {
+                    const selectedContactId = selectedDeliveryEmailId;
+                    if (selectedContactId) {
+                        await api.setDeliveryEmail({ contactId: selectedContactId });
+                    } else {
+                        const deliveryEmail = normalizeDeliveryEmail(getString('deliveryEmail'));
+                        const confirmationEmail = normalizeDeliveryEmail(getString('confirmDeliveryEmail'));
+                        if (!deliveryEmail) {
+                            throw new Error(
+                                isZh ? '请填写有效的交付邮箱' : 'Enter a valid delivery email address',
+                            );
+                        }
+                        if (deliveryEmail !== confirmationEmail) {
+                            throw new Error(
+                                isZh ? '两次输入的交付邮箱不一致' : 'The delivery email entries do not match',
+                            );
+                        }
+                        await api.setDeliveryEmail({
+                            emailAddress: deliveryEmail,
+                            confirmEmailAddress: confirmationEmail,
+                            saveToAddressBook: Boolean(customer && data.get('saveDeliveryEmail')),
+                            isDefault: Boolean(customer && data.get('defaultDeliveryEmail')),
+                        });
                     }
-                    if (deliveryEmail !== confirmationEmail) {
-                        throw new Error(
-                            isZh ? '两次输入的交付邮箱不一致' : 'The delivery email entries do not match',
-                        );
-                    }
-                    await api.setDeliveryEmail({
-                        emailAddress: deliveryEmail,
-                        confirmEmailAddress: confirmationEmail,
-                        saveToAddressBook: Boolean(customer && data.get('saveDeliveryEmail')),
-                        isDefault: Boolean(customer && data.get('defaultDeliveryEmail')),
-                    });
+                    signal.throwIfAborted();
+                    if (!isCurrent()) return;
                 }
-            }
-            if (isDigitalOnly) {
-                const deliveryEmail = selectedDeliveryEmailId
-                    ? (deliveryEmails.find(item => item.id === selectedDeliveryEmailId)?.emailAddress ?? '')
-                    : (normalizeDeliveryEmail(getString('deliveryEmail')) ?? '');
-                if (!customerPrepared) {
+                if (isDigitalOnly) {
+                    const deliveryEmail = selectedDeliveryEmailId
+                        ? (deliveryEmails.find(item => item.id === selectedDeliveryEmailId)?.emailAddress ??
+                          '')
+                        : (normalizeDeliveryEmail(getString('deliveryEmail')) ?? '');
+                    if (!customerPrepared) {
+                        await api.setCustomer({
+                            firstName: 'Digital',
+                            lastName: 'Customer',
+                            emailAddress: deliveryEmail,
+                        });
+                        signal.throwIfAborted();
+                        if (!isCurrent()) return;
+                        setCustomerPrepared(true);
+                    }
+                }
+                if (!isDigitalOnly && !customerPrepared) {
                     await api.setCustomer({
-                        firstName: 'Digital',
-                        lastName: 'Customer',
-                        emailAddress: deliveryEmail,
+                        firstName: getString('firstName'),
+                        lastName: getString('lastName'),
+                        emailAddress: getString('emailAddress'),
                     });
+                    signal.throwIfAborted();
+                    if (!isCurrent()) return;
                     setCustomerPrepared(true);
                 }
-            }
-            if (!isDigitalOnly && !customerPrepared) {
-                await api.setCustomer({
-                    firstName: getString('firstName'),
-                    lastName: getString('lastName'),
-                    emailAddress: getString('emailAddress'),
-                });
-                setCustomerPrepared(true);
-            }
-            if (paymentCurrencyCode) await api.setPaymentCurrencyForOrder(paymentCurrencyCode);
-            const latestCart = await api.cart();
-            onCartChange(latestCart);
-            const session = await api.preparePayment(latestCart.revision);
-            onSessionChange(session);
-            let paymentMethodsRequest: Promise<void> = Promise.resolve();
-            if (typeof api.prefetchEligiblePaymentMethods === 'function') {
-                paymentMethodsRequest = api
-                    .prefetchEligiblePaymentMethods(session.order.id)
-                    .then(() => undefined)
-                    .catch(() => undefined);
-            }
-            await Promise.all([paymentRouteRequest, paymentMethodsRequest]);
-            onNotify(
-                isZh ? '订单已准备，请继续选择支付方式' : 'Order prepared. Continue with a payment method.',
-            );
-            navigateTo({ name: 'payment' }, true);
+                if (paymentCurrencyCode) await api.setPaymentCurrencyForOrder(paymentCurrencyCode, signal);
+                signal.throwIfAborted();
+                if (!isCurrent()) return;
+                const latestCart = await api.cart(signal);
+                signal.throwIfAborted();
+                if (!isCurrent()) return;
+                onCartChange(latestCart);
+                const session = await api.preparePayment(latestCart.revision);
+                signal.throwIfAborted();
+                if (!isCurrent()) return;
+                onSessionChange(session);
+                if (typeof api.prefetchEligiblePaymentMethods === 'function') {
+                    void api.prefetchEligiblePaymentMethods(session.order.id).catch(() => undefined);
+                }
+                onNotify(
+                    isZh
+                        ? '订单已准备，请继续选择支付方式'
+                        : 'Order prepared. Continue with a payment method.',
+                );
+                navigateTo({ name: 'payment' }, true);
+            });
         } catch (requestError) {
+            if (!isCurrent()) return;
             const emailConflict =
                 requestError instanceof ShopApiError &&
                 requestError.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR';
@@ -527,15 +566,13 @@ export function CheckoutPage({
                     : 'Could not submit order';
             setFormError(errorMessage);
             onNotify(errorMessage);
-            // A rejected email does not change the order. Do not hold the button while refreshing it.
-            if (emailConflict) return;
-            try {
-                onCartChange(await api.cart());
-            } catch {
-                // Keep the current form visible if the recovery refresh also fails.
-            }
+            // Keep the form and the controller's confirmed contents. Recovery is an explicit read,
+            // so a failed command cannot add another foreground timeout or replay a write here.
         } finally {
-            setSubmitting(false);
+            if (isCurrent()) {
+                submittingRef.current = false;
+                setSubmitting(false);
+            }
         }
     };
 

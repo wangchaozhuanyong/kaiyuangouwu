@@ -19,7 +19,7 @@ import {
 } from '@vendure/core';
 import { GovernanceService } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
-import { In, ObjectLiteral, ObjectType, Repository } from 'typeorm';
+import { In, IsNull, ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
 import { autoCardDisplayStock } from './auto-card-display-stock';
 import { DigitalDeliveryMode } from './auto-card.constants';
@@ -162,38 +162,36 @@ export class DigitalProductService implements OnApplicationBootstrap {
     async workspace(ctx: RequestContext, productId: ID) {
         const product = await this.connection.getEntityOrThrow(ctx, Product, productId, {
             channelId: ctx.channelId,
-            relations: ['variants'],
         });
         if (product.customFields.fulfillmentType !== 'digital')
             throw new UserInputError('该商品使用实物经营资料');
+        const currentStoreVariants = await this.connection.getRepository(ctx, ProductVariant).find({
+            where: { productId, deletedAt: IsNull(), channels: { id: ctx.channelId } },
+        });
         const variants = await Promise.all(
-            product.variants
-                .filter(v => !v.deletedAt)
-                .map(async variant => {
-                    const config = await this.config(ctx, variant.id);
-                    const file = config?.fileVersionId
-                        ? await this.connection.getRepository(ctx, DigitalFileVersion).findOne({
-                              where: { id: config.fileVersionId, channelId: ctx.channelId },
-                          })
-                        : null;
-                    const cost = await this.catalog.latestCost(ctx, variant.id, ctx.currencyCode);
-                    const supplier = await this.catalog.variantSupplier(ctx, variant.id);
-                    return {
-                        id: variant.id,
-                        sku: variant.sku,
-                        supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
-                        deliveryMode:
-                            config?.deliveryMode ??
-                            variant.customFields.digitalDeliveryMode ??
-                            'manual_service',
-                        stockPolicy:
-                            config?.stockPolicy ?? variant.customFields.digitalStockPolicy ?? 'unlimited',
-                        availableQuantity: config?.availableQuantity ?? null,
-                        migrationRequired: !config,
-                        fileVersion: file,
-                        purchaseCostMicrounits: cost ? Number(cost.costMicrounits) : null,
-                    };
-                }),
+            currentStoreVariants.map(async variant => {
+                const config = await this.config(ctx, variant.id);
+                const file = config?.fileVersionId
+                    ? await this.connection.getRepository(ctx, DigitalFileVersion).findOne({
+                          where: { id: config.fileVersionId, channelId: ctx.channelId },
+                      })
+                    : null;
+                const cost = await this.catalog.latestCost(ctx, variant.id, ctx.currencyCode);
+                const supplier = await this.catalog.variantSupplier(ctx, variant.id);
+                return {
+                    id: variant.id,
+                    sku: variant.sku,
+                    supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
+                    deliveryMode:
+                        config?.deliveryMode ?? variant.customFields.digitalDeliveryMode ?? 'manual_service',
+                    stockPolicy:
+                        config?.stockPolicy ?? variant.customFields.digitalStockPolicy ?? 'unlimited',
+                    availableQuantity: config?.availableQuantity ?? null,
+                    migrationRequired: !config,
+                    fileVersion: file,
+                    purchaseCostMicrounits: cost?.costMicrounits == null ? null : Number(cost.costMicrounits),
+                };
+            }),
         );
         return { productId, variants };
     }
@@ -862,14 +860,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
             });
         }
         // Keep warehouse rows untouched as read-only historical evidence.
-        const channels = await this.connection
-            .getRepository(ctx, Channel)
-            .find({ where: { productVariants: { id: variantId } } });
-        const salesChannels = channels.filter(channel => channel.code !== '__default_channel__');
-        const active = await this.connection
-            .getRepository(ctx, DigitalVariantConfig)
-            .count({ where: { productVariantId: variantId, migrationState: 'ACTIVE' } });
-        if (active >= salesChannels.length)
+        if (await this.allStoresMigrated(ctx, variantId))
             await this.connection
                 .getRepository(ctx, ProductVariant)
                 .update(variantId, { trackInventory: GlobalFlag.FALSE });

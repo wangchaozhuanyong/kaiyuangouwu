@@ -8,6 +8,8 @@ import { Logger } from '../../../config/logger/vendure-logger';
 import { Asset } from '../../../entity/asset/asset.entity';
 import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
 import { Product } from '../../../entity/product/product.entity';
+import { EventBus } from '../../../event-bus/event-bus';
+import { SearchIndexCompletedEvent } from '../../../event-bus/events/search-index-completed-event';
 import { Job } from '../../../job-queue/job';
 import { JobQueue } from '../../../job-queue/job-queue';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
@@ -25,46 +27,57 @@ export class SearchIndexService implements OnModuleInit {
     constructor(
         private jobService: JobQueueService,
         private indexerController: IndexerController,
+        private eventBus: EventBus,
     ) {}
 
     async onModuleInit() {
         this.updateIndexQueue = await this.jobService.createQueue({
             name: 'update-search-index',
-            process: job => {
+            process: async job => {
                 const data = job.data;
-                switch (data.type) {
-                    case 'reindex':
-                        Logger.verbose('sending ReindexMessage');
-                        return this.jobWithProgress(job, this.indexerController.reindex(job));
-                    case 'update-product':
-                        return this.indexerController.updateProduct(data);
-                    case 'update-variants':
-                        return this.indexerController.updateVariants(data);
-                    case 'delete-product':
-                        return this.indexerController.deleteProduct(data);
-                    case 'delete-variant':
-                        return this.indexerController.deleteVariant(data);
-                    case 'update-variants-by-id':
-                        return this.jobWithProgress(
-                            job,
-                            this.indexerController.updateVariantsById(job as Job<UpdateVariantsByIdJobData>),
-                        );
-                    case 'update-asset':
-                        return this.indexerController.updateAsset(data);
-                    case 'delete-asset':
-                        return this.indexerController.deleteAsset(data);
-                    case 'assign-product-to-channel':
-                        return this.indexerController.assignProductToChannel(data);
-                    case 'remove-product-from-channel':
-                        return this.indexerController.removeProductFromChannel(data);
-                    case 'assign-variant-to-channel':
-                        return this.indexerController.assignVariantToChannel(data);
-                    case 'remove-variant-from-channel':
-                        return this.indexerController.removeVariantFromChannel(data);
-                    default:
-                        assertNever(data);
-                        return Promise.resolve();
-                }
+                const work = (() => {
+                    switch (data.type) {
+                        case 'reindex':
+                            Logger.verbose('sending ReindexMessage');
+                            return this.jobWithProgress(job, this.indexerController.reindex(job));
+                        case 'update-product':
+                            return this.indexerController.updateProduct(data);
+                        case 'update-variants':
+                            return this.indexerController.updateVariants(data);
+                        case 'delete-product':
+                            return this.indexerController.deleteProduct(data);
+                        case 'delete-variant':
+                            return this.indexerController.deleteVariant(data);
+                        case 'update-variants-by-id':
+                            return this.jobWithProgress(
+                                job,
+                                this.indexerController.updateVariantsById(
+                                    job as Job<UpdateVariantsByIdJobData>,
+                                ),
+                            );
+                        case 'update-asset':
+                            return this.indexerController.updateAsset(data);
+                        case 'delete-asset':
+                            return this.indexerController.deleteAsset(data);
+                        case 'assign-product-to-channel':
+                            return this.indexerController.assignProductToChannel(data);
+                        case 'remove-product-from-channel':
+                            return this.indexerController.removeProductFromChannel(data);
+                        case 'assign-variant-to-channel':
+                            return this.indexerController.assignVariantToChannel(data);
+                        case 'remove-variant-from-channel':
+                            return this.indexerController.removeVariantFromChannel(data);
+                        default:
+                            assertNever(data);
+                            return Promise.resolve();
+                    }
+                })();
+                const result = await work;
+                if (result === true || result?.success === true)
+                    await this.eventBus.publish(
+                        new SearchIndexCompletedEvent(RequestContext.deserialize(data.ctx), data.type),
+                    );
+                return result;
             },
         });
     }
@@ -205,9 +218,10 @@ export class SearchIndexService implements OnModuleInit {
                         timeTaken: duration,
                     });
                 },
-                error: (err: any) => {
-                    Logger.error(err.message || JSON.stringify(err), undefined, err.stack);
-                    reject(err);
+                error: (err: unknown) => {
+                    const error = err instanceof Error ? err : new Error(String(err));
+                    Logger.error(error.message, undefined, error.stack);
+                    reject(error);
                 },
             });
         });

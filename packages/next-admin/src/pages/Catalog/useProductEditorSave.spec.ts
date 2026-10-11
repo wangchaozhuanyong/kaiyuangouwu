@@ -2,12 +2,17 @@ import type { DocumentNode } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     ADD_OPTION_GROUP_TO_PRODUCT,
+    ASSIGN_PRODUCTS_TO_CHANNEL,
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
 } from '../../graphql/catalog.graphql';
-import { UPDATE_VARIANT_COST, UPDATE_VARIANT_SUPPLIER } from '../../graphql/product-domains.graphql';
+import {
+    UPDATE_DIGITAL_VARIANT,
+    UPDATE_VARIANT_COST,
+    UPDATE_VARIANT_SUPPLIER,
+} from '../../graphql/product-domains.graphql';
 import type { ProductDetailRecord } from './product-editor-types';
 import { useProductEditorSave } from './useProductEditorSave';
 
@@ -171,6 +176,32 @@ describe('product save orchestration', () => {
         mocks.mutations.clear();
         mocks.query.mockReset();
         mocks.mutate.mockReset();
+    });
+
+    it('creates a product when the route has no explicit product ID', async () => {
+        const input = fixture();
+        input.productId = undefined;
+        input.baselineDraft = null;
+        input.draft.variants = [{ ...input.draft.variants[0], id: undefined, isNew: true }];
+        mocks.mutations.set(
+            CREATE_PRODUCT,
+            vi.fn().mockResolvedValue({ data: { createProduct: { id: 'created-product' } } }),
+        );
+        mocks.mutations.set(
+            CREATE_PRODUCT_VARIANTS,
+            vi
+                .fn()
+                .mockResolvedValue({
+                    data: { createProductVariants: [{ id: 'created-sku', sku: 'SKU-1' }] },
+                }),
+        );
+        await useProductEditorSave(input).handleSave();
+        expect(mocks.mutations.get(CREATE_PRODUCT)).toHaveBeenCalledOnce();
+        expect(input.controls.navigate).toHaveBeenCalledWith(
+            '/catalog/products/created-product?tab=variants',
+            { replace: true },
+        );
+        expect(input.controls.showError).not.toHaveBeenCalled();
     });
 
     it('preserves multiline descriptions and blank paragraphs in the saved translation', async () => {
@@ -454,6 +485,236 @@ describe('product save orchestration', () => {
         expect(input.controls.setSaving).toHaveBeenLastCalledWith(false);
     });
 
+    it('retries only product and workspace reads after every write has succeeded', async () => {
+        const input = fixture();
+        input.controls.acceptSavedDraft = vi.fn();
+        vi.mocked(input.data.refetchProduct).mockRejectedValueOnce(new Error('Read unavailable'));
+        const { handleSave } = useProductEditorSave(input);
+
+        await handleSave();
+
+        expect(input.controls.showError).toHaveBeenCalledWith(
+            expect.stringContaining('商品已保存，但最新数据读取失败'),
+        );
+        expect(input.controls.showError).not.toHaveBeenCalledWith(expect.stringContaining('部分内容已保存'));
+        expect(input.controls.acceptSavedDraft).toHaveBeenCalledOnce();
+        const productWrites = mocks.mutations.get(UPDATE_PRODUCT)!;
+        const variantWrites = mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!;
+        expect(productWrites).toHaveBeenCalledOnce();
+        expect(variantWrites).toHaveBeenCalledOnce();
+
+        await handleSave();
+
+        expect(productWrites).toHaveBeenCalledOnce();
+        expect(variantWrites).toHaveBeenCalledOnce();
+        expect(input.data.refetchProduct).toHaveBeenCalledTimes(2);
+        expect(input.data.refetchWorkspace).toHaveBeenCalledTimes(2);
+        expect(input.controls.showNotice).toHaveBeenCalledWith(expect.stringContaining('最新数据已重新读取'));
+    });
+
+    it('does not replay writes when the saved workspace still fails to read', async () => {
+        const input = fixture();
+        vi.mocked(input.data.refetchWorkspace!).mockRejectedValue(new Error('Workspace unavailable'));
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).toHaveBeenCalledOnce();
+        expect(input.data.refetchWorkspace).toHaveBeenCalledTimes(2);
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenLastCalledWith(
+            expect.stringContaining('再次点击保存只会重新读取'),
+        );
+    });
+
+    it('deduplicates save clicks before mutation loading can update the editor', async () => {
+        const input = fixture();
+        const { handleSave } = useProductEditorSave(input);
+        let finish!: (value: unknown) => void;
+        mocks.mutations.get(UPDATE_PRODUCT)!.mockImplementationOnce(
+            () =>
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+        );
+        const saving = handleSave();
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
+        finish({ data: { updateProduct: { id: 'product-1' } } });
+        await saving;
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).toHaveBeenCalledOnce();
+    });
+
+    it('acknowledges a newly created SKU before readback so a read retry cannot create it twice', async () => {
+        const input = fixture();
+        input.draft.variants = [{ ...input.draft.variants[0], id: undefined, sku: 'NEW', isNew: true }];
+        input.controls.acceptSavedDraft = vi.fn();
+        vi.mocked(input.data.refetchWorkspace!).mockRejectedValueOnce(new Error('Workspace unavailable'));
+        mocks.mutations.set(
+            CREATE_PRODUCT_VARIANTS,
+            vi.fn().mockResolvedValue({ data: { createProductVariants: [{ id: 'new-sku-1', sku: 'NEW' }] } }),
+        );
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        expect(input.controls.acceptSavedDraft).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variants: [expect.objectContaining({ id: 'new-sku-1', sku: 'NEW', isNew: false })],
+            }),
+        );
+        await handleSave();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).toHaveBeenCalledOnce();
+    });
+
+    it('claims a confirmed new SKU immediately and retries only its failed cost write', async () => {
+        const input = fixture();
+        input.baselineDraft!.fulfillmentType = 'physical';
+        input.baselineDraft!.variants = [];
+        input.data.productData!.product!.variants = [];
+        const row = { ...input.draft.variants[0], id: undefined, sku: 'NEW', isNew: true, costPrice: '5.00' };
+        input.draft = { ...input.baselineDraft!, variants: [row] };
+        input.controls.acceptSavedDraft = vi.fn();
+        input.controls.acceptSavedVariantIdentities = vi.fn(saved => {
+            Object.assign(row, { id: saved[0].id, isNew: false });
+        });
+        input.data.refetchProduct = vi.fn().mockImplementation(async () => {
+            input.baselineDraft!.variants = [{ ...row, costPrice: '' }];
+            return { data: input.data.productData };
+        });
+        mocks.mutations.set(
+            CREATE_PRODUCT_VARIANTS,
+            vi.fn().mockResolvedValue({ data: { createProductVariants: [{ id: 'new-sku-1', sku: 'NEW' }] } }),
+        );
+        mocks.mutate.mockRejectedValueOnce(new Error('Cost failed')).mockResolvedValue({});
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        expect(input.controls.acceptSavedVariantIdentities).toHaveBeenCalledWith([
+            { id: 'new-sku-1', sku: 'NEW' },
+        ]);
+        expect(input.controls.acceptSavedDraft).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('部分内容已保存'));
+        await handleSave();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).toHaveBeenCalledOnce();
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).not.toHaveBeenCalled();
+        expect(
+            mocks.mutate.mock.calls.filter(([request]) => request.mutation === UPDATE_VARIANT_COST),
+        ).toHaveLength(2);
+        expect(input.controls.acceptSavedDraft).toHaveBeenCalledOnce();
+    });
+
+    it.each(['5.00', '5', '0'])(
+        'keeps successful SKU costs and only retries the failed SKU after partial readback: %s',
+        async cost => {
+            const input = fixture();
+            const first = input.baselineDraft!.variants[0];
+            input.baselineDraft!.variants = [first, { ...first, id: 'variant-2', sku: 'SKU-2' }];
+            input.draft = {
+                ...input.baselineDraft!,
+                variants: input.baselineDraft!.variants.map(row => ({ ...row, costPrice: cost })),
+            };
+            input.data.refetchWorkspace = vi.fn().mockImplementation(async () => {
+                input.baselineDraft!.variants = input.baselineDraft!.variants.map(row =>
+                    row.id === 'variant-1' ? { ...row, costPrice: Number(cost).toFixed(2) } : row,
+                );
+                return {};
+            });
+            let secondAttempts = 0;
+            mocks.mutate.mockImplementation(async request => {
+                if (request.variables.productVariantId === 'variant-2' && ++secondAttempts === 1)
+                    throw new Error('Second cost failed');
+                return {};
+            });
+            const { handleSave } = useProductEditorSave(input);
+            await handleSave();
+            expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('SKU SKU-1 成本'));
+            expect(input.data.refetchWorkspace).toHaveBeenCalledOnce();
+            await handleSave();
+            expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+            expect(
+                mocks.mutate.mock.calls.filter(
+                    ([request]) => request.variables.productVariantId === 'variant-1',
+                ),
+            ).toHaveLength(1);
+            expect(
+                mocks.mutate.mock.calls.filter(
+                    ([request]) => request.variables.productVariantId === 'variant-2',
+                ),
+            ).toHaveLength(2);
+        },
+    );
+
+    it('does not repeat confirmed digital configuration for equivalent empty file and unlimited quantity readback', async () => {
+        const input = fixture();
+        const row = {
+            ...input.baselineDraft!.variants[0],
+            digitalStockPolicy: 'unlimited' as const,
+            digitalAvailableQuantity: undefined,
+            digitalFileVersionId: undefined,
+            costPrice: '5',
+        };
+        input.draft = { ...input.baselineDraft!, variants: [row] };
+        input.data.refetchWorkspace = vi.fn().mockImplementation(async () => {
+            input.baselineDraft!.variants = [
+                { ...row, digitalAvailableQuantity: 0, digitalFileVersionId: null, costPrice: '' },
+            ];
+            return {};
+        });
+        let costs = 0;
+        mocks.mutate.mockImplementation(async request => {
+            if (request.mutation === UPDATE_VARIANT_COST && ++costs === 1) throw new Error('Cost failed');
+            return {};
+        });
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        await handleSave();
+        expect(
+            mocks.mutate.mock.calls.filter(([request]) => request.mutation === UPDATE_DIGITAL_VARIANT),
+        ).toHaveLength(1);
+        expect(
+            mocks.mutate.mock.calls.filter(([request]) => request.mutation === UPDATE_VARIANT_COST),
+        ).toHaveLength(2);
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+    });
+
+    it('blocks replay of partial writes until both product and workspace can be reread', async () => {
+        const input = fixture();
+        vi.mocked(input.data.refetchWorkspace!).mockRejectedValueOnce(new Error('Workspace unavailable'));
+        const { handleSave } = useProductEditorSave(input);
+        mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!.mockRejectedValueOnce(new Error('SKU write failed'));
+        await handleSave();
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).toHaveBeenCalledOnce();
+        expect(input.data.refetchProduct).toHaveBeenCalledTimes(2);
+        expect(input.data.refetchWorkspace).toHaveBeenCalledTimes(2);
+        expect(input.controls.showNotice).toHaveBeenCalledWith(
+            expect.stringContaining('请继续保存尚未完成的修改'),
+        );
+    });
+
+    it('waits for every batch channel write to settle and rereads confirmed partial success', async () => {
+        const input = fixture();
+        input.draft = { ...input.baselineDraft!, selectedChannelIds: ['store-a', 'store-b'] };
+        const { handleSave } = useProductEditorSave(input);
+        let finish!: (value: unknown) => void;
+        mocks.mutations.get(ASSIGN_PRODUCTS_TO_CHANNEL)!.mockImplementation(({ variables }) => {
+            if (variables.input.channelId === 'store-a')
+                return Promise.reject(new Error('First assignment failed'));
+            return new Promise(resolve => {
+                finish = resolve;
+            });
+        });
+        const saving = handleSave();
+        await Promise.resolve();
+        expect(input.data.refetchProduct).not.toHaveBeenCalled();
+        finish({});
+        await saving;
+        expect(input.data.refetchProduct).toHaveBeenCalledOnce();
+        expect(input.controls.showError).toHaveBeenCalledWith(
+            expect.stringContaining('部分内容已保存（销售店铺）'),
+        );
+    });
+
     it('makes no writes when an availability confirmation is cancelled', async () => {
         const input = fixture();
         input.draft.enabled = false;
@@ -691,6 +952,81 @@ describe('product save orchestration', () => {
             }),
         );
     });
+    it.each([
+        ['12.00', '', null],
+        ['12.00', '0', 0],
+    ])('saves an explicit cost change from %s to %s', async (previous, next, expected) => {
+        const input = fixture();
+        input.baselineDraft!.variants[0].costPrice = previous;
+        input.draft.variants[0].costPrice = next;
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                mutation: UPDATE_VARIANT_COST,
+                variables: { productVariantId: 'variant-1', currencyCode: 'MYR', costMicrounits: expected },
+            }),
+        );
+    });
+
+    it.each([undefined, '', '  '])(
+        'does not write a cost when a new SKU leaves it blank: %s',
+        async costPrice => {
+            const input = fixture();
+            input.productId = 'new';
+            input.baselineDraft = null;
+            input.draft.variants[0] = { ...input.draft.variants[0], id: undefined, isNew: true, costPrice };
+            mocks.mutations.set(
+                CREATE_PRODUCT,
+                vi.fn().mockResolvedValue({ data: { createProduct: { id: 'created-prod-1' } } }),
+            );
+            mocks.mutations.set(
+                CREATE_PRODUCT_VARIANTS,
+                vi.fn().mockResolvedValue({
+                    data: { createProductVariants: [{ id: 'created-var-1', sku: 'SKU-1' }] },
+                }),
+            );
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.showError).not.toHaveBeenCalled();
+            expect(
+                mocks.mutate.mock.calls.some(([request]) => request.mutation === UPDATE_VARIANT_COST),
+            ).toBe(false);
+        },
+    );
+
+    it('preserves existing cost when the field is omitted', async () => {
+        const input = fixture();
+        input.baselineDraft!.variants[0].costPrice = '12.00';
+        delete input.draft.variants[0].costPrice;
+        await useProductEditorSave(input).handleSave();
+        expect(mocks.mutate.mock.calls.some(([request]) => request.mutation === UPDATE_VARIANT_COST)).toBe(
+            false,
+        );
+    });
+
+    it('blocks all product writes before saving a changed legacy digital configuration', async () => {
+        const input = fixture();
+        input.draft.fulfillmentType = 'digital';
+        input.draft.variants[0].digitalMigrationRequired = true;
+        input.draft.variants[0].digitalFileVersionId = 'new-file';
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('先核对并迁移'));
+        expect(input.controls.setActiveTab).toHaveBeenCalledWith('DELIVERY');
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it.each(['-1', 'not-a-number', 'Infinity', '999999999999999'])(
+        'rejects invalid cost before any write: %s',
+        async costPrice => {
+            const input = fixture();
+            input.draft.variants[0].costPrice = costPrice;
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('非负成本价'));
+            for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+            expect(mocks.mutate).not.toHaveBeenCalled();
+        },
+    );
     it('saves digital supply associations independently without a warehouse payload', async () => {
         const input = fixture();
         input.draft.variants[0].supplierId = 'supplier-1';

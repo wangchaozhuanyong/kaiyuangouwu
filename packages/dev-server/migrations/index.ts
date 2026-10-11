@@ -151,6 +151,7 @@ import { ExpandIcloudMailBodies1791120600000 } from './1791120600000-expand-iclo
 import { AddSystemAnnouncementOwner1791331200000 } from './1791331200000-add-system-announcement-owner';
 import { AddUsdtAcceptedHandlerSnapshot1791388800000 } from './1791388800000-add-usdt-accepted-handler-snapshot';
 import { AddStorefrontSeo1791580800000 } from './1791580800000-add-storefront-seo';
+import { AllowUnsetCatalogCost1791676800000 } from './1791676800000-allow-unset-catalog-cost';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -306,4 +307,5 @@ export const devServerMigrations = [
     AddSystemAnnouncementOwner1791331200000,
     AddUsdtAcceptedHandlerSnapshot1791388800000,
     AddStorefrontSeo1791580800000,
+    AllowUnsetCatalogCost1791676800000,
 ];

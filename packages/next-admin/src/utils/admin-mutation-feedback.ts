@@ -153,6 +153,16 @@ export function extractMutationFailure(data: unknown): string | null {
     return extractMutationFailureDetails(data)?.message ?? null;
 }
 
+/** Mixed bulk receipts still contain accepted writes which need read-side invalidation. */
+export function hasAcceptedMutationResult(data: unknown): boolean {
+    if (!isRecord(data)) return false;
+    const accepted = (value: unknown): boolean =>
+        Array.isArray(value)
+            ? value.some(accepted)
+            : value != null && value !== false && !extractRootResultFailureDetails(value);
+    return Object.values(data).some(accepted);
+}
+
 export function extractMutationFailureDetails(data: unknown): MutationFailureDescriptor | null {
     if (!isRecord(data)) return null;
 

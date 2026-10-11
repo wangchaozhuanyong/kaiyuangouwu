@@ -1,5 +1,5 @@
 import type { CartController } from '../cart/cart-controller';
-import type { CartCommand, CartCommandResult } from '../cart/cart-intents';
+import type { CartCommand, CartCommandResult, CartTerminalReceipt } from '../cart/cart-intents';
 import type {
     CustomerAddressInput,
     CustomerDeliveryEmail,
@@ -18,8 +18,11 @@ import type {
 
 import {
     CartCommandAcknowledgedReadError,
+    CartCommandDeadline,
     CartCommandNotExecutedError,
     CartScopeChangedError,
+    waitForCartSignal,
+    type CartCommandContext,
 } from '../cart/cart-repository';
 import { cartLineCanSelect } from '../product-availability';
 
@@ -50,12 +53,33 @@ export class CartCheckoutApi extends BaseDomainApi {
         this.controller = controller;
         controller.repository.setTransport({
             read: signal => this.readCart(signal),
-            apply: command => this.applyCommand(command),
-            recover: (id, cancel) => this.recoverCommand(id, cancel),
+            apply: (command, context) =>
+                this.withCommandContext(ctx => this.applyCommand(command, ctx), context),
+            recover: (id, cancel, context) =>
+                this.withCommandContext(ctx => this.recoverCommand(id, cancel, ctx), context),
         });
     }
 
-    private async applyCommand(input: CartCommand): Promise<CartCommandResult> {
+    runWithinDeadline<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs = 20_000): Promise<T> {
+        if (!this.controller) throw new Error('Cart transport is not connected.');
+        return this.controller.runWithinDeadline(operation, timeoutMs);
+    }
+
+    private async withCommandContext(
+        operation: (context: CartCommandContext) => Promise<CartCommandResult>,
+        context?: CartCommandContext,
+    ): Promise<CartCommandResult> {
+        if (context) return operation(context);
+        const deadline = new CartCommandDeadline();
+        try {
+            return await waitForCartSignal(operation(deadline.context), deadline.context.signal);
+        } finally {
+            deadline.dispose();
+        }
+    }
+
+    private async applyCommand(input: CartCommand, context: CartCommandContext): Promise<CartCommandResult> {
+        context.signal.throwIfAborted();
         let result: { applyStorefrontCartCommand: CommandReceipt };
         try {
             result = await this.request<{ applyStorefrontCartCommand: CommandReceipt }>(
@@ -64,7 +88,7 @@ export class CartCheckoutApi extends BaseDomainApi {
                 applyStorefrontCartCommand(input: $input) { ${commandResultFields} }
             }`,
                 { input },
-                undefined,
+                context.signal,
                 20_000,
                 true,
             );
@@ -74,14 +98,20 @@ export class CartCheckoutApi extends BaseDomainApi {
                 throw new CartCommandNotExecutedError(error.message, error);
             throw error;
         }
-        return this.readCommandResult(result.applyStorefrontCartCommand, input.commandId);
+        context.signal.throwIfAborted();
+        return this.readCommandResult(result.applyStorefrontCartCommand, input.commandId, context);
     }
 
-    private async recoverCommand(commandId: string, cancel: boolean): Promise<CartCommandResult> {
+    private async recoverCommand(
+        commandId: string,
+        cancel: boolean,
+        context: CartCommandContext,
+    ): Promise<CartCommandResult> {
+        context.signal.throwIfAborted();
         const cartId = this.controller?.repository.snapshot?.id;
         const acknowledged = this.acknowledgedCommands.get(commandId);
         if (acknowledged && acknowledged.cart.id === cartId)
-            return this.readCommandResult(acknowledged, commandId);
+            return this.readCommandResult(acknowledged, commandId, context);
         this.acknowledgedCommands.delete(commandId);
         const result = await this.request<{ recoverStorefrontCartCommand: CommandReceipt }>(
             `
@@ -89,14 +119,20 @@ export class CartCheckoutApi extends BaseDomainApi {
                 recoverStorefrontCartCommand(cartId: $cartId, commandId: $commandId, cancel: $cancel) { ${commandResultFields} }
             }`,
             { cartId, commandId, cancel },
-            undefined,
+            context.signal,
             20_000,
             true,
         );
-        return this.readCommandResult(result.recoverStorefrontCartCommand, commandId);
+        context.signal.throwIfAborted();
+        return this.readCommandResult(result.recoverStorefrontCartCommand, commandId, context);
     }
 
-    private async readCommandResult(receipt: CommandReceipt, commandId: string): Promise<CartCommandResult> {
+    private async readCommandResult(
+        receipt: CommandReceipt,
+        commandId: string,
+        context: CartCommandContext,
+    ): Promise<CartCommandResult> {
+        context.signal.throwIfAborted();
         if (
             !receipt ||
             receipt.commandId !== commandId ||
@@ -112,9 +148,15 @@ export class CartCheckoutApi extends BaseDomainApi {
 
         const terminal = receipt.status !== 'NOT_FOUND';
         // Keep the outcome separate from projections: their read can fail after the write committed.
-        if (terminal) this.acknowledgedCommands.set(commandId, receipt);
+        if (terminal) {
+            this.acknowledgedCommands.set(commandId, receipt);
+            context.acknowledge?.(terminalReceipt(receipt));
+        }
         try {
-            const fetched = await this.readCart();
+            const fetched = this.controller
+                ? await this.controller.repository.read(context.signal)
+                : await this.readCart(context.signal);
+            context.signal.throwIfAborted();
             const confirmed = this.controller?.repository.snapshot;
             if (fetched.id !== receipt.cart.id || (confirmed && fetched.id !== confirmed.id)) {
                 this.acknowledgedCommands.delete(commandId);
@@ -135,12 +177,13 @@ export class CartCheckoutApi extends BaseDomainApi {
                 commandId,
                 'The cart command was acknowledged, but its current details could not be read.',
                 error,
+                terminalReceipt(receipt),
             );
         }
     }
 
     async cart(signal?: AbortSignal): Promise<StorefrontCart> {
-        return this.controller ? this.controller.read() : this.readCart(signal);
+        return this.controller ? this.controller.read(signal) : this.readCart(signal);
     }
 
     private async readCart(signal?: AbortSignal): Promise<StorefrontCart> {
@@ -819,7 +862,8 @@ export class CartCheckoutApi extends BaseDomainApi {
         return this.assertOrder(result.setCurrencyCodeForOrder);
     }
 
-    async setPaymentCurrencyForOrder(currencyCode: string): Promise<Order> {
+    async setPaymentCurrencyForOrder(currencyCode: string, signal?: AbortSignal): Promise<Order> {
+        signal?.throwIfAborted();
         const result = await this.request<{ setStorefrontPaymentCurrency: Order }>(
             `
                 mutation SetStorefrontPaymentCurrency($currencyCode: String!) {
@@ -829,7 +873,9 @@ export class CartCheckoutApi extends BaseDomainApi {
                 }
             `,
             { currencyCode },
+            signal,
         );
+        signal?.throwIfAborted();
         return result.setStorefrontPaymentCurrency;
     }
 
@@ -943,6 +989,20 @@ const commandResultFields = `commandId status appliedRevision errorCode message
     session { order { id } checkout { id cartRevision state completedAt } }
     shippingMethods { id code name description priceWithTax metadata }
     selectedShippingMethodId`;
+
+function terminalReceipt(receipt: CommandReceipt): CartTerminalReceipt {
+    if (receipt.status === 'NOT_FOUND') throw new Error('The command does not have a terminal receipt.');
+    return {
+        commandId: receipt.commandId,
+        status: receipt.status,
+        cart: { id: receipt.cart.id, revision: receipt.cart.revision },
+        appliedRevision: receipt.appliedRevision,
+        errorCode: receipt.errorCode,
+        session: receipt.session?.order?.id
+            ? { orderId: receipt.session.order.id, checkout: receipt.session.checkout ?? null }
+            : null,
+    };
+}
 function requiredOrder(result: CartCommandResult): Order {
     if (!result.cart.checkoutOrder) throw new Error('No active checkout order.');
     return result.cart.checkoutOrder;

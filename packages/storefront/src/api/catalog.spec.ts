@@ -299,7 +299,7 @@ describe('legacy catalog reads share the existing scoped QueryClient', () => {
                         : { totalItems: 2, items: products.map(product => ({ productId: product.id })) },
                 });
             if (query.includes('query StorefrontProductsByIds'))
-                return Promise.resolve({ products: { items: products } });
+                return Promise.resolve({ products: { totalItems: products.length, items: products } });
             throw new Error('unexpected request');
         });
         const api = new CatalogApi({
@@ -326,7 +326,7 @@ describe('legacy catalog reads share the existing scoped QueryClient', () => {
                     search: { totalItems: 2, items: products.map(p => ({ productId: p.id })) },
                 });
             if (query.includes('query StorefrontProductsByIds'))
-                return Promise.resolve({ products: { items: products } });
+                return Promise.resolve({ products: { totalItems: products.length, items: products } });
             throw new Error('unexpected request');
         });
         const ctx = {
@@ -384,6 +384,7 @@ describe('legacy catalog reads share the existing scoped QueryClient', () => {
         await cancelled;
         finish({
             products: {
+                totalItems: 1,
                 items: [
                     {
                         id: 'a',
@@ -414,7 +415,7 @@ describe('legacy catalog reads share the existing scoped QueryClient', () => {
                     search: { totalItems: 2, items: products.map(p => ({ productId: p.id })) },
                 });
             if (query.includes('query StorefrontProductsByIds'))
-                return Promise.resolve({ products: { items: products } });
+                return Promise.resolve({ products: { totalItems: products.length, items: products } });
             if (query.includes('query StorefrontProductSales'))
                 return Promise.resolve({ storefrontProductSales: [{ productId: 'b', quantity: 9 }] });
             throw new Error('unexpected request');

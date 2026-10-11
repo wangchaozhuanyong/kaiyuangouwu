@@ -52,4 +52,25 @@ describe('SSE decoding', () => {
     it('bounds malformed frames', async () => {
         await expect(read(['a'.repeat(65537)])).rejects.toThrow('too large');
     });
+    it('reads only validated optional store names and excludes technical/private metadata', async () => {
+        const payload = {
+            version: 1,
+            id: 's:1',
+            orderId: '1',
+            occurredAt: '2026-09-10',
+            store: {
+                id: 'a',
+                nameZh: ' 店名 ',
+                nameEn: 'Store',
+                code: 'technical',
+                token: 'fixture-private',
+            },
+        };
+        const handlers = await read([`id: s:1\nevent: order-placed\ndata: ${JSON.stringify(payload)}\n\n`]);
+        expect(handlers.order.mock.calls[0][0].store).toEqual({ id: 'a', nameZh: '店名', nameEn: 'Store' });
+        const legacy = await read([
+            `id: s:1\nevent: order-placed\ndata: ${JSON.stringify({ ...payload, store: { id: null, nameZh: 'Bad' } })}\n\n`,
+        ]);
+        expect(legacy.order.mock.calls[0][0].store).toBeUndefined();
+    });
 });

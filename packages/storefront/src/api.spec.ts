@@ -1856,10 +1856,15 @@ describe('ShopApi storefront mutations', () => {
                 );
             }
             if (request.query.includes('query StorefrontProductsByIds')) {
-                return new Response(JSON.stringify({ data: { products: { items: fallbackProducts } } }), {
-                    status: 200,
-                    headers: { 'content-type': 'application/json' },
-                });
+                return new Response(
+                    JSON.stringify({
+                        data: { products: { items: fallbackProducts, totalItems: fallbackProducts.length } },
+                    }),
+                    {
+                        status: 200,
+                        headers: { 'content-type': 'application/json' },
+                    },
+                );
             }
             throw new Error('Unexpected GraphQL request');
         });
@@ -1949,6 +1954,7 @@ describe('ShopApi storefront mutations', () => {
     it('loads product history by id and preserves recent order', async () => {
         const fetchMock = mockGraphQlResponse({
             products: {
+                totalItems: 2,
                 items: [
                     { id: 'product-1', name: 'First product', variants: [] },
                     { id: 'product-2', name: 'Second product', variants: [] },
@@ -3099,6 +3105,70 @@ describe('cart command acknowledgement recovery', () => {
             name: 'ShopApiGraphQlError',
             requestNotExecuted: false,
         });
+    });
+
+    it('bounds the receipt and its subsequent full read by one deadline and preserves the known receipt', async () => {
+        vi.useFakeTimers();
+        let completeReceipt!: (value: Response) => void;
+        let detailSignal: AbortSignal | null | undefined;
+        const fetchMock = vi
+            .fn<typeof fetch>()
+            .mockImplementationOnce(
+                () =>
+                    new Promise(resolve => {
+                        completeReceipt = resolve;
+                    }),
+            )
+            .mockImplementationOnce((_url, init) => {
+                detailSignal = init?.signal;
+                return new Promise((_resolve, reject) => {
+                    detailSignal?.addEventListener('abort', () => reject(new Error('Fixture read aborted')), {
+                        once: true,
+                    });
+                });
+            });
+        vi.stubGlobal('fetch', fetchMock);
+        const repository = connect();
+        const applying = repository.apply(command).catch(error => error);
+        await vi.advanceTimersByTimeAsync(15_000);
+        completeReceipt(response({ applyStorefrontCartCommand: receipt() }));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(await applying).toMatchObject({ name: 'ShopApiTimeoutError', resultUnknown: true });
+        expect(detailSignal?.aborted).toBe(true);
+        fetchMock.mockResolvedValueOnce(response({ storefrontCart: confirmed }));
+        expect(await repository.recover(command.commandId)).toMatchObject({
+            status: 'APPLIED',
+            cart: confirmed,
+        });
+        const documents = fetchMock.mock.calls.map(call => JSON.parse(jsonRequestBody(call[1])).query);
+        expect(documents.filter(query => query.includes('mutation '))).toHaveLength(1);
+    });
+
+    it('passes route cancellation through the controller while retaining a shared command read owner', async () => {
+        let finish!: (value: Response) => void;
+        let fetchSignal: AbortSignal | null | undefined;
+        const fetchMock = vi.fn<typeof fetch>().mockImplementationOnce((_url, init) => {
+            fetchSignal = init?.signal;
+            return new Promise(resolve => {
+                finish = resolve;
+            });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const controller = new RecoveryCartController();
+        const api = new ShopApi(market);
+        api.enableCartCommands(controller);
+        const route = new AbortController();
+        const owner = new AbortController();
+        const routeRead = api.cart(route.signal).catch(error => error);
+        const commandRead = controller.repository.read(owner.signal);
+        route.abort();
+        expect(await routeRead).toMatchObject({ name: 'AbortError' });
+        expect(fetchSignal?.aborted).toBe(false);
+        finish(response({ storefrontCart: confirmed }));
+        expect(await commandRead).toEqual(confirmed);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 });
 

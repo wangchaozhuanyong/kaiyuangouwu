@@ -9,6 +9,7 @@ import { CREATE_PRODUCT, UPDATE_PRODUCT } from '../../graphql/catalog.graphql';
 import { AdminCapabilitiesContext } from '../../hooks/use-admin-capabilities';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { hasAnyAdminPermission } from '../../utils/admin-permissions';
+import type { ProductEditorTab } from './product-editor-types';
 import { ProductEditor } from './ProductEditor';
 import type { ProductEditorFormState } from './useProductEditorForm';
 import { useProductEditorSave } from './useProductEditorSave';
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
     save: undefined as ReturnType<typeof useProductEditorSave>['handleSave'] | undefined,
     queryScope: 'scope-a',
     channelToken: 'fixture-channel-a',
+    initialTab: 'BASIC' as ProductEditorTab,
 }));
 vi.mock('@apollo/client/react', () => ({
     useMutation: (document: DocumentNode) => {
@@ -57,7 +59,7 @@ vi.mock('./useProductEditorForm', () => ({
     useProductEditorForm: () => {
         if (!mocks.saveInput || !mocks.editor) throw new Error('Missing product fixture');
         const { handleSave } = useProductEditorSave(mocks.saveInput);
-        const [activeTab, setActiveTab] = useState('BASIC');
+        const [activeTab, setActiveTab] = useState(mocks.initialTab);
         const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
         mocks.save = handleSave;
         return {
@@ -197,6 +199,7 @@ beforeEach(() => {
     mocks.mutate.mockReset();
     mocks.queryScope = 'scope-a';
     mocks.channelToken = 'fixture-channel-a';
+    mocks.initialTab = 'BASIC';
     mocks.saveInput = fixture();
     const product = mocks.saveInput.data.productData?.product;
     mocks.editor = {
@@ -301,7 +304,7 @@ it.each([
         expect(host.textContent).not.toContain('复制基础资料创建');
         expect(host.querySelector('input[type="file"]')).toBeNull();
         expect(host.querySelector('[aria-label="启用商品"]')).toBeNull();
-        expect(host.querySelectorAll('[role="tabpanel"] fieldset[disabled]')).toHaveLength(4);
+        expect(host.querySelectorAll('[role="tabpanel"] fieldset[disabled]')).toHaveLength(2);
         expect(host.querySelector('[role="dialog"]')).toBeNull();
         await act(async () => {
             for (const control of host.querySelectorAll<HTMLButtonElement>('[role="tabpanel"] button')) {
@@ -310,9 +313,9 @@ it.each([
             }
         });
         expect(mocks.editor?.handleDeleteVariant).not.toHaveBeenCalled();
-        await act(async () => button('01商品信息').click());
-        await act(async () => button('02规格与价格').click());
-        expect(button('02规格与价格').getAttribute('aria-selected')).toBe('true');
+        await act(async () => button('01商品信息与规格价格').click());
+        await act(async () => button('02交付售后与更多设置').click());
+        expect(button('02交付售后与更多设置').getAttribute('aria-selected')).toBe('true');
         const price = host.querySelector<HTMLInputElement>('[aria-label="批量售价"]');
         expect(price?.matches(':disabled')).toBe(true);
         await act(async () => {
@@ -455,5 +458,35 @@ it('cancels a pending availability confirmation when the product becomes read-on
         approve({});
         await pending;
     });
+    expectNoWrites();
+});
+
+it.each([
+    ['VARIANTS', '01商品信息与规格价格'],
+    ['FACETS_COLLECTIONS', '01商品信息与规格价格'],
+    ['MORE', '02交付售后与更多设置'],
+    ['DELIVERY', '02交付售后与更多设置'],
+] as const)('opens legacy %s in the merged mounted panel', async (legacy, label) => {
+    mocks.initialTab = legacy;
+    await render(snapshot('STORE', true), ['ReadProduct', 'UpdateProduct']);
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
+    expect(button(label).getAttribute('aria-selected')).toBe('true');
+    const panels = [...host.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    expect(panels.filter(panel => !panel.hidden)).toHaveLength(1);
+    expect(host.querySelectorAll('[aria-label="商品描述"]')).toHaveLength(1);
+    expect(host.querySelectorAll('[aria-label="规格 1 售价"]')).toHaveLength(1);
+    expectNoWrites();
+});
+
+it('retains the description reading mode and independent specification draft across merged tabs', async () => {
+    await render(snapshot('STORE', true), ['ReadProduct', 'UpdateProduct']);
+    await act(async () => button('阅读').click());
+    const description = host.querySelector('[aria-label="商品描述"]');
+    const pricing = host.querySelector('[aria-label="规格 1 售价"]');
+    await act(async () => button('02交付售后与更多设置').click());
+    await act(async () => button('01商品信息与规格价格').click());
+    expect(host.querySelector('[aria-label="商品描述"]')).toBe(description);
+    expect(host.querySelector('[aria-label="规格 1 售价"]')).toBe(pricing);
+    expect(button('阅读').getAttribute('aria-pressed')).toBe('true');
     expectNoWrites();
 });

@@ -19,7 +19,12 @@ export function recommendationDay(now: Date) {
     return { businessDate, start, expiresAt: new Date(start.getTime() + 24 * 60 * 60_000) };
 }
 
-export function rankDailyRecommendations(ids: string[], sales: Map<string, number>, seed: string): string[] {
+export function rankDailyRecommendations(
+    ids: string[],
+    sales: Map<string, number>,
+    seed: string,
+    count = 10,
+): string[] {
     const scores = new Map(ids.map(id => [id, createHash('sha256').update(`${seed}:${id}`).digest('hex')]));
     return [...new Set(ids)]
         .sort(
@@ -27,7 +32,7 @@ export function rankDailyRecommendations(ids: string[], sales: Map<string, numbe
                 (sales.get(b) ?? 0) - (sales.get(a) ?? 0) ||
                 (scores.get(a) ?? '').localeCompare(scores.get(b) ?? ''),
         )
-        .slice(0, 10);
+        .slice(0, count);
 }
 
 /** Public product selection only. Order/customer details never leave this service. */
@@ -111,13 +116,18 @@ export class StorefrontRecommendationsService {
             const id = String(row.productId);
             sales.set(id, (sales.get(id) ?? 0) + net);
         }
-        const selected = rankDailyRecommendations(ids, sales, `${ctx.channelId}:${businessDate}`);
-        const products = await this.products.findByIds(ctx, selected);
-        const byId = new Map(
-            products
-                .filter(product => product.enabled && !product.deletedAt)
-                .map(product => [String(product.id), product]),
-        );
-        return { items: selected.flatMap(id => byId.get(id) ?? []), businessDate, expiresAt };
+        const ranked = rankDailyRecommendations(ids, sales, `${ctx.channelId}:${businessDate}`, ids.length);
+        const items: Awaited<ReturnType<ProductService['findByIds']>> = [];
+        for (let offset = 0; offset < ranked.length && items.length < 10; offset += 100) {
+            const batch = ranked.slice(offset, offset + 100);
+            const products = await this.products.findByIds(ctx, batch);
+            const byId = new Map(
+                products
+                    .filter(product => product.enabled && !product.deletedAt)
+                    .map(product => [String(product.id), product]),
+            );
+            items.push(...batch.flatMap(id => byId.get(id) ?? []));
+        }
+        return { items: items.slice(0, 10), businessDate, expiresAt };
     }
 }

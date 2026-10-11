@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { productEditorDraft } from './product-editor-draft';
+import type { DigitalWorkspaceVariant } from '../../graphql/product-domains.graphql';
+import {
+    hasPendingDigitalDeliveryDraft,
+    productEditorDraft,
+    revertPendingDigitalDeliveryDraft,
+} from './product-editor-draft';
 import type { ProductDetailRecord } from './product-editor-types';
 
 const product: ProductDetailRecord = {
@@ -95,5 +100,120 @@ describe('product editor source projection', () => {
         expect(draft.fulfillmentType).toBe('digital');
         expect(draft.variants).toEqual([]);
         expect(draft.dynamicCustomFields).toEqual({});
+    });
+
+    it.each([
+        [null, ''],
+        [0, '0.00'],
+        [7500, '7.50'],
+    ] as const)(
+        'reads the latest nullable cost %s without a fallback to older product values',
+        (cost, expected) => {
+            const draft = productEditorDraft(
+                product,
+                'physical',
+                [],
+                [{ id: 'v1', purchaseCostMicrounits: cost }],
+            );
+            expect(draft.variants[0].costPrice).toBe(expected);
+        },
+    );
+
+    it('uses only current-store digital workspace SKU IDs while keeping product order', () => {
+        const workspace: DigitalWorkspaceVariant = {
+            id: 'v1',
+            sku: 'SKU-1',
+            deliveryMode: 'file_download',
+            stockPolicy: 'limited',
+            availableQuantity: 12,
+            migrationRequired: true,
+            purchaseCostMicrounits: null,
+            fileVersion: null,
+        };
+        const multiStoreProduct = {
+            ...product,
+            variants: [
+                product.variants[0],
+                { ...product.variants[0], id: 'removed-store-sku', sku: 'OTHER' },
+            ],
+        };
+        expect(
+            productEditorDraft(multiStoreProduct, 'digital', [], [workspace]).variants.map(v => v.id),
+        ).toEqual(['v1']);
+        expect(productEditorDraft(multiStoreProduct, 'digital', [], []).variants).toEqual([]);
+        expect(productEditorDraft(multiStoreProduct, 'digital', []).variants).toEqual([]);
+    });
+
+    it('deliberately reverts only legacy delivery input to the latest read baseline', () => {
+        const baseline = productEditorDraft(
+            product,
+            'digital',
+            [],
+            [
+                {
+                    id: 'v1',
+                    sku: 'SKU-1',
+                    deliveryMode: 'file_download',
+                    stockPolicy: 'limited',
+                    availableQuantity: null,
+                    migrationRequired: true,
+                    purchaseCostMicrounits: 5000,
+                    fileVersion: { id: 'existing-file', fileName: 'existing.pdf' },
+                },
+            ],
+        ).variants[0];
+        const edited = {
+            ...baseline,
+            name: 'Name draft',
+            costPrice: '',
+            supplierId: 'draft-supplier',
+            digitalDeliveryMode: 'manual_service' as const,
+            digitalStockPolicy: 'unlimited' as const,
+            digitalAvailableQuantity: 99,
+            digitalFileVersionId: 'new-file',
+            digitalFileName: 'new.pdf',
+        };
+        expect(hasPendingDigitalDeliveryDraft(edited, baseline)).toBe(true);
+        const restored = revertPendingDigitalDeliveryDraft(edited, baseline);
+        expect(restored).toEqual({
+            ...edited,
+            digitalDeliveryMode: baseline.digitalDeliveryMode,
+            digitalStockPolicy: baseline.digitalStockPolicy,
+            digitalAvailableQuantity: baseline.digitalAvailableQuantity,
+            digitalFileVersionId: baseline.digitalFileVersionId,
+            digitalFileName: baseline.digitalFileName,
+        });
+        expect(restored).toMatchObject({ name: 'Name draft', costPrice: '', supplierId: 'draft-supplier' });
+        expect(edited.digitalFileVersionId).toBe('new-file');
+        expect(hasPendingDigitalDeliveryDraft(restored, baseline)).toBe(false);
+    });
+
+    it('cannot undo delivery input without a matching pending current-store SKU baseline', () => {
+        const baseline = productEditorDraft(
+            product,
+            'digital',
+            [],
+            [
+                {
+                    id: 'v1',
+                    sku: 'SKU-1',
+                    deliveryMode: 'manual_service',
+                    stockPolicy: 'unlimited',
+                    availableQuantity: null,
+                    migrationRequired: true,
+                    purchaseCostMicrounits: null,
+                    fileVersion: null,
+                },
+            ],
+        ).variants[0];
+        const edited = { ...baseline, digitalFileVersionId: 'draft-file' };
+        for (const invalid of [
+            undefined,
+            { ...baseline, id: 'another-store-sku' },
+            { ...baseline, digitalMigrationRequired: false },
+        ]) {
+            expect(revertPendingDigitalDeliveryDraft(edited, invalid)).toBe(edited);
+            expect(hasPendingDigitalDeliveryDraft(edited, invalid)).toBe(false);
+        }
     });
 });

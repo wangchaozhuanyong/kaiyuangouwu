@@ -237,6 +237,19 @@ export async function invalidateStorefrontRealtimeQueries(
     );
 }
 
+/** A lightweight current-scope check; the public aggregate and catalog keep their own owners. */
+export function refreshStorefrontAssociations(queryClient: QueryClient, scope: StorefrontRealtimeScope) {
+    return queryClient.refetchQueries(
+        {
+            type: 'active',
+            predicate: query =>
+                matchesPrefix(query.queryKey, ['storefront', scope.marketCode, scope.languageCode]) &&
+                ['products-by-ids', 'flash-sale-associations'].includes(String(query.queryKey[3])),
+        },
+        { cancelRefetch: false },
+    );
+}
+
 export function storefrontRealtimeQueryMatches(
     query: Pick<Query, 'queryKey'>,
     event: StorefrontRealtimeEvent,
@@ -253,7 +266,11 @@ export function storefrontRealtimeQueryMatches(
     }
     if (!matchesPrefix(key, ['storefront', scope.marketCode, scope.languageCode])) return false;
     const section = key[3];
-    if (section === 'flash-sales' && (topics.has('catalog') || topics.has('content'))) return true;
+    if (
+        ['flash-sales', 'flash-sale-associations'].includes(String(section)) &&
+        (topics.has('catalog') || topics.has('content'))
+    )
+        return true;
     if (section === 'daily-recommendations' && (topics.has('catalog') || topics.has('orders'))) return true;
 
     if (topics.has('config') && (section === 'config' || section === 'review-settings')) return true;
@@ -272,6 +289,7 @@ export function storefrontRealtimeQueryMatches(
     if (section !== 'private') return false;
 
     const privateSection = key[4];
+    if (topics.has('catalog') && privateSection === 'cart') return true;
     if (topics.has('coupons') && privateSection === 'coupon-campaigns') return true;
     if (topics.has('cart') && privateSection === 'cart') return true;
     if (topics.has('customer') && privateSection === 'customer' && key.length === 5) return true;
@@ -314,7 +332,17 @@ function couponCampaignQueryMatches(key: QueryKey, scope: StorefrontRealtimeScop
 
 function catalogQueryMatches(key: QueryKey, event: StorefrontRealtimeEvent): boolean {
     const section = key[3];
-    if (['products', 'catalog', 'collections'].includes(String(section))) return true;
+    if (
+        [
+            'products',
+            'catalog',
+            'collections',
+            'native-catalog',
+            'native-catalog-sales',
+            'home-best-seller-sales',
+        ].includes(String(section))
+    )
+        return true;
     const ids = new Set(event.entityIds ?? []);
     if (section === 'product') {
         return event.entityType !== 'Product' || ids.size === 0 || ids.has(String(key[4]));

@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useCallback, useContext, useMemo } from 'react';
 import { UNSAFE_LocationContext } from 'react-router-dom';
 import { adminCapabilityAllows, adminCapabilityForPath } from '../../../common/src/admin-capabilities';
 import type { AdminPermission } from '../utils/admin-permissions';
@@ -15,26 +15,31 @@ export const AdminPermissionsContext = createContext<AdminPermissionsContextValu
 });
 
 export function useAdminPermissions() {
-    const permissions = useContext(AdminPermissionsContext);
+    const { permissions, hasAnyPermission: hasBasePermission } = useContext(AdminPermissionsContext);
     const snapshot = useContext(AdminCapabilitiesContext);
     const location = useContext(UNSAFE_LocationContext);
     const definition = location ? adminCapabilityForPath(location.location.pathname) : undefined;
-    return {
-        ...permissions,
-        hasAnyPermission: (required: readonly AdminPermission[]) => {
-            if (!snapshot || !definition || definition.scope === 'PERSONAL')
-                return permissions.hasAnyPermission(required);
+    const capabilityId = definition?.id;
+    const capabilityScope = definition?.scope;
+    const hasAnyPermission = useCallback(
+        (required: readonly AdminPermission[]) => {
+            if (!snapshot || !capabilityId || capabilityScope === 'PERSONAL')
+                return hasBasePermission(required);
             return (
                 required.length === 0 ||
                 required.some(permission => {
-                    if (!permissions.hasAnyPermission([permission])) return false;
+                    if (!hasBasePermission([permission])) return false;
                     const mutation = /^(Create|Update|Delete|Manage|Adjust)/u.test(permission);
                     return mutation
-                        ? adminCapabilityAllows(snapshot, definition.id, 'write') ||
-                              adminCapabilityAllows(snapshot, definition.id, 'configure')
-                        : adminCapabilityAllows(snapshot, definition.id);
+                        ? adminCapabilityAllows(snapshot, capabilityId, 'write') ||
+                              adminCapabilityAllows(snapshot, capabilityId, 'configure')
+                        : adminCapabilityAllows(snapshot, capabilityId);
                 })
             );
         },
-    };
+        [hasBasePermission, snapshot, capabilityId, capabilityScope],
+    );
+    // Dynamic extension documents depend on this callback. Stable permissions must
+    // not rebuild their document/Observable on every query status render.
+    return useMemo(() => ({ permissions, hasAnyPermission }), [permissions, hasAnyPermission]);
 }

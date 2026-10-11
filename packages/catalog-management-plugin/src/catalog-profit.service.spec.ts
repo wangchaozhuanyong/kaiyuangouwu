@@ -231,6 +231,51 @@ describe('catalog profit report calculation', () => {
         });
     });
 
+    it.each([
+        ['2026-09-10T08:00:00.000Z', 40_000, 0],
+        ['2026-09-16T08:00:00.000Z', null, 1],
+        ['2026-09-21T08:00:00.000Z', 0, 0],
+    ])('uses the cost interval at order placement, including clears and zero: %s', (date, cost, missing) => {
+        const result = calculateCatalogProfitReport(
+            [order({ orderPlacedAt: new Date(date) })],
+            new Map([
+                [
+                    'variant-1',
+                    [
+                        { effectiveAt: new Date('2026-09-01T00:00:00.000Z'), costMicrounits: 20_000 },
+                        { effectiveAt: new Date('2026-09-15T00:00:00.000Z'), costMicrounits: null },
+                        { effectiveAt: new Date('2026-09-20T00:00:00.000Z'), costMicrounits: 0 },
+                    ],
+                ],
+            ]),
+        );
+        expect(result.items[0].productCostMicrounits).toBe(cost);
+        expect(result.items[0].missingCostLineCount).toBe(missing);
+        expect(result.items[0].estimatedCostLineCount).toBe(0);
+        if (missing) expect(result.items[0].grossProfitMicrounits).toBeNull();
+    });
+
+    it('does not estimate an older order from a cleared current cost', () => {
+        const result = calculateCatalogProfitReport(
+            [order()],
+            new Map([
+                [
+                    'variant-1',
+                    [
+                        { effectiveAt: new Date('2026-09-20T00:00:00.000Z'), costMicrounits: 25_000 },
+                        { effectiveAt: new Date('2026-09-21T00:00:00.000Z'), costMicrounits: null },
+                    ],
+                ],
+            ]),
+        );
+        expect(result.items[0]).toMatchObject({
+            productCostMicrounits: null,
+            grossProfitMicrounits: null,
+            missingCostLineCount: 1,
+            estimatedCostLineCount: 0,
+        });
+    });
+
     it('ignores authorized payments until they are settled', () => {
         const result = calculateCatalogProfitReport(
             [order({ payments: [{ method: 'card-payment', amount: 10_000, state: 'Authorized' }] })],

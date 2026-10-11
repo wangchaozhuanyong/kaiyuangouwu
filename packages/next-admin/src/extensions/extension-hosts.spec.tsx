@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminCapabilitySnapshot } from '../../../common/src/admin-capabilities';
 import { AdminCapabilitiesContext } from '../hooks/use-admin-capabilities';
 import { AdminPermissionsContext } from '../hooks/use-admin-permissions';
+import { PageRuntimeContext } from '../runtime/page-runtime-context';
 import { hasAnyAdminPermission } from '../utils/admin-permissions';
 import {
     defineNextAdminExtension as registerExtension,
@@ -14,6 +15,9 @@ import {
     type NextAdminPageBlockContext,
 } from './extension-api';
 import { NextAdminActions, NextAdminPageBlocks } from './extension-hosts';
+
+const scope = vi.hoisted(() => ({ value: 'store-a:session-1' }));
+vi.mock('../apollo', () => ({ getAdminQueryScope: () => scope.value }));
 
 const cleanups: Array<() => void> = [];
 const capabilitySnapshot: AdminCapabilitySnapshot = {
@@ -33,6 +37,7 @@ function defineNextAdminExtension(extension: NextAdminExtension) {
     });
 }
 beforeEach(() => {
+    scope.value = 'store-a:session-1';
     resetNextAdminExtensionsForTests();
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -85,6 +90,76 @@ async function renderBlocks(props: ComponentProps<typeof NextAdminPageBlocks>, p
 }
 
 describe('page block placement filters', () => {
+    it('recovers a failed block only in its new entity/page/session identity and keeps ordinary refresh drafts', async () => {
+        let unavailable = true;
+        function RecoverableBlock() {
+            if (unavailable) throw new Error('synthetic extension failure');
+            return <div>区块已恢复</div>;
+        }
+        function DraftBlock() {
+            const [count, setCount] = useState(0);
+            return <button onClick={() => setCount(value => value + 1)}>字段草稿 {count}</button>;
+        }
+        defineNextAdminExtension({
+            id: 'identity',
+            pageBlocks: [
+                { id: 'recoverable', pageId: 'product-detail', component: RecoverableBlock },
+                { id: 'draft', pageId: 'product-detail', component: DraftBlock },
+            ],
+        });
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+        cleanups.push(() => {
+            root.unmount();
+            container.remove();
+        });
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const render = async (entity: { id: string; updatedAt: string }, page = '/catalog/products/11') =>
+            act(async () =>
+                root.render(
+                    <PageRuntimeContext.Provider value={{ page, active: true }}>
+                        <AdminCapabilitiesContext.Provider value={capabilitySnapshot}>
+                            <NextAdminPageBlocks pageId="product-detail" entity={entity} />
+                        </AdminCapabilitiesContext.Provider>
+                    </PageRuntimeContext.Provider>,
+                ),
+            );
+        try {
+            await render({ id: '11', updatedAt: 'v1' });
+            expect(container.querySelector('[data-admin-extension-error]')).not.toBeNull();
+            const draft = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+                node => node.textContent === '字段草稿 0',
+            )!;
+            await act(async () => draft.click());
+            unavailable = false;
+            await render({ id: '11', updatedAt: 'v2' });
+            expect(container.querySelector('[data-admin-extension-error]')).not.toBeNull();
+            expect(container.textContent).toContain('字段草稿 1');
+            const retry = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+                node => node.textContent === '重试扩展',
+            )!;
+            await act(async () => retry.click());
+            expect(container.querySelector('[data-admin-extension-error]')).toBeNull();
+            expect(container.textContent).toContain('字段草稿 1');
+            unavailable = true;
+            await render({ id: '11', updatedAt: 'v3' });
+            expect(container.querySelector('[data-admin-extension-error]')).not.toBeNull();
+            unavailable = false;
+            await render({ id: '12', updatedAt: 'v1' });
+            expect(container.querySelector('[data-admin-extension-error]')).toBeNull();
+            expect(container.textContent).toContain('字段草稿 0');
+            await act(async () => container.querySelector<HTMLButtonElement>('button')!.click());
+            await render({ id: '12', updatedAt: 'v2' }, '/catalog/products/12');
+            expect(container.textContent).toContain('字段草稿 0');
+            await act(async () => container.querySelector<HTMLButtonElement>('button')!.click());
+            scope.value = 'store-b:session-2';
+            await render({ id: '12', updatedAt: 'v2' }, '/catalog/products/12');
+            expect(container.textContent).toContain('字段草稿 0');
+        } finally {
+            errors.mockRestore();
+        }
+    });
     it('does not mount an extension with no supported capability', async () => {
         const block = vi.fn(() => <div>未授权扩展</div>);
         registerExtension({

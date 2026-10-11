@@ -131,7 +131,7 @@ describe('ProductEditorSidebar', () => {
         const identityHtml = renderToStaticMarkup(<ProductEditorIdentityFields />);
         expect(identityHtml).toContain('value="测试商品"');
         expect(identityHtml).toContain('value="test-product"');
-        expect(identityHtml).toContain('data-admin-field="stacked"');
+        expect(identityHtml).toContain('data-admin-field="auto"');
     });
 
     it('offers upload and selection without rendering a missing image', () => {

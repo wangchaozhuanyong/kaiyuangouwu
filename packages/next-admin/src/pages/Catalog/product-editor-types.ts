@@ -174,10 +174,17 @@ export const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
             name: variant.name,
             price: variant.price,
             physicalSettings: variant.physicalSettings,
-            costPrice: variant.costPrice,
-            supplierId: variant.supplierId,
-            digitalAvailableQuantity: variant.digitalAvailableQuantity,
-            digitalFileVersionId: variant.digitalFileVersionId,
+            costPrice: variant.costPrice?.trim()
+                ? Number.isFinite(Math.round(Number(variant.costPrice) * 1_000))
+                    ? Math.round(Number(variant.costPrice) * 1_000)
+                    : variant.costPrice.trim()
+                : null,
+            supplierId: variant.supplierId ?? null,
+            digitalAvailableQuantity:
+                variant.digitalStockPolicy === 'limited'
+                    ? (variant.digitalAvailableQuantity ?? 0)
+                    : undefined,
+            digitalFileVersionId: variant.digitalFileVersionId ?? null,
             stockOnHand: variant.stockOnHand,
             stockAllocated: variant.stockAllocated,
             enabled: variant.enabled,

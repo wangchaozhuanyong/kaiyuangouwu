@@ -1,8 +1,11 @@
 import { Component, Suspense, useContext, useId, useMemo, useState, type ReactNode } from 'react';
+import { getAdminQueryScope } from '../apollo';
 import { AdminButton } from '../components/AdminControls';
 
 import { useAdminCapabilities } from '../hooks/use-admin-capabilities';
 import { AdminPermissionsContext, useAdminPermissions } from '../hooks/use-admin-permissions';
+import { TabPageContext } from '../layouts/tab-page-context';
+import { PageRuntimeContext } from '../runtime/page-runtime-context';
 
 import {
     getNextAdminActions,
@@ -46,6 +49,19 @@ function useExtensionContext(pageId: string, entity?: Record<string, unknown> | 
     return useMemo<NextAdminPageBlockContext>(() => ({ pageId, entity }), [entity, pageId]);
 }
 
+function useExtensionIdentity(pageId: string, entity?: Record<string, unknown> | null) {
+    const page = useContext(PageRuntimeContext);
+    const tab = useContext(TabPageContext);
+    // Scope is an opaque revision, never a token. Entity versions are deliberately
+    // excluded so an ordinary read/refresh keeps loaded extension drafts mounted.
+    return JSON.stringify([
+        getAdminQueryScope(),
+        page?.page ?? tab?.path ?? pageId,
+        pageId,
+        entity?.id ?? null,
+    ]);
+}
+
 function ExtensionLoadingSurface({ compact = false }: { compact?: boolean }) {
     return (
         <div
@@ -79,6 +95,7 @@ export function NextAdminPageBlocks({
     const { hasAnyPermission } = useAdminPermissions();
     const { canUseCapability } = useAdminCapabilities();
     const context = useExtensionContext(pageId, entity);
+    const identity = useExtensionIdentity(pageId, entity);
     const blocks = getNextAdminPageBlocks(pageId).filter(
         block =>
             (!includeIds || includeIds.includes(block.id)) &&
@@ -94,7 +111,7 @@ export function NextAdminPageBlocks({
             {blocks.map(block => {
                 const Block = block.component;
                 return (
-                    <ExtensionBoundary key={block.id} extensionId={block.id}>
+                    <ExtensionBoundary key={`${identity}:${block.id}`} extensionId={block.id}>
                         <Suspense fallback={<ExtensionLoadingSurface />}>
                             <Block context={context} />
                         </Suspense>
@@ -120,6 +137,7 @@ export function NextAdminActions({
     const { hasAnyPermission } = useContext(AdminPermissionsContext);
     const { canUseCapability } = useAdminCapabilities();
     const context = useExtensionContext(pageId, entity);
+    const identity = useExtensionIdentity(pageId, entity);
     const actions = getNextAdminActions(pageId).filter(
         action =>
             Boolean(
@@ -153,7 +171,7 @@ export function NextAdminActions({
                 {actions.map(action => {
                     const Action = action.component;
                     return (
-                        <ExtensionBoundary key={action.id} extensionId={action.id}>
+                        <ExtensionBoundary key={`${identity}:${action.id}`} extensionId={action.id}>
                             <Suspense fallback={<ExtensionLoadingSurface compact />}>
                                 <Action context={context} />
                             </Suspense>
@@ -168,6 +186,7 @@ export function NextAdminActions({
 export function NextAdminDashboardAlerts() {
     const { hasAnyPermission } = useAdminPermissions();
     const { canUseCapability } = useAdminCapabilities();
+    const identity = useExtensionIdentity('dashboard');
     const alerts = getNextAdminDashboardAlerts().filter(
         alert =>
             Boolean(alert.capabilityId && canUseCapability(alert.capabilityId)) &&
@@ -179,7 +198,7 @@ export function NextAdminDashboardAlerts() {
             {alerts.map(alert => {
                 const Alert = alert.component;
                 return (
-                    <ExtensionBoundary key={alert.id} extensionId={alert.id}>
+                    <ExtensionBoundary key={`${identity}:${alert.id}`} extensionId={alert.id}>
                         <Suspense fallback={<ExtensionLoadingSurface compact />}>
                             <Alert />
                         </Suspense>
@@ -193,6 +212,7 @@ export function NextAdminDashboardAlerts() {
 export function NextAdminDashboardWidgets() {
     const { hasAnyPermission } = useAdminPermissions();
     const { canUseCapability } = useAdminCapabilities();
+    const identity = useExtensionIdentity('dashboard');
     const widgets = getNextAdminDashboardWidgets().filter(
         widget =>
             Boolean(widget.capabilityId && canUseCapability(widget.capabilityId)) &&
@@ -205,7 +225,7 @@ export function NextAdminDashboardWidgets() {
                 const Widget = widget.component;
                 return (
                     <section
-                        key={widget.id}
+                        key={`${identity}:${widget.id}`}
                         className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-xs"
                     >
                         <div className="admin-section-title-line mb-4">

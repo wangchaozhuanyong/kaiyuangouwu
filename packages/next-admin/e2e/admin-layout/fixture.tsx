@@ -1624,7 +1624,7 @@ const client = new ApolloClient({
                                       }))
                                     : [],
                         },
-                        ...(productEditorDesign
+                        ...(productEditorDesign || digitalFixture
                             ? {
                                   digitalProductWorkspace: {
                                       ...(data.digitalProductWorkspace as object),

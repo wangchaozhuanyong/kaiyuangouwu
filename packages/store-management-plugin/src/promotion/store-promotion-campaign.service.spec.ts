@@ -1,4 +1,5 @@
 import { CreatePromotionInput, SortOrder } from '@vendure/common/lib/generated-types';
+import { Product, ProductVariant } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
@@ -202,7 +203,11 @@ describe('StorePromotionCampaignService', () => {
     });
 
     it('rejects a flash sale when any selected product has no saleable variant', async () => {
-        const harness = createHarness({ variants: [productVariant('variant-1', 10_000)] });
+        const variant = productVariant('variant-1', 10_000);
+        const harness = createHarness({
+            variants: [variant],
+            products: [{ ...variant.product, id: 'product-without-variant' }],
+        });
 
         await expect(
             harness.service.createFlashSale(ctx, {
@@ -379,10 +384,12 @@ describe('StorePromotionCampaignService', () => {
         expect(harness.getVariantsByProductId).toHaveBeenNthCalledWith(1, ctx, 'product-1', {
             take: 100,
             skip: 0,
+            filter: { enabled: { eq: true } },
         });
         expect(harness.getVariantsByProductId).toHaveBeenNthCalledWith(2, ctx, 'product-1', {
             take: 100,
             skip: 100,
+            filter: { enabled: { eq: true } },
         });
         const input = harness.createPromotion.mock.calls[0][1];
         expect(JSON.parse(input.actions[0].arguments[0].value)).toHaveLength(101);
@@ -541,12 +548,14 @@ describe('StorePromotionCampaignService', () => {
 
 function createHarness({
     variants = [],
+    products = [],
     promotions = [],
     issuedCount = 0,
     initialConfig = null,
     reportRows,
 }: {
     variants?: any[];
+    products?: any[];
     promotions?: any[];
     issuedCount?: number;
     initialConfig?: StoreCouponCampaignConfig | null;
@@ -602,6 +611,10 @@ function createHarness({
     };
     const updateEntity = vi.fn();
     let campaignConfig: StoreCouponCampaignConfig | null = initialConfig;
+    const saveConfig = vi.fn((value: StoreCouponCampaignConfig) => {
+        campaignConfig = value;
+        return value;
+    });
     let allocationReportQuery = 0;
     const queryBuilder = (rows: any[]) => {
         const builder = {
@@ -616,14 +629,31 @@ function createHarness({
         return builder;
     };
     const connection = {
-        findByIdsInChannel: vi.fn(() => []),
+        findByIdsInChannel: vi.fn((_ctx, entity, ids: string[], channelId: string) => {
+            const records =
+                entity === Product
+                    ? [
+                          ...new Map(
+                              [...products, ...variants.map(variant => variant.product)].map(product => [
+                                  String(product.id),
+                                  product,
+                              ]),
+                          ).values(),
+                      ]
+                    : entity === ProductVariant
+                      ? variants
+                      : [];
+            return records.filter(
+                record =>
+                    ids.map(String).includes(String(record.id)) &&
+                    record.channels?.some((channel: any) => String(channel.id) === String(channelId)) &&
+                    !record.deletedAt,
+            );
+        }),
         getRepository: vi.fn((_ctx, entity) => {
             if (entity === StoreCouponCampaignConfig) {
                 return {
-                    save: vi.fn((value: StoreCouponCampaignConfig) => {
-                        campaignConfig = value;
-                        return value;
-                    }),
+                    save: saveConfig,
                     find: vi.fn(() => (campaignConfig ? [campaignConfig] : [])),
                     findOne: vi.fn(() => campaignConfig),
                     findOneOrFail: vi.fn(() => campaignConfig),
@@ -669,6 +699,8 @@ function createHarness({
         softDeletePromotion,
         updateEntity,
         updatePromotion,
+        connection,
+        saveConfig,
         service: new StorePromotionCampaignService(
             connection as any,
             promotionService as any,
@@ -724,17 +756,271 @@ function operationInput(code: string, values: Record<string, string>) {
 function productVariant(id: string, priceWithTax: number, currencyCode = 'CNY') {
     return {
         id,
+        productId: 'product-1',
+        enabled: true,
+        deletedAt: null,
+        channels: [ctx.channel],
         name: '默认规格',
         priceWithTax,
         currencyCode,
         featuredAsset: { preview: 'preview/product.webp' },
         product: {
             id: 'product-1',
+            enabled: true,
+            deletedAt: null,
+            channels: [ctx.channel],
             name: '测试商品',
             featuredAsset: null,
         },
     };
 }
+
+describe('new and re-enabled marketing association eligibility', () => {
+    it.each([
+        'disabled',
+        'deleted',
+        'other-channel',
+        'parent-disabled',
+        'parent-deleted',
+        'parent-other-channel',
+    ])('rejects a new campaign for %s references before writing', async state => {
+        const variant: any = productVariant('variant-1', 10_000);
+        if (state === 'disabled') variant.enabled = false;
+        if (state === 'deleted') variant.deletedAt = new Date();
+        if (state === 'other-channel') variant.channels = [{ id: 'other' }];
+        if (state === 'parent-disabled') variant.product.enabled = false;
+        if (state === 'parent-deleted') variant.product.deletedAt = new Date();
+        if (state === 'parent-other-channel') variant.product.channels = [{ id: 'other' }];
+        const test = createHarness({ variants: [variant] });
+        await expect(
+            test.service.createFlashSale(ctx, {
+                name: 'fixture flash sale',
+                productIds: ['product-1'],
+                percentageOff: 20,
+                startsAt: new Date('2026-10-11'),
+                endsAt: new Date('2026-10-12'),
+            }),
+        ).rejects.toThrow();
+        await expect(
+            test.service.createCoupon(ctx, {
+                name: 'fixture product coupon',
+                kind: 'PRODUCT_PERCENTAGE',
+                appearanceTheme: 'blue',
+                productIds: ['product-1'],
+                discountRate: 8,
+            }),
+        ).rejects.toThrow();
+        expect(test.createPromotion).not.toHaveBeenCalled();
+        expect(test.saveConfig).not.toHaveBeenCalled();
+    });
+
+    it.each(['flash', 'coupon'])(
+        're-enables %s using only its original eligible SKU contract',
+        async kind => {
+            const oldSku = productVariant('variant-1', 10_000);
+            const newSku = productVariant('variant-2', 12_000);
+            const promotion = {
+                ...couponPromotion(),
+                enabled: false,
+                startsAt: new Date('2026-10-11'),
+                endsAt: new Date('2026-10-12'),
+                couponCode: kind === 'coupon' ? 'FIXTURE' : null,
+                actions:
+                    kind === 'coupon'
+                        ? [
+                              {
+                                  code: 'products_percentage_discount',
+                                  args: { discount: 15, productVariantIds: JSON.stringify(['variant-1']) },
+                              },
+                          ]
+                        : [
+                              {
+                                  code: 'store_flash_sale_price',
+                                  args: {
+                                      variantRules: JSON.stringify([
+                                          { variantId: 'variant-1', salePrice: 7000, currencyCode: 'CNY' },
+                                      ]),
+                                  },
+                              },
+                          ],
+            };
+            const test = createHarness({ variants: [oldSku, newSku], promotions: [promotion] });
+            const result = await test.service.setEnabled(ctx, promotion.id, true);
+            expect(test.updatePromotion).toHaveBeenCalledExactlyOnceWith(ctx, {
+                id: promotion.id,
+                enabled: true,
+            });
+            expect(result.actions).toEqual(promotion.actions);
+            expect(result.startsAt).toEqual(promotion.startsAt);
+            expect(result.endsAt).toEqual(promotion.endsAt);
+            expect(test.getVariantsByProductId).not.toHaveBeenCalled();
+            const lookup = test.connection.findByIdsInChannel.mock.calls.find(
+                call => call[1] === ProductVariant,
+            );
+            expect(lookup?.[2]).toEqual(['variant-1']);
+        },
+    );
+
+    it.each([
+        'disabled',
+        'deleted',
+        'other-channel',
+        'parent-disabled',
+        'parent-deleted',
+        'parent-other-channel',
+    ])('refuses to enable an original %s SKU and never substitutes another SKU', async state => {
+        const variant: any = productVariant('variant-1', 10_000);
+        if (state === 'disabled') variant.enabled = false;
+        if (state === 'deleted') variant.deletedAt = new Date();
+        if (state === 'other-channel') variant.channels = [{ id: 'other' }];
+        if (state === 'parent-disabled') variant.product.enabled = false;
+        if (state === 'parent-deleted') variant.product.deletedAt = new Date();
+        if (state === 'parent-other-channel') variant.product.channels = [{ id: 'other' }];
+        const promotion = {
+            ...couponPromotion(),
+            enabled: false,
+            actions: [
+                {
+                    code: 'products_percentage_discount',
+                    args: { discount: 15, productVariantIds: JSON.stringify(['variant-1']) },
+                },
+            ],
+        };
+        const test = createHarness({ variants: [variant], promotions: [promotion] });
+        await expect(test.service.setEnabled(ctx, promotion.id, true)).rejects.toThrow();
+        expect(test.updatePromotion).not.toHaveBeenCalled();
+        expect(test.saveConfig).not.toHaveBeenCalled();
+    });
+
+    it('fails closed on qualification reads without changing persisted discounts', async () => {
+        const variant = productVariant('variant-1', 10_000);
+        const promotion = {
+            ...couponPromotion(),
+            enabled: false,
+            actions: [
+                {
+                    code: 'products_percentage_discount',
+                    args: { discount: 15, productVariantIds: JSON.stringify(['variant-1']) },
+                },
+            ],
+        };
+        const test = createHarness({ variants: [variant], promotions: [promotion] });
+        test.connection.findByIdsInChannel.mockRejectedValueOnce(
+            new Error('synthetic qualification read failed'),
+        );
+        await expect(test.service.setEnabled(ctx, promotion.id, true)).rejects.toThrow(
+            'synthetic qualification read failed',
+        );
+        expect(test.updatePromotion).not.toHaveBeenCalled();
+        expect(promotion.actions[0].args.discount).toBe(15);
+    });
+
+    it.each([
+        'disabled',
+        'deleted',
+        'other-channel',
+        'parent-disabled',
+        'parent-deleted',
+        'parent-other-channel',
+    ])('hides an active flash sale original %s SKU while preserving its editable contract', async state => {
+        const variant: any = productVariant('variant-1', 10_000);
+        if (state === 'disabled') variant.enabled = false;
+        if (state === 'deleted') variant.deletedAt = new Date();
+        if (state === 'other-channel') variant.channels = [{ id: 'other' }];
+        if (state === 'parent-disabled') variant.product.enabled = false;
+        if (state === 'parent-deleted') variant.product.deletedAt = new Date();
+        if (state === 'parent-other-channel') variant.product.channels = [{ id: 'other' }];
+        const replacement = productVariant('variant-2', 10_000);
+        replacement.productId = 'product-2';
+        replacement.product.id = 'product-2';
+        const rules = [{ variantId: 'variant-1', salePrice: 7000, currencyCode: 'CNY' }];
+        const promotion = {
+            ...couponPromotion(),
+            couponCode: null,
+            actions: [{ code: 'store_flash_sale_price', args: { variantRules: JSON.stringify(rules) } }],
+            startsAt: null,
+            endsAt: null,
+        };
+        const test = createHarness({ variants: [variant, replacement], promotions: [promotion] });
+        await expect(test.service.findFlashSales(ctx, true)).resolves.toEqual([
+            expect.objectContaining({ items: [] }),
+        ]);
+        const editable = await test.service.findFlashSales(ctx);
+        expect(editable[0].items).toEqual([
+            expect.objectContaining({ productVariantId: 'variant-1', salePrice: 7000 }),
+        ]);
+        expect(JSON.parse(promotion.actions[0].args.variantRules)).toEqual(rules);
+        expect(test.updatePromotion).not.toHaveBeenCalled();
+        expect(test.getVariantsByProductId).not.toHaveBeenCalled();
+    });
+
+    it('qualifies flash sale rules in batches before applying the public item limit', async () => {
+        const variants = Array.from({ length: 101 }, (_, index) => ({
+            ...productVariant(`variant-${index}`, 10_000),
+            enabled: index === 100,
+        }));
+        const promotion = {
+            ...couponPromotion(),
+            couponCode: null,
+            startsAt: null,
+            endsAt: null,
+            actions: [
+                {
+                    code: 'store_flash_sale_price',
+                    args: {
+                        variantRules: JSON.stringify(
+                            variants.map(variant => ({
+                                variantId: variant.id,
+                                salePrice: 7000,
+                                currencyCode: 'CNY',
+                            })),
+                        ),
+                    },
+                },
+            ],
+        };
+        const test = createHarness({ variants, promotions: [promotion] });
+        const active = await test.service.findFlashSales(ctx, true);
+        expect(active[0].items).toEqual([
+            expect.objectContaining({ productVariantId: 'variant-100', salePrice: 7000 }),
+        ]);
+        const lookups = test.connection.findByIdsInChannel.mock.calls.filter(
+            call => call[1] === ProductVariant,
+        );
+        expect(lookups.map(call => call[2].length)).toEqual([100, 1]);
+    });
+
+    it('does not silently rewrite an active flash sale when its eligibility read fails', async () => {
+        const promotion = {
+            ...couponPromotion(),
+            couponCode: null,
+            startsAt: null,
+            endsAt: null,
+            actions: [
+                {
+                    code: 'store_flash_sale_price',
+                    args: {
+                        variantRules: JSON.stringify([
+                            { variantId: 'variant-1', salePrice: 7000, currencyCode: 'CNY' },
+                        ]),
+                    },
+                },
+            ],
+        };
+        const test = createHarness({
+            variants: [productVariant('variant-1', 10_000)],
+            promotions: [promotion],
+        });
+        test.connection.findByIdsInChannel.mockRejectedValueOnce(
+            new Error('synthetic eligibility unavailable'),
+        );
+        await expect(test.service.findFlashSales(ctx, true)).rejects.toThrow(
+            'synthetic eligibility unavailable',
+        );
+        expect(test.updatePromotion).not.toHaveBeenCalled();
+        expect(promotion.actions[0].args.variantRules).toContain('variant-1');
+    });
+});
 
 describe('promotion maintainer isolation', () => {
     function sharedPromotion(couponCode?: string) {

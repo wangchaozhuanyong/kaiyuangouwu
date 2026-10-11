@@ -348,9 +348,10 @@ describe('HomePage carousel pointer interactions', () => {
                 activeSlide(),
                 '.hero-rich-image-link img:not([aria-hidden="true"])',
             );
-            expect(artwork.getAttribute('src')).toContain(
-                width <= 767 ? 'phone-hero.jpg' : 'desktop-hero.jpg',
-            );
+            expect(artwork.getAttribute('src')).toContain('desktop-hero.jpg');
+            expect(
+                activeSlide().querySelector('source[media="(max-width: 767px)"]')?.getAttribute('srcset'),
+            ).toContain('phone-hero.jpg');
             if (width <= 767) {
                 expect(activeSlide().querySelector('.hero-rich-pill')).toBeNull();
                 expect(artwork.getAttribute('width')).toBe('1600');
@@ -427,7 +428,8 @@ describe('HomePage carousel pointer interactions', () => {
                 activeSlide(),
                 '.hero-rich-image-link img:not([aria-hidden="true"])',
             ).getAttribute('src'),
-        ).toContain(copy.width <= 767 ? 'phone-hero.jpg' : 'desktop-hero.jpg');
+        ).toContain('desktop-hero.jpg');
+        expect(activeSlide().querySelector('source')?.getAttribute('srcset')).toContain('phone-hero.jpg');
     });
 
     it('allows editorial and original artwork to share manual navigation without changing their own targets', async () => {

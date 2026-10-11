@@ -75,7 +75,7 @@ function graphQlData(page) {
         storefrontContentSettings: page.content.settings,
         storefrontVisualPreset: {
             channelId: page.scope.channelCode,
-            presetId: 'classic',
+            presetId: page.visualPreset?.presetId ?? 'classic',
             desktopLayout: 'legacy',
             revision: 'SYNTHETIC-QA-1',
         },
@@ -119,6 +119,7 @@ function graphQlData(page) {
 function assembleFixtureHtml(page, body) {
     const document = load(template);
     document('html').attr('lang', page.scope.languageCode === 'zh_Hans' ? 'zh-CN' : 'en');
+    document('html').attr('data-storefront-preset', page.visualPreset?.presetId ?? 'classic');
     document('title').text(page.seo.title);
     document('meta[name=description]').attr('content', page.seo.description);
     document('meta[name=robots]').attr('content', page.seo.robots);
@@ -149,7 +150,12 @@ function assembleFixtureHtml(page, body) {
     return document.html();
 }
 
-export async function startSeoFixtureServer(port = 0) {
+export async function startSeoFixtureServer(port = 0, { transformPage } = {}) {
+    const pageFor = (...args) => {
+        const page = dataFor(...args);
+        transformPage?.(page);
+        return page;
+    };
     const server = http.createServer(async (request, response) => {
         try {
             const host = request.headers.host;
@@ -158,7 +164,7 @@ export async function startSeoFixtureServer(port = 0) {
             const url = new URL(request.url, `http://${host}`);
             requests.push({ host, path: url.pathname + url.search, method: request.method });
             if (url.pathname === '/__qa/requests') return json(response, requests);
-            if (url.pathname === '/_storefront/page-data') return json(response, dataFor(url, host));
+            if (url.pathname === '/_storefront/page-data') return json(response, pageFor(url, host));
             if (url.pathname === '/shop-api') {
                 let requestBody = '';
                 for await (const chunk of request) requestBody += chunk.toString();
@@ -166,7 +172,7 @@ export async function startSeoFixtureServer(port = 0) {
                 const referrer = new URL(request.headers.referer ?? `http://${host}/en/`);
                 if (url.searchParams.has('languageCode'))
                     referrer.searchParams.set('languageCode', url.searchParams.get('languageCode'));
-                const graphQlPage = dataFor(referrer, host);
+                const graphQlPage = pageFor(referrer, host);
                 requests.at(-1).operation =
                     /(?:query|mutation)\s+(\w+)/u.exec(operation.query ?? '')?.[1] ?? 'unknown';
                 return json(response, { data: graphQlData(graphQlPage) });
@@ -199,7 +205,7 @@ export async function startSeoFixtureServer(port = 0) {
                 response.end('Missing fixture asset');
                 return;
             }
-            const page = dataFor(url, host);
+            const page = pageFor(url, host);
             const body = await renderPublicPage(page);
             response.writeHead(200, {
                 'content-type': 'text/html; charset=utf-8',

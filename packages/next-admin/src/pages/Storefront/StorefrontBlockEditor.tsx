@@ -31,6 +31,7 @@ import {
     type StorefrontTargetType,
 } from '../../graphql/storefront.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
+import { useCatalogReferences } from '../../hooks/use-catalog-references';
 import { usePageSize } from '../../hooks/use-page-size';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { AssetPicker } from './storefront-asset-picker';
@@ -112,7 +113,10 @@ export function StorefrontBlockEditor({
                 skip: productPage * productPageSize,
                 take: productPageSize,
                 sort: { name: 'ASC', id: 'ASC' },
-                filter: deferredProductSearch ? { name: { contains: deferredProductSearch } } : {},
+                filter: {
+                    enabled: { eq: true },
+                    ...(deferredProductSearch ? { name: { contains: deferredProductSearch } } : {}),
+                },
             },
         },
     });
@@ -148,6 +152,7 @@ export function StorefrontBlockEditor({
           ? 'pinnedProductIds'
           : null;
     const selectedProductIds = productSettingKey ? stringArray(draft.settings?.[productSettingKey]) : [];
+    const productReferences = useCatalogReferences(selectedProductIds, 'products', canReadProducts);
     const visibleProducts = options.data?.products.items ?? [];
 
     const updateTranslation = (patch: Partial<typeof translation>) => {
@@ -1197,7 +1202,12 @@ export function StorefrontBlockEditor({
                                                     onClick={() => setShowProducts(!showProducts)}
                                                     className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
                                                 >
-                                                    选择商品（已选 {selectedProductIds.length} 个）
+                                                    选择商品（有效 {productReferences.available.length} 个
+                                                    {productReferences.unavailable.length > 0 &&
+                                                        `，暂不可用 ${productReferences.unavailable.length} 个`}
+                                                    {productReferences.unknown.length > 0 &&
+                                                        `，待核对 ${productReferences.unknown.length} 个`}
+                                                    ）
                                                 </AdminButton>
                                             </div>
                                         )}
@@ -1207,6 +1217,44 @@ export function StorefrontBlockEditor({
                                     )}
                                     {showProducts && productSettingKey && canReadProducts && (
                                         <div className="mt-4 rounded-xl border border-slate-200 p-3">
+                                            {selectedProductIds.length > 0 && (
+                                                <div
+                                                    className="mb-3 space-y-1 text-xs"
+                                                    aria-label="已选商品及原顺序"
+                                                >
+                                                    {productReferences.references.map((reference, index) => (
+                                                        <div
+                                                            key={reference.id}
+                                                            className="flex items-center justify-between gap-2"
+                                                        >
+                                                            <span>
+                                                                {index + 1}.{' '}
+                                                                {reference.entity?.name ?? reference.id}
+                                                                {reference.state === 'unavailable' &&
+                                                                    ' · 暂不可用，恢复后回到原位置'}
+                                                                {reference.state === 'unknown' &&
+                                                                    ' · 待核对，原关联已保留'}
+                                                            </span>
+                                                            <AdminButton
+                                                                type="button"
+                                                                onClick={() => toggleProduct(reference.id)}
+                                                                className="text-slate-500"
+                                                            >
+                                                                取消选择
+                                                            </AdminButton>
+                                                        </div>
+                                                    ))}
+                                                    {productReferences.error && (
+                                                        <AdminButton
+                                                            type="button"
+                                                            onClick={() => void productReferences.refetch()}
+                                                            className="text-blue-700"
+                                                        >
+                                                            重试商品核对
+                                                        </AdminButton>
+                                                    )}
+                                                </div>
+                                            )}
                                             <div className="relative">
                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none h-4 w-4 text-slate-400" />
                                                 <AdminInput
