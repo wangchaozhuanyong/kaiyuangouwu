@@ -536,6 +536,7 @@ export function EmptyState({
     detail,
     action,
     onAction,
+    secondaryAction,
     compact = false,
 }: {
     icon: ReactNode;
@@ -543,6 +544,7 @@ export function EmptyState({
     detail?: string;
     action?: string;
     onAction?: () => void;
+    secondaryAction?: ReactNode;
     compact?: boolean;
 }) {
     return (
@@ -557,6 +559,7 @@ export function EmptyState({
                     {action}
                 </button>
             )}
+            {secondaryAction && <div className="empty-state-secondary-action">{secondaryAction}</div>}
         </section>
     );
 }
