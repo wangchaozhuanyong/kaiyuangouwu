@@ -2003,6 +2003,7 @@ function CategoryPromotionSection({
         : Math.max(1, Math.min(4, categoryProducts.length));
     const hasSupportingContent = pendingProducts || categoryProducts.length > 0 || block.items.length > 0;
     const colorfulMarketplace = isColorfulHomepageStyle(block.settings?.visualStyle);
+    const scenePoster = block.settings?.categoryArtworkLayout === 'scene-poster';
     const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
         colorfulMarketplace ? ' is-color-marketplace' : ''
     }`;
@@ -2025,7 +2026,7 @@ function CategoryPromotionSection({
         <section
             className={sectionClassName}
             style={{
-                ...managedContentStyle(block),
+                ...(scenePoster ? {} : managedContentStyle(block)),
             }}
         >
             <SectionHeader
@@ -2036,8 +2037,11 @@ function CategoryPromotionSection({
             />
             <div className={`category-promotion-layout${hasSupportingContent ? '' : ' is-visual-only'}`}>
                 <button
-                    className="category-promotion-visual"
-                    style={desktop ? { marginBottom: scrollbarHeight } : undefined}
+                    className={`category-promotion-visual${scenePoster ? ' is-scene-poster' : ''}`}
+                    style={{
+                        ...(scenePoster ? managedContentStyle(block) : {}),
+                        ...(desktop ? { marginBottom: scrollbarHeight } : {}),
+                    }}
                     type="button"
                     disabled={!blockHasTarget}
                     onClick={() => onContentTarget(block.targetType, block.targetValue)}
@@ -2059,9 +2063,21 @@ function CategoryPromotionSection({
                             <LayoutGrid />
                         </span>
                     )}
-                    <span className="category-promotion-visual-copy" aria-hidden="true">
-                        <small>{isZh ? '查看精选' : 'Explore selection'}</small>
-                    </span>
+                    {scenePoster ? (
+                        <>
+                            <span className="category-promotion-poster-copy">
+                                <strong>{block.body || block.title}</strong>
+                                {block.subtitle && <span>{block.subtitle}</span>}
+                            </span>
+                            <span className="category-promotion-poster-action">
+                                {block.ctaLabel || (isZh ? '查看精选' : 'Explore')}
+                            </span>
+                        </>
+                    ) : (
+                        <span className="category-promotion-visual-copy" aria-hidden="true">
+                            <small>{isZh ? '查看精选' : 'Explore selection'}</small>
+                        </span>
+                    )}
                 </button>
 
                 {pendingProducts || categoryProducts.length ? (

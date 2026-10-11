@@ -77,6 +77,7 @@ test('a storefront spacing change never launches backend, codegen or database ch
 });
 test('shared business services renderers rebuild both static apps without a backend release', () => {
     for (const file of [
+        'packages/storefront-content-plugin/src/shared/business-services-banner.ts',
         'packages/storefront-content-plugin/src/shared/business-services-hero.css',
         'packages/storefront-content-plugin/src/shared/business-services-hero.tsx',
     ]) {

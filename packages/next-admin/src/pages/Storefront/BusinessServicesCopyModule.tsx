@@ -1,8 +1,13 @@
 import { useMutation } from '@apollo/client/react';
 import { RefreshCw, RotateCcw, Save, Sparkles } from 'lucide-react';
-import { useLayoutEffect, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useState, type ReactNode } from 'react';
 import { storefrontAssetUrl } from '../../../../storefront-content-plugin/src/content-image';
 import { imageReplacements } from '../../../../storefront-content-plugin/src/image-replacement-policy';
+import {
+    servicesBannerCopyIssues,
+    servicesBannerCopyLimits,
+    servicesBannerReviewKey,
+} from '../../../../storefront-content-plugin/src/shared/business-services-banner';
 import { resolveBusinessServicesHeroLayout } from '../../../../storefront-content-plugin/src/shared/business-services-hero';
 import { channelRequestContext, getActiveChannelToken } from '../../apollo';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
@@ -10,7 +15,7 @@ import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { AssetPicker } from './storefront-asset-picker';
-import { StorefrontDecorationPreview } from './StorefrontDecorationPreview';
+import { StorefrontDecorationPreview, type ServicesBannerLayoutReport } from './StorefrontDecorationPreview';
 import { StorefrontMobileViewSwitch, type StorefrontMobileView } from './StorefrontMobileViewSwitch';
 
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
@@ -106,10 +111,45 @@ export function BusinessServicesCopyModule() {
     /* oxlint-enable react/set-state-in-effect */
     const linkValue = draft ? businessServicesLinkValue(draft) : '';
     const linkIsValid = businessServicesLinkIsValid(linkValue);
+    const heroLayout = resolveBusinessServicesHeroLayout(draft?.settings);
+    const sharedBanner = heroLayout === 'shared-banner';
+    const [bannerReports, setBannerReports] = useState<Record<string, ServicesBannerLayoutReport>>({});
+    const onBannerCheck = useCallback(
+        (report: ServicesBannerLayoutReport) => {
+            const key = `${channel?.id}:${report.language}:${report.viewport}`;
+            setBannerReports(current =>
+                JSON.stringify(current[key]) === JSON.stringify(report)
+                    ? current
+                    : { ...current, [key]: report },
+            );
+        },
+        [channel?.id],
+    );
+    const bannerImageUrl = draft?.imageAsset?.source || draft?.imageAsset?.preview || draft?.imageUrl || '';
+    const bannerIssues =
+        sharedBanner && draft
+            ? (['zh_Hans', 'en'] as const).flatMap(language => {
+                  const copy = getTranslation(draft, language);
+                  const label = language === 'zh_Hans' ? '中文' : '英文';
+                  const copyIssues = servicesBannerCopyIssues(copy, language).map(
+                      issue => `${label}：${issue}`,
+                  );
+                  const reviewKey = servicesBannerReviewKey(copy, bannerImageUrl, Boolean(draft.targetValue));
+                  const layoutIssues = (['mobile', 'desktop'] as const).flatMap(viewport => {
+                      const report = bannerReports[`${channel?.id}:${language}:${viewport}`];
+                      const device = viewport === 'mobile' ? '手机' : '电脑';
+                      return report?.reviewKey === reviewKey
+                          ? report.issues.map(issue => `${label}${device}：${issue}`)
+                          : [`请预览${label}${device}广告，确认文字适合固定框架`];
+                  });
+                  return [...copyIssues, ...layoutIssues];
+              })
+            : [];
 
     const valid = Boolean(
         draft &&
         linkIsValid &&
+        (!sharedBanner || (Boolean(bannerImageUrl) && bannerIssues.length === 0)) &&
         (['zh_Hans'] as const).every(language => {
             const translation = getTranslation(draft, language);
             return translation.title.trim() && translation.body.trim();
@@ -118,7 +158,7 @@ export function BusinessServicesCopyModule() {
     const [verifying, setVerifying] = useState(false);
     const pending = verifying || createState.loading || updateState.loading;
 
-    const change = (languageCode: Language, key: 'title' | 'body', value: string) =>
+    const change = (languageCode: Language, key: 'title' | 'body' | 'ctaLabel', value: string) =>
         setDraft(current =>
             current
                 ? {
@@ -202,7 +242,6 @@ export function BusinessServicesCopyModule() {
     };
     const phoneImageUrl =
         typeof draft?.settings?.mobileImageUrl === 'string' ? draft.settings.mobileImageUrl.trim() : '';
-    const heroLayout = resolveBusinessServicesHeroLayout(draft?.settings);
 
     return (
         <div className="flex h-full flex-col bg-slate-50">
@@ -254,6 +293,15 @@ export function BusinessServicesCopyModule() {
             <main className="mx-auto w-full max-w-none min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
                 {notice && <Message tone="success" message={notice} />}
                 {error && <Message tone="error" message={error} />}
+                {sharedBanner && (!bannerImageUrl || bannerIssues.length > 0) && (
+                    <div role="status" className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
+                        <p>固定广告不会增高或缩字。请缩短超长文案，并切换中英文完成双端预览。</p>
+                        {!bannerImageUrl && <p>请选择电脑与手机共用的 16∶9 图片。</p>}
+                        {bannerIssues.map((issue, index) => (
+                            <p key={`${index}:${issue}`}>{issue}</p>
+                        ))}
+                    </div>
+                )}
                 {query.loading && !draft ? (
                     <State label="正在读取页面文案…" />
                 ) : query.error || !draft ? (
@@ -321,11 +369,19 @@ export function BusinessServicesCopyModule() {
                                         className="space-y-3"
                                     >
                                         <strong className="text-xs">{zh ? '中文' : '英文'}</strong>
-                                        <Field label={`标题 ${translation.title.length}/${zh ? 40 : 80}`}>
+                                        <Field
+                                            label={`标题 ${translation.title.length}/${sharedBanner ? servicesBannerCopyLimits[language].title : zh ? 40 : 80}`}
+                                        >
                                             <AdminTextArea
                                                 value={translation.title}
                                                 rows={2}
-                                                maxLength={zh ? 40 : 80}
+                                                maxLength={
+                                                    sharedBanner
+                                                        ? servicesBannerCopyLimits[language].title
+                                                        : zh
+                                                          ? 40
+                                                          : 80
+                                                }
                                                 disabled={!canEdit}
                                                 onChange={event =>
                                                     change(language, 'title', event.target.value)
@@ -334,16 +390,39 @@ export function BusinessServicesCopyModule() {
                                             />
                                         </Field>
                                         <p className="text-xs leading-5 text-slate-500">
-                                            可换行，前台按排版完整显示。
+                                            {sharedBanner
+                                                ? '标题最多两行，电脑与手机共用；超出固定框架时请缩短内容。'
+                                                : '可换行，前台按排版完整显示。'}
                                         </p>
-                                        <Field label={`说明 ${translation.body.length}/200`}>
+                                        <Field
+                                            label={`说明 ${translation.body.length}/${sharedBanner ? servicesBannerCopyLimits[language].body : 200}`}
+                                        >
                                             <AdminTextArea
                                                 value={translation.body}
-                                                maxLength={200}
+                                                maxLength={
+                                                    sharedBanner
+                                                        ? servicesBannerCopyLimits[language].body
+                                                        : 200
+                                                }
                                                 rows={2}
                                                 disabled={!canEdit}
                                                 onChange={event =>
                                                     change(language, 'body', event.target.value)
+                                                }
+                                                className={inputClass}
+                                            />
+                                        </Field>
+                                        <Field label="按钮文案">
+                                            <AdminInput
+                                                value={translation.ctaLabel ?? ''}
+                                                maxLength={
+                                                    sharedBanner
+                                                        ? servicesBannerCopyLimits[language].ctaLabel
+                                                        : 32
+                                                }
+                                                disabled={!canEdit}
+                                                onChange={event =>
+                                                    change(language, 'ctaLabel', event.target.value)
                                                 }
                                                 className={inputClass}
                                             />
@@ -353,7 +432,7 @@ export function BusinessServicesCopyModule() {
                             })}
                             <AdminField
                                 label="页首图文布局"
-                                description="图下模式保留现有配图；叠加模式将后台文字显示在图片上，建议使用不含广告文字、左侧留空且主体在右侧的底图。"
+                                description="固定横幅让电脑与手机共用一张 16∶9 图片和同一套文案；图片不加遮罩，文字限定左侧 60%。"
                                 className="text-xs font-bold text-slate-700"
                             >
                                 <AdminSelect
@@ -377,28 +456,31 @@ export function BusinessServicesCopyModule() {
                                 >
                                     <option value="stacked">图片在上，文字在下</option>
                                     <option value="image-overlay">无文字底图，文字叠加</option>
+                                    <option value="shared-banner">固定 16∶9 横幅，电脑手机共用</option>
                                 </AdminSelect>
                             </AdminField>
-                            {heroLayout === 'image-overlay' && (
+                            {(heroLayout === 'image-overlay' || sharedBanner) && (
                                 <fieldset
                                     disabled={!canEdit || pending}
                                     className="grid gap-3 sm:grid-cols-2"
                                 >
-                                    <Field label="文案背景色（选填）">
-                                        <ColorInput
-                                            value={draft.backgroundColor ?? ''}
-                                            onChange={color =>
-                                                setDraft(current =>
-                                                    current
-                                                        ? {
-                                                              ...current,
-                                                              backgroundColor: color.trim() || null,
-                                                          }
-                                                        : current,
-                                                )
-                                            }
-                                        />
-                                    </Field>
+                                    {!sharedBanner && (
+                                        <Field label="文案背景色（选填）">
+                                            <ColorInput
+                                                value={draft.backgroundColor ?? ''}
+                                                onChange={color =>
+                                                    setDraft(current =>
+                                                        current
+                                                            ? {
+                                                                  ...current,
+                                                                  backgroundColor: color.trim() || null,
+                                                              }
+                                                            : current,
+                                                    )
+                                                }
+                                            />
+                                        </Field>
+                                    )}
                                     <Field label="广告标题色（选填）">
                                         <ColorInput
                                             value={draft.textColor ?? ''}
@@ -468,10 +550,29 @@ export function BusinessServicesCopyModule() {
                                     <State label="正在读取店铺预览主题…" />
                                 ) : (
                                     <div className="mt-5" data-business-services-preview>
-                                        <StorefrontDecorationPreview
-                                            block={draft}
-                                            language={previewLanguage}
-                                        />
+                                        {sharedBanner ? (
+                                            <div className="grid gap-3 2xl:grid-cols-2">
+                                                {(['mobile', 'desktop'] as const).map(viewport => (
+                                                    <div key={viewport} className="min-w-0">
+                                                        <p className="mb-2 text-xs font-bold">
+                                                            {viewport === 'mobile' ? '手机' : '电脑'} · 同图
+                                                            16∶9
+                                                        </p>
+                                                        <StorefrontDecorationPreview
+                                                            block={draft}
+                                                            language={previewLanguage}
+                                                            fixedViewport={viewport}
+                                                            onServicesBannerCheck={onBannerCheck}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <StorefrontDecorationPreview
+                                                block={draft}
+                                                language={previewLanguage}
+                                            />
+                                        )}
                                     </div>
                                 )}
                             </section>
@@ -481,7 +582,11 @@ export function BusinessServicesCopyModule() {
                                 {' '}
                                 <fieldset disabled={!canEdit || pending} className="space-y-2">
                                     <AssetPicker
-                                        label="电脑端商业服务页首配图"
+                                        label={
+                                            sharedBanner
+                                                ? '电脑与手机共用广告图（16∶9）'
+                                                : '电脑端商业服务页首配图'
+                                        }
                                         value={draft.imageAsset}
                                         fallbackUrl={draft.imageUrl}
                                         onChange={asset =>
@@ -498,40 +603,47 @@ export function BusinessServicesCopyModule() {
                                         }
                                     />
                                     <p className="text-xs leading-5 text-slate-500">
-                                        {heroLayout === 'image-overlay'
-                                            ? '叠加模式建议使用无广告文字、左侧留空且主体在右侧的横向底图；中文与英文文字都由后台实时叠加。切换布局不会替换图片。'
-                                            : '图下模式将图片与文字分开显示，可继续使用已有配图。切换布局不会替换图片。'}
+                                        {sharedBanner
+                                            ? '只上传一张完整横图。框架固定 16∶9，电脑最大 760 × 427.5px；手机按宽度等比缩小。旧手机图保留，可切回旧模式恢复。'
+                                            : heroLayout === 'image-overlay'
+                                              ? '叠加模式建议使用无广告文字、左侧留空且主体在右侧的横向底图；中文与英文文字都由后台实时叠加。切换布局不会替换图片。'
+                                              : '图下模式将图片与文字分开显示，可继续使用已有配图。切换布局不会替换图片。'}
                                     </p>
-                                    <AssetPicker
-                                        label="手机端商业服务页首配图（可选）"
-                                        value={null}
-                                        fallbackUrl={phoneImageUrl || null}
-                                        onChange={asset =>
-                                            setDraft(current =>
-                                                current
-                                                    ? {
-                                                          ...current,
-                                                          settings: {
-                                                              ...(current.settings ?? {}),
-                                                              mobileImageUrl: asset
-                                                                  ? storefrontAssetUrl(asset) || null
-                                                                  : null,
-                                                              mobileImageAssetId: asset?.id ?? null,
-                                                              mobileImageWidth: asset?.width ?? null,
-                                                              mobileImageHeight: asset?.height ?? null,
-                                                          },
-                                                      }
-                                                    : current,
-                                            )
-                                        }
-                                    />
-                                    <p className="text-xs leading-5 text-slate-500">
-                                        {phoneImageUrl
-                                            ? '已单独设置手机配图，电脑端继续使用电脑图。'
-                                            : '未单独设置手机配图，当前沿用电脑图。'}
-                                        手机叠加底图应给左侧文字留空、图形放在右侧；清除手机图后恢复继承电脑图。
-                                        在客户端效果预览中分别切换电脑和手机，核对完整底图与当前语言文案。
-                                    </p>
+                                    {!sharedBanner && (
+                                        <>
+                                            <AssetPicker
+                                                label="手机端商业服务页首配图（可选）"
+                                                value={null}
+                                                fallbackUrl={phoneImageUrl || null}
+                                                onChange={asset =>
+                                                    setDraft(current =>
+                                                        current
+                                                            ? {
+                                                                  ...current,
+                                                                  settings: {
+                                                                      ...(current.settings ?? {}),
+                                                                      mobileImageUrl: asset
+                                                                          ? storefrontAssetUrl(asset) || null
+                                                                          : null,
+                                                                      mobileImageAssetId: asset?.id ?? null,
+                                                                      mobileImageWidth: asset?.width ?? null,
+                                                                      mobileImageHeight:
+                                                                          asset?.height ?? null,
+                                                                  },
+                                                              }
+                                                            : current,
+                                                    )
+                                                }
+                                            />
+                                            <p className="text-xs leading-5 text-slate-500">
+                                                {phoneImageUrl
+                                                    ? '已单独设置手机配图，电脑端继续使用电脑图。'
+                                                    : '未单独设置手机配图，当前沿用电脑图。'}
+                                                手机叠加底图应给左侧文字留空、图形放在右侧；清除手机图后恢复继承电脑图。
+                                                在客户端效果预览中分别切换电脑和手机，核对完整底图与当前语言文案。
+                                            </p>
+                                        </>
+                                    )}
                                     {imageChanges.length > 0 && (
                                         <label className="flex items-start gap-2 text-xs leading-5 text-amber-900">
                                             <AdminInput

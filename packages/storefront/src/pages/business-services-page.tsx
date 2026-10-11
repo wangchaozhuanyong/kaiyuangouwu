@@ -77,9 +77,10 @@ export function BusinessServicesPage() {
             ? clientPluginBlock.targetValue?.trim() || null
             : null;
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
+    const heroLayout = resolveBusinessServicesHeroLayout(clientPluginBlock?.settings);
     const heroImage = heroImageForViewport(
         clientPluginBlock?.enabled ? clientPluginBlock : undefined,
-        desktop,
+        desktop || heroLayout === 'shared-banner',
     );
     const heroImageUrl = heroImage.imageUrl;
 
@@ -106,7 +107,7 @@ export function BusinessServicesPage() {
                     title={heroTitle}
                     body={heroDescription}
                     visual={clientPluginBlock}
-                    layout={resolveBusinessServicesHeroLayout(clientPluginBlock?.settings)}
+                    layout={heroLayout}
                     imageDimensions={heroImage.imageAsset}
                     image={
                         heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined

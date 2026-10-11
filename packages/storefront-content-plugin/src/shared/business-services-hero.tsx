@@ -4,13 +4,14 @@ import './business-services-hero.css';
 import { ContentText } from './content-text';
 import { heroThemeStyle, type HeroThemeData } from './hero-theme';
 
-export type BusinessServicesHeroLayout = 'stacked' | 'image-overlay';
+export type BusinessServicesHeroLayout = 'stacked' | 'image-overlay' | 'shared-banner';
 
 /** Existing image bindings and layouts stay unchanged until a merchant opts in. */
 export function resolveBusinessServicesHeroLayout(
     settings: Record<string, unknown> | null | undefined,
 ): BusinessServicesHeroLayout {
-    return settings?.businessServicesHeroLayout === 'image-overlay' ? 'image-overlay' : 'stacked';
+    const layout = settings?.businessServicesHeroLayout;
+    return layout === 'image-overlay' || layout === 'shared-banner' ? layout : 'stacked';
 }
 
 /** Storefront and Admin previews share the introduction; each caller owns media and actions. */
@@ -43,10 +44,10 @@ export function BusinessServicesHero({
             ? imageDimensions.width / imageDimensions.height
             : undefined;
     const overlayStyle =
-        image && layout === 'image-overlay'
+        image && (layout === 'image-overlay' || layout === 'shared-banner')
             ? ({
                   ...heroThemeStyle(visual ?? {}),
-                  ...(ratio && Number.isFinite(ratio) && ratio > 0
+                  ...(layout === 'image-overlay' && ratio && Number.isFinite(ratio) && ratio > 0
                       ? { '--services-hero-image-ratio': ratio }
                       : {}),
               } as CSSProperties)

@@ -272,6 +272,32 @@ describe('business services page', () => {
         }
     });
 
+    it('uses one image for the fixed banner without clearing the recoverable phone binding', () => {
+        const block = businessPluginBlock();
+        block.title = '模钥 AI 中转';
+        block.body = '多模型，充值未开放';
+        block.imageUrl = '/assets/shared-wide.webp';
+        block.imageAsset = { width: 1600, height: 900 };
+        block.settings = {
+            businessServicesCopyVersion: 1,
+            businessServicesHeroLayout: 'shared-banner',
+            mobileImageUrl: '/assets/legacy-phone.webp',
+            mobileImageWidth: 1000,
+            mobileImageHeight: 1000,
+        };
+        for (const desktop of [false, true]) {
+            const markup = renderPage([block], 'zh', desktop);
+            expect(markup).toContain('data-services-hero-layout="shared-banner"');
+            expect(markup).toContain('/assets/shared-wide.webp');
+            expect(markup).not.toContain('/assets/legacy-phone.webp');
+            expect(markup).not.toContain('--services-hero-image-ratio');
+            expect(markup).toContain('多模型，充值未开放');
+        }
+        expect(block.settings.mobileImageUrl).toBe('/assets/legacy-phone.webp');
+        block.settings.businessServicesHeroLayout = 'image-overlay';
+        expect(renderPage([block], 'zh', false)).toContain('/assets/legacy-phone.webp');
+    });
+
     it('selects independent phone artwork and preserves complete image geometry, with desktop inheritance when unset', () => {
         const block = businessPluginBlock();
         block.settings = {

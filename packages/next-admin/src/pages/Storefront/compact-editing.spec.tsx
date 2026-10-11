@@ -3,15 +3,21 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { storefrontClientPluginCatalog } from '../../../../storefront-content-plugin/src/client-plugin-manifest';
+import {
+    servicesBannerCopyIssues,
+    servicesBannerReviewKey,
+} from '../../../../storefront-content-plugin/src/shared/business-services-banner';
 import { ClientPluginsModule } from '../Plugins/ClientPluginsModule';
 import { BusinessServicesCopyModule } from './BusinessServicesCopyModule';
 import { newContentBlock, newContentItem } from './storefront-content-utils';
+import type { ServicesBannerLayoutReport } from './StorefrontDecorationPreview';
 
 const mocks = vi.hoisted(() => ({
     data: {} as Record<string, unknown>,
     mutate: vi.fn(),
     refetch: vi.fn(),
     assetPickers: new Map<string, { onChange: (asset: unknown) => void }>(),
+    bannerChecks: new Map<string, (report: ServicesBannerLayoutReport) => void>(),
 }));
 vi.mock('@apollo/client/react', () => ({
     useQuery: () => ({ data: mocks.data, loading: false, refetch: mocks.refetch }),
@@ -39,10 +45,16 @@ vi.mock('./StorefrontDecorationPreview', async () => {
         StorefrontDecorationPreview: ({
             block,
             language,
+            fixedViewport,
+            onServicesBannerCheck,
         }: {
             block: ReturnType<typeof newContentBlock>;
             language: string;
+            fixedViewport?: 'mobile' | 'desktop';
+            onServicesBannerCheck?: (report: ServicesBannerLayoutReport) => void;
         }) => {
+            if (onServicesBannerCheck && fixedViewport)
+                mocks.bannerChecks.set(`${language}:${fixedViewport}`, onServicesBannerCheck);
             const translation = block.translations.find(value => value.languageCode === language)!;
             return (
                 <BusinessServicesHero
@@ -64,6 +76,7 @@ beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
     mocks.assetPickers.clear();
+    mocks.bannerChecks.clear();
     mocks.mutate.mockRejectedValue(new Error('Local fixture: no remote writes'));
     mocks.data = {
         activeChannel: { id: 'local', token: 'local-fixture', code: 'local' },
@@ -97,6 +110,73 @@ async function select(input: HTMLSelectElement, value: string) {
 }
 
 describe('compact editors retain drafts', () => {
+    it('requires current bilingual geometry checks and retains legacy images in shared-banner mode', async () => {
+        const block = newContentBlock('CLIENT_PLUGINS', 10_001, 'Services');
+        Object.assign(block, {
+            id: 'services',
+            code: 'storefront-client-plugins',
+            updatedAt: '2026-10-11T00:00:00Z',
+            imageUrl: '/assets/shared.webp',
+        });
+        block.settings = {
+            businessServicesCopyVersion: 1,
+            businessServicesHeroLayout: 'shared-banner',
+            mobileImageUrl: '/assets/old-phone.webp',
+        };
+        block.translations = [
+            {
+                languageCode: 'zh_Hans',
+                title: 'AI 中转',
+                subtitle: '',
+                body: '多模型，充值未开放',
+                ctaLabel: '进入服务',
+            },
+            {
+                languageCode: 'en',
+                title: 'AI gateway',
+                subtitle: '',
+                body: 'Top-up unavailable',
+                ctaLabel: 'Open service',
+            },
+        ];
+        mocks.data.storefrontContentBlocks = [block];
+        await act(async () => root.render(<BusinessServicesCopyModule />));
+        expect(mocks.assetPickers.has('电脑与手机共用广告图（16∶9）')).toBe(true);
+        expect(mocks.assetPickers.has('手机端商业服务页首配图（可选）')).toBe(false);
+        const save = [...host.querySelectorAll('button')].find(button =>
+            button.textContent?.includes('保存并发布'),
+        )!;
+        const title = host.querySelector<HTMLTextAreaElement>('textarea[maxlength="12"]')!;
+        await fill(title, 'AI 服务');
+        expect(save.disabled).toBe(true);
+        for (const language of ['zh_Hans', 'en'] as const) {
+            await select(host.querySelector<HTMLSelectElement>('[aria-label="预览语言"]')!, language);
+            const copy = {
+                ...block.translations.find(value => value.languageCode === language)!,
+                ...(language === 'zh_Hans' ? { title: 'AI 服务' } : {}),
+            };
+            for (const viewport of ['mobile', 'desktop'] as const) {
+                await act(async () =>
+                    mocks.bannerChecks.get(`${language}:${viewport}`)!({
+                        language,
+                        viewport,
+                        reviewKey: servicesBannerReviewKey(copy, '/assets/shared.webp', false),
+                        issues: [],
+                    }),
+                );
+            }
+        }
+        expect(save.disabled).toBe(false);
+        await act(async () => save.click());
+        const input = mocks.mutate.mock.calls[0][0].variables.input;
+        expect(input.settings.mobileImageUrl).toBe('/assets/old-phone.webp');
+        expect(input.allowImageReplacement).not.toBe(true);
+        await fill(title, '新的广告');
+        expect(save.disabled).toBe(true);
+        expect(servicesBannerCopyIssues({ title: '标题', body: '说明\n第二行' }, 'zh_Hans')).toContain(
+            '说明只能填写一行',
+        );
+    });
     it('opts into shared overlay without changing the image, link, or installed items', async () => {
         const block = newContentBlock('CLIENT_PLUGINS', 10_001, 'Existing services');
         block.id = 'services';

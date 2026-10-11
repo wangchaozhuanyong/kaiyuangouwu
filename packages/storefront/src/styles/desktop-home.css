@@ -539,6 +539,9 @@
         border-radius: var(--radius-md);
         overflow: hidden;
     }
+    .desktop-store-layout .home-page .category-promotion-visual.is-scene-poster {
+        align-self: start;
+    }
     .desktop-store-layout .home-page .category-promotion-products {
         padding-block: 0;
     }
