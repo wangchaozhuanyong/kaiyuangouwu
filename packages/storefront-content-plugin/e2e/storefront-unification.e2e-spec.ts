@@ -2057,7 +2057,7 @@ describe('unified storefront Admin API to Shop API', () => {
             await page.getByRole('button', { name: '关闭装修设置' }).click();
             await page.goto(uri + '&panel=services');
             await browserExpect(page.getByRole('heading', { name: /商业服务页文案/ })).toBeVisible();
-            const serviceImage = page.locator('fieldset').filter({ hasText: '电脑端商业服务页首配图' });
+            const serviceImage = page.getByText('电脑端商业服务页首配图', { exact: true }).locator('..');
             await chooseImage(page, serviceImage);
             await page.getByRole('button', { name: '保存并发布', exact: true }).click();
             await browserExpect(page.getByRole('status')).toContainText('已保存');

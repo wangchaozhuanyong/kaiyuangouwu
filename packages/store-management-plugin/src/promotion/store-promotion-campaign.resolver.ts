@@ -3,9 +3,11 @@ import {
     Allow,
     Ctx,
     ID,
+    ListQueryOptions,
     Order,
     Permission,
     ProductVariant,
+    Promotion,
     RequestContext,
     RequestContextCacheService,
     Transaction,
@@ -21,6 +23,7 @@ import {
     StoreCouponLedgerEntryListOptions,
 } from '../types';
 
+import { AdminPromotionManagementService } from './admin-promotion-management.service';
 import { StoreCouponClosureRepairService } from './store-coupon-closure-repair.service';
 import { couponCollectionsForVariant } from './store-coupon-collections';
 import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
@@ -36,7 +39,18 @@ export class StorePromotionCampaignAdminResolver {
         private readonly repairService: StoreCouponRepairService,
         private readonly closureRepair: StoreCouponClosureRepairService,
         private readonly cartCommands: CartCommandService,
+        private readonly management: AdminPromotionManagementService,
     ) {}
+
+    @Query()
+    @Allow(Permission.ReadPromotion)
+    adminPromotionManagement(
+        @Ctx() ctx: RequestContext,
+        @Args('options') options?: ListQueryOptions<Promotion>,
+        @Args('storeChannelId') storeChannelId?: ID,
+    ) {
+        return this.management.list(ctx, options ?? {}, storeChannelId);
+    }
 
     @Query()
     @Allow(Permission.ReadPromotion)

@@ -201,6 +201,7 @@ function SnapshotPage({ page, onReady }: { page: PublicPageData; onReady?: () =>
                     couponCampaignsError: '',
                     flashSales: (page.flashSales as StorefrontFlashSale[]) ?? [],
                     systemAnnouncements: page.content?.systemAnnouncements ?? [],
+                    initialRenderTime: page.generatedAt,
                     bestSellerProducts: [],
                     recommendationProducts: [],
                     contentError: '',

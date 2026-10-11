@@ -14,6 +14,7 @@ import {
     storeNotificationAdminSchema,
     storeNotificationShopSchema,
 } from './notifications/store-notification.schema';
+import { adminPromotionManagementSchema } from './promotion/admin-promotion-management.schema';
 import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { referralPosterFields } from './referral/referral-poster-fields';
 import { storefrontSeoAdminSchema } from './seo/storefront-seo.schema';
@@ -706,6 +707,8 @@ export const adminApiExtensions = gql`
         id: ID!
         name: String!
     }
+
+    ${adminPromotionManagementSchema}
 
     type StoreCouponCampaignActionResult {
         campaignId: ID!

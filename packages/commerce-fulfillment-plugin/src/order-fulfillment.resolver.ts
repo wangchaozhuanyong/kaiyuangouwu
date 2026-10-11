@@ -50,7 +50,11 @@ export class OrderFulfillmentResolver {
             ctx.currencyCode !== orderWithShipping.currencyCode
                 ? ctx.copy({ channel: ctx.channel, currencyCode: orderWithShipping.currencyCode })
                 : ctx;
-        const calculation = await shippingLine.shippingMethod.apply(orderCtx, orderWithShipping);
+        // Placed orders retain their saved shipping charge. Current calculator/rate
+        // settings are only a quote for active carts, not historical order metadata.
+        const calculation = orderWithShipping.active
+            ? await shippingLine.shippingMethod.apply(orderCtx, orderWithShipping)
+            : undefined;
         const metadata = (calculation?.metadata ?? {}) as Record<string, unknown>;
         const estimateMinDays = optionalNonNegativeInteger(metadata.estimateMinDays);
         const estimateMaxDays = optionalNonNegativeInteger(metadata.estimateMaxDays);
