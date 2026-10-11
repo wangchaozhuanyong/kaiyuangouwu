@@ -1,3 +1,4 @@
+// organize-imports-ignore -- Preserve ESLint ordering of product and hyphenated product model paths.
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { assertNever } from '@vendure/common/lib/shared-utils';
@@ -6,8 +7,8 @@ import { Observable } from 'rxjs';
 import { RequestContext } from '../../../api/common/request-context';
 import { Logger } from '../../../config/logger/vendure-logger';
 import { Asset } from '../../../entity/asset/asset.entity';
-import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
 import { Product } from '../../../entity/product/product.entity';
+import { ProductVariant } from '../../../entity/product-variant/product-variant.entity';
 import { EventBus } from '../../../event-bus/event-bus';
 import { SearchIndexCompletedEvent } from '../../../event-bus/events/search-index-completed-event';
 import { Job } from '../../../job-queue/job';
