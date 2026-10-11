@@ -102,6 +102,8 @@ import {
     StorefrontSystemAnnouncement,
 } from '../types';
 
+import { HomepageCouponRail } from './homepage-coupon-rail';
+
 // TODO: Import other internal components like BrandLogo, ProductSection
 
 interface HomepageCouponHubProps {
@@ -295,7 +297,7 @@ function HomepageCouponHub({
                     <PageSkeleton compact label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
                 </div>
             ) : (
-                <div className="coupon-hub-scroll" role="list">
+                <HomepageCouponRail isZh={isZh}>
                     {coupons.map(coupon => {
                         const canClaim = coupon.claimable && !coupon.claimed;
                         const claimAction = (
@@ -338,7 +340,7 @@ function HomepageCouponHub({
                             />
                         );
                     })}
-                </div>
+                </HomepageCouponRail>
             )}
         </section>
     );

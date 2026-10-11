@@ -424,13 +424,6 @@
         margin-bottom: 16px;
         min-height: 40px;
     }
-    .desktop-store-layout .home-page .coupon-hub-scroll {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 20px;
-        overflow: visible;
-        padding: 0;
-    }
     .desktop-store-layout .home-page .coupon-ticket-card {
         width: 100%;
         min-width: 0;
@@ -484,7 +477,7 @@
     .desktop-store-layout .home-page .coupon-ticket-action {
         padding: 0 12px;
     }
-    .desktop-store-layout .home-page .coupon-claim-btn {
+    .desktop-store-layout .home-page .coupon-ticket-card .coupon-claim-btn {
         width: auto;
         min-width: 84px;
         height: 34px;
@@ -498,7 +491,7 @@
             color 0.15s ease,
             transform 0.15s ease;
     }
-    .desktop-store-layout .home-page .coupon-claim-btn:hover:not(:disabled) {
+    .desktop-store-layout .home-page .coupon-ticket-card .coupon-claim-btn:hover:not(:disabled) {
         transform: scale(1.04);
     }
     .desktop-store-layout .home-page .flash-sale-section {
