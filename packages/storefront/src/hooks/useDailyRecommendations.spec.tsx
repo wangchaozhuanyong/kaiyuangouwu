@@ -39,7 +39,7 @@ describe('shared daily recommendation query', () => {
         function Consumer({ market }: { market: MarketConfig }) {
             const query = useDailyRecommendations(api, market, 'zh');
             return (
-                <button onClick={() => void query.refetch()}>
+                <button onClick={() => void query.retry()}>
                     {query.status}:{query.data?.items.map(product => product.id).join(',')}
                 </button>
             );

@@ -43,7 +43,7 @@ export function useDailyRecommendations(
     return {
         ...query,
         data: query.data ? { ...query.data, items } : undefined,
-        refetch: async () => {
+        retry: async () => {
             const result = await query.refetch({ cancelRefetch: false });
             if (selection.selectedIds.length) await references.refetch({ cancelRefetch: false });
             return result;
