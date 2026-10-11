@@ -172,7 +172,9 @@ export const APP_SHELL_PROFILE_CONTEXT_QUERY = gql`
     query NextAdminAppShellProfileContext {
         myStoreProfile {
             id
-            channelId
+            channel {
+                id
+            }
             logoAsset {
                 id
                 preview
@@ -286,7 +288,7 @@ export interface AppShellCommerceContextData {
 export interface AppShellProfileContextData {
     myStoreProfile?: {
         id: string;
-        channelId: string;
+        channel: { id: string };
         logoAsset: { id: string; preview: string } | null;
     } | null;
 }

@@ -119,8 +119,8 @@ export const CATALOG_IMPORT_CONTEXT_QUERY = gql`
                 storefrontNameEn
             }
         }
-        stockLocations(options: { take: 100, sort: { name: ASC, id: ASC } }) {
-            items {
+        catalogProductCreationContext {
+            stockLocations {
                 id
                 name
             }

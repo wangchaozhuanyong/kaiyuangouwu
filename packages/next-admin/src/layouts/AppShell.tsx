@@ -288,7 +288,7 @@ export function AppShell() {
     });
     const storeLogoUrl =
         !isPlatformContext &&
-        profileContextQuery.data?.myStoreProfile?.channelId === channelData?.activeChannel.id
+        profileContextQuery.data?.myStoreProfile?.channel.id === channelData?.activeChannel.id
             ? profileContextQuery.data?.myStoreProfile?.logoAsset?.preview
             : undefined;
     const adminLogoUrl = storeLogoUrl || (isPlatformContext ? adminBrandIcon : undefined);
