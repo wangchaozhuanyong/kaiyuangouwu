@@ -45,6 +45,14 @@ export function assemblePublicHtml(
         document('head').append(`<link rel="stylesheet" href="/assets/${style}">`);
     }
     document('#root').attr('data-public-rendered', '1').html(body);
+    // React's hoisted resource belongs before the common desktop overrides,
+    // including on the server's first response before hydration can run.
+    const homeStyle = document('style[data-href="storefront-home-showcase"]');
+    const commonStyle = document('head link[rel="stylesheet"]').first();
+    if (homeStyle.length) {
+        if (commonStyle.length) commonStyle.before(homeStyle);
+        else document('head').append(homeStyle);
+    }
     document('#storefront-public-page-data').remove();
     document('body').append(
         `<script type="application/json" id="storefront-public-page-data">${serializeStorefrontPageData(page)}</script>`,

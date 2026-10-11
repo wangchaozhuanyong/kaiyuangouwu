@@ -102,6 +102,13 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         expect(dom('link[rel="alternate"]').length).toBe(payload.seo.alternates.length);
                         expect(dom('script[type="module"][src^="/assets/"]').length).toBeGreaterThan(0);
                         expect(dom('link[rel="stylesheet"][href^="/assets/index-"]').length).toBe(1);
+                        if (kind === 'home') {
+                            expect(dom('head style[data-href="storefront-home-showcase"]')).toHaveLength(1);
+                            expect(dom('#root style[data-href="storefront-home-showcase"]')).toHaveLength(0);
+                            expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
+                                html.indexOf('href="/assets/index-'),
+                            );
+                        }
                         expect(html).not.toContain('<!--# include');
                         for (const other of fixtureStores) {
                             if (other !== store) expect(dom('#root').text()).not.toContain(other);
