@@ -10,7 +10,11 @@ import { DesktopCategoryNavigation } from '../components/common/desktop-category
 import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
-import { storefrontInitialQueryError } from '../loading-state';
+import {
+    storefrontInitialQueryError,
+    storefrontQueryPresentation,
+    type StorefrontQuerySnapshot,
+} from '../loading-state';
 import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { RouteState } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
@@ -27,9 +31,11 @@ interface DesktopCatalogContext {
     language: StorefrontLanguage;
     locale: string;
     collections: CollectionSummary[];
+    collectionsQuery?: StorefrontQuerySnapshot;
     contentBlocks: StorefrontContentBlock[];
     storefrontName: string;
     storefrontTagline: string;
+    refetchStorefront: () => Promise<void>;
     navigate: (route: RouteState) => void;
 }
 
@@ -38,21 +44,30 @@ export function DesktopCatalogPage() {
     const { route, market, language, locale, collections, contentBlocks, navigate } = runtime;
     const isZh = language === 'zh';
     const input = catalogInputFromRoute(route);
+    const categoryResolved = route.name !== 'category' || Boolean(input.collectionId);
+    const collectionsLoading = runtime.collectionsQuery
+        ? storefrontQueryPresentation(runtime.collectionsQuery).initialLoading
+        : false;
     const pagination = useCategoryPagination({
         api: runtime.api,
         market,
         languageCode: languageCodeFor(language),
         language,
         input,
-        enabled: runtime.storefrontContextResolved !== false,
+        enabled: runtime.storefrontContextResolved !== false && categoryResolved,
         suspended: false,
         route,
     });
     const query = pagination.query;
-    const products = pagination.products;
-    const totalItems = query.data ? pagination.totalItems : undefined;
-    const displayCount = query.hasNextPage ? totalItems : products.length;
-    const error = storefrontInitialQueryError(query, language);
+    const products = categoryResolved ? pagination.products : [];
+    const totalItems = categoryResolved && query.data ? pagination.totalItems : undefined;
+    const hasNextPage = categoryResolved && query.hasNextPage;
+    const displayCount = hasNextPage ? totalItems : products.length;
+    const error =
+        !categoryResolved && runtime.collectionsQuery
+            ? storefrontInitialQueryError(runtime.collectionsQuery, language)
+            : storefrontInitialQueryError(query, language);
+    const catalogLoading = categoryResolved ? query.isPending : collectionsLoading;
     const activeCollection = collections.find(collection => collection.id === route.collectionId);
     const activeChild = activeCollection?.children?.find(collection => collection.id === route.childId);
     const [filterOpen, setFilterOpen] = useState(false);
@@ -139,12 +154,10 @@ export function DesktopCatalogPage() {
                         <h1 className="desktop-catalog-label">
                             {input.term
                                 ? title
-                                : activeChild?.name ||
-                                  activeCollection?.name ||
-                                  (isZh ? '全部商品' : 'All products')}
+                                : activeChild?.name || activeCollection?.name || (isZh ? '商品' : 'Products')}
                         </h1>
                         <span className="desktop-result-count" role="status">
-                            {query.isPending
+                            {catalogLoading
                                 ? isZh
                                     ? '加载中…'
                                     : 'Loading…'
@@ -226,7 +239,11 @@ export function DesktopCatalogPage() {
                         currencyCode={market.currencyCode}
                         value={draftFilters}
                         onChange={setDraftFilters}
-                        resultCount={draftMatchesApplied && !query.isFetching ? (displayCount ?? null) : null}
+                        resultCount={
+                            categoryResolved && draftMatchesApplied && !query.isFetching
+                                ? (displayCount ?? null)
+                                : null
+                        }
                         onApply={applyFilters}
                         onClose={() => setFilterOpen(false)}
                     />
@@ -245,7 +262,7 @@ export function DesktopCatalogPage() {
                         aria-label={isZh ? '商品列表' : 'Products'}
                         aria-busy={query.isFetching}
                     >
-                        {query.isPending && !error ? (
+                        {catalogLoading && !error ? (
                             <ListSkeleton
                                 layout="products"
                                 label={isZh ? '正在加载商品' : 'Loading products'}
@@ -256,7 +273,11 @@ export function DesktopCatalogPage() {
                                 title={isZh ? '商品加载失败' : 'Could not load products'}
                                 detail={error}
                                 action={isZh ? '重试' : 'Retry'}
-                                onAction={() => void query.refetch({ cancelRefetch: false })}
+                                onAction={() =>
+                                    categoryResolved
+                                        ? void query.refetch({ cancelRefetch: false })
+                                        : void runtime.refetchStorefront()
+                                }
                             />
                         ) : products.length ? (
                             <div className="desktop-product-grid">
@@ -278,7 +299,7 @@ export function DesktopCatalogPage() {
                             <EmptyState
                                 icon={<Search />}
                                 title={
-                                    query.hasNextPage
+                                    hasNextPage
                                         ? isZh
                                             ? '当前批次没有符合条件的商品'
                                             : 'No matches in the loaded products'
@@ -292,15 +313,17 @@ export function DesktopCatalogPage() {
                                         : 'Try another category or adjust your filters.'
                                 }
                                 action={
-                                    query.hasNextPage
+                                    hasNextPage
                                         ? isZh
                                             ? '继续加载'
                                             : 'Load more'
-                                        : isZh
-                                          ? '查看全部商品'
-                                          : 'View all products'
+                                        : filtered
+                                          ? isZh
+                                              ? '清除筛选'
+                                              : 'Clear filters'
+                                          : undefined
                                 }
-                                onAction={query.hasNextPage ? () => void pagination.loadMore() : clearFilters}
+                                onAction={hasNextPage ? () => void pagination.loadMore() : clearFilters}
                             />
                         )}
                         {products.length ? (

@@ -72,6 +72,7 @@ describe('storefront navigation state', () => {
     let value: ReturnType<typeof useStorefrontNavigation>;
     let prepareProduct: ((id: string) => Promise<void>) | undefined;
     let authenticated = true;
+    let availableCollections: CollectionSummary[];
     const collections: CollectionSummary[] = [
         {
             id: 'first',
@@ -85,7 +86,7 @@ describe('storefront navigation state', () => {
         },
     ];
     function Harness() {
-        value = useStorefrontNavigation({ collections, prepareProduct, authenticated });
+        value = useStorefrontNavigation({ collections: availableCollections, prepareProduct, authenticated });
         return <BottomNavigation activeRoute={value.route.name} cartQuantity={0} language="zh" />;
     }
     function servicesLink() {
@@ -102,10 +103,11 @@ describe('storefront navigation state', () => {
     beforeEach(async () => {
         prepareProduct = undefined;
         authenticated = true;
+        availableCollections = collections;
         const actual =
             await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router');
         const history = actual.createMemoryHistory({
-            initialEntries: ['/services', '/category'],
+            initialEntries: ['/services', '/category?collectionId=first'],
             initialIndex: 1,
         });
         const actualBack = history.back.bind(history);
@@ -138,7 +140,11 @@ describe('storefront navigation state', () => {
         });
         router.back.mockReset();
         router.forward.mockReset();
-        router.state.location = { pathname: '/category', search: {}, searchStr: '' };
+        router.state.location = {
+            pathname: '/category',
+            search: { collectionId: 'first' },
+            searchStr: '?collectionId=first',
+        };
         router.state.resolvedLocation = router.state.location;
         router.state.status = 'idle';
         router.listeners.clear();
@@ -189,9 +195,9 @@ describe('storefront navigation state', () => {
         vi.useRealTimers();
     });
 
-    it('keeps the URL all-products default and remembers explicit filters when returning', () => {
+    it('selects the first category and remembers explicit filters when returning', () => {
         act(() => root.render(<Harness />));
-        expect(value.activeCollectionId).toBe('all');
+        expect(value.activeCollectionId).toBe('first');
         expect(value.activeChildId).toBe('all');
         act(() => value.updateCategory({ collectionId: 'picked', minPrice: '10', inStockOnly: true }));
         act(() => value.navigate({ name: 'category' }));
@@ -205,6 +211,54 @@ describe('storefront navigation state', () => {
                 }),
             }),
         );
+    });
+
+    it.each([undefined, 'all'])(
+        'replaces the missing category URL without adding a history entry (%s)',
+        collectionId => {
+            router.state.location = { pathname: '/category', search: { collectionId }, searchStr: '' };
+            act(() => root.render(<Harness />));
+            expect(value.activeCollectionId).toBe('first');
+            expect(router.navigate).toHaveBeenCalledOnce();
+            expect(router.navigate).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    to: '/category',
+                    replace: true,
+                    resetScroll: false,
+                    search: expect.objectContaining({ collectionId: 'first', childId: 'all' }),
+                }),
+            );
+            expect(routerInstance.history.location.href).toContain('collectionId=first');
+            act(() => routerInstance.history.back());
+            expect(routerInstance.history.location.pathname).toBe('/services');
+        },
+    );
+
+    it('waits for the navigation categories before choosing the first item', () => {
+        availableCollections = [];
+        router.state.location = { pathname: '/category', search: {}, searchStr: '' };
+        act(() => root.render(<Harness />));
+        expect(router.navigate).not.toHaveBeenCalled();
+        availableCollections = collections;
+        act(() => root.render(<Harness />));
+        expect(value.activeCollectionId).toBe('first');
+        expect(router.navigate).toHaveBeenCalledOnce();
+    });
+
+    it('preserves the authentication overlay when normalizing the default category URL', () => {
+        router.state.location = {
+            pathname: '/category',
+            search: { auth: 'login' },
+            searchStr: '?auth=login',
+        };
+        act(() => root.render(<Harness />));
+        expect(router.navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                replace: true,
+                search: expect.objectContaining({ auth: 'login', collectionId: 'first' }),
+            }),
+        );
+        expect(value.authOverlay?.mode).toBe('login');
     });
 
     it('resynchronizes filter state after a history navigation', () => {
@@ -984,7 +1038,11 @@ describe('storefront navigation state', () => {
         expect(router.navigate).toHaveBeenLastCalledWith(
             expect.objectContaining({
                 to: '/category',
-                search: { auth: 'register', authTarget: '/purchase?id=variant-7&quantity=3' },
+                search: {
+                    collectionId: 'first',
+                    auth: 'register',
+                    authTarget: '/purchase?id=variant-7&quantity=3',
+                },
                 replace: true,
                 resetScroll: false,
             }),
@@ -1105,14 +1163,14 @@ describe('storefront navigation state', () => {
             value.changeAuthOverlay('register');
         });
         expect(router.navigate).toHaveBeenCalledOnce();
-        expect(router.state.location.search).toEqual({ auth: 'register' });
+        expect(router.state.location.search).toEqual({ collectionId: 'first', auth: 'register' });
     });
 
     it('does not let a delayed close erase a newer auth mode', async () => {
         router.state.location = {
             pathname: '/category',
-            search: { auth: 'login', authTarget: '/orders' },
-            searchStr: '?auth=login&authTarget=%2Forders',
+            search: { collectionId: 'first', auth: 'login', authTarget: '/orders' },
+            searchStr: '?collectionId=first&auth=login&authTarget=%2Forders',
         };
         act(() => root.render(<Harness />));
         await authAction(() => {
@@ -1121,7 +1179,11 @@ describe('storefront navigation state', () => {
         });
         expect(router.back).not.toHaveBeenCalled();
         expect(router.navigate).toHaveBeenCalledOnce();
-        expect(router.state.location.search).toEqual({ auth: 'register', authTarget: '/orders' });
+        expect(router.state.location.search).toEqual({
+            collectionId: 'first',
+            auth: 'register',
+            authTarget: '/orders',
+        });
     });
 
     it.each(['open', 'close'] as const)(

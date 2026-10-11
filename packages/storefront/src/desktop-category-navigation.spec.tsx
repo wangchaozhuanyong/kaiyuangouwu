@@ -3,11 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CatalogApi } from './api/catalog';
+import { catalogInputFromRoute } from './catalog-route-query';
 import {
     DesktopCategoryNavigation,
     DesktopSubcategoryNavigation,
 } from './components/common/desktop-category-navigation';
 import { DesktopCatalogPage } from './pages/desktop-catalog-page';
+import { storefrontQueryKeys } from './query-client';
 import { RouteState } from './storefront-router';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 import { readStorefrontStylesheet } from './test-stylesheet';
@@ -76,6 +78,63 @@ function renderSubcategories(route: RouteState) {
 }
 
 describe('desktop catalog category navigation', () => {
+    it.each([true, false])(
+        'hides a cached unfiltered catalog while the first category is unresolved (loading: %s)',
+        loading => {
+            const route: RouteState = { name: 'category' };
+            const market = { code: 'MY', currencyCode: 'MYR', locale: 'zh-CN' } as any;
+            const client = new QueryClient();
+            client.setQueryData(
+                storefrontQueryKeys.catalog(storefrontQueryKeys.market(market), 'zh', {
+                    ...catalogInputFromRoute(route),
+                    take: 12,
+                }),
+                {
+                    pages: [{ items: [{ id: 'cached-all', name: '旧的全商品缓存' }], totalItems: 24 }],
+                    pageParams: [0],
+                },
+            );
+            try {
+                const markup = renderToStaticMarkup(
+                    <QueryClientProvider client={client}>
+                        <StorefrontContext.Provider
+                            value={
+                                {
+                                    route,
+                                    collections: [],
+                                    language: 'zh',
+                                    market,
+                                    locale: 'zh-CN',
+                                    contentBlocks: [],
+                                    storefrontName: '店铺',
+                                    storefrontTagline: '',
+                                    api: { catalog: vi.fn() },
+                                    navigate: vi.fn(),
+                                    refetchStorefront: vi.fn(),
+                                    collectionsQuery: {
+                                        data: loading ? undefined : [],
+                                        error: null,
+                                        isPending: loading,
+                                    },
+                                } as unknown as StorefrontContextValue
+                            }
+                        >
+                            <DesktopCatalogPage />
+                        </StorefrontContext.Provider>
+                    </QueryClientProvider>,
+                );
+                expect(markup).not.toContain('旧的全商品缓存');
+                expect(markup).not.toContain('24 件商品');
+                expect(markup).not.toContain('查看全部商品');
+                expect(markup).not.toContain('继续加载');
+                expect(markup.includes('aria-label="正在加载商品"')).toBe(loading);
+                expect(markup.includes('没有找到商品')).toBe(!loading);
+            } finally {
+                client.clear();
+            }
+        },
+    );
+
     it('renders each managed plugin at its configured location without replacing the catalog columns', () => {
         const placements = [
             'AFTER_HEADER',

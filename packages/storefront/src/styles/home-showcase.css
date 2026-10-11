@@ -110,7 +110,7 @@
 /* Managed copy and pager share the photograph; service information is an ordered floor. */
 .home-page .home-intro-grid .hero-carousel > .hero.hero-image-overlay {
     height: auto;
-    min-height: 240px;
+    min-height: 0;
     flex: 0 0 auto;
     margin-block: 0;
 }

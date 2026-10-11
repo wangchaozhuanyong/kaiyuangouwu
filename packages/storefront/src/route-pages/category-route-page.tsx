@@ -1,5 +1,6 @@
 import '../commerce-styles';
 import { useDesktopLayout } from '../desktop-layout';
+import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
 import { CategoryPage } from '../pages/category-page';
 import { DesktopCatalogPage } from '../pages/desktop-catalog-page';
 import { CategoryPageContext } from '../storefront-page-contexts';
@@ -19,8 +20,10 @@ export function CategoryRoutePage() {
                 products: runtime.products,
                 collections: runtime.collections,
                 contentBlocks: runtime.contentBlocks,
-                loading: runtime.loading,
-                error: runtime.error,
+                loading:
+                    runtime.loading || storefrontQueryPresentation(runtime.collectionsQuery).initialLoading,
+                error:
+                    runtime.error || storefrontInitialQueryError(runtime.collectionsQuery, runtime.language),
                 market: runtime.market,
                 locale: runtime.locale,
                 language: runtime.language,

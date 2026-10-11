@@ -1,12 +1,24 @@
 import { priceInputToMinorUnits } from './catalog-page-utils';
 import { STOREFRONT_CATALOG_PAGE_SIZE } from './query-client';
 import { RouteState } from './storefront-router';
-import { StorefrontCatalogInput } from './types';
+import { CollectionSummary, StorefrontCatalogInput } from './types';
 
 export type CatalogRouteState = Pick<
     RouteState,
     'collectionId' | 'childId' | 'sort' | 'fulfillment' | 'inStockOnly' | 'minPrice' | 'maxPrice' | 'page'
 >;
+
+export function resolveCategoryRoute(route: RouteState, collections: CollectionSummary[]): RouteState {
+    if (route.name !== 'category' || (route.collectionId && route.collectionId !== 'all')) return route;
+    if (route.childId && route.childId !== 'all') {
+        const parent = collections.find(collection =>
+            collection.children?.some(child => child.id === route.childId),
+        );
+        return parent ? { ...route, collectionId: parent.id } : route;
+    }
+    const first = collections.find(collection => collection.id && collection.id !== 'all');
+    return first ? { ...route, collectionId: first.id, childId: 'all' } : route;
+}
 
 export function catalogRouteState(route: RouteState): Required<CatalogRouteState> {
     return {

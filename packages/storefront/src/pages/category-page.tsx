@@ -85,6 +85,8 @@ export function CategoryPage() {
         contextResolved = true,
         products,
         collections,
+        loading,
+        error,
         contentBlocks,
         market,
         locale,
@@ -199,13 +201,14 @@ export function CategoryPage() {
         maxPrice: maximumPriceInput,
         page,
     });
+    const categoryResolved = Boolean(catalogInput.collectionId);
     const pagination = useCategoryPagination({
         api,
         market,
         languageCode: vendureLanguageCode,
         language,
         input: catalogInput,
-        enabled: contextResolved,
+        enabled: contextResolved && categoryResolved,
         suspended: filterOpen || allCategoriesOpen,
         route: {
             name: 'category',
@@ -245,16 +248,19 @@ export function CategoryPage() {
         [],
     );
 
-    const categoryProducts = pagination.products;
+    const categoryProducts = categoryResolved ? pagination.products : [];
     const visibleProducts = categoryProducts;
-    const totalItems = pagination.totalItems;
-    const categoryLoading = catalogQuery.isPending && !catalogQuery.isError && !categoryProducts.length;
-    const categoryError =
-        catalogQuery.isPaused && catalogQuery.data === undefined
-            ? offlineLoadError(language)
-            : catalogQuery.error instanceof Error
-              ? storefrontErrorMessage(catalogQuery.error, language)
-              : '';
+    const totalItems = categoryResolved ? pagination.totalItems : 0;
+    const categoryLoading = categoryResolved
+        ? catalogQuery.isPending && !catalogQuery.isError && !categoryProducts.length
+        : loading && !error;
+    const categoryError = !categoryResolved
+        ? (error ?? '')
+        : catalogQuery.isPaused && catalogQuery.data === undefined
+          ? offlineLoadError(language)
+          : catalogQuery.error instanceof Error
+            ? storefrontErrorMessage(catalogQuery.error, language)
+            : '';
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
     const allCategoriesTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -297,13 +303,15 @@ export function CategoryPage() {
         draftStock === inStockOnly &&
         draftMinimumPrice === minimumPriceInput &&
         draftMaximumPrice === maximumPriceInput;
-    const draftResultCount = !collections.length
-        ? products.filter(product =>
-              matchesFilters(product, draftType, draftStock, draftMinimumPrice, draftMaximumPrice),
-          ).length
-        : draftMatchesAppliedFilters && catalogQuery.isSuccess && !catalogQuery.isPlaceholderData
-          ? totalItems
-          : null;
+    const draftResultCount = !categoryResolved
+        ? null
+        : !collections.length
+          ? products.filter(product =>
+                matchesFilters(product, draftType, draftStock, draftMinimumPrice, draftMaximumPrice),
+            ).length
+          : draftMatchesAppliedFilters && catalogQuery.isSuccess && !catalogQuery.isPlaceholderData
+            ? totalItems
+            : null;
 
     return (
         <main className="page category-page" aria-label={isZh ? '商品' : 'Products'}>

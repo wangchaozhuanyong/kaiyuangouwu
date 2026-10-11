@@ -1,12 +1,12 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { catalogInputFromRoute, catalogRouteWithChanges } from './catalog-route-query';
+import { catalogInputFromRoute, catalogRouteWithChanges, resolveCategoryRoute } from './catalog-route-query';
 import { ProductCard } from './components/common/product-card';
 import { ProductRow } from './components/common/product-row';
 import { STOREFRONT_IMAGE_SIZES } from './responsive-image';
 import { readStorefrontStylesheet } from './test-stylesheet';
-import { MarketConfig, Product } from './types';
+import { CollectionSummary, MarketConfig, Product } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -14,6 +14,52 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
 }));
 
 describe('desktop catalog navigation', () => {
+    const categories = [
+        { id: 'first-category', children: [{ id: 'first-child' }] },
+        { id: 'second-category', children: [{ id: 'second-child' }] },
+    ] as CollectionSummary[];
+
+    it.each([undefined, 'all'])(
+        'defaults an unspecified category to the first navigation item (%s)',
+        collectionId => {
+            const route = resolveCategoryRoute(
+                { name: 'category', collectionId, sort: 'price-desc', inStockOnly: true, page: 2 },
+                categories,
+            );
+            expect(route).toEqual({
+                name: 'category',
+                collectionId: 'first-category',
+                childId: 'all',
+                sort: 'price-desc',
+                inStockOnly: true,
+                page: 2,
+            });
+            expect(catalogInputFromRoute(route)).toMatchObject({ collectionId: 'first-category', skip: 12 });
+        },
+    );
+
+    it('preserves an explicit category and resolves a child-only link to its actual parent', () => {
+        const explicit = {
+            name: 'category' as const,
+            collectionId: 'second-category',
+            childId: 'second-child',
+        };
+        expect(resolveCategoryRoute(explicit, categories)).toBe(explicit);
+        expect(resolveCategoryRoute({ name: 'category', childId: 'second-child' }, categories)).toEqual(
+            explicit,
+        );
+        const unknown = { name: 'category' as const, childId: 'removed-child' };
+        expect(resolveCategoryRoute(unknown, categories)).toBe(unknown);
+    });
+
+    it('waits for categories and leaves home and search scopes unchanged', () => {
+        const unresolved = { name: 'category' as const };
+        expect(resolveCategoryRoute(unresolved, [])).toBe(unresolved);
+        for (const route of [{ name: 'home' as const }, { name: 'search' as const, term: 'Token' }]) {
+            expect(resolveCategoryRoute(route, categories)).toBe(route);
+        }
+    });
+
     it('baseline-aligns shared heading metadata instead of vertically centering smaller copy', () => {
         const sharedStylesheet = readStorefrontStylesheet(['./styles/home-showcase.css']);
         const desktopStylesheet = readStorefrontStylesheet([

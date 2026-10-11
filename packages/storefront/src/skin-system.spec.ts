@@ -1127,6 +1127,10 @@ describe('storefront skin system', () => {
         const mobile = stylesheet('./styles/hero-mobile-overlay.css');
         expect(mobile).toContain('@media (max-width: 1023px)');
         expect(mobile).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*auto;/);
+        expect(mobile).toMatch(
+            /\.hero-scene-wrapper\[data-hero-artwork-layout='overlay'\]\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*10;/,
+        );
+        expect(mobile).not.toMatch(/min-height:\s*280px;/);
         expect(mobile).toMatch(/\.hero-carousel-stage[^}]*position:\s*relative;/);
         expect(mobile).toMatch(/\.hero-scene-wrapper[^}]*display:\s*block;[^}]*height:\s*auto;/);
         expect(mobile).toMatch(/\.hero-rich-media[^}]*position:\s*absolute;[^}]*inset:\s*0;/);
@@ -1150,6 +1154,9 @@ describe('storefront skin system', () => {
         expect(mobile).not.toMatch(/home-trust-bar|home-trust-item/);
         expect(mobile).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl/i);
         const services = stylesheet('./styles/home-showcase.css');
+        expect(services).toMatch(
+            /\.home-page \.home-intro-grid \.hero-carousel > \.hero\.hero-image-overlay\s*\{[^}]*min-height:\s*0;/,
+        );
         expect(services).toMatch(
             /\.hero\.hero-image-overlay \.hero-scene-wrapper\s*\{[^}]*position:\s*static;[^}]*display:\s*block;/,
         );
