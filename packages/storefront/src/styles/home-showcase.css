@@ -2504,7 +2504,7 @@
 .section-header-action-btn,
 .section-header > button {
     min-width: 44px;
-    min-height: 32px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3917,4 +3917,22 @@ html[lang='en'] .primary-category-image {
 
 .home-trust-bar .trust-icon {
     color: var(--accent-ink);
+}
+
+/* One responsive first-frame structure; hidden shortcut images remain native lazy reads. */
+@media (max-width: 1023px) {
+    .home-intro-grid .desktop-quick-row,
+    .home-intro-grid .desktop-quick-pagination,
+    .responsive-home-header-placeholder {
+        display: none;
+    }
+}
+@media (min-width: 1024px) {
+    .home-intro-grid .mobile-quick-tile {
+        display: none;
+    }
+    .responsive-home-header-placeholder {
+        display: block;
+        height: var(--desktop-header-height, 72px);
+    }
 }

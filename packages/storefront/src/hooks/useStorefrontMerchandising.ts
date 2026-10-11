@@ -19,6 +19,7 @@ import {
 } from '../types';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
+import { useDeferredHomeCatalogs } from './useDeferredHomeCatalogs';
 import { usePageLoadProductOrder } from './usePageLoadProductOrder';
 export function useStorefrontMerchandising({
     api,
@@ -62,8 +63,17 @@ export function useStorefrontMerchandising({
     const homeContentReady = activeRoute === 'home' && contentReady;
     const recommendationsReady =
         (activeRoute === 'home' || activeRoute === 'recommendations') && contentReady;
-    const bestSellersEnabled = storefrontContextResolved && homeContentReady && showBestSellers;
-    const recommendationsEnabled = storefrontContextResolved && recommendationsReady && showRecommendations;
+    const deferred = useDeferredHomeCatalogs(
+        JSON.stringify([storefrontQueryKeys.market(market), vendureLanguageCode]),
+        homeContentReady,
+    );
+    const bestSellersEnabled =
+        storefrontContextResolved && homeContentReady && deferred.sales && showBestSellers;
+    const recommendationsEnabled =
+        storefrontContextResolved &&
+        recommendationsReady &&
+        (activeRoute !== 'home' || deferred.recommended) &&
+        showRecommendations;
 
     // Keep enough variety for configured sections without loading the previous
     // 48-product ceiling on every home visit. Larger managed sections still
@@ -111,7 +121,7 @@ export function useStorefrontMerchandising({
 
     const pinnedBestSellerQuery = useProductsByIdsQuery({
         api,
-        productIds: homeContentReady ? pinnedBestSellerIds : [],
+        productIds: bestSellersEnabled ? pinnedBestSellerIds : [],
         market,
         language,
     });
@@ -124,7 +134,7 @@ export function useStorefrontMerchandising({
 
     const personalizationSourceQuery = useProductsByIdsQuery({
         api,
-        productIds: recommendationsReady ? personalizationSourceIds : [],
+        productIds: recommendationsEnabled ? personalizationSourceIds : [],
         market,
         language,
     });
@@ -191,7 +201,15 @@ export function useStorefrontMerchandising({
         bestSellerProducts: bestSellers.products,
         recommendationProducts: recommendations.products,
         recommendationsBlock,
-        bestSellersLoading: bestSellersEnabled && bestSellers.loading,
-        recommendationsLoading: recommendationsEnabled && recommendations.loading,
+        bestSellersLoading:
+            storefrontContextResolved &&
+            homeContentReady &&
+            showBestSellers &&
+            (!deferred.sales || bestSellers.loading),
+        recommendationsLoading:
+            storefrontContextResolved &&
+            recommendationsReady &&
+            showRecommendations &&
+            ((activeRoute === 'home' && !deferred.recommended) || recommendations.loading),
     };
 }

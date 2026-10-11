@@ -9,6 +9,7 @@ import {
     isDesktopAccountRoute,
 } from './components/common/desktop-account-navigation';
 import { DesktopHeader } from './components/common/desktop-header';
+import { ResponsiveHomeHeaderPlaceholder } from './components/common/responsive-home-header-placeholder';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { desktopPageFamily } from './desktop-page-contract';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
@@ -208,7 +209,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             data-route={renderedRouteName}
                             data-page-family={desktopPageFamily(renderedRouteName)}
                             data-preview-embedded={previewEmbedded ? 'true' : undefined}
-                            className={`storefront-app${online ? '' : ' is-offline'}${desktop ? ' desktop-store-layout' : ''}`}
+                            className={`storefront-app${online ? '' : ' is-offline'}${desktop || renderedRouteName === 'home' ? ' desktop-store-layout' : ''}`}
                         >
                             <a className="skip-link" href="#storefront-content">
                                 {isZh ? '跳到主要内容' : 'Skip to content'}
@@ -230,6 +231,12 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                             : 'This store is not live yet. Test payments create simulated orders only.'}
                                     </span>
                                 </aside>
+                            )}
+                            {!desktop && renderedRouteName === 'home' && (
+                                <ResponsiveHomeHeaderPlaceholder
+                                    name={storefrontContextValue.storefrontName}
+                                    logoUrl={storefrontContextValue.logoUrl}
+                                />
                             )}
                             {desktop && showNavigation && (
                                 <DesktopHeader

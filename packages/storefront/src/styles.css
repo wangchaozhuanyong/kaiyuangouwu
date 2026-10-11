@@ -293,6 +293,15 @@ img {
         transform 220ms ease;
 }
 
+/* Native images paint as they arrive, including the server-rendered first frame.
+   Replacement images keep their decoded preview until the new candidate is ready. */
+.safe-image-frame:not(.has-placeholder) .safe-image {
+    opacity: 1;
+}
+.safe-image-art-direction {
+    display: contents;
+}
+
 .safe-image.is-loaded {
     opacity: 1;
 }

@@ -23,6 +23,56 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it('server-renders native art direction without preloading the wrong desktop source', () => {
+        const html = renderToStaticMarkup(
+            <SafeImage
+                src="/desktop-art.jpg"
+                alt="Artwork"
+                fetchPriority="high"
+                mediaSources={[
+                    { media: '(max-width: 767px)', src: '/mobile-art.jpg', width: 800, height: 1000 },
+                ]}
+            />,
+        );
+        expect(html).toContain('<picture');
+        expect(html).toContain('media="(max-width: 767px)" srcSet="/mobile-art.jpg"');
+        expect(html).not.toContain('rel="preload"');
+        expect(html).not.toContain('style="opacity:0');
+    });
+
+    it('does not mark desktop art decoded when a native picture loaded its mobile candidate', async () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const desktop = '/art-cache-desktop.jpg';
+        const mobile = '/art-cache-mobile.jpg';
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src={desktop}
+                        alt="QA"
+                        mediaSources={[{ media: '(max-width: 767px)', src: mobile }]}
+                    />,
+                ),
+            );
+            const image = requiredImage(host);
+            Object.defineProperties(image, {
+                complete: { configurable: true, value: true },
+                naturalWidth: { configurable: true, value: 800 },
+                currentSrc: { configurable: true, value: new URL(mobile, window.location.href).href },
+            });
+            await act(async () => {
+                image.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            expect(isImageAlreadyDecoded(new URL(mobile, window.location.href).href)).toBe(true);
+            expect(isImageAlreadyDecoded(desktop)).toBe(false);
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
     it.each([
         ['zh', '图片暂时无法显示'],
         ['en', 'Image temporarily unavailable'],

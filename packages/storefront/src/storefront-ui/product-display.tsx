@@ -472,6 +472,7 @@ export function renderColorfulQuickIcon(label: string, index: number, imageUrl?:
                     src={managedImageUrl}
                     alt=""
                     imageKind="icon"
+                    loading="lazy"
                     sizes="48px"
                     showFallbackIcon={false}
                 />
