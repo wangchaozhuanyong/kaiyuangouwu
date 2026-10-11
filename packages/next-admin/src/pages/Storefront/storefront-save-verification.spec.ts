@@ -98,6 +98,20 @@ describe('content save and readback verification', () => {
             normalizedPhoneHero,
         );
     });
+    it('verifies CATEGORY_AD phone asset normalization while rejecting changed dimensions or other settings', () => {
+        const expected = { ...phoneHero, type: 'CATEGORY_AD' as const };
+        const saved = { ...normalizedPhoneHero, type: 'CATEGORY_AD' as const };
+        expect(verifySavedBlock(saved, storefrontBlockInput(expected))).toBe(saved);
+        expect(() =>
+            verifySavedBlock(
+                {
+                    ...saved,
+                    settings: { ...saved.settings, mobileImageHeight: 1 },
+                },
+                storefrontBlockInput(expected),
+            ),
+        ).toThrow('settings');
+    });
     it.each([
         { mobileImageAssetId: 'other-asset' },
         { mobileImageAssetId: null },

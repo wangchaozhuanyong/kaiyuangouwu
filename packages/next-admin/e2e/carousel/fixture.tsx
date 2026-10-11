@@ -22,7 +22,7 @@ import clientStyles from '../../../storefront/src/styles.css?inline';
 import desktopStyles from '../../../storefront/src/styles/desktop-layout.css?inline';
 import '../../../storefront/src/styles/service-entries.css';
 import presetStyles from '../../../storefront/src/styles/visual-presets.css?inline';
-import type { StorefrontContentBlock as ClientBlock } from '../../../storefront/src/types';
+import type { StorefrontContentBlock as ClientBlock, Product } from '../../../storefront/src/types';
 import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import '../../src/index.css';
@@ -441,6 +441,129 @@ if (params.has('recommendations')) {
         ],
     });
 }
+// Daily-selection review only. Original merchant artwork and public card content are preserved.
+const dailyProducts: Product[] = [
+    ['1', 'Codex-Plu成品号', 'ChatGPT- plus正规渠道', 14000, '58/product-codex-plus__03__preview.webp'],
+    [
+        '6262',
+        'Claude Pro订阅|1个月',
+        'Claude Pro 订阅代充',
+        13460,
+        'ee/moyao-product-claude-20261002-v1__preview.webp',
+    ],
+    [
+        '6265',
+        'Claude Max 20x订阅|1个月',
+        'Claude Max 20x 订阅代充',
+        134600,
+        'ee/moyao-product-claude-20261002-v1__preview.webp',
+    ],
+    [
+        '6280',
+        '美区余额|US$100',
+        '数字账号商品:美国区Apple账号',
+        67000,
+        'c6/moyao-product-apple-20261002-v1__preview.webp',
+    ],
+].map(([id, name, description, price, image]) => ({
+    id: String(id),
+    name: String(name),
+    description: String(description),
+    createdAt: '2026-10-11T00:00:00Z',
+    slug: String(id),
+    collections: [],
+    featuredAsset: {
+        id: String(id),
+        preview: 'https://moyaoai.com/assets/preview/' + image,
+        width: 1000,
+        height: 1000,
+    },
+    assets: [],
+    ...(id === '1' ? { warrantyDuration: '一个月' } : {}),
+    variants: [
+        {
+            id: 'snapshot-' + id,
+            name: String(name),
+            sku: 'snapshot-' + id,
+            priceWithTax: Number(price),
+            currencyCode: 'CNY',
+            stockLevel: 'IN_STOCK' as const,
+            saleableStockLevel: 100,
+            featuredAsset: null,
+            product: { id: String(id), name: String(name), featuredAsset: null },
+            customFields: { fulfillmentType: 'digital' as const },
+        },
+    ],
+}));
+const dailyDesktopAsset = {
+    ...asset,
+    id: 'daily-desktop',
+    name: 'featured-desktop-5x6.png',
+    mimeType: 'image/png',
+    preview: '/assets/daily-desktop-original.png',
+    source: '/assets/daily-desktop-original.png',
+    width: 1145,
+    height: 1374,
+};
+const dailyMobileAsset = {
+    ...asset,
+    id: 'daily-mobile',
+    name: '原有每日精选横图',
+    mimeType: 'image/png',
+    preview: '/assets/daily-mobile-original.png',
+    source: '/assets/daily-mobile-original.png',
+    width: 1672,
+    height: 941,
+};
+if (params.has('daily-selection')) {
+    servicesAsset = dailyDesktopAsset;
+    blocks = [
+        {
+            ...newContentBlock('CATEGORY_AD', 0, '每日精选'),
+            __typename: 'StorefrontContentBlock',
+            id: 'daily-selection-review',
+            code: 'home-fixed-category-ad',
+            createdAt: '2026-10-11T00:00:00Z',
+            updatedAt: '2026-10-11T00:00:00Z',
+            enabled: true,
+            imageAsset: dailyDesktopAsset,
+            imageUrl: dailyDesktopAsset.preview,
+            textColor: '#FFFFFF',
+            backgroundColor: '#061328',
+            targetType: 'PAGE',
+            targetValue: '/category',
+            settings: {
+                categoryArtworkLayout: params.has('legacy') ? 'scene-poster' : 'device-poster',
+                displayCount: 4,
+                selectedProductIds: dailyProducts.map(product => product.id),
+                mobileImageAssetId: dailyMobileAsset.id,
+                mobileImageUrl: dailyMobileAsset.preview,
+                mobileImageWidth: dailyMobileAsset.width,
+                mobileImageHeight: dailyMobileAsset.height,
+            },
+            translations: [
+                {
+                    languageCode: 'zh_Hans',
+                    title: '每日精选',
+                    body: 'AI 精选',
+                    subtitle: '账号 · 订阅',
+                    ctaLabel: '查看精选',
+                },
+                {
+                    languageCode: 'en',
+                    title: 'Daily selection',
+                    body: 'AI picks',
+                    subtitle: 'Accounts · Plans',
+                    ctaLabel: 'Explore',
+                },
+            ],
+        },
+    ];
+    if (params.has('legacy')) {
+        blocks[0].imageAsset = dailyMobileAsset;
+        blocks[0].imageUrl = dailyMobileAsset.preview;
+    }
+}
 if (params.has('notice-period')) {
     const notice = blocks.find(block => block.type === 'NOTICE');
     if (notice) {
@@ -589,7 +712,8 @@ if (
     params.has('notice-period') ||
     params.has('editorialHome') ||
     params.has('services-candidate') ||
-    params.has('services-sidebar')
+    params.has('services-sidebar') ||
+    params.has('daily-selection')
 ) {
     asset.preview = `/assets/fixture-carousel.svg${params.has('tallHero') ? '?tall=1' : ''}`;
     replacementAsset.preview = '/assets/replacement-carousel.svg';
@@ -624,6 +748,10 @@ if (
                 false,
                 params.has('auth') || params.has('managedImages') ? 'auth-referral' : 'normal',
             );
+            if (params.has('daily-selection')) {
+                data.products = { items: dailyProducts, totalItems: dailyProducts.length };
+                data.storefrontManagedContentProducts = dailyProducts;
+            }
             data.activeChannel = { ...data.activeChannel, id: channel.id, code: channel.code };
             data.storefrontVisualPreset.channelId = channel.id;
             if (params.has('managedImages'))
@@ -678,7 +806,19 @@ const client = new ApolloClient({
                         const mutation = /Create|Update|Delete|Reorder/.test(name);
                         if (mutation && faults.write) throw new Error('模拟保存失败，请重试');
                         let data: Record<string, unknown>;
-                        if (name === 'NextAdminStorefrontPluginCollections') {
+                        if (name === 'NextAdminCatalogReferences' && params.has('daily-selection')) {
+                            data = Object.fromEntries(
+                                Object.entries(operation.variables).map(([key, ids]) => [
+                                    key.replace('ids', 'batch'),
+                                    {
+                                        totalItems: (ids as string[]).length,
+                                        items: dailyProducts
+                                            .filter(product => (ids as string[]).includes(product.id))
+                                            .map(product => ({ ...product, enabled: true, deletedAt: null })),
+                                    },
+                                ]),
+                            );
+                        } else if (name === 'NextAdminStorefrontPluginCollections') {
                             data = {
                                 collections: { items: [], totalItems: 0 },
                                 selectedCollections: { items: [], totalItems: 0 },
@@ -743,9 +883,21 @@ const client = new ApolloClient({
                                 },
                             };
                         } else if (name === 'NextAdminStorefrontEditorOptions') {
-                            data = { products: { items: [], totalItems: 0 } };
+                            data = {
+                                products: {
+                                    items: params.has('daily-selection') ? dailyProducts : [],
+                                    totalItems: params.has('daily-selection') ? 4 : 0,
+                                },
+                            };
                         } else if (name === 'GetAssets') {
-                            data = { assets: { items: [servicesAsset, replacementAsset], totalItems: 2 } };
+                            data = {
+                                assets: {
+                                    items: params.has('daily-selection')
+                                        ? [dailyDesktopAsset, dailyMobileAsset]
+                                        : [servicesAsset, replacementAsset],
+                                    totalItems: 2,
+                                },
+                            };
                         } else if (name === 'NextAdminBannerCollections') {
                             data = { collections: { items: [], totalItems: 0 } };
                         } else if (name === 'NextAdminSystemAnnouncements') {
@@ -1027,7 +1179,25 @@ export function ServicesClientFixture() {
 }
 
 createRoot(document.getElementById('root')!).render(
-    params.has('editorialHomeClient') ? (
+    params.has('daily-client') ? (
+        <EditorialHomeClient
+            blocks={blocks}
+            dailySelection
+            products={params.has('no-products') ? [] : dailyProducts}
+            configuredBlockTypes={[
+                'CATEGORY_AD',
+                'HERO',
+                'NOTICE',
+                'COUPONS',
+                'TRUST_BAR',
+                'QUICK_LINKS',
+                'CORE_CATEGORIES',
+                'BEST_SELLERS',
+                'RECOMMENDATIONS',
+                'LEGAL',
+            ]}
+        />
+    ) : params.has('editorialHomeClient') ? (
         <EditorialHomeClient
             blocks={blocks}
             layoutReview={params.has('layout-review')}

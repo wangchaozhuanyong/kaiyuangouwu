@@ -2205,6 +2205,54 @@ describe('HomePage core category cards', () => {
 });
 
 describe('HomePage category promotion', () => {
+    it('uses native desktop/phone artwork in device mode and preserves the target and editable copy', () => {
+        const markup = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],
+            contentBlocks: [
+                {
+                    ...categoryAdBlock,
+                    body: 'AI 精选',
+                    settings: {
+                        ...categoryAdBlock.settings,
+                        categoryArtworkLayout: 'device-poster',
+                        mobileImageUrl: '/assets/phone-selection.png',
+                        mobileImageWidth: 1672,
+                        mobileImageHeight: 941,
+                    },
+                },
+            ],
+        });
+        expect(markup).toContain('is-scene-poster is-device-poster');
+        expect(markup).toContain('media="(max-width: 1023px)"');
+        expect(markup).toContain('/assets/phone-selection.png');
+        expect(markup).toContain('/assets/category-ad.jpg');
+        expect(markup).toContain('AI 精选');
+        expect(markup).toContain('打开分类广告');
+    });
+
+    it('inherits the existing image when phone artwork is absent and ignores phone artwork in legacy mode', () => {
+        for (const layout of ['device-poster', 'scene-poster', 'original']) {
+            const markup = renderHome({
+                configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],
+                contentBlocks: [
+                    {
+                        ...categoryAdBlock,
+                        settings: {
+                            ...categoryAdBlock.settings,
+                            categoryArtworkLayout: layout,
+                            ...(layout !== 'device-poster'
+                                ? { mobileImageUrl: '/assets/unused-phone.png' }
+                                : {}),
+                        },
+                    },
+                ],
+            });
+            expect(markup).toContain('/assets/category-ad.jpg');
+            expect(markup).not.toContain('/assets/unused-phone.png');
+            expect(markup).not.toContain('media="(max-width: 1023px)"');
+        }
+    });
+
     it('renders editable scene-poster copy only when selected and keeps its image binding', () => {
         const markup = renderHome({
             configuredBlockTypes: [...baseProps.configuredBlockTypes, 'CATEGORY_AD'],

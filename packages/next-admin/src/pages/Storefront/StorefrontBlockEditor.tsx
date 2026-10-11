@@ -133,8 +133,9 @@ export function StorefrontBlockEditor({
     ) => binding?.imageAsset?.name || binding?.imageUrl?.split('/').pop() || '清除图片';
     const imageChangeDescriptions = imageChanges.map(change => {
         if (change.slot === 'main')
-            return `${draft.type === 'HERO' ? '电脑端轮播图' : '主图'}：${imageName(value)} → ${imageName(draft)}`;
-        if (change.slot === 'mobile-hero') return '手机端轮播图已替换或清除';
+            return `${draft.type === 'HERO' ? '电脑端轮播图' : draft.type === 'CATEGORY_AD' ? '电脑端精选海报' : '主图'}：${imageName(value)} → ${imageName(draft)}`;
+        if (change.slot === 'mobile-hero')
+            return draft.type === 'CATEGORY_AD' ? '手机端精选横图已替换或清除' : '手机端轮播图已替换或清除';
         if (change.slot === 'mobile-decoration') return '手机底部装饰图已替换或清除';
         const itemId = change.slot.slice('item:'.length);
         const previous = value.items.find(item => String(item.id) === itemId);
@@ -171,6 +172,8 @@ export function StorefrontBlockEditor({
     const phoneTranslation = mobileHeroTranslation(draft.settings, language);
     const editorialHero = draft.type === 'HERO' && resolveHeroArtworkLayout(draft.settings) === 'editorial';
     const campaignHero = draft.type === 'HERO' && resolveHeroArtworkLayout(draft.settings) === 'campaign';
+    const deviceCategoryPoster =
+        draft.type === 'CATEGORY_AD' && draft.settings?.categoryArtworkLayout === 'device-poster';
     const phoneImageUrl = stringSetting(draft.settings?.mobileImageUrl, '').trim();
     const updatePhoneTranslation = (patch: Partial<MobileHeroTranslation>) => {
         const translations = (['zh_Hans', 'en'] as const).map(code => {
@@ -477,7 +480,9 @@ export function StorefrontBlockEditor({
                                         <Field
                                             label={
                                                 draft.type === 'CATEGORY_AD' &&
-                                                draft.settings?.categoryArtworkLayout === 'scene-poster'
+                                                ['scene-poster', 'device-poster'].includes(
+                                                    String(draft.settings?.categoryArtworkLayout),
+                                                )
                                                     ? '横幅主标题（中文最多5字）'
                                                     : isSupport
                                                       ? '客服说明'
@@ -488,7 +493,9 @@ export function StorefrontBlockEditor({
                                                 rows={5}
                                                 maxLength={
                                                     draft.type === 'CATEGORY_AD' &&
-                                                    draft.settings?.categoryArtworkLayout === 'scene-poster'
+                                                    ['scene-poster', 'device-poster'].includes(
+                                                        String(draft.settings?.categoryArtworkLayout),
+                                                    )
                                                         ? language === 'zh_Hans'
                                                             ? 5
                                                             : 12
@@ -637,7 +644,9 @@ export function StorefrontBlockEditor({
                                                             ? '电脑端客服页首配图'
                                                             : draft.type === 'HERO'
                                                               ? '电脑端轮播图'
-                                                              : '主图素材'
+                                                              : deviceCategoryPoster
+                                                                ? '电脑端精选海报'
+                                                                : '主图素材'
                                                     }
                                                     value={draft.imageAsset}
                                                     fallbackUrl={draft.imageUrl}
@@ -658,12 +667,23 @@ export function StorefrontBlockEditor({
                                                         切换图文布局不会替换电脑图或手机图。
                                                     </p>
                                                 )}
+                                                {deviceCategoryPoster && (
+                                                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                                                        建议使用约5∶6竖图，电脑端海报与右侧商品卡顶部、底部对齐。
+                                                        图片完整显示，不裁切、不拉伸、不加遮罩。广告标题与按钮在前台文案中编辑。
+                                                        切换布局不会替换或清除已有图片。
+                                                    </p>
+                                                )}
                                             </div>
                                         )}
-                                        {draft.type === 'HERO' && (
+                                        {(draft.type === 'HERO' || deviceCategoryPoster) && (
                                             <div className="sm:col-span-2">
                                                 <AssetPicker
-                                                    label="手机端轮播图（可选）"
+                                                    label={
+                                                        deviceCategoryPoster
+                                                            ? '手机端精选横图（可选）'
+                                                            : '手机端轮播图（可选）'
+                                                    }
                                                     value={null}
                                                     fallbackUrl={phoneImageUrl || null}
                                                     onChange={asset =>
@@ -681,15 +701,23 @@ export function StorefrontBlockEditor({
                                                     data-hero-artwork-binding="mobile"
                                                     className="mt-2 text-xs leading-5 text-slate-500"
                                                 >
-                                                    {phoneImageUrl
-                                                        ? '已单独设置手机端轮播图，电脑端继续使用电脑图。'
-                                                        : '未单独设置手机图，当前沿用电脑端轮播图。'}
-                                                    建议比例 3:2；清除手机图后恢复沿用电脑图。
+                                                    {deviceCategoryPoster
+                                                        ? phoneImageUrl
+                                                            ? '已单独设置手机精选图，电脑继续使用竖版海报。'
+                                                            : '未设置手机精选图，当前沿用主图。建议先选入原有横图，再更换电脑图。'
+                                                        : phoneImageUrl
+                                                          ? '已单独设置手机端轮播图，电脑端继续使用电脑图。'
+                                                          : '未单独设置手机图，当前沿用电脑端轮播图。'}
+                                                    {deviceCategoryPoster
+                                                        ? '手机容器保持16∶9；清除手机图后恢复沿用主图。'
+                                                        : '建议比例 3:2；清除手机图后恢复沿用电脑图。'}
                                                 </p>
                                                 <p className="mt-2 text-xs leading-5 text-slate-500">
-                                                    {editorialHero
-                                                        ? '手机也采用左侧文字、右侧主体构图，底图左侧请留出文字空间，右侧保留完整主体。'
-                                                        : '手机图可按手机屏幕单独构图；在右侧预览中切换“电脑 / 手机”核对各自图片。'}
+                                                    {deviceCategoryPoster
+                                                        ? '手机横图左侧60%留给短文案，右侧保留主体；在预览中切换“电脑 / 手机”核对各自图片。'
+                                                        : editorialHero
+                                                          ? '手机也采用左侧文字、右侧主体构图，底图左侧请留出文字空间，右侧保留完整主体。'
+                                                          : '手机图可按手机屏幕单独构图；在右侧预览中切换“电脑 / 手机”核对各自图片。'}
                                                 </p>
                                             </div>
                                         )}
@@ -698,9 +726,10 @@ export function StorefrontBlockEditor({
                                                 <AdminSelect
                                                     className={inputClass}
                                                     value={
-                                                        draft.settings?.categoryArtworkLayout ===
-                                                        'scene-poster'
-                                                            ? 'scene-poster'
+                                                        ['scene-poster', 'device-poster'].includes(
+                                                            String(draft.settings?.categoryArtworkLayout),
+                                                        )
+                                                            ? String(draft.settings?.categoryArtworkLayout)
                                                             : 'original'
                                                     }
                                                     onChange={event =>
@@ -713,9 +742,14 @@ export function StorefrontBlockEditor({
                                                     <option value="scene-poster">
                                                         紧凑 16∶9 广告，文案独立编辑
                                                     </option>
+                                                    <option value="device-poster">
+                                                        电脑竖图与商品等高，手机16∶9横图
+                                                    </option>
                                                 </AdminSelect>
                                                 <p className="mt-2 text-xs text-slate-500">
-                                                    电脑手机共用16∶9横图。正文用作短标题，副标题用作短说明，按钮文案保持简短；文字位于左侧60%，图片不叠加遮罩。更换布局会保留原图。
+                                                    {deviceCategoryPoster
+                                                        ? '电脑和手机分别选图。正文用作短标题，副标题用作短说明；中文标题/说明/按钮最多5/9/4字，英文最多12/18/8字。更换布局会保留已有图片与商品。'
+                                                        : '电脑手机共用16∶9横图。正文用作短标题，副标题用作短说明，按钮文案保持简短；文字位于左侧60%，图片不叠加遮罩。更换布局会保留原图。'}
                                                 </p>
                                             </Field>
                                         )}

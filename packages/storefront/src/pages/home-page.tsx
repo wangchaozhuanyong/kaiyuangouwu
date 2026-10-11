@@ -2003,7 +2003,10 @@ function CategoryPromotionSection({
         : Math.max(1, Math.min(4, categoryProducts.length));
     const hasSupportingContent = pendingProducts || categoryProducts.length > 0 || block.items.length > 0;
     const colorfulMarketplace = isColorfulHomepageStyle(block.settings?.visualStyle);
-    const scenePoster = block.settings?.categoryArtworkLayout === 'scene-poster';
+    const devicePoster = block.settings?.categoryArtworkLayout === 'device-poster';
+    const scenePoster = devicePoster || block.settings?.categoryArtworkLayout === 'scene-poster';
+    const desktopImage = heroImageForViewport(block, true);
+    const mobileImage = devicePoster ? heroImageForViewport(block, false) : desktopImage;
     const sectionClassName = `content-section managed-content-section managed-content-category_ad category-promotion-section${
         colorfulMarketplace ? ' is-color-marketplace' : ''
     }`;
@@ -2037,7 +2040,7 @@ function CategoryPromotionSection({
             />
             <div className={`category-promotion-layout${hasSupportingContent ? '' : ' is-visual-only'}`}>
                 <button
-                    className={`category-promotion-visual${scenePoster ? ' is-scene-poster' : ''}`}
+                    className={`category-promotion-visual${scenePoster ? ' is-scene-poster' : ''}${devicePoster ? ' is-device-poster' : ''}`}
                     style={{
                         ...(scenePoster ? managedContentStyle(block) : {}),
                         ...(desktop ? { marginBottom: scrollbarHeight } : {}),
@@ -2049,14 +2052,28 @@ function CategoryPromotionSection({
                         blockHasTarget ? (isZh ? `打开${block.title}` : `Open ${block.title}`) : block.title
                     }
                 >
-                    {block.imageUrl ? (
+                    {desktopImage.imageUrl || mobileImage.imageUrl ? (
                         <SafeImage
-                            src={block.imageUrl}
+                            src={desktopImage.imageUrl || mobileImage.imageUrl}
+                            mediaSources={
+                                mobileImage.imageUrl && mobileImage.imageUrl !== desktopImage.imageUrl
+                                    ? [
+                                          {
+                                              media: '(max-width: 1023px)',
+                                              src: mobileImage.imageUrl,
+                                              sizes: 'calc(100vw - 32px)',
+                                              width: mobileImage.imageAsset?.width,
+                                              height: mobileImage.imageAsset?.height,
+                                          },
+                                      ]
+                                    : undefined
+                            }
                             alt={block.title}
                             imageKind="hero"
+                            sizes={devicePoster ? '(min-width: 1024px) 320px, calc(100vw - 32px)' : undefined}
                             loading="lazy"
-                            width={block.imageAsset?.width || undefined}
-                            height={block.imageAsset?.height || undefined}
+                            width={desktopImage.imageAsset?.width || undefined}
+                            height={desktopImage.imageAsset?.height || undefined}
                         />
                     ) : (
                         <span className="category-promotion-placeholder" aria-hidden="true">

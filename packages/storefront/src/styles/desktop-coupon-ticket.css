@@ -42,7 +42,7 @@
     border-inline-end: 1px dashed var(--line-subtle);
     border-start-start-radius: var(--skin-card-radius);
     border-end-start-radius: var(--skin-card-radius);
-    background: var(--skin-coupon-tint, color-mix(in srgb, var(--coupon-face) 10%, var(--surface)));
+    background: color-mix(in srgb, var(--coupon-face) 10%, var(--surface));
     color: var(--coupon-face);
     text-align: center;
 }

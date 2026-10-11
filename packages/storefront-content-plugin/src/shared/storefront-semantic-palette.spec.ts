@@ -12,6 +12,31 @@ import {
 
 describe('storefront semantic palette', () => {
     it.each(['classic', 'neo-minimalist'] as const)(
+        'keeps all four configured coupon tones distinct and readable in %s',
+        preset => {
+            const palette = resolveStorefrontSemanticPalette(preset);
+            const variables = storefrontSkinCssVariables(preset, palette);
+            const inks = ['rose', 'gold', 'blue', 'emerald'].map(tone => variables[`--coupon-${tone}-ink`]);
+            expect(new Set(inks).size).toBe(4);
+            for (const ink of inks) {
+                // The actual ticket uses 10% of its ink on the shared surface.
+                const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+                const surface = rgb(palette.surface);
+                const tint =
+                    '#' +
+                    rgb(ink)
+                        .map((channel, i) =>
+                            Math.round(channel * 0.1 + surface[i] * 0.9)
+                                .toString(16)
+                                .padStart(2, '0'),
+                        )
+                        .join('');
+                expect(storefrontContrastRatio(ink, tint)).toBeGreaterThanOrEqual(4.5);
+            }
+        },
+    );
+
+    it.each(['classic', 'neo-minimalist'] as const)(
         'separates navigation from primary actions with readable %s interaction states',
         presetId => {
             const palette = resolveStorefrontSemanticPalette(presetId);

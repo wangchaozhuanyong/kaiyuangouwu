@@ -968,6 +968,29 @@ describe('StorefrontContentService image ownership', () => {
 });
 
 describe('shared phone hero settings', () => {
+    it('validates CATEGORY_AD phone assets and does not publish unimported third-party phone URLs', () => {
+        for (const settings of [{ mobileImageAssetId: false }, { mobileImageUrl: 'javascript:alert(1)' }]) {
+            expect(() => validate(createInput({ type: 'CATEGORY_AD', settings: settings as never }))).toThrow(
+                /手机精选图/,
+            );
+        }
+        const service = new StorefrontContentService(
+            {} as never,
+            { translate: (contentBlock: StorefrontContentBlock) => contentBlock } as never,
+            {} as never,
+            {} as never,
+        );
+        const block = new StorefrontContentBlock({
+            type: 'CATEGORY_AD',
+            code: 'daily-selection',
+            settings: {
+                categoryArtworkLayout: 'device-poster',
+                mobileImageUrl: 'https://third-party.example.com/phone.png',
+            },
+            items: [],
+        });
+        expect((service as any).translateBlock(block, {}, true).settings.mobileImageUrl).toBeNull();
+    });
     it('keeps the existing JSON settings serializer compatible with pre-staged phone assets and object-array translations', () => {
         const service = new StorefrontContentService({} as never, {} as never, {} as never, {} as never);
         const settings = {
@@ -1004,9 +1027,13 @@ describe('shared phone hero settings', () => {
         }
     });
 
-    it.each(['moyao', 'damatong', 'flashcast'])(
-        'resolves phone asset metadata on create/update in %s while preserving desktop bindings',
-        async channelId => {
+    it.each(
+        ['moyao', 'damatong', 'flashcast'].flatMap(channel =>
+            (['HERO', 'CATEGORY_AD'] as const).map(type => [channel, type] as const),
+        ),
+    )(
+        'resolves phone asset metadata on create/update in %s %s while preserving desktop bindings',
+        async (channelId, type) => {
             let saved: StorefrontContentBlock;
             const repository = {
                 save: vi.fn((block: StorefrontContentBlock) => {
@@ -1048,7 +1075,10 @@ describe('shared phone hero settings', () => {
                 ],
             };
             const ctx = { channelId } as never;
-            const created = await service.create(ctx, createInput({ imageAssetId: 'desktop', settings }));
+            const created = await service.create(
+                ctx,
+                createInput({ type, imageAssetId: 'desktop', settings }),
+            );
             expect(created).toMatchObject({
                 imageAssetId: 'desktop',
                 imageUrl: '/assets/desktop.webp',
@@ -1095,7 +1125,11 @@ describe('shared phone hero settings', () => {
                 mobileImageHeight: null,
             });
             expect(cleared.imageAssetId).toBe('desktop');
-            expect(resolve.mock.calls.filter(call => call[3] === '手机轮播图')).toHaveLength(3);
+            expect(
+                resolve.mock.calls.filter(
+                    call => call[3] === (type === 'HERO' ? '手机轮播图' : '手机精选图'),
+                ),
+            ).toHaveLength(3);
         },
     );
 });

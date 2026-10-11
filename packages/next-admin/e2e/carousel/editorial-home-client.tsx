@@ -25,12 +25,16 @@ export function EditorialHomeClient({
     referenceArtwork = false,
     independentDeviceArtwork = false,
     configuredBlockTypes = ['HERO'],
+    products = [],
+    dailySelection = false,
 }: {
     blocks: StorefrontContentBlock[];
     layoutReview?: boolean;
     referenceArtwork?: boolean;
     independentDeviceArtwork?: boolean;
     configuredBlockTypes?: HomePageProps['configuredBlockTypes'];
+    products?: HomePageProps['products'];
+    dailySelection?: boolean;
 }) {
     const [language, setLanguage] = useState<'zh_Hans' | 'en'>('zh_Hans');
     const [preset, setPreset] = useState(normalizeStorefrontVisualPreset('classic'));
@@ -82,10 +86,10 @@ export function EditorialHomeClient({
             return [converted];
         });
     const homepageValue: HomePageProps = {
-        products: [],
+        products,
         collections: [],
         contentBlocks,
-        managedContentProducts: [],
+        managedContentProducts: products,
         heroAutoplayIntervalSeconds: 12,
         configuredBlockTypes,
         coupons: [],
@@ -102,7 +106,7 @@ export function EditorialHomeClient({
         catalogError: null,
         market: {
             code: 'my-malaysia',
-            currencyCode: 'MYR',
+            currencyCode: dailySelection ? 'CNY' : 'MYR',
             countryCode: 'MY',
             defaultLanguageCode: 'zh_Hans',
             locale: 'zh-CN',
@@ -110,15 +114,15 @@ export function EditorialHomeClient({
         },
         locale: language === 'en' ? 'en-MY' : 'zh-CN',
         language: language === 'en' ? 'en' : 'zh',
-        storefrontName: '轮播设计示例',
+        storefrontName: dailySelection ? '每日精选效果预览' : '轮播设计示例',
         storefrontDescription: '',
         storefrontTagline: '',
         logoUrl: null,
         logoOnLightUrl: null,
         couponLoading: false,
-        availableCurrencyCodes: ['MYR'],
+        availableCurrencyCodes: dailySelection ? ['CNY'] : ['MYR'],
         currencySelectorEnabled: false,
-        displayCurrencyCode: 'MYR',
+        displayCurrencyCode: dailySelection ? 'CNY' : 'MYR',
         currencyLoading: false,
         onCategorySelect: () => undefined,
         onToggleLanguage: () => setLanguage(v => (v === 'en' ? 'zh_Hans' : 'en')),
@@ -147,11 +151,13 @@ export function EditorialHomeClient({
                 data-editorial-carousel-controls
             >
                 <strong>
-                    {independentDeviceArtwork
-                        ? '首页双端设计预览 · 电脑 / 手机专用图 · 示例数据'
-                        : referenceArtwork
-                          ? '首页最新设计预览 · 原构图 V2 · 示例数据'
-                          : '首页轮播本地验收 · 示例数据'}
+                    {dailySelection
+                        ? '每日精选双端预览 · 原有商品公开内容快照 · 不保存真实店铺'
+                        : independentDeviceArtwork
+                          ? '首页双端设计预览 · 电脑 / 手机专用图 · 示例数据'
+                          : referenceArtwork
+                            ? '首页最新设计预览 · 原构图 V2 · 示例数据'
+                            : '首页轮播本地验收 · 示例数据'}
                 </strong>
                 <label>
                     语言{' '}

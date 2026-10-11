@@ -3984,6 +3984,16 @@ html[lang='en'] .primary-category-image {
     object-fit: contain;
     filter: none;
 }
+/* Any space around complete device artwork inherits the merchant's frame color. */
+.category-promotion-visual.is-device-poster > .responsive-picture {
+    background: transparent;
+}
+.category-promotion-visual.is-device-poster > .responsive-picture img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: none;
+}
 .category-promotion-poster-copy {
     position: absolute;
     z-index: 2;
