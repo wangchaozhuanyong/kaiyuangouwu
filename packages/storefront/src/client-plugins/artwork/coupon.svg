@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 144" fill="none">
+<view id="compact" viewBox="50 18 215 125"/>
+          <defs>
+            <linearGradient id="gold" x1="70" y1="18" x2="227" y2="130" gradientUnits="userSpaceOnUse"><stop stop-color="#ffe7b5"/><stop offset=".42" stop-color="#e3b768"/><stop offset=".75" stop-color="#b78438"/><stop offset="1" stop-color="#f4d59a"/></linearGradient>
+            <linearGradient id="blue" x1="37" y1="12" x2="208" y2="107" gradientUnits="userSpaceOnUse"><stop stop-color="#396280"/><stop offset="1" stop-color="#12253c"/></linearGradient>
+            <linearGradient id="coin" x1="278" y1="60" x2="321" y2="119" gradientUnits="userSpaceOnUse"><stop stop-color="#fff1c9"/><stop offset=".5" stop-color="#c59751"/><stop offset="1" stop-color="#73481d"/></linearGradient>
+            <radialGradient id="goldGlow"><stop stop-color="#d5ad60" stop-opacity=".22"/><stop offset="1" stop-color="#d5ad60" stop-opacity="0"/></radialGradient>
+            <filter id="goldShadow" x="-40%" y="-60%" width="200%" height="240%"><feDropShadow dx="0" dy="9" stdDeviation="8" flood-color="#000817" flood-opacity=".65"/></filter>
+          </defs>
+          <ellipse cx="190" cy="116" rx="164" ry="26" fill="url(#goldGlow)"/>
+          <path d="M0 130h56l20-14h232l31 14h101M117 142l36-30h64l32 30" stroke="#b9a16f" stroke-opacity=".19"/>
+          <g transform="rotate(-15 139 59)"><path d="M59 20h164a7 7 0 0 1 7 7v17a12 12 0 0 0 0 24v17a7 7 0 0 1-7 7H59a7 7 0 0 1-7-7V68a12 12 0 0 0 0-24V27a7 7 0 0 1 7-7Z" fill="url(#blue)" stroke="#7da5bd" stroke-opacity=".65"/><path d="M192 30v52" stroke="#a9cfdf" stroke-opacity=".4" stroke-dasharray="4 5"/></g>
+          <g transform="rotate(7 164 86)" filter="url(#goldShadow)">
+            <path d="M77 40h167a8 8 0 0 1 8 8v19a12 12 0 0 0 0 24v19a8 8 0 0 1-8 8H77a8 8 0 0 1-8-8V91a12 12 0 0 0 0-24V48a8 8 0 0 1 8-8Z" fill="url(#gold)" stroke="#ffeac4" stroke-width="1.4"/>
+            <path d="M84 48h157v14M84 110h157V96" stroke="#755327" stroke-opacity=".35"/>
+            <path d="M213 50v59" stroke="#8e622f" stroke-dasharray="4 4"/>
+            <circle cx="102" cy="65" r="7" stroke="#6e4920" stroke-width="4"/><circle cx="130" cy="94" r="7" stroke="#6e4920" stroke-width="4"/><path d="m100 96 32-33" stroke="#6e4920" stroke-width="4.5" stroke-linecap="round"/>
+            <path d="M158 64h31M158 76h23M158 98h29" stroke="#87602b" stroke-opacity=".6" stroke-width="3.5" stroke-linecap="round"/>
+            <path d="M229 58v42M233 58v42M238 58v42" stroke="#815b2b" stroke-opacity=".6"/>
+          </g>
+          <g transform="rotate(16 293 93)"><ellipse cx="298" cy="96" rx="27" ry="31" fill="#6d4a25"/><ellipse cx="293" cy="92" rx="27" ry="31" fill="url(#coin)" stroke="#e1ba79"/><ellipse cx="293" cy="92" rx="20" ry="24" stroke="#684822" stroke-opacity=".5"/><path d="m293 78 4 9 9 1-7 7 1 10-7-5-8 5 2-10-7-7 10-1Z" fill="#785025" fill-opacity=".8"/></g>
+          <path d="m38 88 2 6 6 2-6 2-2 6-2-6-6-2 6-2Zm274-62 2 6 6 2-6 2-2 6-2-6-6-2 6-2Z" fill="#eed19b"/><circle cx="325" cy="122" r="2" fill="#b69357"/>
+        </svg>

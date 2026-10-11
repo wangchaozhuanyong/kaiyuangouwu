@@ -345,30 +345,170 @@
         height: 100%;
         min-height: 0;
     }
+}
 
-    .business-services-assistance-sidebar .is-assistance .category-client-plugin {
-        grid-template-columns: 40px minmax(0, 1fr);
-        align-content: center;
-        column-gap: 16px;
-        row-gap: 12px;
-        min-height: 0;
+/* Approved dark illustrated assistance. Only the banner's explicit assistance
+   slot opts in; category entries and the tool directory retain their skins. */
+.category-client-plugin-support.has-assistance-artwork {
+    --service-card-surface: var(--service-promo-support-surface);
+    --service-card-ink: var(--service-promo-support-ink);
+    --service-card-description: var(--service-promo-support-muted);
+    --service-card-action: var(--service-promo-support-action);
+    --service-card-action-ink: var(--service-promo-support-action-ink);
+}
+
+.category-client-plugin-coupon.has-assistance-artwork {
+    --service-card-surface: var(--service-promo-coupon-surface);
+    --service-card-ink: var(--service-promo-coupon-ink);
+    --service-card-description: var(--service-promo-coupon-muted);
+    --service-card-action: var(--service-promo-coupon-action);
+    --service-card-action-ink: var(--service-promo-coupon-action-ink);
+}
+
+.is-business-services-main .is-assistance .has-assistance-artwork {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: var(--service-card-surface);
+    color: var(--service-card-ink);
+}
+
+.has-assistance-artwork::before {
+    content: '';
+    position: absolute;
+    width: 265px;
+    height: 265px;
+    right: -132px;
+    bottom: -190px;
+    border: 1px solid color-mix(in srgb, var(--service-card-action) 18%, transparent);
+    border-radius: 50%;
+    box-shadow:
+        0 0 0 22px color-mix(in srgb, var(--service-card-action) 3%, transparent),
+        0 0 0 45px color-mix(in srgb, var(--service-card-action) 3%, transparent),
+        0 0 0 68px color-mix(in srgb, var(--service-card-action) 2%, transparent);
+    z-index: -1;
+    pointer-events: none;
+}
+
+.has-assistance-artwork .category-client-plugin-icon {
+    display: none;
+}
+
+.is-business-services-main .has-assistance-artwork .category-client-plugin-copy strong {
+    color: var(--service-card-ink);
+}
+
+.is-business-services-main .has-assistance-artwork .category-client-plugin-action {
+    background: var(--service-card-action);
+    color: var(--service-card-action-ink);
+    min-width: 0;
+    min-height: var(--experience-control-min);
+    justify-self: end;
+    z-index: 1;
+}
+
+.is-business-services-main .has-assistance-artwork:hover .category-client-plugin-action {
+    background: color-mix(in srgb, var(--service-card-action), var(--service-card-ink) 15%);
+}
+
+.is-business-services-main .has-assistance-artwork:focus-visible {
+    outline-color: var(--service-card-action);
+}
+
+.category-client-plugin-artwork {
+    position: absolute;
+    left: 8px;
+    bottom: -5px;
+    width: 83%;
+    height: 65%;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.category-client-plugin-artwork img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: left bottom;
+}
+
+@media (min-width: 1024px) {
+    .business-services-assistance-sidebar .is-assistance .has-assistance-artwork {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: minmax(0, 1fr);
+        align-items: center;
+        align-content: stretch;
+        gap: var(--space-12);
         padding: var(--space-24);
+        min-height: 0;
+    }
+
+    .has-assistance-artwork .category-client-plugin-copy {
+        grid-column: 1;
+        align-self: start;
     }
 
     .business-services-assistance-sidebar .category-client-plugin-action {
         grid-column: 2;
-        justify-self: start;
         font-size: var(--type-action-size);
         line-height: var(--type-action-leading);
     }
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
-    .business-services-assistance-sidebar .is-assistance .category-client-plugin {
-        grid-template-columns: 32px minmax(0, 1fr);
-        column-gap: 12px;
-        row-gap: 8px;
+    .business-services-assistance-sidebar .is-assistance .has-assistance-artwork {
         padding: var(--space-16);
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: var(--space-8);
+    }
+
+    .has-assistance-artwork .category-client-plugin-copy {
+        grid-column: 1 / -1;
+    }
+
+    .business-services-assistance-sidebar .category-client-plugin-action {
+        align-self: end;
+    }
+
+    .category-client-plugin-artwork {
+        width: 75%;
+        height: 59%;
+        left: 0;
+        bottom: -7px;
+    }
+}
+
+@media (max-width: 1023px) {
+    .business-services-assistance-sidebar .is-assistance .has-assistance-artwork {
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+        padding: var(--space-8) var(--space-12);
+        column-gap: var(--space-8);
+    }
+
+    .has-assistance-artwork .category-client-plugin-copy {
+        grid-column: 2;
+        gap: var(--space-4);
+    }
+
+    .has-assistance-artwork .category-client-plugin-action {
+        grid-column: 3;
+        padding-inline: var(--space-8);
+        gap: var(--space-4);
+    }
+
+    .category-client-plugin-artwork {
+        left: var(--space-8);
+        top: 50%;
+        bottom: auto;
+        width: 44px;
+        height: 44px;
+        transform: translateY(-50%);
+    }
+
+    .category-client-plugin-artwork img {
+        object-position: center;
     }
 }
 
