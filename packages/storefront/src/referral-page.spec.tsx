@@ -118,7 +118,9 @@ describe('referral page reward summary', () => {
         const markup = renderReferralPage();
         expect(markup).toContain('我的邀请码');
         expect(markup).toContain('INVITE88');
-        const linkLabel = markup.match(/<label class="sr-only" for="([^"]+)">邀请链接<\/label>/);
+        const linkLabel = markup.match(
+            /<label class="referral-invite-link-label" for="([^"]+)">邀请链接<\/label>/,
+        );
         expect(linkLabel).not.toBeNull();
         expect(markup).toContain(`<input id="${linkLabel?.[1]}" class="referral-invite-url"`);
         expect(markup).toMatch(/<input[^>]*value="https:\/\/storefront.example.com\/register\?ref=INVITE88/);
@@ -127,10 +129,16 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('复制邀请码');
     });
 
-    it('groups four metrics in one panel and moves reward guidance into an accessible info control', () => {
+    it('prioritizes the available balance above compact details and accessible reward guidance', () => {
         const markup = renderReferralPage();
 
-        expect(markup.match(/class="referral-stat(?: is-prominent)?"/g)).toHaveLength(4);
+        expect(markup.match(/class="referral-stat(?: is-prominent)?"/g)).toHaveLength(6);
+        expect(markup.match(/class="referral-stat is-prominent"/g)).toHaveLength(1);
+        expect(markup).toContain('class="referral-balance-summary"');
+        expect(markup).toContain('class="referral-reward-details"');
+        expect(markup).toContain('2 人');
+        expect(markup).toContain('1 人');
+        expect(markup).not.toContain('referral-stat-grid');
         expect(markup).toContain('class="referral-reward-help-trigger"');
         expect(markup).toContain('aria-label="查看奖励说明"');
         expect(markup).toContain('aria-expanded="false"');
@@ -154,7 +162,7 @@ describe('referral page reward summary', () => {
         expect(markup).not.toContain('奖励、生效、退款扣回与消费抵扣全程留痕');
     });
 
-    it('uses the shared skin without clipping reward totals', () => {
+    it('uses shared panel classes without clipping reward totals', () => {
         const markup = renderReferralPage();
         expect(markup).toContain('class="referral-overview"');
         expect(markup).not.toContain('bg-white');

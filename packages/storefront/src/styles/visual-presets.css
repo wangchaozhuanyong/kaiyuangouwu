@@ -63,6 +63,26 @@ html[data-storefront-preset] {
     --skin-referral-focus: var(--accent-foreground);
     --skin-referral-link-surface: var(--surface);
     --skin-referral-link-ink: var(--text);
+    /* REFERRAL_CORAL_ICE_20261012: fixed roles for the two approved panels,
+       independent of merchant palette/inline --skin-referral-* variables. */
+    --referral-invite-surface: #fff0e9;
+    --referral-invite-ink: #562f28;
+    --referral-invite-muted: #75534b;
+    --referral-invite-action: #b74630;
+    --referral-invite-action-hover: #9e3826;
+    --referral-invite-action-pressed: #873020;
+    --referral-invite-on-action: #ffffff;
+    --referral-invite-control: #ffffff;
+    --referral-invite-control-hover: #ffe2d5;
+    --referral-invite-control-pressed: #f9d5c5;
+    --referral-invite-control-border: #bb7868;
+    --referral-invite-focus: #873020;
+    --referral-reward-surface: #eef3fc;
+    --referral-reward-ink: #20385d;
+    --referral-reward-muted: #5c6e87;
+    --referral-reward-divider: #d5dfed;
+    --referral-reward-help-surface: #ffffff;
+    --referral-reward-focus: #20385d;
     --skin-coupon-tint: initial;
     --skin-coupon-action-surface: initial;
     --skin-coupon-action-hover: initial;

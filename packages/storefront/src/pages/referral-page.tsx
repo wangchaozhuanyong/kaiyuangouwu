@@ -28,7 +28,7 @@ import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { ReferralPageContext } from '../storefront-page-contexts';
 import { EmptyState, Subpage, SubpageBody } from '../storefront-ui/page-shell';
-import { formatMoney } from '../storefront-ui/product-display';
+import { formatMoney, PriceDisplay } from '../storefront-ui/product-display';
 import { ActiveCustomer, MarketConfig, ReferralLedgerEntry, StorefrontLanguage } from '../types';
 
 import '../styles/referral.css';
@@ -216,7 +216,7 @@ export function ReferralPage() {
                             <strong className="referral-invite-code-value">{overview.inviteCode}</strong>
                         </div>
                         <div className="referral-invite-link">
-                            <label className="sr-only" htmlFor={`${recordId}-link`}>
+                            <label className="referral-invite-link-label" htmlFor={`${recordId}-link`}>
                                 {isZh ? '邀请链接' : 'Invitation link'}
                             </label>
                             <input
@@ -273,55 +273,60 @@ export function ReferralPage() {
                             <h2 id={`${recordId}-overview`}>{isZh ? '奖励概览' : 'Reward overview'}</h2>
                             <RewardInfo isZh={isZh} releaseDelayDays={overview.releaseDelayDays} />
                         </div>
-                        <dl className="referral-stat-grid">
+                        <dl className="referral-balance-summary">
                             <SummaryCard
-                                icon={<WalletCards />}
                                 label={isZh ? '可用奖励' : 'Available rewards'}
-                                value={formatMoney(
-                                    wallet?.availableBalance ?? 0,
-                                    market.currencyCode,
-                                    locale,
-                                )}
+                                value={
+                                    <PriceDisplay
+                                        value={wallet?.availableBalance ?? 0}
+                                        currency={market.currencyCode}
+                                        locale={locale}
+                                    />
+                                }
                                 prominent
                             />
                             <SummaryCard
-                                icon={<Gift />}
                                 label={isZh ? '待生效' : 'Pending rewards'}
-                                value={formatMoney(wallet?.pendingBalance ?? 0, market.currencyCode, locale)}
-                                prominent
+                                value={
+                                    <PriceDisplay
+                                        value={wallet?.pendingBalance ?? 0}
+                                        currency={market.currencyCode}
+                                        locale={locale}
+                                    />
+                                }
                             />
+                        </dl>
+                        <dl className="referral-reward-details">
                             <SummaryCard
                                 icon={<Users />}
                                 label={isZh ? '已邀请' : 'Invited'}
-                                value={String(overview.invitedCount)}
+                                value={isZh ? `${overview.invitedCount} 人` : String(overview.invitedCount)}
                             />
                             <SummaryCard
                                 icon={<ShoppingBag />}
                                 label={isZh ? '已消费好友' : 'Purchased friends'}
-                                value={String(overview.purchasedInviteeCount)}
+                                value={
+                                    isZh
+                                        ? `${overview.purchasedInviteeCount} 人`
+                                        : String(overview.purchasedInviteeCount)
+                                }
                             />
-                        </dl>
-                        <dl className="referral-reward-totals">
-                            <div>
-                                <dt>{isZh ? '累计获得' : 'Total earned'}</dt>
-                                <dd>
-                                    {formatMoney(
-                                        rewardSummary?.grossReward ?? 0,
-                                        market.currencyCode,
-                                        locale,
-                                    )}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt>{isZh ? '退款扣回' : 'Refund clawbacks'}</dt>
-                                <dd>
-                                    {formatMoney(
-                                        rewardSummary?.clawedBackReward ? -rewardSummary.clawedBackReward : 0,
-                                        market.currencyCode,
-                                        locale,
-                                    )}
-                                </dd>
-                            </div>
+                            <SummaryCard
+                                label={isZh ? '累计获得' : 'Total earned'}
+                                value={formatMoney(
+                                    rewardSummary?.grossReward ?? 0,
+                                    market.currencyCode,
+                                    locale,
+                                )}
+                            />
+                            <SummaryCard
+                                label={isZh ? '退款扣回' : 'Refund clawbacks'}
+                                value={formatMoney(
+                                    rewardSummary?.clawedBackReward ? -rewardSummary.clawedBackReward : 0,
+                                    market.currencyCode,
+                                    locale,
+                                )}
+                            />
                         </dl>
                     </section>
                     <section
@@ -493,17 +498,19 @@ function SummaryCard({
     value,
     prominent = false,
 }: {
-    icon: React.ReactNode;
+    icon?: React.ReactNode;
     label: string;
-    value: string;
+    value: React.ReactNode;
     prominent?: boolean;
 }) {
     return (
         <div className={prominent ? 'referral-stat is-prominent' : 'referral-stat'}>
             <dt>
-                <span className="referral-stat-icon" aria-hidden="true">
-                    {icon}
-                </span>
+                {icon && (
+                    <span className="referral-stat-icon" aria-hidden="true">
+                        {icon}
+                    </span>
+                )}
                 {label}
             </dt>
             <dd>{value}</dd>

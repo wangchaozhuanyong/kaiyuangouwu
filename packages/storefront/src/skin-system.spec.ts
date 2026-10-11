@@ -169,7 +169,7 @@ describe('storefront skin system', () => {
         }
     });
 
-    it('keeps the referral page on the active skin without local palette overrides', () => {
+    it('consumes fixed referral panel roles without page-local palette overrides', () => {
         const css = postcss.parse(stylesheet('./styles/referral.css'));
         css.walkDecls(declaration => {
             expect(declaration.prop).not.toMatch(/^--/u);
@@ -305,11 +305,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // Centered referral totals use one subtle reading divider from the active skin.
+                        // Approved fixed reward layout: balance grouping and adjacent detail rows.
                         if (
-                            functionalKey === 'styles/referral.css|.referral-reward-totals::before' &&
-                            border[1] === 'inline' &&
-                            border[2].trim() === '1px solid var(--skin-divider)'
+                            [
+                                'styles/referral.css|.referral-balance-summary > .referral-stat + .referral-stat|inline',
+                                'styles/referral.css|.referral-reward-details|top',
+                                'styles/referral.css|.referral-reward-details > .referral-stat + .referral-stat|top',
+                            ].includes(`${functionalKey}|${border[1]}`) &&
+                            border[2].trim() === '1px solid var(--referral-reward-divider)'
                         ) {
                             continue;
                         }
