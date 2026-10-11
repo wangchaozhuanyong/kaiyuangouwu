@@ -551,7 +551,8 @@ export class MerchantCatalogAccessService {
             await this.assertSensitiveStoreOrderOperation(ctx, fieldName, args);
         }
         if (this.isPlatformOrderMutation(fieldName)) {
-            throw new ForbiddenError();
+            if (fieldName !== 'setOrderCustomFields') throw new ForbiddenError();
+            await this.assertStoreOrderSupplementAccess(ctx, args);
         }
 
         const inputs = this.getInputs(args);
@@ -578,6 +579,38 @@ export class MerchantCatalogAccessService {
 
     private isPlatformOrderMutation(fieldName: string): boolean {
         return platformOrderMutations.has(fieldName);
+    }
+
+    private async assertStoreOrderSupplementAccess(
+        ctx: RequestContext,
+        args: Record<string, unknown>,
+    ): Promise<void> {
+        const input = args.input as { id?: unknown; customFields?: unknown } | undefined;
+        if (
+            !ctx.userHasPermissions([Permission.SuperAdmin]) ||
+            !input ||
+            Array.isArray(input) ||
+            !['string', 'number'].includes(typeof input.id) ||
+            input.id === ''
+        ) {
+            throw new ForbiddenError();
+        }
+        const fields = input.customFields;
+        if (
+            !fields ||
+            typeof fields !== 'object' ||
+            Array.isArray(fields) ||
+            Object.keys(fields).length === 0 ||
+            Object.entries(fields).some(
+                ([key, value]) =>
+                    !['customerNote', 'deliveryEmail'].includes(key) ||
+                    (value !== null && typeof value !== 'string'),
+            )
+        ) {
+            throw new ForbiddenError();
+        }
+        // Order ownership uses the immutable sales Channel, never shared channel memberships.
+        await this.assertEntitiesBelongToActiveChannel(ctx, Order, [input.id as ID]);
     }
 
     private async assertDraftOrderOperation(
