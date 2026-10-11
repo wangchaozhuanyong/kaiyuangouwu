@@ -12,6 +12,8 @@ export interface ResourceOwner {
     loading: boolean;
     hasData: boolean;
     error?: unknown;
+    /** Apollo observables can share a network request while receiving individual refresh state. */
+    refetchPeers?: boolean;
     fetch: () => Promise<unknown>;
 }
 interface Resource {
@@ -232,15 +234,35 @@ export class AdminQueryRuntime {
         const item = this.resources.get(key);
         if (!item) return Promise.resolve(undefined);
         if (item.pending) return item.pending;
-        const owner = [...item.owners.values()].find(value => value.active);
-        if (!owner) {
+        const owners = [...item.owners.values()].filter(value => value.active);
+        const participants = owners[0]?.refetchPeers
+            ? owners.filter(value => value.refetchPeers)
+            : owners.slice(0, 1);
+        const fetches = [...new Set(participants.map(value => value.fetch))];
+        if (!fetches.length) {
             item.invalidatedAt = this.now() || 1;
             return Promise.resolve(undefined);
         }
         // Store the promise before executing fetch so simultaneous callers join it.
         const invalidation = item.invalidatedAt;
         item.pending = Promise.resolve()
-            .then(owner.fetch)
+            .then(() =>
+                Promise.allSettled(
+                    fetches.map(fetch => {
+                        try {
+                            return fetch();
+                        } catch (error) {
+                            return Promise.reject(error);
+                        }
+                    }),
+                ),
+            )
+            .then(results => {
+                const first = results[0];
+                if (first.status === 'rejected') throw first.reason;
+                // Peers retain their own error policies; callers keep the original owner's result.
+                return first.value;
+            })
             .then(result => {
                 item.updatedAt = this.now();
                 if (item.invalidatedAt === invalidation) item.invalidatedAt = 0;
