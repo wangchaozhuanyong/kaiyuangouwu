@@ -97,4 +97,17 @@ describe('standalone administration navigation', () => {
         expect(standalonePagePermissions(getStandaloneAdminPage(path)!)).toEqual(['SuperAdmin']);
         expect(standalonePageScopeAllows('/settings/system-ops/api-keys', false)).toBe(true);
     });
+    it('opens channel-scoped risk cases in a store without changing administrator permissions or shared governance scope', () => {
+        const path = '/settings/governance-risk/cases';
+        expect(standalonePageScopeAllows(path, false)).toBe(true);
+        expect(standalonePageScopeAllows(path, true)).toBe(true);
+        const permissions = standalonePagePermissions(getStandaloneAdminPage(path)!)!;
+        expect(permissions).toEqual(['SuperAdmin']);
+        expect(hasAnyAdminPermission(['SuperAdmin'], permissions)).toBe(true);
+        expect(hasAnyAdminPermission(['ReadOrder', 'UpdateOrder'], permissions)).toBe(false);
+        for (const key of ['rules', 'approvals', 'audit', 'reports', 'report-schedule']) {
+            expect(standalonePageScopeAllows(`/settings/governance-risk/${key}`, false)).toBe(false);
+            expect(standalonePageScopeAllows(`/settings/governance-risk/${key}`, true)).toBe(true);
+        }
+    });
 });
