@@ -7,6 +7,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 import { authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
 
 import { authOverlayLoginRoute } from './auth-overlay-navigation-actions';
+import { AuthOverlayLoading } from './auth-overlay-surface';
 import { AuthPresentationContext } from './auth-presentation';
 import { findAuthVisualContent } from './auth-visual-content';
 import { LazyForgotPasswordPage, LazyLoginPage, LazyRegisterPage } from './lazy-storefront-pages';
@@ -160,9 +161,12 @@ export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest
                     >
                         <Suspense
                             fallback={
-                                <p className="type-body" role="status">
-                                    {isZh ? '正在加载表单…' : 'Loading form…'}
-                                </p>
+                                <AuthOverlayLoading
+                                    mode={request.mode}
+                                    language={runtime.language}
+                                    content={visualContent}
+                                    settings={runtime.authSettings}
+                                />
                             }
                         >
                             {request.mode === 'register' ? (

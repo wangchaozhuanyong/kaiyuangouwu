@@ -1,7 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { CheckboxField, Field, SettingsContentSkeleton, SettingsFormGrid, inputClass } from './settings-ui';
+import {
+    CheckboxField,
+    Field,
+    LoadingState,
+    SettingsContentSkeleton,
+    SettingsFormGrid,
+    inputClass,
+} from './settings-ui';
 
 describe('settings form layout', () => {
     it('gives every field the same header rhythm and responsive grid boundary', () => {
@@ -41,4 +48,12 @@ describe('SettingsContentSkeleton', () => {
         expect(html).toContain('min-h-[620px]');
         expect(html.match(/<section/g)).toHaveLength(4);
     });
+});
+
+it('uses the shared settings structure for legacy LoadingState callers', () => {
+    const html = renderToStaticMarkup(<LoadingState label="正在读取返利" />);
+    expect(html).toContain('aria-label="正在读取返利"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html.match(/<section/g)).toHaveLength(3);
+    expect(html).not.toContain('animate-spin');
 });

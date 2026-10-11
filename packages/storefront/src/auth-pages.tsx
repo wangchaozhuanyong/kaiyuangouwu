@@ -29,6 +29,7 @@ import { ContentText } from '../../storefront-content-plugin/src/shared/content-
 import { useImageTextContrast } from '../../storefront-content-plugin/src/shared/image-tone';
 
 import { ShopApi, ShopApiError } from './api';
+import { AuthFormIntro, AuthOverlaySurface } from './auth-overlay-surface';
 import { AuthPresentationContext, type AuthPresentationRoute } from './auth-presentation';
 import {
     ACCOUNT_PASSWORD_MAX_LENGTH,
@@ -233,36 +234,6 @@ function AuthBrand({ logoUrl, storefrontName }: { logoUrl?: string | null; store
                 <strong>{storefrontName}</strong>
             )}
         </div>
-    );
-}
-
-function AuthFormIntro({
-    variant,
-    language,
-    content,
-}: {
-    variant: 'login' | 'register';
-    language: StorefrontLanguage;
-    content?: StorefrontContentBlock;
-}) {
-    const overlay = useContext(AuthPresentationContext);
-    const presentation = authPresentation(content, variant, language);
-    const configuredSubtitle = content?.settings?.[`formSubtitle${language === 'zh' ? 'Zh' : 'En'}`];
-    const subtitle =
-        overlay && !(typeof configuredSubtitle === 'string' && configuredSubtitle.trim())
-            ? variant === 'login'
-                ? language === 'zh'
-                    ? '登录后管理订单与服务'
-                    : 'Sign in to manage your orders and services'
-                : language === 'zh'
-                  ? '创建账户，探索更多商品与服务'
-                  : 'Create an account to explore products and services'
-            : presentation.subtitle;
-    return (
-        <header className={`auth-form-heading auth-form-heading-${language}`}>
-            <h1>{presentation.title}</h1>
-            <p>{subtitle}</p>
-        </header>
     );
 }
 
@@ -1473,17 +1444,9 @@ function AuthLayout({
 
     if (overlay) {
         return (
-            <section
-                className="page auth-page auth-page-overlay"
-                aria-label={title}
-                style={authVisualStyle(heroContent)}
-            >
-                <div className="login-content">
-                    <div className="auth-form-column">
-                        <div className="auth-card-content">{children}</div>
-                    </div>
-                </div>
-            </section>
+            <AuthOverlaySurface title={title} content={heroContent}>
+                {children}
+            </AuthOverlaySurface>
         );
     }
 

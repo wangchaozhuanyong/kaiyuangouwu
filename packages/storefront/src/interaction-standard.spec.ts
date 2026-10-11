@@ -20,6 +20,18 @@ describe('storefront interaction architecture guard', () => {
         ])
             expect(checkInteractionSource('pages/new-page.tsx', source).length).toBeGreaterThan(0);
     });
+    it('rejects text-only lazy fallbacks while accepting shared structural surfaces', () => {
+        expect(
+            checkInteractionSource(
+                'pages/future-page.tsx',
+                '<Suspense fallback={<p role="status">Loading</p>}/>',
+            ),
+        ).not.toEqual([]);
+        expect(
+            checkInteractionSource('pages/future-page.tsx', '<Suspense fallback={<PageSkeleton/>}/>'),
+        ).toEqual([]);
+        expect(checkInteractionSource('pages/future-page.tsx', '<Suspense fallback={null}/>')).toEqual([]);
+    });
     it('permits explicit joining and restricts full reload to version recovery', () => {
         expect(
             checkInteractionSource('pages/new-page.tsx', 'query.refetch({ cancelRefetch: false })'),

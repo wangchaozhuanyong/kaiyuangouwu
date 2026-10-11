@@ -308,13 +308,8 @@ export function EmptyState({
 
 // ─── LoadingState ────────────────────────────────────────────────────────────
 
-export function LoadingState() {
-    return (
-        <div className="flex min-h-96 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-500">
-            <LoaderCircle className="h-4 w-4 animate-spin" />
-            正在读取真实店铺配置…
-        </div>
-    );
+export function LoadingState({ label = '正在读取真实店铺配置…' }: { label?: string } = {}) {
+    return <SettingsContentSkeleton label={label} />;
 }
 
 export function SettingsContentSkeleton({ label, sections = 2 }: { label: string; sections?: number }) {

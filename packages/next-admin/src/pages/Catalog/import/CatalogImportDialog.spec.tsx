@@ -81,10 +81,11 @@ describe('CatalogImportDialog target selection', () => {
             );
         });
 
-        const targetShop = Array.from(container.querySelectorAll('label')).find(label =>
+        const dialog = document.querySelector('[role=dialog][aria-label="商品安全导入中心"]')!;
+        const targetShop = Array.from(dialog.querySelectorAll('label')).find(label =>
             label.textContent?.includes('目标店铺'),
         );
-        const targetWarehouse = Array.from(container.querySelectorAll('label')).find(label =>
+        const targetWarehouse = Array.from(dialog.querySelectorAll('label')).find(label =>
             label.textContent?.includes('目标仓库'),
         );
         expect(targetShop?.querySelector('input')?.value).toBe('大马通');

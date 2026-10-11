@@ -195,8 +195,6 @@
     color: transparent;
     background: var(--soft);
     border-radius: var(--skin-control-radius);
-    font-size: var(--type-product-subtitle-size);
-    line-height: var(--type-product-subtitle-leading);
 }
 
 .product-card-skeleton .product-card-subtitle {

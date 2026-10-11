@@ -264,6 +264,7 @@ export function DesktopCatalogPage() {
                     >
                         {catalogLoading && !error ? (
                             <ListSkeleton
+                                className="desktop-product-grid"
                                 layout="products"
                                 label={isZh ? '正在加载商品' : 'Loading products'}
                             />

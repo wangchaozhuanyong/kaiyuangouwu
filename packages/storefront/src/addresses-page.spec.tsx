@@ -848,14 +848,14 @@ describe('AddressesPage asynchronous contact readiness', () => {
         if (failure === 'offline') onlineManager.setOnline(false);
         else readMode.mockRejectedValueOnce(new Error('Synthetic mode failure'));
         render();
-        await eventually(() =>
+        await eventually(() => {
             expect(
                 failure === 'offline'
                     ? client.getQueryState(modeKey())?.fetchStatus
                     : client.getQueryState(modeKey())?.status,
-            ).toBe(failure === 'offline' ? 'paused' : 'error'),
-        );
-        expect(host.querySelector('[role="alert"]')).not.toBeNull();
+            ).toBe(failure === 'offline' ? 'paused' : 'error');
+            expect(host.querySelector('[role="alert"]')).not.toBeNull();
+        });
         expect(host.textContent).not.toContain('还没有收货地址');
         expect(host.querySelector('[aria-label="新增地址"]')).toBeNull();
         const retry = button('重试');

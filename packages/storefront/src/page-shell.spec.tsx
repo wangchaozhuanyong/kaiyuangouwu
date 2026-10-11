@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AsyncRouteStatePage, SubHeader, Subpage } from './storefront-ui/page-shell';
+import { AsyncRouteStatePage, ListSkeleton, SubHeader, Subpage } from './storefront-ui/page-shell';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('Subpage surface', () => {
@@ -117,5 +117,33 @@ describe('AsyncRouteStatePage layout', () => {
 
         expect(markup).toContain('subpage-header');
         expect(markup).toContain('My orders');
+    });
+});
+
+describe('shared list loading layout', () => {
+    it('keeps the destination grid and accessible status without fake product links', () => {
+        const html = renderToStaticMarkup(
+            <ListSkeleton
+                layout="products"
+                className="desktop-product-grid"
+                count={12}
+                label="Loading products"
+            />,
+        );
+        expect(html).toContain('desktop-product-grid');
+        expect(html.match(/class="product-card product-card-skeleton"/g)).toHaveLength(12);
+        expect(html).toContain('aria-busy="true"');
+        expect(html).toContain('aria-label="Loading products"');
+        expect(html).not.toContain('<a');
+        expect(html).not.toContain('brand-loading');
+    });
+    it('keeps compact row structure without advertising unfinished products', () => {
+        const html = renderToStaticMarkup(
+            <ListSkeleton layout="compact" className="product-list" count={2} showDescription={false} />,
+        );
+        expect(html.match(/product-row-skeleton is-compact/g)).toHaveLength(2);
+        expect(html).toContain('product-row-bottom');
+        expect(html).not.toContain('product-row-desc');
+        expect(html).not.toContain('<button');
     });
 });

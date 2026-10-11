@@ -1,22 +1,14 @@
 import { SectionHeader } from '../../storefront-ui/page-shell';
+import '../../styles/search-layout.css';
 import '../../styles/search-loading.css';
 
-/** Uses the same product-row geometry before the recommendation query resolves. */
+import { ProductSkeletonItems } from './product-skeleton';
+
+/** The module and data waits share the same compact ProductRow placeholders. */
 export function SearchRecommendationSkeleton({ count = 10 }: { count?: number }) {
     return (
-        <div className="search-recommendation-list search-loading-skeleton" aria-hidden="true">
-            {Array.from({ length: count }, (_, index) => (
-                <div className="product-row is-compact" key={index}>
-                    <div className="product-row-image skeleton-block" />
-                    <div className="product-row-content">
-                        <div className="product-row-top">
-                            <span className="skeleton-block search-loading-name" />
-                            <span className="skeleton-block search-loading-meta" />
-                        </div>
-                        <span className="skeleton-block search-loading-price" />
-                    </div>
-                </div>
-            ))}
+        <div className="search-recommendation-list" aria-hidden="true">
+            <ProductSkeletonItems count={count} layout="compact" showDescription={false} />
         </div>
     );
 }
@@ -45,6 +37,9 @@ export function EmbeddedSearchLoading({
                         <section className="search-recent">
                             <header>
                                 <h2>{isZh ? '最近搜索' : 'Recent searches'}</h2>
+                                <div className="search-history-actions" aria-hidden="true">
+                                    <span className="skeleton-block search-loading-action" />
+                                </div>
                             </header>
                             <div className="search-tags" aria-hidden="true">
                                 <span className="skeleton-block search-loading-tag" />
@@ -59,7 +54,7 @@ export function EmbeddedSearchLoading({
                                 {Array.from({ length: categoryCount }, (_, index) => (
                                     <div className="search-loading-category" key={index}>
                                         <span className="skeleton-block search-loading-icon" />
-                                        <span className="skeleton-block search-loading-name" />
+                                        <span className="skeleton-block search-loading-name">&nbsp;</span>
                                     </div>
                                 ))}
                             </div>
@@ -79,7 +74,7 @@ export function EmbeddedSearchLoading({
                                   : "Today's picks"
                         }
                     />
-                    <SearchRecommendationSkeleton />
+                    <SearchRecommendationSkeleton count={results ? 12 : 10} />
                 </section>
             </div>
         </div>

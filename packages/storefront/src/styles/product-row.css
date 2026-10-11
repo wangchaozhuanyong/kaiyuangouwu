@@ -205,3 +205,25 @@
     background: transparent;
     box-shadow: none;
 }
+
+/* Skeletons consume the same row boxes instead of maintaining another geometry. */
+.product-row-skeleton
+    :is(.product-row-name, .product-row-desc, .product-row-badge, .price-lockup, .product-row-stock) {
+    background: var(--soft);
+    border-radius: var(--skin-control-radius);
+    color: transparent;
+}
+.product-row-skeleton .product-row-name {
+    width: 80%;
+}
+.product-row-skeleton .product-row-desc,
+.product-row-skeleton .product-row-badge {
+    width: 65%;
+}
+.product-row-skeleton .product-row-stock {
+    width: 20%;
+}
+.product-row-skeleton .price-lockup {
+    display: inline-block;
+    min-width: 48px;
+}

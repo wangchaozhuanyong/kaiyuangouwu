@@ -12,10 +12,10 @@ import { AdminButton, PAGE_REFRESH_EVENT, type PageRefreshRequest } from './Admi
 import { AdminOverlayHost } from './AdminOverlayHost';
 import { PageErrorBoundary } from './PageErrorBoundary';
 
-export function PageSkeleton() {
+export function PageSkeleton({ label = '正在加载页面' }: { label?: string }) {
     return (
-        <div className="admin-page-skeleton" role="status" aria-label="正在加载页面">
-            <span className="sr-only">正在加载页面…</span>
+        <div className="admin-page-skeleton" role="status" aria-label={label} aria-busy="true">
+            <span className="sr-only">{label}</span>
             <div className="h-7 w-48 rounded bg-slate-200" />
             <div className="h-10 rounded bg-slate-100" />
             {Array.from({ length: 5 }, (_, index) => (

@@ -1,6 +1,5 @@
-.search-page {
-    background: var(--surface);
-}
+/* Search-specific controls remain owned by the lazy route. */
+
 .search-page .search-header {
     position: sticky;
     top: 0;
@@ -76,92 +75,6 @@
     width: 15px;
     height: 15px;
 }
-.search-page :is(.search-discovery, .search-results, .search-suggestions) {
-    width: 100%;
-    margin: 0;
-    padding: 16px var(--page-section-inset, var(--experience-page-gutter-mobile)) 32px;
-    background: transparent;
-}
-.search-discovery > section + section {
-    margin-top: 28px;
-}
-.search-page :is(.search-recent, .search-discover-terms, .search-browse) > header,
-.search-page .section-header,
-.search-results-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 24px;
-    margin: 0 0 12px;
-    padding: 0;
-}
-.search-page :is(.search-recent, .search-discover-terms, .search-browse) h2,
-.search-page .section-header h2,
-.search-results-heading h2 {
-    margin: 0;
-    color: var(--text);
-    font-size: var(--type-section-size);
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--type-section-leading);
-}
-.search-page :is(.search-recent, .search-discover-terms, .search-browse) > header > span,
-.search-page .section-header-end-subtitle,
-.search-results-heading > span {
-    min-width: 0;
-    margin: 0 0 0 auto;
-    color: var(--muted);
-    font-size: var(--type-helper-size);
-    line-height: var(--type-helper-leading);
-    text-align: right;
-}
-.search-page .section-header-title-lockup {
-    flex-shrink: 0;
-}
-.search-history-actions {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 10px;
-}
-.search-history-actions button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 32px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: var(--muted);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-}
-.search-history-actions svg {
-    width: 13px;
-    height: 13px;
-}
-.search-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.search-tags > button {
-    max-width: 100%;
-    min-height: 32px;
-    padding: 6px 12px;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface, var(--soft));
-    color: var(--text);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-    overflow-wrap: anywhere;
-}
-.search-tags > small {
-    color: var(--muted);
-    font-size: var(--type-meta-size);
-    line-height: var(--type-meta-leading);
-}
 .search-term-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -191,53 +104,6 @@
     margin-left: auto;
     flex: none;
     color: var(--muted);
-}
-.search-category-links {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
-}
-.search-category-links button {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    min-height: 64px;
-    padding: 4px 0;
-    border: 0;
-    background: transparent;
-    color: var(--text);
-    font-size: var(--type-label-size);
-    line-height: var(--type-label-leading);
-}
-.search-category-links :is(img, svg, .safe-image-frame) {
-    width: 28px;
-    height: 28px;
-    flex: none;
-}
-.search-category-links .safe-image-frame > .safe-image {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-.search-category-links span {
-    width: 100%;
-    overflow-wrap: anywhere;
-    text-align: center;
-    line-height: var(--line-height-body);
-}
-.search-page .product-section {
-    margin: 0;
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-}
-.search-page .search-discovery > .product-section {
-    margin-top: 28px;
 }
 .search-page .product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -378,9 +244,6 @@
 .search-page .search-results > .product-section {
     margin-top: 28px;
 }
-.search-empty .search-browse {
-    margin-top: 16px;
-}
 .search-load-error {
     display: flex;
     align-items: center;
@@ -440,9 +303,6 @@
         display: block;
         background: var(--surface);
     }
-    .search-page :is(.search-discovery, .search-results, .search-suggestions) {
-        padding-inline: var(--page-section-inset, var(--experience-page-gutter-mobile));
-    }
     .search-page .search-header {
         position: static;
         grid-template-columns: var(--experience-control-min) minmax(0, 1fr) 64px auto;
@@ -456,31 +316,8 @@
         line-height: var(--type-meta-leading);
         white-space: nowrap;
     }
-    .search-page .search-discovery {
-        display: grid;
-        grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
-        grid-template-rows: auto auto 1fr;
-        align-items: start;
-        gap: 28px 32px;
-    }
     .search-page .search-term-list {
         grid-template-columns: minmax(0, 1fr);
-    }
-    .search-page .search-discovery .product-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 24px 12px;
-    }
-    .search-discovery > section {
-        grid-column: 1;
-        margin: 0;
-    }
-    .search-discovery > section + section {
-        margin-top: 0;
-    }
-    .search-page .search-discovery > .product-section {
-        grid-column: 2;
-        grid-row: 1 / span 3;
-        margin: 0;
     }
     .search-page .search-suggestions {
         width: min(100%, 760px);
@@ -499,9 +336,6 @@
     }
 }
 @media (min-width: 1280px) {
-    .search-page .search-discovery .product-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-    }
     .search-page .search-results .product-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
     }
@@ -513,55 +347,4 @@
     .search-term-list {
         gap: 0 16px;
     }
-}
-
-.search-page.is-embedded-search {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-}
-.search-page.is-embedded-search :is(.search-discovery, .search-results, .search-suggestions) {
-    width: 100%;
-    padding: 12px 20px 20px;
-}
-.search-page.is-embedded-search .search-discovery {
-    grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    gap: 24px;
-}
-.search-page.is-embedded-search .search-discovery > .product-section {
-    grid-row: 1 / span 2;
-}
-.search-page.is-embedded-search .search-recommendation-list,
-.search-page.is-embedded-search .search-results .product-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px 16px;
-}
-.search-page.is-embedded-search .search-discovery .product-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.search-page.is-embedded-search .search-load-more {
-    grid-column: 1 / -1;
-}
-.search-category-group {
-    min-width: 0;
-}
-.search-category-group > button {
-    width: 100%;
-}
-.search-page.is-embedded-search .search-category-links {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-}
-.search-page.is-embedded-search .search-category-links button {
-    flex-direction: row;
-    justify-content: flex-start;
-    min-height: 44px;
-    text-align: left;
-}
-
-.search-page.is-embedded-search .search-category-links span {
-    width: auto;
-    text-align: left;
 }

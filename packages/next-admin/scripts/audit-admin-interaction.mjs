@@ -105,6 +105,20 @@ export function auditAdminInteraction(root = defaultSourceRoot) {
                 jsxAttribute(node, 'type')?.getText(tree) ?? '',
             );
         function visit(node) {
+            if (
+                ts.isJsxAttribute(node) &&
+                node.name.text === 'fallback' &&
+                node.initializer &&
+                ts.isJsxExpression(node.initializer)
+            ) {
+                const fallback = node.initializer.expression;
+                if (
+                    fallback &&
+                    ts.isJsxElement(fallback) &&
+                    ['p', 'span'].includes(fallback.openingElement.tagName.getText(tree))
+                )
+                    fail(node, '懒加载占位必须使用对应布局骨架，不能只显示一行文字');
+            }
             if (ts.isJsxElement(node) && jsxTag(node) === 'label') {
                 const children = node.children.filter(child => !ts.isJsxText(child) || child.text.trim());
                 const controlIndex = children.findIndex(isShortControl);
