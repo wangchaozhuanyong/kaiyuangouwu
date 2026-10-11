@@ -701,6 +701,7 @@ export interface StorefrontPaymentAttemptReceipt {
     requestId: string;
     status: 'NOT_FOUND' | 'PROCESSING' | 'APPLIED' | 'REJECTED' | 'NOT_EXECUTED' | 'UNKNOWN';
     errorCode: string | null;
+    order?: Order | null;
 }
 
 export interface ActiveCustomer {

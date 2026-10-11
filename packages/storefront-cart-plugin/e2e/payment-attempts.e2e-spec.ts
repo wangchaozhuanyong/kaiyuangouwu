@@ -12,12 +12,14 @@ import { StorefrontCartPlugin } from '../src/storefront-cart.plugin';
 // Synthetic local provider only. No network, charge, fulfillment or production configuration.
 let providerCalls = 0;
 let decline = true;
+let failProvider = false;
 const handler = new PaymentMethodHandler({
     code: 'receipt-fixture',
     description: [{ languageCode: LanguageCode.en, value: 'Isolated receipt fixture' }],
     args: {},
     createPayment: (_ctx, _order, amount) => {
         providerCalls++;
+        if (failProvider) throw new Error('Synthetic provider outcome is unknown');
         return { amount, state: decline ? 'Declined' : 'Settled', transactionId: `fixture-${providerCalls}` };
     },
     settlePayment: () => ({ success: true }),
@@ -29,7 +31,7 @@ const config = mergeConfig(testConfig(), {
     plugins: [StorefrontCartPlugin],
 });
 const { server, adminClient, shopClient } = createTestEnvironment(config);
-const fields = 'id revision checkoutOrder { id state currencyCode totalWithTax }';
+const fields = 'id revision state checkoutOrder { id state currencyCode totalWithTax }';
 const cartQuery = gql`query { storefrontCart { ${fields} } }`;
 const command = gql`mutation($input: StorefrontCartCommandInput!) {
     applyStorefrontCartCommand(input: $input) { status errorCode cart { ${fields} } }
@@ -40,6 +42,15 @@ const receiptQuery = gql`
             requestId
             status
             errorCode
+            order {
+                id
+                state
+                payments {
+                    id
+                    state
+                    amount
+                }
+            }
         }
     }
 `;
@@ -79,6 +90,7 @@ let descriptor: {
     currencyCode: string;
     amount: number;
 };
+let prepareCheckout: () => Promise<void>;
 const readReceipt = async (input = descriptor) =>
     (await shopClient.query(receiptQuery, { input })).storefrontPaymentAttempt;
 const submit = (input = descriptor) =>
@@ -135,39 +147,42 @@ beforeAll(async () => {
         expect(result.status, result.errorCode).toBe('APPLIED');
         return result.cart;
     };
-    await change({
-        changes: { add: [{ productVariantId: products.products.items[0].variants[0].id, quantity: 1 }] },
-    });
-    await change({
-        order: {
-            customer: {
-                firstName: 'Receipt',
-                lastName: 'Fixture',
-                emailAddress: 'receipt-fixture@example.test',
+    prepareCheckout = async () => {
+        await change({
+            changes: { add: [{ productVariantId: products.products.items[0].variants[0].id, quantity: 1 }] },
+        });
+        await change({
+            order: {
+                customer: {
+                    firstName: 'Receipt',
+                    lastName: 'Fixture',
+                    emailAddress: 'receipt-fixture@example.test',
+                },
             },
-        },
-    });
-    await change({
-        prepareShipping: {
-            shippingAddress: {
-                fullName: 'Receipt Fixture',
-                streetLine1: '100 Test Street',
-                city: 'London',
-                postalCode: 'SW1A 1AA',
-                countryCode: 'GB',
+        });
+        await change({
+            prepareShipping: {
+                shippingAddress: {
+                    fullName: 'Receipt Fixture',
+                    streetLine1: '100 Test Street',
+                    city: 'London',
+                    postalCode: 'SW1A 1AA',
+                    countryCode: 'GB',
+                },
             },
-        },
-    });
-    await change({ beginCheckout: true });
-    const preparedCart = await change({ preparePayment: true });
-    descriptor = {
-        requestId: randomUUID(),
-        orderId: preparedCart.checkoutOrder.id,
-        kind: 'payment',
-        method: 'receipt-fixture',
-        currencyCode: preparedCart.checkoutOrder.currencyCode,
-        amount: preparedCart.checkoutOrder.totalWithTax,
+        });
+        await change({ beginCheckout: true });
+        const preparedCart = await change({ preparePayment: true });
+        descriptor = {
+            requestId: randomUUID(),
+            orderId: preparedCart.checkoutOrder.id,
+            kind: 'payment',
+            method: 'receipt-fixture',
+            currencyCode: preparedCart.checkoutOrder.currencyCode,
+            amount: preparedCart.checkoutOrder.totalWithTax,
+        };
     };
+    await prepareCheckout();
 }, TEST_SETUP_TIMEOUT_MS);
 afterAll(() => server.destroy());
 
@@ -197,10 +212,77 @@ describe('payment receipts through the actual shop resolver and payment transact
         expect(paid?.status === 'fulfilled' && paid.value.addPaymentToOrder.state).toBe('PaymentSettled');
         expect(providerCalls).toBe(2);
         expect((await readReceipt()).status).toBe('APPLIED');
+        // Guest recovery after a reload cannot use the customer-only native order query.
+        const native = await shopClient.query(
+            gql`
+                query ($id: ID!) {
+                    order(id: $id) {
+                        id
+                    }
+                }
+            `,
+            { id: descriptor.orderId },
+        );
+        expect(native.order).toBeNull();
+        const recovery = await shopClient.query(
+            gql`
+                query ($input: StorefrontPaymentAttemptInput!) {
+                    storefrontPaymentAttempt(input: $input) {
+                        order {
+                            id
+                            state
+                            currencyCode
+                            totalWithTax
+                            payments {
+                                id
+                                state
+                                amount
+                            }
+                        }
+                    }
+                }
+            `,
+            { input: descriptor },
+        );
+        expect(recovery.storefrontPaymentAttempt.order).toMatchObject({
+            id: descriptor.orderId,
+            state: 'PaymentSettled',
+            currencyCode: descriptor.currencyCode,
+        });
+        const { shopClient: anotherGuest } = createTestEnvironment(config);
+        await anotherGuest.query(cartQuery);
+        await expect(anotherGuest.query(receiptQuery, { input: descriptor })).rejects.toThrow();
         await expect(submit()).rejects.toThrow('PAYMENT_REQUEST_ALREADY_APPLIED');
         expect(providerCalls).toBe(2);
         await expect(readReceipt({ ...descriptor, amount: descriptor.amount + 1 })).rejects.toThrow(
             'PAYMENT_REQUEST_SCOPE_CHANGED',
         );
+    });
+    it('blocks reopening from another request while a provider outcome is unknown, even without a successful payment row', async () => {
+        await prepareCheckout();
+        failProvider = true;
+        await submit().catch(() => undefined);
+        const uncertain = await readReceipt();
+        expect(uncertain.status).toBe('UNKNOWN');
+        expect(
+            uncertain.order.payments.some((payment: { state: string }) =>
+                ['Settled', 'Authorized'].includes(payment.state),
+            ),
+        ).toBe(false);
+        const before = (await shopClient.query(cartQuery)).storefrontCart;
+        const reopened = (
+            await shopClient.query(command, {
+                input: {
+                    cartId: before.id,
+                    commandId: randomUUID(),
+                    expectedRevision: before.revision,
+                    reopen: true,
+                },
+            })
+        ).applyStorefrontCartCommand;
+        expect(reopened).toMatchObject({ status: 'REJECTED', errorCode: 'CART_CHECKOUT_LOCKED_ERROR' });
+        expect((await shopClient.query(cartQuery)).storefrontCart).toMatchObject(before);
+        expect((await readReceipt()).status).toBe('UNKNOWN');
+        expect(providerCalls).toBe(3);
     });
 });

@@ -567,9 +567,15 @@ export function PaymentPage({
                 if (receipt.status === 'NOT_FOUND') receipt = await api.paymentAttempt(input, true);
                 if (receipt.requestId !== attempt.requestId) throw new Error('Payment receipt scope changed');
                 if (['REJECTED', 'NOT_EXECUTED'].includes(receipt.status)) {
-                    const refreshedOrder = attempt.token
-                        ? await api.orderByConfirmationToken(attempt.token, undefined, attempt.currencyCode)
-                        : await api.order(attempt.orderId, undefined, attempt.currencyCode);
+                    const refreshedOrder =
+                        receipt.order ??
+                        (attempt.token
+                            ? await api.orderByConfirmationToken(
+                                  attempt.token,
+                                  undefined,
+                                  attempt.currencyCode,
+                              )
+                            : await api.order(attempt.orderId, undefined, attempt.currencyCode));
                     if (!isCurrentAttempt(attempt)) return false;
                     if (
                         !refreshedOrder ||
@@ -589,9 +595,11 @@ export function PaymentPage({
                     return true;
                 }
             }
-            const latest = attempt.token
-                ? await api.orderByConfirmationToken(attempt.token, undefined, attempt.currencyCode)
-                : await api.order(attempt.orderId, undefined, attempt.currencyCode);
+            const latest =
+                receipt?.order ??
+                (attempt.token
+                    ? await api.orderByConfirmationToken(attempt.token, undefined, attempt.currencyCode)
+                    : await api.order(attempt.orderId, undefined, attempt.currencyCode));
             if (await acceptAttemptOutcome(attempt, latest)) return true;
             if (
                 receipt?.status === 'APPLIED' &&

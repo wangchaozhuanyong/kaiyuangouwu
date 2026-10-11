@@ -3,6 +3,8 @@ import {
     ForbiddenError,
     ID,
     Order,
+    OrderService,
+    RelationPaths,
     RequestContext,
     TransactionalConnection,
     UserInputError,
@@ -34,6 +36,7 @@ export class StorefrontPaymentAttemptService {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly carts: StorefrontCartService,
+        private readonly orders: OrderService,
     ) {}
 
     // Deliberately autocommitted outside the payment transaction: a rollback or lost response
@@ -63,7 +66,14 @@ export class StorefrontPaymentAttemptService {
             activeOrderKey: this.orderKey(ctx, input.orderId),
         });
         try {
-            await this.receipts.insert(receipt);
+            // Share the cart's existing lock boundary with reopening: either reopening finishes
+            // first, or the durable claim is visible before another tab can change the order.
+            await this.carts.withTransaction(ctx, async claimCtx => {
+                const cart = await this.carts.lockCart(claimCtx);
+                if (String(cart.id) !== String(cartId)) throw new ForbiddenError();
+                await this.assertCurrentOrder(claimCtx, input);
+                await this.receipts.insert(receipt);
+            });
         } catch (error) {
             // Only a real uniqueness collision may become a replay; storage failures fail closed.
             const raced = await this.receipts.findOneBy({ cartId, requestId: input.requestId });
@@ -108,7 +118,7 @@ export class StorefrontPaymentAttemptService {
         const receipt = await this.receipts.findOneBy({ cartId, requestId: input.requestId });
         if (!receipt) {
             await this.assertOwnedOrder(ctx, input.orderId);
-            return { requestId: input.requestId, status: 'NOT_FOUND', errorCode: null };
+            return { requestId: input.requestId, status: 'NOT_FOUND', errorCode: null, input };
         }
         this.assertMatches(ctx, receipt, input);
         // A crashed worker cannot be inferred to have failed before a provider side effect.
@@ -119,7 +129,24 @@ export class StorefrontPaymentAttemptService {
             requestId: receipt.requestId,
             status: needsReview ? 'UNKNOWN' : receipt.status,
             errorCode: needsReview ? 'PAYMENT_ATTEMPT_REVIEW_REQUIRED' : receipt.errorCode,
+            input,
         };
+    }
+
+    async readOrder(
+        ctx: RequestContext,
+        input: StorefrontPaymentAttemptInput,
+        relations: RelationPaths<Order>,
+    ) {
+        // This receipt is owned by the exact cart/channel, including guests after the active order
+        // has been unset. Never fall back to a customer-only query or possession of an order code.
+        await this.read(ctx, input);
+        const order = await this.orders.findOne(ctx, input.orderId, relations, 'business');
+        return order &&
+            String(order.salesChannelId) === String(ctx.channelId) &&
+            String(order.currencyCode) === input.currencyCode
+            ? order
+            : null;
     }
 
     async fenceUnstarted(ctx: RequestContext, input: StorefrontPaymentAttemptInput) {

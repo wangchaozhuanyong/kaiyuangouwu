@@ -40,6 +40,34 @@ function jsonRequestBody(init?: RequestInit): string {
     return init.body;
 }
 
+describe('payment receipt order recovery', () => {
+    it.each([false, true])('reads the original order in its original currency (fence=%s)', async fence => {
+        const input = {
+            requestId: 'synthetic-request-001',
+            orderId: 'synthetic-order',
+            kind: 'payment' as const,
+            method: 'synthetic-method',
+            currencyCode: 'CNY',
+            amount: 990,
+        };
+        const field = fence ? 'fenceUnstartedStorefrontPaymentAttempt' : 'storefrontPaymentAttempt';
+        const receipt = {
+            requestId: input.requestId,
+            status: 'APPLIED',
+            errorCode: null,
+            order: { id: input.orderId, currencyCode: 'CNY', state: 'PaymentSettled' },
+        };
+        const fetchMock = mockGraphQlResponse({ [field]: receipt });
+        const api = new ShopApi({ ...market, currencyCode: 'USD' });
+        expect(await api.paymentAttempt(input, fence)).toEqual(receipt);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(String(fetchMock.mock.calls[0][0])).toContain('currencyCode=CNY');
+        const body = JSON.parse(jsonRequestBody(fetchMock.mock.calls[0][1]));
+        expect(body.variables.input).toEqual(input);
+        expect(body.query).toContain('order {');
+    });
+});
+
 // Issue 42: token writes must follow session transitions, not network completion order.
 describe('ShopApi session response ordering', () => {
     const guestData = { storefrontContent: [] };
