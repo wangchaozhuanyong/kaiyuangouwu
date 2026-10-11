@@ -91,6 +91,22 @@
     --skin-card-hover-shadow: 0 6px 18px rgba(37, 41, 45, 0.08);
     --skin-hero-shadow: 0 6px 24px rgba(37, 41, 45, 0.06);
     --skin-header-shadow: 0 2px 10px rgba(37, 41, 45, 0.04);
+    /* Approved illustrated assistance identity, shared by support/coupon promotion
+       slots across stores and skins; ordinary directory entries keep skin colors. */
+    --service-promo-support-surface:
+        radial-gradient(ellipse at 25% 110%, #078eb338, transparent 65%),
+        linear-gradient(115deg, #081c36, #0b2a47 65%, #06172f);
+    --service-promo-coupon-surface:
+        radial-gradient(ellipse at 27% 125%, #87703639, transparent 66%),
+        linear-gradient(115deg, #091a32, #142940 66%, #0b192e);
+    --service-promo-support-ink: #f0f7ff;
+    --service-promo-support-muted: #bdcedf;
+    --service-promo-support-action: #aee9f4;
+    --service-promo-support-action-ink: #103348;
+    --service-promo-coupon-ink: #f8e5be;
+    --service-promo-coupon-muted: #c5ccd6;
+    --service-promo-coupon-action: #f1d09a;
+    --service-promo-coupon-action-ink: #49341e;
     --radius-sm: var(--skin-control-radius);
     --radius-md: var(--skin-card-radius);
     --shadow-sm: var(--skin-card-shadow);

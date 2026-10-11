@@ -7,6 +7,9 @@ import { type RouteState } from '../storefront-router';
 import { StorefrontContext } from '../StorefrontContext';
 import { type StorefrontContentBlock, type StorefrontContentItem, type StorefrontLanguage } from '../types';
 
+import couponArtwork from './artwork/coupon.svg';
+import supportArtwork from './artwork/support.svg';
+
 export const clientPluginPlacements = [
     'AFTER_HEADER',
     'AFTER_CATEGORY_NAVIGATION',
@@ -24,6 +27,7 @@ export interface CategoryClientPluginContext {
 }
 
 interface ClientPluginComponentProps {
+    illustrated?: boolean;
     language: StorefrontLanguage;
     onNavigate: (route: RouteState) => void;
 }
@@ -38,12 +42,12 @@ export function isAssistanceClientPlugin(plugin: Pick<ResolvedClientPlugin, 'cod
     return plugin.code === 'category-coupon-entry' || plugin.code === 'category-support-entry';
 }
 
-function CouponEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
+function CouponEntryPlugin({ language, onNavigate, illustrated }: Readonly<ClientPluginComponentProps>) {
     const isZh = language === 'zh';
     return (
         <button
             type="button"
-            className="category-client-plugin category-client-plugin-coupon"
+            className={`category-client-plugin category-client-plugin-coupon${illustrated ? ' has-assistance-artwork' : ''}`}
             onClick={() => onNavigate({ name: 'coupons' })}
         >
             <span className="category-client-plugin-icon" aria-hidden="true">
@@ -54,16 +58,17 @@ function CouponEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCompon
                 <span>{isZh ? '查看可领取的优惠券' : 'See available coupons'}</span>
             </span>
             <span className="category-client-plugin-action">{isZh ? '去领券' : 'View'}</span>
+            {illustrated && <AssistanceArtwork source={couponArtwork} />}
         </button>
     );
 }
 
-function SupportEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
+function SupportEntryPlugin({ language, onNavigate, illustrated }: Readonly<ClientPluginComponentProps>) {
     const isZh = language === 'zh';
     return (
         <button
             type="button"
-            className="category-client-plugin category-client-plugin-support"
+            className={`category-client-plugin category-client-plugin-support${illustrated ? ' has-assistance-artwork' : ''}`}
             onClick={() => onNavigate({ name: 'support' })}
         >
             <span className="category-client-plugin-icon" aria-hidden="true">
@@ -76,7 +81,17 @@ function SupportEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCompo
                 </span>
             </span>
             <span className="category-client-plugin-action">{isZh ? '联系客服' : 'Support'}</span>
+            {illustrated && <AssistanceArtwork source={supportArtwork} />}
         </button>
+    );
+}
+
+function AssistanceArtwork({ source }: Readonly<{ source: string }>) {
+    return (
+        <picture className="category-client-plugin-artwork" aria-hidden="true">
+            <source media="(max-width: 1023px)" srcSet={`${source}#compact`} />
+            <img src={source} alt="" width="440" height="144" draggable={false} />
+        </picture>
     );
 }
 
@@ -249,7 +264,12 @@ export function ClientPluginSlot({
     if (!plugins.length) return null;
     const renderPlugins = (entries: ResolvedClientPlugin[]) =>
         entries.map(({ code, item, Component }) => (
-            <Component key={item.id || code} language={language} onNavigate={onNavigate} />
+            <Component
+                key={item.id || code}
+                language={language}
+                onNavigate={onNavigate}
+                illustrated={group === 'assistance'}
+            />
         ));
     // Keep managed order within each group, including when a merchant hides an entry.
     const tools = plugins.filter(plugin => !isAssistanceClientPlugin(plugin));
