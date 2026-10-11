@@ -357,7 +357,7 @@ export function standalonePageScopeAllows(path: string, platformContext: boolean
         (page.sourcePath === '/settings/system-ops' &&
             ['health', 'jobs', 'schedules', 'telegram', 'settings'].includes(page.key)) ||
         page.sourcePath === '/settings/usdt-payments' ||
-        page.sourcePath === '/settings/governance-risk' ||
+        (page.sourcePath === '/settings/governance-risk' && page.key !== 'cases') ||
         page.sourcePath === '/settings/data-management'
     )
         return platformContext;
