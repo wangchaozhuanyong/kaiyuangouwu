@@ -205,6 +205,9 @@ test(
                 'CREATE TABLE fraud_risk_case (id int PRIMARY KEY, orderId int)',
                 'CREATE TABLE fraud_risk_case_event (id int PRIMARY KEY, riskCaseId int, FOREIGN KEY (riskCaseId) REFERENCES fraud_risk_case(id))',
                 'CREATE TABLE storefront_payment_attempt (id int PRIMARY KEY, orderId int)',
+                'CREATE TABLE admin_notification_outbox (id int PRIMARY KEY, payload json)',
+                'CREATE TABLE admin_incident_evidence (id int PRIMARY KEY, incidentId int, FOREIGN KEY (incidentId) REFERENCES admin_notification_outbox(id))',
+                'CREATE TABLE admin_incident_action (id int PRIMARY KEY, incidentId int, FOREIGN KEY (incidentId) REFERENCES admin_notification_outbox(id))',
             ])
                 await connection.query(sql);
             for (const target of cleanup.TARGETS)
@@ -225,10 +228,18 @@ test(
             await connection.query('INSERT INTO fraud_risk_case VALUES (1,47),(2,48),(3,49),(4,99)');
             await connection.query('INSERT INTO fraud_risk_case_event VALUES (1,1),(2,3),(3,4)');
             await connection.query('INSERT INTO storefront_payment_attempt VALUES (1,22),(2,99)');
+            await connection.execute('INSERT INTO admin_notification_outbox VALUES (1,?),(2,?)', [
+                JSON.stringify({ orderId: 49 }),
+                JSON.stringify({ orderId: 99 }),
+            ]);
+            await connection.query('INSERT INTO admin_incident_evidence VALUES (1,1),(2,2)');
+            await connection.query('INSERT INTO admin_incident_action VALUES (1,1),(2,2)');
             const plan = await cleanup.execute(connection, 'plan');
             assert.equal(plan.canApply, true);
             assert.equal(plan.deletionCounts.order, 4);
             assert.equal(plan.deletionCounts.fraud_risk_case_event, 2);
+            assert.equal(plan.deletionCounts.admin_incident_evidence, 1);
+            assert.equal(plan.deletionCounts.admin_incident_action, 1);
             await assert.rejects(cleanup.execute(connection, 'apply', 'd'.repeat(64)), /PLAN_CHANGED/u);
             let [rows] = await connection.query('SELECT COUNT(*) AS count FROM `order`');
             assert.equal(rows[0].count, 5);
@@ -262,6 +273,16 @@ test(
             assert.deepEqual(
                 rows.map(row => row.orderId),
                 [99],
+            );
+            [rows] = await connection.query('SELECT incidentId FROM admin_incident_evidence');
+            assert.deepEqual(
+                rows.map(row => row.incidentId),
+                [2],
+            );
+            [rows] = await connection.query('SELECT incidentId FROM admin_incident_action');
+            assert.deepEqual(
+                rows.map(row => row.incidentId),
+                [2],
             );
             [rows] = await connection.query('SELECT orderId FROM storefront_payment_attempt');
             assert.deepEqual(

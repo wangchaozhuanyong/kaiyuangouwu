@@ -57,6 +57,9 @@ const DERIVED = new Set([
     'storefront_payment_attempt',
     'storefront_cart_command_receipt',
     'admin_notification_outbox',
+    // Incident workflow evidence/actions belong to the exact order-bound outbox parent.
+    'admin_incident_evidence',
+    'admin_incident_action',
     'store_notification_read',
     'governance_audit_entry',
 ]);
