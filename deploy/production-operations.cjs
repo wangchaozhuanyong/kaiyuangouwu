@@ -141,6 +141,8 @@ function validateRequest(environment) {
             'audit-store-isolation-data',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
+            'plan-window-test-order-cleanup',
+            'apply-window-test-order-cleanup-reviewed',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
             'plan-moyao-default-store-migration',
@@ -185,6 +187,7 @@ function validateRequest(environment) {
             'apply-file-backup-cleanup-reviewed',
             'apply-offsite-file-backup-config-reviewed',
             'backup-two-factor-reviewed',
+            'apply-window-test-order-cleanup-reviewed',
             'apply-order-sales-ownership-backfill-reviewed',
             'apply-moyao-default-store-migration-reviewed',
             'apply-asset-webp-migration-reviewed',
@@ -218,6 +221,8 @@ function validateRequest(environment) {
             'inspect-icloud-relay',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
+            'plan-window-test-order-cleanup',
+            'apply-window-test-order-cleanup-reviewed',
             'plan-order-sales-ownership-backfill',
             'apply-order-sales-ownership-backfill-reviewed',
             'plan-moyao-default-store-migration',
@@ -1831,6 +1836,17 @@ function runDatabaseBackup(
     };
 }
 
+function runWindowTestOrderCleanup(request, dependencies = {}) {
+    return require('./window-test-order-cleanup.cjs').runOperation(request, {
+        inspect: inspectProductionReleases,
+        health: productionHealthSnapshot,
+        spawn: spawnSync,
+        backup: startVerifiedMysqlBackup,
+        assertHealth: assertProductionHealthSnapshot,
+        ...dependencies,
+    });
+}
+
 function runOrderSalesOwnershipBackfill(
     request,
     {
@@ -2717,6 +2733,16 @@ function runLocked(environment = process.env) {
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=plan-platform-store-governance\n');
         return;
     }
+    if (
+        ['plan-window-test-order-cleanup', 'apply-window-test-order-cleanup-reviewed'].includes(
+            request.operation,
+        )
+    ) {
+        const result = runWindowTestOrderCleanup(request);
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
+        return;
+    }
     if (request.operation === 'audit-store-isolation-data') {
         const result = runStoreIsolationAudit(request);
         process.stdout.write(
@@ -3021,6 +3047,7 @@ module.exports = {
     runPlatformGovernanceDataPreflight,
     runAdministratorProductReadinessAudit,
     runDatabaseBackup,
+    runWindowTestOrderCleanup,
     runOrderSalesOwnershipBackfill,
     runMoyaoDefaultStoreMigration,
     runAssetWebpMigration,
