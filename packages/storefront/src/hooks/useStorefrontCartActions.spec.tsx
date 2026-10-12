@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } fr
 
 import { ShopApi, ShopApiError } from '../api';
 import { CartController } from '../cart/cart-controller';
+import { CartReadInvalidatedError } from '../cart/cart-repository';
 import { ActiveCustomer, Order, ProductVariant, StorefrontCart } from '../types';
 
 import { useStorefrontCartActions } from './useStorefrontCartActions';
@@ -47,6 +48,46 @@ describe('storefront cart action boundaries', () => {
     function render() {
         act(() => root.render(<Harness />));
     }
+    function startRealReadRace() {
+        controller = new CartController('fixture-store');
+        options.cartController = controller;
+        const order = { id: 'order-a', currencyCode: 'MYR', customer: { id: 'customer-a' } } as Order;
+        let latest = { ...cart, revision: 87, checkoutOrder: order };
+        options.cart = latest;
+        controller.repository.accept(latest);
+        const pendingReads: Array<{
+            signal?: AbortSignal;
+            resolve: (cart: StorefrontCart) => void;
+            reject: (error: Error) => void;
+        }> = [];
+        const read = vi.fn(
+            (signal?: AbortSignal) =>
+                new Promise<StorefrontCart>((resolve, reject) => {
+                    pendingReads.push({ signal, resolve, reject });
+                    signal?.addEventListener('abort', () => reject(signal.reason as Error), { once: true });
+                }),
+        );
+        const apply = vi.fn((command: CartCommand): Promise<CartCommandResult> => {
+            latest = {
+                ...latest,
+                revision: latest.revision + 1,
+                checkoutOrder: { ...order, totalWithTax: 192000 },
+            };
+            return Promise.resolve({
+                ...acknowledgement,
+                commandId: command.commandId,
+                appliedRevision: latest.revision,
+                cart: latest,
+                session: null,
+            });
+        });
+        const recover = vi.fn();
+        controller.repository.setTransport({ read, apply, recover });
+        const recoverPending = vi.spyOn(controller, 'recoverPending');
+        api.cart.mockImplementation((signal?: AbortSignal) => controller.read(signal));
+        render();
+        return { read, apply, recover, recoverPending, pendingReads, latest: () => latest };
+    }
     beforeEach(() => {
         vi.resetAllMocks();
         root = createRoot(document.createElement('div'));
@@ -77,6 +118,8 @@ describe('storefront cart action boundaries', () => {
     });
     afterEach(() => {
         act(() => root.unmount());
+        controller.reset();
+        vi.useRealTimers();
         vi.restoreAllMocks();
     });
 
@@ -899,6 +942,202 @@ describe('storefront cart action boundaries', () => {
             expect(options.setCartError).toHaveBeenLastCalledWith(null);
             expect(options.navigate).not.toHaveBeenCalled();
             controller.reset();
+        },
+    );
+
+    it('finishes a confirmed read when shipping starts after the first transport read', async () => {
+        controller = new CartController();
+        options.cartController = controller;
+        const order = { id: 'order-a', currencyCode: 'MYR', customer: { id: 'customer-a' } } as Order;
+        let latest = { ...cart, revision: 87, checkoutOrder: order };
+        options.cart = latest;
+        const stale = latest;
+        controller.repository.accept(latest);
+        let finishStale!: (value: StorefrontCart) => void;
+        let firstSignal: AbortSignal | undefined;
+        const firstRead = (signal?: AbortSignal): Promise<StorefrontCart> => {
+            firstSignal = signal;
+            return new Promise(resolve => {
+                // Deliberately ignore abort to verify that late data is never admitted.
+                finishStale = resolve;
+            });
+        };
+        const read = vi.fn(firstRead);
+        read.mockImplementationOnce(firstRead).mockImplementation(() => Promise.resolve(latest));
+        const apply = vi.fn((command: CartCommand): Promise<CartCommandResult> => {
+            latest = { ...latest, revision: 88, checkoutOrder: { ...order, totalWithTax: 192000 } };
+            return Promise.resolve({
+                ...acknowledgement,
+                commandId: command.commandId,
+                appliedRevision: 88,
+                cart: latest,
+                session: null,
+            });
+        });
+        const recover = vi.fn();
+        controller.repository.setTransport({ read, apply, recover });
+        const recoverPending = vi.spyOn(controller, 'recoverPending');
+        api.cart.mockImplementation((signal?: AbortSignal) => controller.read(signal));
+        render();
+        await act(async () => {
+            const refresh = value.refreshConfirmedCart();
+            expect(value.refreshConfirmedCart()).toBe(refresh);
+            await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+            await controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+            expect(firstSignal?.aborted).toBe(true);
+            finishStale(stale);
+            expect(await refresh).toEqual(latest);
+        });
+        expect(api.cart).toHaveBeenCalledTimes(2);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(apply).toHaveBeenCalledOnce();
+        expect(recover).not.toHaveBeenCalled();
+        expect(recoverPending).not.toHaveBeenCalled();
+        expect(controller.getSnapshot().confirmed).toEqual(latest);
+        expect(options.setCheckoutOrder).toHaveBeenLastCalledWith(latest.checkoutOrder);
+        expect(options.setCartError).toHaveBeenLastCalledWith(null);
+        expect(options.navigate).not.toHaveBeenCalled();
+        controller.reset();
+    });
+
+    it('keeps a late invalidation retry inside the original twenty-second read budget', async () => {
+        vi.useFakeTimers();
+        const fixture = startRealReadRace();
+        let outcome: unknown;
+        let refresh!: Promise<StorefrontCart>;
+        act(() => {
+            refresh = value.refreshConfirmedCart();
+            void refresh.catch(error => {
+                outcome = error;
+            });
+        });
+        expect(fixture.read).toHaveBeenCalledOnce();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(19_900);
+            const write = controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+            await vi.advanceTimersByTimeAsync(80);
+            await write;
+            expect(fixture.read).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(20);
+            await expect(refresh).rejects.toMatchObject({
+                name: 'ShopApiTimeoutError',
+                resultUnknown: false,
+            });
+        });
+        expect(outcome).toMatchObject({ name: 'ShopApiTimeoutError' });
+        expect(fixture.pendingReads[1].signal?.aborted).toBe(true);
+        expect(fixture.apply).toHaveBeenCalledOnce();
+        expect(fixture.recover).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+    });
+
+    it('does not retry again when a second write invalidates the replacement read', async () => {
+        const fixture = startRealReadRace();
+        await act(async () => {
+            const refresh = value.refreshConfirmedCart();
+            const outcome = refresh.catch(error => error);
+            await controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+            await vi.waitFor(() => expect(fixture.read).toHaveBeenCalledTimes(2));
+            await controller.execute({ order: { shippingMethodId: 'shipping-b' } });
+            expect(await outcome).toBeInstanceOf(CartReadInvalidatedError);
+        });
+        expect(api.cart).toHaveBeenCalledTimes(2);
+        expect(fixture.apply).toHaveBeenCalledTimes(2);
+        expect(fixture.recover).not.toHaveBeenCalled();
+        expect(fixture.recoverPending).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+        expect(options.setCartError).toHaveBeenCalledWith(expect.any(String));
+    });
+
+    it.each(['api', 'customer', 'store'] as const)(
+        'does not retry an internally invalidated read after its %s scope changes',
+        async changed => {
+            const fixture = startRealReadRace();
+            await act(async () => {
+                const refresh = value.refreshConfirmedCart();
+                const outcome = refresh.catch(error => error);
+                if (changed === 'api') options.api = { ...api } as unknown as ShopApi;
+                if (changed === 'customer') options.customer = { id: 'customer-b' } as ActiveCustomer;
+                if (changed === 'store') options.cartController = new CartController('other-store');
+                render();
+                await controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+                expect(await outcome).toBeInstanceOf(Error);
+            });
+            expect(api.cart).toHaveBeenCalledOnce();
+            expect(fixture.apply).toHaveBeenCalledOnce();
+            expect(fixture.recover).not.toHaveBeenCalled();
+            expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+            expect(options.setCartError).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['cart', 'order', 'currency'] as const)(
+        'does not adopt a replacement read from another %s scope',
+        async changed => {
+            const fixture = startRealReadRace();
+            await act(async () => {
+                const refresh = value.refreshConfirmedCart();
+                const outcome = refresh.catch(error => error);
+                await controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+                await vi.waitFor(() => expect(fixture.read).toHaveBeenCalledTimes(2));
+                const current = fixture.latest();
+                fixture.pendingReads[1].resolve({
+                    ...current,
+                    revision: current.revision + 1,
+                    id: changed === 'cart' ? 'cart-b' : current.id,
+                    checkoutOrder: {
+                        ...current.checkoutOrder,
+                        id: changed === 'order' ? 'order-b' : current.checkoutOrder.id,
+                        currencyCode: changed === 'currency' ? 'CNY' : current.checkoutOrder.currencyCode,
+                    },
+                });
+                expect(await outcome).toMatchObject({ message: 'Cart session changed.' });
+            });
+            expect(api.cart).toHaveBeenCalledTimes(2);
+            expect(fixture.apply).toHaveBeenCalledOnce();
+            expect(fixture.recover).not.toHaveBeenCalled();
+            expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+            expect(options.setCartError).not.toHaveBeenCalled();
+        },
+    );
+
+    it('preserves a real network failure from the replacement read', async () => {
+        const fixture = startRealReadRace();
+        const failure = new Error('Network unavailable');
+        await act(async () => {
+            const refresh = value.refreshConfirmedCart();
+            const outcome = refresh.catch(error => error);
+            await controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+            await vi.waitFor(() => expect(fixture.read).toHaveBeenCalledTimes(2));
+            fixture.pendingReads[1].reject(failure);
+            expect(await outcome).toBe(failure);
+        });
+        expect(api.cart).toHaveBeenCalledTimes(2);
+        expect(fixture.apply).toHaveBeenCalledOnce();
+        expect(fixture.recover).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+        expect(options.setCartError).toHaveBeenCalledWith(expect.stringContaining('网络'));
+    });
+
+    it.each(['network', 'ordinary-abort'] as const)(
+        'does not retry a genuine %s failure from the first read',
+        async failureType => {
+            const fixture = startRealReadRace();
+            const failure =
+                failureType === 'network'
+                    ? new Error('Network unavailable')
+                    : new DOMException('Route cancelled', 'AbortError');
+            await act(async () => {
+                const refresh = value.refreshConfirmedCart();
+                const rejected = expect(refresh).rejects.toBe(failure);
+                fixture.pendingReads[0].reject(failure);
+                await rejected;
+            });
+            expect(api.cart).toHaveBeenCalledOnce();
+            expect(fixture.read).toHaveBeenCalledOnce();
+            expect(fixture.apply).not.toHaveBeenCalled();
+            expect(fixture.recover).not.toHaveBeenCalled();
+            expect(options.setCheckoutOrder).not.toHaveBeenCalled();
         },
     );
 

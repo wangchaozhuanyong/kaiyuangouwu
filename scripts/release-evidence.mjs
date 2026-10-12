@@ -118,9 +118,10 @@ export function requestGitHubApi(
                 request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
             );
         } catch (error) {
-            const transient = /gh: HTTP (?:429|5\d\d)\b|TLS handshake timeout|connection reset by peer/u.test(
-                String(error?.stderr ?? ''),
-            );
+            const transient =
+                /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer/u.test(
+                    String(error?.stderr ?? ''),
+                );
             if (attempt === 2 || !transient) throw error;
             pause(1000 * (attempt + 1));
         }
@@ -169,9 +170,10 @@ export function downloadEvidenceArtifact(
                 maxBuffer: 2 * 1024 * 1024,
             });
         } catch (error) {
-            const transient = /gh: HTTP (?:429|5\d\d)\b|TLS handshake timeout|connection reset by peer/u.test(
-                String(error?.stderr ?? ''),
-            );
+            const transient =
+                /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer/u.test(
+                    String(error?.stderr ?? ''),
+                );
             if (attempt === 2 || !transient) throw error;
             pause(1000 * (attempt + 1));
         }
@@ -225,9 +227,10 @@ export async function findInputCoverage({
     let runs = ['build_and_test.yml', 'production_release.yml', 'deploy_storefront_fast_lane.yml']
         .flatMap(workflow => [
             ...api(
-                `repos/${repository}/actions/workflows/${workflow}/runs?status=completed&created=${recentFilter}&per_page=100`,
+                // Missing older evidence only reduces reuse; required checks still run.
+                `repos/${repository}/actions/workflows/${workflow}/runs?status=completed&created=${recentFilter}&per_page=5`,
             ).workflow_runs,
-            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=100`)
+            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=5`)
                 .workflow_runs,
         ])
         .sort((left, right) => right.id - left.id);

@@ -188,6 +188,56 @@ test('GitHub evidence reads retry transient HTTP and network failures without re
     assert.deepEqual(networkDelays, [1000, 2000]);
 });
 
+test('GitHub evidence reads recognize the actual CLI HTTP status format and remain bounded', () => {
+    for (const stderr of ['gh: Server Error (HTTP 502)', 'gh: Too Many Requests (HTTP 429)']) {
+        let calls = 0;
+        const delays = [];
+        assert.deepEqual(
+            requestGitHubApi(
+                'repos/owner/repo/actions/runs',
+                () => {
+                    if (++calls === 1) throw Object.assign(new Error('temporarily unavailable'), { stderr });
+                    return '{"workflow_runs":[]}';
+                },
+                delay => delays.push(delay),
+            ),
+            { workflow_runs: [] },
+        );
+        assert.equal(calls, 2);
+        assert.deepEqual(delays, [1000]);
+    }
+    for (const stderr of ['gh: Forbidden (HTTP 403)', 'gh: Not Found (HTTP 404)']) {
+        let calls = 0;
+        assert.throws(() =>
+            requestGitHubApi(
+                'repos/owner/repo/actions/runs',
+                () => {
+                    calls++;
+                    throw Object.assign(new Error('not authorized'), { stderr });
+                },
+                () => assert.fail('Client errors must not wait'),
+            ),
+        );
+        assert.equal(calls, 1);
+    }
+    let persistentCalls = 0;
+    const persistentDelays = [];
+    assert.throws(() =>
+        requestGitHubApi(
+            'repos/owner/repo/actions/runs',
+            () => {
+                persistentCalls++;
+                throw Object.assign(new Error('still unavailable'), {
+                    stderr: 'gh: Server Error (HTTP 502)',
+                });
+            },
+            delay => persistentDelays.push(delay),
+        ),
+    );
+    assert.equal(persistentCalls, 3);
+    assert.deepEqual(persistentDelays, [1000, 2000]);
+});
+
 test('evidence archives retry transient downloads and fail closed on client or persistent errors', () => {
     const delays = [];
     const archive = Buffer.from('trusted archive bytes');
@@ -202,7 +252,7 @@ test('evidence archives retry transient downloads and fail closed on client or p
             assert.equal(options.maxBuffer, 2 * 1024 * 1024);
             if (attempts < 3)
                 throw Object.assign(new Error('network unavailable'), {
-                    stderr: Buffer.from('Get "https://api.github.com": net/http: TLS handshake timeout'),
+                    stderr: Buffer.from('gh: Server Error (HTTP 502)'),
                 });
             return archive;
         },
@@ -490,7 +540,7 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
         const workflowMatch =
-            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=100$/u.exec(
+            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=5$/u.exec(
                 endpoint,
             );
         if (workflowMatch)
@@ -533,6 +583,30 @@ test('recent workflow indexes recover exact CI proof omitted by cached historica
     assert.equal(result.anchor.runId, 2);
     assert.equal(result.missing.length, 0);
     assert.ok(result.reused.some(check => check.runId === 1));
+});
+
+test('small history reads keep unavailable proof missing instead of authorizing deployment', async () => {
+    const fixture = coverageFixture();
+    const api = fixture.api;
+    let reads = 0;
+    fixture.api = endpoint => {
+        if (endpoint.includes('/actions/workflows/')) {
+            assert.match(endpoint, /per_page=5$/u);
+            reads++;
+            return { workflow_runs: [] };
+        }
+        return api(endpoint);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.equal(reads, 6);
+    assert.equal(result.anchor, undefined);
+    assert.deepEqual(result.reused, []);
+    assert.deepEqual(
+        result.missing.map(check => check.id).sort(),
+        checkRequirements(fixture.plan, fixture.inventory)
+            .map(check => check.id)
+            .sort(),
+    );
 });
 
 test('backup-only follow-up combines narrow target proof with older full business proof', async () => {
