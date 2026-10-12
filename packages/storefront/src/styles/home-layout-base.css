@@ -3,17 +3,13 @@
 }
 
 .homepage-modules {
-    --homepage-module-gap: 12px;
-    --homepage-section-gap: 20px;
+    --homepage-module-gap: var(--space-section);
+    --homepage-section-gap: var(--space-major);
 
     display: flex;
     min-width: 0;
     flex-direction: column;
     gap: var(--homepage-module-gap);
-    padding-top: 8px;
-}
-
-.homepage-modules:has(> .notice-strip) {
     padding-top: var(--homepage-module-gap);
 }
 
@@ -30,7 +26,8 @@
 }
 
 .homepage-modules > .notice-strip,
-.homepage-modules .home-intro-grid > .hero,
+.homepage-modules .home-intro-grid > .hero-carousel,
+.homepage-modules .home-intro-grid .hero-carousel > .hero,
 .homepage-modules > .home-trust-bar,
 .homepage-modules .home-intro-grid > .quick-grid,
 .homepage-module-shell > .coupon-hub-section,

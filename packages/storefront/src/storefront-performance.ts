@@ -1,9 +1,12 @@
 import type { Metric } from 'web-vitals';
 import type { LCPMetricWithAttribution } from 'web-vitals/attribution';
 
+import { publicUnlocalizedPathname } from '../../storefront-content-plugin/src/shared/public-page-data';
+
 import { storefrontTrafficOptedOut, TRAFFIC_PREFERENCE_EVENT } from './storefront-traffic';
 
 export function performancePageType(path: string): 'home' | 'catalog' | 'search' | 'product' | 'other' {
+    path = publicUnlocalizedPathname(path.split(/[?#]/u, 1)[0]);
     if (path === '/' || path === '/home') return 'home';
     if (path === '/category') return 'catalog';
     if (path === '/search') return 'search';

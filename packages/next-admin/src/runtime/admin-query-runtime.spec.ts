@@ -43,6 +43,37 @@ describe('shared admin query runtime', () => {
         expect(orders).toHaveBeenCalledTimes(1);
     });
 
+    it('merges a burst of event refreshes and reads only affected domains, keeping manual refresh complete', async () => {
+        const runtime = new AdminQueryRuntime();
+        let finish!: () => void;
+        const orders = vi
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<void>(resolve => {
+                        finish = resolve;
+                    }),
+            )
+            .mockResolvedValue('latest');
+        const products = vi.fn(async () => 'catalog');
+        runtime.register('orders', 'orders', owner(orders), { ...policy, domains: ['orders'] });
+        runtime.register('products', 'products', owner(products), { ...policy, domains: ['catalog'] });
+        const initial = runtime.refreshPage('/catalog/list');
+        await Promise.resolve();
+        runtime.invalidateDomains(['orders']);
+        const events = Array.from({ length: 50 }, () =>
+            runtime.refreshPage('/catalog/list', 'event', ['orders']),
+        );
+        expect(events.every(work => work === events[0])).toBe(true);
+        finish();
+        await initial;
+        await Promise.all(events);
+        expect(orders).toHaveBeenCalledTimes(2);
+        expect(products).toHaveBeenCalledTimes(1);
+        await runtime.refreshPage('/catalog/list');
+        expect(products).toHaveBeenCalledTimes(2);
+    });
+
     it('moves resource ownership without leaving the previous page subscribed to its state', () => {
         const runtime = new AdminQueryRuntime();
         const remove = runtime.register(

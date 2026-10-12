@@ -112,7 +112,7 @@ describe('bottom navigation configuration', () => {
 
         const shell = readFileSync(new URL('./StorefrontShell.tsx', import.meta.url), 'utf8');
         expect(shell).toMatch(/!desktop\s*&&\s*showNavigation\s*&&\s*shouldShowBottomNavigation\(/u);
-        expect(shell).toContain('{desktop && showNavigation && (');
+        expect(shell).toMatch(/desktop\s*&&\s*showNavigation\s*\?/u);
         expect(shell).toContain('<DesktopHeader');
     });
 

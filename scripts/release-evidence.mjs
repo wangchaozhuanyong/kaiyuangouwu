@@ -20,6 +20,11 @@ import {
     packageInventory,
     STATIC_APPS,
 } from './ci-impact.mjs';
+import {
+    hasNativePullRequestProvenance,
+    isFailedNativeSource,
+    loadNativeCoverage,
+} from './ci-native-coverage.mjs';
 
 export function frontendEvidencePlan(
     plan,
@@ -107,22 +112,27 @@ export function hasTrustedPullRequest(run, repository, api) {
 }
 
 const apiCache = new Map();
-export function requestGitHubApi(
-    endpoint,
-    request = execFileSync,
-    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
-) {
+const retryPause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+const isTransientGitHubError = error =>
+    /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer|i\/o timeout/u.test(
+        String(error?.stderr ?? ''),
+    );
+const isMissingGitHubProof = error =>
+    /(?:^|\n)gh: (?:HTTP 404\b|[^\r\n]*\(HTTP 404\))/u.test(String(error?.stderr ?? ''));
+export function requestGitHubApi(endpoint, request = execFileSync, pause = retryPause) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            return JSON.parse(
-                request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
-            );
+            const body = request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+            try {
+                return JSON.parse(body);
+            } catch (error) {
+                // Transport data is not historical scope JSON. Keep malformed API
+                // reads fatal without displaying response content in diagnostics.
+                if (error instanceof SyntaxError) throw new Error('GitHub API response is not valid JSON');
+                throw error;
+            }
         } catch (error) {
-            const transient =
-                /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer/u.test(
-                    String(error?.stderr ?? ''),
-                );
-            if (attempt === 2 || !transient) throw error;
+            if (attempt === 2 || !isTransientGitHubError(error)) throw error;
             pause(1000 * (attempt + 1));
         }
     }
@@ -158,27 +168,42 @@ export async function findEvidence({ repository, targetSha, requiredFiles, api =
     return null;
 }
 
-export function downloadEvidenceArtifact(
-    repository,
-    artifactId,
-    request = execFileSync,
-    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
-) {
+export function downloadEvidenceArtifact(repository, artifactId, request = execFileSync, pause = retryPause) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             return request('gh', ['api', `repos/${repository}/actions/artifacts/${artifactId}/zip`], {
                 maxBuffer: 2 * 1024 * 1024,
             });
         } catch (error) {
-            const transient =
-                /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer/u.test(
-                    String(error?.stderr ?? ''),
-                );
-            if (attempt === 2 || !transient) throw error;
+            if (attempt === 2 || !isTransientGitHubError(error)) throw error;
             pause(1000 * (attempt + 1));
         }
     }
     throw new Error('Unreachable GitHub artifact retry state');
+}
+
+const nativeLogCapabilities = new WeakMap();
+export function readNativeJobLog(repository, jobId, request = execFileSync, pause = retryPause) {
+    assert.match(repository, /^[\w.-]+\/[\w.-]+$/u);
+    assert.ok(Number.isSafeInteger(jobId) && jobId > 0, 'Invalid native job ID');
+    const capture = { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] };
+    if (!nativeLogCapabilities.has(request)) {
+        const help = request('gh', ['api', '--help'], capture);
+        nativeLogCapabilities.set(request, /^\s*--allow-escape-sequences(?:\s|$)/mu.test(help));
+    }
+    const args = ['api', `repos/${repository}/actions/jobs/${jobId}/logs`];
+    // Actions shell annotations contain ANSI. Permit raw bytes only into this
+    // captured log reader; the source/attempt/scope verifier still validates them.
+    if (nativeLogCapabilities.get(request)) args.push('--allow-escape-sequences');
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            return request('gh', args, capture);
+        } catch (error) {
+            if (attempt === 2 || !isTransientGitHubError(error)) throw error;
+            pause(1000 * (attempt + 1));
+        }
+    }
+    throw new Error('Unreachable GitHub native log retry state');
 }
 
 function readProof(repository, artifactId) {
@@ -205,6 +230,7 @@ export async function findInputCoverage({
     proofReader = readProof,
     includeRunId,
     currentRunId,
+    nativeLogReader = readNativeJobLog,
 }) {
     assert.match(targetSha, /^[a-f0-9]{40}$/u);
     const targetTree = api(`repos/${repository}/git/commits/${targetSha}`).tree.sha;
@@ -215,11 +241,13 @@ export async function findInputCoverage({
     );
     const targetSharedInputs = sharedInputFingerprint(targetSha, reader);
     const reused = [];
+    const nativeRejected = [];
     let anchor;
     // Other Actions workflows can fill the repository-wide first page, or leave it stale.
     // Read only workflows that can produce trusted CI evidence.
     // Some cached workflow indexes omit newly completed runs. A rolling created
-    // filter obtains the recent index; retain the historical index for older proof.
+    // filter obtains the recent index; a separate bounded historical window keeps
+    // verified business proof reachable after several failed or cancelled follow-ups.
     const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .replace(/\.\d{3}Z$/u, 'Z');
@@ -230,7 +258,7 @@ export async function findInputCoverage({
                 // Missing older evidence only reduces reuse; required checks still run.
                 `repos/${repository}/actions/workflows/${workflow}/runs?status=completed&created=${recentFilter}&per_page=5`,
             ).workflow_runs,
-            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=5`)
+            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=20`)
                 .workflow_runs,
         ])
         .sort((left, right) => right.id - left.id);
@@ -249,6 +277,7 @@ export async function findInputCoverage({
                 '.github/workflows/production_release.yml',
                 '.github/workflows/deploy_storefront_fast_lane.yml',
             ].includes(run.path);
+        const failedNative = isFailedNativeSource(run, repository);
         if (current) {
             assert.equal(run.head_repository?.full_name, repository);
             assert.ok(['workflow_dispatch', 'pull_request'].includes(run.event));
@@ -266,7 +295,7 @@ export async function findInputCoverage({
                 gates.length && gates.every(job => job.conclusion === 'success'),
                 'The current run has no successful applicable CI gate',
             );
-        } else if (!isTrustedRun(run, repository) && !failedRelease) continue;
+        } else if (!isTrustedRun(run, repository) && !failedRelease && !failedNative) continue;
         let sourceTree;
         let sourceRef = run.head_sha;
         try {
@@ -303,20 +332,54 @@ export async function findInputCoverage({
             }
         }
         if (!matching.length && sourceTree !== targetTree) continue;
-        if (!hasTrustedPullRequest(run, repository, api)) continue;
-        const artifacts = api(`repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
-        const artifact = artifacts
-            .filter(item => !item.expired && item.name.startsWith(`ci-evidence-${run.id}-`))
-            .sort((a, b) => b.id - a.id)[0];
-        if (!artifact) continue;
-        const proof = proofReader(repository, artifact.id);
-        if (
-            ![1, 2].includes(proof.version) ||
-            proof.sourceSha !== run.head_sha ||
-            proof.tree !== sourceTree ||
-            String(proof.runId) !== String(run.id)
-        )
-            continue;
+        let artifact;
+        let native;
+        let proof;
+        if (failedNative) {
+            try {
+                if (!hasNativePullRequestProvenance(run, repository, api)) continue;
+                native = await loadNativeCoverage({
+                    run,
+                    repository,
+                    sourceTree,
+                    reader,
+                    inventory,
+                    api,
+                    logReader: nativeLogReader,
+                });
+            } catch (error) {
+                const proofMissing = isMissingGitHubProof(error);
+                const malformed = error instanceof assert.AssertionError || error instanceof SyntaxError;
+                // Reader/protection/permission failures must stop planning, never widen execution.
+                if (!proofMissing && !malformed) throw error;
+                // Known missing or malformed old proof supplies no coverage; independent proof remains usable.
+                nativeRejected.push({
+                    runId: run.id,
+                    reason: proofMissing
+                        ? 'Native proof is unavailable (404)'
+                        : 'Native proof structure is invalid',
+                });
+                continue;
+            }
+            proof = native.plan;
+        } else {
+            if (!hasTrustedPullRequest(run, repository, api)) continue;
+            const artifacts = api(
+                `repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`,
+            ).artifacts;
+            artifact = artifacts
+                .filter(item => !item.expired && item.name.startsWith(`ci-evidence-${run.id}-`))
+                .sort((a, b) => b.id - a.id)[0];
+            if (!artifact) continue;
+            proof = proofReader(repository, artifact.id);
+            if (
+                ![1, 2].includes(proof.version) ||
+                proof.sourceSha !== run.head_sha ||
+                proof.tree !== sourceTree ||
+                String(proof.runId) !== String(run.id)
+            )
+                continue;
+        }
         if (failedRelease) {
             if (proof.version !== 2) continue;
             const gates = api(`repos/${repository}/actions/runs/${run.id}/jobs?per_page=100`).jobs.filter(
@@ -324,9 +387,11 @@ export async function findInputCoverage({
             );
             if (!gates.length || gates.some(job => job.conclusion !== 'success')) continue;
         }
-        if (sourceTree === targetTree && !anchor) anchor = { runId: run.id, artifactId: artifact.id };
+        if (!native && sourceTree === targetTree && !anchor)
+            anchor = { runId: run.id, artifactId: artifact.id };
         for (const check of matching) {
             if (!checkCovered(proof, check, inventory)) continue;
+            if (native && !native.checks.has(check.id)) continue;
             // A full source run executes the root build/test jobs, not the related-frontend job.
             const inputHash =
                 check.kind === 'frontend' && proof.full === true
@@ -347,14 +412,22 @@ export async function findInputCoverage({
             reused.push({
                 check: check.id,
                 runId: run.id,
-                artifactId: artifact.id,
+                ...(native
+                    ? { ...native.provenance, nativeJobs: native.jobs.get(check.id) }
+                    : { artifactId: artifact.id }),
                 sourceSha: run.head_sha,
                 inputSha256: inputHash,
             });
         }
         if (!missing.size && anchor) break;
     }
-    return { targetTree, anchor, reused, missing: [...missing.values()] };
+    return {
+        targetTree,
+        anchor,
+        reused,
+        missing: [...missing.values()],
+        ...(nativeRejected.length ? { nativeRejected } : {}),
+    };
 }
 
 export async function waitForCompleteInputCoverage(

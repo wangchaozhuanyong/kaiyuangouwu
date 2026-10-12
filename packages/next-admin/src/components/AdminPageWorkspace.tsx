@@ -1,12 +1,8 @@
 import { useApolloClient } from '@apollo/client/react';
 import { RefreshCw, WifiOff } from 'lucide-react';
-import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
-import {
-    RESOURCE_INVALIDATION_EVENT,
-    resourceMatchesDomains,
-    type ResourceDomain,
-} from '../runtime/admin-resource-events';
+import { RESOURCE_INVALIDATION_EVENT, type ResourceDomain } from '../runtime/admin-resource-events';
 import { PageRuntimeContext } from '../runtime/page-runtime-context';
 import { AdminButton, PAGE_REFRESH_EVENT, type PageRefreshRequest } from './AdminControls';
 import { AdminOverlayHost } from './AdminOverlayHost';
@@ -58,15 +54,23 @@ export function AdminPageWorkspace({
     useEffect(() => {
         if (!active) return;
         let timer: ReturnType<typeof setTimeout> | undefined;
+        const pendingDomains = new Set<ResourceDomain>();
+        let pendingReason: 'write' | 'event' = 'event';
         const invalidate = (event: Event) => {
             const { domains, reason } = (
                 event as CustomEvent<{ domains: ResourceDomain[]; reason: 'write' | 'event' }>
             ).detail;
-            runtime.invalidate(key => resourceMatchesDomains(key, domains));
+            runtime.invalidateDomains(domains);
+            domains.forEach(domain => pendingDomains.add(domain));
+            if (reason === 'write') pendingReason = 'write';
             clearTimeout(timer);
             timer = setTimeout(() => {
+                const affected = [...pendingDomains];
+                const refreshReason = pendingReason;
+                pendingDomains.clear();
+                pendingReason = 'event';
                 if (navigator.onLine && document.visibilityState !== 'hidden')
-                    void runtime.refreshPage(page, reason);
+                    void runtime.refreshPage(page, refreshReason, affected);
             }, 150);
         };
         window.addEventListener(RESOURCE_INVALIDATION_EVENT, invalidate);
@@ -99,9 +103,10 @@ export function AdminPageWorkspace({
             document.removeEventListener('visibilitychange', resume);
         };
     }, [runtime, page, active]);
+    const context = useMemo(() => ({ page, active }), [page, active]);
     const showStatus = !online || state.refreshing || state.failed > 0;
     return (
-        <PageRuntimeContext.Provider value={{ page, active }}>
+        <PageRuntimeContext.Provider value={context}>
             <AdminOverlayHost owner={page} active={active}>
                 <div
                     className="admin-workspace"

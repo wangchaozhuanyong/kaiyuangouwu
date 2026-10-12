@@ -4,8 +4,16 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
+import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
+
+import { CustomerAvatar } from './components/common/customer-avatar';
 import { IMAGE_WAIT_EXPIRED_EVENT } from './image-readiness';
-import { ImagePlaceholder, isImageAlreadyDecoded } from './safe-image';
+import {
+    clearDecodedImageCache,
+    ImagePlaceholder,
+    isImageAlreadyDecoded,
+    SafeImageMediaProvider,
+} from './safe-image';
 import { ProductImagePlaceholder, ProductVariantImage, SafeImage } from './storefront-ui/product-display';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,6 +31,136 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it('renders supplied bounded inline hints on priority media without a placeholder request', () => {
+        const preview = 'data:image/png;base64,aW5saW5l';
+        const media = [mediaDescriptor('/cover.png?v=one', 'hero', { inlinePreview: preview })];
+        const render = (
+            src = '/cover.png?v=one',
+            kind: 'hero' | 'card' = 'hero',
+            priority: 'high' | 'auto' = 'high',
+        ) =>
+            renderToStaticMarkup(
+                <SafeImageMediaProvider media={media}>
+                    <SafeImage src={src} imageKind={kind} alt="Cover" fetchPriority={priority} />
+                </SafeImageMediaProvider>,
+            );
+        expect(render()).toContain('has-inline-preview');
+        expect(render()).toContain('safe-image-preview is-ready');
+        expect(render()).toContain(`src="${preview}"`);
+        expect(render()).not.toContain('storefront-placeholder');
+        expect(render('/cover.png?v=two')).not.toContain('has-placeholder');
+        expect(render('/cover.png?v=one', 'card')).not.toContain('has-placeholder');
+        expect(render('/cover.png?v=one', 'hero', 'auto')).not.toContain('has-placeholder');
+        const stale = renderToStaticMarkup(
+            <SafeImageMediaProvider media={[{ ...media[0], version: 'other' }]}>
+                <SafeImage src="/cover.png?v=one" imageKind="hero" alt="Cover" fetchPriority="high" />
+            </SafeImageMediaProvider>,
+        );
+        expect(stale).not.toContain('has-placeholder');
+    });
+
+    it('marks only the actual responsive candidate decoded, never its larger fallback or original alias', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/assets/preview/candidate.png"
+                        alt="Candidate"
+                        imageKind="card"
+                        sizes="80px"
+                    />,
+                ),
+            );
+            const image = requiredImage(host);
+            const selected = new URL(
+                '/assets/preview/candidate.png?preset=storefront-card-square-160&format=webp&q=90',
+                location.href,
+            ).href;
+            Object.defineProperties(image, {
+                complete: { configurable: true, value: true },
+                naturalWidth: { configurable: true, value: 160 },
+                currentSrc: { configurable: true, value: selected },
+            });
+            await act(async () => {
+                image.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+            expect(isImageAlreadyDecoded(selected)).toBe(true);
+            expect(isImageAlreadyDecoded('/assets/preview/candidate.png')).toBe(false);
+            expect(isImageAlreadyDecoded(image.getAttribute('src'))).toBe(false);
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
+    it('preserves a decoded same-version customer avatar across remounts without treating a larger candidate as ready', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const customer = {
+            id: 'avatar-one',
+            firstName: 'A',
+            lastName: '',
+            emailAddress: 'local@example.invalid',
+            phoneNumber: null,
+            avatar: { id: 'avatar-v1', preview: '/assets/preview/avatar.png?v=one' },
+        };
+        try {
+            act(() => root.render(<CustomerAvatar customer={customer} size={48} />));
+            const first = requiredImage(host);
+            const selected = new URL(
+                '/assets/preview/avatar.png?v=one&preset=storefront-icon-64&format=webp&q=82',
+                location.href,
+            ).href;
+            Object.defineProperties(first, {
+                complete: { configurable: true, value: true },
+                naturalWidth: { configurable: true, value: 64 },
+                currentSrc: { configurable: true, value: selected },
+            });
+            await act(async () => {
+                first.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+            act(() => root.render(<CustomerAvatar key="security" customer={customer} size={64} />));
+            const fallback = host.querySelector<HTMLElement>('.safe-image-fallback');
+            expect(fallback?.style.backgroundImage).toContain('storefront-icon-64');
+            expect(host.querySelector('[data-safe-image="ready"]')).toBeNull();
+            expect(isImageAlreadyDecoded(requiredImage(host).getAttribute('src'))).toBe(false);
+            act(() =>
+                root.render(
+                    <CustomerAvatar
+                        key="other-owner"
+                        customer={{ ...customer, id: 'avatar-other', firstName: 'B' }}
+                        size={48}
+                    />,
+                ),
+            );
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            expect(host.textContent).toBe('B');
+            act(() =>
+                root.render(
+                    <CustomerAvatar
+                        key="changed"
+                        customer={{
+                            ...customer,
+                            avatar: { id: 'avatar-v2', preview: '/assets/preview/avatar.png?v=two' },
+                        }}
+                        size={48}
+                    />,
+                ),
+            );
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            expect(host.textContent).toBe('A');
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
     it('server-renders native art direction without preloading the wrong desktop source', () => {
         const html = renderToStaticMarkup(
             <SafeImage

@@ -131,7 +131,7 @@
        separate surfaces, while tabs remain compact navigation instead of a
        full-width mobile divider. */
     .desktop-store-layout .page.subpage:has(> .ai-studio-workflow) {
-        padding-bottom: 48px;
+        padding-bottom: var(--space-16);
         background: transparent;
     }
     .desktop-store-layout .ai-studio-shell.ai-studio-workflow {

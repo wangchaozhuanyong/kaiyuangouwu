@@ -31,6 +31,15 @@ interface PageLoadingState {
     onBack: () => void;
 }
 const PageLoadingContext = createContext<PageLoadingState | null>(null);
+const PageRouteCommitContext = createContext<(() => void) | null>(null);
+
+/** A real route commit completes adoption; a server ready attribute is not a client signal. */
+export function usePageRouteCommit(): void {
+    const commit = useContext(PageRouteCommitContext);
+    useLayoutEffect(() => {
+        commit?.();
+    }, [commit]);
+}
 
 /** Route modules and their required queries declare state; DOM visibility is never a data signal. */
 export function usePageReadiness(pending: boolean, presentation: ReadinessPresentation = 'query'): void {
@@ -81,6 +90,7 @@ interface PageReadinessProps {
     /** Stable host/channel identity, not route, currency, language or a query request key. */
     initialScopeKey?: string;
     initialError?: boolean;
+    requireInitialRouteCommit?: boolean;
     children: ReactNode;
     pending: boolean;
     navigationPreparing?: boolean;
@@ -103,7 +113,14 @@ export function PageReadinessBoundary({
     requestKey = navigationKey,
     initialScopeKey,
     initialError = false,
+    requireInitialRouteCommit = false,
 }: PageReadinessProps) {
+    const [initialRouteCommitted, setInitialRouteCommitted] = useState(false);
+    const commitRoute = useCallback(() => {
+        const root = document.getElementById('root');
+        if (root?.dataset.publicRendered === '1') root.dataset.publicAdopted = '1';
+        setInitialRouteCommitted(true);
+    }, []);
     const tokens = useRef(new Map<object, ReadinessPresentation>());
     const [required, setRequired] = useState({ total: 0, page: 0, local: 0 });
     const register = useCallback((token: object, isWaiting: boolean, presentation: ReadinessPresentation) => {
@@ -156,7 +173,8 @@ export function PageReadinessBoundary({
             started.current = null;
             setProgressCycle(undefined);
             setTimeoutCycle(undefined);
-            if (!tokens.current.size) document.dispatchEvent(new Event('storefront:page-ready'));
+            if (!tokens.current.size && (!requireInitialRouteCommit || initialRouteCommitted))
+                document.dispatchEvent(new Event('storefront:page-ready'));
             return;
         }
         if (!started.current || started.current.cycle !== cycle) {
@@ -175,7 +193,7 @@ export function PageReadinessBoundary({
             clearTimeout(indicator);
             clearTimeout(deadline);
         };
-    }, [waiting, cycle]);
+    }, [waiting, cycle, requireInitialRouteCommit, initialRouteCommitted]);
 
     const retry = useCallback(() => {
         onRetry();
@@ -197,47 +215,55 @@ export function PageReadinessBoundary({
     return (
         <ReadinessContext.Provider value={register}>
             <PageLoadingContext.Provider value={loadingState}>
-                <div
-                    className="page-readiness"
-                    data-page-readiness={phase}
-                    aria-busy={phase === 'preparing' || undefined}
-                >
-                    <div className="page-readiness-stage" hidden={initial} inert={initial || undefined}>
-                        {children}
+                <PageRouteCommitContext.Provider value={commitRoute}>
+                    <div
+                        className="page-readiness"
+                        data-page-readiness={phase}
+                        aria-busy={phase === 'preparing' || undefined}
+                    >
+                        <div className="page-readiness-stage" hidden={initial} inert={initial || undefined}>
+                            {children}
+                        </div>
+                        {initial && (
+                            <main className="page-readiness-initial" aria-busy={phase === 'preparing'}>
+                                {phase === 'preparing' && showProgress && (
+                                    <div role="status" aria-live="polite" aria-label={loadingLabel}>
+                                        <BrandLoadingIndicator language={language} />
+                                    </div>
+                                )}
+                                {phase === 'error' && (
+                                    <>
+                                        <BrandLoadingIndicator language={language} pending={false} />
+                                        <PageReadinessError state={loadingState} />
+                                    </>
+                                )}
+                            </main>
+                        )}
+                        {!initial && phase === 'preparing' && (showProgress || navigationPreparing) && (
+                            <div
+                                className={
+                                    navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'
+                                }
+                                role="status"
+                                aria-live="polite"
+                                aria-label={navigationPreparing ? navigationLabel : loadingLabel}
+                            >
+                                {navigationPreparing && (
+                                    <BrandLoadingIndicator
+                                        language={language}
+                                        compact
+                                        label={navigationLabel}
+                                    />
+                                )}
+                            </div>
+                        )}
+                        {!initial && !inlineLoadingRegions && phase === 'error' && (
+                            <div className="page-readiness-overlay" aria-busy="false">
+                                <PageReadinessError state={loadingState} />
+                            </div>
+                        )}
                     </div>
-                    {initial && (
-                        <main className="page-readiness-initial" aria-busy={phase === 'preparing'}>
-                            {phase === 'preparing' && showProgress && (
-                                <div role="status" aria-live="polite" aria-label={loadingLabel}>
-                                    <BrandLoadingIndicator language={language} />
-                                </div>
-                            )}
-                            {phase === 'error' && (
-                                <>
-                                    <BrandLoadingIndicator language={language} pending={false} />
-                                    <PageReadinessError state={loadingState} />
-                                </>
-                            )}
-                        </main>
-                    )}
-                    {!initial && phase === 'preparing' && (showProgress || navigationPreparing) && (
-                        <div
-                            className={navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'}
-                            role="status"
-                            aria-live="polite"
-                            aria-label={navigationPreparing ? navigationLabel : loadingLabel}
-                        >
-                            {navigationPreparing && (
-                                <BrandLoadingIndicator language={language} compact label={navigationLabel} />
-                            )}
-                        </div>
-                    )}
-                    {!initial && !inlineLoadingRegions && phase === 'error' && (
-                        <div className="page-readiness-overlay" aria-busy="false">
-                            <PageReadinessError state={loadingState} />
-                        </div>
-                    )}
-                </div>
+                </PageRouteCommitContext.Provider>
             </PageLoadingContext.Provider>
         </ReadinessContext.Provider>
     );

@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-12T21:08:35.902Z",
+  "baseHead": "b8d45cc6",
+  "branch": "feat/experience-offline-payments-20261013",
+  "sourceFile": "packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts",
+  "sourceSha256": "79943167057aa79c5bb6849d8c3938322cbdbce88c47d9090664118e45cab293",
+  "change": "Explicit async CouponIssueValidationStub facade prevents spyOn(any) void fallback inference; Date callback inferred; original three cases and assertions unchanged",
+  "dependencyVersions": {
+    "rootVitest": "4.1.11",
+    "localStoreManagementVitest": "3.2.7",
+    "modified": false
+  },
+  "checks": {
+    "coupon-spy-local-types-lint.log": "package-local Vitest3 types; 0 errors / 0 warnings / exit0",
+    "coupon-spy-vitest4-types-lint.log": "canonical root Vitest4 types via temporary project config; 0 errors / 0 warnings / exit0",
+    "coupon-spy-vitest4-types.log": "canonical root Vitest4 tsc exit0",
+    "coupon-spy-vitest4-test.log": "root Vitest4.1.11 runtime; 3 passed / exit0"
+  },
+  "temporaryTypeProject": "vitest4-coupon-ci-typing.tsconfig.json",
+  "remoteCI": "Original Quality #38307485152 failed; no push/retry/commit here; parent owns recovery",
+  "production": "No production source change, dependency mutation, build, deployment or production operation"
+}

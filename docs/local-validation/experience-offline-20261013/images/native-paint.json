@@ -1,0 +1,91 @@
+{
+    "environment": "Actual SafeImage SSR markup and production CSS. Browser runs no hydration JavaScript.",
+    "cases": [
+        {
+            "width": 96,
+            "hinted": false,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96
+        },
+        {
+            "width": 96,
+            "hinted": true,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96,
+            "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QZ1cAAAAASUVORK5CYII="
+        },
+        {
+            "width": 96,
+            "hinted": false,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96
+        },
+        {
+            "width": 96,
+            "hinted": true,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96,
+            "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QZ1cAAAAASUVORK5CYII="
+        },
+        {
+            "width": 96,
+            "hinted": false,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96
+        },
+        {
+            "width": 96,
+            "hinted": true,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96,
+            "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QZ1cAAAAASUVORK5CYII="
+        },
+        {
+            "width": 96,
+            "hinted": false,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96
+        },
+        {
+            "width": 96,
+            "hinted": true,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96,
+            "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QZ1cAAAAASUVORK5CYII="
+        },
+        {
+            "width": 96,
+            "hinted": false,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96
+        },
+        {
+            "width": 96,
+            "hinted": true,
+            "complete": true,
+            "loaded": false,
+            "opacity": "1",
+            "height": 96,
+            "preview": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6QZ1cAAAAASUVORK5CYII="
+        }
+    ],
+    "errors": []
+}

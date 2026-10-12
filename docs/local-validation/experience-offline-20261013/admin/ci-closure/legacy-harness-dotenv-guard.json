@@ -1,0 +1,7 @@
+{
+  "scope": "harness-only",
+  "packageBuildStarted": false,
+  "reason": "Initial nonempty text guard rejected a comment-only empty.env fixture",
+  "correction": "Require dotenv parsed keys to be empty rather than file text",
+  "sourceChanges": []
+}

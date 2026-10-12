@@ -1,6 +1,5 @@
 import { lazyRouteComponent, Outlet } from '@tanstack/react-router';
 import { clsx } from 'clsx';
-import { WifiOff } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
@@ -9,9 +8,7 @@ import {
     isDesktopAccountRoute,
 } from './components/common/desktop-account-navigation';
 import { DesktopHeader } from './components/common/desktop-header';
-import { ResponsiveHomeHeaderPlaceholder } from './components/common/responsive-home-header-placeholder';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
-import { desktopPageFamily } from './desktop-page-contract';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { OverlayHost } from './overlay-host';
 import { PageReadinessBoundary } from './page-readiness';
@@ -22,6 +19,8 @@ import {
     shouldShowStorefrontUpdatePrompt,
     useDeferredStorefrontUi,
 } from './storefront-deferred-ui';
+import { readInitialPublicPage } from './storefront-page-data';
+import { StorefrontPageFrame } from './storefront-page-frame';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
 import { StorefrontContext } from './StorefrontContext';
@@ -62,8 +61,15 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         let dispose: () => void = () => undefined;
         // Native CSS positioning remains the fallback while this small enhancement loads.
         void import('./fixed-bottom-viewport')
-            .then(({ trackFixedBottomViewport }) => {
-                if (active) dispose = trackFixedBottomViewport();
+            .then(({ trackFixedBottomViewport, trackFixedBottomBars }) => {
+                if (active) {
+                    const disposeViewport = trackFixedBottomViewport();
+                    const disposeBars = trackFixedBottomBars();
+                    dispose = () => {
+                        disposeBars();
+                        disposeViewport();
+                    };
+                }
             })
             .catch(() => undefined);
         return () => {
@@ -74,6 +80,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const desktop = useDesktopViewport();
     // Preview identity belongs to this iframe document, not a changing route query string.
     const [previewParameters] = useState(storefrontPreviewParameters);
+    const [requireInitialRouteCommit] = useState(() => Boolean(readInitialPublicPage()));
     const previewEmbedded = previewParameters.get('storefrontPreviewEmbedded') === '1';
     const previewScenario = previewEmbedded ? previewParameters.get('storefrontPreviewScenario') : null;
     const previewSession = previewEmbedded ? previewParameters.get('storefrontPreviewSession') : null;
@@ -188,6 +195,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                 <OverlayHost ownerKey={readinessIdentity}>
                     <PageReadinessBoundary
                         initialScopeKey={storefrontContextValue.market.code}
+                        requireInitialRouteCommit={requireInitialRouteCommit}
                         initialError={
                             !storefrontContextValue.storefrontContextResolved &&
                             storefrontContextValue.configQuery.isError &&
@@ -205,48 +213,30 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             (() => storefrontContextValue.navigate({ name: 'home' }, true))
                         }
                     >
-                        <div
-                            data-route={renderedRouteName}
-                            data-page-family={desktopPageFamily(renderedRouteName)}
-                            data-preview-embedded={previewEmbedded ? 'true' : undefined}
-                            className={`storefront-app${online ? '' : ' is-offline'}${desktop || renderedRouteName === 'home' ? ' desktop-store-layout' : ''}`}
-                        >
-                            <a className="skip-link" href="#storefront-content">
-                                {isZh ? '跳到主要内容' : 'Skip to content'}
-                            </a>
-                            {!online && (
-                                <div className="network-banner" role="status">
-                                    <WifiOff aria-hidden="true" />
-                                    {isZh
-                                        ? '当前网络不可用，部分操作可能失败'
-                                        : 'You are offline. Some actions may fail.'}
-                                </div>
-                            )}
-                            {!previewEmbedded && state.storefrontAccessMode === 'PREVIEW' && (
-                                <aside className="storefront-preview-notice type-helper" role="status">
-                                    <strong>{isZh ? '公开预览' : 'Public preview'}</strong>
-                                    <span>
-                                        {isZh
-                                            ? '店铺尚未正式营业；测试支付只会生成模拟订单。'
-                                            : 'This store is not live yet. Test payments create simulated orders only.'}
-                                    </span>
-                                </aside>
-                            )}
-                            {!desktop && renderedRouteName === 'home' && (
-                                <ResponsiveHomeHeaderPlaceholder
-                                    name={storefrontContextValue.storefrontName}
-                                    logoUrl={storefrontContextValue.logoUrl}
-                                />
-                            )}
-                            {desktop && showNavigation && (
-                                <DesktopHeader
-                                    navigationBlock={navigationBlock}
-                                    cartQuantity={cart?.totalQuantity ?? 0}
-                                />
-                            )}
-                            {!previewEmbedded &&
+                        <StorefrontPageFrame
+                            routeName={renderedRouteName}
+                            language={language}
+                            desktop={desktop}
+                            online={online}
+                            previewEmbedded={previewEmbedded}
+                            accessMode={state.storefrontAccessMode}
+                            storefrontName={storefrontContextValue.storefrontName}
+                            logoUrl={storefrontContextValue.logoUrl}
+                            publicMedia={storefrontContextValue.publicMedia}
+                            accountLayout={Boolean(customer && isDesktopAccountRoute(displayedRoute.name))}
+                            header={
+                                desktop && showNavigation ? (
+                                    <DesktopHeader
+                                        navigationBlock={navigationBlock}
+                                        cartQuantity={cart?.totalQuantity ?? 0}
+                                    />
+                                ) : undefined
+                            }
+                            accountNavigation={desktop && customer ? <DesktopAccountNavigation /> : undefined}
+                            deferred={
+                                !previewEmbedded &&
                                 deferredUiReady &&
-                                shouldShowStorefrontUpdatePrompt(renderedRouteName) && (
+                                shouldShowStorefrontUpdatePrompt(renderedRouteName) ? (
                                     <Suspense fallback={null}>
                                         <StorefrontUpdatePrompt
                                             language={language}
@@ -254,66 +244,46 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                             initialAssetReferences={initialStorefrontAssetReferences}
                                         />
                                     </Suspense>
-                                )}
-                            <div
-                                className={
-                                    desktop
-                                        ? customer && isDesktopAccountRoute(displayedRoute.name)
-                                            ? 'desktop-shell-frame desktop-account-layout'
-                                            : 'desktop-shell-frame'
-                                        : undefined
-                                }
+                                ) : undefined
+                            }
+                        >
+                            <Suspense
+                                fallback={<PageSkeleton variant={skeletonVariant} language={language} root />}
                             >
-                                {desktop && customer && <DesktopAccountNavigation />}
-                                <div id="storefront-content" tabIndex={-1}>
-                                    <Suspense
-                                        fallback={
-                                            <PageSkeleton
-                                                variant={skeletonVariant}
-                                                language={language}
-                                                root
-                                            />
-                                        }
-                                    >
-                                        {protectedRoute && waitingForAccount ? (
-                                            accountFailed ? (
-                                                <div role="alert" className="empty-state">
-                                                    <p>{customerLoadError}</p>
-                                                    <button type="button" onClick={() => void retryAccount()}>
-                                                        {isZh ? '重试' : 'Try again'}
-                                                    </button>
-                                                    <a href="/promo">
-                                                        {isZh ? '返回介绍页' : 'Back to introduction'}
-                                                    </a>
-                                                </div>
-                                            ) : (
-                                                <PageSkeleton variant="account" language={language} root />
-                                            )
-                                        ) : protectedRoute && !customer ? (
-                                            <LoginRoutePage />
-                                        ) : (
-                                            <Outlet />
-                                        )}
+                                {protectedRoute && waitingForAccount ? (
+                                    accountFailed ? (
+                                        <div role="alert" className="empty-state">
+                                            <p>{customerLoadError}</p>
+                                            <button type="button" onClick={() => void retryAccount()}>
+                                                {isZh ? '重试' : 'Try again'}
+                                            </button>
+                                            <a href="/promo">
+                                                {isZh ? '返回介绍页' : 'Back to introduction'}
+                                            </a>
+                                        </div>
+                                    ) : (
+                                        <PageSkeleton variant="account" language={language} root />
+                                    )
+                                ) : protectedRoute && !customer ? (
+                                    <LoginRoutePage />
+                                ) : (
+                                    <Outlet />
+                                )}
+                            </Suspense>
+                            {previewEmbedded &&
+                                previewScenario &&
+                                !['normal', 'dense', 'aftercare', 'catalog-scroll'].includes(
+                                    previewScenario,
+                                ) &&
+                                !(
+                                    displayedRoute.name === 'home' &&
+                                    ['empty', 'loading'].includes(previewScenario)
+                                ) && (
+                                    <Suspense fallback={null}>
+                                        <PreviewScenarioPanel scenario={previewScenario} isZh={isZh} />
                                     </Suspense>
-                                    {previewEmbedded &&
-                                        previewScenario &&
-                                        !['normal', 'dense', 'aftercare', 'catalog-scroll'].includes(
-                                            previewScenario,
-                                        ) &&
-                                        !(
-                                            displayedRoute.name === 'home' &&
-                                            ['empty', 'loading'].includes(previewScenario)
-                                        ) && (
-                                            <Suspense fallback={null}>
-                                                <PreviewScenarioPanel
-                                                    scenario={previewScenario}
-                                                    isZh={isZh}
-                                                />
-                                            </Suspense>
-                                        )}
-                                </div>
-                            </div>
-                        </div>
+                                )}
+                        </StorefrontPageFrame>
                         {!desktop &&
                             showNavigation &&
                             shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (

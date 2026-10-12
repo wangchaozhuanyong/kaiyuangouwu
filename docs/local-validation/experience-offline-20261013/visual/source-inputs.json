@@ -1,0 +1,24 @@
+{
+    "recordedAt": "2026-10-12T18:59:57.715465+00:00",
+    "inputs": {
+        "packages/storefront/src/components/common/support-qr-save.tsx": "4b01785013e3d0eee8dd6d151b7ae3f4b332c2e534fd072b360a2abd6505e270",
+        "packages/storefront/src/components/common/support-qr-save.spec.tsx": "4f296b14bb8383f84f213f41b5130ba3d83aac16a0c85ee326d0deee6f7570d9",
+        "packages/storefront/src/pages/support-page.tsx": "1e4cbf70507193d03c8e205539bf0194ca9333ac71dcb42a404277441a46163b",
+        "packages/storefront/src/pages/referral-page.tsx": "4aea602ac6bb2bd434169c44d31fbb3da6ce496e898d91b59fee3914e85a73d1",
+        "packages/storefront/src/pages/home-page.tsx": "fc7498bc8c36a6094a62de7c9cac64b7fce78aeee643465267ba6cb3d9cf9e4c",
+        "packages/storefront/src/pages/ai-image-studio-page.tsx": "1d930d53c36fccbe9b2dff7faadff078aeb6caa490a57add7e058278a4665b55",
+        "packages/storefront/src/styles/referral.css": "805fe590ceaa1587cbefa36d3a81383f8a2e6f685ef1498652c495fe5b19c71f",
+        "packages/storefront/src/styles/visual-presets.css": "4617cbf31ff9bc6f6cfd828992e9eb7bf5e5e3a2b2ccb92c2fc7956593475eba",
+        "packages/storefront/src/styles/home-showcase.css": "2d534fe870b70dc87da5ee15a4c55d399c3e1d945d0bb77dcff228662bd4be7b",
+        "packages/storefront/src/styles/hero-mobile-overlay.css": "711c55fd12bf3c8a252298fede28b9d62bde52da0ea9c1f0a159d0ecdf81b561",
+        "packages/storefront/src/styles/home-layout-base.css": "1a0327f0bbfd4b967585fc223d96291f754114d4da21fffb495fa007a581c06b",
+        "packages/storefront/src/styles/image-studio-components.css": "4ec6155382639ea9b613d981492fde799af4da2f958c9e84d2db94135e6f1e73",
+        "packages/storefront/src/styles/image-studio-layout.css": "07dc43db44e92afe63283e561fb2469f6c04ebecb200ea976b33481ad2da9c56",
+        "packages/storefront/src/styles/image-studio-desktop.css": "0d2cf1256eddc36493876f8284727bb86bc4a0eb9e05eb6f4362804a74128ea4",
+        "packages/storefront/src/styles/desktop-layout.css": "66ec7233544e4740e072da904863c83b1c67e8b77809d74f44d5c9a8ebdf1199",
+        "packages/storefront/src/styles/experience-foundations.css": "65743971b9072b07b98c4d82bd6b3612f07e618120cd837339b858fd9e91e05a",
+        "packages/storefront/src/styles/modals-and-support.css": "d21df793f9f1d76c8c488d4736be4cfc8a761bf0f80ca0ca89539bc005c99dee",
+        "packages/storefront/src/fixed-bottom-viewport.ts": "f693a13260b7ceb2be7a6d306d464ac39714a40968b023a5ad85bb6187bef829",
+        "packages/storefront-content-plugin/src/shared/storefront-semantic-palette.ts": "ebbafae1fde1713d197559ed926b801533de51cd8cbbd0eebcb49bac8104d495"
+    }
+}

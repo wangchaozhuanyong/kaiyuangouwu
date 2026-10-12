@@ -1,0 +1,700 @@
+{
+  "synthetic": true,
+  "reads": [
+    {
+      "url": "http://127.0.0.1:62931/_storefront/page-data?kind=product&id=synthetic-a-product-1&languageCode=en&currencyCode=MYR",
+      "status": 200,
+      "key": "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}",
+      "time": 1791837476142
+    },
+    {
+      "url": "http://127.0.0.1:62931/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22collectionId%22%3A%22synthetic-a-collection%22%2C%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+      "status": 200,
+      "key": "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"collectionId\":\"synthetic-a-collection\",\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}",
+      "time": 1791837477009
+    },
+    {
+      "url": "http://127.0.0.1:62931/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+      "status": 200,
+      "key": "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}",
+      "time": 1791837477051
+    },
+    {
+      "url": "http://127.0.0.1:62931/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+      "status": 200,
+      "key": "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}",
+      "time": 1791837477386
+    }
+  ],
+  "snapshots": [
+    {
+      "label": "home-0",
+      "time": 1791837476966,
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1114,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837476967,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837476967,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 864,
+          "invalidated": false
+        }
+      ]
+    },
+    {
+      "label": "category-0",
+      "time": 1791837477016,
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1163,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477016,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477016,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 913,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"collectionId\":\"synthetic-a-collection\",\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 30,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "collectionId": "synthetic-a-collection",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 30,
+          "invalidated": false
+        }
+      ]
+    },
+    {
+      "label": "return-0",
+      "time": 1791837477247,
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1394,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477247,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477247,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1144,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"collectionId\":\"synthetic-a-collection\",\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 261,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "collectionId": "synthetic-a-collection",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 261,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477247,
+          "invalidated": false
+        }
+      ]
+    },
+    {
+      "label": "home-1",
+      "time": 1791837477312,
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1459,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477312,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477312,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1209,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"collectionId\":\"synthetic-a-collection\",\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 326,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "collectionId": "synthetic-a-collection",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 326,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477312,
+          "invalidated": false
+        }
+      ]
+    },
+    {
+      "label": "category-1",
+      "time": 1791837477345,
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1493,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477346,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477346,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1243,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"collectionId\":\"synthetic-a-collection\",\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 360,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "collectionId": "synthetic-a-collection",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 360,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477346,
+          "invalidated": false
+        }
+      ]
+    },
+    {
+      "label": "return-1",
+      "time": 1791837477578,
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1726,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477579,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477579,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 1476,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"collectionId\":\"synthetic-a-collection\",\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 593,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "collectionId": "synthetic-a-collection",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": true,
+          "state": "success",
+          "fetch": "idle",
+          "age": 593,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "data": false,
+          "state": "pending",
+          "fetch": "idle",
+          "age": 1791837477579,
+          "invalidated": false
+        }
+      ]
+    }
+  ]
+}

@@ -34,6 +34,7 @@ describe('completed payment states', () => {
         'PaymentAuthorized',
         'PaymentSettled',
         'TestPaymentSettled',
+        'AwaitingManualPayment',
         'PartiallyShipped',
         'Shipped',
         'PartiallyDelivered',
@@ -51,6 +52,7 @@ describe('completed payment states', () => {
 
 function method(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
     return {
+        kind: 'EXTERNAL',
         id: 'payment-1',
         code: 'card-payment',
         name: 'Card payment',
@@ -64,7 +66,7 @@ function method(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
 describe('paymentAvailability', () => {
     it('keeps real handlers alongside legacy test handlers in development', () => {
         const result = paymentAvailability(
-            [method(), method({ id: 'test', code: '测试支付', name: '测试支付' })],
+            [method(), method({ id: 'test', kind: 'INTERNAL_TEST', code: '测试支付', name: '测试支付' })],
             { allowTestMethods: true },
         );
 
@@ -73,13 +75,22 @@ describe('paymentAvailability', () => {
     });
 
     it('shows an eligible controlled test method in a production build alongside real payments', () => {
-        const test = method({ id: 'controlled', code: 'controlled-test-payment-2', name: '测试支付' });
+        const test = method({
+            id: 'controlled',
+            kind: 'CONTROLLED_TEST',
+            code: 'controlled-test-payment-2',
+            name: '测试支付',
+        });
         const result = paymentAvailability([method(), test], { allowTestMethods: false });
         expect(result.methods.map(item => item.id)).toEqual(['payment-1', 'controlled']);
     });
 
     it('hides controlled test payments for accounts rejected by the server in every build', () => {
-        const test = method({ code: 'controlled-test-payment-2', isEligible: false });
+        const test = method({
+            kind: 'CONTROLLED_TEST',
+            code: 'controlled-test-payment-2',
+            isEligible: false,
+        });
         for (const allowTestMethods of [true, false]) {
             expect(paymentAvailability([test], { allowTestMethods }).methods).toEqual([]);
         }
@@ -87,7 +98,10 @@ describe('paymentAvailability', () => {
 
     it('keeps real handlers in production and excludes test handlers', () => {
         const result = paymentAvailability(
-            [method(), method({ id: 'dummy', code: 'dummy-payment-handler', name: 'Dummy' })],
+            [
+                method(),
+                method({ id: 'dummy', kind: 'INTERNAL_TEST', code: 'dummy-payment-handler', name: 'Dummy' }),
+            ],
             { allowTestMethods: false },
         );
 
@@ -96,12 +110,21 @@ describe('paymentAvailability', () => {
     });
 
     it('reports a channel without a real provider as not configured', () => {
-        const result = paymentAvailability([method({ code: '测试支付', name: '测试支付' })], {
-            allowTestMethods: false,
-        });
+        const result = paymentAvailability(
+            [method({ kind: 'INTERNAL_TEST', code: '测试支付', name: '测试支付' })],
+            {
+                allowTestMethods: false,
+            },
+        );
 
         expect(result.status).toBe('NOT_CONFIGURED');
         expect(result.methods).toEqual([]);
+    });
+
+    it('uses server kind even when a formal merchant name contains testing words', () => {
+        const formal = method({ kind: 'OFFLINE_MANUAL', code: 'test-bank-method', name: '测试支付' });
+        expect(paymentAvailability([formal], { allowTestMethods: false }).methods).toEqual([formal]);
+        expect(isTestPaymentMethod(formal)).toBe(false);
     });
 
     it('preserves provider eligibility errors for the active order', () => {
@@ -118,7 +141,9 @@ describe('paymentAvailability', () => {
 
 describe('isTestPaymentMethod', () => {
     it('detects common placeholder payment handlers without matching normal provider names', () => {
-        expect(isTestPaymentMethod(method({ code: 'dummy-payment-handler' }))).toBe(true);
+        expect(isTestPaymentMethod(method({ kind: 'INTERNAL_TEST', code: 'dummy-payment-handler' }))).toBe(
+            true,
+        );
         expect(isTestPaymentMethod(method({ code: 'tng-ewallet', name: 'Touch n Go eWallet' }))).toBe(false);
     });
 });

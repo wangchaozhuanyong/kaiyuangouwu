@@ -33,6 +33,8 @@ export const orderProcessingSchema = gql`
     }
     type OrderPaymentCapability {
         paymentId: ID!
+        paymentKind: String!
+        canConfirmOffline: Boolean!
         canRefund: Boolean!
         refundBlockedReason: String
         canCancel: Boolean!

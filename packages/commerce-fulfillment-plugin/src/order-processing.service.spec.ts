@@ -13,6 +13,23 @@ vi.mock('./digital-receipt.service', () => ({ DigitalReceiptService: class {} })
 vi.mock('@vendure/store-management-plugin', () => ({
     sensitiveStoreFinancePermission: { Permission: 'SensitiveStoreFinance' },
 }));
+const projectionFixture = vi.hoisted(() => ({
+    page: vi.fn(),
+    counts: vi.fn(),
+    created: vi.fn(),
+    prepare: vi.fn(),
+}));
+vi.mock('./order-processing-projection', () => ({
+    OrderProcessingProjection: class {
+        constructor(_connection: unknown, _ctx: unknown, options: unknown) {
+            projectionFixture.created(options);
+        }
+        fileCandidates = () => Promise.resolve([]);
+        prepare = projectionFixture.prepare;
+        page = projectionFixture.page;
+        counts = projectionFixture.counts;
+    },
+}));
 function sale(id: string, amount = 1000, type = 'digital', state = 'PaymentSettled') {
     return {
         id,
@@ -47,6 +64,12 @@ function sale(id: string, amount = 1000, type = 'digital', state = 'PaymentSettl
     } as unknown as Order;
 }
 function setup(orders = [sale('1')]) {
+    projectionFixture.page.mockReset();
+    projectionFixture.created.mockReset();
+    projectionFixture.page.mockResolvedValue({
+        ids: orders.map(order => order.id),
+        totalItems: orders.length,
+    });
     const ctx = { channelId: 'store-a', channel: { code: 'store-a' }, userHasPermissions: () => true } as any;
     const andWhere = vi.fn();
     const metadataReads = vi.fn();
@@ -113,7 +136,19 @@ function setup(orders = [sale('1')]) {
             Promise.resolve(operation(ctx)),
     };
     const eventBus = { publish: vi.fn().mockResolvedValue(undefined) };
-    const receipts = { statuses: vi.fn(() => Promise.resolve([])) };
+    const statuses = vi.fn(() => Promise.resolve([]));
+    const receipts = {
+        statuses,
+        processingFileAvailability: vi.fn().mockResolvedValue([]),
+        statusesForOrders: vi.fn(
+            async (_ctx, values: Order[]) =>
+                new Map(
+                    await Promise.all(
+                        values.map(async order => [String(order.id), await statuses()] as const),
+                    ),
+                ),
+        ),
+    };
     const service = new OrderProcessingService(
         connection as never,
         orderService as never,
@@ -142,22 +177,26 @@ function setup(orders = [sale('1')]) {
     };
 }
 describe('order processing service contract', () => {
-    it('filters real digital tasks before pagination and scopes every order query to its sale owner', async () => {
+    it('hydrates only the database-selected page and scopes the full order read to its sale owner', async () => {
         const first = sale('1');
         first.state = 'Cancelled';
         first.payments = [];
         const test = sale('2');
         test.payments[0].method = 'controlled-test-payment-fixture';
         const h = setup([first, test, sale('3'), sale('4')]);
+        projectionFixture.page.mockResolvedValue({ ids: ['4'], totalItems: 2 });
         const result = await h.service.list(h.ctx, { category: 'DIGITAL', take: 1, skip: 1 });
         expect(result.totalItems).toBe(2);
         expect(result.items.map(item => item.id)).toEqual(['4']);
+        expect(projectionFixture.page).toHaveBeenCalledWith('DIGITAL', 1, 1);
+        expect(h.receipts.statusesForOrders.mock.calls[0][1].map((order: Order) => order.id)).toEqual(['4']);
         expect(h.andWhere).toHaveBeenCalledWith('order.salesChannelId = :orderSalesChannelId', {
             orderSalesChannelId: 'store-a',
         });
     });
-    it('sorts actual money and quantities before slicing, rather than silently using creation time', async () => {
+    it('passes money sorting to the SQL projection and preserves its selected-page order', async () => {
         const h = setup([sale('1', 300), sale('2', 100), sale('3', 200)]);
+        projectionFixture.page.mockResolvedValue({ ids: ['3'], totalItems: 3 });
         const result = await h.service.list(h.ctx, {
             category: 'ALL',
             sortBy: 'totalWithTax',
@@ -167,6 +206,9 @@ describe('order processing service contract', () => {
         });
         expect(result.items[0].id).toBe('3');
         expect(result.totalItems).toBe(3);
+        expect(projectionFixture.created).toHaveBeenCalledWith(
+            expect.objectContaining({ sortBy: 'totalWithTax', sortOrder: 'ASC' }),
+        );
     });
     it('never loads encrypted manual content when an ordinary order summary is read', async () => {
         const h = setup();

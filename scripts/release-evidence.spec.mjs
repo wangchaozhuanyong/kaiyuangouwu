@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+// Keep native recovery negative cases in the existing remote controls entrypoint.
+import './ci-native-coverage.spec.mjs';
+
 import {
     checkCovered,
     checkFingerprint,
@@ -26,6 +29,7 @@ import {
     frontendEvidencePlan,
     hasTrustedPullRequest,
     isTrustedRun,
+    readNativeJobLog,
     requestGitHubApi,
     validateExecutedChecks,
     waitForCompleteInputCoverage,
@@ -295,6 +299,186 @@ test('evidence archives retry transient downloads and fail closed on client or p
     assert.deepEqual(persistentDelays, [1000, 2000]);
 });
 
+const ioTimeoutError = () =>
+    Object.assign(new Error('GitHub native transport timed out'), {
+        stderr: 'Get "https://api.github.com": dial tcp 20.205.243.168:443: i/o timeout',
+    });
+const legacyApiHelp = 'Flags:\n      --silent   Do not print the response body\n';
+const nativeReadCases = [
+    {
+        name: 'metadata',
+        args: ['api', 'repos/owner/repo/actions/runs/1/attempts/1'],
+        response: '{"id":1}',
+        expected: { id: 1 },
+        read: (request, pause) =>
+            requestGitHubApi('repos/owner/repo/actions/runs/1/attempts/1', request, pause),
+    },
+    {
+        name: 'archive',
+        args: ['api', 'repos/owner/repo/actions/artifacts/42/zip'],
+        response: Buffer.from('trusted archive bytes'),
+        expected: Buffer.from('trusted archive bytes'),
+        read: (request, pause) => downloadEvidenceArtifact('owner/repo', 42, request, pause),
+    },
+    {
+        name: 'native log',
+        args: ['api', 'repos/owner/repo/actions/jobs/100/logs'],
+        response: '[command]/usr/bin/git log -1 --format=%H\nchecked-source\n',
+        expected: '[command]/usr/bin/git log -1 --format=%H\nchecked-source\n',
+        read: (request, pause) => readNativeJobLog('owner/repo', 100, request, pause),
+    },
+];
+
+test('native metadata, archive and log readers retry actual i/o timeouts before returning successful data', () => {
+    for (const reader of nativeReadCases)
+        for (const failures of [1, 2]) {
+            let calls = 0;
+            const delays = [];
+            const result = reader.read(
+                (command, args) => {
+                    assert.equal(command, 'gh');
+                    if (reader.name === 'native log' && args.join(' ') === 'api --help') return legacyApiHelp;
+                    assert.deepEqual(args, reader.args);
+                    if (++calls <= failures) {
+                        const failure = ioTimeoutError();
+                        if (failures === 2) failure.stderr = Buffer.from(failure.stderr);
+                        throw failure;
+                    }
+                    return reader.response;
+                },
+                delay => delays.push(delay),
+            );
+            assert.deepEqual(result, reader.expected, reader.name);
+            assert.equal(calls, failures + 1, reader.name);
+            assert.deepEqual(delays, failures === 1 ? [1000] : [1000, 2000], reader.name);
+        }
+});
+
+test('native metadata, archive and log readers stop after three i/o timeout attempts', () => {
+    for (const reader of nativeReadCases) {
+        const failure = ioTimeoutError();
+        let calls = 0;
+        const delays = [];
+        assert.throws(
+            () =>
+                reader.read(
+                    (command, args) => {
+                        if (reader.name === 'native log' && args.join(' ') === 'api --help')
+                            return legacyApiHelp;
+                        calls++;
+                        throw failure;
+                    },
+                    delay => delays.push(delay),
+                ),
+            error => error === failure,
+            reader.name,
+        );
+        assert.equal(calls, 3, reader.name);
+        assert.deepEqual(delays, [1000, 2000], reader.name);
+    }
+});
+
+test('native logs do not retry missing evidence or non-network failures', () => {
+    for (const stderr of ['gh: Not Found (HTTP 404)', 'invalid native log']) {
+        const failure = Object.assign(new Error('Native log read failed'), { stderr });
+        let calls = 0;
+        assert.throws(
+            () =>
+                readNativeJobLog(
+                    'owner/repo',
+                    100,
+                    (command, args) => {
+                        if (args.join(' ') === 'api --help') return legacyApiHelp;
+                        calls++;
+                        throw failure;
+                    },
+                    () => assert.fail('A missing or malformed log must not wait'),
+                ),
+            error => error === failure,
+        );
+        assert.equal(calls, 1);
+    }
+});
+
+test('native log capability detection is cached per request and captures unchanged log bytes on old and new CLIs', () => {
+    const bytes = Buffer.from('\u001b[36;1mRun checked step\u001b[0m\n工作日志\n', 'utf8');
+    for (const help of [
+        legacyApiHelp,
+        'Flags:\n      --allow-escape-sequences   Allow printing terminal escape sequences\n',
+    ]) {
+        const supportsFlag = help !== legacyApiHelp;
+        let helpReads = 0;
+        const calls = [];
+        const request = (command, args, options) => {
+            assert.equal(command, 'gh');
+            calls.push(args);
+            if (args.join(' ') === 'api --help' || args[1].includes('/actions/jobs/')) {
+                assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
+                assert.equal(options.encoding, 'utf8');
+                assert.equal(options.maxBuffer, 2 * 1024 * 1024);
+            }
+            if (args.join(' ') === 'api --help') {
+                helpReads++;
+                return help;
+            }
+            if (args[1].includes('/actions/jobs/')) {
+                assert.deepEqual(args.slice(2), supportsFlag ? ['--allow-escape-sequences'] : []);
+                return bytes.toString('utf8');
+            }
+            assert.ok(!args.includes('--allow-escape-sequences'), 'Only raw native logs opt into escapes');
+            if (args[1].endsWith('/zip')) return Buffer.from('archive bytes');
+            return '{"id":7}';
+        };
+        for (const jobId of [100, 101]) {
+            const text = readNativeJobLog('owner/repo', jobId, request);
+            assert.equal(text, bytes.toString('utf8'));
+            assert.equal(
+                createHash('sha256').update(Buffer.from(text, 'utf8')).digest('hex'),
+                createHash('sha256').update(bytes).digest('hex'),
+            );
+        }
+        assert.equal(helpReads, 1);
+        assert.deepEqual(requestGitHubApi('repos/owner/repo/pulls/7', request), { id: 7 });
+        assert.deepEqual(downloadEvidenceArtifact('owner/repo', 42, request), Buffer.from('archive bytes'));
+        assert.equal(helpReads, 1);
+        assert.deepEqual(
+            calls.filter(args => args[1].includes('/actions/jobs/')).map(args => args[1]),
+            ['repos/owner/repo/actions/jobs/100/logs', 'repos/owner/repo/actions/jobs/101/logs'],
+        );
+    }
+});
+
+test('native log capability detection ignores prose and similarly named flags', () => {
+    for (const help of [
+        'Examples:\n  $ gh api --allow-escape-sequences endpoint\n',
+        'Use --allow-escape-sequences when this option is available.\n',
+        'Flags:\n      --allow-escape-sequences-extra   A different option\n',
+    ]) {
+        const request = (command, args) => {
+            if (args.join(' ') === 'api --help') return help;
+            assert.deepEqual(args, ['api', 'repos/owner/repo/actions/jobs/100/logs']);
+            return 'native log';
+        };
+        assert.equal(readNativeJobLog('owner/repo', 100, request), 'native log');
+    }
+});
+
+test('failed native CLI capability probes propagate without a log read or cached fallback', () => {
+    const failure = Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' });
+    let calls = 0;
+    const request = (command, args) => {
+        calls++;
+        assert.deepEqual(args, ['api', '--help']);
+        throw failure;
+    };
+    for (let call = 0; call < 2; call++)
+        assert.throws(
+            () => readNativeJobLog('owner/repo', 100, request),
+            error => error === failure,
+        );
+    assert.equal(calls, 2);
+});
+
 test('a previous PR does not cover additional undeployed backend changes', () => {
     const css = 'packages/storefront/src/style.css';
     const proof = { version: 1, files: [css], full: false };
@@ -540,7 +724,7 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
         const workflowMatch =
-            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=5$/u.exec(
+            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=(?:5|20)$/u.exec(
                 endpoint,
             );
         if (workflowMatch)
@@ -585,13 +769,374 @@ test('recent workflow indexes recover exact CI proof omitted by cached historica
     assert.ok(result.reused.some(check => check.runId === 1));
 });
 
-test('small history reads keep unavailable proof missing instead of authorizing deployment', async () => {
+function nativeRecoveryFixture({
+    targetProof = false,
+    changes,
+    mutateJobs,
+    missingLog = false,
+    newQualityScopeComplete = false,
+} = {}) {
+    const baseSha = 'c'.repeat(40);
+    const fixture = coverageFixture({
+        targetProof,
+        changes,
+        mutateRun: run => {
+            if (run.id !== 1) return;
+            Object.assign(run, {
+                conclusion: 'failure',
+                run_attempt: 1,
+                repository: { id: 9, full_name: 'owner/repo' },
+            });
+            run.head_repository.id = 9;
+        },
+    });
+    const scope = classifyChanges(
+        ['packages/core/src/service.ts', 'deploy/systemd/backup.py'],
+        inputInventory,
+    );
+    if (newQualityScopeComplete) {
+        const readProof = fixture.proofReader;
+        fixture.proofReader = (repository, id) =>
+            id === 2 ? { ...readProof(repository, id), lintFiles: scope.files } : readProof(repository, id);
+    }
+    const nativeRun = {
+        id: 1,
+        head_sha: sourceSha,
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+        event: 'workflow_dispatch',
+        path: '.github/workflows/build_and_test.yml',
+        repository: { id: 9, full_name: 'owner/repo' },
+        head_repository: { id: 9, full_name: 'owner/repo' },
+    };
+    const jobs = [
+        'detect changes',
+        'build affected packages',
+        'affected unit tests (22.x)',
+        'e2e (mysql) (22.x)',
+        'repository quality gates',
+        'all-passed',
+    ].map((name, index) => ({
+        id: index + 100,
+        name,
+        run_id: 1,
+        run_attempt: 1,
+        head_sha: sourceSha,
+        status: 'completed',
+        conclusion: index < 4 ? 'success' : 'failure',
+    }));
+    mutateJobs?.(jobs);
+    const oldReader = fixture.reader;
+    fixture.reader = {
+        ...oldReader,
+        tree: ref => (ref === targetSha ? 'target-tree' : 'source-tree'),
+        entries: ref =>
+            ref === baseSha
+                ? oldReader
+                      .entries(sourceSha)
+                      .map(entry =>
+                          ['packages/core/src/service.ts', 'deploy/systemd/backup.py'].includes(entry.path)
+                              ? { ...entry, metadata: 'original-base' }
+                              : entry,
+                      )
+                : oldReader.entries(ref),
+    };
+    const oldApi = fixture.api;
+    fixture.api = endpoint => {
+        if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1') return nativeRun;
+        if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1/jobs?per_page=100')
+            return { total_count: jobs.length, jobs };
+        if (endpoint === `repos/owner/repo/compare/${baseSha}...${sourceSha}`)
+            return { status: 'ahead', base_commit: { sha: baseSha }, merge_base_commit: { sha: baseSha } };
+        return oldApi(endpoint);
+    };
+    fixture.nativeLogReader = () => {
+        if (missingLog)
+            throw Object.assign(new Error('Native log unavailable'), {
+                stderr: 'gh: Not Found (HTTP 404)',
+            });
+        return `[command]/usr/bin/git log -1 --format=%H\n${sourceSha}\n  BASE_SHA: ${baseSha}\n  FULL: false\n${JSON.stringify(scope, null, 2)}\n`;
+    };
+    return fixture;
+}
+
+test('failed ordinary CI retains only exact-input native success groups and can never anchor a release', async () => {
+    const result = await findInputCoverage(nativeRecoveryFixture());
+    assert.equal(result.anchor, undefined);
+    assert.deepEqual(
+        result.reused.map(item => item.check),
+        ['backend:core'],
+    );
+    assert.equal(result.reused[0].evidenceKind, 'partial-native');
+    assert.equal(result.reused[0].sourceRunConclusion, 'failure');
+    assert.equal(result.reused[0].runAttempt, 1);
+    assert.deepEqual(
+        result.reused[0].nativeJobs.map(job => job.name),
+        ['build affected packages', 'affected unit tests (22.x)', 'e2e (mysql) (22.x)'],
+    );
+    assert.ok(result.missing.some(check => check.kind === 'quality'));
+    assert.ok(result.missing.some(check => check.kind === 'controls'));
+});
+
+test('a new successful source anchor plus native success coverage closes only the actually missing checks', async () => {
+    const result = await findInputCoverage(
+        nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true }),
+    );
+    assert.equal(result.anchor.runId, 2);
+    assert.deepEqual(result.missing, []);
+    assert.ok(
+        result.reused.some(item => item.evidenceKind === 'partial-native' && item.check === 'backend:core'),
+    );
+});
+
+test('a new narrow successful gate cannot erase failed quality checks omitted from its executed scope', async () => {
+    const result = await findInputCoverage(nativeRecoveryFixture({ targetProof: true }));
+    assert.equal(result.anchor.runId, 2);
+    assert.ok(result.missing.some(check => check.id === 'quality:packages/core/src/service.ts'));
+    assert.ok(!result.reused.some(item => item.check === 'quality:packages/core/src/service.ts'));
+});
+
+test('a dependency fixture change keeps downstream native business checks missing', async () => {
+    const fixture = nativeRecoveryFixture();
+    const entries = fixture.reader.entries;
+    fixture.reader.entries = ref => [
+        ...entries(ref),
+        {
+            path: 'packages/common/src/helper.spec.ts',
+            metadata: ref === targetSha ? 'fixed-typed-fixture' : 'original-typed-fixture',
+        },
+    ];
+    const result = await findInputCoverage(fixture);
+    assert.ok(result.missing.some(check => check.id === 'backend:core'));
+    assert.ok(!result.reused.some(item => item.check === 'backend:core'));
+});
+
+test('native recovery rejects changed business input and changed execution recipes', async () => {
+    for (const changes of [
+        { 'packages/core/src/service.ts': 'changed-business' },
+        {
+            '.github/workflows/build_and_test.yml': workflow.replace(
+                'Build affected packages and preserve compiled output',
+                'Changed execution step',
+            ),
+        },
+    ]) {
+        const result = await findInputCoverage(nativeRecoveryFixture({ changes }));
+        assert.ok(result.missing.some(check => check.id === 'backend:core'));
+        assert.ok(!result.reused.some(check => check.check === 'backend:core'));
+    }
+});
+
+test('missing logs or failed native jobs never supply coverage or disrupt other valid proof', async () => {
+    for (const fixture of [
+        nativeRecoveryFixture({ targetProof: true, missingLog: true }),
+        nativeRecoveryFixture({
+            targetProof: true,
+            mutateJobs: jobs => {
+                jobs[2].conclusion = 'failure';
+            },
+        }),
+    ]) {
+        const result = await findInputCoverage(fixture);
+        assert.equal(result.anchor.runId, 2);
+        assert.ok(result.missing.some(check => check.id === 'backend:core'));
+        assert.ok(!result.reused.some(item => item.check === 'backend:core'));
+    }
+});
+
+test('exhausted native metadata, comparison or log transport aborts before scope planning and emission', async () => {
+    const baseSha = 'c'.repeat(40);
+    const stages = [
+        { name: 'attempt metadata', endpoint: 'repos/owner/repo/actions/runs/1/attempts/1' },
+        { name: 'source comparison', endpoint: `repos/owner/repo/compare/${baseSha}...${sourceSha}` },
+        { name: 'scope log' },
+    ];
+    for (const stage of stages) {
+        const fixture = nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true });
+        const failure = ioTimeoutError();
+        let attempts = 0;
+        const delays = [];
+        const request = (command, args) => {
+            if (args.join(' ') === 'api --help') return legacyApiHelp;
+            attempts++;
+            throw failure;
+        };
+        const pause = delay => delays.push(delay);
+        if (stage.endpoint) {
+            const nativeApi = fixture.api;
+            fixture.api = endpoint =>
+                endpoint === stage.endpoint
+                    ? requestGitHubApi(endpoint, request, pause)
+                    : nativeApi(endpoint);
+        } else
+            fixture.nativeLogReader = (repository, jobId) =>
+                readNativeJobLog(repository, jobId, request, pause);
+        let planned = false;
+        let emitted = false;
+        const pipeline = findInputCoverage(fixture)
+            .then(coverage => {
+                planned = true;
+                return missingPlan(fixture.plan, coverage.missing);
+            })
+            .then(execution => {
+                emitted = true;
+                return execution;
+            });
+        await assert.rejects(pipeline, error => error === failure, stage.name);
+        assert.equal(attempts, 3, stage.name);
+        assert.deepEqual(delays, [1000, 2000], stage.name);
+        assert.equal(planned, false, stage.name);
+        assert.equal(emitted, false, stage.name);
+    }
+});
+
+test('malformed API metadata aborts planning with a fixed safe error instead of rejecting the source proof', async () => {
+    const fixture = nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true });
+    const nativeApi = fixture.api;
+    const marker = 'INVALID_NATIVE_RESPONSE_BODY_MARKER';
+    let calls = 0;
+    fixture.api = endpoint =>
+        endpoint === 'repos/owner/repo/actions/runs/1/attempts/1'
+            ? requestGitHubApi(
+                  endpoint,
+                  () => {
+                      calls++;
+                      return `{"native": ${marker}}`;
+                  },
+                  () => assert.fail('Malformed API JSON must not retry'),
+              )
+            : nativeApi(endpoint);
+    let planned = false;
+    let emitted = false;
+    const pipeline = findInputCoverage(fixture)
+        .then(coverage => {
+            planned = true;
+            return missingPlan(fixture.plan, coverage.missing);
+        })
+        .then(execution => {
+            emitted = true;
+            return execution;
+        });
+    await assert.rejects(pipeline, error => {
+        assert.equal(error.name, 'Error');
+        assert.equal(error.message, 'GitHub API response is not valid JSON');
+        assert.equal(error.cause, undefined);
+        assert.ok(!String(error).includes(marker));
+        return true;
+    });
+    assert.equal(calls, 1);
+    assert.equal(planned, false);
+    assert.equal(emitted, false);
+});
+
+test('native CLI protection, permission and process failures abort before planning or emitting a wider scope', async () => {
+    const failures = [
+        Object.assign(new Error('Output protection rejected the response'), {
+            stderr: 'the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway',
+        }),
+        Object.assign(new Error('Native log permission denied'), { stderr: 'gh: Forbidden (HTTP 403)' }),
+        Object.assign(new Error('Unsupported CLI option'), {
+            stderr: 'unknown flag: --allow-escape-sequences',
+        }),
+        Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' }),
+        new Error('Unexpected native process failure'),
+    ];
+    for (const failure of failures)
+        for (const stage of ['metadata', 'log']) {
+            const fixture = nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true });
+            let reads = 0;
+            if (stage === 'metadata') {
+                const nativeApi = fixture.api;
+                fixture.api = endpoint => {
+                    if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1') {
+                        reads++;
+                        throw failure;
+                    }
+                    return nativeApi(endpoint);
+                };
+            } else {
+                const request = (command, args) => {
+                    if (args.join(' ') === 'api --help') return legacyApiHelp;
+                    reads++;
+                    throw failure;
+                };
+                fixture.nativeLogReader = (repository, jobId) =>
+                    readNativeJobLog(repository, jobId, request, () =>
+                        assert.fail('Process errors do not retry'),
+                    );
+            }
+            let planned = false;
+            let emitted = false;
+            const pipeline = findInputCoverage(fixture)
+                .then(coverage => {
+                    planned = true;
+                    return missingPlan(fixture.plan, coverage.missing);
+                })
+                .then(execution => {
+                    emitted = true;
+                    return execution;
+                });
+            await assert.rejects(pipeline, error => error === failure, `${stage}: ${failure.message}`);
+            assert.equal(reads, 1);
+            assert.equal(planned, false);
+            assert.equal(emitted, false);
+        }
+});
+
+test('missing or malformed native evidence remains rejected while independent valid proof stays reusable', async () => {
+    for (const stage of ['metadata 404', 'log 404', 'malformed log']) {
+        const fixture = nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true });
+        const missing = Object.assign(new Error('Native evidence no longer exists'), {
+            stderr: 'gh: Not Found (HTTP 404)',
+        });
+        if (stage === 'metadata 404') {
+            const nativeApi = fixture.api;
+            fixture.api = endpoint => {
+                if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1') throw missing;
+                return nativeApi(endpoint);
+            };
+        } else if (stage === 'log 404')
+            fixture.nativeLogReader = () => {
+                throw missing;
+            };
+        else fixture.nativeLogReader = () => 'malformed native scope log';
+        const result = await findInputCoverage(fixture);
+        assert.equal(result.anchor.runId, 2, stage);
+        assert.ok(
+            result.reused.some(check => check.runId === 2),
+            stage,
+        );
+        assert.ok(!result.reused.some(check => check.runId === 1), stage);
+        assert.ok(
+            result.missing.some(check => check.id === 'backend:core'),
+            stage,
+        );
+        assert.ok(
+            result.nativeRejected.some(run => run.runId === 1),
+            stage,
+        );
+        assert.deepEqual(
+            result.nativeRejected.find(run => run.runId === 1),
+            {
+                runId: 1,
+                reason:
+                    stage === 'malformed log'
+                        ? 'Native proof structure is invalid'
+                        : 'Native proof is unavailable (404)',
+            },
+        );
+    }
+});
+
+test('bounded history reads keep unavailable proof missing instead of authorizing deployment', async () => {
     const fixture = coverageFixture();
     const api = fixture.api;
     let reads = 0;
     fixture.api = endpoint => {
         if (endpoint.includes('/actions/workflows/')) {
-            assert.match(endpoint, /per_page=5$/u);
+            assert.match(endpoint, /per_page=(?:5|20)$/u);
+            assert.equal(endpoint.endsWith('per_page=5'), endpoint.includes('&created='));
             reads++;
             return { workflow_runs: [] };
         }
@@ -607,6 +1152,42 @@ test('small history reads keep unavailable proof missing instead of authorizing 
             .map(check => check.id)
             .sort(),
     );
+});
+
+test('bounded historical lookup retains verified native success beyond five failed or cancelled follow-ups', async () => {
+    const fixture = nativeRecoveryFixture();
+    const api = fixture.api;
+    const newer = Array.from({ length: 6 }, (_, index) => ({
+        id: 10 + index,
+        status: 'completed',
+        conclusion: 'cancelled',
+        event: 'pull_request',
+        path: '.github/workflows/build_and_test.yml',
+        head_repository: { full_name: 'owner/repo' },
+    }));
+    const indexReads = [];
+    fixture.api = endpoint => {
+        if (endpoint.includes('/actions/workflows/') && endpoint.includes('/runs?')) {
+            const response = api(endpoint);
+            const limit = Number(/per_page=(\d+)$/u.exec(endpoint)[1]);
+            assert.ok(limit === 5 || limit === 20);
+            indexReads.push({ endpoint, limit });
+            return {
+                workflow_runs: endpoint.includes('/build_and_test.yml/')
+                    ? [...newer, ...response.workflow_runs].slice(0, limit)
+                    : response.workflow_runs,
+            };
+        }
+        return api(endpoint);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.equal(indexReads.length, 6);
+    assert.equal(indexReads.filter(read => read.limit === 5).length, 3);
+    assert.equal(indexReads.filter(read => read.limit === 20).length, 3);
+    assert.equal(result.anchor, undefined);
+    assert.ok(result.reused.some(check => check.check === 'backend:core' && check.runId === 1));
+    assert.ok(result.reused.every(check => check.runId === 1 && check.evidenceKind === 'partial-native'));
+    assert.ok(result.missing.length > 0);
 });
 
 test('backup-only follow-up combines narrow target proof with older full business proof', async () => {

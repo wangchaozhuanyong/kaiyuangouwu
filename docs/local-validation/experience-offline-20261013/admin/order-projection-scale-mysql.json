@@ -1,0 +1,24 @@
+{
+    "at": "2026-10-12T19:05:33.272Z",
+    "scope": "isolated actual SQL; synthetic lifecycle fixtures; page graph hydration checked separately",
+    "measurements": [
+        {
+            "orders": 1000,
+            "pageSize": 20,
+            "sqlQueriesForFileReadinessPageAndCounts": 3,
+            "p95Milliseconds": 48.95,
+            "samples": [46.88, 46.74, 45.66, 46.28, 48.95, 45.01, 47.46, 45.42, 45.77, 46.4],
+            "database": "mysql",
+            "fullOrderHydration": 0
+        },
+        {
+            "orders": 10000,
+            "pageSize": 20,
+            "sqlQueriesForFileReadinessPageAndCounts": 3,
+            "p95Milliseconds": 409.99,
+            "samples": [409.99, 397.33, 396.17, 384.86, 389.04, 389.61, 392.34, 392.75, 384.7, 386.25],
+            "database": "mysql",
+            "fullOrderHydration": 0
+        }
+    ]
+}

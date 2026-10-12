@@ -1249,7 +1249,7 @@ export function HomePage() {
                                                                 copyScrollable={heroCopyScrollable}
                                                                 content={slide}
                                                                 mediaOverlay={
-                                                                    desktop && heroCount > 0 ? (
+                                                                    heroCount > 0 ? (
                                                                         <div className="hero-overlay-controls">
                                                                             <div
                                                                                 className="hero-page-picker"

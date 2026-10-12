@@ -1,5 +1,5 @@
 import { ApolloLink, Observable } from '@apollo/client';
-import { getOperationAST, type DocumentNode } from 'graphql';
+import { getOperationAST, parse, type DocumentNode, type SelectionSetNode } from 'graphql';
 import { hasAcceptedMutationResult } from '../utils/admin-mutation-feedback';
 
 export const RESOURCE_INVALIDATION_EVENT = 'vendure:admin-resources-invalidated';
@@ -48,18 +48,54 @@ const authTransitionFields = new Set([
     'logout',
     'completeInitialPasswordChange',
 ]);
+const documentDomains = new WeakMap<DocumentNode, ResourceDomain[]>();
+const offlineResourceFields = new Set([
+    'confirmOfflinePayment',
+    'retryOfflinePaymentReview',
+    'prepareOfflinePaymentRefund',
+    'prepareLegacyOfflineOrder',
+    'submitLegacyOfflineOrder',
+]);
+/** Root fields, including fragments and aliases, describe data; variables and context never do. */
 export function resourceDomains(document: DocumentNode): ResourceDomain[] {
+    const cached = documentDomains.get(document);
+    if (cached) return cached;
+    const fragments = new Map(
+        document.definitions.flatMap(definition =>
+            definition.kind === 'FragmentDefinition'
+                ? [[definition.name.value, definition.selectionSet] as const]
+                : [],
+        ),
+    );
+    const fields: string[] = [];
+    const seen = new Set<string>();
+    const collect = (selection: SelectionSetNode) => {
+        for (const entry of selection.selections) {
+            if (entry.kind === 'Field') {
+                if (!authTransitionFields.has(entry.name.value)) fields.push(entry.name.value);
+            } else if (entry.kind === 'InlineFragment') collect(entry.selectionSet);
+            else if (!seen.has(entry.name.value)) {
+                seen.add(entry.name.value);
+                const fragment = fragments.get(entry.name.value);
+                if (fragment) collect(fragment);
+            }
+        }
+    };
     const operation = getOperationAST(document);
-    const fields =
-        operation?.selectionSet.selections
-            .filter(selection => selection.kind === 'Field')
-            .map(selection => selection.name.value)
-            .filter(name => !authTransitionFields.has(name))
-            .join(' ') ?? '';
-    return domainRules.filter(([, pattern]) => pattern.test(fields)).map(([domain]) => domain);
+    if (operation) collect(operation.selectionSet);
+    const names = fields.join(' ');
+    const domains = domainRules.filter(([, pattern]) => pattern.test(names)).map(([domain]) => domain);
+    if (fields.some(field => offlineResourceFields.has(field))) {
+        for (const domain of ['catalog', 'orders', 'marketing'] as const)
+            if (!domains.includes(domain)) domains.push(domain);
+    }
+    documentDomains.set(document, domains);
+    return domains;
 }
-export function resourceMatchesDomains(key: string, domains: ResourceDomain[]) {
-    return domainRules.some(([domain, pattern]) => domains.includes(domain) && pattern.test(key));
+export function resourceMatchesDomains(document: DocumentNode | string, domains: readonly ResourceDomain[]) {
+    // String support is for source-document tooling; opaque Runtime identities are never parsed.
+    const resource = resourceDomains(typeof document === 'string' ? parse(document) : document);
+    return resource.some(domain => domains.includes(domain));
 }
 export function invalidateAdminResources(domains: ResourceDomain[], reason: 'write' | 'event' = 'write') {
     if (domains.length && typeof window !== 'undefined')

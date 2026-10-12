@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "command": "eslint storefront Account API adapter and affected tests",
+  "errors": 7,
+  "warnings": 3,
+  "rules": ["prefer-promise-reject-errors", "unbound-method", "no-shadow", "import/order", "require-await"],
+  "repair": "The cancellation wait races the shared module promise with abort resolution, removes its listener in finally, and throws the original abort reason. Account methods are explicitly bound before reflection. Tests use a distinct constructor parameter, explicit reflection for method identity, and a promise-returning module loader. No lint rules or business assertions are disabled."
+}

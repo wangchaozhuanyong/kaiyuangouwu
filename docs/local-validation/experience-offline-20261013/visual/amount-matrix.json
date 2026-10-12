@@ -1,0 +1,206 @@
+{
+    "environment": "Actual ReferralPage; synthetic MYR balances, 320px; no production writes.",
+    "cases": [
+        {
+            "skin": "classic",
+            "language": "zh",
+            "name": "normal",
+            "available": 12500,
+            "pending": 2990,
+            "metrics": [
+                {
+                    "text": "125",
+                    "lines": 1,
+                    "width": 144,
+                    "scrollWidth": 144,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "29.9",
+                    "lines": 1,
+                    "width": 79,
+                    "scrollWidth": 79,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "classic",
+            "language": "zh",
+            "name": "large",
+            "available": 123456789,
+            "pending": 999999999999,
+            "metrics": [
+                {
+                    "text": "1,234,567.89",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "9,999,999,999.99",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "classic",
+            "language": "en",
+            "name": "normal",
+            "available": 12500,
+            "pending": 2990,
+            "metrics": [
+                {
+                    "text": "125",
+                    "lines": 1,
+                    "width": 144,
+                    "scrollWidth": 144,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "29.9",
+                    "lines": 1,
+                    "width": 79,
+                    "scrollWidth": 79,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "classic",
+            "language": "en",
+            "name": "large",
+            "available": 123456789,
+            "pending": 999999999999,
+            "metrics": [
+                {
+                    "text": "1,234,567.89",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "9,999,999,999.99",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "neo-minimalist",
+            "language": "zh",
+            "name": "normal",
+            "available": 12500,
+            "pending": 2990,
+            "metrics": [
+                {
+                    "text": "125",
+                    "lines": 1,
+                    "width": 144,
+                    "scrollWidth": 144,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "29.9",
+                    "lines": 1,
+                    "width": 79,
+                    "scrollWidth": 79,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "neo-minimalist",
+            "language": "zh",
+            "name": "large",
+            "available": 123456789,
+            "pending": 999999999999,
+            "metrics": [
+                {
+                    "text": "1,234,567.89",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "9,999,999,999.99",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "neo-minimalist",
+            "language": "en",
+            "name": "normal",
+            "available": 12500,
+            "pending": 2990,
+            "metrics": [
+                {
+                    "text": "125",
+                    "lines": 1,
+                    "width": 144,
+                    "scrollWidth": 144,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "29.9",
+                    "lines": 1,
+                    "width": 79,
+                    "scrollWidth": 79,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        },
+        {
+            "skin": "neo-minimalist",
+            "language": "en",
+            "name": "large",
+            "available": 123456789,
+            "pending": 999999999999,
+            "metrics": [
+                {
+                    "text": "1,234,567.89",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                },
+                {
+                    "text": "9,999,999,999.99",
+                    "lines": 1,
+                    "width": 256,
+                    "scrollWidth": 256,
+                    "whiteSpace": "nowrap",
+                    "overflowWrap": "normal"
+                }
+            ]
+        }
+    ],
+    "errors": []
+}

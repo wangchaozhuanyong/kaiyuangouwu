@@ -6,6 +6,7 @@ import {
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import {
@@ -20,6 +21,7 @@ import { DigitalProductService } from './digital-product.service';
 import { DigitalOrderReservation } from './entities/digital-product.entity';
 import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 import { isFileDownloadOrderLine } from './fulfillment-classification';
+import { type ProcessingFileCandidate } from './order-processing-projection';
 
 export type DigitalDeliveryStatus = 'READY' | 'PAYMENT_REQUIRED' | 'NOT_CONFIGURED' | 'FILE_MISSING';
 
@@ -47,6 +49,37 @@ export class DigitalDeliveryService {
         @Optional() private readonly cipher?: AutoCardCipherService,
     ) {}
 
+    /** Same filesystem/path checks as downloads, once per unique source, without signing links. */
+    async processingFileAvailability(
+        candidates: ProcessingFileCandidate[],
+    ): Promise<ProcessingFileCandidate[]> {
+        if (!this.tokens.configured) return [];
+        const byChannel = new Map<string, ProcessingFileCandidate[]>();
+        for (const candidate of candidates) {
+            const rows = byChannel.get(String(candidate.channelId)) ?? [];
+            rows.push(candidate);
+            byChannel.set(String(candidate.channelId), rows);
+        }
+        const ready: ProcessingFileCandidate[] = [];
+        await Promise.all(
+            [...byChannel].map(async ([channelId, rows]) => {
+                const resources = await this.files?.resources(
+                    channelId,
+                    rows.flatMap(row => (row.fileVersionId == null ? [] : [row.fileVersionId])),
+                );
+                for (const row of rows) {
+                    if (
+                        row.fileVersionId != null
+                            ? resources?.has(String(row.fileVersionId))
+                            : this.tokens.resourceForSku(channelId, row.sku)
+                    )
+                        ready.push(row);
+                }
+            }),
+        );
+        return ready;
+    }
+
     async deliveriesForOrder(
         ctx: RequestContext,
         orderId: string,
@@ -68,6 +101,58 @@ export class DigitalDeliveryService {
                 .filter(line => isFileDownloadOrderLine(line))
                 .map(line => this.deliveryForLine(ctx, order, line, options.metadataOnly === true)),
         );
+    }
+
+    /** Bulk read-only readiness for already scoped orders; never signs links or loads an order again. */
+    async metadataForOrders(
+        ctx: RequestContext,
+        orders: Order[],
+    ): Promise<Map<string, DigitalDeliveryItem[]>> {
+        orders.forEach(order => assertOrderSalesChannel(ctx, order));
+        const lines = orders.flatMap(order => order.lines.filter(isFileDownloadOrderLine));
+        const result = new Map<string, DigitalDeliveryItem[]>();
+        if (!lines.length) return result;
+        const reservations = this.digitalProducts
+            ? await this.connection.getRepository(ctx, DigitalOrderReservation).find({
+                  where: { channelId: ctx.channelId, orderLineId: In(lines.map(line => line.id)) },
+                  select: ['orderLineId', 'fileVersionId'],
+              })
+            : [];
+        const byLine = new Map(reservations.map(item => [String(item.orderLineId), item]));
+        const resources = await this.files?.resources(
+            ctx.channelId,
+            reservations.flatMap(item => (item.fileVersionId ? [item.fileVersionId] : [])),
+        );
+        const skuResources = new Map<string, boolean>();
+        for (const order of orders) {
+            result.set(
+                String(order.id),
+                order.lines.filter(isFileDownloadOrderLine).map(line => {
+                    const base = {
+                        orderLineId: String(line.id),
+                        sku: line.productVariant.sku,
+                        name: digitalDeliveryName(ctx, line),
+                    };
+                    if (!this.hasDownloadEntitlement(order, line))
+                        return { ...base, status: 'PAYMENT_REQUIRED' as const };
+                    if (!this.tokens.configured) return { ...base, status: 'NOT_CONFIGURED' as const };
+                    const reservation = byLine.get(String(line.id));
+                    let ready: boolean;
+                    if (reservation?.fileVersionId)
+                        ready = resources?.has(String(reservation.fileVersionId)) ?? false;
+                    else {
+                        if (!skuResources.has(base.sku))
+                            skuResources.set(
+                                base.sku,
+                                Boolean(this.tokens.resourceForSku(String(ctx.channelId), base.sku)),
+                            );
+                        ready = skuResources.get(base.sku) ?? false;
+                    }
+                    return { ...base, status: ready ? ('READY' as const) : ('FILE_MISSING' as const) };
+                }),
+            );
+        }
+        return result;
     }
 
     async authorizeDownload(

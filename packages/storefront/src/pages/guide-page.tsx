@@ -7,6 +7,7 @@ import {
 } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { type PublicGuideContent } from '../../../storefront-content-plugin/src/shared/public-seo';
 import { languageCodeFor } from '../i18n';
+import { usePageRouteCommit } from '../page-readiness';
 import { publicQueryMeta, storefrontQueryKeys, storefrontQueryRetry } from '../query-client';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
@@ -80,6 +81,7 @@ export function GuideContent({
 }
 
 export function GuidePage({ slug }: { slug: string }) {
+    usePageRouteCommit();
     const runtime = useStorefront();
     const { language, market } = runtime;
     const languageCode = languageCodeFor(language);

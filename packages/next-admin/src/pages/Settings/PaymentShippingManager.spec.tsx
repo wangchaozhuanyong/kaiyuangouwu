@@ -86,6 +86,66 @@ describe('PaymentShippingManager', () => {
         expect(html).not.toContain('测试配送');
     });
 
+    it('distinguishes same named formal and simulated payment methods by their server handler', () => {
+        const name = '提交订单后联系客服支付';
+        const html = renderManager('payment', {
+            ...data,
+            paymentMethods: {
+                totalItems: 3,
+                items: [
+                    {
+                        ...data.paymentMethods.items[0],
+                        id: 'legacy',
+                        name,
+                        translations: [
+                            { id: 'legacy-zh', languageCode: 'zh_Hans', name, description: '' },
+                            { id: 'legacy-en', languageCode: 'en', name, description: '' },
+                        ],
+                        handler: { code: 'controlled-test-payment-handler', args: [] },
+                    },
+                    {
+                        ...data.paymentMethods.items[0],
+                        id: 'formal',
+                        name,
+                        translations: [
+                            { id: 'formal-zh', languageCode: 'zh_Hans', name, description: '' },
+                            { id: 'formal-en', languageCode: 'en', name, description: '' },
+                        ],
+                        handler: { code: 'offline-manual-payment-handler', args: [] },
+                    },
+                    {
+                        ...data.paymentMethods.items[0],
+                        id: 'gateway',
+                        name: '测试客服支付',
+                        translations: [
+                            {
+                                id: 'gateway-zh',
+                                languageCode: 'zh_Hans',
+                                name: '测试客服支付',
+                                description: '',
+                            },
+                            { id: 'gateway-en', languageCode: 'en', name: '测试客服支付', description: '' },
+                        ],
+                        handler: { code: 'stripe-payment-handler', args: [] },
+                    },
+                ],
+            },
+        });
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const rows = host.querySelectorAll('tbody tr');
+        expect(rows).toHaveLength(3);
+        expect(rows[0]?.textContent).toContain(`${name}模拟测试`);
+        expect(rows[1]?.textContent).toContain(`${name}客服核款`);
+        expect(rows[0]?.querySelector('input')?.getAttribute('aria-label')).toBe(
+            `${name}（模拟测试）平台启用状态`,
+        );
+        expect(rows[1]?.querySelector('input')?.getAttribute('aria-label')).toBe(
+            `${name}（客服核款）平台启用状态`,
+        );
+        expect(rows[2]?.querySelector('input')?.getAttribute('aria-label')).toBe('测试客服支付平台启用状态');
+    });
+
     it('shows only independent payment switches in an operating store even for a SuperAdmin', () => {
         apolloMocks.useQuery.mockReturnValue({
             data: {

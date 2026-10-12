@@ -2,13 +2,15 @@
 import { QueryClient } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApiError, ShopApiTimeoutError } from './api';
-import { PaymentPage } from './payment-pages';
+import { OrderConfirmationPage, PaymentPage } from './payment-pages';
 import { ShopApiGraphQlError } from './shop-api-errors';
 
 const mocks = vi.hoisted(() => ({
+    confirmationOrder: undefined as Record<string, unknown> | undefined,
     refetch: vi.fn().mockResolvedValue({}),
     tokenRefetch: vi.fn().mockResolvedValue({}),
     walletBalance: 700,
@@ -34,15 +36,18 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
     useQuery: (options: { queryKey: string[]; enabled?: boolean; retry?: boolean }) => {
         mocks.queries.push(options);
         return {
-            data: options.queryKey.includes('referral-program')
-                ? { enabled: true, allowBalanceSpend: true }
-                : options.queryKey.includes('referral')
-                  ? { wallets: [{ currencyCode: 'CNY', availableBalance: mocks.walletBalance }] }
-                  : options.queryKey.includes('payment-methods')
-                    ? mocks.methods
-                    : options.queryKey.includes('usdt-checkout-quote')
-                      ? mocks.quote
-                      : undefined,
+            isFetchedAfterMount: true,
+            data: options.queryKey.includes('synthetic-manual-confirmation')
+                ? mocks.confirmationOrder
+                : options.queryKey.includes('referral-program')
+                  ? { enabled: true, allowBalanceSpend: true }
+                  : options.queryKey.includes('referral')
+                    ? { wallets: [{ currencyCode: 'CNY', availableBalance: mocks.walletBalance }] }
+                    : options.queryKey.includes('payment-methods')
+                      ? mocks.methods
+                      : options.queryKey.includes('usdt-checkout-quote')
+                        ? mocks.quote
+                        : undefined,
             error: options.queryKey.includes('usdt-order-confirmation-token') ? mocks.tokenError : null,
             refetch: options.queryKey.includes('usdt-order-confirmation-token')
                 ? mocks.tokenRefetch
@@ -55,6 +60,7 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
 beforeEach(() => {
     queryClient.clear();
     sessionStorage.clear();
+    mocks.confirmationOrder = undefined;
     mocks.methods = [];
     mocks.tokenError = null;
     mocks.quote = undefined;
@@ -285,11 +291,12 @@ async function renderPayment(
         order?: typeof syntheticOrder | null;
         onComplete?: ReturnType<typeof vi.fn>;
         onOrderChange?: ReturnType<typeof vi.fn>;
+        methods?: Array<Record<string, unknown>>;
         marketCode?: string;
         customer?: { id: string } | null;
     } = {},
 ) {
-    mocks.methods = [syntheticMethod];
+    mocks.methods = options.methods ?? [syntheticMethod];
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -355,6 +362,60 @@ function syntheticApi(overrides: Record<string, unknown> = {}) {
 }
 
 describe('payment response recovery', () => {
+    it('submits a formally typed merchant manual method once and completes to its awaiting-confirmation order', async () => {
+        const pending = {
+            ...syntheticOrder,
+            state: 'AwaitingManualPayment',
+            payments: [
+                { id: 'pending-manual', method: 'merchant-manual', amount: 113, state: 'PendingManual' },
+            ],
+        };
+        const api = syntheticApi({ addPaymentToOrder: vi.fn().mockResolvedValue(pending) });
+        const view = await renderPayment(api, {
+            methods: [
+                {
+                    ...syntheticMethod,
+                    code: 'merchant-manual',
+                    name: '测试名称也可正式使用',
+                    kind: 'OFFLINE_MANUAL',
+                },
+            ],
+        });
+        try {
+            expect(view.host.textContent).toContain('测试名称也可正式使用');
+            expect(view.host.textContent).toContain('提交订单并联系客服');
+            expect(view.host.querySelector('.payment-test-notice')).toBeNull();
+            await act(async () => {
+                view.submit();
+                await Promise.resolve();
+            });
+            expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+            expect(api.addPaymentToOrder).toHaveBeenCalledWith('merchant-manual', expect.anything());
+            expect(view.onComplete).toHaveBeenCalledExactlyOnceWith(pending, 'synthetic-original-token');
+        } finally {
+            await view.unmount();
+        }
+    });
+
+    it('gives a pending manual confirmation its support and copy actions without asserting payment success', () => {
+        mocks.confirmationOrder = { ...syntheticOrder, state: 'AwaitingManualPayment', payments: [] };
+        const markup = renderToStaticMarkup(
+            <OrderConfirmationPage
+                api={{} as never}
+                code={syntheticOrder.code}
+                confirmationToken="synthetic-manual-confirmation"
+                customer={{ id: 'synthetic-customer' } as never}
+                market={{ code: 'synthetic', currencyCode: 'CNY' } as never}
+                locale="zh-CN"
+                language="zh"
+            />,
+        );
+        expect(markup).toContain('订单已提交，待客服确认收款');
+        expect(markup).toContain('联系客服核款');
+        expect(markup).toContain('复制订单号');
+        expect(markup).not.toContain('支付成功');
+    });
+
     it('checks the original token after a lost response and never submits another payment', async () => {
         const api = syntheticApi();
         const view = await renderPayment(api);

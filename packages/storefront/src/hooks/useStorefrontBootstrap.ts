@@ -30,6 +30,7 @@ import {
 } from '../query-client';
 import { captureReferralAttribution } from '../referral-attribution';
 import { isStorefrontClosedError } from '../storefront-access';
+import { readInitialStorefrontBoot } from '../storefront-boot-data';
 import { readInitialPublicPage, setPublicPageNavigationScope } from '../storefront-page-data';
 import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
@@ -59,9 +60,41 @@ function previewLanguage(fallback: StorefrontLanguage): StorefrontLanguage {
     return parameters.get('storefrontPreviewLanguage') === 'en' ? 'en' : 'zh';
 }
 
+function initialAvailableCurrencies(config: StorefrontConfig): string[] {
+    const currency = config.currencyConfiguration;
+    const settlement = currency?.availableCurrencyCodes.length
+        ? currency.availableCurrencyCodes
+        : [config.defaultCurrencyCode];
+    return [
+        ...settlement,
+        ...(currency?.usdtDisplayEnabled && currency.usdtRateAvailable && currency.usdtPaymentConfigured
+            ? ['USDT']
+            : []),
+    ];
+}
+
 export function useStorefrontBootstrap() {
     const queryClient = useQueryClient();
-    const [initialPage, setInitialPage] = useState(readInitialPublicPage);
+    const [initialPage, setInitialPage] = useState(
+        () => readInitialPublicPage() ?? readInitialStorefrontBoot(),
+    );
+    const [initialPreferencesReady, setInitialPreferencesReady] = useState(
+        () =>
+            !initialPage ||
+            typeof document === 'undefined' ||
+            document.getElementById('root')?.dataset.publicRendered !== '1' ||
+            document.getElementById('root')?.dataset.publicAdopted === '1',
+    );
+    useEffect(() => {
+        if (initialPreferencesReady) return;
+        const adopted = () => {
+            if (document.getElementById('root')?.dataset.publicAdopted === '1')
+                setInitialPreferencesReady(true);
+        };
+        document.addEventListener('storefront:page-ready', adopted);
+        adopted();
+        return () => document.removeEventListener('storefront:page-ready', adopted);
+    }, [initialPreferencesReady]);
     const initializedPreferenceScope = useRef('');
     const restoredCacheScopes = useRef(new Set<string>());
 
@@ -70,24 +103,45 @@ export function useStorefrontBootstrap() {
         language: StorefrontLanguage;
     }>(() => {
         const initialMarket = initialPage ? marketForStorefrontConfig(initialPage.config) : enabledMarkets[0];
-        const currencyCode = readStoredSettlementCurrency(initialMarket);
+        const currencyCode = initialPage?.scope.currencyCode ?? readStoredSettlementCurrency(initialMarket);
         return {
             market: { ...initialMarket, currencyCode },
-            language: previewLanguage(readStoredLanguage(initialMarket)),
+            language: previewLanguage(
+                initialPage
+                    ? initialPage.scope.languageCode === 'en'
+                        ? 'en'
+                        : 'zh'
+                    : readStoredLanguage(initialMarket),
+            ),
         };
     });
     const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
-        readStoredCurrency(enabledMarkets[0]),
+        initialPage &&
+        typeof document !== 'undefined' &&
+        document.getElementById('root')?.dataset.publicRendered === '1'
+            ? initialPage.scope.currencyCode
+            : initialPage
+              ? readStoredCurrency(
+                    marketForStorefrontConfig(initialPage.config),
+                    initialAvailableCurrencies(initialPage.config),
+                )
+              : readStoredCurrency(enabledMarkets[0]),
     );
     const [storefrontContextResolved, setStorefrontContextResolved] = useState(Boolean(initialPage));
     const [favoriteProductIds, setFavoriteProductIds] = useState<string[]>([]);
     const [recentProductIds, setRecentProductIds] = useState<string[]>([]);
-    const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>([]);
+    const [availableCountries, setAvailableCountries] = useState<StorefrontConfig['availableCountries']>(
+        initialPage?.config.availableCountries ?? [],
+    );
     const [availableProvinces, setAvailableProvinces] = useState<
         NonNullable<StorefrontConfig['availableProvinces']>
-    >([]);
-    const [availableCurrencyCodes, setAvailableCurrencyCodes] = useState<string[]>([]);
-    const [currencySelectorEnabled, setCurrencySelectorEnabled] = useState(false);
+    >(initialPage?.config.availableProvinces ?? []);
+    const [availableCurrencyCodes, setAvailableCurrencyCodes] = useState<string[]>(
+        initialPage ? initialAvailableCurrencies(initialPage.config) : [],
+    );
+    const [currencySelectorEnabled, setCurrencySelectorEnabled] = useState(
+        initialPage?.config.currencyConfiguration?.selectorEnabled === true,
+    );
 
     const locale = localeFor(language, market);
     const text = uiCopy[language];
@@ -130,9 +184,9 @@ export function useStorefrontBootstrap() {
 
     const accountQuery = useQuery({
         queryKey: storefrontQueryKeys.customer(storefrontQueryKeys.market(market), vendureLanguageCode),
-        queryFn: ({ signal }) => api.activeCustomer(signal),
+        queryFn: ({ signal }) => api.customerIdentity(signal),
         enabled: storefrontContextResolved && !accessDenied,
-        staleTime: 0,
+        staleTime: 60_000,
     });
     const customerAuthenticated = Boolean(accountQuery.data);
     const queryContext = {
@@ -142,6 +196,7 @@ export function useStorefrontBootstrap() {
         vendureLanguageCode,
         storefrontContextResolved: storefrontContextResolved && !accessDenied,
         customerAuthenticated,
+        customerIdentityQuery: accountQuery,
     };
     const visualConfig = useStorefrontVisualPreset(
         api,
@@ -218,7 +273,7 @@ export function useStorefrontBootstrap() {
 
     useEffect(() => {
         const config = configQuery.data;
-        if (!config || storefrontUnavailable) return;
+        if (!config || storefrontUnavailable || !initialPreferencesReady) return;
         const nextStorefrontCode = config.code;
         const configuredMarket = marketForStorefrontConfig(config);
         const currencyConfiguration = config.currencyConfiguration;
@@ -316,6 +371,7 @@ export function useStorefrontBootstrap() {
         queryClient,
         vendureLanguageCode,
         marketCode,
+        initialPreferencesReady,
     ]);
 
     useStorefrontBrandColors(configQuery.data, visualConfig.presetId, {

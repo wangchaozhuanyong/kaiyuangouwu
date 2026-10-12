@@ -567,7 +567,7 @@
 }
 
 .support-qr-frame {
-    width: min(64vw, 240px);
+    width: min(calc(100vw - 64px), 320px);
     aspect-ratio: 1;
     padding: 8px;
     border-radius: 12px;
@@ -707,18 +707,42 @@
 
 .support-qr-save {
     width: 100%;
-    min-height: 46px;
-    margin-top: 18px;
-    border-radius: 10px;
+    min-height: var(--experience-control-min);
+    margin-top: var(--space-16);
+    border: 0;
+    border-radius: var(--skin-control-radius);
     background: var(--accent);
     color: var(--accent-foreground);
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
-    font-weight: var(--font-weight-bold);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
     display: flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
+}
+
+.support-qr-save-actions {
+    width: 100%;
+}
+
+.support-qr-save:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.support-qr-save-result {
+    display: block;
+    margin-top: var(--space-8);
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    text-align: center;
+}
+
+.support-qr-frame img {
+    -webkit-touch-callout: default;
+    user-select: auto;
 }
 
 .support-qr-save:hover {

@@ -1,0 +1,33 @@
+{
+  "extends": "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@vendure/content-translation-plugin": [
+        "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/content-translation-plugin/src/index.ts"
+      ],
+      "@vendure/storefront-content-plugin": [
+        "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/storefront-content-plugin/src/index.ts"
+      ],
+      "vitest": [
+        "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/node_modules/vitest/index.d.cts"
+      ]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/index.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/merchant-initial-password.service.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/offline-payment-proof.spec.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/offline-payment-proof.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/performance/storefront-public-cache.service.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/promotion/store-coupon-lifecycle.service.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/referral/referral-today-metrics.spec.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/referral/referral.service.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/storefront-lcp-preload.controller.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/storefront-lcp-preload.service.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/storefront-lcp-preload.spec.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/storefront-public-page.service.ts",
+    "/Users/wangchao/Desktop/\u6e90\u7801\u6587\u4ef6\u5939/vendure\u5f00\u6e90/vendure-master/packages/store-management-plugin/src/storefront-public-page.spec.ts"
+  ]
+}

@@ -1,0 +1,495 @@
+{
+  "at": "2026-10-12T20:31:03.057Z",
+  "scope": "Local affected CI build closure, exact package scripts and public workflow build-check environment; no service startup, remote CI or deploy",
+  "selectedPackages": 28,
+  "closurePackages": 30,
+  "commands": [
+    [
+      "bunx",
+      "lerna",
+      "run",
+      "build",
+      "--scope",
+      "@vendure/admin-ui-plugin",
+      "--scope",
+      "@vendure/asset-server-plugin",
+      "--scope",
+      "@vendure/catalog-management-plugin",
+      "--scope",
+      "@vendure/cli",
+      "--scope",
+      "@vendure/commerce-fulfillment-plugin",
+      "--scope",
+      "@vendure/content-translation-plugin",
+      "--scope",
+      "@vendure/core",
+      "--scope",
+      "@vendure/create",
+      "--scope",
+      "@vendure/dashboard",
+      "--scope",
+      "dev-server",
+      "--scope",
+      "@vendure/email-plugin",
+      "--scope",
+      "@vendure/graphiql-plugin",
+      "--scope",
+      "@vendure/harden-plugin",
+      "--scope",
+      "@vendure/icloud-relay-plugin",
+      "--scope",
+      "@vendure/image-generation-plugin",
+      "--scope",
+      "@vendure/job-queue-plugin",
+      "--scope",
+      "@vendure/next-admin-plugin",
+      "--scope",
+      "@vendure/operations-dashboard-plugin",
+      "--scope",
+      "@vendure/store-domain-plugin",
+      "--scope",
+      "@vendure/store-management-plugin",
+      "--scope",
+      "@vendure/storefront-cart-plugin",
+      "--scope",
+      "@vendure/storefront-catalog-plugin",
+      "--scope",
+      "@vendure/storefront-content-plugin",
+      "--scope",
+      "@vendure/storefront-review-plugin",
+      "--scope",
+      "@vendure/telemetry-plugin",
+      "--scope",
+      "@vendure/testing",
+      "--scope",
+      "@vendure/two-factor-dashboard-plugin",
+      "--scope",
+      "@vendure/ui-devkit",
+      "--include-dependencies"
+    ]
+  ],
+  "built": [
+    {
+      "directory": "common",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/common-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "email-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/email-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "asset-server-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/asset-server-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "harden-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/harden-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "telemetry-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/telemetry-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "content-translation-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/content-translation-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "operations-dashboard-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/operations-dashboard-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "storefront-catalog-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/storefront-catalog-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "storefront-review-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/storefront-review-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "store-domain-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/store-domain-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "catalog-management-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/catalog-management-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "image-generation-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/image-generation-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "next-admin-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/next-admin-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "icloud-relay-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/icloud-relay-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "two-factor-dashboard-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/two-factor-dashboard-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "job-queue-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/job-queue-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "testing",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/testing-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "cli",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/cli-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "create",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/create-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "admin-ui-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/admin-ui-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "admin-ui",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/legacy-admin-ui-build-cache-corrected.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "ui-devkit",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/legacy-ui-devkit-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "dashboard",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/legacy-dashboard-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "graphiql-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/legacy-graphiql-plugin-build.json",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "directory": "dev-server",
+      "proof": [
+        {
+          "target": "dev-server-server-types",
+          "command": [
+            "bunx",
+            "tsc",
+            "--project",
+            "tsconfig.server.json",
+            "--noEmit"
+          ],
+          "exitCode": 0,
+          "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-server-types-build.json"
+        },
+        {
+          "target": "dev-server-worker-types",
+          "command": [
+            "bunx",
+            "tsc",
+            "--project",
+            "tsconfig.worker.json",
+            "--noEmit"
+          ],
+          "exitCode": 0,
+          "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-worker-types-build.json"
+        },
+        {
+          "target": "dev-server-server",
+          "command": [
+            "node",
+            "../cli/dist/cli.js",
+            "build",
+            "server",
+            "--no-progress"
+          ],
+          "exitCode": 0,
+          "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-server-build.json"
+        },
+        {
+          "target": "dev-server-worker",
+          "command": [
+            "node",
+            "../cli/dist/cli.js",
+            "build",
+            "worker",
+            "--no-progress"
+          ],
+          "exitCode": 0,
+          "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-worker-build.json"
+        }
+      ],
+      "note": "Exact package CLI server/worker compilation; unchanged plugin and next-admin prerequisites reused."
+    }
+  ],
+  "reused": [
+    {
+      "directory": "core",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/../payment/core-build.log",
+      "status": "Root confirmed final successful input, frozen hashes unchanged"
+    },
+    {
+      "directory": "storefront-cart-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/../payment/cart-build.log",
+      "status": "Root confirmed final successful input, frozen hashes unchanged"
+    },
+    {
+      "directory": "storefront-content-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/content-build-final.log",
+      "exitCode": 0,
+      "status": "Recorded final successful build, frozen hashes unchanged"
+    },
+    {
+      "directory": "store-management-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/management-build-final.log",
+      "exitCode": 0,
+      "status": "Recorded final successful build, frozen hashes unchanged"
+    },
+    {
+      "directory": "commerce-fulfillment-plugin",
+      "proof": "docs/local-validation/experience-offline-20261013/admin/commerce-build-final.log",
+      "exitCode": 0,
+      "status": "Recorded final successful build, frozen hashes unchanged"
+    }
+  ],
+  "runtime": [
+    {
+      "target": "dev-server-server-types",
+      "command": [
+        "bunx",
+        "tsc",
+        "--project",
+        "tsconfig.server.json",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-server-types-build.json"
+    },
+    {
+      "target": "dev-server-worker-types",
+      "command": [
+        "bunx",
+        "tsc",
+        "--project",
+        "tsconfig.worker.json",
+        "--noEmit"
+      ],
+      "exitCode": 0,
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-worker-types-build.json"
+    },
+    {
+      "target": "dev-server-server",
+      "command": [
+        "node",
+        "../cli/dist/cli.js",
+        "build",
+        "server",
+        "--no-progress"
+      ],
+      "exitCode": 0,
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-server-build.json"
+    },
+    {
+      "target": "dev-server-worker",
+      "command": [
+        "node",
+        "../cli/dist/cli.js",
+        "build",
+        "worker",
+        "--no-progress"
+      ],
+      "exitCode": 0,
+      "proof": "docs/local-validation/experience-offline-20261013/admin/ci-closure/dev-server-worker-build.json"
+    }
+  ],
+  "missing": [],
+  "frozenInputVerification": {
+    "files": 1411,
+    "changedFiles": []
+  },
+  "compiledArtifactReadiness": {
+    "paths": [
+      "packages/admin-ui/dist",
+      "packages/admin-ui/package",
+      "packages/admin-ui-plugin/lib",
+      "packages/asset-server-plugin/lib",
+      "packages/catalog-management-plugin/dist",
+      "packages/cli/dist",
+      "packages/commerce-fulfillment-plugin/dist",
+      "packages/common/lib",
+      "packages/content-translation-plugin/dist",
+      "packages/core/dist",
+      "packages/core/cli",
+      "packages/create/lib",
+      "packages/dashboard/dist",
+      "packages/dev-server/dist",
+      "packages/email-plugin/lib",
+      "packages/graphiql-plugin/dist",
+      "packages/harden-plugin/lib",
+      "packages/icloud-relay-plugin/dist",
+      "packages/image-generation-plugin/dist",
+      "packages/job-queue-plugin/package",
+      "packages/next-admin/dist",
+      "packages/next-admin-plugin/dist",
+      "packages/operations-dashboard-plugin/dist",
+      "packages/store-domain-plugin/dist",
+      "packages/store-management-plugin/dist",
+      "packages/storefront/dist",
+      "packages/storefront/dist-two-factor",
+      "packages/storefront-cart-plugin/dist",
+      "packages/storefront-catalog-plugin/dist",
+      "packages/storefront-content-plugin/dist",
+      "packages/storefront-review-plugin/dist",
+      "packages/telemetry-plugin/dist",
+      "packages/testing/lib",
+      "packages/two-factor-dashboard-plugin/dist",
+      "packages/ui-devkit/client",
+      "packages/ui-devkit/compiler"
+    ],
+    "trackedOutput": []
+  },
+  "independentFrontendProof": "Final storefront and next-admin builds owned by root; no repeated local frontend builds",
+  "dependencyRepair": "docs/local-validation/experience-offline-20261013/admin/ci-closure/legacy-dependency-repair.json"
+}

@@ -1,0 +1,24 @@
+{
+  "at": "2026-10-12T19:53:41.070Z",
+  "reason": "GraphQLModule HttpAdapterHost provider identity mismatch before scale fixtures execute",
+  "contexts": {
+    "package.json": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "common": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "graphql": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "graphqlCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js"
+    },
+    "packages/core/package.json": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "common": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "graphql": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "graphqlCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js"
+    },
+    "packages/testing/package.json": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "common": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "graphql": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "graphqlCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js"
+    }
+  }
+}

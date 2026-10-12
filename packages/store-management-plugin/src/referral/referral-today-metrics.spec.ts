@@ -210,7 +210,7 @@ describe('referral today metrics queries', () => {
 
         await (service as any).rewardSettledOrder({ channelId: 'channel-1' }, 'order-1', settledAt);
 
-        expect(relationship.firstPaidOrderAt).toBe(settledAt);
+        expect(relationship.firstPaidOrderAt?.getTime()).toBe(settledAt.getTime());
         expect(saveRelationship).toHaveBeenCalledWith(relationship, { reload: false });
     });
 

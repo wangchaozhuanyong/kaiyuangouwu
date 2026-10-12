@@ -3,6 +3,7 @@ import type { BrandLoadingProps } from './brand-loading';
 import { useContext, useLayoutEffect, useRef, useState } from 'react';
 
 import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-image';
+import { readInitialStorefrontBoot } from './storefront-boot-data';
 import { readInitialPublicPage } from './storefront-page-data';
 import { StorefrontContext } from './StorefrontContext';
 
@@ -18,7 +19,7 @@ export default function BrandLoadingContent({
 }: BrandLoadingProps) {
     const context = useContext(StorefrontContext);
     // Root router pending renders outside the provider. Only the validated server payload may brand it.
-    const initialPage = context ? undefined : readInitialPublicPage();
+    const initialPage = context ? undefined : (readInitialPublicPage() ?? readInitialStorefrontBoot());
     const resolvedLanguage = language ?? context?.language ?? initialPage?.scope.languageCode ?? 'zh';
     const chinese = resolvedLanguage === 'zh' || resolvedLanguage.startsWith('zh_');
     const known = !context || Boolean(context.storefrontCode);
@@ -45,12 +46,15 @@ export default function BrandLoadingContent({
     if (local) {
         return (
             <span className="page-loading-indicator">
-                <span className="brand-loading-dots" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                </span>
-                <span>{label}</span>
+                <BrandLoadingLogo key={owner} source={source} />
+                <span>{loadingLabel}</span>
+                {pending && (
+                    <span className="brand-loading-dots" aria-hidden="true">
+                        <i />
+                        <i />
+                        <i />
+                    </span>
+                )}
             </span>
         );
     }

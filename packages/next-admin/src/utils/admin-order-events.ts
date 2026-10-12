@@ -85,14 +85,35 @@ function deliver(session: Session, message: StreamMessage, relay = false) {
     if (relay) session.channel?.postMessage(message);
 }
 
+function waitUntilOnline(signal: AbortSignal) {
+    if (navigator.onLine !== false || signal.aborted) return Promise.resolve();
+    return new Promise<void>(resolve => {
+        const finish = () => {
+            if (!signal.aborted && navigator.onLine === false) return;
+            window.removeEventListener('online', finish);
+            signal.removeEventListener('abort', finish);
+            resolve();
+        };
+        window.addEventListener('online', finish);
+        signal.addEventListener('abort', finish, { once: true });
+        finish();
+    });
+}
+
 async function connect(session: Session, channelToken: string) {
     const { signal } = session.controller;
     let delay = 1000;
     let rateLimitDelay = 30000;
     while (!signal.aborted && !isUnauthorized(session)) {
+        await waitUntilOnline(signal);
+        if (signal.aborted || isUnauthorized(session)) return;
         let nextDelay = delay;
+        const request = new AbortController();
+        const cancel = () => request.abort();
+        signal.addEventListener('abort', cancel, { once: true });
+        window.addEventListener('offline', cancel);
         try {
-            const response = await openAdminOrderEvents(channelToken, signal, session.cursor);
+            const response = await openAdminOrderEvents(channelToken, request.signal, session.cursor);
             if (signal.aborted) {
                 await response.body?.cancel();
                 return;
@@ -108,7 +129,7 @@ async function connect(session: Session, channelToken: string) {
                 rateLimitDelay = Math.min(rateLimitDelay * 2, 300000);
                 await response.body?.cancel();
             } else {
-                await readAdminOrderStream(response, signal, {
+                await readAdminOrderStream(response, request.signal, {
                     ready: cursor => {
                         delay = 1000;
                         nextDelay = 1000;
@@ -123,12 +144,17 @@ async function connect(session: Session, channelToken: string) {
                 });
             }
         } catch {
-            // Dropped reads reconnect; cancellation never starts a replacement request.
+            // Dropped reads reconnect; offline waits for connectivity without replacement reads.
+        } finally {
+            signal.removeEventListener('abort', cancel);
+            window.removeEventListener('offline', cancel);
         }
         if (signal.aborted || isUnauthorized(session)) return;
         deliver(session, { type: 'status', value: 'disconnected' }, true);
-        await pause(signal, nextDelay);
-        delay = Math.min(delay * 2, 30000);
+        if (navigator.onLine !== false) {
+            await pause(signal, nextDelay);
+            delay = Math.min(delay * 2, 30000);
+        }
     }
 }
 

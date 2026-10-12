@@ -38,7 +38,8 @@ export function syntheticPage(store, languageCode, kind, options = {}) {
     const host = options.host ?? `${store}.test`;
     const origin = options.origin ?? `https://${host}`;
     const collectionId = `${store}-collection`;
-    const name = zh ? `${store} 合成测试商店` : `${store} Synthetic test store`;
+    // Merchant settings enforce sixteen display units; keep the normal fixture admissible.
+    const name = zh ? `${store}测试` : `${store} Shop`;
     const body = zh
         ? `${store} 中文合成公开正文，仅用于本地验收。`
         : `${store} English synthetic public body for local acceptance only.`;
@@ -174,8 +175,8 @@ export function syntheticPage(store, languageCode, kind, options = {}) {
             defaultCurrencyCode: 'MYR',
             defaultLanguageCode: 'en',
             customFields: {
-                storefrontNameZh: `${store} 合成测试商店`,
-                storefrontNameEn: `${store} Synthetic test store`,
+                storefrontNameZh: `${store}测试`,
+                storefrontNameEn: `${store} Shop`,
             },
             availableCountries: [{ code: 'MY', name: 'Malaysia' }],
             description: body,

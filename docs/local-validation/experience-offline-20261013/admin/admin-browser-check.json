@@ -1,0 +1,35 @@
+{
+    "at": "2026-10-12T19:05:53.620Z",
+    "source": "actual public runtime components, Chromium, synthetic fixtures; no backend or business writes",
+    "measurements": [
+        {
+            "width": 390,
+            "samplesMilliseconds": [
+                39, 36.8, 37.1, 38, 39.8, 38.3, 36.8, 40, 36.6, 37.9, 38.4, 38.6, 37.8, 38.4, 38.5, 39.5,
+                37.8, 37.5, 37.9, 38.3
+            ],
+            "p95Milliseconds": 39.8,
+            "retainedDirtyPages": 2,
+            "cleanCacheLimit": 8,
+            "hiddenOverlayPreserved": true,
+            "nestedEscapePreservedLowerLayer": true,
+            "scopeClearedDrafts": true,
+            "offlineContentRetained": true
+        },
+        {
+            "width": 1440,
+            "samplesMilliseconds": [
+                31.4, 39.3, 39.3, 39.4, 39.5, 39.4, 37.4, 39.6, 37.4, 40.5, 39.5, 39.3, 39, 39.4, 39.3, 39.4,
+                39.4, 39.5, 41.2, 37.5
+            ],
+            "p95Milliseconds": 40.5,
+            "retainedDirtyPages": 2,
+            "cleanCacheLimit": 8,
+            "hiddenOverlayPreserved": true,
+            "nestedEscapePreservedLowerLayer": true,
+            "scopeClearedDrafts": true,
+            "offlineContentRetained": true
+        }
+    ],
+    "errors": []
+}

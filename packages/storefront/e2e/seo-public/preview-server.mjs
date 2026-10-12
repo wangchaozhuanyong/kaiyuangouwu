@@ -12,8 +12,9 @@ import { syntheticPage } from './fixtures.mjs';
 // Uses the actual completed production artifacts; this script never builds or contacts a backend.
 const dist = path.resolve(fileURLToPath(new URL('../../dist/', import.meta.url)));
 const require = createRequire(import.meta.url);
-const { renderPublicPage } = require(path.join(dist, '.server/public-page-renderer.cjs'));
-const template = await readFile(path.join(dist, 'index.html'), 'utf8');
+const renderPublicPage = page =>
+    require(path.join(dist, '.server/public-page-renderer.cjs')).renderPublicPage(page);
+let template;
 const mime = {
     '.js': 'application/javascript',
     '.css': 'text/css',
@@ -116,8 +117,8 @@ function graphQlData(page) {
     return data;
 }
 
-function assembleFixtureHtml(page, body) {
-    const document = load(template);
+function assembleFixtureHtml(page, body, htmlTemplate) {
+    const document = load(htmlTemplate);
     document('html').attr('lang', page.scope.languageCode === 'zh_Hans' ? 'zh-CN' : 'en');
     document('html').attr('data-storefront-preset', page.visualPreset?.presetId ?? 'classic');
     document('title').text(page.seo.title);
@@ -156,10 +157,13 @@ function assembleFixtureHtml(page, body) {
     return document.html();
 }
 
-export async function startSeoFixtureServer(port = 0, { transformPage } = {}) {
+export async function startSeoFixtureServer(
+    port = 0,
+    { transformPage, renderPage = renderPublicPage, transformHtml, serveAssets, listenHost = '::' } = {},
+) {
     const pageFor = (...args) => {
         const page = dataFor(...args);
-        transformPage?.(page);
+        transformPage?.(page, { url: args[0], host: args[1] });
         return page;
     };
     const server = http.createServer(async (request, response) => {
@@ -193,6 +197,7 @@ export async function startSeoFixtureServer(port = 0, { transformPage } = {}) {
                 response.end(picture);
                 return;
             }
+            if (serveAssets && (await serveAssets(request, response))) return;
             const asset = path.resolve(dist, '.' + decodeURIComponent(url.pathname));
             if (
                 asset.startsWith(dist + path.sep) &&
@@ -212,17 +217,20 @@ export async function startSeoFixtureServer(port = 0, { transformPage } = {}) {
                 return;
             }
             const page = pageFor(url, host);
-            const body = await renderPublicPage(page);
+            const body = await renderPage(page);
             response.writeHead(200, {
                 'content-type': 'text/html; charset=utf-8',
                 'cache-control': 'no-store',
             });
-            response.end(assembleFixtureHtml(page, body));
+            const htmlTemplate =
+                (await transformHtml?.(url.pathname)) ??
+                (template ??= await readFile(path.join(dist, 'index.html'), 'utf8'));
+            response.end(assembleFixtureHtml(page, body, htmlTemplate));
         } catch (error) {
             json(response, { error: error.message }, 500);
         }
     });
-    await new Promise(resolve => server.listen(port, '::', resolve));
+    await new Promise(resolve => server.listen(port, listenHost, resolve));
     return {
         port: server.address().port,
         requests,

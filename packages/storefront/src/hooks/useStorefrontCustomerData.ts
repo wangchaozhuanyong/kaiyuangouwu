@@ -4,7 +4,8 @@ import { uiCopy } from '../i18n';
 import { offlineLoadError, resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
-import { type StorefrontConfig } from '../types';
+import { type RouteName } from '../storefront-router';
+import { type ActiveCustomer, type CustomerIdentity, type StorefrontConfig } from '../types';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
 
@@ -16,7 +17,18 @@ export function useStorefrontCustomerData({
     storefrontContextResolved,
     customerAuthenticated,
     configQuery,
+    customerIdentityQuery,
+    activeRoute = 'account',
+    homepageCoupons = false,
+    homepageRecommendations = false,
 }: StorefrontQueryContext & {
+    customerIdentityQuery: Pick<
+        UseQueryResult<CustomerIdentity | null>,
+        'data' | 'isLoading' | 'isPaused' | 'isError' | 'error' | 'refetch'
+    >;
+    activeRoute?: RouteName;
+    homepageCoupons?: boolean;
+    homepageRecommendations?: boolean;
     configQuery: Pick<
         UseQueryResult<StorefrontConfig>,
         'isLoading' | 'isPaused' | 'isError' | 'error' | 'refetch'
@@ -37,14 +49,85 @@ export function useStorefrontCustomerData({
         staleTime: 0,
     });
 
-    const customerQuery = useQuery({
-        queryKey: customerQueryKey,
-        queryFn: ({ signal }) => api.activeCustomer(signal),
-        enabled: storefrontContextResolved,
-        staleTime: 0,
+    // Bootstrap owns the sole identity observer. Addresses and recent orders do not
+    // join its critical path or get downloaded by every navigation.
+    const customerQuery = customerIdentityQuery;
+    const identity = storefrontContextResolved ? (customerQuery.data ?? null) : null;
+    const addressRoutes: RouteName[] = ['addresses', 'account-security', 'purchase', 'checkout', 'payment'];
+    const orderRoutes: RouteName[] = ['account', 'orders', 'notifications', 'logistics', 'recommendations'];
+    const needsAddresses = addressRoutes.includes(activeRoute);
+    const needsOrders =
+        orderRoutes.includes(activeRoute) || (activeRoute === 'home' && homepageRecommendations);
+    const customerAddressesQueryKey = [
+        ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
+        'customer-addresses',
+        identity?.id ?? '',
+    ];
+    const customerRecentOrdersQueryKey = [
+        ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
+        'customer-recent-orders',
+        identity?.id ?? '',
+    ];
+    const customerAddressesQuery = useQuery({
+        queryKey: customerAddressesQueryKey,
+        queryFn: ({ signal }) => api.customerAddresses(signal),
+        enabled: Boolean(identity) && needsAddresses,
+        staleTime: 60_000,
     });
-
-    const customer = storefrontContextResolved ? (customerQuery.data ?? null) : null;
+    const customerRecentOrdersQuery = useQuery({
+        queryKey: customerRecentOrdersQueryKey,
+        queryFn: ({ signal }) => api.customerRecentOrders(signal),
+        enabled: Boolean(identity) && needsOrders,
+        staleTime: 60_000,
+    });
+    const confirmedMissing =
+        (needsAddresses && customerAddressesQuery.data === null) ||
+        (needsOrders && customerRecentOrdersQuery.data === null);
+    const customer: ActiveCustomer | null =
+        identity && !confirmedMissing
+            ? {
+                  ...identity,
+                  ...(customerAddressesQuery.data !== undefined
+                      ? { addresses: customerAddressesQuery.data }
+                      : {}),
+                  ...(customerRecentOrdersQuery.data != null
+                      ? { orders: customerRecentOrdersQuery.data }
+                      : {}),
+              }
+            : null;
+    const requiredDetails = customer
+        ? [
+              ...(needsAddresses ? [customerAddressesQuery] : []),
+              ...(needsOrders && activeRoute !== 'home' && activeRoute !== 'recommendations'
+                  ? [customerRecentOrdersQuery]
+                  : []),
+          ]
+        : [];
+    const detailsFailure = requiredDetails.find(
+        query => query.data === undefined && (query.isError || query.isPaused),
+    );
+    const detailsPending = requiredDetails.find(query => query.data === undefined);
+    const customerDetailsLoadState = resolveQueryLoadState({
+        hasData: !detailsPending,
+        isLoading: Boolean(detailsPending) && !detailsFailure,
+        isPaused: Boolean(detailsFailure?.isPaused),
+        isError: Boolean(detailsFailure?.isError),
+    });
+    const customerDetailsLoadError = detailsFailure
+        ? (storefrontInitialQueryError(detailsFailure, language) ?? offlineLoadError(language))
+        : '';
+    const retryCustomerDetails = () =>
+        Promise.all(requiredDetails.map(query => query.refetch({ cancelRefetch: false })));
+    const couponRoutes: RouteName[] = [
+        'coupons',
+        'product',
+        'cart',
+        'purchase',
+        'checkout',
+        'payment',
+        'account',
+    ];
+    const needsCoupons = couponRoutes.includes(activeRoute) || (activeRoute === 'home' && homepageCoupons);
 
     const couponCampaignsQueryKey = storefrontQueryKeys.couponCampaigns(
         storefrontQueryKeys.market(market),
@@ -55,7 +138,7 @@ export function useStorefrontCustomerData({
     const couponCampaignsQuery = useQuery({
         queryKey: couponCampaignsQueryKey,
         queryFn: ({ signal }) => api.activeCouponCampaigns(signal),
-        enabled: Boolean(customer),
+        enabled: Boolean(customer) && needsCoupons,
         staleTime: 0,
     });
 
@@ -70,7 +153,7 @@ export function useStorefrontCustomerData({
     const customerCouponsQuery = useQuery({
         queryKey: customerCouponQueryKey,
         queryFn: ({ signal }) => api.myAvailableCoupons(signal),
-        enabled: Boolean(customer),
+        enabled: Boolean(customer) && needsCoupons,
         staleTime: 0,
     });
 
@@ -83,7 +166,7 @@ export function useStorefrontCustomerData({
             customer?.id ?? '',
         ),
         queryFn: ({ signal }) => api.myCouponUsageRecordsPage({ take: 20 }, signal),
-        enabled: Boolean(customer),
+        enabled: Boolean(customer) && activeRoute === 'coupons',
         staleTime: 0,
     });
 
@@ -122,7 +205,10 @@ export function useStorefrontCustomerData({
               : text.loadError;
 
     const couponCampaignsLoading =
-        Boolean(customer) && couponCampaignsQuery.isPending && couponCampaignsQuery.data === undefined;
+        Boolean(customer) &&
+        needsCoupons &&
+        couponCampaignsQuery.isPending &&
+        couponCampaignsQuery.data === undefined;
 
     const couponCampaignsError =
         customerQuery.data === undefined && customerQuery.isError
@@ -136,6 +222,16 @@ export function useStorefrontCustomerData({
         cartQuery,
         customerQuery,
         customer,
+        customerAddressesQueryKey,
+        customerRecentOrdersQueryKey,
+        customerDetailsLoadState,
+        customerDetailsLoadError,
+        retryCustomerDetails,
+        customerHistoryPending:
+            Boolean(customer) &&
+            needsOrders &&
+            customerRecentOrdersQuery.data === undefined &&
+            !customerRecentOrdersQuery.isError,
         couponCampaignsQueryKey,
         couponCampaignsQuery,
         activeCoupons,

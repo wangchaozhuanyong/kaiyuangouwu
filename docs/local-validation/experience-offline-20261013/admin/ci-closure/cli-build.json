@@ -1,0 +1,461 @@
+{
+  "directory": "cli",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "rimraf dist && tsc -p ./tsconfig.cli.json && ts-node ./build.ts",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli",
+  "startedAt": "2026-10-12T20:24:02.326Z",
+  "finishedAt": "2026-10-12T20:24:04.331Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/cli-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/README.md",
+      "sha256": "b0ad1a82481b83789fd92320189aa173246a052f619a1f8726e50d234e16359b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/cli.ts",
+      "sha256": "7ea544b3eb9334486090639f3f6fad7628ad8fa8ccc98ce12f2276acb345dc71"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/add.spec.ts",
+      "sha256": "9a39fc9742661405376220cddc681279a773576ef57ea21c079777b733fb6bb1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/add.ts",
+      "sha256": "8ddf9972d416b4be6253ff81dabab70b4dd592c1c0fd3beebaf374789039f942"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/api-extension/add-api-extension.ts",
+      "sha256": "74a0bef397f5d4714faa7da9680fe0d3aecf1606d9bfac463d73df81dcf8cb05"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/api-extension/templates/api-extensions.template.ts",
+      "sha256": "5333a9be3318f616ee0cd6f5e1cca1e7ba55079d5d436f64d44dc1414bb67899"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/api-extension/templates/crud-resolver.template.ts",
+      "sha256": "a04d7a2b4af0ee0f25c0616602c7b0191e440484a9c6feb3ad03dce9ccffd052"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/api-extension/templates/simple-resolver.template.ts",
+      "sha256": "a75bace071d65303c68b10e70ec4edd9a7c091d977cbc007a403a8a9bf213540"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/codegen/add-codegen.ts",
+      "sha256": "223584ec918b162f4abfe33eeb95f3623abc8d21b52a1e231ccb91ad8a007211"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/codegen/codegen-config-ref.ts",
+      "sha256": "68f9aa210ac6ad2be5e4a8c46799941e260e0132e4c94b25dc1b4008b945bf09"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/codegen/templates/codegen.template.ts",
+      "sha256": "86b4d54164a366b53e34082e60ef1f1165dde7fc2d63e8c9ba5aa8fb610bf286"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/dashboard/add-dashboard.ts",
+      "sha256": "7b55895ee5e322ecefac0b7711219e3444d52dfb3554b5b10d2b961dd7024fd1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/dashboard/templates/index.template.tsx",
+      "sha256": "ad5a392aa9e1e15a1a9e10957c178734cc63ecb5232bc188dda0df84f1d54527"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/add-entity.ts",
+      "sha256": "9107e2675b6d61f1b51127cbee5a8f25a2e92d2695e6e27bfb5304e7342228a0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/codemods/add-entity-to-plugin/add-entity-to-plugin.spec.ts",
+      "sha256": "84d85c1dd762df52a617e70edf1e5dcc2745c1054fb782f1875c6edeb91a97c4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/codemods/add-entity-to-plugin/add-entity-to-plugin.ts",
+      "sha256": "395779c60817de438681ec63e966e9bae078dd7c4c97c9c453db9be3c104ffd9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/codemods/add-entity-to-plugin/fixtures/existing-entity-prop.expected",
+      "sha256": "4ab27ac9f1c18dd521c50cf0915dad5ce70df5a8fa86d591f4cd3977cee7b7bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/codemods/add-entity-to-plugin/fixtures/existing-entity-prop.fixture.ts",
+      "sha256": "f605d13925a4ce59677c09a3cdcf238109e230efcbe4030e23f1299f16f181e1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/codemods/add-entity-to-plugin/fixtures/no-entity-prop.expected",
+      "sha256": "0e1b8cbea7e8c655e76f7079505900f0a774cff2b0841f5e66d73e4ea7b34933"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/codemods/add-entity-to-plugin/fixtures/no-entity-prop.fixture.ts",
+      "sha256": "e2cfcbc6e7fd1fb9231e7db004abca8fcd4b340cfb29b9b0fbb0a6d2c3c98892"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/templates/entity-translation.template.ts",
+      "sha256": "a165fdc97f850ba5fa14364473ed907d986f20b60748bf2afdeb5f6d857ddce5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/entity/templates/entity.template.ts",
+      "sha256": "6c4ac966e6c6a77664cd13e0de3d159c5e939f27750da0f3fb77615b5e75ac84"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/job-queue/add-job-queue.ts",
+      "sha256": "95da1e53babf7b996c0ad3d52cbd8e77fd2ddc3c6eee4b83e71c91a13808f159"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/plugin/create-new-plugin.spec.ts",
+      "sha256": "6ea5ea892951620d3d6214d2f272231ae1756dac619723cbde26ebdd20279bde"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/plugin/create-new-plugin.ts",
+      "sha256": "e546fdba88f6a063e0a8845bba5ffcd6b206e331c5f71446e69d10b402866204"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/plugin/templates/constants.template.ts",
+      "sha256": "7a18f5891fa4fd4195ed9c8cff380ac0eec375df98f06666b841f2564d580b28"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/plugin/templates/plugin.template.ts",
+      "sha256": "55f6554162307aa7d5a8f1537f787af4f16f2e234da18d4e83955d249082dd1a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/plugin/templates/types.template.ts",
+      "sha256": "6989e92e1436aeb092b7ee7ba3c7201321e68175aa7bc8aadc03e817ed657d31"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/plugin/types.ts",
+      "sha256": "c66404a140a71fe6013da40db7787cd60ad4cb84aa06c70453d4bcf78b0889b8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/service/add-service.ts",
+      "sha256": "2e8f439f6c52558a3a0c3616b61b901e3fd7fddc9a7fca535e7f39eda208a3de"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/service/templates/basic-service.template.ts",
+      "sha256": "1567993cbcb22c26c1d3ef16d1bd3d0a9857ce5d784aae5c4db3730fcb119c35"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/service/templates/entity-service.template.ts",
+      "sha256": "24d7fe4e6ac7b0d19ba01e2ff9acba55dfdcaa231f7e8ba60864ea5efacf7e86"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/add-ui-extensions.ts",
+      "sha256": "fc39008b3688d94e83c299e1d5a96ab17dd039a49710e89e6e81d2f379c9a882"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/add-ui-extension-static-prop/add-ui-extension-static-prop.spec.ts",
+      "sha256": "488e8218f40d5ed26c5f2013910289fee36c58ed11352f5b9af96c5ac29e8ba0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/add-ui-extension-static-prop/add-ui-extension-static-prop.ts",
+      "sha256": "7781108de3635790eb7f4e11f9603220056e97a2804441729cbe43f577d04bd3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/add-ui-extension-static-prop/fixtures/no-ui-prop.expected",
+      "sha256": "620f70b02284ea9b4da69901ce79ee5c32233c4923ff102497e4caed1312a69d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/add-ui-extension-static-prop/fixtures/no-ui-prop.fixture.ts",
+      "sha256": "e2cfcbc6e7fd1fb9231e7db004abca8fcd4b340cfb29b9b0fbb0a6d2c3c98892"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/update-admin-ui-plugin-init/fixtures/existing-app-prop.expected",
+      "sha256": "701e1f26716186dd5ee7944e48ddd399f83900194d939e2795cd4a4a162d1555"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/update-admin-ui-plugin-init/fixtures/existing-app-prop.fixture.ts",
+      "sha256": "8723e571bd53e54c50b1e9b33d9d75769105d8cb39c275d57171fa089b6bcd65"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/update-admin-ui-plugin-init/fixtures/no-app-prop.expected",
+      "sha256": "ce9d4a0fc298cd4646a9512af26fe1c7ef789b278cc2bcf529c180697ebee277"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/update-admin-ui-plugin-init/fixtures/no-app-prop.fixture.ts",
+      "sha256": "febae1b152ffd189c7cbf67bb8bbc2d69117103d37ec69a3c06ddddd338a9d52"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/update-admin-ui-plugin-init/update-admin-ui-plugin-init.spec.ts",
+      "sha256": "a28a43b150dc6313392eca83ba0e7b67a9f41b72c4d40671731914051e5febf8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/codemods/update-admin-ui-plugin-init/update-admin-ui-plugin-init.ts",
+      "sha256": "501a5f6ded4954b2d0fde26df982c24e9988e3478668557183ae46ade00938a7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/templates/providers.template.ts",
+      "sha256": "eae31d79bfcaddc6c7165686785b9c2b51189771465575fb692ae4ec3f8afe8d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/add/ui-extensions/templates/routes.template.ts",
+      "sha256": "9d4274653b2d97fde804a575e8ec2313f2fb805c445f3f49501a683d3ca27619"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/build/build.spec.ts",
+      "sha256": "044fd482bb181daaeb3c4072df44011f680330b4f677953c45a4165c29fb58c2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/build/build.ts",
+      "sha256": "997c146cd4f620aaec8a2fb60b68616d1728f098b6eb898930b875d4260abefd"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/codemod.ts",
+      "sha256": "748727953d0c03e627a91c0ed20c53271b7f0e79c18d18dbf4e0f9601f5ffb4e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/dashboard-ui-migration.spec.ts",
+      "sha256": "756113fffff69b743b37372500430967be050348a946d8ddb6b589f07fca875a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/dashboard-ui-migration.ts",
+      "sha256": "bb359fb498f664c76b1d5284b5ed42fd63ca5b957d866171f04b54f96b382f1e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/transforms/accordion-props.ts",
+      "sha256": "486f0a00b42b64c496f1d273a872fb04569d53b2d5dfb1d1367914329bce3881"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/transforms/as-child-to-render.ts",
+      "sha256": "dfe9576aec185cf0c341bc4dce606392a45f66a6f0fb2dc1a88771973f6fa659"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/transforms/form-components.ts",
+      "sha256": "eadc9cc0f4af6f8ef1dfe2f988b3f102501cc781e0603cda0738d5a51813d0ca"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/transforms/import-consolidation.ts",
+      "sha256": "78ba1297c8ca9e3443f7131160d1aaccf946aed30f448064e9b4e1f033473570"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/codemod/dashboard-ui/transforms/select-items-prop.ts",
+      "sha256": "7d6a20c6da001b6dc43235552993e34bd406c349218fca9598d5e245341004fd"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/command-declarations.ts",
+      "sha256": "dff5f2b932415957299022f5bb47852c2700a4e33c6a2ed744f3638ff3d2526f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/dev/dev.spec.ts",
+      "sha256": "3d4df4b8f571b5b5c85fb00cfe26d91824adfcea9b3ad834f429e908aeef2739"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/dev/dev.ts",
+      "sha256": "991f4d32d3be24f3aed4a0967b9415ea656bd584a4ac8be1815f28b1568b128e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/config-check.ts",
+      "sha256": "1b848298c132dfeefc679244864367431738ea296aeb4512f2d4bd6ed3590344"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/database-check.ts",
+      "sha256": "deb8c5f232f73b95c91ee091033bae4c857f8c1a72add1a6682f9fcd11482e31"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/dependency-check.spec.ts",
+      "sha256": "357762284eeb0ca165065fed4ed662fea7c846109f1b594521ceb52ec1ba8a0e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/dependency-check.ts",
+      "sha256": "32a81f86719ce0caf9474221e38a61fe774f7ee4010acedcf121def7fa5da73c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/production-check.spec.ts",
+      "sha256": "c1427d5dd96202a2bba4a640fb52be6d68ff368141676dcb2cbc9a70a94f4fea"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/production-check.ts",
+      "sha256": "db8fc426eab263091d6af40f1deb6af4ba7f8566ab47d124ce32aebb2f4d1c9b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/project-check.spec.ts",
+      "sha256": "3692df3400947c789d40c7924d520acf1891feb5c074ee39a0ff9eecfd5d7466"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/project-check.ts",
+      "sha256": "673f23b1dc7fff540a2711f865c3f41529f30f4da2688ba6898907a4ad314ee7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/checks/schema-check.ts",
+      "sha256": "c480442aa1d1423ec91187cfd947990c31c8058366ffaf290a89f6c08dbfc550"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/doctor.spec.ts",
+      "sha256": "83f39ea5259457eeb5e027f6dcf6df212d67e1fd3273566e6dd87edd03128021"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/doctor.ts",
+      "sha256": "8a4e310a7e5694a8a519dda5a1d2fe283d79bc17306c3a3969bb6187b5dfb7d1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/formatters/console-formatter.spec.ts",
+      "sha256": "0b712ea12628f07108b30a46d3620cdbe7e47fcf9caf9772031c97b1a031c1bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/formatters/console-formatter.ts",
+      "sha256": "98d07797730fff8152b084a91a7586098932a463f42dadd3e1505220f86b9d45"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/formatters/json-formatter.spec.ts",
+      "sha256": "a95832814c7f365b05ce97fd02ced7dd62c4f36ad081e013efd0e71632de94d4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/formatters/json-formatter.ts",
+      "sha256": "8cc04003804469acf3c0f6c211b4834b90277f562097325f2749d3cccba1e2e0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/doctor/types.ts",
+      "sha256": "053549be2e1624f5ca2ef4ca579ab5ee94c265076602593080f7b8a81068c6b1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/generate-migration/generate-migration.ts",
+      "sha256": "d33cee3d1603b37bcd159952421f8259d02113c90465756f1c782d5c54cef468"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/migrate.spec.ts",
+      "sha256": "1d61d89d8a1b1513b35513b56f6cdec02252b0456142ea32e459182660c5cac6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/migrate.ts",
+      "sha256": "70cf009d8eaed276995414d0c12961537fbf9ce46508ba9243fc59f4bf7fcef0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/migration-operations.spec.ts",
+      "sha256": "e4e7c25a35c1e0fa8c7375e1372a50b96ec40dd414830c4171bf492d2ca0da6e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/migration-operations.ts",
+      "sha256": "b3735503c4b5db6bb0a10cd05ceb1dd6d6b9ea0bdb8834da83efc4adf0f1f8d2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/revert-migration/revert-migration.spec.ts",
+      "sha256": "3b928346e0ae2d34be0e25dbbd88f59c29d069e6d70ee2a0b7495f1eaade43b5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/revert-migration/revert-migration.ts",
+      "sha256": "dc3c697601a1c2dd5caacf6a5a0cf538c79f0230dd057013a14d9173c4ad1c84"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/migrate/run-migration/run-migration.ts",
+      "sha256": "019f9c059e14952ab39e2d0d928909b839ec2bc130798a7e6ba2f03c69d641f1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/schema/generate-schema/generate-schema.ts",
+      "sha256": "3d0eca54a52d895f9c8d6e3251b0c8a6eae98569d1e21961343fa23f8edde6f1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/schema/schema.spec.ts",
+      "sha256": "c4b691e9e10dd313fb75262bc601cc1c1fde5c71b2061b120558cbacb0a53475"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/schema/schema.ts",
+      "sha256": "2432d8ba5e87b4ef50a7ff9416a66df5ecf8e4faa17ded8b037763f1e8cc0f7a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/start/start.spec.ts",
+      "sha256": "66837ac9826c306da98374f375c764ad5889bc33d0f388afb0b8b166fdfbe847"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/commands/start/start.ts",
+      "sha256": "e24ee79b0b852341820f3e5e3bd72513b3a6ef78efaf0bfd3d7af0b9ef50b8ee"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/constants.ts",
+      "sha256": "7bda166b5fd0f2ab2cb0c9c7e0aaf6a0d6f94a7b99d5a59d56021d18de203c86"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/cli-command-definition.ts",
+      "sha256": "d7bd428fa7db05b9ccaa943234af9f2b0b3c659c49f9e093ac03d082ed53f384"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/cli-command.ts",
+      "sha256": "4dd2a9e6dff8fa29de99c50cf5b48553d88c2a08c171b20347e37df229d6cf8a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/cli-process-utils.spec.ts",
+      "sha256": "56b040798fe59ec9523381d997a3d90c407f23867938acac3ad15c76ac3a9832"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/cli-process-utils.ts",
+      "sha256": "2d2f5eee041139347f4903dd8ced6929ed0d9970799fbe7fe1f1040f65be0c7e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/command-registry.ts",
+      "sha256": "b083538474d77773124efe0f74031d4c5a02014e99ba453e21c9b908f3c19571"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/entity-ref.ts",
+      "sha256": "3cb5b96ae586682740c111e979baf3bb6dd411484b355aecd83b0d479a9ff44d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/load-vendure-config-file.spec.ts",
+      "sha256": "086f04e7d368b8e428e07250c7c8df66fedd42d0fffbd3da631caab56713fdfc"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/load-vendure-config-file.ts",
+      "sha256": "4e8e647270ad0494430d069952decf91714766ead87bdf3471d3938c441dbef5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/package-json-ref.ts",
+      "sha256": "e51f66e8c20d7347e4120a6001f75bd7d66d1e49866ce76798d0bd69cbfc33f3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/plugin-resolution.ts",
+      "sha256": "72ff529ebbbcce75ff41140a81ccdeb7a9af6303974125facf9a9000a897aec8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/project-validation.ts",
+      "sha256": "490b9f158e0ff2a4fbd4a317da832fba06b89eeafaad3810e434d9deefa3bac6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/service-ref.ts",
+      "sha256": "e00f164db816f4dc5ee522b6833d3ee567238f03f323c34b071fe98a34e46bef"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/shared-prompts.ts",
+      "sha256": "d0859f31872d50ec4305b2d20c95cc0d0f836311b27c02db46a5fb1819311478"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/vendure-config-ref.ts",
+      "sha256": "347b0533b3a77046b4f7d8aa4c22a9eeae2119fcf00cda832b79d0d784545d9b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/shared/vendure-plugin-ref.ts",
+      "sha256": "7ecf7f199d5c9ea2d45cbf3f17c4829c0f3a7af40e5a77c3137c9cb720a2e985"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/types.ts",
+      "sha256": "257df1baee26025b01045177de39d98b46adc544e81b3b4636e297e7d040e1a4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/ast-utils.ts",
+      "sha256": "aa3424b61abc38f7badb612719c8172313137a5f509633c9572d11c1a0a92b80"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/case-utils.spec.ts",
+      "sha256": "1acbf97202b98f75e8f4a7010c3b5713acbb1154487395e8ca8a6b6f7cd6494c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/case-utils.ts",
+      "sha256": "2e2edac8fcdfe160340aae63a017e1fc365780d1e4db1b370b31f36ee1cdf5d5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/monorepo-utils.ts",
+      "sha256": "d906c169fb1cbdc01f10fb4c24d83b6f1e21648aeb169e73e129a6b5b19b8dca"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/testing-utils.ts",
+      "sha256": "fc39fa0af2aa9c8ea4a4dec804c693d6e0eb4fecdcfdcd85e84fade09e5781b5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/utils.spec.ts",
+      "sha256": "c2cdb2e68c152012fd15436ec406fb6fc0ff2687686bb572773c6265254ce560"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/cli/src/utilities/utils.ts",
+      "sha256": "18850f59ec181726f1530fc8621aca19d9025e182c8777356f275c33969f7aef"
+    }
+  ],
+  "changedInputs": []
+}

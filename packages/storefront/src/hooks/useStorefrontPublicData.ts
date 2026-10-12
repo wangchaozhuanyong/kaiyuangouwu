@@ -1,6 +1,9 @@
-import { useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
+// organize-imports-ignore -- Preserve the ESLint type-import groups.
+import type { MediaDescriptor } from '../../../storefront-content-plugin/src/shared/responsive-image';
+import { skipToken, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
+import { publicPageRequestFromUrl } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { type PublicSeoDocument } from '../../../storefront-content-plugin/src/shared/public-seo';
 import { storefrontNavigationCollections } from '../api/catalog';
 import { SEND_CLIENT_CHANNEL_TOKEN } from '../api/helpers';
@@ -37,10 +40,29 @@ export function useStorefrontPublicData({
     const text = uiCopy[language];
     const queryClient = useQueryClient();
     const request = currentPublicPageRequest();
+    const publicRoute = (() => {
+        if (typeof window === 'undefined') return true;
+        try {
+            return Boolean(publicPageRequestFromUrl(window.location.pathname + window.location.search));
+        } catch {
+            return false;
+        }
+    })();
     const initialSeoPage = readInitialPublicPage();
+    const publicMediaQuery = useQuery<MediaDescriptor[]>({
+        queryKey: [
+            ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
+            'public-media',
+        ],
+        queryFn: skipToken,
+        enabled: false,
+        staleTime: PUBLIC_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
     // Observe metadata delivered by the same public read; this observer never starts a request.
     const publicSeoQuery = useQuery<PublicSeoDocument | null>({
         queryKey: publicSeoQueryKey(storefrontQueryKeys.market(market), vendureLanguageCode, request),
+        queryFn: skipToken,
         enabled: false,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
@@ -66,6 +88,7 @@ export function useStorefrontPublicData({
         fallback: () => Promise<T>,
         signal?: AbortSignal,
     ): Promise<T> {
+        if (!publicRoute) return fallback();
         const page = await fetchPublicPage(
             vendureLanguageCode,
             market.currencyCode,
@@ -143,7 +166,9 @@ export function useStorefrontPublicData({
                 ? publicSection('products', () => api.products(12, signal), signal)
                 : api.products(12, signal),
         // Non-home recommendations never repeat the current catalog aggregate or delay its first rows.
-        enabled: storefrontContextResolved && (request.kind === 'home' || readyLocation === locationKey),
+        enabled:
+            storefrontContextResolved &&
+            ((publicRoute && request.kind === 'home') || readyLocation === locationKey),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         ...aggregatePart,
@@ -168,6 +193,7 @@ export function useStorefrontPublicData({
             'public',
         ],
         queryFn: async ({ signal }) => {
+            if (!publicRoute) return api.storefrontConfig(signal);
             const page = await fetchPublicPage(
                 vendureLanguageCode,
                 storefrontContextResolved ? market.currencyCode : undefined,
@@ -341,6 +367,7 @@ export function useStorefrontPublicData({
     const contentError = storefrontInitialQueryError(contentQuery, language);
     return {
         publicSeo: publicSeoQuery.data,
+        publicMedia: publicMediaQuery.data ?? [],
         productsQuery,
         collectionsQuery,
         configQuery,

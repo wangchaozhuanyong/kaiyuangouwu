@@ -1,0 +1,15 @@
+{
+    "verifiedAt": "2026-10-12T19:46:44.121579+00:00",
+    "runnerSession": 36111,
+    "pid": 20295,
+    "parentPid": 20253,
+    "port": 37406,
+    "ownedDirectory": "reports/order-closure-mysql/1791831421760",
+    "verification": [
+        "owner write_stdin returned live same session",
+        "ready.json pid/datadir/port matched owned pid file",
+        "lsof listener pid matched 20295",
+        "ps executable matched owned mysql-8.0.29 runtime"
+    ],
+    "state": "idle; waiting for final API scale test job"
+}

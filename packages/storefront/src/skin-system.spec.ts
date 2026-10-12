@@ -7,6 +7,7 @@ import {
     resolveStorefrontSemanticPalette,
     resolveStorefrontSkinTreatment,
     semanticPaletteCssVariables,
+    storefrontReferralCssVariables,
 } from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { storefrontVisualPresets } from '../../storefront-content-plugin/src/visual-presets';
 
@@ -176,6 +177,25 @@ describe('storefront skin system', () => {
         });
         expect(stylesheet('./pages/referral-page.tsx')).not.toContain('data-referral-theme');
     });
+
+    it.each(['classic', 'neo-minimalist'] as const)(
+        'matches referral first-frame CSS and runtime shared roles in %s',
+        presetId => {
+            const variables: Record<string, string> = {};
+            const css = postcss.parse(stylesheet('./styles/visual-presets.css'));
+            css.walkRules(rule => {
+                if (
+                    rule.selector === 'html[data-storefront-preset]' ||
+                    rule.selector === `html[data-storefront-preset='${presetId}']`
+                ) {
+                    rule.walkDecls(/^--referral-/, declaration => {
+                        variables[declaration.prop] = declaration.value;
+                    });
+                }
+            });
+            expect(variables).toEqual(storefrontReferralCssVariables(presetId));
+        },
+    );
 
     it('preserves directory B without overriding the active storefront skin', () => {
         const selector = ".business-services-page[data-services-layout='directory-b']";
@@ -456,7 +476,7 @@ describe('storefront skin system', () => {
                         ) &&
                         // The approved carousel marker identifies only the current interactive page.
                         !(
-                            file === path.join(__dirname, 'styles/desktop-home.css') &&
+                            file === path.join(__dirname, 'styles/home-showcase.css') &&
                             selector.trim() === ".hero-page-picker button[aria-current='true']::after" &&
                             /width:\s*12px\s*;/.test(body) &&
                             /height:\s*2px\s*;/.test(body) &&
@@ -1151,7 +1171,9 @@ describe('storefront skin system', () => {
             /\.hero-rich-cta-btn\s*\{[^}]*min-height:\s*var\(--experience-control-min, 44px\);[^}]*white-space:\s*normal;/,
         );
         expect(mobile).toMatch(/\.hero-rich-cta-label\s*\{[^}]*overflow:\s*visible;/);
-        expect(mobile).toMatch(/\.hero-overlay-controls[^}]*left:\s*50%;[^}]*translateX\(-50%\)/);
+        expect(mobile).toMatch(
+            /\.hero-overlay-controls[^}]*bottom:\s*12px;[^}]*left:\s*auto;[^}]*right:\s*12px;[^}]*transform:\s*none;/,
+        );
         // Complete copy grows the scene; it is neither a separate row nor an internal reading scroller.
         expect(mobile).not.toMatch(
             /grid-row:\s*[12]|60%|text-overflow:\s*ellipsis|overflow-[xy]:\s*auto|16\s*\/\s*9/,

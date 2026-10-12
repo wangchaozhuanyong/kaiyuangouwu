@@ -64,16 +64,29 @@ const overview: MyReferralOverview = {
     ledger: [],
 };
 
-function renderReferralPage(customOverview?: Partial<MyReferralOverview>): string {
+function renderReferralPage(
+    customOverview?: Partial<MyReferralOverview>,
+    options: { currency?: string; language?: 'zh' | 'en' } = {},
+): string {
     vi.stubGlobal('window', { location: { origin: 'https://storefront.example.com' } });
     const client = createStorefrontQueryClient();
-    const languageCode = languageCodeFor('zh');
+    const language = options.language ?? 'zh';
+    const currentMarket = {
+        ...market,
+        currencyCode: options.currency ?? market.currencyCode,
+        locale: language === 'en' ? 'en-MY' : market.locale,
+    };
+    const languageCode = languageCodeFor(language);
     client.setQueryData(
-        storefrontQueryKeys.referralProgram(storefrontQueryKeys.market(market), languageCode),
+        storefrontQueryKeys.referralProgram(storefrontQueryKeys.market(currentMarket), languageCode),
         program,
     );
     client.setQueryData(
-        storefrontQueryKeys.customerReferral(storefrontQueryKeys.market(market), languageCode, customer.id),
+        storefrontQueryKeys.customerReferral(
+            storefrontQueryKeys.market(currentMarket),
+            languageCode,
+            customer.id,
+        ),
         { ...overview, ...customOverview },
     );
 
@@ -88,9 +101,9 @@ function renderReferralPage(customOverview?: Partial<MyReferralOverview>): strin
                 value={{
                     api,
                     customer,
-                    market,
-                    locale: market.locale,
-                    language: 'zh',
+                    market: currentMarket,
+                    locale: currentMarket.locale,
+                    language,
                     storefrontName: '测试商城',
                     logoUrl: null,
                     onBack: vi.fn(),
@@ -105,6 +118,26 @@ function renderReferralPage(customOverview?: Partial<MyReferralOverview>): strin
 }
 
 describe('referral page reward summary', () => {
+    it.each(['zh', 'en'] as const)('keeps complete MYR decimals in one numeric span in %s', language => {
+        const markup = renderReferralPage(
+            {
+                wallets: [
+                    {
+                        ...overview.wallets[0],
+                        currencyCode: 'MYR',
+                        availableBalance: 123456789,
+                        pendingBalance: 2990,
+                    },
+                ],
+            },
+            { currency: 'MYR', language },
+        );
+        expect(markup).toContain('class="referral-balance-value">29.9</span>');
+        expect(markup).toContain('class="referral-balance-value">1,234,567.89</span>');
+        expect(markup).toContain('referral-balance-amount is-long');
+        expect(markup).not.toContain('price-integer');
+        expect(markup).not.toContain('price-decimal');
+    });
     it('uses the concise referral headline and dynamic reward-rate copy', () => {
         const markup = renderReferralPage();
 

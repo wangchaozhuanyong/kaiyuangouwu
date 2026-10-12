@@ -1,0 +1,9 @@
+{
+    "packages/storefront/src/safe-image.tsx": "a8cbbc9dea793f52aaf8caf3daafba24c332323081f7116a36a5af5697d4a6a1",
+    "packages/storefront/src/safe-image.spec.tsx": "a41724027f1e07b58a0692de6d987b0cc0921d164215c872cc785a2695f6fe91",
+    "packages/storefront/src/responsive-image.spec.ts": "92343a2dfbd3187100564d062416acf226ad638f7c9b2866c51574291fb190e9",
+    "packages/storefront-content-plugin/src/shared/responsive-image.ts": "fa91a7f5719fc43d885c09a41ef612a7670620441fcc668c15b846f89ca5f45f",
+    "packages/storefront/src/components/common/customer-avatar.tsx": "2219db84c26b3b0b43eac50c3424a63ff59047f5e95d86cc3d9e9adf60517fb9",
+    "packages/storefront/src/styles.css": "0a5e5aebc8ef5e1d8ceb115d4796899c344a17670ce5b4c1138da41b915df2e5",
+    "packages/storefront/src/storefront-page-frame.tsx": "52c2f663c492f884f65a3e912d6b20b6492d5bea7f1269b7ca2140075b8e5dcf"
+}

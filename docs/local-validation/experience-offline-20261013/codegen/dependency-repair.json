@@ -1,0 +1,9 @@
+{
+    "link": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/core/node_modules/graphql",
+    "target": "../../../node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+    "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+    "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql",
+    "version": "16.14.2",
+    "indexSha256": "9833b66f0502a1ce59d5c7a120edd9206d432bb502045c7f68a2860296dfc52a",
+    "reason": "Remove stale isolated linker override; same-version hoisted singleton owns codegen"
+}

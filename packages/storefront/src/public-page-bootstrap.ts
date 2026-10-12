@@ -1,10 +1,15 @@
 import {
     publicLanguageFromUrl,
     publicPageRequestFromUrl,
+    STOREFRONT_BOOT_DATA_ELEMENT_ID,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 
-import { applyInitialLoadingBrand, initialLoadingBrandForSnapshot } from './brand-loading-bootstrap';
+import {
+    applyInitialLoadingBrand,
+    initialLoadingBrandForBootData,
+    initialLoadingBrandForSnapshot,
+} from './brand-loading-bootstrap';
 import { startPublicPageBootstrap } from './public-page-transport';
 
 // This entry intentionally has no React/router/API imports. It runs while those chunks download.
@@ -14,7 +19,7 @@ if (
 ) {
     try {
         const request = publicPageRequestFromUrl(location.pathname + location.search);
-        if (request) {
+        {
             const cookie = (name: string) =>
                 document.cookie
                     .split('; ')
@@ -29,14 +34,19 @@ if (
             const snapshot = JSON.parse(
                 document.getElementById(STOREFRONT_PAGE_DATA_ELEMENT_ID)?.textContent ?? 'null',
             );
-            const brand = initialLoadingBrandForSnapshot(snapshot, {
+            const scope = {
                 host: location.host,
-                request,
                 languageCode: language,
                 currencyCode: currency,
-            });
+            };
+            const boot = JSON.parse(
+                document.getElementById(STOREFRONT_BOOT_DATA_ELEMENT_ID)?.textContent ?? 'null',
+            );
+            const brand =
+                (request ? initialLoadingBrandForSnapshot(snapshot, { ...scope, request }) : undefined) ??
+                initialLoadingBrandForBootData(boot, scope);
             if (brand) applyInitialLoadingBrand(brand);
-            else startPublicPageBootstrap(request, language, currency);
+            else if (request) startPublicPageBootstrap(request, language, currency);
         }
     } catch {
         /* Invalid public URLs use the normal route validation and error UI. */

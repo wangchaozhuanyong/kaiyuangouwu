@@ -356,6 +356,31 @@ export function resolveStorefrontSkinTreatment(presetId: StorefrontVisualPresetI
     return { ...SKIN_TREATMENTS[presetId] };
 }
 
+/** Campaign roles are shared by HTML first frames, storefronts and merchant previews. */
+export function storefrontReferralCssVariables(presetId: StorefrontVisualPresetId): Record<string, string> {
+    const dark = presetId === 'neo-minimalist';
+    return {
+        '--referral-invite-surface': '#173d39',
+        '--referral-invite-ink': '#f6f7f3',
+        '--referral-invite-muted': '#cbdad4',
+        '--referral-invite-action': '#f4f1e9',
+        '--referral-invite-action-hover': '#e5e2d8',
+        '--referral-invite-action-pressed': '#d6d4ca',
+        '--referral-invite-on-action': '#173d39',
+        '--referral-invite-control': '#234944',
+        '--referral-invite-control-hover': '#315650',
+        '--referral-invite-control-pressed': '#3a635b',
+        '--referral-invite-control-border': '#7faaa0',
+        '--referral-invite-focus': '#f4f1e9',
+        '--referral-reward-surface': dark ? '#243b36' : '#f4f1e9',
+        '--referral-reward-ink': dark ? '#e9f0eb' : '#253c35',
+        '--referral-reward-muted': dark ? '#becfc5' : '#5b6b63',
+        '--referral-reward-divider': dark ? '#526e60' : '#d6ded6',
+        '--referral-reward-help-surface': dark ? '#243b36' : '#ffffff',
+        '--referral-reward-focus': dark ? '#e9f0eb' : '#253c35',
+    };
+}
+
 function assignColorVariables(
     variables: Record<string, string>,
     prefix: string,
@@ -378,6 +403,7 @@ export function storefrontSkinCssVariables(
     const classic = presetId === 'classic';
     const variables: Record<string, string> = {
         ...storefrontServiceCardCssVariables(palette),
+        ...storefrontReferralCssVariables(presetId),
         '--accent-disabled-text': palette.muted,
     };
     assignColorVariables(variables, '--skin-', {

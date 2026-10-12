@@ -31,6 +31,7 @@ import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { OfflineOrderPaymentPanel } from './OfflineOrderPaymentPanel';
 import { canAddManualPayment } from './order-operation-availability';
 import {
     canManageOrderInChannel,
@@ -230,6 +231,7 @@ export function OrderOperationsBlock({ context }: { context: NextAdminPageBlockC
 
     return (
         <div className="space-y-4">
+            <OfflineOrderPaymentPanel key={order.id} order={order} onChanged={() => query.refetch()} />
             {notice && <Notice tone={noticeTone} message={notice} />}
             {error && !action && <Notice tone="error" message={error} />}
             <section className={sectionClass}>

@@ -255,7 +255,9 @@
     gap: var(--space-8);
 }
 .brand-loading--compact .route-transition-mark,
-.brand-loading--compact .route-transition-mark img {
+.brand-loading--compact .route-transition-mark img,
+.page-loading-indicator .route-transition-mark,
+.page-loading-indicator .route-transition-mark img {
     width: 24px;
     height: 24px;
     flex: 0 0 24px;
@@ -265,7 +267,7 @@
     margin-top: 0;
 }
 @media (min-width: 1024px) {
-    .route-transition-mark {
+    .brand-loading:not(.brand-loading--compact) > .route-transition-mark {
         width: 96px;
         height: 96px;
     }

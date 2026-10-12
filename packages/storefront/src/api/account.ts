@@ -20,7 +20,7 @@ import type {
     StorefrontUsdtCheckoutQuote,
 } from '../types';
 
-import { BaseDomainApi } from './base-domain-api';
+import { CustomerIdentityApi } from './customer-identity';
 import { orderFields, orderSummaryFields } from './fragments';
 import {
     API_URL,
@@ -31,7 +31,38 @@ import {
     createRequestSignal,
 } from './helpers';
 
-export class AccountApi extends BaseDomainApi {
+export class AccountApi extends CustomerIdentityApi {
+    async customerAddresses(signal?: AbortSignal): Promise<CustomerAddress[] | null> {
+        const result = await this.request<{
+            activeCustomer: { addresses: CustomerAddress[] } | null;
+        }>(
+            `query StorefrontCustomerAddresses {
+            activeCustomer { addresses {
+                id fullName phoneNumber streetLine1 streetLine2 city province postalCode
+                defaultShippingAddress defaultBillingAddress country { code name }
+            } }
+        }`,
+            undefined,
+            signal,
+        );
+        return result.activeCustomer?.addresses ?? null;
+    }
+
+    async customerRecentOrders(signal?: AbortSignal): Promise<NonNullable<ActiveCustomer['orders']> | null> {
+        const result = await this.request<{
+            activeCustomer: { orders: NonNullable<ActiveCustomer['orders']> } | null;
+        }>(
+            `query StorefrontCustomerRecentOrders {
+            activeCustomer { orders(options: { take: 5, sort: { orderPlacedAt: DESC } }) {
+                totalItems items { ${orderSummaryFields} }
+            } }
+        }`,
+            undefined,
+            signal,
+        );
+        return result.activeCustomer?.orders ?? null;
+    }
+
     async activeCustomer(signal?: AbortSignal): Promise<ActiveCustomer | null> {
         const result = await this.request<{
             activeCustomer: Omit<ActiveCustomer, 'avatar'> | null;

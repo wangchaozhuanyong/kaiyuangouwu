@@ -85,7 +85,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
             return '平台管理中心不经营，请到经营店铺购买';
         }
         const confirmsPayment =
-            fromState === 'ArrangingPayment' &&
+            ['ArrangingPayment', 'AwaitingManualPayment'].includes(fromState) &&
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled');
         if (!entersPayment && !confirmsPayment) {
             return;
@@ -278,7 +278,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
         if (toState === 'ArrangingPayment')
             await checkoutResources.reserve(ctx, order, await stockLines(ctx, order.lines));
         if (
-            fromState === 'ArrangingPayment' &&
+            ['ArrangingPayment', 'AwaitingManualPayment'].includes(fromState) &&
             (toState === 'PaymentAuthorized' || toState === 'PaymentSettled')
         ) {
             await checkoutResources.confirm(ctx, order);
@@ -432,7 +432,7 @@ function isValidDeliveryEmail(value: string | null | undefined): boolean {
     return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email);
 }
 
-async function saleableStockFromLockedRows(
+export async function saleableStockFromLockedRows(
     ctx: Parameters<typeof productVariantService.getSaleableStockLevel>[0],
     variant: Parameters<typeof productVariantService.getSaleableStockLevel>[1],
     lockedStockLevels: StockLevel[],

@@ -294,6 +294,7 @@ export class StorefrontPaymentAttemptService {
             [
                 'PaymentAuthorized',
                 'PaymentSettled',
+                'AwaitingManualPayment',
                 'PartiallyShipped',
                 'Shipped',
                 'PartiallyDelivered',

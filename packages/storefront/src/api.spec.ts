@@ -138,6 +138,9 @@ describe('ShopApi session response ordering', () => {
                 .mockResolvedValueOnce(response(guestData, 'intermediate-guest'));
             const api = new ShopApi(market);
             const authentication = run(api);
+            // The later guest response belongs after the real authentication request,
+            // including when its account module is loaded on demand.
+            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
             await api.storefrontContent();
             authResponse.resolve(
                 response({ [field]: { __typename: 'CurrentUser', id: '1' } }, 'new-session'),
@@ -155,6 +158,7 @@ describe('ShopApi session response ordering', () => {
             .mockReturnValueOnce(guestResponse.promise);
         const api = new ShopApi(market);
         const login = api.login('fixture@example.test', 'mock-only');
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
         const guest = api.storefrontContent();
         authResponse.resolve(response({ login: { __typename: 'CurrentUser', id: '1' } }, 'new-session'));
         await login;
@@ -796,6 +800,7 @@ describe('ShopApi storefront mutations', () => {
         const controller = new AbortController();
         const request = new ShopApi(market).createOrderConfirmationToken(controller.signal);
         const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
         controller.abort();
         await rejection;
         expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -3219,6 +3224,7 @@ describe('modified order payment API safety', () => {
             controller.signal,
         );
         const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
         controller.abort();
         await rejected;
         expect(requestSignal?.aborted).toBe(true);

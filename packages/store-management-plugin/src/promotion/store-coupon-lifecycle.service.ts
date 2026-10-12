@@ -46,6 +46,7 @@ import {
 } from '../entities/coupon-order-allocation.entity';
 import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { StoreCouponCampaignConfig } from '../entities/store-coupon-campaign-config.entity';
+import { verifyOfflinePaymentProof } from '../offline-payment-proof';
 import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import {
@@ -720,11 +721,14 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
         return (
             !!order &&
             idsAreEqual(order.salesChannelId, ctx.channelId) &&
-            order.active &&
-            order.state === 'ArrangingPayment' &&
+            ((order.active && order.state === 'ArrangingPayment') ||
+                (!order.active && String(order.state) === 'AwaitingManualPayment')) &&
             order.payments.every(
                 payment =>
-                    ['Declined', 'Cancelled'].includes(payment.state) &&
+                    (['Declined', 'Cancelled'].includes(payment.state) ||
+                        (String(payment.state) === 'PendingManual' &&
+                            payment.metadata?.offlineManual?.kind === 'OFFLINE_MANUAL' &&
+                            !payment.metadata.offlineManual.receiptProof)) &&
                     !payment.metadata?.manualReview?.required,
             )
         );
@@ -1275,7 +1279,28 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 return '可信付款时间或到账证据缺失，请人工核对';
             paidAt = new Date(evidence.paidAt);
         }
-        if (!isUsdt && source === 'manual') return '人工登记的付款时间无法核实，请核对原始支付凭证';
+        const offlineProof =
+            payment.metadata?.offlineManual?.kind === 'OFFLINE_MANUAL'
+                ? verifyOfflinePaymentProof(payment.metadata.offlineManual.receiptProof)
+                : null;
+        if (payment.metadata?.offlineManual?.kind === 'OFFLINE_MANUAL') {
+            if (
+                !offlineProof ||
+                offlineProof.channelId !== String(ctx.channelId) ||
+                offlineProof.orderId !== String(orderId) ||
+                offlineProof.paymentId !== String(payment.id) ||
+                String(offlineProof.currencyCode) !== String(order.currencyCode) ||
+                offlineProof.amount !== payment.amount ||
+                offlineProof.transactionId !== payment.transactionId
+            )
+                return '客服核款的实际到账证据无法核实';
+            // Refund-only preparation recognizes funds, never redeems an invalid coupon or approves delivery.
+            if (offlineProof.purpose === 'REFUND_ONLY' && payment.metadata?.manualReview?.required === true)
+                return;
+            paidAt = new Date(offlineProof.receivedAt);
+        }
+        if (!isUsdt && !offlineProof && source === 'manual')
+            return '人工登记的付款时间无法核实，请核对原始支付凭证';
         const issues = await this.paymentCouponIssues(ctx, order, paidAt);
         if (issues.length) return issues.map(issue => issue.reason).join('；') + '，已收款订单需人工核对';
         if (state === 'Settled')
@@ -1283,7 +1308,11 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
                 ...payment.metadata,
                 couponPaymentValidation: {
                     paidAt: paidAt.toISOString(),
-                    source: isUsdt ? 'VERIFIED_TRC20_BLOCK' : 'SERVER_HANDLER_SUCCESS',
+                    source: isUsdt
+                        ? 'VERIFIED_TRC20_BLOCK'
+                        : offlineProof
+                          ? 'VERIFIED_OFFLINE_RECEIPT'
+                          : 'SERVER_HANDLER_SUCCESS',
                     orderId: String(orderId),
                     channelId: String(ctx.channelId),
                     transactionId: payment.transactionId,

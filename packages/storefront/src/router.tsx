@@ -42,9 +42,10 @@ export const router = createRouter({
     parseSearch: parseStorefrontSearch,
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
+    defaultPreloadStaleTime: 0,
     // Keep the current route visible through ordinary chunk/data waits; show the
     // bounded pending state if the destination still has not resolved.
-    defaultPendingMs: 750,
+    defaultPendingMs: 200,
     defaultPendingMinMs: 0,
     defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,

@@ -23,6 +23,7 @@ export function isPaymentCompletedOrderState(state: string): boolean {
         'PaymentAuthorized',
         'PaymentSettled',
         'TestPaymentSettled',
+        'AwaitingManualPayment',
         'PartiallyShipped',
         'Shipped',
         'PartiallyDelivered',
@@ -30,14 +31,12 @@ export function isPaymentCompletedOrderState(state: string): boolean {
     ].includes(state);
 }
 
-const TEST_PAYMENT_PATTERN = /(?:^|[-_\s])(demo|dummy|mock|test)(?:$|[-_\s])|测试/iu;
-
 export function isTestPaymentMethod(method: PaymentMethod): boolean {
-    return TEST_PAYMENT_PATTERN.test([method.code, method.name, method.description].join(' '));
+    return method.kind === 'INTERNAL_TEST' || method.kind === 'CONTROLLED_TEST';
 }
 
 export function isControlledTestPaymentMethod(method: PaymentMethod): boolean {
-    return method.code.startsWith('controlled-test-payment-');
+    return method.kind === 'CONTROLLED_TEST';
 }
 
 export function paymentAvailability(

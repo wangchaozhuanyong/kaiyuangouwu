@@ -8,6 +8,7 @@ import {
     UserInputError,
     assertOrderSalesChannel,
 } from '@vendure/core';
+import { In } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
 import { DigitalDeliveryTokenService, normalizeDigitalDeliveryHost } from './digital-delivery-token.service';
@@ -23,6 +24,7 @@ import { getOrderLineDigitalDeliveryMode, getOrderLineFulfillmentType } from './
 import { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 import { OrderConfirmationTokenService } from './order-confirmation-token.service';
 import { OrderProcessingChangedEvent } from './order-processing-changed.event';
+import { type ProcessingFileCandidate } from './order-processing-projection';
 
 @Injectable()
 export class DigitalReceiptService {
@@ -67,68 +69,141 @@ export class DigitalReceiptService {
     }
 
     async statuses(ctx: RequestContext, order: Order) {
-        const downloads = await this.downloads.deliveriesForOrder(ctx, String(order.id), {
-            metadataOnly: true,
-        });
-        return Promise.all(
-            order.lines
-                .filter(line => getOrderLineFulfillmentType(line) === 'digital')
-                .map(async line => {
-                    const mode = getOrderLineDigitalDeliveryMode(line);
-                    const [cards, manual, access] = await Promise.all([
-                        mode === 'auto_card'
-                            ? this.connection
-                                  .getRepository(ctx, AutoCardDelivery)
-                                  .findOne({ where: { channelId: ctx.channelId, orderLineId: line.id } })
-                            : null,
-                        mode === 'manual_service'
-                            ? this.connection
-                                  .getRepository(ctx, ManualDigitalDelivery)
-                                  .findOne({ where: { channelId: ctx.channelId, orderLineId: line.id } })
-                            : null,
-                        this.connection
-                            .getRepository(ctx, DigitalReceiptAccess)
-                            .findOne({ where: { channelId: ctx.channelId, orderLineId: line.id } }),
-                    ]);
-                    const entitled = digitalDeliverableQuantity(order, line);
-                    const cardQuantity = cards
-                        ? await this.connection
-                              .getRepository(ctx, AutoCardPoolItem)
-                              .count({ where: { deliveryId: cards.id, state: 'ASSIGNED' } })
-                        : 0;
-                    const ready =
-                        mode === 'file_download'
-                            ? downloads.some(
-                                  item => item.orderLineId === String(line.id) && item.status === 'READY',
-                              )
-                            : cards
-                              ? cardQuantity > 0
-                              : Boolean(
-                                    manual?.encryptedPackages &&
-                                    ['SENDING', 'SENT', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(
-                                        manual.state,
-                                    ),
-                                );
-                    return {
-                        orderLineId: line.id,
-                        mode,
-                        state: !entitled
-                            ? 'UNAVAILABLE'
-                            : ready && (cards ? cardQuantity : (manual?.quantity ?? line.quantity)) > 0
-                              ? 'READY'
-                              : 'WAITING',
-                        eligibleQuantity: entitled,
-                        readyQuantity: ready
-                            ? Math.min(entitled, cards ? cardQuantity : (manual?.quantity ?? line.quantity))
-                            : 0,
-                        claimedQuantity: access?.claimedQuantity ?? 0,
-                        notificationState: cards?.state ?? manual?.state ?? 'NOT_REQUIRED',
-                        instructions: '',
-                        packages: [],
-                        downloadUrl: null,
-                    };
-                }),
+        return (await this.statusesForOrders(ctx, [order])).get(String(order.id)) ?? [];
+    }
+
+    processingFileAvailability(candidates: ProcessingFileCandidate[]) {
+        return this.downloads.processingFileAvailability(candidates);
+    }
+
+    /** Metadata only, bounded queries for a page; encrypted content never leaves the database. */
+    async statusesForOrders(ctx: RequestContext, orders: Order[]) {
+        orders.forEach(order => assertOrderSalesChannel(ctx, order));
+        const lines = orders.flatMap(order =>
+            order.lines.filter(line => getOrderLineFulfillmentType(line) === 'digital'),
         );
+        const result = new Map<
+            string,
+            Array<{
+                orderLineId: ID;
+                mode: ReturnType<typeof getOrderLineDigitalDeliveryMode>;
+                state: 'UNAVAILABLE' | 'READY' | 'WAITING';
+                eligibleQuantity: number;
+                readyQuantity: number;
+                claimedQuantity: number;
+                notificationState: string;
+                instructions: string;
+                packages: never[];
+                downloadUrl: null;
+            }>
+        >();
+        if (!lines.length) return result;
+        const lineIds = lines.map(line => line.id);
+        const [cards, manual, access, downloads] = await Promise.all([
+            this.connection.getRepository(ctx, AutoCardDelivery).find({
+                where: { channelId: ctx.channelId, orderLineId: In(lineIds) },
+                select: ['id', 'orderLineId', 'state', 'quantity'],
+            }),
+            this.connection
+                .getRepository(ctx, ManualDigitalDelivery)
+                .createQueryBuilder('manual')
+                .select('manual.orderLineId', 'orderLineId')
+                .addSelect('manual.state', 'state')
+                .addSelect('manual.quantity', 'quantity')
+                .addSelect(
+                    "CASE WHEN manual.encryptedPackages IS NOT NULL AND manual.encryptedPackages <> '' THEN 1 ELSE 0 END",
+                    'hasPackages',
+                )
+                .where('manual.channelId = :channelId AND manual.orderLineId IN (:...lineIds)', {
+                    channelId: ctx.channelId,
+                    lineIds,
+                })
+                .getRawMany<{
+                    orderLineId: ID;
+                    state: string;
+                    quantity: number;
+                    hasPackages: number | string;
+                }>(),
+            this.connection.getRepository(ctx, DigitalReceiptAccess).find({
+                where: { channelId: ctx.channelId, orderLineId: In(lineIds) },
+                select: ['orderLineId', 'claimedQuantity'],
+            }),
+            this.downloads.metadataForOrders(ctx, orders),
+        ]);
+        const quantities = cards.length
+            ? await this.connection
+                  .getRepository(ctx, AutoCardPoolItem)
+                  .createQueryBuilder('pool')
+                  .select('pool.deliveryId', 'deliveryId')
+                  .addSelect('COUNT(*)', 'quantity')
+                  .innerJoin(
+                      AutoCardDelivery,
+                      'poolDelivery',
+                      'poolDelivery.id = pool.deliveryId AND poolDelivery.channelId = :channelId',
+                      { channelId: ctx.channelId },
+                  )
+                  .where('pool.deliveryId IN (:...deliveryIds) AND pool.state = :state', {
+                      deliveryIds: cards.map(card => card.id),
+                      state: 'ASSIGNED',
+                  })
+                  .groupBy('pool.deliveryId')
+                  .getRawMany<{ deliveryId: ID; quantity: number | string }>()
+            : [];
+        const cardByLine = new Map(cards.map(item => [String(item.orderLineId), item]));
+        const manualByLine = new Map(manual.map(item => [String(item.orderLineId), item]));
+        const accessByLine = new Map(access.map(item => [String(item.orderLineId), item.claimedQuantity]));
+        const cardQuantities = new Map(
+            quantities.map(item => [String(item.deliveryId), Number(item.quantity)]),
+        );
+        for (const order of orders)
+            result.set(
+                String(order.id),
+                order.lines
+                    .filter(line => getOrderLineFulfillmentType(line) === 'digital')
+                    .map(line => {
+                        const mode = getOrderLineDigitalDeliveryMode(line);
+                        const card = mode === 'auto_card' ? cardByLine.get(String(line.id)) : undefined;
+                        const task =
+                            mode === 'manual_service' ? manualByLine.get(String(line.id)) : undefined;
+                        const entitled = digitalDeliverableQuantity(order, line);
+                        const cardQuantity = card ? (cardQuantities.get(String(card.id)) ?? 0) : 0;
+                        const ready =
+                            mode === 'file_download'
+                                ? (downloads
+                                      .get(String(order.id))
+                                      ?.some(
+                                          item =>
+                                              item.orderLineId === String(line.id) && item.status === 'READY',
+                                      ) ?? false)
+                                : card
+                                  ? cardQuantity > 0
+                                  : Boolean(
+                                        Number(task?.hasPackages) &&
+                                        ['SENDING', 'SENT', 'EMAIL_FAILED', 'MANUAL_REVIEW'].includes(
+                                            task?.state ?? '',
+                                        ),
+                                    );
+                        return {
+                            orderLineId: line.id,
+                            mode,
+                            state: !entitled
+                                ? ('UNAVAILABLE' as const)
+                                : ready && (card ? cardQuantity : (task?.quantity ?? line.quantity)) > 0
+                                  ? ('READY' as const)
+                                  : ('WAITING' as const),
+                            eligibleQuantity: entitled,
+                            readyQuantity: ready
+                                ? Math.min(entitled, card ? cardQuantity : (task?.quantity ?? line.quantity))
+                                : 0,
+                            claimedQuantity: accessByLine.get(String(line.id)) ?? 0,
+                            notificationState: card?.state ?? task?.state ?? 'NOT_REQUIRED',
+                            instructions: '',
+                            packages: [],
+                            downloadUrl: null,
+                        };
+                    }),
+            );
+        return result;
     }
 
     /** Explicit POST mutation, idempotent access audit, followed by current entitlement validation. */

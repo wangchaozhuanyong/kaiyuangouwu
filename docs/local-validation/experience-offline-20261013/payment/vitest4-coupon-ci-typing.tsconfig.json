@@ -1,0 +1,20 @@
+{
+  "extends": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-management-plugin/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@vendure/content-translation-plugin": [
+        "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/content-translation-plugin/src/index.ts"
+      ],
+      "@vendure/storefront-content-plugin": [
+        "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-content-plugin/src/index.ts"
+      ],
+      "vitest": [
+        "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/vitest/index.d.cts"
+      ]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts"
+  ]
+}

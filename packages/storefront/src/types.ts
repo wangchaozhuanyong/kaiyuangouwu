@@ -704,7 +704,7 @@ export interface StorefrontPaymentAttemptReceipt {
     order?: Order | null;
 }
 
-export interface ActiveCustomer {
+export interface CustomerIdentity {
     id: string;
     firstName: string;
     lastName: string;
@@ -712,8 +712,13 @@ export interface ActiveCustomer {
     phoneNumber: string | null;
     /** Customer-selected profile image; absent in legacy cached/test data. */
     avatar?: Asset | null;
-    addresses: CustomerAddress[] | null;
-    orders: { items: OrderSummary[]; totalItems: number };
+}
+
+export interface ActiveCustomer extends CustomerIdentity {
+    /** Missing until the address page or checkout requests this resource. */
+    addresses?: CustomerAddress[] | null;
+    /** Missing until an account or recommendation section requests recent orders. */
+    orders?: { items: OrderSummary[]; totalItems: number };
 }
 
 export interface CustomerServiceFeedback {
@@ -843,7 +848,11 @@ export interface ShippingMethod {
     } | null;
 }
 
+export type CommercePaymentKind =
+    'OFFLINE_MANUAL' | 'CONTROLLED_TEST' | 'INTERNAL_TEST' | 'BALANCE' | 'EXTERNAL';
+
 export interface PaymentMethod {
+    kind?: CommercePaymentKind;
     id: string;
     code: string;
     name: string;

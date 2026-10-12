@@ -1,0 +1,637 @@
+{
+  "repairs": [
+    {
+      "link": "packages/admin-ui/node_modules/graphql",
+      "target": "../../../node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql",
+      "version": "16.14.2",
+      "removed": true
+    },
+    {
+      "link": "packages/admin-ui/node_modules/rxjs",
+      "target": "../../../node_modules/.bun/rxjs@7.8.2/node_modules/rxjs",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/rxjs@7.8.2/node_modules/rxjs",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/rxjs",
+      "version": "7.8.2",
+      "removed": true
+    },
+    {
+      "link": "packages/catalog-management-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/catalog-management-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/catalog-management-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/catalog-management-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/commerce-fulfillment-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/commerce-fulfillment-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/commerce-fulfillment-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/content-translation-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/content-translation-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/content-translation-plugin/node_modules/reflect-metadata",
+      "target": "../../../node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/reflect-metadata",
+      "version": "0.2.2",
+      "removed": true
+    },
+    {
+      "link": "packages/content-translation-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/content-translation-plugin/node_modules/@nestjs/core",
+      "target": "../../../../node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/content-translation-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/core/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+e394d3f0ed02cab7/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+e394d3f0ed02cab7/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/core/node_modules/rxjs",
+      "target": "../../../node_modules/.bun/rxjs@7.8.2/node_modules/rxjs",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/rxjs@7.8.2/node_modules/rxjs",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/rxjs",
+      "version": "7.8.2",
+      "removed": true
+    },
+    {
+      "link": "packages/core/node_modules/reflect-metadata",
+      "target": "../../../node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/reflect-metadata",
+      "version": "0.2.2",
+      "removed": true
+    },
+    {
+      "link": "packages/core/node_modules/@nestjs/testing",
+      "target": "../../../../node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/testing",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/core/node_modules/@nestjs/typeorm",
+      "target": "../../../../node_modules/.bun/@nestjs+typeorm@11.0.3+37182595bf3ff21e/node_modules/@nestjs/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+typeorm@11.0.3+37182595bf3ff21e/node_modules/@nestjs/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/typeorm",
+      "version": "11.0.3",
+      "removed": true
+    },
+    {
+      "link": "packages/dashboard/node_modules/graphql",
+      "target": "../../../node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql",
+      "version": "16.14.2",
+      "removed": true
+    },
+    {
+      "link": "packages/dev-server/node_modules/@nestjs/axios",
+      "target": "../../../../node_modules/.bun/@nestjs+axios@4.0.1+0f8dfce55d6ad501/node_modules/@nestjs/axios",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+axios@4.0.1+0f8dfce55d6ad501/node_modules/@nestjs/axios",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/axios",
+      "version": "4.0.1",
+      "removed": true
+    },
+    {
+      "link": "packages/email-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/email-plugin/node_modules/@nestjs/testing",
+      "target": "../../../../node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/testing",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/graphiql-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/graphiql-plugin/node_modules/@nestjs/testing",
+      "target": "../../../../node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/testing",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/icloud-relay-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/icloud-relay-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+7da0e06d1f2f5078/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+7da0e06d1f2f5078/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/icloud-relay-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/icloud-relay-plugin/node_modules/@nestjs/core",
+      "target": "../../../../node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/icloud-relay-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/image-generation-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/image-generation-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/image-generation-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/image-generation-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/next-admin/node_modules/graphql",
+      "target": "../../../node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql",
+      "version": "16.14.2",
+      "removed": true
+    },
+    {
+      "link": "packages/next-admin-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/next-admin-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/next-admin-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/operations-dashboard-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/operations-dashboard-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+7da0e06d1f2f5078/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+7da0e06d1f2f5078/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/operations-dashboard-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/operations-dashboard-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/store-domain-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/store-domain-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/store-domain-plugin/node_modules/reflect-metadata",
+      "target": "../../../node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/reflect-metadata",
+      "version": "0.2.2",
+      "removed": true
+    },
+    {
+      "link": "packages/store-domain-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/store-domain-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/store-management-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/store-management-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/store-management-plugin/node_modules/reflect-metadata",
+      "target": "../../../node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/reflect-metadata",
+      "version": "0.2.2",
+      "removed": true
+    },
+    {
+      "link": "packages/store-management-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/store-management-plugin/node_modules/@nestjs/core",
+      "target": "../../../../node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/store-management-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-cart-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-cart-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-cart-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-cart-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-catalog-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-catalog-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-catalog-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-catalog-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-content-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-content-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-content-plugin/node_modules/reflect-metadata",
+      "target": "../../../node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/reflect-metadata@0.2.2/node_modules/reflect-metadata",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/reflect-metadata",
+      "version": "0.2.2",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-content-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-content-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-review-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-review-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+857f7cc8720e88c0/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-review-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/storefront-review-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/testing/node_modules/graphql",
+      "target": "../../../node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql@16.14.2/node_modules/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql",
+      "version": "16.14.2",
+      "removed": true
+    },
+    {
+      "link": "packages/testing/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/two-factor-dashboard-plugin/node_modules/graphql-tag",
+      "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+      "version": "2.12.7",
+      "removed": true
+    },
+    {
+      "link": "packages/two-factor-dashboard-plugin/node_modules/typeorm",
+      "target": "../../../node_modules/.bun/typeorm@0.3.31+7da0e06d1f2f5078/node_modules/typeorm",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/typeorm@0.3.31+7da0e06d1f2f5078/node_modules/typeorm",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm",
+      "version": "0.3.31",
+      "removed": true
+    },
+    {
+      "link": "packages/two-factor-dashboard-plugin/node_modules/@nestjs/common",
+      "target": "../../../../node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/two-factor-dashboard-plugin/node_modules/@nestjs/core",
+      "target": "../../../../node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core",
+      "version": "11.2.1",
+      "removed": true
+    },
+    {
+      "link": "packages/two-factor-dashboard-plugin/node_modules/@nestjs/graphql",
+      "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+      "version": "13.4.4",
+      "removed": true
+    },
+    {
+      "link": "packages/ui-devkit/node_modules/rxjs",
+      "target": "../../../node_modules/.bun/rxjs@7.8.2/node_modules/rxjs",
+      "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/rxjs@7.8.2/node_modules/rxjs",
+      "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/rxjs",
+      "version": "7.8.2",
+      "removed": true
+    }
+  ],
+  "skipped": []
+}

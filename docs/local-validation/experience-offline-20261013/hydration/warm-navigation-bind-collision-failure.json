@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "mode": "production-artifact",
+  "environment": "Local Chromium, unthrottled CPU/network, synthetic 36-product catalog",
+  "method": "Document capture of trusted click → first requestAnimationFrame containing destination route, visible page and ready boundary; performance.now inside browser",
+  "scope": "Warm route code and query contents after two complete UI round trips; timing excludes Playwright RPC and actionability wait",
+  "results": [],
+  "failures": [
+    {
+      "width": 390,
+      "message": "page.goto: net::ERR_INVALID_HTTP_RESPONSE at http://127.0.0.1:62349/en/\nCall log:\n\u001b[2m  - navigating to \"http://127.0.0.1:62349/en/\", waiting until \"load\"\u001b[22m\n",
+      "errors": []
+    }
+  ]
+}

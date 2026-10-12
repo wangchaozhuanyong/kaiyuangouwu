@@ -3,6 +3,33 @@ import { describe, expect, it, vi } from 'vitest';
 import { defaultPaymentProcess } from './default-payment-process';
 
 describe('defaultPaymentProcess', () => {
+    it('records a zero-total pending receipt without advancing the paid order state', async () => {
+        const orderService = {
+            getOrderPayments: vi.fn().mockResolvedValue([{ amount: 0, state: 'PendingManual' }]),
+            transitionToState: vi.fn(),
+        };
+        const historyService = { createHistoryEntryForOrder: vi.fn() };
+        await defaultPaymentProcess.init?.({
+            get: (provider: { name: string }) =>
+                provider.name === 'OrderService'
+                    ? orderService
+                    : provider.name === 'HistoryService'
+                      ? historyService
+                      : {},
+        } as any);
+        await defaultPaymentProcess.onTransitionEnd?.(
+            'Created',
+            'PendingManual' as any,
+            {
+                ctx: {},
+                payment: { id: 'payment-0' },
+                order: { id: 'order-0', state: 'ArrangingPayment', totalWithTax: 0 },
+            } as any,
+        );
+        expect(historyService.createHistoryEntryForOrder).toHaveBeenCalledTimes(1);
+        expect(orderService.transitionToState).not.toHaveBeenCalled();
+    });
+
     it('rejects settlement when the covered order cannot enter PaymentSettled', async () => {
         const transitionError = {
             __typename: 'OrderStateTransitionError',

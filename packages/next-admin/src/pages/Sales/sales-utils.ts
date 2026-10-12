@@ -214,6 +214,7 @@ export const orderStateLabels: Record<string, string> = {
     AddingItems: '购物车中',
     Draft: '草稿订单',
     ArrangingPayment: '待支付',
+    AwaitingManualPayment: '待客服核款',
     PaymentAuthorized: '支付已授权',
     PaymentSettled: '待履约',
     PartiallyShipped: '部分发货',
@@ -238,6 +239,7 @@ const fulfillmentStateLabels: Readonly<Record<string, string>> = {
 const paymentStateLabels: Readonly<Record<string, string>> = {
     Created: '待支付',
     Authorized: '已授权',
+    PendingManual: '待客服核款',
     Settled: '已支付',
     Declined: '已拒绝',
     Cancelled: '已取消',

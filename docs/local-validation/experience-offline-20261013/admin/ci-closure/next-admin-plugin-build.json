@@ -1,0 +1,85 @@
+{
+  "directory": "next-admin-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin",
+  "startedAt": "2026-10-12T20:23:57.303Z",
+  "finishedAt": "2026-10-12T20:23:58.238Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/next-admin-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/api/api-extensions.ts",
+      "sha256": "755ff1cee43019ead8015dca2c77a25979ac78ae447f3f7509482cb8fff615e4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/api/metrics.resolver.ts",
+      "sha256": "7cf2153bfe7d8f57dfcbf485c1aa1482a3516f5294de5a9f449dc3dfe4464f98"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/api/order-events.controller.spec.ts",
+      "sha256": "13e7fd06ef87b03ff1d601567e3ea1322da0265ddce252c82d5ebb0514c3723d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/api/order-events.controller.ts",
+      "sha256": "ae01bc93af652cff4b137c3af608df402e83283251f9192592f1dbdb67bfdd2d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/config/metrics-strategies.ts",
+      "sha256": "02b02d6dba8f924ea2a75fb526056cdabf982cea0e4418d0a2e52ea4b3ffd348"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/constants.ts",
+      "sha256": "47497794cf567566d23273ff8b3887476bb0b0ef0cbd2a9b23b4b34d22dd0098"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/index.ts",
+      "sha256": "7fc168063e9d56088cf46c5377b954076ad663f8130f6456a193c4af73a84d1d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/metrics-strategies.spec.ts",
+      "sha256": "39125c220c4633e2dc7f8f0671bd159eb8fb26d6b932cec6775202e51c5539e9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/next-admin.plugin.ts",
+      "sha256": "f40d197482c3e5501e16bfe36256167764862f7df5e7cf2f7c3c618cc3f2a079"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/service/metrics.service.ts",
+      "sha256": "eff319496d1f8b1ff0e4adab7b3288f150fba20954bd5917958aef620244a5bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/service/order-event-relay.spec.ts",
+      "sha256": "7a7f185be6142162fe21a6d71dde66a9677b1ab24475237d151fa79bc76f6223"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/service/order-event-relay.ts",
+      "sha256": "1dfbd78dfe4d8a775f6335000f39b444550fc53be951592eeb475cb52c3b7452"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/service/order-events.service.spec.ts",
+      "sha256": "7e46140b22080ced3a5833d9dcc9264bead91d09a838598ffafc1dc8a4f2fdbf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/service/order-events.service.ts",
+      "sha256": "0f373ef009086659d11d6ee67361466467f0345e3b1f2ea233fcd84235dc51db"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/static-server.spec.ts",
+      "sha256": "7a2216d09045ff4a1648206b21f5b034cb8f712c899a24d5bc63ac7e5291e4e1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/static-server.ts",
+      "sha256": "dd642fe03c07b82f5b69e34fba93d4b034f730b58c61dde3887b33800025692f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/next-admin-plugin/src/types.ts",
+      "sha256": "5ee54520f4817144b83713a008a14744eba10bd0e7673d0d3813218c38a0fc58"
+    }
+  ],
+  "changedInputs": []
+}

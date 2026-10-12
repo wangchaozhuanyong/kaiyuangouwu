@@ -965,6 +965,7 @@ export class CartCheckoutApi extends BaseDomainApi {
             `
                 query EligibleStorefrontPaymentMethods {
                     eligiblePaymentMethods {
+                        kind
                         id
                         code
                         name

@@ -40,6 +40,7 @@ import { ReferralReward } from '../entities/referral-reward.entity';
 import { ReferralWallet } from '../entities/referral-wallet.entity';
 import { ReferralWithdrawal } from '../entities/referral-withdrawal.entity';
 import { StorefrontDailyVisitor } from '../entities/storefront-daily-visitor.entity';
+import { verifyOfflinePaymentProof } from '../offline-payment-proof';
 import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 import { StorefrontActivationService } from '../storefront-activation.service';
@@ -1080,6 +1081,20 @@ export class ReferralService implements OnApplicationBootstrap {
         if (realSettledPayments.reduce((total, payment) => total + payment.amount, 0) < order.totalWithTax) {
             return;
         }
+        const receiptTimes = realSettledPayments.map(payment => {
+            if (payment.metadata?.offlineManual?.kind !== 'OFFLINE_MANUAL') return settledAt.getTime();
+            const receipt = verifyOfflinePaymentProof(payment.metadata.offlineManual.receiptProof);
+            return receipt &&
+                receipt.channelId === String(ctx.channelId) &&
+                receipt.orderId === String(orderId) &&
+                receipt.paymentId === String(payment.id) &&
+                receipt.amount === payment.amount &&
+                receipt.transactionId === payment.transactionId
+                ? receipt.receivedAt
+                : NaN;
+        });
+        if (receiptTimes.some(time => !Number.isSafeInteger(time))) return;
+        settledAt = new Date(Math.max(...receiptTimes));
         const relationship = await this.connection.getRepository(ctx, ReferralRelationship).findOne({
             where: { channelId: ctx.channelId, inviteeCustomerId: order.customer.id },
         });
@@ -1136,7 +1151,7 @@ export class ReferralService implements OnApplicationBootstrap {
         if (!inviter) return;
         const account = await this.getOrCreateAccount(ctx, inviter);
         const wallet = await this.getOrCreateWallet(ctx, account, inviter, order.currencyCode);
-        const earnedAt = new Date();
+        const earnedAt = settledAt;
         const availableAt = new Date(earnedAt.getTime() + config.releaseDelayDays * 86_400_000);
         const availableImmediately = config.releaseDelayDays === 0;
         const reward = await this.connection.getRepository(ctx, ReferralReward).save(

@@ -44,6 +44,7 @@ import {
     configurableArgumentLabel,
     configurableArgumentRequiresValue,
     configurableOperationLabel,
+    paymentHandlerPurposeLabel,
     serializeConfigurableListValue,
 } from '../../utils/configurable-operation-localization';
 import {
@@ -65,11 +66,13 @@ import {
 type PaymentMethodItem = StoreManagementResult['paymentMethods']['items'][number];
 type ShippingMethodItem = StoreManagementResult['shippingMethods']['items'][number];
 type EditorState =
-    | { kind: 'payment'; item?: PaymentMethodItem; testPayment?: boolean }
+    | { kind: 'payment'; item?: PaymentMethodItem; testPayment?: boolean; offlinePayment?: boolean }
     | { kind: 'shipping'; item?: ShippingMethodItem };
 
 const testPaymentHandler = 'controlled-test-payment-handler';
 const testPaymentChecker = 'controlled-test-payment-checker';
+const offlinePaymentHandler = 'offline-manual-payment-handler';
+const offlinePaymentChecker = 'offline-manual-payment-checker';
 
 const primaryButton =
     'inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50';
@@ -95,7 +98,7 @@ function TestPaymentAvailabilityNotice({
             </p>
             <p className="mt-1">
                 {available
-                    ? '平台可设置测试订单范围，各店铺再独立开启。模拟付款不会真实扣款，但订单会进入正常已付款、库存与交付流程。'
+                    ? '平台可设置测试订单范围，各店铺再独立开启。模拟付款只保留测试证据，不进入真实交付、收入与返利。正式线下收款请配置客服核款支付。'
                     : '当前服务器未开放测试支付，请联系平台管理员开启测试支付开关。'}
             </p>
             {available && onConfigure && (
@@ -234,7 +237,28 @@ export function PaymentShippingManager({
                                 </AdminButton>
                             )}
                         </div>
-                        <div className="px-5 pt-4 empty:hidden">
+                        <div className="px-5 pt-4 space-y-3">
+                            <aside className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                                <p className="font-bold text-slate-900">客服核款支付</p>
+                                <p className="mt-1">
+                                    正式提交订单后先等待客服确认实际到账，再进入库存、交付与返利流程。显示名称和说明可自定义，各店铺独立开启。
+                                </p>
+                                {canCreatePayment &&
+                                    data.paymentMethodHandlers.some(
+                                        handler => handler.code === offlinePaymentHandler,
+                                    ) && (
+                                        <AdminButton
+                                            type="button"
+                                            className={`${secondaryButton} mt-3`}
+                                            onClick={() =>
+                                                setEditor({ kind: 'payment', offlinePayment: true })
+                                            }
+                                        >
+                                            新增客服核款方式
+                                        </AdminButton>
+                                    )}
+                            </aside>
+
                             <TestPaymentAvailabilityNotice
                                 definitions={data.paymentMethodHandlers}
                                 onConfigure={
@@ -269,10 +293,16 @@ export function PaymentShippingManager({
                                         const systemManaged = isSystemManagedUsdtPaymentMethod(item);
                                         const displayName = getLocalizedEntityName(item);
                                         const displayDescription = getLocalizedEntityDescription(item);
+                                        const purposeLabel = paymentHandlerPurposeLabel(item.handler.code);
                                         return (
                                             <tr key={item.id}>
                                                 <td className="font-semibold text-slate-900">
-                                                    {displayName}
+                                                    <span>{displayName}</span>
+                                                    {purposeLabel && (
+                                                        <span className="ml-2 whitespace-nowrap text-[11px] font-normal text-slate-500">
+                                                            {purposeLabel}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td
                                                     className="max-w-96 truncate text-slate-500"
@@ -300,7 +330,7 @@ export function PaymentShippingManager({
                                                                 aria-label={
                                                                     systemManaged
                                                                         ? '平台 USDT 全局开关'
-                                                                        : `${displayName}平台启用状态`
+                                                                        : `${displayName}${purposeLabel ? `（${purposeLabel}）` : ''}平台启用状态`
                                                                 }
                                                                 checked={item.enabled}
                                                                 disabled={toggleState.loading}
@@ -520,30 +550,40 @@ function StorePaymentSwitches({
                         </tr>
                     </thead>
                     <tbody>
-                        {query.data?.myStorePaymentOptions?.map(item => (
-                            <tr key={item.id}>
-                                <td className="font-semibold">{item.name}</td>
-                                <td className="max-w-96 truncate text-slate-500" title={item.description}>
-                                    {item.description || '—'}
-                                </td>
-                                <td>{item.platformEnabled ? '平台启用' : '平台已停用'}</td>
-                                <td>{item.enabled ? '本店已开启' : '本店未开启'}</td>
-                                <td>{item.effectiveEnabled ? '已启用' : '未启用'}</td>
-                                <td>
-                                    {canUpdate && (
-                                        <AdminInput
-                                            type="checkbox"
-                                            aria-label={`本店${item.name}开关`}
-                                            checked={item.enabled}
-                                            disabled={
-                                                saving.loading || (!item.platformEnabled && !item.enabled)
-                                            }
-                                            onChange={event => void toggle(item, event.target.checked)}
-                                        />
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
+                        {query.data?.myStorePaymentOptions?.map(item => {
+                            const purposeLabel = paymentHandlerPurposeLabel(item.handlerCode);
+                            return (
+                                <tr key={item.id}>
+                                    <td className="font-semibold">
+                                        <span>{item.name}</span>
+                                        {purposeLabel && (
+                                            <span className="ml-2 whitespace-nowrap text-[11px] font-normal text-slate-500">
+                                                {purposeLabel}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="max-w-96 truncate text-slate-500" title={item.description}>
+                                        {item.description || '—'}
+                                    </td>
+                                    <td>{item.platformEnabled ? '平台启用' : '平台已停用'}</td>
+                                    <td>{item.enabled ? '本店已开启' : '本店未开启'}</td>
+                                    <td>{item.effectiveEnabled ? '已启用' : '未启用'}</td>
+                                    <td>
+                                        {canUpdate && (
+                                            <AdminInput
+                                                type="checkbox"
+                                                aria-label={`本店${item.name}${purposeLabel ? `（${purposeLabel}）` : ''}开关`}
+                                                checked={item.enabled}
+                                                disabled={
+                                                    saving.loading || (!item.platformEnabled && !item.enabled)
+                                                }
+                                                onChange={event => void toggle(item, event.target.checked)}
+                                            />
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -572,6 +612,7 @@ function MethodEditorDialog({
     const item = state.item;
     const storeShipping = state.kind === 'shipping' && data.activeChannel.code !== '__default_channel__';
     const initialTestPayment = state.kind === 'payment' && state.testPayment;
+    const initialOfflinePayment = state.kind === 'payment' && state.offlinePayment;
     const languageCode = getAdminDisplayLanguage();
     const selectedTranslation = getLocalizedEntityTranslation(item?.translations, languageCode);
     const checkerDefinitions =
@@ -603,25 +644,35 @@ function MethodEditorDialog({
                   }));
     const [code, setCode] = useState(
         item?.code ??
-            (initialTestPayment
-                ? 'controlled-test-payment-platform'
-                : storeShipping
-                  ? `store-shipping-${data.activeChannel.id}-${globalThis.crypto.randomUUID()}`
-                  : ''),
+            (initialOfflinePayment
+                ? 'offline-manual-payment'
+                : initialTestPayment
+                  ? 'controlled-test-payment-platform'
+                  : storeShipping
+                    ? `store-shipping-${data.activeChannel.id}-${globalThis.crypto.randomUUID()}`
+                    : ''),
     );
     const [name, setName] = useState(
-        selectedTranslation?.name ?? (item ? '' : initialTestPayment ? '测试支付' : ''),
+        selectedTranslation?.name ??
+            (item ? '' : initialOfflinePayment ? '提交订单后联系客服' : initialTestPayment ? '测试支付' : ''),
     );
     const [description, setDescription] = useState(selectedTranslation?.description ?? '');
     const [enabled, setEnabled] = useState(
         state.kind === 'payment' ? (state.item?.enabled ?? !initialTestPayment) : true,
     );
     const [checkerCode, setCheckerCode] = useState(
-        storeShipping ? 'store-shipping-zone-eligibility-checker' : (item?.checker?.code ?? ''),
+        storeShipping
+            ? 'store-shipping-zone-eligibility-checker'
+            : (item?.checker?.code ?? (initialOfflinePayment ? offlinePaymentChecker : '')),
     );
     const [handlerCode, setHandlerCode] = useState(
         state.kind === 'payment'
-            ? (state.item?.handler.code ?? (initialTestPayment ? testPaymentHandler : ''))
+            ? (state.item?.handler.code ??
+                  (initialOfflinePayment
+                      ? offlinePaymentHandler
+                      : initialTestPayment
+                        ? testPaymentHandler
+                        : ''))
             : '',
     );
     const [calculatorCode, setCalculatorCode] = useState(
@@ -879,11 +930,14 @@ function MethodEditorDialog({
             return onError(Object.values(customFieldErrors)[0] ?? '扩展字段校验失败');
         }
         try {
-            const checker = isControlledTest
-                ? operationInput(testPaymentChecker, {}, checkerDefinitions)
-                : checkerCode
-                  ? operationInput(checkerCode, checkerArgs, checkerDefinitions)
-                  : null;
+            const checker =
+                handlerCode === offlinePaymentHandler
+                    ? operationInput(offlinePaymentChecker, {}, checkerDefinitions)
+                    : isControlledTest
+                      ? operationInput(testPaymentChecker, {}, checkerDefinitions)
+                      : checkerCode
+                        ? operationInput(checkerCode, checkerArgs, checkerDefinitions)
+                        : null;
             const customFields = customFieldInputFromValues(customFieldDefinitions, customFieldValues);
             const existingTranslations = item?.translations ?? [];
             const translations = existingTranslations.map(translation => ({

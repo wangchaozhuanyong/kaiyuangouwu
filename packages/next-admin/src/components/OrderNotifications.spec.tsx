@@ -319,19 +319,36 @@ describe('event-driven order announcements', () => {
         expect(openStream).toHaveBeenCalledTimes(1);
         expect(events.at(-1)?.title).toContain('重新登录');
     });
-    it('aborts the stream and reconnect timer on unmount', async () => {
+    it('aborts the active stream on unmount without reconnecting', async () => {
         await render();
-        await act(async () => {
-            streams[0].end();
-        });
+        const active = streams[0];
+        const signal = openStream.mock.calls[0][1] as AbortSignal;
         await act(async () => {
             root.render(null);
         });
+        expect(signal.aborted).toBe(true);
+        expect(active.cancel).toHaveBeenCalled();
         await act(async () => {
             await vi.advanceTimersByTimeAsync(60000);
         });
         expect(openStream).toHaveBeenCalledTimes(1);
-        expect(openStream.mock.calls[0][1].aborted).toBe(true);
+        expect(invalidations).toEqual([]);
+    });
+    it('clears the reconnect timer on unmount after the stream has ended', async () => {
+        await render();
+        const initialTimers = vi.getTimerCount();
+        await act(async () => {
+            streams[0].end();
+        });
+        expect(vi.getTimerCount()).toBe(initialTimers + 1);
+        await act(async () => {
+            root.render(null);
+        });
+        expect(vi.getTimerCount()).toBe(initialTimers);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(60000);
+        });
+        expect(openStream).toHaveBeenCalledTimes(1);
         expect(invalidations).toEqual([]);
     });
     it('keeps a visible order notification if audio fails', async () => {

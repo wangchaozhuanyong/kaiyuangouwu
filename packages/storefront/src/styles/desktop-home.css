@@ -1,7 +1,7 @@
 @media (min-width: 1024px) {
     /* Home keeps the managed merchandising order and gives images the visual priority. */
     .desktop-store-layout .home-page {
-        padding-top: 20px;
+        padding-top: 0;
     }
     .desktop-store-layout .home-page > .storefront-tagline {
         margin: 0 0 8px;
@@ -16,9 +16,9 @@
         color: var(--muted);
     }
     .desktop-store-layout .homepage-modules {
-        padding-top: 0;
-        --homepage-module-gap: 20px;
-        --homepage-section-gap: 20px;
+        padding-top: var(--homepage-module-gap);
+        --homepage-module-gap: var(--space-section);
+        --homepage-section-gap: var(--space-major);
     }
     .desktop-store-layout .home-intro-grid {
         display: contents;
@@ -255,84 +255,6 @@
         gap: 12px;
         background: transparent;
         box-shadow: none;
-    }
-
-    .hero-page-picker {
-        flex: 0 0 auto;
-        margin-left: auto;
-        max-width: min(40%, 320px);
-        display: flex;
-        align-items: stretch;
-        min-height: 44px;
-        gap: 0;
-        padding: 0 var(--space-4);
-        overflow-x: auto;
-        scrollbar-width: none;
-        cursor: default;
-    }
-
-    .hero-page-picker :is(button, .hero-page-static-number) {
-        position: relative;
-        flex: 0 0 44px;
-        width: 44px;
-        min-height: 44px;
-        padding: 0;
-        display: grid;
-        place-items: center;
-        border: 0;
-        border-radius: var(--skin-control-radius);
-        background: transparent;
-        color: inherit;
-        font-size: var(--type-meta-size);
-        font-weight: var(--font-weight-medium);
-        font-variant-numeric: tabular-nums;
-        line-height: var(--type-meta-leading);
-        cursor: pointer;
-        transition:
-            background-color 150ms ease,
-            color 150ms ease;
-    }
-
-    .hero-page-picker .hero-page-static-number {
-        font-weight: var(--font-weight-bold);
-        cursor: default;
-    }
-
-    .hero-page-picker button:hover {
-        color: var(--hero-pagination-active-color, var(--accent-ink));
-    }
-
-    .hero-page-picker button[aria-current='true'] {
-        font-weight: var(--font-weight-bold);
-    }
-
-    .hero-page-picker button[aria-current='true']::after {
-        content: '';
-        position: absolute;
-        bottom: var(--space-4);
-        left: 50%;
-        transform: translateX(-50%);
-        width: 12px;
-        height: 2px;
-        border-radius: var(--skin-control-radius);
-        background: var(--hero-pagination-active-color, currentColor);
-        pointer-events: none;
-    }
-
-    .hero-page-number {
-        /* Match the optical center of short Latin digits to the trust labels. */
-        transform: translateY(1px);
-    }
-
-    .hero-page-picker button:focus-visible {
-        outline: var(--experience-focus-width) solid var(--focus);
-        outline-offset: -2px;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .hero-page-picker button {
-            transition: none;
-        }
     }
 
     .desktop-store-layout .home-page .hero-rich-copy-surface {

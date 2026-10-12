@@ -323,6 +323,62 @@ export interface StorefrontPageData<
 
 export const STOREFRONT_PAGE_DATA_ELEMENT_ID = 'storefront-public-page-data';
 
+export const STOREFRONT_BOOT_DATA_ELEMENT_ID = 'storefront-boot-data';
+
+/** A route-independent anonymous configuration, never an account or order snapshot. */
+export interface StorefrontBootData<Config = unknown> {
+    schemaVersion: 1;
+    generatedAt: number;
+    configUpdatedAt: number;
+    scope: StorefrontPageData['scope'];
+    config: Config;
+    visualPreset?: { presetId: string };
+    visualUpdatedAt?: number;
+}
+
+export function validateStorefrontBootData(
+    value: unknown,
+    scope: { host: string; languageCode?: string; currencyCode?: string; now?: number },
+): value is StorefrontBootData {
+    const boot = value as Partial<StorefrontBootData> | null;
+    const config = boot?.config as
+        | { code?: unknown; accessMode?: unknown; customFields?: unknown; availableCountries?: unknown }
+        | undefined;
+    const now = scope.now ?? Date.now();
+    return Boolean(
+        boot &&
+        boot.schemaVersion === 1 &&
+        boot.scope?.host === scope.host &&
+        boot.scope.priceContext === 'public' &&
+        typeof boot.scope.channelCode === 'string' &&
+        boot.scope.channelCode &&
+        ['en', 'zh_Hans'].includes(boot.scope.languageCode) &&
+        /^[A-Z]{3}$/u.test(boot.scope.currencyCode) &&
+        (!scope.languageCode || boot.scope.languageCode === scope.languageCode) &&
+        (!scope.currencyCode || boot.scope.currencyCode === scope.currencyCode) &&
+        config?.code === boot.scope.channelCode &&
+        config.accessMode === 'LIVE' &&
+        config.customFields &&
+        typeof config.customFields === 'object' &&
+        Array.isArray(config.availableCountries) &&
+        typeof boot.generatedAt === 'number' &&
+        Number.isFinite(boot.generatedAt) &&
+        now - boot.generatedAt <= 30_000 &&
+        boot.generatedAt - now <= 5_000 &&
+        typeof boot.configUpdatedAt === 'number' &&
+        Number.isFinite(boot.configUpdatedAt) &&
+        now - boot.configUpdatedAt <= 60_000 &&
+        boot.configUpdatedAt - now <= 5_000,
+    );
+}
+
+export function serializeStorefrontBootData(data: StorefrontBootData): string {
+    return JSON.stringify(data).replace(
+        /[<>&\u2028\u2029]/gu,
+        value => `\\u${value.charCodeAt(0).toString(16).padStart(4, '0')}`,
+    );
+}
+
 /** Preview responses can be viewed for the current request, but cannot become shared snapshots. */
 export function isReusablePublicPageData(page: { config?: unknown } | null | undefined): boolean {
     return (page?.config as { accessMode?: unknown } | undefined)?.accessMode === 'LIVE';

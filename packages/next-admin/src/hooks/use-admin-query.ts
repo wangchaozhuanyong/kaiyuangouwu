@@ -8,6 +8,7 @@ import {
     queryPolicy,
     resourceIdentity,
 } from '../runtime/admin-query-runtime';
+import { resourceDomains } from '../runtime/admin-resource-events';
 import { PageRuntimeContext } from '../runtime/page-runtime-context';
 import { normalizeOperationFailure } from '../utils/operation-failure';
 import { usePageActivity } from './use-page-activity';
@@ -148,9 +149,9 @@ function useManagedResult(document: any, options: any, result: any, active: bool
                 refetchPeers,
                 ...ownerState.current,
             },
-            { staleTime, pollInterval, stage },
+            { staleTime, pollInterval, stage, domains: resourceDomains(document) },
         );
-    }, [runtime, key, ownerId, page, enabled, fetch, refetchPeers, staleTime, pollInterval, stage]);
+    }, [runtime, key, document, ownerId, page, enabled, fetch, refetchPeers, staleTime, pollInterval, stage]);
     useEffect(() => {
         const completed = wasLoading.current.key === key && wasLoading.current.value && !result.loading;
         wasLoading.current = { key, value: result.loading };

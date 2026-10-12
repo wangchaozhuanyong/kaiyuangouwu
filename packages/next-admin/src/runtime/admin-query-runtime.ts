@@ -1,10 +1,12 @@
 import { getOperationAST, print, type DocumentNode } from 'graphql';
+import type { ResourceDomain } from './admin-resource-events';
 
 export type RefreshReason = 'manual' | 'activation' | 'reconnect' | 'event' | 'write';
 export interface ResourcePolicy {
     staleTime: number;
     pollInterval: number;
     stage: number;
+    domains?: readonly ResourceDomain[];
 }
 export interface ResourceOwner {
     page: string;
@@ -89,6 +91,14 @@ export class AdminQueryRuntime {
     private pageVersions = new Map<string, number>();
     private pageResources = new Map<string, Set<string>>();
     private pages = new Map<string, Promise<PromiseSettledResult<unknown>[]>>();
+    private queuedPages = new Map<
+        string,
+        {
+            domains?: Set<ResourceDomain>;
+            reason: RefreshReason;
+            work: Promise<PromiseSettledResult<unknown>[]>;
+        }
+    >();
     private preparations = new Map<string, Set<() => void>>();
     constructor(private now: () => number = Date.now) {}
     subscribePage = (page: string, listener: () => void) => {
@@ -210,6 +220,11 @@ export class AdminQueryRuntime {
         }
         this.publish(changed);
     }
+    invalidateDomains(domains: readonly ResourceDomain[]) {
+        this.invalidate(
+            key => this.resources.get(key)?.policy.domains?.some(domain => domains.includes(domain)) ?? false,
+        );
+    }
     state(page: string): PageQueryState {
         const keys = new Set([
             ...(this.pageResources.get(page) ?? []),
@@ -275,22 +290,49 @@ export class AdminQueryRuntime {
         this.publish([key]);
         return item.pending;
     }
-    refreshPage(page: string, reason: RefreshReason = 'manual'): Promise<PromiseSettledResult<unknown>[]> {
+    refreshPage(
+        page: string,
+        reason: RefreshReason = 'manual',
+        domains?: readonly ResourceDomain[],
+    ): Promise<PromiseSettledResult<unknown>[]> {
         const existing = this.pages.get(page);
-        if (existing)
-            return reason === 'write' || reason === 'event'
-                ? existing.then(() => this.refreshPage(page, reason))
-                : existing;
+        if (existing) {
+            if (reason !== 'write' && reason !== 'event') return existing;
+            const queued = this.queuedPages.get(page);
+            if (queued) {
+                if (!domains) queued.domains = undefined;
+                else if (queued.domains) domains.forEach(domain => queued.domains!.add(domain));
+                if (reason === 'write') queued.reason = reason;
+                return queued.work;
+            }
+            const next = {
+                domains: domains ? new Set(domains) : undefined,
+                reason,
+                work: Promise.resolve([]) as Promise<PromiseSettledResult<unknown>[]>,
+            };
+            next.work = existing.then(() => {
+                this.queuedPages.delete(page);
+                return this.refreshPage(page, next.reason, next.domains ? [...next.domains] : undefined);
+            });
+            this.queuedPages.set(page, next);
+            return next.work;
+        }
         const work = (async () => {
             const results: PromiseSettledResult<unknown>[] = [];
-            this.preparations.get(page)?.forEach(prepare => prepare());
-            if (this.preparations.has(page)) await new Promise(resolve => setTimeout(resolve, 0));
+            if (reason === 'manual') {
+                this.preparations.get(page)?.forEach(prepare => prepare());
+                if (this.preparations.has(page)) await new Promise(resolve => setTimeout(resolve, 0));
+            }
             for (const stage of [0, 1, 2]) {
                 const keys = [...this.resources]
                     .filter(
                         ([key, item]) =>
                             item.policy.stage === stage &&
-                            (reason === 'manual' || this.isStale(key)) &&
+                            (reason === 'manual' ||
+                                (reason === 'write' || reason === 'event'
+                                    ? item.invalidatedAt > 0
+                                    : this.isStale(key))) &&
+                            (!domains || item.policy.domains?.some(domain => domains.includes(domain))) &&
                             [...item.owners.values()].some(
                                 owner => (owner.page === page || owner.page === '@shell') && owner.active,
                             ),

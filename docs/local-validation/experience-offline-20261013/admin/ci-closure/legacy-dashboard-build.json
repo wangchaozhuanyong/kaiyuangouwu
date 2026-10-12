@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "target": "dashboard",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/dashboard",
+  "startedAt": "2026-10-12T20:25:26.599Z",
+  "finishedAt": "2026-10-12T20:25:52.220Z",
+  "durationMs": 25621,
+  "exitCode": 0,
+  "signal": null,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/legacy-dashboard-build.log",
+  "sourceAggregateBefore": "a2583efcbb5ed29d3b7d901de9058f92b4c5131fcd99c9fbebba8bc0a61d8f03",
+  "sourceAggregateAfter": "a2583efcbb5ed29d3b7d901de9058f92b4c5131fcd99c9fbebba8bc0a61d8f03",
+  "changedSourceFiles": [],
+  "environmentSource": ".github/workflows/build_and_test.yml: Build affected packages and preserve compiled output",
+  "dotenvPath": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/empty.env",
+  "publicPathOverride": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/runtime-staging",
+  "toolchain": {
+    "node": "v24.19.0",
+    "bun": "1.3.14"
+  }
+}

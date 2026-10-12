@@ -1128,7 +1128,12 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                 : 'Choose resolution';
 
     return (
-        <Subpage title={isZh ? 'AI 图片工坊' : 'AI Image Studio'} language={language} onBack={onBack}>
+        <Subpage
+            title={isZh ? 'AI 图片工坊' : 'AI Image Studio'}
+            language={language}
+            onBack={onBack}
+            className="ai-studio-page"
+        >
             {loading ? (
                 <PageSkeleton variant="studio" label={isZh ? '正在加载图片工坊' : 'Loading image studio'} />
             ) : loadError ? (
@@ -1712,7 +1717,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                                 </label>
                             </section>
 
-                            <div className="ai-studio-fixed-generate">
+                            <div className="ai-studio-fixed-generate page-action-bar">
                                 <div className="ai-studio-hold-amount" aria-live="polite">
                                     <small>{isZh ? '预计冻结金额' : 'Estimated hold'}</small>
                                     <strong>

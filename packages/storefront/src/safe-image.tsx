@@ -1,5 +1,19 @@
 import { ImageOff, Package } from 'lucide-react';
-import { ImgHTMLAttributes, ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
+import {
+    createContext,
+    ImgHTMLAttributes,
+    ReactNode,
+    useContext,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
+
+import {
+    boundedMediaPreviews,
+    type MediaDescriptor,
+} from '../../storefront-content-plugin/src/shared/responsive-image';
 
 import {
     cancelPendingImage,
@@ -11,6 +25,40 @@ import {
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontLanguage } from './types';
+
+/** Image accessibility uses the same language in anonymous HTML and the interactive frame. */
+export const ImageLanguageContext = createContext<StorefrontLanguage | null>(null);
+
+const SafeImageMediaContext = createContext<ReadonlyMap<string, string>>(new Map());
+const mediaPreviewKey = (source: string, kind?: StorefrontImageKind) =>
+    `${imageSources(source).identity}\u0000${kind ?? ''}`;
+
+/** Consume only the current page's query-owned public hints; this provider adds no DOM. */
+export function SafeImageMediaProvider({
+    media = [],
+    children,
+}: {
+    media?: readonly MediaDescriptor[];
+    children: ReactNode;
+}) {
+    const previews = useMemo(
+        () =>
+            new Map(
+                boundedMediaPreviews(media).flatMap(descriptor =>
+                    descriptor.placeholder && imageSources(descriptor.identity).version === descriptor.version
+                        ? [
+                              [
+                                  mediaPreviewKey(descriptor.identity, descriptor.kind),
+                                  descriptor.placeholder.inlineData,
+                              ] as const,
+                          ]
+                        : [],
+                ),
+            ),
+        [media],
+    );
+    return <SafeImageMediaContext.Provider value={previews}>{children}</SafeImageMediaContext.Provider>;
+}
 
 export function ImagePlaceholder({
     state = 'missing',
@@ -24,7 +72,8 @@ export function ImagePlaceholder({
     language?: StorefrontLanguage;
 }) {
     const runtime = useContext(StorefrontContext);
-    const isZh = (language ?? runtime?.language ?? 'zh') === 'zh';
+    const frameLanguage = useContext(ImageLanguageContext);
+    const isZh = (language ?? runtime?.language ?? frameLanguage ?? 'zh') === 'zh';
     const loading = state === 'loading';
     const label =
         state === 'missing'
@@ -60,6 +109,9 @@ export type SafeImageProps = {
     mediaSources?: Array<{ media: string; src: string; sizes?: string; width?: number; height?: number }>;
     fallbackSrc?: string;
     errorFallback?: ReactNode;
+    loadingFallback?: ReactNode;
+    /** Private identity surfaces keep visual decode reuse inside one confirmed owner. */
+    retainedOwnerKey?: string;
     placeholderSrc?: string;
     showFallbackIcon?: boolean;
     fallbackLabel?: string;
@@ -78,19 +130,24 @@ export function SafeImage(props: SafeImageProps) {
         props.imageKind ?? '',
         props.srcSet ?? '',
         props.sizes ?? '',
+        props.retainedOwnerKey ?? '',
         JSON.stringify(props.mediaSources ?? []),
     ].join('\u0000');
-    const [previous, setPrevious] = useState({ identity: '', source: '' });
+    const [previous, setPrevious] = useState({ identity: '', source: '', ownerKey: props.retainedOwnerKey });
     return (
         <SafeImageSource
             key={identity}
             {...props}
-            retainedSrc={previous.identity !== identity ? previous.source : ''}
+            retainedSrc={
+                previous.ownerKey === props.retainedOwnerKey && previous.identity !== identity
+                    ? previous.source
+                    : ''
+            }
             onReady={source =>
                 setPrevious(current =>
                     current.identity === identity && current.source === source
                         ? current
-                        : { identity, source },
+                        : { identity, source, ownerKey: props.retainedOwnerKey },
                 )
             }
         />
@@ -98,6 +155,8 @@ export function SafeImage(props: SafeImageProps) {
 }
 
 const decodedImageUrls = new Set<string>();
+// This is decode bookkeeping for actual image resources, never a server-data cache.
+const decodedAvatarPreviews = new Map<string, string>();
 
 export function isImageAlreadyDecoded(
     src?: string | null,
@@ -117,6 +176,7 @@ export function markImageDecoded(url?: string | null): void {
 
 export function clearDecodedImageCache(): void {
     decodedImageUrls.clear();
+    decodedAvatarPreviews.clear();
 }
 
 function SafeImageSource({
@@ -124,6 +184,8 @@ function SafeImageSource({
     mediaSources,
     fallbackSrc,
     errorFallback,
+    loadingFallback,
+    retainedOwnerKey,
     placeholderSrc,
     showFallbackIcon = true,
     fallbackLabel,
@@ -143,7 +205,14 @@ function SafeImageSource({
     const [failed, setFailed] = useState(false);
     const [fallbackHeight, setFallbackHeight] = useState<number>();
     const [timedOut, setTimedOut] = useState(false);
-    const [previewReady, setPreviewReady] = useState(false);
+    const publicPreviews = useContext(SafeImageMediaContext);
+    const inlinePreview =
+        imageProps.fetchPriority === 'high' ? publicPreviews.get(mediaPreviewKey(src, imageKind)) : undefined;
+    const avatarKey = JSON.stringify([retainedOwnerKey, mediaPreviewKey(src, imageKind)]);
+    const decodedAvatarPreview =
+        loadingFallback && retainedOwnerKey ? decodedAvatarPreviews.get(avatarKey) : undefined;
+    const retainedPreview = retainedSrc || decodedAvatarPreview;
+    const [previewReady, setPreviewReady] = useState(Boolean(inlinePreview));
     const previewRef = useRef<HTMLImageElement>(null);
     const sources = imageSources(currentSrc, responsive ? imageKind : undefined, imageProps.sizes);
     const sourceKey = [
@@ -169,7 +238,8 @@ function SafeImageSource({
     latestSourceKey.current = sourceKey;
     const loaded = loadedCandidate.startsWith(sourceKey + '\u0001') && !failed;
     const placeholder =
-        retainedSrc ||
+        retainedPreview ||
+        inlinePreview ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
             : placeholderSrc);
@@ -215,12 +285,20 @@ function SafeImageSource({
                 )
                     return;
                 markImageDecoded(image.currentSrc || image.src);
-                if (!mediaSources?.length) {
+                if (!mediaSources?.length && !sources.srcSet && !imageProps.srcSet) {
                     markImageDecoded(sources.src);
                     markImageDecoded(currentSrc);
                     markImageDecoded(sourceKey);
                 }
                 markImageDecoded(candidate);
+                if (loadingFallback && retainedOwnerKey) {
+                    decodedAvatarPreviews.delete(avatarKey);
+                    decodedAvatarPreviews.set(avatarKey, image.currentSrc || image.src);
+                    if (decodedAvatarPreviews.size > 128) {
+                        const oldest = decodedAvatarPreviews.keys().next().value;
+                        if (oldest !== undefined) decodedAvatarPreviews.delete(oldest);
+                    }
+                }
                 if (notifiedCandidate.current !== candidate) {
                     notifiedCandidate.current = candidate;
                     onImageReady?.(image);
@@ -321,6 +399,7 @@ function SafeImageSource({
         loaded && 'is-loaded',
         imageProps.fetchPriority === 'high' && !exceededBudget.current && 'is-priority',
         placeholder && 'has-placeholder',
+        inlinePreview && 'has-inline-preview',
         frameClassName,
     ]
         .filter(Boolean)
@@ -360,12 +439,14 @@ function SafeImageSource({
                 className="safe-image-fallback"
                 aria-hidden={failed ? undefined : true}
                 style={
-                    !failed && retainedSrc
-                        ? { backgroundImage: `url(${JSON.stringify(retainedSrc)})` }
+                    !failed && retainedPreview
+                        ? { backgroundImage: `url(${JSON.stringify(retainedPreview)})` }
                         : undefined
                 }
             >
-                {!failed && placeholder && !retainedSrc ? (
+                {!failed && loadingFallback && !placeholder ? (
+                    loadingFallback
+                ) : !failed && placeholder && !retainedPreview ? (
                     <>
                         {!previewReady && (
                             <span className="safe-image-preview-loading" aria-hidden="true">

@@ -1,0 +1,848 @@
+{
+  "synthetic": true,
+  "mode": "production-artifact",
+  "environment": "Local Chromium, unthrottled CPU/network, synthetic 36-product catalog",
+  "method": "Document capture of trusted click → first requestAnimationFrame containing destination route, visible page and ready boundary; performance.now inside browser",
+  "scope": "Warm route code and query contents after two complete UI round trips; timing excludes Playwright RPC and actionability wait",
+  "results": [
+    {
+      "width": 390,
+      "warmupNavigations": 8,
+      "count": 40,
+      "p50Ms": 11.799999952316284,
+      "p95Ms": 12.900000095367432,
+      "maxMs": 13.299999952316284,
+      "targetMs": 200,
+      "passed": true,
+      "directions": {
+        "home→product": {
+          "count": 10,
+          "p95Ms": 12.700000047683716
+        },
+        "product→home": {
+          "count": 10,
+          "p95Ms": 12.5
+        },
+        "home→category": {
+          "count": 10,
+          "p95Ms": 12.900000095367432
+        },
+        "category→home": {
+          "count": 10,
+          "p95Ms": 13.299999952316284
+        }
+      },
+      "codeLoads": [],
+      "businessReads": [],
+      "samples": [
+        {
+          "direction": "home→product",
+          "elapsedMs": 9.399999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.5,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 11,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 13,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 10,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 11.799999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 11.099999904632568,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 10.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.700000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 11.600000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 10.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.5,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.800000071525574,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 6.600000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 11,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 6.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 13.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 10.600000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 10.300000071525574,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 11.5,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.199999928474426,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 11.799999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.600000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.199999928474426,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 10.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.900000095367432,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 5.799999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 11.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 11.400000095367432,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.699999928474426,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.799999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "warmupNavigations": 8,
+      "count": 40,
+      "p50Ms": 12,
+      "p95Ms": 12.5,
+      "maxMs": 14.100000023841858,
+      "targetMs": 200,
+      "passed": true,
+      "directions": {
+        "home→product": {
+          "count": 10,
+          "p95Ms": 13
+        },
+        "product→home": {
+          "count": 10,
+          "p95Ms": 12.299999952316284
+        },
+        "home→category": {
+          "count": 10,
+          "p95Ms": 12.5
+        },
+        "category→home": {
+          "count": 10,
+          "p95Ms": 14.100000023841858
+        }
+      },
+      "codeLoads": [],
+      "businessReads": [
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        },
+        {
+          "url": "http://127.0.0.1:62501/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+          "resource": "fetch"
+        }
+      ],
+      "samples": [
+        {
+          "direction": "home→product",
+          "elapsedMs": 13,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.099999904632568,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 12.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 10.700000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 10.700000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 10.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 10.399999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 10.300000071525574,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.5,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 10.300000071525574,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.299999952316284,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 10.600000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.199999928474426,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 12.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 12.200000047683716,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 14.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→product",
+          "elapsedMs": 12.100000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/product?id=synthetic-a-product-1",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "product→home",
+          "elapsedMs": 11.899999976158142,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "home→category",
+          "elapsedMs": 12,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/category?collectionId=synthetic-a-collection&childId=all",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        },
+        {
+          "direction": "category→home",
+          "elapsedMs": 10.600000023841858,
+          "frames": 1,
+          "trusted": true,
+          "location": "/en/",
+          "shellRetained": true,
+          "requiredPlaceholder": false
+        }
+      ]
+    }
+  ],
+  "failures": [],
+  "sourceArtifacts": [
+    {
+      "file": "warm-navigation-selector-failure.json",
+      "reusedSuccessfulViewport": 390,
+      "failedViewport": 1440,
+      "reason": "Incorrect desktop target selector during warmup; actual category was ready"
+    },
+    {
+      "file": "warm-navigation-1440-report.json",
+      "rerunViewport": 1440,
+      "reason": "Corrected selector to actual desktop-catalog-main; only the failed viewport rerun"
+    }
+  ]
+}

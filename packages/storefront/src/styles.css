@@ -295,7 +295,8 @@ img {
 
 /* Native images paint as they arrive, including the server-rendered first frame.
    Replacement images keep their decoded preview until the new candidate is ready. */
-.safe-image-frame:not(.has-placeholder) .safe-image {
+.safe-image-frame:not(.has-placeholder) .safe-image,
+.safe-image-frame.has-inline-preview .safe-image {
     opacity: 1;
 }
 .safe-image-art-direction {
@@ -571,8 +572,11 @@ img {
     --page-end-gap: var(--root-page-end-gap);
     min-height: 100dvh;
     padding-bottom: calc(
-        var(--page-bottom-fixed-height) + var(--page-bottom-fixed-offset) + var(--page-end-gap) +
-            var(--safe-bottom)
+        var(
+                --page-bottom-measured-clearance,
+                calc(var(--page-bottom-fixed-height) + var(--page-bottom-fixed-offset) + var(--safe-bottom))
+            ) +
+            var(--page-end-gap)
     );
     background: var(--bg);
     color: var(--text);
@@ -849,8 +853,8 @@ img {
 }
 
 .notice-strip {
-    width: calc(100% - 24px);
-    margin: 8px 12px 10px;
+    width: auto;
+    margin: 0 var(--page-section-inset, var(--experience-page-gutter-mobile));
     min-height: 44px;
     padding: 0 14px;
     border: 0;

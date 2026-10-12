@@ -1,10 +1,13 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
+import { usePageRouteCommit } from '../page-readiness';
+
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 const ManagedLegalPage = lazyRouteComponent(() => import('../pages/legal-page'), 'ManagedLegalPage');
 
 export function LegalRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
     return (
         <ManagedLegalPage

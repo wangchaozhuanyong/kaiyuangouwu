@@ -1,0 +1,69 @@
+{
+  "at": "2026-10-12T20:18:27.309Z",
+  "scope": "Original-owner isolated MySQL runner; synthetic actual Vendure schema/Admin HTTP; no production writes, payment confirmation, external transfer or email",
+  "sourceSha256": {
+    "packages/commerce-fulfillment-plugin/e2e/order-processing-scale/order-processing-scale.e2e-spec.ts": "77abc4a38ef9c10eac50dbf53cc454208c15e8506de7de1b87c404d9938cd116",
+    "packages/commerce-fulfillment-plugin/e2e/order-processing-scale/order-processing-scale.vitest.config.mjs": "974dc230b8091cc2b2d6afddf3ed1a028f7db6add21f920ec347937be7b5f2d5",
+    "packages/commerce-fulfillment-plugin/e2e/order-closure.vitest.config.mjs": "b454a6b6051afd34c39b206d9f96c7ed6b8594a5eb5957e2b8f7e5014a3bc4c4",
+    "packages/commerce-fulfillment-plugin/e2e/order-closure-db.ts": "70737bfb78edb39badc53a961d602029f648117f0a8d1e9e20fa40e8f5477017",
+    "packages/commerce-fulfillment-plugin/e2e/run-order-closure-mysql.mjs": "890c0451ee0f6587de33be7ac8223c8f24f002162f33d0dff0a1bc3ebef38a60",
+    "packages/commerce-fulfillment-plugin/src/order-processing.service.ts": "e6b2dee1c8d88c689d79e9393c2bcb7748c5c4306a146c4ebfff45848ad26aef",
+    "packages/commerce-fulfillment-plugin/src/order-processing-projection.ts": "aca481d5b6d2b0c5d87617bb4e21b158f10364ad5df92e63ef78fdd8aa80e3f4",
+    "packages/commerce-fulfillment-plugin/src/order-processing-projection.spec.ts": "ca6fa36146991fd84e9b57fc1993a684d477af049ee532839c7b699c2fd4e9ad",
+    "packages/commerce-fulfillment-plugin/src/order-processing-summary.ts": "ab5bc2f19c1fcb1b173ab3064810dc71232d2fb5e576cdd98776d3135ad999d9",
+    "packages/commerce-fulfillment-plugin/src/digital-receipt.service.ts": "3cbf165a2d4b9be30da22a741f4198fe12da646508930c502c8ada3fed137b80",
+    "packages/commerce-fulfillment-plugin/src/entities/auto-card-pool-item.entity.ts": "554d9bbeb7ec7ff2696e28c986987d65ffd552b6ff173383af1f11e05117034e",
+    "packages/commerce-fulfillment-plugin/src/entities/auto-card-delivery.entity.ts": "f03e53fb0dc6e6c297e02b69b6c2943514e26b422d2f497c1543423d4d23727e",
+    "packages/commerce-fulfillment-plugin/src/entities/auto-card-config.entity.ts": "d107a6fd669431b75f2db5a8cae8074c97df37292936b2c739418c72f9baeac1",
+    "packages/commerce-fulfillment-plugin/src/offline-manual-payment.ts": "7e837c7c9e73d757392342b02ed56c352a28f1da7c41fb0b04b45d8a7e7cbcc5",
+    "packages/commerce-fulfillment-plugin/src/offline-payment.resolver.ts": "aaffd6c3787ac874db61c87255aa691901868199d92440c39f74cd6b754077cd",
+    "packages/store-management-plugin/src/promotion/store-coupon-lifecycle.service.ts": "94c7b51c68299f43d6db451f28c1c2d71a86e8cd6a83df6445048c355e838378",
+    "packages/store-management-plugin/src/referral/referral.service.ts": "e51bc5467de5502cf5dfa4fc0e0953ec4a42cbcb33309b223dcdce07d475b0df",
+    "packages/next-admin/src/graphql/sales.graphql.ts": "50b00d6f16779959a930000c5778fb6952cd1e2595b1b929178aa1e6c72adb31",
+    "vitest.shared.mts": "d28d616ec2fbdc2074ae7b00c4cbc0fc9a0a290d1735c44b204631a12bbdae87",
+    "bun.lock": "975427e75dace7404c102d66b87e536a9ed69a3e08b244770309c3069537922a"
+  },
+  "dependencyProof": "api-scale-dependency-identity-canonical-all.json",
+  "successfulJobs": [
+    "admin-order-projection-owner-scope.json",
+    "admin-order-api-integrated-scale-owner-scope.json"
+  ],
+  "failedJobsPreserved": [
+    "admin-order-api-integrated-scale.json",
+    "admin-order-api-integrated-scale-canonical.json",
+    "admin-order-api-integrated-scale-canonical-all.json",
+    "admin-order-api-integrated-scale-platform.json",
+    "admin-order-api-integrated-scale-products.json",
+    "admin-order-api-integrated-scale-schema.json"
+  ],
+  "metrics": [
+    {
+      "orders": 1000,
+      "readsPerStage": 21,
+      "p95Milliseconds": 343.65,
+      "coldMilliseconds": 311.68,
+      "queryRange": [
+        103,
+        308
+      ],
+      "uniqueHydratedOrders": 20,
+      "uniqueHydratedLines": 20,
+      "manualGoldenPath": "Seeded inactive AwaitingManualPayment orders; every result strictly asserts original PendingManual payment, PENDING_MANUAL, needsProcessing and CONFIRM_OFFLINE_PAYMENT in actual GET_SALES_ORDERS document"
+    },
+    {
+      "orders": 10000,
+      "readsPerStage": 21,
+      "p95Milliseconds": 597.98,
+      "coldMilliseconds": 394.49,
+      "queryRange": [
+        103,
+        106
+      ],
+      "uniqueHydratedOrders": 20,
+      "uniqueHydratedLines": 20,
+      "manualGoldenPath": "Seeded inactive AwaitingManualPayment orders; every result strictly asserts original PendingManual payment, PENDING_MANUAL, needsProcessing and CONFIRM_OFFLINE_PAYMENT in actual GET_SALES_ORDERS document"
+    }
+  ],
+  "shutdownProof": "mysql-final-api-shutdown.json",
+  "reused": "Previous ten protected payment scenarios unchanged; signed currency comparison String preserves actual currency codes and three specific coupon receipt cases passed again; SQL-only unchanged scale evidence is distinct from complete Admin HTTP query"
+}

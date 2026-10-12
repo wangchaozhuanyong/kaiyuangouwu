@@ -1,0 +1,237 @@
+{
+  "directory": "icloud-relay-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin",
+  "startedAt": "2026-10-12T20:23:58.245Z",
+  "finishedAt": "2026-10-12T20:23:59.234Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/icloud-relay-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/api-extensions.ts",
+      "sha256": "31b55a8ba1663f740d090b0c910eeab8ed0657b4ac4aed19451639b509f5b30d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-admin.resolver.ts",
+      "sha256": "6b0b0e0b4d92a5305b85ead6471b65c1a9193c3421fa447050eabb97a2a5977a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-mail-stream.controller.spec.ts",
+      "sha256": "70f7331aedde9ce9adb3046a4c0cf787a5241b6ba027b778788e2bbdfd11014c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-mail-stream.controller.ts",
+      "sha256": "155562ff160348d84b6e20317975cdbf0c1975d9aca217d75465ad520504992f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-portal.controller.spec.ts",
+      "sha256": "bb5434dd80df1e84257b56008e9d2ef2a4552558020edacef195b7b7629d6b25"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-portal.controller.ts",
+      "sha256": "711e1e10933b34727991592f7343ee98e33253c1f569df1233a8a00226046bbb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-public.resolver.spec.ts",
+      "sha256": "d09815f470683091f7f739e6f47c041be8420af4bb04cc9263d3b60dd00badb2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/icloud-public.resolver.ts",
+      "sha256": "1b9606fbbe9fe75b19d1f18754395fd24aec699218b90b1be1be94de9dc4abc6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/portal-html.ts",
+      "sha256": "3bbcec0d61f9b8a5e4205194df750fbbf185da8a696b0da695cf77b97cc172d4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/portal-script.spec.ts",
+      "sha256": "93ece43f67ee4cb60bcd20dc292141af61c02382998669a907bd8c5943082f7a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/api/portal-script.ts",
+      "sha256": "996d94314a5ffa40b9e3148e0c39e458ed1b2d028560ee2c66b88474c4cd2b41"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/client/README.md",
+      "sha256": "7e87bf14ba35cd8898e2c23a8b64c779975c951c955494a9385a0fd530054544"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/client/admin-contract.spec.ts",
+      "sha256": "8285359c523473bdd3edca22486028e58b475f6c948b87fb1da8871d8891f3ef"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/client/admin-validation.ts",
+      "sha256": "4ad4aaebec4379648782c29436720e0ca5f3755ac2c0c23976c0e33425244b50"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/client/admin.generated.ts",
+      "sha256": "d5c6914fb0b2d75f7bce6a3251ba6855ad3dbc46a5fd722c9cbf295560282d95"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/client/admin.graphql",
+      "sha256": "73563168118c83f846551726b3e426d3ce9e8bd9c17c6840812c2e687feec4e2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/constants.spec.ts",
+      "sha256": "c194295a218ee2f5609528b4cc7d9c5a7c5fe75c43c7efb9dd592eba3b076eb7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/constants.ts",
+      "sha256": "d4270b4853654eaaaddb0429ebdf599927bae246c8a54751013646e88468cc31"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/entities/icloud-mail-outbox.entity.ts",
+      "sha256": "438b5988e93ec96cd02844cfaab611c8f94974390fae17c076498f844ead32ab"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/entities/icloud-primary-account.entity.ts",
+      "sha256": "aa22c61e955c81435ed69c687d14b66334a3831714d2527b4a5caa0ea36cfcdf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/entities/icloud-query-audit-log.entity.ts",
+      "sha256": "db80dea0c217b667a95b1f45e62e30b48e9c6393b73df955cd9ba5795a04a04d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/entities/icloud-received-mail.entity.ts",
+      "sha256": "9ec6582731b013fa9bc110f4b3a526a32f69df180abe8f23813922de3fb821c3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/entities/icloud-virtual-email.entity.ts",
+      "sha256": "855a4b5e9108dab8a6049b0ed079787053e1e07512b16c1120eefe96ebfa7d86"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/icloud-relay.plugin.spec.ts",
+      "sha256": "611ae1580ad1b7cdc1e4131d70c5bae6482c600d74efbef2fb2cadeb473bcdde"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/icloud-relay.plugin.ts",
+      "sha256": "ca0ecb9f464a779eccc55e858482dd4da164ef44ac4dd59824320cfc9c5478e2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/index.ts",
+      "sha256": "232937f1e80c8653a6f3fe02f09a5d5ebbe1125041b1a25cf978fe14cf6cf5d9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/jobs/icloud-job.service.ts",
+      "sha256": "5f50006b4947544e7133940f36751c1824a3998485e181fe2dbfd871e79dcc91"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-access-code.service.spec.ts",
+      "sha256": "7c90880e54cee9566ce2062507990b4e4acf7360005a9a59b2f47ae34ff27d3c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-access-code.service.ts",
+      "sha256": "fecbaa9f1712848dce92ec944f5439bfc53af3a86576fa750cc5d74eefad78ce"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-admin.service.spec.ts",
+      "sha256": "d6a789c9d85a9654d4f2cac458f988bc29a94e221a6d106c11d1fcc7d02140ed"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-admin.service.ts",
+      "sha256": "b7c32d2d17df032e55c890559556997944e6d4f86ae82a684d62810bdde0ae86"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-cipher.service.spec.ts",
+      "sha256": "acf9510b7cb510a0860c9a624cece15c6d3c8044be1c60264d823507acad4324"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-cipher.service.ts",
+      "sha256": "1d2f89cf165316e2d43e3481db1187985b2d068e886341da95a8c82edd5b3dd7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-idle.service.spec.ts",
+      "sha256": "c53c6bee8d76e2b53a71d287a3fe0c1b0283bcac679c31edadf11260777afbb0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-idle.service.ts",
+      "sha256": "6a2f453f81683333ca31e2300a3c6470169d25ae8f8883c5536902a1d63576e7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-imap-events.spec.ts",
+      "sha256": "5e9a578db1fd5e7bb6e5d313a8bf70fbd9868c51c6a1c964f72eebc703092a90"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-imap-sync.service.spec.ts",
+      "sha256": "3de094a1c927d8d5511138badc88fe2232b6c392780f7401531f73e205614ee7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-imap-sync.service.ts",
+      "sha256": "610c9421dfd3921bb84eef704dea14faf2024fe9f3146f3879e6dca9b34cf5bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-bridge.spec.ts",
+      "sha256": "410634fba43c159da5e652f7e4f65911b1a45e7289ae1f73e17e2e2a4fe6fe13"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-bridge.ts",
+      "sha256": "797a911ea6300891c160bf8eafb1a15123ea73008229aeb9783aa21452c045b3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-events.service.spec.ts",
+      "sha256": "5851ef007efdb07c0ee02fc2a283d40e325a2db3011c11fff923c5e50dbc3b7d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-events.service.ts",
+      "sha256": "29c0d94ca53ca2e43e715f1ac6e5d3d416c17a4d01586c7e16443e702234df5c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-history.service.ts",
+      "sha256": "b83f5b7ee08a47a71630a3174cad23fdf035e7d47ac00d93e656688c1147712c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-recipients.spec.ts",
+      "sha256": "cfe284c20450d12273f9b5793603bc9bbb3961d49016483f1bb48deff10a720d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-recipients.ts",
+      "sha256": "275ed660269c95e908ac671cba86faa8bcc753c277f7183c53980502fea14a8e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-sanitizer.service.ts",
+      "sha256": "05291c072bdc235ceda2b1d7b448407d0b8a346b54e8084edfbfb0125f2a1d68"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-mail-storage.ts",
+      "sha256": "71ce7c8883cc911a9d378fc68d864f0665037530fdd689a78355efa8dfb15be0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-otp-extractor.service.spec.ts",
+      "sha256": "61e42be91f952799ea45a76af728f232259f57c337363faecd659cb4fdcffef5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-otp-extractor.service.ts",
+      "sha256": "790e1e54c7657e927e38fa8ffbae052280576975a8e8815805a39fdf976101e2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-public-query.service.spec.ts",
+      "sha256": "933b2f7ed30fc68fb2b231efd0f3c5a359e2a41f812cc77366b586f6c06f68d7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-public-query.service.ts",
+      "sha256": "4488f4c31ba880146573a8bc4f104fc65e39f98931373fcd23ba822f5f9d50d5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-record-update.ts",
+      "sha256": "ea30094e8eb7e305c9a0edba5ccb1eb0d2d473b8898d2697468efc7b2c43ee7d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-storefront-events.service.spec.ts",
+      "sha256": "2280ab5bb444e5cec7ac44b24b39413faca086366f710b3a3702dace44479ba7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/services/icloud-storefront-events.service.ts",
+      "sha256": "33e696e5e11d8cf822496ff19dfe91452f0d3ffeaee74538c2c23bae165afcf4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/icloud-relay-plugin/src/types.ts",
+      "sha256": "7f53da450363807f87c7cd5ce97d2d4eeb085e35319630b86e5337d151bbd8d9"
+    }
+  ],
+  "changedInputs": []
+}

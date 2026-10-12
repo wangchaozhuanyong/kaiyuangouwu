@@ -133,6 +133,40 @@ afterEach(async () => {
 });
 
 describe('browser-shared order transport', () => {
+    it('pauses offline connections, aborts active reads and resumes once with the last cursor', async () => {
+        vi.useFakeTimers();
+        const connection = navigator as unknown as { onLine: boolean };
+        connection.onLine = false;
+        const runtime = await separateEventRuntime();
+        cleanups.push(
+            runtime.subscribeAdminOrderEvents(
+                { administratorId: 'offline', channelId: 'shop', channelToken: 'fixture-shop' },
+                handlers(),
+            ),
+        );
+        await flush();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(openStream).not.toHaveBeenCalled();
+        connection.onLine = true;
+        window.dispatchEvent(new Event('online'));
+        await flush();
+        expect(openStream).toHaveBeenCalledTimes(1);
+        streams[0].send(frame('order', 'server:8'));
+        await flush();
+        connection.onLine = false;
+        window.dispatchEvent(new Event('offline'));
+        await flush();
+        expect(streams[0].cancel).toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(openStream).toHaveBeenCalledTimes(1);
+        connection.onLine = true;
+        window.dispatchEvent(new Event('online'));
+        await flush();
+        expect(openStream).toHaveBeenCalledTimes(2);
+        expect(openStream).toHaveBeenLastCalledWith('fixture-shop', expect.any(AbortSignal), 'server:8');
+        vi.useRealTimers();
+    });
+
     it('uses one channel connection and relays notifications to a second browser tab', async () => {
         const first = await separateEventRuntime();
         const second = await separateEventRuntime();

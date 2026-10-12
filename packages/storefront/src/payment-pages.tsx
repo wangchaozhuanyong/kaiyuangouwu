@@ -8,6 +8,7 @@ import {
     Copy,
     Gift,
     House,
+    MessageCircle,
     Package,
     WalletCards,
 } from 'lucide-react';
@@ -45,7 +46,7 @@ import {
     StorefrontUsdtCheckoutQuote,
 } from './types';
 
-type PaymentRoute = { name: 'cart' | 'home' | 'orders'; tab?: 'shipping' | 'pending' };
+type PaymentRoute = { name: 'cart' | 'home' | 'orders' | 'support'; tab?: 'shipping' | 'pending' };
 const referralCurrencyBadgeClassName =
     'payment-balance-currency grid min-h-11 place-items-center px-3 type-body weight-bold';
 
@@ -388,6 +389,9 @@ export function PaymentPage({
     });
     const methods = availability.methods;
     const isTestMode = methods.some(method => method.code === selectedMethod && isTestPaymentMethod(method));
+    const isOfflineManual = methods.some(
+        method => method.code === selectedMethod && method.kind === 'OFFLINE_MANUAL',
+    );
     const loading = isPending && methodsQuery.isLoading;
     const methodLoadError =
         methodsQuery.isPaused && methodsQuery.data === undefined
@@ -775,9 +779,13 @@ export function PaymentPage({
                     icon={<WalletCards />}
                     title={
                         recoveredOrder
-                            ? isZh
-                                ? '付款已确认'
-                                : 'Payment confirmed'
+                            ? recoveredOrder.state === 'AwaitingManualPayment'
+                                ? isZh
+                                    ? '订单已提交，待客服核款'
+                                    : 'Order submitted, awaiting payment confirmation'
+                                : isZh
+                                  ? '付款已确认'
+                                  : 'Payment confirmed'
                             : hasUnresolvedPayment
                               ? isZh
                                   ? '请核对原付款结果'
@@ -788,9 +796,13 @@ export function PaymentPage({
                     }
                     detail={
                         recoveredOrder
-                            ? isZh
-                                ? `订单 ${recoveredOrder.code} 的付款已确认，请从我的订单查看最新状态。`
-                                : `Payment for ${recoveredOrder.code} is confirmed. View the latest status in your orders.`
+                            ? recoveredOrder.state === 'AwaitingManualPayment'
+                                ? isZh
+                                    ? `订单 ${recoveredOrder.code} 已保留，请联系客服核实实际到账。`
+                                    : `Order ${recoveredOrder.code} is preserved. Contact support to verify your payment.`
+                                : isZh
+                                  ? `订单 ${recoveredOrder.code} 的付款已确认，请从我的订单查看最新状态。`
+                                  : `Payment for ${recoveredOrder.code} is confirmed. View the latest status in your orders.`
                             : hasUnresolvedPayment
                               ? paymentError || unknownPaymentMessage
                               : isZh
@@ -952,48 +964,6 @@ export function PaymentPage({
                             onAction={() => void usdtConfirmationTokenQuery.refetch({ cancelRefetch: false })}
                         />
                     ) : null}
-                    <section
-                        className={`payment-test-notice${isTestMode ? '' : ' is-production'}`}
-                        role="note"
-                    >
-                        <CircleAlert aria-hidden="true" />
-                        <div>
-                            <strong>
-                                {isUsdtPayment
-                                    ? isZh
-                                        ? '链上到账检测'
-                                        : 'On-chain payment detection'
-                                    : isTestMode
-                                      ? isZh
-                                          ? '测试支付'
-                                          : 'Test payment'
-                                      : availability.status === 'READY'
-                                        ? isZh
-                                            ? '安全支付'
-                                            : 'Secure payment'
-                                        : isZh
-                                          ? '支付暂未开放'
-                                          : 'Payment is not available yet'}
-                            </strong>
-                            <span>
-                                {isUsdtPayment
-                                    ? isZh
-                                        ? '系统每分钟补扫 TRON 链，当前页面每 5 秒检查订单状态；无需提交付款成功。'
-                                        : 'TRON is reconciled every minute and this page checks the order every 5 seconds.'
-                                    : isTestMode
-                                      ? isZh
-                                          ? '按订单应付金额模拟付款成功，确认后正常下单，无需真实转账。'
-                                          : 'Simulates successful payment of the amount due and completes checkout without a real transfer.'
-                                      : availability.status === 'READY'
-                                        ? isZh
-                                            ? '请确认订单和金额后选择支付方式。'
-                                            : 'Review the order and amount before choosing a payment method.'
-                                        : isZh
-                                          ? '订单已保留，不会发起扣款。你可以返回购物车继续修改。'
-                                          : 'Your order is preserved and no charge will be attempted. You can return to edit it.'}
-                            </span>
-                        </div>
-                    </section>
                     {customer && !isUsdtPayment && referralProgramQuery.data?.enabled && (
                         <section className="payment-method-section">
                             <h2>{isZh ? '返利余额抵扣' : 'Referral balance'}</h2>
@@ -1279,20 +1249,28 @@ export function PaymentPage({
                                       ? '核对付款结果'
                                       : 'Check payment result'
                                 : submitting
-                                  ? isTestMode
+                                  ? isOfflineManual
                                       ? isZh
-                                          ? '正在完成测试支付'
-                                          : 'Completing test payment'
-                                      : isZh
-                                        ? '正在提交支付'
-                                        : 'Submitting payment'
-                                  : isTestMode
+                                          ? '正在提交订单'
+                                          : 'Submitting order'
+                                      : isTestMode
+                                        ? isZh
+                                            ? '正在完成测试支付'
+                                            : 'Completing test payment'
+                                        : isZh
+                                          ? '正在提交支付'
+                                          : 'Submitting payment'
+                                  : isOfflineManual
                                     ? isZh
-                                        ? '确认测试支付'
-                                        : 'Confirm test payment'
-                                    : isZh
-                                      ? '确认支付'
-                                      : 'Confirm payment'}
+                                        ? '提交订单并联系客服'
+                                        : 'Submit order and contact support'
+                                    : isTestMode
+                                      ? isZh
+                                          ? '确认测试支付'
+                                          : 'Confirm test payment'
+                                      : isZh
+                                        ? '确认支付'
+                                        : 'Confirm payment'}
                         </button>
                     )}
                     <button
@@ -1369,6 +1347,8 @@ export function OrderConfirmationPage({
             : null;
     const usdtReceipt = order ? usdtPaymentReceipt(order) : null;
     const isTestOrder = order?.state === 'TestPaymentSettled';
+    const isAwaitingManual = order?.state === 'AwaitingManualPayment';
+    const [copiedOrderCode, setCopiedOrderCode] = useState(false);
     const needsAdditionalPayment = order?.state === 'ArrangingAdditionalPayment';
     const isBeingModified = order?.state === 'Modifying';
     const isCancelled = order?.state === 'Cancelled';
@@ -1436,46 +1416,54 @@ export function OrderConfirmationPage({
                 </span>
                 <p>{isTestOrder ? (isZh ? '测试订单' : 'Test order') : isZh ? '订单状态' : 'Order status'}</p>
                 <h1>
-                    {isTestOrder
+                    {isAwaitingManual
                         ? isZh
-                            ? '测试支付成功'
-                            : 'Test payment complete'
-                        : needsAdditionalPayment
+                            ? '订单已提交，待客服确认收款'
+                            : 'Order submitted, awaiting payment confirmation'
+                        : isTestOrder
                           ? isZh
-                              ? '订单待补款'
-                              : 'Additional payment needed'
-                          : isBeingModified
+                              ? '测试支付成功'
+                              : 'Test payment complete'
+                          : needsAdditionalPayment
                             ? isZh
-                                ? '商家正在调整订单'
-                                : 'The merchant is updating your order'
-                            : isCancelled
+                                ? '订单待补款'
+                                : 'Additional payment needed'
+                            : isBeingModified
                               ? isZh
-                                  ? '订单已取消'
-                                  : 'Order cancelled'
-                              : isZh
-                                ? '订单提交成功'
-                                : 'Order confirmed'}
+                                  ? '商家正在调整订单'
+                                  : 'The merchant is updating your order'
+                              : isCancelled
+                                ? isZh
+                                    ? '订单已取消'
+                                    : 'Order cancelled'
+                                : isZh
+                                  ? '订单提交成功'
+                                  : 'Order confirmed'}
                 </h1>
                 <span>
-                    {isTestOrder
+                    {isAwaitingManual
                         ? isZh
-                            ? '测试付款和订单流程已完成，未真实扣款、发货或扣库存，不计入收入和返利。'
-                            : 'Test checkout is complete. No real charge, delivery, stock deduction, revenue or rewards.'
-                        : needsAdditionalPayment
+                            ? '请复制订单号并联系客服。客服核实实际到账后，商家会处理交付。'
+                            : 'Copy your order number and contact support. Delivery starts after support verifies your payment.'
+                        : isTestOrder
                           ? isZh
-                              ? '订单金额已调整，请核对下方补款金额与支付方式后确认支付。'
-                              : 'Your order total changed. Review the additional amount and payment method before confirming.'
-                          : isBeingModified
+                              ? '测试付款和订单流程已完成，未真实扣款、发货或扣库存，不计入收入和返利。'
+                              : 'Test checkout is complete. No real charge, delivery, stock deduction, revenue or rewards.'
+                          : needsAdditionalPayment
                             ? isZh
-                                ? '请等待商家结束修改，订单会显示更新后的处理状态。'
-                                : 'Wait for the merchant to finish the update and check the order status.'
-                            : isCancelled
+                                ? '订单金额已调整，请核对下方补款金额与支付方式后确认支付。'
+                                : 'Your order total changed. Review the additional amount and payment method before confirming.'
+                            : isBeingModified
                               ? isZh
-                                  ? '交付已停止。如已付款，请查看退款进度或联系商家。'
-                                  : 'Delivery has stopped. If you paid, check the refund status or contact the merchant.'
-                              : isZh
-                                ? '支付状态已更新，请保留订单号。'
-                                : 'The payment status has been updated. Keep your order number.'}
+                                  ? '请等待商家结束修改，订单会显示更新后的处理状态。'
+                                  : 'Wait for the merchant to finish the update and check the order status.'
+                              : isCancelled
+                                ? isZh
+                                    ? '交付已停止。如已付款，请查看退款进度或联系商家。'
+                                    : 'Delivery has stopped. If you paid, check the refund status or contact the merchant.'
+                                : isZh
+                                  ? '支付状态已更新，请保留订单号。'
+                                  : 'The payment status has been updated. Keep your order number.'}
                 </span>
             </section>
             <section className="order-confirmation-summary">
@@ -1517,7 +1505,7 @@ export function OrderConfirmationPage({
                         : 'Keep your order number. Guest access through this link is available for a limited time.'}
                 </small>
             </section>
-            {!isTestOrder && orderHasDigitalDelivery(order) && (
+            {!isTestOrder && !isAwaitingManual && orderHasDigitalDelivery(order) && (
                 <DigitalReceiptPanel
                     api={api}
                     order={order}
@@ -1526,7 +1514,7 @@ export function OrderConfirmationPage({
                     confirmationToken={confirmationToken}
                 />
             )}
-            {!isTestOrder && (
+            {!isTestOrder && !isAwaitingManual && (
                 <OrderAdditionalPaymentPanel
                     api={api}
                     order={order}
@@ -1536,7 +1524,42 @@ export function OrderConfirmationPage({
                 />
             )}
             <div className="order-confirmation-actions">
-                <button type="button" className="primary-action" onClick={() => navigateTo({ name: 'home' })}>
+                {isAwaitingManual && (
+                    <>
+                        <button
+                            type="button"
+                            className="primary-action"
+                            onClick={() => navigateTo({ name: 'support' })}
+                        >
+                            <MessageCircle aria-hidden="true" />
+                            {isZh ? '联系客服核款' : 'Contact support'}
+                        </button>
+                        <button
+                            type="button"
+                            className="secondary-action"
+                            onClick={() => {
+                                void navigator.clipboard
+                                    .writeText(order.code)
+                                    .then(() => setCopiedOrderCode(true))
+                                    .catch(() => setCopiedOrderCode(false));
+                            }}
+                        >
+                            <Copy aria-hidden="true" />
+                            {copiedOrderCode
+                                ? isZh
+                                    ? '订单号已复制'
+                                    : 'Order number copied'
+                                : isZh
+                                  ? '复制订单号'
+                                  : 'Copy order number'}
+                        </button>
+                    </>
+                )}
+                <button
+                    type="button"
+                    className={isAwaitingManual ? 'secondary-action' : 'primary-action'}
+                    onClick={() => navigateTo({ name: 'home' })}
+                >
                     <House aria-hidden="true" />
                     {isZh ? '继续购物' : 'Continue shopping'}
                 </button>
@@ -1550,7 +1573,7 @@ export function OrderConfirmationPage({
                                 tab:
                                     isTestOrder || isCancelled || isBeingModified
                                         ? undefined
-                                        : needsAdditionalPayment
+                                        : needsAdditionalPayment || isAwaitingManual
                                           ? 'pending'
                                           : 'shipping',
                             })

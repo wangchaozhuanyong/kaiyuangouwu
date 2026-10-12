@@ -132,6 +132,13 @@ export class StorefrontPublicCacheService {
     }
 
     async peek<T>(ctx: RequestContext, scopeKey: string): Promise<T | undefined> {
+        return (await this.peekEntry<T>(ctx, scopeKey))?.value;
+    }
+
+    async peekEntry<T>(
+        ctx: RequestContext,
+        scopeKey: string,
+    ): Promise<{ value: T; expiresAt: number; revision: string } | undefined> {
         if (ctx.activeUserId || this.accessContext.getStore()?.uncached) return undefined;
         const deadline = Date.now() + PEEK_BUDGET_MS;
         const revision = await this.revision(ctx.channelId, deadline);
@@ -147,7 +154,7 @@ export class StorefrontPublicCacheService {
         if (Date.now() >= deadline || revision !== (await this.revision(ctx.channelId, deadline)))
             return undefined;
         this.metrics.hits++;
-        return entry.value as T;
+        return { value: entry.value as T, expiresAt: entry.expiresAt, revision };
     }
 
     async readThrough<T>(

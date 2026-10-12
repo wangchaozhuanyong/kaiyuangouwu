@@ -1,0 +1,45 @@
+{
+  "directory": "create",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "npm run copy-assets && rimraf lib && tsc -p ./tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create",
+  "startedAt": "2026-10-12T20:24:04.333Z",
+  "finishedAt": "2026-10-12T20:24:06.203Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/create-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/constants.ts",
+      "sha256": "775a3ca5b3e8e427012b085b6f4ca528ad4852379b3f2e8c11705efcf1492cd2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/create-vendure-app.ts",
+      "sha256": "fb491290cf8d1f279c8555bf45571306a5477313a7d9bf2ee1bffeed2178cc52"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/gather-user-responses.ts",
+      "sha256": "aa5246132c4c350f9ffc28d54870bd77b2499642e1e0731b145894ca77856b3c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/helpers.spec.ts",
+      "sha256": "ff077760b7395bff381c9b25ee3ad23bf6673ee163bae02e6e6de8401e4d7a84"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/helpers.ts",
+      "sha256": "c42a0124c5b8e6b2a7c62a8f75d33338d7ef564e6d70836d5c19a28fba208e7b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/logger.ts",
+      "sha256": "a2fb35c914d02b4f241025a4e747b696cbe2f2969badabc5fa9fa5eed97bd911"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/create/src/types.ts",
+      "sha256": "90f698adefc6065f0496d2604312592121d02e1f441083f43c7692b2eb02a604"
+    }
+  ],
+  "changedInputs": []
+}

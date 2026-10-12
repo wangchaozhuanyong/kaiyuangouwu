@@ -1,0 +1,73 @@
+{
+  "directory": "storefront-catalog-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin",
+  "startedAt": "2026-10-12T20:23:50.297Z",
+  "finishedAt": "2026-10-12T20:23:51.540Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/storefront-catalog-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/api-extensions.ts",
+      "sha256": "3745afeb5b94b87f6d2b94fb0512ddf8e8ce8faa06430bfb9170cff01774fd14"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/catalog-price-bounds.spec.ts",
+      "sha256": "f0e380199acc5d2b542ee144665fd8b77bce44bc530b2922e3a16c63716fb1f5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/catalog-price-bounds.ts",
+      "sha256": "f454bb24e42a2206ec868adf543760b39fadcadff8175e104150dd0d3b1c6e1b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/index.ts",
+      "sha256": "5d00a9073f20267a0380a655b08f70120924a6554b59c5ada17e5548ef2925f7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/public-catalog-reader.service.ts",
+      "sha256": "1052acc32f89442e69b323ff6085c7e015a73e32b73ccc93783e5806b6f12609"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-catalog.plugin.ts",
+      "sha256": "8d1849dd2fcbe5abf99ec27a7d5aa1e4296cc7cefa75a5a26bd70562efdccf30"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-catalog.resolver.ts",
+      "sha256": "03ef9103de8bb20c5dc6aa8ba51870f817f14f0d13ca02f36cb03c8a6014d410"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-catalog.service.spec.ts",
+      "sha256": "772b01429c1a05aa1a5730c0e26b5c9e88020f9f8cf63f51a65909d5e2ae8d44"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-catalog.service.ts",
+      "sha256": "4ef02927f89855eb003c68452c5b541e3b67c21f84ff10a3032f707f4ac8580d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-product-sales.service.spec.ts",
+      "sha256": "f5be0e9beb7131f9862cdec46f03173c15436860bc7f8cdc28c38f3069bb858a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-product-sales.service.ts",
+      "sha256": "ecfea7378e2d47dc8466fa5839ff145123956b81f4a3b24f55ab382f4d7c67be"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-recommendations.service.spec.ts",
+      "sha256": "a582e64d4edc134f8ac3ffa660163e3a6be09d2e70d964fd0d91226b0a8e5685"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/storefront-recommendations.service.ts",
+      "sha256": "913075a82ac7a4bdc9362dc0ec3bc73b3c66c57f314d499ac1a42fb760b9e6d8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-catalog-plugin/src/types.ts",
+      "sha256": "9f142f91b0c1f50b3160b6d9364a6df49794658813ad72e577a4b3ac536e6dba"
+    }
+  ],
+  "changedInputs": []
+}

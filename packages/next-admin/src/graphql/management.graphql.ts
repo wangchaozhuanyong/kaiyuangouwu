@@ -349,6 +349,7 @@ export const MY_STORE_SETTINGS_QUERY = gql`
             id
             name
             code
+            handlerCode
             enabled
         }
         myStoreUsdtWallet {
@@ -1643,6 +1644,7 @@ export interface MyStoreSettingsResult {
         id: string;
         name: string;
         code: string;
+        handlerCode: string;
         enabled: boolean;
     }>;
     myStoreUsdtWallet: {

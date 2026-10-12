@@ -12,7 +12,11 @@ import {
     TransactionalConnection,
     type PublicProductSummaryReader,
 } from '@vendure/core';
-import type { PublicPageRequest, StorefrontPageData } from '@vendure/storefront-content-plugin';
+import type {
+    PublicPageRequest,
+    StorefrontBootData,
+    StorefrontPageData,
+} from '@vendure/storefront-content-plugin';
 import {
     canonicalPublicPageRequest,
     isReusablePublicPageData,
@@ -138,6 +142,49 @@ export class StorefrontPublicPageService {
             return isReusablePublicPageData(page) ? page : undefined;
         } catch (error) {
             if (error instanceof PublicPageAccessChangedError) return undefined;
+            throw error;
+        }
+    }
+
+    /** SSI may use warm configuration for private routes without assembling public catalog data. */
+    async peekBoot(ctx: RequestContext, host: string): Promise<StorefrontBootData | undefined> {
+        if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop') return;
+        if ((await this.getAccessMode(ctx)) !== 'LIVE') return;
+        try {
+            return await this.cache.runGuarded(
+                () => this.assertMode(ctx, 'LIVE'),
+                async () => {
+                    const [config, visual] = await Promise.all([
+                        this.cache.peekEntry<Record<string, unknown>>(ctx, `config:${host}`),
+                        this.cache.peekEntry<{ presetId: string }>(ctx, `visual-preset:${host}`),
+                    ]);
+                    if (
+                        !config ||
+                        config.value.code !== ctx.channel.code ||
+                        (visual && visual.revision !== config.revision) ||
+                        config.revision !== (await this.cache.revision(ctx.channelId))
+                    )
+                        return;
+                    return {
+                        schemaVersion: 1,
+                        generatedAt: Date.now(),
+                        configUpdatedAt: config.expiresAt - 60_000,
+                        scope: {
+                            host,
+                            channelCode: String(config.value.code),
+                            languageCode: ctx.languageCode,
+                            currencyCode: ctx.currencyCode,
+                            priceContext: 'public',
+                        },
+                        config: { ...config.value, accessMode: 'LIVE' },
+                        ...(visual
+                            ? { visualPreset: visual.value, visualUpdatedAt: visual.expiresAt - 60_000 }
+                            : {}),
+                    };
+                },
+            );
+        } catch (error) {
+            if (error instanceof PublicPageAccessChangedError) return;
             throw error;
         }
     }

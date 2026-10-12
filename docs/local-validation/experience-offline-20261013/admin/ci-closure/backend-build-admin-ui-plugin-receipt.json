@@ -1,0 +1,97 @@
+{
+  "at": "2026-10-12T20:29:08.460Z",
+  "workflow": ".github/workflows/build_and_test.yml",
+  "scope": "isolated canonical public CI build-check values; no server startup or external actions",
+  "executions": [
+    {
+      "directory": "admin-ui-plugin",
+      "target": "admin-ui-plugin",
+      "command": [
+        "bun",
+        "run",
+        "build"
+      ],
+      "script": "rimraf lib && node -r ts-node/register build.ts && npm run compile",
+      "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin",
+      "startedAt": "2026-10-12T20:28:50.471Z",
+      "finishedAt": "2026-10-12T20:29:08.459Z",
+      "exitCode": 0,
+      "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/admin-ui-plugin-build.log",
+      "inputs": [
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/.gitignore",
+          "sha256": "a325dcacb80b202a014b420b93fc19061900018f8ce216d0a0cb00d610ec7f97"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/.npmignore",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/README.md",
+          "sha256": "0edcd5e3fcf42dd77cfc0636a7919ee5b5afab6a48169e9d692aa09264f6dd41"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/build.ts",
+          "sha256": "bf85187f4bdf4533ac66e60e05e351930816566534d08fded4d8e5282c2ea0fd"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/index.ts",
+          "sha256": "007e931674e612ea8fb79a902f54c8c03bdf762dcd4c1837b60b51790c55a67d"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/package.json",
+          "sha256": "8f5f2438e5bc67efc0b70c7a5749bc89b84ff3f3e53a8130a7b00bc364f2e8a9"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/api/api-extensions.ts",
+          "sha256": "f1c64c9a9b6f533e922d5f8fe73a7868bc73ef52279fa4fc4e27d2a5237dd32d"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/api/metrics.resolver.ts",
+          "sha256": "a32f5d7cdeaa29cbd23f612c1de543a6829b62e7ce3517d6187ee914d8ba7d10"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/config/metrics-strategies.ts",
+          "sha256": "d290d79b2c196a772df86f88f36ba4c623477d6e9b4b9432f1509294b9c24d7b"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/constants.ts",
+          "sha256": "b43b419fb39d8a0329b656fe989aba649f6e9def027665eabfdadd4d1e04ca78"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/plugin.ts",
+          "sha256": "2dc16fe9793a9430559bd5083c3e8521747091c657b9d68970b17509f194e82c"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/service/metrics.service.ts",
+          "sha256": "3601c6a6177f87ed92e87cb874e9b123866b9a6e7fd96e62267a369056692d35"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/src/types.ts",
+          "sha256": "f57536b6aee2ee38ce46cdcb277ed3af688ee23f0088c9e6f9a3873a5cfdc381"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/tsconfig.build.json",
+          "sha256": "bcd8b70f8d6d058ef36552ec5d82c86f9ea38619a5acda8d78c5b67f55a5cb4c"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/admin-ui-plugin/tsconfig.json",
+          "sha256": "eed6271dcf2b8fe26e853f4be42b220d46a2ef7389628421dde09c48028eac65"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/tsconfig.json",
+          "sha256": "e2825b9f270aa924ea42af876988a50763b189dabf6b1294480fd5b206c46297"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/bun.lock",
+          "sha256": "975427e75dace7404c102d66b87e536a9ed69a3e08b244770309c3069537922a"
+        },
+        {
+          "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.github/workflows/build_and_test.yml",
+          "sha256": "6e9bd02b2b12af4664647af326e8617a903aa9c47bc7cbc712a523d588951315"
+        }
+      ],
+      "changedInputs": []
+    }
+  ]
+}

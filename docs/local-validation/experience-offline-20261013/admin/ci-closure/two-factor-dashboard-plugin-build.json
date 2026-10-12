@@ -1,0 +1,177 @@
+{
+  "directory": "two-factor-dashboard-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin",
+  "startedAt": "2026-10-12T20:23:59.241Z",
+  "finishedAt": "2026-10-12T20:24:00.216Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/two-factor-dashboard-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/api-extensions.ts",
+      "sha256": "56f264882fd0941e8657d4724b5467a0b1efeb162b2f26b62b60b5c5b4e2bf66"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/account-dialog.tsx",
+      "sha256": "ff4fe2ba6b7cd68a4865274a2fc4def533d4a50c1c9ed789ce2e553609ac8bae"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/account-list.tsx",
+      "sha256": "a807cf187ff6936f0c0b0819643a5f68c782da1feabf8f50ccbfb269537e1f20"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/batch-import-dialog.tsx",
+      "sha256": "d06b15a0acfd4d990e51ceca20646edcde0ded7e8061a53bf52a170d431125e0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/batch-parser.spec.ts",
+      "sha256": "676a1a13abb27293eeb5273b2bc746585ce42c8b59d85afe6f209527a8a092e0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/batch-parser.ts",
+      "sha256": "015a9829740d960f513511f1f54e3c3459f45b5e61fc73c8591dd2b4cd0c8d32"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/i18n/en.po",
+      "sha256": "6f6da879c98b6db573a79f30ff4b01ee5f5c004c1858a0dbb962be6908ff72a2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/i18n/zh_Hans.po",
+      "sha256": "574379691c17b929243eda58a309c65f2e8a5b1afb23e09d79c5f74de8d665ee"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/i18n.spec.ts",
+      "sha256": "8443364f7a1428b21f71040fe7ccfe968dd27203b4e25e67bba9e5e80a601008"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/index.tsx",
+      "sha256": "d5e390a131863dc60d3118de43b3173b1deddf7c793e0246d453044317cf322f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/legacy-session-cleanup.spec.ts",
+      "sha256": "3b16d606e49944d4973dd16cf8f8914189c1ac00ec8b7d677650283aa996427d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/legacy-session-cleanup.ts",
+      "sha256": "060329ef9d2f6b1a97b09d303a9120931f12c070ef72fa1fa955f3784f72b8c8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/messages.ts",
+      "sha256": "20767a2d23bbcfbf28cb3c19ef909fc9deb0a2621207c74bf786d2751cd66176"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/privacy-notice.tsx",
+      "sha256": "135c151692990ef15621263c4a9f05f57cd63da6bd96e283bfc376497f5f94ee"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/quick-query-card.tsx",
+      "sha256": "50f028fbe36681f3e829949af2ed7b6eee9884758634f12d6f1a12883a848c17"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/totp.spec.ts",
+      "sha256": "2dbc81864d068d031f61ad282890e1d655e7c66f4ef6441f9b17f766591b45d3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/totp.ts",
+      "sha256": "152a5876d2d43e5e355cc9892e6a8c3b8d2f9ae0dfaf6036c730ed52ec7b4b87"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/two-factor-page.tsx",
+      "sha256": "4ba953e0b0aa9fb278d9968cf9c61c2ed3407b18efc33220cf28b8c02bb6db6c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/two-factor.graphql.ts",
+      "sha256": "2896583e848a20f347301d9e5305d8df62aca53d3619b79a6fa77c4d5552fdaf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/dashboard/types.ts",
+      "sha256": "b976401374a736d596c0f41acbbb0b5ff9131f853eb8025cc8398978d9c0e5c6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/entities/dashboard-two-factor-account.entity.spec.ts",
+      "sha256": "b97161faae7be55e5b8e5a443237bc74467b0361f898b0b50117a14f3aa5d12e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/entities/dashboard-two-factor-account.entity.ts",
+      "sha256": "5d27527ce26bd9cb1b0b3c18577fde4579d1fcd24549ee93be37cec42f0040f3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/index.ts",
+      "sha256": "3afdc07ee9753e92ddbc5dea1cf692ed3f4051babbbd17493c8aea6f70a013b9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.browser-qa.ts",
+      "sha256": "e565107fe9d5aeaadef07c6dba7fc001b84378b2c0bea89fe5474e7a88eda317"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.channel.spec.ts",
+      "sha256": "c3442ea14926eb1497467655c9ec22e43c83ff71c4eac6b279315131810516ef"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.crypto.spec.ts",
+      "sha256": "8783b4710e53d894bc03ac08b93cc60e80e42741e6250bddfe5a3eb8afb67c96"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.crypto.ts",
+      "sha256": "0aeb2cb68dc36f51ca51f15d74170977e26cb50fbb627dd8bcafdbd41186337b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.entity.ts",
+      "sha256": "1db1037fa771bf07ecb7da18c602cb9ecfe71a33a5571cd2d025d9c64fe8e5ff"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.integration.spec.ts",
+      "sha256": "d6d443a306df9e763b6a62c8f4a50041a99a75d7b100d39b42e7c16fe0f0571c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.interceptor.ts",
+      "sha256": "36e0f1f25e282603c3500007a271daf7fe4526c787bc615d6d09f8fd13c2203d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.resolver.ts",
+      "sha256": "79b043b4a48bc36d8bdd5c28918682b980c783658df6f0e4b058ecdbd402f80b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.service.ts",
+      "sha256": "909354ae1b2f244456866a9197feec2eba59116b2377428d7bbf62ecbe4ffe56"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/login/admin-two-factor.strategy.ts",
+      "sha256": "92b3e6612a880063618ec390320c174cfd7a719566f3edc82f9a72b861fa711e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-account.resolver.ts",
+      "sha256": "2deb165f49704ec1e3469592bf7e27013abbe889c8bfc841b6e9a4f9e01f6f37"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-account.service.spec.ts",
+      "sha256": "5cafda25abf0ce13cfe614d90571b5708c1edfc7b3e2c26853e5955b09745439"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-account.service.ts",
+      "sha256": "0052264824ba7667258eef41bdbf8f66a0aab4c116a168b4eea24fd57b563ba7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-cipher.service.spec.ts",
+      "sha256": "7ba14f0f6f57122843f747e497cafa634a7b82e2685567bde408521533dd9d50"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-cipher.service.ts",
+      "sha256": "28f38fc24f52cc4fdd0b70328cc618db8e711fdbbf5c225ea5d60e94660424fd"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-dashboard.plugin.ts",
+      "sha256": "d2dd05833f865065b62792b8b47614405c07ab9eea4a1956ea3984d5267fdbd4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/two-factor-dashboard-plugin/src/two-factor-secret.ts",
+      "sha256": "a876449a2b26d7184b7a142e8f5cc2b8a7264136f1b6bfbe09dabbabb62e9881"
+    }
+  ],
+  "changedInputs": []
+}
