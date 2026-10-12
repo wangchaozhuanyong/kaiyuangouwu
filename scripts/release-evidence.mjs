@@ -112,22 +112,19 @@ export function hasTrustedPullRequest(run, repository, api) {
 }
 
 const apiCache = new Map();
-export function requestGitHubApi(
-    endpoint,
-    request = execFileSync,
-    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
-) {
+const retryPause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+const isTransientGitHubError = error =>
+    /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer|i\/o timeout/u.test(
+        String(error?.stderr ?? ''),
+    );
+export function requestGitHubApi(endpoint, request = execFileSync, pause = retryPause) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             return JSON.parse(
                 request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
             );
         } catch (error) {
-            const transient =
-                /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer/u.test(
-                    String(error?.stderr ?? ''),
-                );
-            if (attempt === 2 || !transient) throw error;
+            if (attempt === 2 || !isTransientGitHubError(error)) throw error;
             pause(1000 * (attempt + 1));
         }
     }
@@ -163,36 +160,35 @@ export async function findEvidence({ repository, targetSha, requiredFiles, api =
     return null;
 }
 
-export function downloadEvidenceArtifact(
-    repository,
-    artifactId,
-    request = execFileSync,
-    pause = milliseconds => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds),
-) {
+export function downloadEvidenceArtifact(repository, artifactId, request = execFileSync, pause = retryPause) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             return request('gh', ['api', `repos/${repository}/actions/artifacts/${artifactId}/zip`], {
                 maxBuffer: 2 * 1024 * 1024,
             });
         } catch (error) {
-            const transient =
-                /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer/u.test(
-                    String(error?.stderr ?? ''),
-                );
-            if (attempt === 2 || !transient) throw error;
+            if (attempt === 2 || !isTransientGitHubError(error)) throw error;
             pause(1000 * (attempt + 1));
         }
     }
     throw new Error('Unreachable GitHub artifact retry state');
 }
 
-export function readNativeJobLog(repository, jobId) {
+export function readNativeJobLog(repository, jobId, request = execFileSync, pause = retryPause) {
     assert.match(repository, /^[\w.-]+\/[\w.-]+$/u);
     assert.ok(Number.isSafeInteger(jobId) && jobId > 0, 'Invalid native job ID');
-    return execFileSync('gh', ['api', `repos/${repository}/actions/jobs/${jobId}/logs`], {
-        encoding: 'utf8',
-        maxBuffer: 2 * 1024 * 1024,
-    });
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            return request('gh', ['api', `repos/${repository}/actions/jobs/${jobId}/logs`], {
+                encoding: 'utf8',
+                maxBuffer: 2 * 1024 * 1024,
+            });
+        } catch (error) {
+            if (attempt === 2 || !isTransientGitHubError(error)) throw error;
+            pause(1000 * (attempt + 1));
+        }
+    }
+    throw new Error('Unreachable GitHub native log retry state');
 }
 
 function readProof(repository, artifactId) {
@@ -335,7 +331,9 @@ export async function findInputCoverage({
                     api,
                     logReader: nativeLogReader,
                 });
-            } catch {
+            } catch (error) {
+                // Exhausted transport retries must stop planning, not expand execution to all missing checks.
+                if (isTransientGitHubError(error)) throw error;
                 // Incomplete historical metadata cannot authorize a check or disrupt unrelated valid proof.
                 nativeRejected.push({
                     runId: run.id,

@@ -29,6 +29,7 @@ import {
     frontendEvidencePlan,
     hasTrustedPullRequest,
     isTrustedRun,
+    readNativeJobLog,
     requestGitHubApi,
     validateExecutedChecks,
     waitForCompleteInputCoverage,
@@ -296,6 +297,102 @@ test('evidence archives retry transient downloads and fail closed on client or p
     );
     assert.equal(persistentAttempts, 3);
     assert.deepEqual(persistentDelays, [1000, 2000]);
+});
+
+const ioTimeoutError = () =>
+    Object.assign(new Error('GitHub native transport timed out'), {
+        stderr: 'Get "https://api.github.com": dial tcp 20.205.243.168:443: i/o timeout',
+    });
+const nativeReadCases = [
+    {
+        name: 'metadata',
+        args: ['api', 'repos/owner/repo/actions/runs/1/attempts/1'],
+        response: '{"id":1}',
+        expected: { id: 1 },
+        read: (request, pause) =>
+            requestGitHubApi('repos/owner/repo/actions/runs/1/attempts/1', request, pause),
+    },
+    {
+        name: 'archive',
+        args: ['api', 'repos/owner/repo/actions/artifacts/42/zip'],
+        response: Buffer.from('trusted archive bytes'),
+        expected: Buffer.from('trusted archive bytes'),
+        read: (request, pause) => downloadEvidenceArtifact('owner/repo', 42, request, pause),
+    },
+    {
+        name: 'native log',
+        args: ['api', 'repos/owner/repo/actions/jobs/100/logs'],
+        response: '[command]/usr/bin/git log -1 --format=%H\nchecked-source\n',
+        expected: '[command]/usr/bin/git log -1 --format=%H\nchecked-source\n',
+        read: (request, pause) => readNativeJobLog('owner/repo', 100, request, pause),
+    },
+];
+
+test('native metadata, archive and log readers retry actual i/o timeouts before returning successful data', () => {
+    for (const reader of nativeReadCases)
+        for (const failures of [1, 2]) {
+            let calls = 0;
+            const delays = [];
+            const result = reader.read(
+                (command, args) => {
+                    assert.equal(command, 'gh');
+                    assert.deepEqual(args, reader.args);
+                    if (++calls <= failures) {
+                        const failure = ioTimeoutError();
+                        if (failures === 2) failure.stderr = Buffer.from(failure.stderr);
+                        throw failure;
+                    }
+                    return reader.response;
+                },
+                delay => delays.push(delay),
+            );
+            assert.deepEqual(result, reader.expected, reader.name);
+            assert.equal(calls, failures + 1, reader.name);
+            assert.deepEqual(delays, failures === 1 ? [1000] : [1000, 2000], reader.name);
+        }
+});
+
+test('native metadata, archive and log readers stop after three i/o timeout attempts', () => {
+    for (const reader of nativeReadCases) {
+        const failure = ioTimeoutError();
+        let calls = 0;
+        const delays = [];
+        assert.throws(
+            () =>
+                reader.read(
+                    () => {
+                        calls++;
+                        throw failure;
+                    },
+                    delay => delays.push(delay),
+                ),
+            error => error === failure,
+            reader.name,
+        );
+        assert.equal(calls, 3, reader.name);
+        assert.deepEqual(delays, [1000, 2000], reader.name);
+    }
+});
+
+test('native logs do not retry missing evidence or non-network failures', () => {
+    for (const stderr of ['gh: Not Found (HTTP 404)', 'invalid native log']) {
+        const failure = Object.assign(new Error('Native log read failed'), { stderr });
+        let calls = 0;
+        assert.throws(
+            () =>
+                readNativeJobLog(
+                    'owner/repo',
+                    100,
+                    () => {
+                        calls++;
+                        throw failure;
+                    },
+                    () => assert.fail('A missing or malformed log must not wait'),
+                ),
+            error => error === failure,
+        );
+        assert.equal(calls, 1);
+    }
 });
 
 test('a previous PR does not cover additional undeployed backend changes', () => {
@@ -758,6 +855,86 @@ test('missing logs or failed native jobs never supply coverage or disrupt other 
         assert.equal(result.anchor.runId, 2);
         assert.ok(result.missing.some(check => check.id === 'backend:core'));
         assert.ok(!result.reused.some(item => item.check === 'backend:core'));
+    }
+});
+
+test('exhausted native metadata, comparison or log transport aborts before scope planning and emission', async () => {
+    const baseSha = 'c'.repeat(40);
+    const stages = [
+        { name: 'attempt metadata', endpoint: 'repos/owner/repo/actions/runs/1/attempts/1' },
+        { name: 'source comparison', endpoint: `repos/owner/repo/compare/${baseSha}...${sourceSha}` },
+        { name: 'scope log' },
+    ];
+    for (const stage of stages) {
+        const fixture = nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true });
+        const failure = ioTimeoutError();
+        let attempts = 0;
+        const delays = [];
+        const request = () => {
+            attempts++;
+            throw failure;
+        };
+        const pause = delay => delays.push(delay);
+        if (stage.endpoint) {
+            const nativeApi = fixture.api;
+            fixture.api = endpoint =>
+                endpoint === stage.endpoint
+                    ? requestGitHubApi(endpoint, request, pause)
+                    : nativeApi(endpoint);
+        } else
+            fixture.nativeLogReader = (repository, jobId) =>
+                readNativeJobLog(repository, jobId, request, pause);
+        let planned = false;
+        let emitted = false;
+        const pipeline = findInputCoverage(fixture)
+            .then(coverage => {
+                planned = true;
+                return missingPlan(fixture.plan, coverage.missing);
+            })
+            .then(execution => {
+                emitted = true;
+                return execution;
+            });
+        await assert.rejects(pipeline, error => error === failure, stage.name);
+        assert.equal(attempts, 3, stage.name);
+        assert.deepEqual(delays, [1000, 2000], stage.name);
+        assert.equal(planned, false, stage.name);
+        assert.equal(emitted, false, stage.name);
+    }
+});
+
+test('missing or malformed native evidence remains rejected while independent valid proof stays reusable', async () => {
+    for (const stage of ['metadata 404', 'log 404', 'malformed log']) {
+        const fixture = nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true });
+        const missing = Object.assign(new Error('Native evidence no longer exists'), {
+            stderr: 'gh: Not Found (HTTP 404)',
+        });
+        if (stage === 'metadata 404') {
+            const nativeApi = fixture.api;
+            fixture.api = endpoint => {
+                if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1') throw missing;
+                return nativeApi(endpoint);
+            };
+        } else if (stage === 'log 404')
+            fixture.nativeLogReader = () => {
+                throw missing;
+            };
+        else fixture.nativeLogReader = () => 'malformed native scope log';
+        const result = await findInputCoverage(fixture);
+        assert.equal(result.anchor.runId, 2, stage);
+        assert.ok(
+            result.reused.some(check => check.runId === 2),
+            stage,
+        );
+        assert.ok(!result.reused.some(check => check.runId === 1), stage);
+        assert.ok(
+            result.missing.some(check => check.id === 'backend:core'),
+            stage,
+        );
+        assert.ok(
+            result.nativeRejected.some(run => run.runId === 1),
+            stage,
+        );
     }
 });
 
