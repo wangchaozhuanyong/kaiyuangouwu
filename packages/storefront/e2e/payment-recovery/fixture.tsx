@@ -56,9 +56,10 @@ const method = {
 };
 const client = createStorefrontQueryClient();
 applyStorefrontVisualPreset(document.documentElement, 'neo-minimalist');
-if (scenario === 'legacy') {
+if (scenario === 'legacy' || scenario === 'guest-reload') {
     const marketScope = market.code;
     const marker = {
+        ...(scenario === 'guest-reload' ? { requestId: 'synthetic-guest-request-001' } : {}),
         scope: JSON.stringify([marketScope, '', original.id]),
         orderId: original.id,
         orderCode: original.code,
@@ -77,7 +78,9 @@ if (scenario === 'legacy') {
 
 function Fixture() {
     const desktop = useDesktopViewport();
-    const [order, setOrder] = useState<Order | null>(scenario === 'legacy' ? null : original);
+    const [order, setOrder] = useState<Order | null>(
+        ['legacy', 'guest-reload'].includes(scenario) ? null : original,
+    );
     const [calls, setCalls] = useState({ payments: 0, reads: 0, fences: 0 });
     const [api] = useState(
         () =>
@@ -102,17 +105,24 @@ function Fixture() {
                                 ? fence
                                     ? 'NOT_EXECUTED'
                                     : 'NOT_FOUND'
-                                : scenario === 'applied'
+                                : scenario === 'applied' || scenario === 'guest-reload'
                                   ? 'APPLIED'
                                   : scenario === 'rejected'
                                     ? 'REJECTED'
                                     : 'UNKNOWN',
                         errorCode: null,
+                        ...(scenario === 'guest-reload'
+                            ? { order: { ...original, state: 'PaymentSettled' } }
+                            : {}),
                     });
                 },
                 order: () =>
                     Promise.resolve(
-                        scenario === 'applied' ? { ...original, state: 'PaymentSettled' } : original,
+                        scenario === 'guest-reload'
+                            ? null
+                            : scenario === 'applied'
+                              ? { ...original, state: 'PaymentSettled' }
+                              : original,
                     ),
                 orderByConfirmationToken: () =>
                     Promise.resolve(

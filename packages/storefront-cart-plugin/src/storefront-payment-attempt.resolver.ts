@@ -1,14 +1,24 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { Allow, Ctx, Permission, RequestContext } from '@vendure/core';
+import { Args, Mutation, Parent, Query, ResolveField, Resolver } from '@nestjs/graphql';
+import { Allow, Ctx, Order, Permission, RelationPaths, Relations, RequestContext } from '@vendure/core';
 
 import {
     StorefrontPaymentAttemptInput,
     StorefrontPaymentAttemptService,
 } from './storefront-payment-attempt.service';
 
-@Resolver()
+@Resolver('StorefrontPaymentAttemptReceipt')
 export class StorefrontPaymentAttemptResolver {
     constructor(private readonly attempts: StorefrontPaymentAttemptService) {}
+
+    @ResolveField()
+    order(
+        @Ctx() ctx: RequestContext,
+        @Parent() receipt: { input: StorefrontPaymentAttemptInput },
+        @Relations({ entity: Order, omit: ['aggregateOrder', 'sellerOrders'] })
+        relations: RelationPaths<Order>,
+    ) {
+        return this.attempts.readOrder(ctx, receipt.input, relations);
+    }
 
     @Query()
     @Allow(Permission.Owner)

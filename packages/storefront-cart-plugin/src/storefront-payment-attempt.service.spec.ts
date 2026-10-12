@@ -52,7 +52,11 @@ afterAll(async () => {
 beforeEach(async () => {
     // Only this suite's isolated synthetic database is cleared.
     await database.getRepository(StorefrontPaymentAttempt).clear();
-    carts = { findOwnedCart: vi.fn().mockResolvedValue({ id: 2463, checkoutOrderId: 22 }) };
+    carts = {
+        findOwnedCart: vi.fn().mockResolvedValue({ id: 2463, checkoutOrderId: 22 }),
+        lockCart: vi.fn().mockResolvedValue({ id: 2463 }),
+        withTransaction: vi.fn((context, work) => work(context)),
+    };
     orderRepository = {
         findOne: vi.fn().mockResolvedValue({
             id: 22,
@@ -67,6 +71,7 @@ beforeEach(async () => {
     service = new StorefrontPaymentAttemptService(
         { rawConnection: database, getRepository: () => orderRepository } as any,
         carts,
+        { findOne: () => orderRepository.findOne() } as any,
     );
 });
 
@@ -211,6 +216,7 @@ describe('payment attempt durable fences against an isolated real database', () 
         orderRepository.findOne
             .mockReset()
             .mockResolvedValueOnce(original)
+            .mockResolvedValueOnce(original)
             .mockResolvedValue({ ...original, totalWithTax: 1000 });
         const work = vi.fn();
         await expect(service.execute(ctx, input, work)).rejects.toThrow('PAYMENT_REQUEST_SCOPE_CHANGED');
@@ -229,5 +235,24 @@ describe('payment attempt durable fences against an isolated real database', () 
         await service.execute(ctx, balance, work);
         await expect(service.execute(ctx, balance, work)).rejects.toThrow('PAYMENT_REQUEST_ALREADY_APPLIED');
         expect(work).toHaveBeenCalledTimes(1);
+    });
+
+    it('loads the exact receipt order for a guest after checkout has moved on, without granting another cart access', async () => {
+        await service.execute(ctx, input, () => Promise.resolve({ id: 22 }));
+        carts.findOwnedCart.mockResolvedValue({ id: 2463, checkoutOrderId: null });
+        expect(await service.readOrder(ctx, input, [])).toMatchObject({ id: 22, currencyCode: 'CNY' });
+        carts.findOwnedCart.mockResolvedValue({ id: 3000, checkoutOrderId: null });
+        await expect(service.readOrder(ctx, input, [])).rejects.toThrow();
+    });
+
+    it('rejects claiming after another checkout wins the cart lock, before starting the provider', async () => {
+        const original = await orderRepository.findOne();
+        orderRepository.findOne
+            .mockResolvedValueOnce(original)
+            .mockResolvedValue({ ...original, state: 'AddingItems' });
+        const work = vi.fn();
+        await expect(service.execute(ctx, input, work)).rejects.toThrow('PAYMENT_REQUEST_SCOPE_CHANGED');
+        expect(work).not.toHaveBeenCalled();
+        expect(await service.read(ctx, input)).toMatchObject({ status: 'NOT_FOUND' });
     });
 });

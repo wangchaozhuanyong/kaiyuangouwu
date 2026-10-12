@@ -199,6 +199,7 @@ export const shopApiExtensions = gql`
         requestId: String!
         status: String!
         errorCode: String
+        order: Order
     }
 
     extend type Mutation {

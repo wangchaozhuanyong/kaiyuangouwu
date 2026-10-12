@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
+import { StorefrontPaymentAttempt } from './entities/storefront-payment-attempt.entity';
 import {
     controlledTestPaymentScopeMatchesOrder,
     isRegisteredProductionPaymentMethod,
@@ -13,6 +14,52 @@ import {
 
 afterEach(() => {
     vi.restoreAllMocks();
+});
+
+describe('unresolved payment protection when reopening a cart', () => {
+    it.each(['PROCESSING', 'UNKNOWN', 'APPLIED'])(
+        'does not reopen an order with an active %s receipt even before a native payment exists',
+        async status => {
+            const cart = new StorefrontCart({
+                id: 'cart-1',
+                revision: 4,
+                state: 'PAYMENT_PENDING',
+                checkoutOrder: { id: 'order-1' },
+            });
+            const receiptRepository = { existsBy: vi.fn().mockResolvedValue(true) };
+            const cartRepository = { update: vi.fn().mockResolvedValue({ affected: 1 }) };
+            const orders = {
+                findOne: vi
+                    .fn()
+                    .mockResolvedValue({ id: 'order-1', state: 'ArrangingPayment', payments: [] }),
+                transitionToState: vi.fn().mockResolvedValue({ id: 'order-1', state: 'AddingItems' }),
+            };
+            const service = new StorefrontCartService(
+                {
+                    getRepository: (_ctx: unknown, entity: unknown) =>
+                        entity === StorefrontPaymentAttempt ? receiptRepository : cartRepository,
+                } as any,
+                {} as any,
+                {} as any,
+                orders as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+            );
+            vi.spyOn(service, 'getCart').mockResolvedValue(cart);
+            vi.spyOn(service as any, 'getOwner').mockResolvedValue({
+                ownerType: 'SESSION',
+                ownerId: 'guest-1',
+            });
+            vi.spyOn(service as any, 'loadCart').mockResolvedValue(cart);
+            const result = await service.reopenCart({ channelId: 'store-a' } as any, cart.revision);
+            expect(result).toMatchObject({ errorCode: 'CART_CHECKOUT_LOCKED_ERROR' });
+            expect(receiptRepository.existsBy).toHaveBeenCalledWith({ activeOrderKey: 'store-a:order-1' });
+            expect(orders.transitionToState, status).not.toHaveBeenCalled();
+            expect(cartRepository.update).not.toHaveBeenCalled();
+        },
+    );
 });
 
 describe('StorefrontCartService selection projection', () => {

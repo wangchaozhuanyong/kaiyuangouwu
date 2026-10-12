@@ -28,6 +28,7 @@ import { StorefrontCartCheckoutLine } from './entities/storefront-cart-checkout-
 import { StorefrontCartCheckout } from './entities/storefront-cart-checkout.entity';
 import { StorefrontCartLine } from './entities/storefront-cart-line.entity';
 import { StorefrontCart } from './entities/storefront-cart.entity';
+import { StorefrontPaymentAttempt } from './entities/storefront-payment-attempt.entity';
 import {
     CartCheckoutLockedError,
     CartEmptySelectionError,
@@ -606,6 +607,13 @@ export class StorefrontCartService implements OnApplicationBootstrap {
         }
         if (!cart.checkoutOrder) {
             return new CartProjectionError('ORDER_MISSING', 'The pending checkout order no longer exists.');
+        }
+        if (
+            await this.connection.getRepository(ctx, StorefrontPaymentAttempt).existsBy({
+                activeOrderKey: `${ctx.channelId}:${cart.checkoutOrder.id}`,
+            })
+        ) {
+            return new CartCheckoutLockedError(cart.state);
         }
         const order = await this.orderService.findOne(
             ctx,

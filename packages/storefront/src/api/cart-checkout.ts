@@ -990,12 +990,13 @@ export class CartCheckoutApi extends BaseDomainApi {
         const field = fenceUnstarted ? 'fenceUnstartedStorefrontPaymentAttempt' : 'storefrontPaymentAttempt';
         const result = await this.request<Record<string, import('../types').StorefrontPaymentAttemptReceipt>>(
             `${fenceUnstarted ? 'mutation' : 'query'} StorefrontPaymentAttempt($input: StorefrontPaymentAttemptInput!) {
-                ${field}(input: $input) { requestId status errorCode }
+                ${field}(input: $input) { requestId status errorCode order { ${orderFields} } }
             }`,
             { input },
             undefined,
             20_000,
             fenceUnstarted,
+            input.currencyCode,
         );
         const receipt = result[field];
         if (

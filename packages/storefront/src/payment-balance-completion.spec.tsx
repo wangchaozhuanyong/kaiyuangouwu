@@ -979,9 +979,12 @@ describe('canonical payment request recovery', () => {
                 requestId: input.requestId,
                 status: 'APPLIED',
                 errorCode: null,
+                order: { ...syntheticOrder, state: 'PaymentSettled' },
             }),
         );
-        api.order.mockResolvedValue({ ...syntheticOrder, state: 'PaymentSettled' });
+        // The actual native order(id) query returns null for guests.
+        api.order.mockResolvedValue(null);
+        api.order.mockClear();
         const second = await renderPayment(api, { customer: null });
         try {
             await act(async () => {
@@ -994,6 +997,7 @@ describe('canonical payment request recovery', () => {
             expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
             expect(sessionStorage.length).toBe(0);
             expect(second.host.textContent).toContain('付款已确认');
+            expect(api.order).not.toHaveBeenCalled();
         } finally {
             await second.unmount();
         }
