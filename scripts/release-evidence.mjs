@@ -117,12 +117,20 @@ const isTransientGitHubError = error =>
     /gh: (?:HTTP (?:429|5\d\d)\b|[^\r\n]*\(HTTP (?:429|5\d\d)\))|TLS handshake timeout|connection reset by peer|i\/o timeout/u.test(
         String(error?.stderr ?? ''),
     );
+const isMissingGitHubProof = error =>
+    /(?:^|\n)gh: (?:HTTP 404\b|[^\r\n]*\(HTTP 404\))/u.test(String(error?.stderr ?? ''));
 export function requestGitHubApi(endpoint, request = execFileSync, pause = retryPause) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            return JSON.parse(
-                request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }),
-            );
+            const body = request('gh', ['api', endpoint], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 });
+            try {
+                return JSON.parse(body);
+            } catch (error) {
+                // Transport data is not historical scope JSON. Keep malformed API
+                // reads fatal without displaying response content in diagnostics.
+                if (error instanceof SyntaxError) throw new Error('GitHub API response is not valid JSON');
+                throw error;
+            }
         } catch (error) {
             if (attempt === 2 || !isTransientGitHubError(error)) throw error;
             pause(1000 * (attempt + 1));
@@ -174,15 +182,22 @@ export function downloadEvidenceArtifact(repository, artifactId, request = execF
     throw new Error('Unreachable GitHub artifact retry state');
 }
 
+const nativeLogCapabilities = new WeakMap();
 export function readNativeJobLog(repository, jobId, request = execFileSync, pause = retryPause) {
     assert.match(repository, /^[\w.-]+\/[\w.-]+$/u);
     assert.ok(Number.isSafeInteger(jobId) && jobId > 0, 'Invalid native job ID');
+    const capture = { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] };
+    if (!nativeLogCapabilities.has(request)) {
+        const help = request('gh', ['api', '--help'], capture);
+        nativeLogCapabilities.set(request, /^\s*--allow-escape-sequences(?:\s|$)/mu.test(help));
+    }
+    const args = ['api', `repos/${repository}/actions/jobs/${jobId}/logs`];
+    // Actions shell annotations contain ANSI. Permit raw bytes only into this
+    // captured log reader; the source/attempt/scope verifier still validates them.
+    if (nativeLogCapabilities.get(request)) args.push('--allow-escape-sequences');
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
-            return request('gh', ['api', `repos/${repository}/actions/jobs/${jobId}/logs`], {
-                encoding: 'utf8',
-                maxBuffer: 2 * 1024 * 1024,
-            });
+            return request('gh', args, capture);
         } catch (error) {
             if (attempt === 2 || !isTransientGitHubError(error)) throw error;
             pause(1000 * (attempt + 1));
@@ -332,12 +347,16 @@ export async function findInputCoverage({
                     logReader: nativeLogReader,
                 });
             } catch (error) {
-                // Exhausted transport retries must stop planning, not expand execution to all missing checks.
-                if (isTransientGitHubError(error)) throw error;
-                // Incomplete historical metadata cannot authorize a check or disrupt unrelated valid proof.
+                const proofMissing = isMissingGitHubProof(error);
+                const malformed = error instanceof assert.AssertionError || error instanceof SyntaxError;
+                // Reader/protection/permission failures must stop planning, never widen execution.
+                if (!proofMissing && !malformed) throw error;
+                // Known missing or malformed old proof supplies no coverage; independent proof remains usable.
                 nativeRejected.push({
                     runId: run.id,
-                    reason: 'Native source, scope or jobs could not be verified',
+                    reason: proofMissing
+                        ? 'Native proof is unavailable (404)'
+                        : 'Native proof structure is invalid',
                 });
                 continue;
             }
