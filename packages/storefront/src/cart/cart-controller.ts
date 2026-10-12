@@ -267,11 +267,35 @@ export class CartController {
         return this.repository.snapshot ?? cart;
     }
 
-    execute(operation: CartOperation): Promise<CartCommandResult> {
+    canRecoverForShipping(): boolean {
+        const pending = this.queue[0];
+        if (!pending || (this.phase !== 'unknown' && !pending.recoveryOnly) || pending.checkoutIntent)
+            return false;
+        const operation = pending.operation;
+        const knownOrdinaryOperation =
+            'coupon' in operation ||
+            ('changes' in operation &&
+                Boolean(
+                    operation.changes.add?.length ||
+                    operation.changes.lines?.length ||
+                    operation.changes.remove?.length,
+                ));
+        const receipt = pending.terminalReceipt;
+        return (
+            knownOrdinaryOperation &&
+            (!pending.recoveryOnly ||
+                (receipt?.status === 'APPLIED' &&
+                    receipt.commandId === pending.command?.commandId &&
+                    receipt.cart.id === pending.command.cartId))
+        );
+    }
+
+    execute(operation: CartOperation, context?: CartCommandContext): Promise<CartCommandResult> {
         if (this.activeWorkflow?.context.signal.aborted)
             return Promise.reject(cartAbortError(this.activeWorkflow.context.signal));
+        if (context?.signal.aborted) return Promise.reject(cartAbortError(context.signal));
         if (this.phase === 'unknown' || this.queue[0]?.recoveryOnly)
-            return Promise.reject(new Error('上次操作结果尚未确认，请先重试核对。'));
+            return Promise.reject(new CartCommandNotExecutedError('上次操作结果尚未确认，请先重试核对。'));
         if (this.state.editingBlocked && this.queue.length)
             return Promise.reject(new Error('正在切换币种或确认结算，请稍后再修改商品。'));
         const promise = new Promise<CartCommandResult>((resolve, reject) => {
@@ -290,7 +314,7 @@ export class CartController {
                 this.queue.push({
                     operation,
                     checkoutIntent: cartCheckoutIntent(operation),
-                    workflowContext: this.activeWorkflow?.context,
+                    workflowContext: context ?? this.activeWorkflow?.context,
                     waiters: [{ resolve, reject }],
                 });
         });
@@ -620,7 +644,12 @@ export class CartController {
                 pending.waiters = [];
                 // Later operations must not pass a failed or uncertain prerequisite.
                 for (const later of this.queue.slice(unresolved ? 1 : 0))
-                    for (const waiter of later.waiters) waiter.reject(this.error);
+                    for (const waiter of later.waiters)
+                        waiter.reject(
+                            unresolved && !later.command
+                                ? new CartCommandNotExecutedError(this.error.message, this.error)
+                                : this.error,
+                        );
                 this.queue = unresolved ? [pending] : [];
                 break;
             } finally {

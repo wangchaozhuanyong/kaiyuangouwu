@@ -17,6 +17,7 @@ import type {
 } from '../types';
 
 import {
+    CART_COMMAND_TIMEOUT_MS,
     CartCommandAcknowledgedReadError,
     CartCommandDeadline,
     CartCommandNotExecutedError,
@@ -781,19 +782,97 @@ export class CartCheckoutApi extends BaseDomainApi {
         selectedShippingMethodId: string | null;
     }> {
         if (this.controller) {
-            const acknowledged = await this.controller.execute({ prepareShipping: input });
-            const order = requiredOrder(acknowledged);
-            const preparedMethods = acknowledged.shippingMethods ?? (await this.eligibleShippingMethods());
-            const selectedShippingMethodId =
-                acknowledged.selectedShippingMethodId ??
-                preparedMethods.find(method => method.code === order.checkoutShipping?.methodCode)?.id ??
-                null;
-            return {
-                cart: acknowledged.cart,
-                order,
-                shippingMethods: preparedMethods,
-                selectedShippingMethodId,
-            };
+            const controller = this.controller;
+            const before = controller.getSnapshot();
+            const scope = shippingRecoveryScope(before.confirmed);
+            const marketCode = this.market.code;
+            const deadline = new CartCommandDeadline(CART_COMMAND_TIMEOUT_MS, undefined, false);
+            const context = deadline.context;
+            try {
+                let acknowledged: CartCommandResult;
+                try {
+                    acknowledged = await waitForCartSignal(
+                        controller.execute({ prepareShipping: input }, context),
+                        context.signal,
+                    );
+                } catch (error) {
+                    // Admission or an earlier queue barrier can prove that this shipping
+                    // operation was never submitted. An issued write is never sent again.
+                    const pending = controller.getSnapshot();
+                    if (
+                        !(error instanceof CartCommandNotExecutedError) ||
+                        !controller.canRecoverForShipping() ||
+                        !scope ||
+                        !pending.pendingCommandId ||
+                        pending.pendingCheckoutIntent ||
+                        this.controller !== controller ||
+                        this.market.code !== marketCode ||
+                        shippingRecoveryScope(pending.confirmed) !== scope
+                    )
+                        throw error;
+                    let recovery = controller.getSnapshot().lastRecovery;
+                    let recoveryError: Error | null = null;
+                    const captureRecovery = () => {
+                        const current = controller.getSnapshot();
+                        if (current.lastRecovery?.commandId === pending.pendingCommandId) {
+                            recovery = current.lastRecovery;
+                            recoveryError = current.error;
+                        }
+                    };
+                    captureRecovery();
+                    const unsubscribe = controller.subscribe(captureRecovery);
+                    let recovered: boolean;
+                    try {
+                        recovered = await waitForCartSignal(
+                            controller.recoverPending(false, context),
+                            context.signal,
+                        );
+                    } finally {
+                        unsubscribe();
+                    }
+                    const state = controller.getSnapshot();
+                    if (!recovered || state.error) throw state.error ?? error;
+                    if (
+                        recovery?.commandId !== pending.pendingCommandId ||
+                        recovery.status !== 'APPLIED' ||
+                        state.pendingCheckoutIntent ||
+                        state.editingBlocked
+                    )
+                        throw recoveryError ?? error;
+                    await waitForCartSignal(controller.drain(), context.signal);
+                    context.signal.throwIfAborted();
+                    const settled = controller.getSnapshot();
+                    if (
+                        this.controller !== controller ||
+                        this.market.code !== marketCode ||
+                        shippingRecoveryScope(settled.confirmed) !== scope ||
+                        settled.pending ||
+                        settled.editingBlocked ||
+                        settled.error
+                    )
+                        throw settled.error ?? new Error('Cart session changed.');
+                    acknowledged = await waitForCartSignal(
+                        controller.execute({ prepareShipping: input }, context),
+                        context.signal,
+                    );
+                }
+                const order = requiredOrder(acknowledged);
+                const preparedMethods =
+                    acknowledged.shippingMethods ??
+                    (await waitForCartSignal(this.eligibleShippingMethods(), context.signal));
+                const selectedShippingMethodId =
+                    acknowledged.selectedShippingMethodId ??
+                    preparedMethods.find(method => method.code === order.checkoutShipping?.methodCode)?.id ??
+                    null;
+                return {
+                    cart: acknowledged.cart,
+                    order,
+                    shippingMethods: preparedMethods,
+                    selectedShippingMethodId,
+                };
+            } finally {
+                deadline.dispose();
+            }
         }
         await this.setShippingAddress(input.shippingAddress);
         const fallbackMethods = await this.eligibleShippingMethods();
@@ -1030,6 +1109,20 @@ function terminalReceipt(receipt: CommandReceipt): CartTerminalReceipt {
             : null,
     };
 }
+function shippingRecoveryScope(cart: StorefrontCart | null): string | null {
+    const order = cart?.checkoutOrder;
+    if (!cart || cart.state !== 'OPEN' || !order?.customer?.id) return null;
+    const selected: Array<[string, number]> = [];
+    for (const line of cart.lines) {
+        if (!line.selected) continue;
+        if (!line.productVariant) return null;
+        selected.push([line.productVariant.id, line.quantity]);
+    }
+    if (!selected.length) return null;
+    selected.sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
+    return JSON.stringify([cart.id, order.id, order.currencyCode, order.customer.id, selected]);
+}
+
 function requiredOrder(result: CartCommandResult): Order {
     if (!result.cart.checkoutOrder) throw new Error('No active checkout order.');
     return result.cart.checkoutOrder;
