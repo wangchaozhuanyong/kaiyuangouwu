@@ -84,12 +84,14 @@ export function CheckoutPage({
     cartUnknown = false,
     cartError,
     onRetryCart,
+    onContinueCheckout,
 }: {
     mode?: CheckoutMode;
     cartPending?: boolean;
     cartUnknown?: boolean;
     cartError?: string | null;
     onRetryCart?: () => void;
+    onContinueCheckout?: (session: StorefrontCheckoutSession) => boolean;
     api: ShopApi;
     cart: StorefrontCart | null;
     order: Order | null;
@@ -548,7 +550,12 @@ export function CheckoutPage({
                         ? '订单已准备，请继续选择支付方式'
                         : 'Order prepared. Continue with a payment method.',
                 );
-                navigateTo({ name: 'payment' }, true);
+                if (onContinueCheckout) {
+                    if (!onContinueCheckout(session))
+                        throw new Error(
+                            isZh ? '结算会话已变更，请重新确认' : 'Checkout changed. Please review again.',
+                        );
+                } else navigateTo({ name: 'payment' }, true);
             });
         } catch (requestError) {
             if (!isCurrent()) return;

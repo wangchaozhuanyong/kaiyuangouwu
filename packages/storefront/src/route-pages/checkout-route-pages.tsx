@@ -17,6 +17,9 @@ function CheckoutRoutePage({ mode }: { mode?: 'purchase' }) {
                     cartUnknown={runtime.cartEditingBlocked}
                     cartError={runtime.cartError}
                     onRetryCart={() => void runtime.refreshCart().catch(() => undefined)}
+                    onContinueCheckout={(session: StorefrontCheckoutSession) =>
+                        runtime.continueCheckoutSession(session, 'preparePayment')
+                    }
                     api={runtime.api}
                     cart={runtime.cart}
                     order={runtime.currentCheckoutOrder}

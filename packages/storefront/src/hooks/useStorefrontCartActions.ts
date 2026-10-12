@@ -1,11 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { ShopApi, ShopApiError } from '../api';
-import { CartController } from '../cart/cart-controller';
+import { CartController, type CartState } from '../cart/cart-controller';
+import { type CartCheckoutIntent, type CartCommandResult } from '../cart/cart-intents';
+import {
+    checkoutContinuationIsCurrent,
+    checkoutContinuationOwnerMatches,
+    claimCheckoutContinuation,
+    registerCheckoutContinuationOwner,
+} from '../cart/checkout-continuation';
 import { quantityStockMessage } from '../product-availability';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { storefrontErrorCode, storefrontErrorMessage } from '../storefront-errors';
-import { ActiveCustomer, Order, OrderSummary, ProductVariant, StorefrontCart } from '../types';
+import {
+    ActiveCustomer,
+    Order,
+    OrderSummary,
+    ProductVariant,
+    StorefrontCart,
+    StorefrontCheckoutSession,
+} from '../types';
 
 import { useStorefrontNavigation } from './useStorefrontNavigation';
 
@@ -43,13 +57,17 @@ export function useStorefrontCartActions({
     setAddingVariantId,
 }: StorefrontCartActionOptions) {
     const recoveryRequestRef = useRef<Promise<StorefrontCart> | null>(null);
-    const recoveredNavigationRef = useRef<string | null>(null);
+    const cartState = useSyncExternalStore(cartController.subscribe, cartController.getSnapshot);
     const actionOwnerRef = useRef({ api, cartController, customerId: customer?.id });
     const owner = actionOwnerRef.current;
+    registerCheckoutContinuationOwner(
+        cartController,
+        cartState.pendingCommandId ?? cartState.lastRecovery?.commandId,
+        owner.cartController === cartController ? owner.api : api,
+    );
     if (owner.api !== api || owner.cartController !== cartController || owner.customerId !== customer?.id) {
         actionOwnerRef.current = { api, cartController, customerId: customer?.id };
         recoveryRequestRef.current = null;
-        recoveredNavigationRef.current = null;
     }
     const mountedRef = useRef(false);
     useEffect(() => {
@@ -66,15 +84,122 @@ export function useStorefrontCartActions({
     const acknowledgedResultMessage = isZh
         ? '操作已确认，请重试读取购物车。'
         : 'The operation is confirmed. Retry loading your cart.';
+    const continuationMessage = useCallback(
+        (acknowledged: boolean) =>
+            isZh
+                ? acknowledged
+                    ? '购买操作已确认，请继续读取本次购买，勿重复提交。'
+                    : '购买结果待确认，请继续确认本次购买，勿重复提交。'
+                : acknowledged
+                  ? 'Your purchase is confirmed. Continue loading it; do not submit again.'
+                  : 'Your purchase result is unconfirmed. Continue checking it; do not submit again.',
+        [isZh],
+    );
     const cartErrorMessage = useCallback(
-        (error: unknown, fallback = text.loadError) =>
-            cartController.getSnapshot().commandAcknowledged
+        (error: unknown, fallback = text.loadError) => {
+            const state = cartController.getSnapshot();
+            const uncertain = state.phase === 'unknown' || state.phase === 'recovering';
+            if (uncertain && state.pendingCheckoutIntent === 'buyNow')
+                return continuationMessage(state.commandAcknowledged);
+            if (uncertain)
+                return state.commandAcknowledged ? acknowledgedResultMessage : pendingResultMessage;
+            return state.commandAcknowledged
                 ? acknowledgedResultMessage
                 : storefrontErrorCode(error) === 'UNKNOWN_RESULT'
                   ? pendingResultMessage
-                  : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback),
-        [acknowledgedResultMessage, cartController, isZh, pendingResultMessage, text.loadError],
+                  : storefrontErrorMessage(error, isZh ? 'zh' : 'en', fallback);
+        },
+        [
+            acknowledgedResultMessage,
+            cartController,
+            continuationMessage,
+            isZh,
+            pendingResultMessage,
+            text.loadError,
+        ],
     );
+    const continueCheckoutSession = useCallback(
+        (
+            session: StorefrontCheckoutSession,
+            intent: CartCheckoutIntent,
+            replace = true,
+            commandId?: string,
+        ): boolean => {
+            const state = cartController.getSnapshot();
+            if (
+                state.pending ||
+                state.phase === 'unknown' ||
+                state.phase === 'recovering' ||
+                !checkoutContinuationIsCurrent(session, state.confirmed, customer?.id, intent)
+            )
+                return false;
+            const recovery = state.lastRecovery;
+            const recoveredCommand =
+                recovery?.status === 'APPLIED' &&
+                recovery.checkoutIntent === intent &&
+                recovery.result.session?.order.id === session.order.id &&
+                recovery.result.cart.id === session.cart.id &&
+                recovery.result.cart.revision === session.cart.revision
+                    ? recovery.commandId
+                    : undefined;
+            const continuationCommand = commandId ?? recoveredCommand;
+            if (!checkoutContinuationOwnerMatches(cartController, continuationCommand, api)) return false;
+            registerCheckoutContinuationOwner(cartController, continuationCommand, api);
+            if (!claimCheckoutContinuation(cartController, continuationCommand)) return true;
+            setCart(session.cart);
+            setCheckoutOrder(session.order);
+            setCartError(null);
+            const destination =
+                intent === 'beginCheckout' ? 'checkout' : intent === 'buyNow' ? 'purchase' : 'payment';
+            void preloadStorefrontRouteComponent(destination);
+            navigate({ name: destination }, replace);
+            return true;
+        },
+        [api, cartController, customer?.id, navigate, setCart, setCartError, setCheckoutOrder],
+    );
+    const continueCheckout = useCallback(
+        (result: CartCommandResult, intent: CartCheckoutIntent, replace = true): boolean =>
+            result.status === 'APPLIED' &&
+            !!result.session &&
+            result.cart.id === result.session.cart.id &&
+            result.cart.revision === result.session.cart.revision &&
+            continueCheckoutSession(result.session, intent, replace, result.commandId),
+        [continueCheckoutSession],
+    );
+    const consumeRecovery = useCallback(
+        (state: CartState) => {
+            const recovery = state.lastRecovery;
+            if (
+                !recovery ||
+                state.pending ||
+                state.phase === 'unknown' ||
+                state.phase === 'recovering' ||
+                recovery.commandId !== recovery.result.commandId ||
+                recovery.status !== recovery.result.status ||
+                !checkoutContinuationOwnerMatches(cartController, recovery.commandId, api) ||
+                recovery.result.cart.id !== state.confirmed?.id ||
+                recovery.result.cart.revision !== state.confirmed.revision
+            )
+                return;
+            if (recovery.status !== 'APPLIED') {
+                setCartError(
+                    storefrontErrorMessage(
+                        new ShopApiError(
+                            recovery.result.errorCode ?? 'CART_COMMAND_CANCELLED',
+                            recovery.result.message ?? '',
+                        ),
+                        isZh ? 'zh' : 'en',
+                    ),
+                );
+                return;
+            }
+            if (recovery.checkoutIntent) continueCheckout(recovery.result, recovery.checkoutIntent);
+        },
+        [api, cartController, continueCheckout, isZh, setCartError],
+    );
+    useEffect(() => {
+        consumeRecovery(cartState);
+    }, [cartState, consumeRecovery]);
     const cartActionsBlocked = useCallback(
         () =>
             !!recoveryRequestRef.current ||
@@ -111,51 +236,15 @@ export function useStorefrontCartActions({
                 const currentPhase = cartController.getSnapshot().phase;
                 setCartError(
                     !recovered || currentPhase === 'unknown' || currentPhase === 'recovering'
-                        ? state.commandAcknowledged
-                            ? acknowledgedResultMessage
-                            : pendingResultMessage
+                        ? cartErrorMessage(state.error)
                         : null,
                 );
-                const recovery = state.lastRecovery;
-                const session = recovery?.result.session;
-                if (
-                    hadPendingCommand &&
-                    recovered &&
-                    !state.pending &&
-                    state.phase !== 'unknown' &&
-                    state.phase !== 'recovering' &&
-                    requestOwner.customerId &&
-                    recovery?.status === 'APPLIED' &&
-                    recovery.checkoutIntent &&
-                    session &&
-                    session.cart.id === latest.id &&
-                    session.order.id === latest.checkoutOrder?.id &&
-                    recoveredNavigationRef.current !== recovery.commandId
-                ) {
-                    recoveredNavigationRef.current = recovery.commandId;
-                    setCheckoutOrder(session.order);
-                    const destination =
-                        recovery.checkoutIntent === 'beginCheckout'
-                            ? 'checkout'
-                            : recovery.checkoutIntent === 'buyNow'
-                              ? 'purchase'
-                              : 'payment';
-                    void preloadStorefrontRouteComponent(destination);
-                    navigate({ name: destination }, true);
-                }
+                if (hadPendingCommand && recovered) consumeRecovery(state);
                 return latest;
             })()
                 .catch(requestError => {
                     if (!isCurrent()) throw requestError;
-                    const failedState = cartController.getSnapshot();
-                    const failedPhase = failedState.phase;
-                    setCartError(
-                        failedPhase === 'unknown' || failedPhase === 'recovering'
-                            ? failedState.commandAcknowledged
-                                ? acknowledgedResultMessage
-                                : pendingResultMessage
-                            : cartErrorMessage(requestError),
-                    );
+                    setCartError(cartErrorMessage(requestError));
                     throw requestError;
                 })
                 .finally(() => {
@@ -167,12 +256,11 @@ export function useStorefrontCartActions({
         },
         [
             api,
-            acknowledgedResultMessage,
             cartController,
             cartErrorMessage,
             checkoutStartingRef,
+            consumeRecovery,
             isZh,
-            navigate,
             pendingResultMessage,
             setCart,
             setCartError,
@@ -272,10 +360,11 @@ export function useStorefrontCartActions({
                     throw new Error(
                         isZh ? '结算会话已变更，请重新确认' : 'Checkout changed. Please review again.',
                     );
-                setCart(session.cart);
-                setCheckoutOrder(session.order);
+                if (!continueCheckout(result, 'buyNow', false))
+                    throw new Error(
+                        isZh ? '结算会话已变更，请重新确认' : 'Checkout changed. Please review again.',
+                    );
                 notify(isZh ? '已准备本次购买' : 'Your purchase is ready to review');
-                navigate({ name: 'purchase' });
             } catch (requestError) {
                 if (!isCurrent()) return;
                 if (
@@ -303,6 +392,7 @@ export function useStorefrontCartActions({
             cart,
             cartActionsBlocked,
             cartErrorMessage,
+            continueCheckout,
             customer,
             isZh,
             navigate,
@@ -352,9 +442,11 @@ export function useStorefrontCartActions({
         cancelPendingCartCommand: () => refreshCart(true),
         cartRecoveryPending,
         cartActionsBlocked,
+        formatCartActionError: cartErrorMessage,
         mutateCart,
         addToCart,
         startDirectPurchase,
+        continueCheckoutSession,
         addOrderToCart,
     };
 }

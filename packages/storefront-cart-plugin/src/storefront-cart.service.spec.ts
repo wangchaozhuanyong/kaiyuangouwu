@@ -46,6 +46,7 @@ describe('unresolved payment protection when reopening a cart', () => {
                 {} as any,
                 {} as any,
                 {} as any,
+                {} as any,
             );
             vi.spyOn(service, 'getCart').mockResolvedValue(cart);
             vi.spyOn(service as any, 'getOwner').mockResolvedValue({
@@ -63,12 +64,19 @@ describe('unresolved payment protection when reopening a cart', () => {
 });
 
 describe('StorefrontCartService selection projection', () => {
-    function setup(selected = [true, true, false], quantities = [1, 1, 1]) {
+    function setup(
+        selected = [true, true, false],
+        quantities = [1, 1, 1],
+        historical = false,
+        shippingMethods: string[] = [],
+    ) {
         let order: any = {
             id: 'order-1',
             code: 'TEST',
             active: true,
             state: 'AddingItems',
+            couponCodes: [],
+            shippingLines: shippingMethods.map(shippingMethodId => ({ shippingMethodId })),
             lines: [1, 2].map(id => ({ id: `order-line-${id}`, productVariantId: id, quantity: 1 })),
         };
         const cart = new StorefrontCart({
@@ -88,9 +96,24 @@ describe('StorefrontCartService selection projection', () => {
                     }),
             ),
         });
-        const repository = { update: vi.fn().mockResolvedValue({ affected: 1 }) };
+        const repository = {
+            update: vi.fn().mockResolvedValue({ affected: 1 }),
+            createQueryBuilder: () => ({ where: () => ({ getExists: () => Promise.resolve(historical) }) }),
+        };
         const orderService = {
             applyPriceAdjustments: vi.fn((_ctx, current) => Promise.resolve(current)),
+            getEligibleShippingMethods: vi.fn().mockResolvedValue([]),
+            setShippingMethod: vi.fn((_ctx, _id, ids) =>
+                Promise.resolve(
+                    (order = {
+                        ...order,
+                        shippingLines: ids.map((shippingMethodId: string) => ({ shippingMethodId })),
+                    }),
+                ),
+            ),
+            applyCouponCode: vi.fn((_ctx, _id, code) =>
+                Promise.resolve((order = { ...order, couponCodes: [code] })),
+            ),
             removeAllItemsFromOrder: vi.fn(() => Promise.resolve((order = { ...order, lines: [] }))),
             removeItemsFromOrder: vi.fn((_ctx, _id, ids) =>
                 Promise.resolve(
@@ -132,11 +155,27 @@ describe('StorefrontCartService selection projection', () => {
             {} as any,
             {} as any,
             { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
+            {} as any,
         );
         vi.spyOn(service as any, 'loadCart').mockImplementation(() => ({
             ...cart,
             checkoutOrder: order,
         }));
+        if (historical)
+            vi.spyOn(
+                service as unknown as { replaceHistoricalProjection: () => Promise<unknown> },
+                'replaceHistoricalProjection',
+            ).mockImplementation(() =>
+                Promise.resolve(
+                    (order = {
+                        ...order,
+                        id: 'replacement-order',
+                        lines: [],
+                        shippingLines: [],
+                        couponCodes: [],
+                    }),
+                ),
+            );
         const project = (force = false) =>
             (service as any).projectCart(
                 { channelId: 'store-a' },
@@ -144,7 +183,7 @@ describe('StorefrontCartService selection projection', () => {
                 { ownerType: 'CUSTOMER', ownerId: 'customer-1' },
                 force,
             );
-        return { project, orderService, repository };
+        return { project, orderService, repository, service, cart };
     }
 
     it('deselects only the changed line without removing and re-adding retained items', async () => {
@@ -201,6 +240,141 @@ describe('StorefrontCartService selection projection', () => {
         } as any);
         expect(await project()).toMatchObject({ errorCode: 'CART_PROJECTION_ERROR' });
         expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('does not apply old physical shipping when the method is ineligible', async () => {
+        const { project, orderService } = setup([true, false, false], [1, 1, 1], true, ['old-physical']);
+        const result = await project();
+        expect(result.checkoutOrder.lines).toHaveLength(1);
+        expect(orderService.getEligibleShippingMethods).toHaveBeenCalledWith(
+            expect.anything(),
+            'replacement-order',
+        );
+        expect(orderService.setShippingMethod).not.toHaveBeenCalled();
+        expect(result.checkoutOrder.shippingLines).toEqual([]);
+    });
+
+    it.each([
+        {
+            customFields: { fulfillmentTypeSnapshot: 'digital' },
+            productVariant: { customFields: { fulfillmentType: 'physical' } },
+        },
+        { productVariant: { customFields: { fulfillmentType: 'digital' } } },
+    ])('does not restore an eligible legacy carrier for a digital replacement: %j', async fields => {
+        const { project, orderService } = setup([true, false, false], [1, 1, 1], true, ['old-physical']);
+        orderService.getEligibleShippingMethods.mockResolvedValueOnce([{ id: 'old-physical' }] as never);
+        const add = orderService.addItemsToOrder.getMockImplementation();
+        if (!add) throw new Error('Missing fixture add-items implementation');
+        orderService.addItemsToOrder.mockImplementationOnce(async (...args) => {
+            const added = await add(...args);
+            Object.assign(added.order.lines[0], fields);
+            return added;
+        });
+        const result = await project();
+        expect(result.checkoutOrder.lines).toHaveLength(1);
+        expect(orderService.getEligibleShippingMethods).not.toHaveBeenCalled();
+        expect(orderService.setShippingMethod).not.toHaveBeenCalled();
+        expect(result.checkoutOrder.shippingLines).toEqual([]);
+    });
+
+    it('keeps only original shipping methods that remain eligible for the new selection', async () => {
+        const { project, orderService } = setup([true, false, false], [1, 1, 1], true, [
+            'pickup',
+            'old-physical',
+        ]);
+        orderService.getEligibleShippingMethods.mockResolvedValueOnce([{ id: 'pickup' }] as never);
+        const result = await project();
+        expect(orderService.setShippingMethod).toHaveBeenCalledWith(expect.anything(), 'replacement-order', [
+            'pickup',
+        ]);
+        expect(result.checkoutOrder.shippingLines).toEqual([{ shippingMethodId: 'pickup' }]);
+    });
+
+    it('allows clearing a historical selection without attempting to reapply coupons or old shipping', async () => {
+        const { project, orderService, service, cart } = setup([false, false, false], [1, 1, 1], true, [
+            'old-physical',
+        ]);
+        const checkoutOrder = cart.checkoutOrder;
+        if (!checkoutOrder) throw new Error('Missing fixture checkout order');
+        checkoutOrder.couponCodes = ['ORIGINAL'];
+        const restore = vi.fn().mockRejectedValue(new Error('Empty order cannot use coupons'));
+        service.registerProjectionTransfer('fixture', () => Promise.resolve(restore));
+        const result = await project();
+        expect(result.checkoutOrder.lines).toEqual([]);
+        expect(restore).not.toHaveBeenCalled();
+        expect(orderService.applyCouponCode).not.toHaveBeenCalled();
+        expect(orderService.getEligibleShippingMethods).not.toHaveBeenCalled();
+        expect(orderService.setShippingMethod).not.toHaveBeenCalled();
+    });
+});
+
+describe('replacing a historical checkout projection', () => {
+    it.each(['Created', 'Authorized', 'Settled', 'Declined', 'Cancelled'])(
+        'does not cancel or replace an order with a %s payment',
+        async state => {
+            const orders = {
+                findOne: vi
+                    .fn()
+                    .mockResolvedValue({ active: true, state: 'AddingItems', payments: [{ state }] }),
+                create: vi.fn(),
+                cancelOrder: vi.fn(),
+            };
+            const stock = { createReleasesForOrderLines: vi.fn() };
+            const repository = { existsBy: vi.fn().mockResolvedValue(false), update: vi.fn() };
+            const service = new StorefrontCartService(
+                { getRepository: () => repository } as any,
+                {} as any,
+                {} as any,
+                orders as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                stock as any,
+            );
+            const result = await (service as any).replaceHistoricalProjection(
+                { channelId: 'store' },
+                { id: 'cart' },
+                { ownerType: 'CUSTOMER', ownerId: 'owner' },
+                { id: 'order' },
+            );
+            expect(result).toMatchObject({ causeCode: 'ORDER_NOT_EDITABLE' });
+            expect(orders.create).not.toHaveBeenCalled();
+            expect(orders.cancelOrder).not.toHaveBeenCalled();
+            expect(stock.createReleasesForOrderLines).not.toHaveBeenCalled();
+            expect(repository.update).not.toHaveBeenCalled();
+        },
+    );
+
+    it('does not replace an unresolved payment attempt even when the native payment has not appeared', async () => {
+        const orders = {
+            findOne: vi.fn().mockResolvedValue({ active: true, state: 'AddingItems', payments: [] }),
+            create: vi.fn(),
+            cancelOrder: vi.fn(),
+        };
+        const repository = { existsBy: vi.fn().mockResolvedValue(true), update: vi.fn() };
+        const service = new StorefrontCartService(
+            { getRepository: () => repository } as any,
+            {} as any,
+            {} as any,
+            orders as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        );
+        expect(
+            await (service as any).replaceHistoricalProjection(
+                { channelId: 'store' },
+                { id: 'cart' },
+                { ownerType: 'CUSTOMER', ownerId: 'owner' },
+                { id: 'order' },
+            ),
+        ).toMatchObject({ causeCode: 'ORDER_NOT_EDITABLE' });
+        expect(repository.existsBy).toHaveBeenCalledWith({ activeOrderKey: 'store:order' });
+        expect(orders.create).not.toHaveBeenCalled();
+        expect(orders.cancelOrder).not.toHaveBeenCalled();
     });
 });
 
@@ -354,6 +528,7 @@ describe('StorefrontCartService Channel isolation', () => {
             {} as any,
             {} as any,
             { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
+            {} as any,
         );
         const owner = { ownerType: 'CUSTOMER', ownerId: 'customer-1' };
 
@@ -408,6 +583,7 @@ describe('StorefrontCartService login merge', () => {
             {} as any,
             {} as any,
             { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
+            {} as any,
         );
         const projectCartSpy = vi.spyOn(service as any, 'projectCart');
 
@@ -455,6 +631,7 @@ describe('cart inventory before persistence', () => {
             {} as any,
             { orderOptions: { orderLineItemsLimit: 100, orderItemsLimit: 1000 } } as any,
             { getActivePaymentMethods: vi.fn().mockResolvedValue([]) } as any,
+            {} as any,
         );
         vi.spyOn(service, 'getCart').mockResolvedValue(cart);
         vi.spyOn(service as any, 'getOwner').mockResolvedValue({

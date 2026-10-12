@@ -50,6 +50,7 @@ export interface CartState {
     editingBlocked: boolean;
     error: Error | null;
     commandAcknowledged: boolean;
+    pendingCommandId: string | null;
     pendingCheckoutIntent: CartCheckoutIntent | null;
     lastRecovery: CartRecoveryResult | null;
 }
@@ -164,7 +165,20 @@ export class CartController {
                 waiter.reject(new Error('上次操作正在核对，请稍后再修改购物车。'));
         this.queue = [pending];
         this.phase = 'unknown';
-        await this.recoverPending(false, context);
+        const epoch = this.epoch;
+        const recovered = await this.recoverPending(false, context);
+        if (!recovered && !context?.signal.aborted && epoch === this.epoch && this.queue[0] === pending) {
+            // A transient first lookup need not require a manual click. Keep route
+            // ownership cancellation while giving that identity one bounded retry.
+            const deadline = new CartCommandDeadline(CART_COMMAND_TIMEOUT_MS, context?.signal);
+            this.deadlines.add(deadline);
+            try {
+                await this.recoverPending(false, deadline.context);
+            } finally {
+                deadline.dispose();
+                this.deadlines.delete(deadline);
+            }
+        }
     }
     private error: Error | null = null;
     private phase: Phase = 'idle';
@@ -178,6 +192,7 @@ export class CartController {
         editingBlocked: false,
         error: null,
         commandAcknowledged: false,
+        pendingCommandId: null,
         pendingCheckoutIntent: null,
         lastRecovery: null,
     };
@@ -516,9 +531,8 @@ export class CartController {
         while (this.queue.length && epoch === this.epoch) {
             const pending = this.queue[0];
             let notExecuted = false;
-            const owned = this.openDeadline(pending.workflowContext);
-            const deadline = owned.deadline;
-            const context = this.commandContext(pending, epoch, owned.context);
+            let owned = this.openDeadline(pending.workflowContext);
+            let context = this.commandContext(pending, epoch, owned.context);
             try {
                 context.signal.throwIfAborted();
                 const cart = this.repository.snapshot ?? (await this.repository.read(context.signal));
@@ -540,6 +554,7 @@ export class CartController {
                 this.phase = 'saving';
                 this.publish();
                 let result: CartCommandResult | undefined;
+                let recovered = false;
                 for (let attempt = 0; attempt < 3; attempt++) {
                     try {
                         result =
@@ -547,6 +562,7 @@ export class CartController {
                                 ? await this.repository.apply(pending.command, context)
                                 : await this.recoverResult(pending, epoch, context);
                         if (epoch !== this.epoch) return;
+                        recovered = attempt > 0;
                         break;
                     } catch (error) {
                         if (epoch !== this.epoch) return;
@@ -556,9 +572,15 @@ export class CartController {
                             throw error;
                         }
                         this.preserveAcknowledgement(pending, error);
-                        // A known outcome only needs a user-triggered read retry; never spend
-                        // several more request timeouts pretending its execution is uncertain.
-                        if (pending.acknowledged || context.signal.aborted) throw error;
+                        if (attempt === 0) {
+                            // Receipt lookup/detail recovery must still run when the original
+                            // write exhausted its deadline. All recovery attempts share this
+                            // one fresh budget, including callers joining through drain().
+                            owned.deadline?.dispose();
+                            if (owned.deadline) this.deadlines.delete(owned.deadline);
+                            owned = this.openDeadline();
+                            context = this.commandContext(pending, epoch, owned.context);
+                        } else if (pending.acknowledged || context.signal.aborted) throw error;
                         this.phase = 'recovering';
                         this.publish();
                         if (attempt === 2) throw error;
@@ -566,7 +588,7 @@ export class CartController {
                 }
                 if (epoch !== this.epoch) return;
                 if (!result) throw new Error('Cart acknowledgement is missing.');
-                this.finish(pending, result);
+                this.finish(pending, result, recovered);
             } catch (error) {
                 if (epoch !== this.epoch) return;
                 // Restoring a journal can replace this unsent operation. Its outcome
@@ -602,9 +624,9 @@ export class CartController {
                 this.queue = unresolved ? [pending] : [];
                 break;
             } finally {
-                if (deadline) {
-                    deadline.dispose();
-                    this.deadlines.delete(deadline);
+                if (owned.deadline) {
+                    owned.deadline.dispose();
+                    this.deadlines.delete(owned.deadline);
                 }
             }
         }
@@ -689,6 +711,7 @@ export class CartController {
             checkoutReady: !!confirmed?.selectedQuantity && confirmed.state === 'OPEN' && !pending,
             error: this.error,
             commandAcknowledged: !!this.queue[0]?.acknowledged,
+            pendingCommandId: this.queue[0]?.command?.commandId ?? null,
             pendingCheckoutIntent: this.queue[0]?.checkoutIntent ?? null,
             lastRecovery: this.lastRecovery,
         };

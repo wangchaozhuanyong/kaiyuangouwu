@@ -67,14 +67,19 @@ export interface ProductDetailPageProps {
     logoUrl: string | null;
     supportContent?: StorefrontContentBlock;
     initialVariantId?: string;
+    initialQuantity?: number;
     flashSaleItems: StorefrontFlashSaleItem[];
     couponCampaigns: StorefrontCouponCampaign[];
     customerCoupons: StoreCustomerCoupon[];
     addingVariantId: string | null;
     cartCommandUnknown?: boolean;
+    purchaseResultUnknown?: boolean;
+    purchaseRecoveryPending?: boolean;
+    purchaseError?: string | null;
     favorite: boolean;
     onAdd: (variant: ProductVariant, quantity: number) => void;
     onBuyNow: (variant: ProductVariant, quantity: number) => void;
+    onContinuePurchase?: () => void;
     onFavorite: () => Promise<boolean> | void;
     onNotify: (message: string) => void;
 }
@@ -114,10 +119,15 @@ export function ProductDetailPage() {
         customerCoupons,
         addingVariantId,
         cartCommandUnknown = false,
+        purchaseResultUnknown = false,
+        purchaseRecoveryPending = false,
+        purchaseError,
         favorite,
         initialVariantId,
+        initialQuantity = 1,
         onAdd,
         onBuyNow,
+        onContinuePurchase,
         onFavorite,
         onNotify,
     } = ProductDetailPageContext.useValue();
@@ -126,7 +136,7 @@ export function ProductDetailPage() {
         (initialVariantId && product.variants.find(item => item.id === initialVariantId)) ||
         lowestPricedProductVariant(product);
     const [variantId, setVariantId] = useState(initialVariant?.id ?? '');
-    const [quantity, setQuantity] = useState(1);
+    const [quantity, setQuantity] = useState(initialQuantity);
     const [activeSection, setActiveSection] = useState<'description' | 'reviews' | 'params' | 'after-sales'>(
         'description',
     );
@@ -135,9 +145,9 @@ export function ProductDetailPage() {
 
     useEffect(() => {
         setVariantId(initialVariant?.id ?? '');
-        setQuantity(1);
+        setQuantity(initialQuantity);
         setActiveSection('description');
-    }, [initialVariant?.id, product.id]);
+    }, [initialQuantity, initialVariant?.id, product.id]);
     useEffect(() => {
         if (!reviewEnabled && activeSection === 'reviews') setActiveSection('description');
     }, [activeSection, reviewEnabled]);
@@ -597,37 +607,44 @@ export function ProductDetailPage() {
                     </button>
                     <button
                         type="button"
-                        disabled={!cartCommandUnknown && (unavailable || addingVariantId !== null)}
-                        onPointerEnter={() =>
-                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
+                        disabled={
+                            purchaseRecoveryPending ||
+                            (cartCommandUnknown && !onContinuePurchase) ||
+                            (!cartCommandUnknown && (unavailable || addingVariantId !== null))
                         }
-                        onFocus={() =>
-                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
-                        }
-                        onTouchStart={() =>
-                            void preloadStorefrontRouteComponent(cartCommandUnknown ? 'cart' : 'purchase')
-                        }
+                        aria-busy={purchaseRecoveryPending || addingVariantId === variant?.id || undefined}
+                        onPointerEnter={() => void preloadStorefrontRouteComponent('purchase')}
+                        onFocus={() => void preloadStorefrontRouteComponent('purchase')}
+                        onTouchStart={() => void preloadStorefrontRouteComponent('purchase')}
                         onClick={() =>
                             cartCommandUnknown
-                                ? navigateTo({ name: 'cart' })
+                                ? onContinuePurchase?.()
                                 : variant && onBuyNow(variant, purchaseQuantity)
                         }
                     >
-                        {cartCommandUnknown
+                        {purchaseRecoveryPending
                             ? isZh
-                                ? '核对购物车'
-                                : 'Review cart'
-                            : unavailable
-                              ? isZh
-                                  ? '已售罄'
-                                  : 'Sold out'
-                              : addingVariantId === variant?.id
+                                ? '正在确认购买'
+                                : 'Checking purchase'
+                            : cartCommandUnknown
+                              ? purchaseResultUnknown
+                                  ? isZh
+                                      ? '继续确认购买'
+                                      : 'Continue purchase'
+                                  : isZh
+                                    ? '继续确认操作'
+                                    : 'Continue checking'
+                              : unavailable
                                 ? isZh
-                                    ? '正在进入结算'
-                                    : 'Opening checkout'
-                                : isZh
-                                  ? '立即购买'
-                                  : 'Buy now'}
+                                    ? '已售罄'
+                                    : 'Sold out'
+                                : addingVariantId === variant?.id
+                                  ? isZh
+                                      ? '正在确认购买'
+                                      : 'Checking purchase'
+                                  : isZh
+                                    ? '立即购买'
+                                    : 'Buy now'}
                     </button>
                 </>
             )}
@@ -666,6 +683,11 @@ export function ProductDetailPage() {
                             {options}
                             {!quoteOnly && quantityControl}
                             {!quoteOnly && services}
+                            {purchaseError && (
+                                <p className="type-helper" role="status">
+                                    {purchaseError}
+                                </p>
+                            )}
                             {actions}
                         </div>
                     </div>
@@ -676,6 +698,11 @@ export function ProductDetailPage() {
                         {options}
                         {!quoteOnly && quantityControl}
                         {!quoteOnly && services}
+                        {purchaseError && (
+                            <p className="type-helper" role="status">
+                                {purchaseError}
+                            </p>
+                        )}
                     </>
                 )}
                 {desktop && (

@@ -18,6 +18,7 @@ import tempfile
 
 
 MANIFEST_VERSION = 3
+SORT_BUFFER_SIZE = "32M"
 
 def client(root=False):
     return (["--protocol=socket", "--user=root"] if root else [
@@ -67,10 +68,11 @@ def legacy_manifest(database, root=False):
                 if proc.wait() or rows != count:
                     raise RuntimeError("Source row export mismatch for " + table)
             digest = hashlib.sha256()
-            sorter = subprocess.Popen(["sort", str(row_hashes)], stdout=subprocess.PIPE,
+            sorter = subprocess.Popen(["sort", "-S", SORT_BUFFER_SIZE, "-T", temp, str(row_hashes)], stdout=subprocess.PIPE,
                                       env={**os.environ, "LC_ALL": "C", "TMPDIR": temp})
-            for chunk in iter(lambda: sorter.stdout.read(1024 * 1024), b""):
-                digest.update(chunk)
+            with sorter.stdout:
+                for chunk in iter(lambda: sorter.stdout.read(1024 * 1024), b""):
+                    digest.update(chunk)
             if sorter.wait():
                 raise RuntimeError("Row digest sorting failed")
         result[table] = {"rows": count, "sha256": digest.hexdigest()}
@@ -200,10 +202,13 @@ def snapshot_manifest(session, target=None, version=MANIFEST_VERSION):
                 raise RuntimeError("Snapshot row count mismatch for " + table)
             digest = hashlib.sha256()
             with row_hashes.open("rb") as source:
-                sorter = subprocess.Popen(["sort"], stdin=source, stdout=subprocess.PIPE,
+                # Bound the sort buffer independently of the EC2's physical RAM.
+                # External merge sorting preserves the canonical digest when it spills to disk.
+                sorter = subprocess.Popen(["sort", "-S", SORT_BUFFER_SIZE, "-T", temp], stdin=source, stdout=subprocess.PIPE,
                                           env={**os.environ, "LC_ALL": "C", "TMPDIR": temp})
-                for chunk in iter(lambda: sorter.stdout.read(1024 * 1024), b""):
-                    digest.update(chunk)
+                with sorter.stdout:
+                    for chunk in iter(lambda: sorter.stdout.read(1024 * 1024), b""):
+                        digest.update(chunk)
                 if sorter.wait():
                     raise RuntimeError("Row digest sorting failed")
             result[table] = {"rows": rows, "sha256": digest.hexdigest(), "columns": columns,

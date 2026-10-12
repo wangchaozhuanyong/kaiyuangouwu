@@ -45,6 +45,7 @@ const order = {
     shippingWithTax: 0,
     totalWithTax: 2990,
     currencyCode: 'MYR',
+    customer: { id: 'customer-1', emailAddress: 'qa@example.invalid' },
     lines: [
         {
             id: 'line-1',

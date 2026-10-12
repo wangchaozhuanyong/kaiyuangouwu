@@ -1,18 +1,38 @@
-import { mergeConfig } from '@vendure/core';
-import { createTestEnvironment } from '@vendure/testing';
+import {
+    Allocation,
+    ConfigService,
+    getConfig,
+    mergeConfig,
+    Order,
+    OrderLine,
+    OrderService,
+    ProductVariant,
+    Release,
+    RequestContextService,
+    StockLevel,
+    StockMovementService,
+    TransactionalConnection,
+} from '@vendure/core';
+import { OrderLineEntityResolver } from '@vendure/core/dist/api/resolvers/entity/order-line-entity.resolver';
+import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
 import gql from 'graphql-tag';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { StorefrontCartLine } from '../src/entities/storefront-cart-line.entity';
 import { StorefrontCartPlugin } from '../src/storefront-cart.plugin';
 
 const { server, adminClient, shopClient } = createTestEnvironment(
     mergeConfig(testConfig(), {
         apiOptions: { port: 13388 },
         importExportOptions: { importAssetsDir: path.join(__dirname, '../../core/e2e/fixtures/assets') },
+        customFields: {
+            ProductVariant: [{ name: 'fulfillmentType', type: 'string', nullable: true, public: true }],
+            OrderLine: [{ name: 'fulfillmentTypeSnapshot', type: 'string', nullable: true, public: true }],
+        },
         plugins: [StorefrontCartPlugin],
     }),
 );
@@ -231,6 +251,422 @@ describe('cart commands against a real database', () => {
         expect(result.cart.revision).toBe(cart.revision + 1);
         expect(result.cart.checkoutOrder.lines).toHaveLength(1);
         expect(result.cart.checkoutOrder.lines[0]).toMatchObject({ id: retained, quantity: 3 });
+    });
+
+    it('buys only the requested item after stock reservations while retaining the ledger and other cart items', async () => {
+        const connection = server.app.get(TransactionalConnection);
+        const contexts = server.app.get(RequestContextService);
+        const stock = server.app.get(StockMovementService);
+        const ctx = await contexts.create({ apiType: 'admin' });
+        const decode = (id: string) => {
+            const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+            if (!strategy) throw new Error('Test entity ID strategy missing');
+            return strategy.decodeId(id);
+        };
+        const couponCode = 'CART-STOCK-HISTORY';
+        await adminClient.query(
+            gql`
+                mutation ($input: [UpdateProductVariantInput!]!) {
+                    updateProductVariants(input: $input) {
+                        id
+                    }
+                }
+            `,
+            { input: [{ id: variantIds[1], trackInventory: 'TRUE', stockOnHand: 100 }] },
+        );
+        const created = await adminClient.query(
+            gql`
+                mutation ($input: CreatePromotionInput!) {
+                    createPromotion(input: $input) {
+                        ... on Promotion {
+                            id
+                        }
+                        ... on ErrorResult {
+                            message
+                        }
+                    }
+                }
+            `,
+            {
+                input: {
+                    enabled: true,
+                    couponCode,
+                    conditions: [],
+                    actions: [
+                        { code: 'order_fixed_discount', arguments: [{ name: 'discount', value: '100' }] },
+                    ],
+                    translations: [{ languageCode: 'en', name: 'Stock history regression', description: '' }],
+                },
+            },
+        );
+        expect(created.createPromotion.id, created.createPromotion.message).toBeTruthy();
+        const orderQuery = gql`
+            query {
+                activeOrder {
+                    id
+                    currencyCode
+                    couponCodes
+                    totalWithTax
+                    discounts {
+                        amountWithTax
+                    }
+                    lines {
+                        id
+                        quantity
+                        productVariant {
+                            id
+                        }
+                    }
+                }
+            }
+        `;
+        const readOrder = async () => (await shopClient.query(orderQuery)).activeOrder;
+
+        for (const previouslyReleased of [true, false]) {
+            let before = await read();
+            const other = before.lines.find((line: any) => line.productVariant.id === variantIds[1]);
+            before = (
+                await send({
+                    cartId,
+                    commandId: randomUUID(),
+                    expectedRevision: before.revision,
+                    changes: { lines: [{ lineId: other.id, selected: true }] },
+                })
+            ).cart;
+            const otherOrderLine = before.checkoutOrder.lines.find(
+                (line: any) => line.productVariant.id === variantIds[1],
+            );
+            const otherId = decode(otherOrderLine.id);
+            const variantId = decode(variantIds[1]);
+            const levels = () =>
+                connection.getRepository(ctx, StockLevel).find({ where: { productVariantId: variantId } });
+            const allocatedBefore = (await levels()).reduce(
+                (total, level) => total + level.stockAllocated,
+                0,
+            );
+            await stock.createAllocationsForOrderLines(ctx, [{ orderLineId: otherId, quantity: 1 }]);
+            if (previouslyReleased)
+                await stock.createReleasesForOrderLines(ctx, [{ orderLineId: otherId, quantity: 1 }]);
+            // The real FK reproduces the production failure before exercising the safe service path.
+            await expect(connection.getRepository(ctx, OrderLine).delete(otherId)).rejects.toThrow();
+            const coupon = await shopClient.query(
+                gql`
+                    mutation ($code: String!) {
+                        applyCouponCode(couponCode: $code) {
+                            ... on Order {
+                                couponCodes
+                            }
+                            ... on ErrorResult {
+                                message
+                            }
+                        }
+                    }
+                `,
+                { code: couponCode },
+            );
+            expect(coupon.applyCouponCode.couponCodes, coupon.applyCouponCode.message).toContain(couponCode);
+            before = await read();
+            const priorOrder = await readOrder();
+            const priorCartLines = before.lines.map((line: any) => ({
+                id: line.id,
+                variantId: line.productVariant.id,
+                quantity: line.quantity,
+            }));
+            const retainedId = before.checkoutOrder.lines.find(
+                (line: any) => line.productVariant.id === variantIds[0],
+            ).id;
+
+            // Cancelling an unknown command must be a fence, not a cart/coupon mutation.
+            const cancelled = (await shopClient.query(recover, { id: randomUUID(), cartId, cancel: true }))
+                .recoverStorefrontCartCommand;
+            expect(cancelled.status).toBe('CANCELLED');
+            expect(cancelled.cart).toEqual(before);
+            expect(await readOrder()).toEqual(priorOrder);
+
+            const input = {
+                cartId,
+                commandId: randomUUID(),
+                expectedRevision: before.revision,
+                buyNow: { productVariantId: variantIds[0], quantity: 1 },
+            };
+            if (!previouslyReleased) {
+                const orders = server.app.get(OrderService);
+                const originalOrderCount = await connection.getRepository(ctx, Order).count();
+                const failure = vi
+                    .spyOn(orders, 'addItemsToOrder')
+                    .mockRejectedValueOnce(new Error('Synthetic projection migration failure'));
+                try {
+                    await expect(send(input)).rejects.toThrow('Synthetic projection migration failure');
+                } finally {
+                    failure.mockRestore();
+                }
+                expect(await read()).toEqual(before);
+                expect(await readOrder()).toEqual(priorOrder);
+                expect(await connection.getRepository(ctx, Order).count()).toBe(originalOrderCount);
+                expect(
+                    await connection
+                        .getRepository(ctx, Release)
+                        .count({ where: { orderLine: { id: otherId } } }),
+                ).toBe(0);
+                expect((await levels()).reduce((total, level) => total + level.stockAllocated, 0)).toBe(
+                    allocatedBefore + 1,
+                );
+            }
+            const purchased = await send(input);
+            expect(purchased.status, purchased.message).toBe('APPLIED');
+            expect(purchased.cart.checkoutOrder.lines).toEqual([
+                { id: expect.any(String), quantity: 1, productVariant: { id: variantIds[0] } },
+            ]);
+            expect(purchased.cart.checkoutOrder.id).not.toBe(priorOrder.id);
+            expect(purchased.cart.checkoutOrder.lines[0].id).not.toBe(retainedId);
+            expect(
+                purchased.cart.lines.map((line: any) => ({
+                    id: line.id,
+                    variantId: line.productVariant.id,
+                    quantity: line.quantity,
+                })),
+            ).toEqual(
+                priorCartLines.map((line: any) => ({
+                    ...line,
+                    quantity: line.variantId === variantIds[0] ? 1 : line.quantity,
+                })),
+            );
+            expect(purchased.cart.lines.find((line: any) => line.id === other.id)).toMatchObject({
+                selected: false,
+                quantity: other.quantity,
+            });
+            const archived = await connection
+                .getRepository(ctx, OrderLine)
+                .findOne({ where: { id: otherId }, relations: ['order'] });
+            expect(archived).toBeTruthy();
+            expect(archived?.order).toMatchObject({
+                id: decode(priorOrder.id),
+                state: 'Cancelled',
+                active: false,
+            });
+            const historyResolver = Object.assign(Object.create(OrderLineEntityResolver.prototype), {
+                orderService: server.app.get(OrderService),
+            }) as OrderLineEntityResolver;
+            if (!archived) throw new Error('The historical order line is missing');
+            const resolvedHistoryOrder = await historyResolver.order(ctx, archived, []);
+            expect(resolvedHistoryOrder?.id).toBe(decode(priorOrder.id));
+            const historyOrder = await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        order(id: $id) {
+                            id
+                            state
+                            lines {
+                                id
+                            }
+                        }
+                    }
+                `,
+                { id: priorOrder.id },
+            );
+            expect(historyOrder.order).toMatchObject({ id: priorOrder.id, state: 'Cancelled' });
+            expect(historyOrder.order.lines).toContainEqual({ id: otherOrderLine.id });
+            const stockHistory = await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        productVariant(id: $id) {
+                            stockMovements(options: { take: 100 }) {
+                                items {
+                                    ... on StockMovement {
+                                        id
+                                        type
+                                        quantity
+                                    }
+                                }
+                                totalItems
+                            }
+                        }
+                    }
+                `,
+                { id: variantIds[1] },
+            );
+            expect(
+                stockHistory.productVariant.stockMovements.items.some(
+                    (movement: any) => movement.type === 'ALLOCATION',
+                ),
+            ).toBe(true);
+            expect(
+                (
+                    await connection
+                        .getRepository(ctx, StorefrontCartLine)
+                        .findOneByOrFail({ id: decode(other.id) })
+                ).orderLineId,
+            ).toBeNull();
+            expect(
+                await connection
+                    .getRepository(ctx, Allocation)
+                    .count({ where: { orderLine: { id: otherId } } }),
+            ).toBe(1);
+            const releases = await connection
+                .getRepository(ctx, Release)
+                .find({ where: { orderLine: { id: otherId } } });
+            expect(releases).toHaveLength(1);
+            expect(releases[0].quantity).toBe(1);
+            expect((await levels()).reduce((total, level) => total + level.stockAllocated, 0)).toBe(
+                allocatedBefore,
+            );
+            const purchasedOrder = await readOrder();
+            expect(purchasedOrder.couponCodes).toEqual(priorOrder.couponCodes);
+            expect(purchasedOrder.currencyCode).toBe(priorOrder.currencyCode);
+            expect(purchasedOrder.discounts).toEqual(priorOrder.discounts);
+            expect(purchasedOrder.totalWithTax).toBe(purchased.cart.checkoutOrder.totalWithTax);
+
+            // Same-id replay returns the same purchase without another release or quantity change.
+            const replay = await send(input);
+            expect(replay.status).toBe('APPLIED');
+            expect(replay.cart).toEqual(purchased.cart);
+            expect(
+                await connection.getRepository(ctx, Release).count({ where: { orderLine: { id: otherId } } }),
+            ).toBe(1);
+        }
+        await shopClient.query(
+            gql`
+                mutation ($code: String!) {
+                    removeCouponCode(couponCode: $code) {
+                        id
+                    }
+                }
+            `,
+            { code: couponCode },
+        );
+    });
+
+    it('continues a digital historical purchase without an eligible legacy carrier and allows clearing its selection', async () => {
+        const client = new SimpleGraphQLClient(getConfig(), 'http://127.0.0.1:13388/shop-api');
+        const ownRead = async () => (await client.query(cartQuery)).storefrontCart;
+        const ownSend = async (operation: object) => {
+            const current = await ownRead();
+            return (
+                await client.query(command, {
+                    input: {
+                        cartId: current.id,
+                        commandId: randomUUID(),
+                        expectedRevision: current.revision,
+                        ...operation,
+                    },
+                })
+            ).applyStorefrontCartCommand;
+        };
+        const connection = server.app.get(TransactionalConnection);
+        const ctx = await server.app.get(RequestContextService).create({ apiType: 'admin' });
+        const strategy = server.app.get(ConfigService).entityOptions.entityIdStrategy;
+        if (!strategy) throw new Error('Test entity ID strategy missing');
+        const stock = server.app.get(StockMovementService);
+        await ownSend({
+            changes: {
+                add: [
+                    { productVariantId: variantIds[0], quantity: 1 },
+                    { productVariantId: variantIds[1], quantity: 1 },
+                ],
+            },
+        });
+        const methods = (
+            await client.query(gql`
+                query {
+                    eligibleShippingMethods {
+                        id
+                    }
+                }
+            `)
+        ).eligibleShippingMethods;
+        expect(methods.length).toBeGreaterThan(0);
+        const methodId = methods[0].id;
+        const originalMethod = (
+            await adminClient.query(
+                gql`
+                    query ($id: ID!) {
+                        shippingMethod(id: $id) {
+                            translations {
+                                languageCode
+                                name
+                                description
+                            }
+                            checker {
+                                code
+                                args {
+                                    name
+                                    value
+                                }
+                            }
+                        }
+                    }
+                `,
+                { id: methodId },
+            )
+        ).shippingMethod;
+        expect(originalMethod.checker.code).toBe('default-shipping-eligibility-checker');
+        expect((await ownSend({ order: { shippingMethodId: methodId } })).status).toBe('APPLIED');
+        let before = await ownRead();
+        const otherId = strategy.decodeId(
+            before.checkoutOrder.lines.find((line: any) => line.productVariant.id === variantIds[1]).id,
+        );
+        await stock.createAllocationsForOrderLines(ctx, [{ orderLineId: otherId, quantity: 1 }]);
+        await stock.createReleasesForOrderLines(ctx, [{ orderLineId: otherId, quantity: 1 }]);
+        const variantRepository = connection.getRepository(ctx, ProductVariant);
+        const purchasedVariantId = strategy.decodeId(variantIds[0]);
+        const originalVariant = await variantRepository.findOneByOrFail({ id: purchasedVariantId });
+        await variantRepository.update(purchasedVariantId, {
+            customFields: { ...originalVariant.customFields, fulfillmentType: 'digital' },
+        });
+        try {
+            const purchased = await ownSend({ buyNow: { productVariantId: variantIds[0], quantity: 1 } });
+            expect(purchased.status, purchased.message).toBe('APPLIED');
+            const shipping = await client.query(gql`
+                query {
+                    activeOrder {
+                        shippingWithTax
+                        lines {
+                            productVariant {
+                                customFields {
+                                    fulfillmentType
+                                }
+                            }
+                        }
+                        shippingLines {
+                            id
+                        }
+                    }
+                }
+            `);
+            expect(shipping.activeOrder.lines[0].productVariant.customFields.fulfillmentType).toBe('digital');
+            const stillEligible = await client.query(gql`
+                query {
+                    eligibleShippingMethods {
+                        id
+                    }
+                }
+            `);
+            expect(stillEligible.eligibleShippingMethods.map((method: any) => method.id)).toContain(methodId);
+            expect(shipping.activeOrder.shippingLines).toEqual([]);
+            expect(shipping.activeOrder.shippingWithTax).toBe(0);
+            const currentLineId = strategy.decodeId(purchased.cart.checkoutOrder.lines[0].id);
+            await stock.createAllocationsForOrderLines(ctx, [{ orderLineId: currentLineId, quantity: 1 }]);
+            await stock.createReleasesForOrderLines(ctx, [{ orderLineId: currentLineId, quantity: 1 }]);
+            before = await ownRead();
+            const cleared = await ownSend({
+                changes: { lines: before.lines.map((line: any) => ({ lineId: line.id, selected: false })) },
+            });
+            expect(cleared.status, cleared.message).toBe('APPLIED');
+            expect(cleared.cart.selectedQuantity).toBe(0);
+            expect(cleared.cart.checkoutOrder.totalWithTax).toBe(0);
+            expect(cleared.cart.checkoutOrder.lines).toEqual([]);
+            expect(cleared.cart.lines.map((line: any) => ({ id: line.id, quantity: line.quantity }))).toEqual(
+                before.lines.map((line: any) => ({ id: line.id, quantity: line.quantity })),
+            );
+            const previous = await connection
+                .getRepository(ctx, OrderLine)
+                .findOne({ where: { id: currentLineId }, relations: ['order'] });
+            expect(previous?.order.state).toBe('Cancelled');
+        } finally {
+            await variantRepository.update(purchasedVariantId, {
+                customFields: originalVariant.customFields,
+            });
+        }
     });
 
     it('rejects a stale concurrent command instead of overwriting another device', async () => {

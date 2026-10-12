@@ -84,6 +84,9 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
     ) {}
 
     async onApplicationBootstrap(): Promise<void> {
+        this.carts?.registerProjectionTransfer('customer-coupons', (ctx, previous) =>
+            this.prepareProjectionCouponTransfer(ctx, previous),
+        );
         this.orderService.registerCheckoutValidator(
             'store-coupon-entitlements',
             (ctx, order, input, source) => this.validateBeforePayment(ctx, order.id, input, source),
@@ -162,6 +165,47 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             items.push(...page.items);
             if (!page.items.length || items.length >= page.totalItems) return items;
         }
+    }
+
+    private async prepareProjectionCouponTransfer(
+        ctx: RequestContext,
+        previous: Order,
+    ): Promise<(replacement: Order) => Promise<readonly string[]>> {
+        if (!previous.customerId || previous.couponCodes.length === 0) return () => Promise.resolve([]);
+        const codes = new Set(previous.couponCodes.map(code => code.toLocaleLowerCase()));
+        const locked = (
+            await this.connection.getRepository(ctx, CustomerCoupon).find({
+                where: {
+                    channelId: ctx.channelId,
+                    customerId: previous.customerId,
+                    lockedOrderId: previous.id,
+                    status: 'LOCKED',
+                },
+                relations: { promotion: true },
+                order: { id: 'ASC' },
+            })
+        ).filter(
+            coupon =>
+                coupon.promotion.couponCode && codes.has(coupon.promotion.couponCode.toLocaleLowerCase()),
+        );
+        return async replacement => {
+            if (!idsAreEqual(previous.customerId, replacement.customerId))
+                throw new UserInputError('购买账号已变化，请重新选择优惠券');
+            for (const coupon of locked) {
+                try {
+                    await this.apply(ctx, coupon.id);
+                } catch (error) {
+                    // This eligibility rejection occurs before apply changes any
+                    // coupon state. The original claim stays available for a later order.
+                    if (!(
+                        error instanceof UserInputError &&
+                        error.message === '该优惠券不适用于当前购物车，请检查使用门槛及适用商品'
+                    ))
+                        throw error;
+                }
+            }
+            return locked.map(coupon => coupon.promotion.couponCode);
+        };
     }
 
     async findMinePage(

@@ -233,6 +233,12 @@ export function useStorefrontAppState() {
 
     const cart = cartState.cart;
     const checkoutOwnerRef = useRef({ api, cartController, customerId: customer?.id, cartId: cart?.id });
+    const authenticationApiOwnerRef = useRef({ api, cartController });
+    if (
+        authenticationApiOwnerRef.current.api !== api ||
+        authenticationApiOwnerRef.current.cartController !== cartController
+    )
+        authenticationApiOwnerRef.current = { api, cartController };
     const checkoutMountedRef = useRef(false);
     useEffect(() => {
         checkoutMountedRef.current = true;
@@ -428,9 +434,11 @@ export function useStorefrontAppState() {
         cancelPendingCartCommand,
         cartRecoveryPending,
         cartActionsBlocked,
+        formatCartActionError,
         mutateCart,
         addToCart,
         startDirectPurchase,
+        continueCheckoutSession,
         addOrderToCart,
     } = useStorefrontCartActions({
         api,
@@ -594,9 +602,10 @@ export function useStorefrontAppState() {
                 return confirmedSession;
             });
             if (!isCurrent()) return;
-            setCart(session.cart);
-            setCheckoutOrder(session.order);
-            navigate({ name: 'checkout' });
+            if (!continueCheckoutSession(session, 'beginCheckout', false))
+                throw new Error(
+                    isZh ? '结算会话已变更，请重新确认' : 'Checkout changed. Please review again.',
+                );
         } catch (requestError) {
             if (!isCurrent()) return;
             if (
@@ -625,6 +634,7 @@ export function useStorefrontAppState() {
         cart,
         cartActionsBlocked,
         cartController,
+        continueCheckoutSession,
         customer,
         isZh,
         navigate,
@@ -638,12 +648,19 @@ export function useStorefrontAppState() {
             destination?: RouteState,
             isCurrent: () => boolean = () => true,
         ) => {
-            if (!isCurrent()) return;
+            const apiOwner = authenticationApiOwnerRef.current;
+            const authenticationCurrent = () =>
+                isCurrent() &&
+                apiOwner.api === api &&
+                apiOwner.cartController === cartController &&
+                authenticationApiOwnerRef.current === apiOwner;
+            if (!authenticationCurrent()) return;
             const { completeStorefrontAuthentication } = await import('../checkout-authentication');
             await completeStorefrontAuthentication(
                 {
                     api,
                     cartController,
+                    purchaseFallbackRoute: route.name === 'product' ? route : undefined,
                     clearPrivateQueryCache,
                     setCustomer,
                     setCart,
@@ -655,7 +672,7 @@ export function useStorefrontAppState() {
                 },
                 authenticationRoute ?? route,
                 destination,
-                isCurrent,
+                authenticationCurrent,
             );
         },
         [api, cartController, clearPrivateQueryCache, isZh, navigateAfterAuthentication, notify, route],
@@ -843,6 +860,8 @@ export function useStorefrontAppState() {
         cartEditingBlocked: cartState.editingBlocked,
         cartCommandUnknown: cartState.phase === 'unknown' || cartState.phase === 'recovering',
         cartCommandAcknowledged: cartState.commandAcknowledged,
+        cartPendingCheckoutIntent: cartState.pendingCheckoutIntent,
+        continueCheckoutSession,
         cancelPendingCartCommand,
         selectCartLines: (ids: string[], selected: boolean) => {
             void api.setLinesSelected(ids, selected, cart?.revision ?? 0).catch(() => undefined);
@@ -856,9 +875,7 @@ export function useStorefrontAppState() {
                 )
                 .catch(() => undefined);
         },
-        cartError: cartState.error
-            ? storefrontErrorMessage(cartState.error, language)
-            : (cartError ?? cartQueryError),
+        cartError: cartState.error ? formatCartActionError(cartState.error) : (cartError ?? cartQueryError),
         cartLoadState,
         cartQueryError,
         cartQuery,
