@@ -123,17 +123,8 @@
     background: var(--hero-copy-background);
 }
 .home-page .hero.hero-image-overlay .hero-rich-image-link::after {
-    content: '';
-    position: absolute;
-    z-index: 2;
-    inset: 0;
-    pointer-events: none;
-    background: linear-gradient(
-        90deg,
-        var(--hero-stat-background) 0%,
-        color-mix(in srgb, var(--hero-stat-background) 85%, transparent) 42%,
-        transparent 78%
-    );
+    /* Contrast comes from managed text colors, never a veil over the new artwork. */
+    content: none;
 }
 .home-page .hero.hero-image-overlay .hero-rich-backdrop,
 .home-page .hero.hero-image-overlay .safe-image-preview {
@@ -4085,7 +4076,8 @@ html[lang='en'] .primary-category-image {
     .hero.hero-image-overlay
     .hero-scene-wrapper[data-hero-artwork-layout='campaign']
     :is(.hero-rich-backdrop, .safe-image-preview) {
-    object-fit: contain;
+    object-fit: cover;
+    object-position: right center;
     filter: none;
 }
 .home-page
@@ -4128,7 +4120,8 @@ html[lang='en'] .primary-category-image {
         .hero.hero-image-overlay
         .hero-scene-wrapper[data-hero-artwork-layout='campaign']
         :is(.hero-rich-backdrop, .safe-image-preview) {
-        object-fit: contain;
+        object-fit: cover;
+        object-position: right center;
     }
 }
 @media (max-width: 1023px) {

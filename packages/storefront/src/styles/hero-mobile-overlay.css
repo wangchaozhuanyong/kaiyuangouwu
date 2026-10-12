@@ -40,17 +40,18 @@
         background: var(--hero-copy-background);
     }
 
-    /* Artwork scales with the phone width, independently of the copy's height. */
+    /* Dedicated phone artwork fills the existing scene; its outer layout is unchanged. */
     .hero.hero-image-overlay
         .hero-scene-wrapper[data-hero-artwork-layout='overlay']
         :is(.hero-rich-backdrop, .safe-image-preview) {
         position: absolute;
-        inset: 50% 0 auto;
+        inset: 0;
         display: block;
         width: 100%;
-        height: auto;
-        transform: translateY(-50%);
-        object-fit: contain;
+        height: 100%;
+        transform: none;
+        object-fit: cover;
+        object-position: center;
     }
 
     .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='overlay'] .hero-rich-content {
