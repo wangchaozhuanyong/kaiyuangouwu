@@ -150,7 +150,7 @@ const schemas = [
 
 let db: DataSource;
 let queryCount = 0;
-const directory = resolve(__dirname, '../../../docs/local-validation/experience-offline-20261013/admin');
+const directory = resolve(__dirname, '../../../reports/experience-offline-20261013-projection-recovery');
 const canonical = new Map<number, ProcessingSource>();
 const readyFiles: ProcessingFileCandidate[] = [];
 const ctx = { channelId: 1, channel: { code: 'projection-store-a' }, userHasPermissions: () => true } as any;
@@ -738,11 +738,14 @@ describe('actual SQL order classification', () => {
             }
             const timings: number[] = [];
             const queries: number[] = [];
+            const stages: object[] = [];
             for (let sample = 0; sample < 10; sample++) {
                 const startCount = queryCount;
+                const cpuStart = process.cpuUsage();
                 const start = performance.now();
                 const projection = new OrderProcessingProjection(connection, ctx, {});
                 const files = await projection.fileCandidates();
+                const filesReady = performance.now();
                 projection.prepare(
                     readyFiles.filter(file =>
                         files.some(
@@ -750,12 +753,25 @@ describe('actual SQL order classification', () => {
                         ),
                     ),
                 );
+                const prepared = performance.now();
                 const page = await projection.page('PENDING', 0, 20);
+                const pageReady = performance.now();
                 const counts = await projection.counts();
+                const countsReady = performance.now();
                 expect(page.ids).toHaveLength(20);
                 expect(counts.physical).toBe(size - initialSize + initialPhysical);
                 queries.push(queryCount - startCount);
-                timings.push(performance.now() - start);
+                const end = performance.now();
+                timings.push(end - start);
+                const cpu = process.cpuUsage(cpuStart);
+                stages.push({
+                    fileCandidatesMilliseconds: filesReady - start,
+                    prepareMilliseconds: prepared - filesReady,
+                    pageMilliseconds: pageReady - prepared,
+                    countsMilliseconds: countsReady - pageReady,
+                    assertionsMilliseconds: end - countsReady,
+                    processCpuMilliseconds: (cpu.user + cpu.system) / 1000,
+                });
             }
             expect(new Set(queries)).toEqual(new Set([3]));
             const sorted = [...timings].sort((a, b) => a - b);
@@ -766,11 +782,13 @@ describe('actual SQL order classification', () => {
                 sqlQueriesForFileReadinessPageAndCounts: queries[0],
                 p95Milliseconds: Number(p95.toFixed(2)),
                 samples: timings.map(value => Number(value.toFixed(2))),
+                stages,
+                nodeVersion: process.version,
+                ci: Boolean(process.env.CI),
                 database: db.options.type,
                 fullOrderHydration: 0,
             });
-            // A regression must remain visible; the accepted target applies to the complete request.
-            expect(p95).toBeLessThan(800);
+            // Persist every sample, including a failing cold/outlier request, before enforcing the budget.
             writeFileSync(
                 resolve(directory, `order-projection-scale-${db.options.type}.json`),
                 JSON.stringify(
@@ -783,6 +801,8 @@ describe('actual SQL order classification', () => {
                     2,
                 ),
             );
+            // A regression must remain visible; the accepted target applies to the complete request.
+            expect(p95).toBeLessThan(800);
         }
     }, 120000);
 });

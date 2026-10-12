@@ -724,7 +724,7 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
         const workflowMatch =
-            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=5$/u.exec(
+            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=(?:5|20)$/u.exec(
                 endpoint,
             );
         if (workflowMatch)
@@ -1129,13 +1129,14 @@ test('missing or malformed native evidence remains rejected while independent va
     }
 });
 
-test('small history reads keep unavailable proof missing instead of authorizing deployment', async () => {
+test('bounded history reads keep unavailable proof missing instead of authorizing deployment', async () => {
     const fixture = coverageFixture();
     const api = fixture.api;
     let reads = 0;
     fixture.api = endpoint => {
         if (endpoint.includes('/actions/workflows/')) {
-            assert.match(endpoint, /per_page=5$/u);
+            assert.match(endpoint, /per_page=(?:5|20)$/u);
+            assert.equal(endpoint.endsWith('per_page=5'), endpoint.includes('&created='));
             reads++;
             return { workflow_runs: [] };
         }
@@ -1151,6 +1152,42 @@ test('small history reads keep unavailable proof missing instead of authorizing 
             .map(check => check.id)
             .sort(),
     );
+});
+
+test('bounded historical lookup retains verified native success beyond five failed or cancelled follow-ups', async () => {
+    const fixture = nativeRecoveryFixture();
+    const api = fixture.api;
+    const newer = Array.from({ length: 6 }, (_, index) => ({
+        id: 10 + index,
+        status: 'completed',
+        conclusion: 'cancelled',
+        event: 'pull_request',
+        path: '.github/workflows/build_and_test.yml',
+        head_repository: { full_name: 'owner/repo' },
+    }));
+    const indexReads = [];
+    fixture.api = endpoint => {
+        if (endpoint.includes('/actions/workflows/') && endpoint.includes('/runs?')) {
+            const response = api(endpoint);
+            const limit = Number(/per_page=(\d+)$/u.exec(endpoint)[1]);
+            assert.ok(limit === 5 || limit === 20);
+            indexReads.push({ endpoint, limit });
+            return {
+                workflow_runs: endpoint.includes('/build_and_test.yml/')
+                    ? [...newer, ...response.workflow_runs].slice(0, limit)
+                    : response.workflow_runs,
+            };
+        }
+        return api(endpoint);
+    };
+    const result = await findInputCoverage(fixture);
+    assert.equal(indexReads.length, 6);
+    assert.equal(indexReads.filter(read => read.limit === 5).length, 3);
+    assert.equal(indexReads.filter(read => read.limit === 20).length, 3);
+    assert.equal(result.anchor, undefined);
+    assert.ok(result.reused.some(check => check.check === 'backend:core' && check.runId === 1));
+    assert.ok(result.reused.every(check => check.runId === 1 && check.evidenceKind === 'partial-native'));
+    assert.ok(result.missing.length > 0);
 });
 
 test('backup-only follow-up combines narrow target proof with older full business proof', async () => {
