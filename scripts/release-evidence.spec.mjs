@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+// Keep native recovery negative cases in the existing remote controls entrypoint.
+import './ci-native-coverage.spec.mjs';
+
 import {
     checkCovered,
     checkFingerprint,
@@ -583,6 +586,179 @@ test('recent workflow indexes recover exact CI proof omitted by cached historica
     assert.equal(result.anchor.runId, 2);
     assert.equal(result.missing.length, 0);
     assert.ok(result.reused.some(check => check.runId === 1));
+});
+
+function nativeRecoveryFixture({
+    targetProof = false,
+    changes,
+    mutateJobs,
+    missingLog = false,
+    newQualityScopeComplete = false,
+} = {}) {
+    const baseSha = 'c'.repeat(40);
+    const fixture = coverageFixture({
+        targetProof,
+        changes,
+        mutateRun: run => {
+            if (run.id !== 1) return;
+            Object.assign(run, {
+                conclusion: 'failure',
+                run_attempt: 1,
+                repository: { id: 9, full_name: 'owner/repo' },
+            });
+            run.head_repository.id = 9;
+        },
+    });
+    const scope = classifyChanges(
+        ['packages/core/src/service.ts', 'deploy/systemd/backup.py'],
+        inputInventory,
+    );
+    if (newQualityScopeComplete) {
+        const readProof = fixture.proofReader;
+        fixture.proofReader = (repository, id) =>
+            id === 2 ? { ...readProof(repository, id), lintFiles: scope.files } : readProof(repository, id);
+    }
+    const nativeRun = {
+        id: 1,
+        head_sha: sourceSha,
+        run_attempt: 1,
+        status: 'completed',
+        conclusion: 'failure',
+        event: 'workflow_dispatch',
+        path: '.github/workflows/build_and_test.yml',
+        repository: { id: 9, full_name: 'owner/repo' },
+        head_repository: { id: 9, full_name: 'owner/repo' },
+    };
+    const jobs = [
+        'detect changes',
+        'build affected packages',
+        'affected unit tests (22.x)',
+        'e2e (mysql) (22.x)',
+        'repository quality gates',
+        'all-passed',
+    ].map((name, index) => ({
+        id: index + 100,
+        name,
+        run_id: 1,
+        run_attempt: 1,
+        head_sha: sourceSha,
+        status: 'completed',
+        conclusion: index < 4 ? 'success' : 'failure',
+    }));
+    mutateJobs?.(jobs);
+    const oldReader = fixture.reader;
+    fixture.reader = {
+        ...oldReader,
+        tree: ref => (ref === targetSha ? 'target-tree' : 'source-tree'),
+        entries: ref =>
+            ref === baseSha
+                ? oldReader
+                      .entries(sourceSha)
+                      .map(entry =>
+                          ['packages/core/src/service.ts', 'deploy/systemd/backup.py'].includes(entry.path)
+                              ? { ...entry, metadata: 'original-base' }
+                              : entry,
+                      )
+                : oldReader.entries(ref),
+    };
+    const oldApi = fixture.api;
+    fixture.api = endpoint => {
+        if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1') return nativeRun;
+        if (endpoint === 'repos/owner/repo/actions/runs/1/attempts/1/jobs?per_page=100')
+            return { total_count: jobs.length, jobs };
+        if (endpoint === `repos/owner/repo/compare/${baseSha}...${sourceSha}`)
+            return { status: 'ahead', base_commit: { sha: baseSha }, merge_base_commit: { sha: baseSha } };
+        return oldApi(endpoint);
+    };
+    fixture.nativeLogReader = () => {
+        if (missingLog) throw new Error('Native log unavailable');
+        return `[command]/usr/bin/git log -1 --format=%H\n${sourceSha}\n  BASE_SHA: ${baseSha}\n  FULL: false\n${JSON.stringify(scope, null, 2)}\n`;
+    };
+    return fixture;
+}
+
+test('failed ordinary CI retains only exact-input native success groups and can never anchor a release', async () => {
+    const result = await findInputCoverage(nativeRecoveryFixture());
+    assert.equal(result.anchor, undefined);
+    assert.deepEqual(
+        result.reused.map(item => item.check),
+        ['backend:core'],
+    );
+    assert.equal(result.reused[0].evidenceKind, 'partial-native');
+    assert.equal(result.reused[0].sourceRunConclusion, 'failure');
+    assert.equal(result.reused[0].runAttempt, 1);
+    assert.deepEqual(
+        result.reused[0].nativeJobs.map(job => job.name),
+        ['build affected packages', 'affected unit tests (22.x)', 'e2e (mysql) (22.x)'],
+    );
+    assert.ok(result.missing.some(check => check.kind === 'quality'));
+    assert.ok(result.missing.some(check => check.kind === 'controls'));
+});
+
+test('a new successful source anchor plus native success coverage closes only the actually missing checks', async () => {
+    const result = await findInputCoverage(
+        nativeRecoveryFixture({ targetProof: true, newQualityScopeComplete: true }),
+    );
+    assert.equal(result.anchor.runId, 2);
+    assert.deepEqual(result.missing, []);
+    assert.ok(
+        result.reused.some(item => item.evidenceKind === 'partial-native' && item.check === 'backend:core'),
+    );
+});
+
+test('a new narrow successful gate cannot erase failed quality checks omitted from its executed scope', async () => {
+    const result = await findInputCoverage(nativeRecoveryFixture({ targetProof: true }));
+    assert.equal(result.anchor.runId, 2);
+    assert.ok(result.missing.some(check => check.id === 'quality:packages/core/src/service.ts'));
+    assert.ok(!result.reused.some(item => item.check === 'quality:packages/core/src/service.ts'));
+});
+
+test('a dependency fixture change keeps downstream native business checks missing', async () => {
+    const fixture = nativeRecoveryFixture();
+    const entries = fixture.reader.entries;
+    fixture.reader.entries = ref => [
+        ...entries(ref),
+        {
+            path: 'packages/common/src/helper.spec.ts',
+            metadata: ref === targetSha ? 'fixed-typed-fixture' : 'original-typed-fixture',
+        },
+    ];
+    const result = await findInputCoverage(fixture);
+    assert.ok(result.missing.some(check => check.id === 'backend:core'));
+    assert.ok(!result.reused.some(item => item.check === 'backend:core'));
+});
+
+test('native recovery rejects changed business input and changed execution recipes', async () => {
+    for (const changes of [
+        { 'packages/core/src/service.ts': 'changed-business' },
+        {
+            '.github/workflows/build_and_test.yml': workflow.replace(
+                'Build affected packages and preserve compiled output',
+                'Changed execution step',
+            ),
+        },
+    ]) {
+        const result = await findInputCoverage(nativeRecoveryFixture({ changes }));
+        assert.ok(result.missing.some(check => check.id === 'backend:core'));
+        assert.ok(!result.reused.some(check => check.check === 'backend:core'));
+    }
+});
+
+test('missing logs or failed native jobs never supply coverage or disrupt other valid proof', async () => {
+    for (const fixture of [
+        nativeRecoveryFixture({ targetProof: true, missingLog: true }),
+        nativeRecoveryFixture({
+            targetProof: true,
+            mutateJobs: jobs => {
+                jobs[2].conclusion = 'failure';
+            },
+        }),
+    ]) {
+        const result = await findInputCoverage(fixture);
+        assert.equal(result.anchor.runId, 2);
+        assert.ok(result.missing.some(check => check.id === 'backend:core'));
+        assert.ok(!result.reused.some(item => item.check === 'backend:core'));
+    }
 });
 
 test('small history reads keep unavailable proof missing instead of authorizing deployment', async () => {

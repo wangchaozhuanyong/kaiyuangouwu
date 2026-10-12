@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { createOfflinePaymentProof } from '../offline-payment-proof';
 
 import { StoreCouponLifecycleService } from './store-coupon-lifecycle.service';
+
+interface CouponIssueValidationStub {
+    paymentCouponIssues(ctx: unknown, order: unknown, paidAt: Date): Promise<Array<{ reason: string }>>;
+}
+
 const ctx = { channelId: 'shop-a' } as any;
 function harness(purpose?: 'REFUND_ONLY') {
     const order = { id: 'order-a', currencyCode: 'MYR' };
@@ -42,10 +47,10 @@ function harness(purpose?: 'REFUND_ONLY') {
     vi.spyOn(service as any, 'loadOrder').mockResolvedValue(order);
     vi.spyOn(service as any, 'hasCouponEntitlements').mockResolvedValue(true);
     const issues = vi
-        .spyOn(service as any, 'paymentCouponIssues')
-        .mockImplementation((_ctx: unknown, _order: unknown, paidAt: unknown) =>
+        .spyOn(service as unknown as CouponIssueValidationStub, 'paymentCouponIssues')
+        .mockImplementation((_ctx, _order, paidAt) =>
             Promise.resolve(
-                (paidAt as Date).getTime() >= Date.now() - 86_400_000
+                paidAt.getTime() >= Date.now() - 86_400_000
                     ? [{ reason: 'Coupon was expired at arrival' }]
                     : [],
             ),

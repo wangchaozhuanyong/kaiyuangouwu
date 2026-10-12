@@ -1,0 +1,16 @@
+[
+  "packages/store-management-plugin/src/index.ts",
+  "packages/store-management-plugin/src/merchant-initial-password.service.ts",
+  "packages/store-management-plugin/src/offline-payment-proof.spec.ts",
+  "packages/store-management-plugin/src/offline-payment-proof.ts",
+  "packages/store-management-plugin/src/performance/storefront-public-cache.service.ts",
+  "packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts",
+  "packages/store-management-plugin/src/promotion/store-coupon-lifecycle.service.ts",
+  "packages/store-management-plugin/src/referral/referral-today-metrics.spec.ts",
+  "packages/store-management-plugin/src/referral/referral.service.ts",
+  "packages/store-management-plugin/src/storefront-lcp-preload.controller.ts",
+  "packages/store-management-plugin/src/storefront-lcp-preload.service.ts",
+  "packages/store-management-plugin/src/storefront-lcp-preload.spec.ts",
+  "packages/store-management-plugin/src/storefront-public-page.service.ts",
+  "packages/store-management-plugin/src/storefront-public-page.spec.ts"
+]

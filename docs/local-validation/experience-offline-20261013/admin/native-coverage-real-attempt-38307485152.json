@@ -1,0 +1,815 @@
+{
+  "at": "2026-10-12T21:24:28.690Z",
+  "run": {
+    "id": 38307485152,
+    "runAttempt": 1,
+    "status": "completed",
+    "conclusion": "failure",
+    "headSha": "b8d45cc6cf28f025bb9a3e91028c346614aeeada"
+  },
+  "plan": {
+    "version": 1,
+    "files": [
+      "packages/next-admin/src/components/AdminPageWorkspace.tsx",
+      "packages/next-admin/src/components/OrderNotifications.spec.tsx",
+      "packages/next-admin/src/graphql/management.graphql.ts",
+      "packages/next-admin/src/graphql/order-operations.graphql.ts",
+      "packages/next-admin/src/hooks/use-admin-query.spec.tsx",
+      "packages/next-admin/src/hooks/use-admin-query.ts",
+      "packages/next-admin/src/hooks/use-admin-read-resource.ts",
+      "packages/next-admin/src/layouts/AppShell.tsx",
+      "packages/next-admin/src/layouts/TabbedOutlet.spec.tsx",
+      "packages/next-admin/src/layouts/TabbedOutlet.tsx",
+      "packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.spec.tsx",
+      "packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.tsx",
+      "packages/next-admin/src/pages/Sales/OrderOperationsBlock.tsx",
+      "packages/next-admin/src/pages/Sales/sales-utils.ts",
+      "packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.spec.tsx",
+      "packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.tsx",
+      "packages/next-admin/src/pages/Settings/PaymentShippingManager.spec.tsx",
+      "packages/next-admin/src/pages/Settings/PaymentShippingManager.tsx",
+      "packages/next-admin/src/runtime/admin-query-runtime.spec.ts",
+      "packages/next-admin/src/runtime/admin-query-runtime.ts",
+      "packages/next-admin/src/runtime/admin-resource-events.spec.ts",
+      "packages/next-admin/src/runtime/admin-resource-events.ts",
+      "packages/next-admin/src/utils/admin-order-events.spec.ts",
+      "packages/next-admin/src/utils/admin-order-events.ts",
+      "packages/next-admin/src/utils/configurable-operation-localization.ts",
+      "packages/storefront-content-plugin/src/shared/public-page-data.ts",
+      "packages/storefront/DESKTOP_SKIN_DESIGN_CONTRACT.md",
+      "packages/storefront/TYPOGRAPHY.md",
+      "packages/storefront/e2e/client-loading/preview-server.spec.mjs",
+      "packages/storefront/e2e/seo-public/fixtures.mjs",
+      "packages/storefront/e2e/seo-public/hydration.mjs",
+      "packages/storefront/e2e/seo-public/preview-server.mjs",
+      "packages/storefront/e2e/seo-public/warm-navigation.mjs",
+      "packages/storefront/src/StorefrontShell.tsx",
+      "packages/storefront/src/account-security-page.tsx",
+      "packages/storefront/src/api.spec.ts",
+      "packages/storefront/src/api.ts",
+      "packages/storefront/src/api/account.ts",
+      "packages/storefront/src/api/cart-checkout.ts",
+      "packages/storefront/src/api/customer-identity.spec.ts",
+      "packages/storefront/src/api/customer-identity.ts",
+      "packages/storefront/src/api/fragments.ts",
+      "packages/storefront/src/api/lazy-account.spec.ts",
+      "packages/storefront/src/api/lazy-account.ts",
+      "packages/storefront/src/bottom-navigation.spec.ts",
+      "packages/storefront/src/brand-loading-bootstrap.ts",
+      "packages/storefront/src/brand-loading-content.tsx",
+      "packages/storefront/src/brand-loading.spec.tsx",
+      "packages/storefront/src/brand-loading.tsx",
+      "packages/storefront/src/components/common/account-identity.tsx",
+      "packages/storefront/src/components/common/customer-avatar.tsx",
+      "packages/storefront/src/components/common/customer-orders-status.tsx",
+      "packages/storefront/src/components/common/desktop-account-navigation.tsx",
+      "packages/storefront/src/components/common/support-qr-save.spec.tsx",
+      "packages/storefront/src/components/common/support-qr-save.tsx",
+      "packages/storefront/src/desktop-catalog-transition.spec.tsx",
+      "packages/storefront/src/entry-public-server.tsx",
+      "packages/storefront/src/fixed-bottom-bars.spec.ts",
+      "packages/storefront/src/fixed-bottom-layout.spec.ts",
+      "packages/storefront/src/fixed-bottom-viewport.ts",
+      "packages/storefront/src/home-hero-carousel.spec.tsx",
+      "packages/storefront/src/homepage-spacing.spec.ts",
+      "packages/storefront/src/hooks/customer-query-ownership.spec.tsx",
+      "packages/storefront/src/hooks/useStorefrontAppState.ts",
+      "packages/storefront/src/hooks/useStorefrontBootstrap.ts",
+      "packages/storefront/src/hooks/useStorefrontCartActions.ts",
+      "packages/storefront/src/hooks/useStorefrontCustomerData.spec.ts",
+      "packages/storefront/src/hooks/useStorefrontCustomerData.ts",
+      "packages/storefront/src/hooks/useStorefrontCustomerRecovery.spec.tsx",
+      "packages/storefront/src/hooks/useStorefrontMerchandising.ts",
+      "packages/storefront/src/hooks/useStorefrontPublicData.spec.tsx",
+      "packages/storefront/src/hooks/useStorefrontPublicData.ts",
+      "packages/storefront/src/main.tsx",
+      "packages/storefront/src/order-pages.spec.tsx",
+      "packages/storefront/src/order-pages.tsx",
+      "packages/storefront/src/page-readiness.spec.tsx",
+      "packages/storefront/src/page-readiness.tsx",
+      "packages/storefront/src/pages/account-page.tsx",
+      "packages/storefront/src/pages/ai-image-studio-page.tsx",
+      "packages/storefront/src/pages/desktop-account-page.tsx",
+      "packages/storefront/src/pages/desktop-catalog-page.tsx",
+      "packages/storefront/src/pages/guide-page.tsx",
+      "packages/storefront/src/pages/home-page.tsx",
+      "packages/storefront/src/pages/notifications-page.tsx",
+      "packages/storefront/src/pages/referral-page.tsx",
+      "packages/storefront/src/pages/support-page.tsx",
+      "packages/storefront/src/payment-balance-completion.spec.tsx",
+      "packages/storefront/src/payment-pages.tsx",
+      "packages/storefront/src/payment-readiness.spec.ts",
+      "packages/storefront/src/payment-readiness.ts",
+      "packages/storefront/src/public-page-bootstrap.ts",
+      "packages/storefront/src/public-snapshot.spec.tsx",
+      "packages/storefront/src/public-snapshot.tsx",
+      "packages/storefront/src/referral-page.spec.tsx",
+      "packages/storefront/src/responsive-image.spec.ts",
+      "packages/storefront/src/route-pages/account-route-pages.tsx",
+      "packages/storefront/src/route-pages/catalog-route-pages.tsx",
+      "packages/storefront/src/route-pages/category-route-page.tsx",
+      "packages/storefront/src/route-pages/content-route-pages.tsx",
+      "packages/storefront/src/route-pages/legal-route-page.tsx",
+      "packages/storefront/src/route-pages/shared.tsx",
+      "packages/storefront/src/router.tsx",
+      "packages/storefront/src/safe-image.spec.tsx",
+      "packages/storefront/src/safe-image.tsx",
+      "packages/storefront/src/skin-system.spec.ts",
+      "packages/storefront/src/storefront-boot-data.spec.ts",
+      "packages/storefront/src/storefront-boot-data.ts",
+      "packages/storefront/src/storefront-page-data.ts",
+      "packages/storefront/src/storefront-page-frame.tsx",
+      "packages/storefront/src/storefront-performance.spec.ts",
+      "packages/storefront/src/storefront-performance.ts",
+      "packages/storefront/src/storefront-ui/order-ui.tsx",
+      "packages/storefront/src/styles.css",
+      "packages/storefront/src/styles/customer-avatar.css",
+      "packages/storefront/src/styles/desktop-home.css",
+      "packages/storefront/src/styles/desktop-layout.css",
+      "packages/storefront/src/styles/desktop-pages.css",
+      "packages/storefront/src/styles/experience-foundations.css",
+      "packages/storefront/src/styles/hero-mobile-overlay.css",
+      "packages/storefront/src/styles/home-layout-base.css",
+      "packages/storefront/src/styles/home-showcase.css",
+      "packages/storefront/src/styles/image-studio-components.css",
+      "packages/storefront/src/styles/image-studio-desktop.css",
+      "packages/storefront/src/styles/image-studio-layout.css",
+      "packages/storefront/src/styles/modals-and-support.css",
+      "packages/storefront/src/styles/referral.css",
+      "packages/storefront/src/styles/skeletons.css",
+      "packages/storefront/src/styles/visual-presets.css",
+      "packages/storefront/src/types.ts"
+    ],
+    "changedPackages": [
+      "admin-ui-plugin",
+      "asset-server-plugin",
+      "catalog-management-plugin",
+      "cli",
+      "commerce-fulfillment-plugin",
+      "content-translation-plugin",
+      "core",
+      "create",
+      "dashboard",
+      "dev-server",
+      "email-plugin",
+      "graphiql-plugin",
+      "harden-plugin",
+      "icloud-relay-plugin",
+      "image-generation-plugin",
+      "job-queue-plugin",
+      "next-admin",
+      "next-admin-plugin",
+      "operations-dashboard-plugin",
+      "store-domain-plugin",
+      "store-management-plugin",
+      "storefront",
+      "storefront-cart-plugin",
+      "storefront-catalog-plugin",
+      "storefront-content-plugin",
+      "storefront-review-plugin",
+      "telemetry-plugin",
+      "testing",
+      "two-factor-dashboard-plugin",
+      "ui-devkit"
+    ],
+    "frontends": [
+      "next-admin",
+      "storefront"
+    ],
+    "frontendFull": false,
+    "packages": [
+      "admin-ui-plugin",
+      "asset-server-plugin",
+      "catalog-management-plugin",
+      "cli",
+      "commerce-fulfillment-plugin",
+      "content-translation-plugin",
+      "core",
+      "create",
+      "dashboard",
+      "dev-server",
+      "email-plugin",
+      "graphiql-plugin",
+      "harden-plugin",
+      "icloud-relay-plugin",
+      "image-generation-plugin",
+      "job-queue-plugin",
+      "next-admin-plugin",
+      "operations-dashboard-plugin",
+      "store-domain-plugin",
+      "store-management-plugin",
+      "storefront-cart-plugin",
+      "storefront-catalog-plugin",
+      "storefront-content-plugin",
+      "storefront-review-plugin",
+      "telemetry-plugin",
+      "testing",
+      "two-factor-dashboard-plugin",
+      "ui-devkit"
+    ],
+    "lane": "runtime",
+    "full": false,
+    "dependencies": false,
+    "controls": false,
+    "migration": false,
+    "publishing": true,
+    "architecture": true,
+    "codegen": true,
+    "e2e": true,
+    "databases": [
+      "mysql"
+    ],
+    "dashboard": true,
+    "icloud": true,
+    "translation": true,
+    "storefrontIntegration": true,
+    "reasons": [
+      "Changed packages: commerce-fulfillment-plugin, core, next-admin, store-management-plugin, storefront, storefront-cart-plugin, storefront-content-plugin.",
+      "Checks are limited to affected packages and dependencies.",
+      "Deployment route: runtime.",
+      "212 missing check groups; validated input matches are reused."
+    ],
+    "lintFiles": [
+      "packages/commerce-fulfillment-plugin/e2e/offline-payment.e2e-spec.ts",
+      "packages/commerce-fulfillment-plugin/e2e/offline-payment.vitest.config.mjs",
+      "packages/commerce-fulfillment-plugin/e2e/order-processing-scale/order-processing-scale.e2e-spec.ts",
+      "packages/commerce-fulfillment-plugin/e2e/order-processing-scale/order-processing-scale.vitest.config.mjs",
+      "packages/commerce-fulfillment-plugin/e2e/order-processing-scale/tsconfig.json",
+      "packages/commerce-fulfillment-plugin/e2e/tsconfig.json",
+      "packages/commerce-fulfillment-plugin/e2e/tsconfig.offline-payment.json",
+      "packages/commerce-fulfillment-plugin/src/checkout-resources.service.ts",
+      "packages/commerce-fulfillment-plugin/src/commerce-fulfillment.plugin.ts",
+      "packages/commerce-fulfillment-plugin/src/commerce-order-process.ts",
+      "packages/commerce-fulfillment-plugin/src/digital-delivery.service.ts",
+      "packages/commerce-fulfillment-plugin/src/digital-file.service.ts",
+      "packages/commerce-fulfillment-plugin/src/digital-receipt.service.spec.ts",
+      "packages/commerce-fulfillment-plugin/src/digital-receipt.service.ts",
+      "packages/commerce-fulfillment-plugin/src/offline-manual-payment.ts",
+      "packages/commerce-fulfillment-plugin/src/offline-payment.resolver.ts",
+      "packages/commerce-fulfillment-plugin/src/offline-payment.service.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing-projection.spec.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing-projection.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing-schema.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing-summary.spec.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing-summary.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing.service.spec.ts",
+      "packages/commerce-fulfillment-plugin/src/order-processing.service.ts",
+      "packages/core/src/config/payment/default-payment-process.spec.ts",
+      "packages/core/src/config/payment/default-payment-process.ts",
+      "packages/core/src/event-bus/events/payment-attempt-event.ts",
+      "packages/core/src/service/services/payment.service.ts",
+      "packages/next-admin/src/components/AdminPageWorkspace.tsx",
+      "packages/next-admin/src/components/OrderNotifications.spec.tsx",
+      "packages/next-admin/src/graphql/management.graphql.ts",
+      "packages/next-admin/src/graphql/order-operations.graphql.ts",
+      "packages/next-admin/src/hooks/use-admin-query.spec.tsx",
+      "packages/next-admin/src/hooks/use-admin-query.ts",
+      "packages/next-admin/src/hooks/use-admin-read-resource.ts",
+      "packages/next-admin/src/layouts/AppShell.tsx",
+      "packages/next-admin/src/layouts/TabbedOutlet.spec.tsx",
+      "packages/next-admin/src/layouts/TabbedOutlet.tsx",
+      "packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.spec.tsx",
+      "packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.tsx",
+      "packages/next-admin/src/pages/Sales/OrderOperationsBlock.tsx",
+      "packages/next-admin/src/pages/Sales/sales-utils.ts",
+      "packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.spec.tsx",
+      "packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.tsx",
+      "packages/next-admin/src/pages/Settings/PaymentShippingManager.spec.tsx",
+      "packages/next-admin/src/pages/Settings/PaymentShippingManager.tsx",
+      "packages/next-admin/src/runtime/admin-query-runtime.spec.ts",
+      "packages/next-admin/src/runtime/admin-query-runtime.ts",
+      "packages/next-admin/src/runtime/admin-resource-events.spec.ts",
+      "packages/next-admin/src/runtime/admin-resource-events.ts",
+      "packages/next-admin/src/utils/admin-order-events.spec.ts",
+      "packages/next-admin/src/utils/admin-order-events.ts",
+      "packages/next-admin/src/utils/configurable-operation-localization.ts",
+      "packages/store-management-plugin/src/index.ts",
+      "packages/store-management-plugin/src/merchant-initial-password.service.ts",
+      "packages/store-management-plugin/src/offline-payment-proof.spec.ts",
+      "packages/store-management-plugin/src/offline-payment-proof.ts",
+      "packages/store-management-plugin/src/performance/storefront-public-cache.service.ts",
+      "packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts",
+      "packages/store-management-plugin/src/promotion/store-coupon-lifecycle.service.ts",
+      "packages/store-management-plugin/src/referral/referral-today-metrics.spec.ts",
+      "packages/store-management-plugin/src/referral/referral.service.ts",
+      "packages/store-management-plugin/src/storefront-lcp-preload.controller.ts",
+      "packages/store-management-plugin/src/storefront-lcp-preload.service.ts",
+      "packages/store-management-plugin/src/storefront-lcp-preload.spec.ts",
+      "packages/store-management-plugin/src/storefront-public-page.service.ts",
+      "packages/store-management-plugin/src/storefront-public-page.spec.ts",
+      "packages/storefront-cart-plugin/src/storefront-cart.service.spec.ts",
+      "packages/storefront-cart-plugin/src/storefront-cart.service.ts",
+      "packages/storefront-cart-plugin/src/storefront-payment-attempt.service.ts",
+      "packages/storefront-content-plugin/src/index.ts",
+      "packages/storefront-content-plugin/src/shared/public-page-data.ts",
+      "packages/storefront-content-plugin/src/shared/responsive-image.ts",
+      "packages/storefront-content-plugin/src/shared/storefront-semantic-palette.spec.ts",
+      "packages/storefront-content-plugin/src/shared/storefront-semantic-palette.ts",
+      "packages/storefront/DESKTOP_SKIN_DESIGN_CONTRACT.md",
+      "packages/storefront/TYPOGRAPHY.md",
+      "packages/storefront/e2e/client-loading/preview-server.spec.mjs",
+      "packages/storefront/e2e/seo-public/fixtures.mjs",
+      "packages/storefront/e2e/seo-public/hydration.mjs",
+      "packages/storefront/e2e/seo-public/preview-server.mjs",
+      "packages/storefront/e2e/seo-public/warm-navigation.mjs",
+      "packages/storefront/src/StorefrontShell.tsx",
+      "packages/storefront/src/account-security-page.tsx",
+      "packages/storefront/src/api.spec.ts",
+      "packages/storefront/src/api.ts",
+      "packages/storefront/src/api/account.ts",
+      "packages/storefront/src/api/cart-checkout.ts",
+      "packages/storefront/src/api/customer-identity.spec.ts",
+      "packages/storefront/src/api/customer-identity.ts",
+      "packages/storefront/src/api/fragments.ts",
+      "packages/storefront/src/api/lazy-account.spec.ts",
+      "packages/storefront/src/api/lazy-account.ts",
+      "packages/storefront/src/bottom-navigation.spec.ts",
+      "packages/storefront/src/brand-loading-bootstrap.ts",
+      "packages/storefront/src/brand-loading-content.tsx",
+      "packages/storefront/src/brand-loading.spec.tsx",
+      "packages/storefront/src/brand-loading.tsx",
+      "packages/storefront/src/components/common/account-identity.tsx",
+      "packages/storefront/src/components/common/customer-avatar.tsx",
+      "packages/storefront/src/components/common/customer-orders-status.tsx",
+      "packages/storefront/src/components/common/desktop-account-navigation.tsx",
+      "packages/storefront/src/components/common/support-qr-save.spec.tsx",
+      "packages/storefront/src/components/common/support-qr-save.tsx",
+      "packages/storefront/src/desktop-catalog-transition.spec.tsx",
+      "packages/storefront/src/entry-public-server.tsx",
+      "packages/storefront/src/fixed-bottom-bars.spec.ts",
+      "packages/storefront/src/fixed-bottom-layout.spec.ts",
+      "packages/storefront/src/fixed-bottom-viewport.ts",
+      "packages/storefront/src/home-hero-carousel.spec.tsx",
+      "packages/storefront/src/homepage-spacing.spec.ts",
+      "packages/storefront/src/hooks/customer-query-ownership.spec.tsx",
+      "packages/storefront/src/hooks/useStorefrontAppState.ts",
+      "packages/storefront/src/hooks/useStorefrontBootstrap.ts",
+      "packages/storefront/src/hooks/useStorefrontCartActions.ts",
+      "packages/storefront/src/hooks/useStorefrontCustomerData.spec.ts",
+      "packages/storefront/src/hooks/useStorefrontCustomerData.ts",
+      "packages/storefront/src/hooks/useStorefrontCustomerRecovery.spec.tsx",
+      "packages/storefront/src/hooks/useStorefrontMerchandising.ts",
+      "packages/storefront/src/hooks/useStorefrontPublicData.spec.tsx",
+      "packages/storefront/src/hooks/useStorefrontPublicData.ts",
+      "packages/storefront/src/main.tsx",
+      "packages/storefront/src/order-pages.spec.tsx",
+      "packages/storefront/src/order-pages.tsx",
+      "packages/storefront/src/page-readiness.spec.tsx",
+      "packages/storefront/src/page-readiness.tsx",
+      "packages/storefront/src/pages/account-page.tsx",
+      "packages/storefront/src/pages/ai-image-studio-page.tsx",
+      "packages/storefront/src/pages/desktop-account-page.tsx",
+      "packages/storefront/src/pages/desktop-catalog-page.tsx",
+      "packages/storefront/src/pages/guide-page.tsx",
+      "packages/storefront/src/pages/home-page.tsx",
+      "packages/storefront/src/pages/notifications-page.tsx",
+      "packages/storefront/src/pages/referral-page.tsx",
+      "packages/storefront/src/pages/support-page.tsx",
+      "packages/storefront/src/payment-balance-completion.spec.tsx",
+      "packages/storefront/src/payment-pages.tsx",
+      "packages/storefront/src/payment-readiness.spec.ts",
+      "packages/storefront/src/payment-readiness.ts",
+      "packages/storefront/src/public-page-bootstrap.ts",
+      "packages/storefront/src/public-snapshot.spec.tsx",
+      "packages/storefront/src/public-snapshot.tsx",
+      "packages/storefront/src/referral-page.spec.tsx",
+      "packages/storefront/src/responsive-image.spec.ts",
+      "packages/storefront/src/route-pages/account-route-pages.tsx",
+      "packages/storefront/src/route-pages/catalog-route-pages.tsx",
+      "packages/storefront/src/route-pages/category-route-page.tsx",
+      "packages/storefront/src/route-pages/content-route-pages.tsx",
+      "packages/storefront/src/route-pages/legal-route-page.tsx",
+      "packages/storefront/src/route-pages/shared.tsx",
+      "packages/storefront/src/router.tsx",
+      "packages/storefront/src/safe-image.spec.tsx",
+      "packages/storefront/src/safe-image.tsx",
+      "packages/storefront/src/skin-system.spec.ts",
+      "packages/storefront/src/storefront-boot-data.spec.ts",
+      "packages/storefront/src/storefront-boot-data.ts",
+      "packages/storefront/src/storefront-page-data.ts",
+      "packages/storefront/src/storefront-page-frame.tsx",
+      "packages/storefront/src/storefront-performance.spec.ts",
+      "packages/storefront/src/storefront-performance.ts",
+      "packages/storefront/src/storefront-ui/order-ui.tsx",
+      "packages/storefront/src/styles.css",
+      "packages/storefront/src/styles/customer-avatar.css",
+      "packages/storefront/src/styles/desktop-home.css",
+      "packages/storefront/src/styles/desktop-layout.css",
+      "packages/storefront/src/styles/desktop-pages.css",
+      "packages/storefront/src/styles/experience-foundations.css",
+      "packages/storefront/src/styles/hero-mobile-overlay.css",
+      "packages/storefront/src/styles/home-layout-base.css",
+      "packages/storefront/src/styles/home-showcase.css",
+      "packages/storefront/src/styles/image-studio-components.css",
+      "packages/storefront/src/styles/image-studio-desktop.css",
+      "packages/storefront/src/styles/image-studio-layout.css",
+      "packages/storefront/src/styles/modals-and-support.css",
+      "packages/storefront/src/styles/referral.css",
+      "packages/storefront/src/styles/skeletons.css",
+      "packages/storefront/src/styles/visual-presets.css",
+      "packages/storefront/src/types.ts"
+    ]
+  },
+  "checks": [
+    "backend:admin-ui-plugin",
+    "backend:asset-server-plugin",
+    "backend:catalog-management-plugin",
+    "backend:cli",
+    "backend:commerce-fulfillment-plugin",
+    "backend:content-translation-plugin",
+    "backend:core",
+    "backend:create",
+    "backend:dashboard",
+    "backend:dev-server",
+    "backend:email-plugin",
+    "backend:graphiql-plugin",
+    "backend:harden-plugin",
+    "backend:icloud-relay-plugin",
+    "backend:image-generation-plugin",
+    "backend:job-queue-plugin",
+    "backend:next-admin-plugin",
+    "backend:operations-dashboard-plugin",
+    "backend:store-domain-plugin",
+    "backend:store-management-plugin",
+    "backend:storefront-cart-plugin",
+    "backend:storefront-catalog-plugin",
+    "backend:storefront-content-plugin",
+    "backend:storefront-review-plugin",
+    "backend:telemetry-plugin",
+    "backend:testing",
+    "backend:two-factor-dashboard-plugin",
+    "backend:ui-devkit",
+    "frontend:next-admin",
+    "frontend:storefront",
+    "codegen",
+    "dashboard"
+  ],
+  "jobs": {
+    "backend:admin-ui-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:asset-server-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      },
+      {
+        "id": 115006997681,
+        "name": "e2e (mysql) (22.x)"
+      }
+    ],
+    "backend:catalog-management-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:cli": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      },
+      {
+        "id": 115006997681,
+        "name": "e2e (mysql) (22.x)"
+      }
+    ],
+    "backend:commerce-fulfillment-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:content-translation-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:core": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      },
+      {
+        "id": 115006997681,
+        "name": "e2e (mysql) (22.x)"
+      }
+    ],
+    "backend:create": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:dashboard": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:dev-server": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:email-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:graphiql-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      },
+      {
+        "id": 115006997681,
+        "name": "e2e (mysql) (22.x)"
+      }
+    ],
+    "backend:harden-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:icloud-relay-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:image-generation-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:job-queue-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      },
+      {
+        "id": 115006997681,
+        "name": "e2e (mysql) (22.x)"
+      }
+    ],
+    "backend:next-admin-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:operations-dashboard-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:store-domain-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:store-management-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:storefront-cart-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      },
+      {
+        "id": 115006997681,
+        "name": "e2e (mysql) (22.x)"
+      }
+    ],
+    "backend:storefront-catalog-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:storefront-content-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:storefront-review-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:telemetry-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:testing": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:two-factor-dashboard-plugin": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "backend:ui-devkit": [
+      {
+        "id": 115005077325,
+        "name": "build affected packages"
+      },
+      {
+        "id": 115006997906,
+        "name": "affected unit tests (22.x)"
+      }
+    ],
+    "frontend:next-admin": [
+      {
+        "id": 115005077353,
+        "name": "frontend (next-admin)"
+      },
+      {
+        "id": 115005077238,
+        "name": "frontend (storefront)"
+      }
+    ],
+    "frontend:storefront": [
+      {
+        "id": 115005077353,
+        "name": "frontend (next-admin)"
+      },
+      {
+        "id": 115005077238,
+        "name": "frontend (storefront)"
+      }
+    ],
+    "codegen": [
+      {
+        "id": 115005077435,
+        "name": "codegen / codegen"
+      }
+    ],
+    "dashboard": [
+      {
+        "id": 115005077179,
+        "name": "dashboard i18n sync"
+      },
+      {
+        "id": 115005077277,
+        "name": "dashboard Storybook quality gate"
+      },
+      {
+        "id": 115005077475,
+        "name": "dashboard e2e (1)"
+      },
+      {
+        "id": 115005077473,
+        "name": "dashboard e2e (2)"
+      },
+      {
+        "id": 115005077476,
+        "name": "dashboard e2e (3)"
+      },
+      {
+        "id": 115005077485,
+        "name": "dashboard e2e (4)"
+      }
+    ]
+  },
+  "provenance": {
+    "evidenceKind": "partial-native",
+    "sourceRunConclusion": "failure",
+    "runAttempt": 1,
+    "scopeJobId": 115004942532,
+    "scopeLogSha256": "6d3e8dbbde674bac875eeda620e023e6c8deb4c142aaad0522afd5bcefef8545",
+    "baseSha": "e754de52be04d8c391acc5ee0e5376003bb83f6f",
+    "sourceTree": "210b65b550eb543a6cf7dc99046a8542842ff425"
+  },
+  "sourceAnchor": false
+}

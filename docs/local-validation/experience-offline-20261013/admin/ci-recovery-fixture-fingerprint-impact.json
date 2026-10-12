@@ -1,0 +1,561 @@
+{
+  "at": "2026-10-12T21:10:22.979Z",
+  "sourceSha": "b8d45cc6cf28f025bb9a3e91028c346614aeeada",
+  "sourceJobId": 115004942532,
+  "sourcePlanScope": {
+    "packages": [
+      "admin-ui-plugin",
+      "asset-server-plugin",
+      "catalog-management-plugin",
+      "cli",
+      "commerce-fulfillment-plugin",
+      "content-translation-plugin",
+      "core",
+      "create",
+      "dashboard",
+      "dev-server",
+      "email-plugin",
+      "graphiql-plugin",
+      "harden-plugin",
+      "icloud-relay-plugin",
+      "image-generation-plugin",
+      "job-queue-plugin",
+      "next-admin-plugin",
+      "operations-dashboard-plugin",
+      "store-domain-plugin",
+      "store-management-plugin",
+      "storefront-cart-plugin",
+      "storefront-catalog-plugin",
+      "storefront-content-plugin",
+      "storefront-review-plugin",
+      "telemetry-plugin",
+      "testing",
+      "two-factor-dashboard-plugin",
+      "ui-devkit"
+    ],
+    "frontends": [
+      "next-admin",
+      "storefront"
+    ],
+    "lintFiles": 178,
+    "full": false
+  },
+  "fixtureOnlyWorkingInput": "packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts",
+  "mismatches": [
+    {
+      "id": "backend:catalog-management-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:commerce-fulfillment-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:content-translation-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:dev-server",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:image-generation-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:next-admin-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:store-management-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:storefront-catalog-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "backend:storefront-content-plugin",
+      "kind": "backend",
+      "requiredJobs": [
+        "build",
+        "unit-tests"
+      ]
+    },
+    {
+      "id": "frontend:next-admin",
+      "kind": "frontend",
+      "requiredJobs": [
+        "frontend"
+      ]
+    },
+    {
+      "id": "publishing",
+      "kind": "publishing",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/e2e/offline-payment.e2e-spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/e2e/order-processing-scale/order-processing-scale.e2e-spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/e2e/order-processing-scale/tsconfig.json",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/e2e/tsconfig.json",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/e2e/tsconfig.offline-payment.json",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/checkout-resources.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/commerce-fulfillment.plugin.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/commerce-order-process.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/digital-delivery.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/digital-file.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/digital-receipt.service.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/digital-receipt.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/offline-manual-payment.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/offline-payment.resolver.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/offline-payment.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing-projection.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing-projection.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing-schema.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing-summary.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing-summary.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing.service.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/commerce-fulfillment-plugin/src/order-processing.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/components/AdminPageWorkspace.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/components/OrderNotifications.spec.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/graphql/management.graphql.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/graphql/order-operations.graphql.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/hooks/use-admin-query.spec.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/hooks/use-admin-query.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/hooks/use-admin-read-resource.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/layouts/AppShell.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/layouts/TabbedOutlet.spec.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/layouts/TabbedOutlet.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.spec.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Sales/OrderOperationsBlock.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Sales/sales-utils.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.spec.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Settings/PaymentShippingManager.spec.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/pages/Settings/PaymentShippingManager.tsx",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/runtime/admin-query-runtime.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/runtime/admin-query-runtime.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/runtime/admin-resource-events.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/runtime/admin-resource-events.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/utils/admin-order-events.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/utils/admin-order-events.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/next-admin/src/utils/configurable-operation-localization.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/index.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/merchant-initial-password.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/offline-payment-proof.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/offline-payment-proof.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/performance/storefront-public-cache.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/promotion/offline-coupon-receipt.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/promotion/store-coupon-lifecycle.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/referral/referral-today-metrics.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/referral/referral.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/storefront-lcp-preload.controller.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/storefront-lcp-preload.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/storefront-lcp-preload.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/storefront-public-page.service.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    },
+    {
+      "id": "quality:packages/store-management-plugin/src/storefront-public-page.spec.ts",
+      "kind": "quality",
+      "requiredJobs": [
+        "quality-gates"
+      ]
+    }
+  ],
+  "exactMatches": 140,
+  "total": 212
+}
