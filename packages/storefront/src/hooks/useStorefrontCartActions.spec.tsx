@@ -11,6 +11,8 @@ import { useStorefrontCartActions } from './useStorefrontCartActions';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 type Options = Parameters<typeof useStorefrontCartActions>[0];
+type CartCommand = Parameters<CartController['repository']['apply']>[0];
+type CartCommandResult = Awaited<ReturnType<CartController['execute']>>;
 
 describe('storefront cart action boundaries', () => {
     let root: ReturnType<typeof createRoot>;
@@ -835,5 +837,197 @@ describe('storefront cart action boundaries', () => {
         const message = value.formatCartActionError(new ShopApiError('INSUFFICIENT_STOCK_ERROR', 'Stock'));
         expect(message).toContain(isZh ? '库存' : 'stock');
         expect(message).not.toContain(isZh ? '结果待确认' : 'unconfirmed');
+    });
+
+    it.each(['queued', 'saving'] as const)(
+        'reads the confirmed total after a real %s shipping command without recovery or replay',
+        async phase => {
+            controller = new CartController();
+            options.cartController = controller;
+            const order = { id: 'order-a', currencyCode: 'MYR', customer: { id: 'customer-a' } } as Order;
+            let latest = { ...cart, revision: 80, checkoutOrder: order };
+            controller.repository.accept(latest);
+            let complete!: (result: CartCommandResult) => void;
+            let sent!: CartCommand;
+            const apply = vi.fn((command: CartCommand) => {
+                sent = command;
+                return new Promise<CartCommandResult>(resolve => {
+                    complete = resolve;
+                });
+            });
+            const read = vi.fn(() => Promise.resolve(latest));
+            const recover = vi.fn();
+            controller.repository.setTransport({ read, apply, recover });
+            const recoverPending = vi.spyOn(controller, 'recoverPending');
+            api.cart.mockImplementation(() => controller.read());
+            render();
+            let write!: Promise<CartCommandResult>;
+            act(() => {
+                write = controller.execute({ order: { shippingMethodId: 'shipping-a' } });
+            });
+            if (phase === 'saving') {
+                await act(async () => {
+                    await vi.waitFor(() => expect(controller.getSnapshot().phase).toBe('saving'));
+                });
+            }
+            expect(controller.getSnapshot().phase).toBe(phase);
+            let refresh!: Promise<StorefrontCart>;
+            act(() => {
+                refresh = value.refreshConfirmedCart();
+                expect(value.refreshConfirmedCart()).toBe(refresh);
+            });
+            await act(async () => {
+                await vi.waitFor(() => expect(apply).toHaveBeenCalledOnce());
+                latest = { ...latest, revision: 81, checkoutOrder: { ...order, totalWithTax: 192000 } };
+                complete({
+                    ...acknowledgement,
+                    commandId: sent.commandId,
+                    appliedRevision: 81,
+                    cart: latest,
+                    session: null,
+                });
+                await write;
+                expect(await refresh).toEqual(latest);
+            });
+            expect(api.cart).toHaveBeenCalledOnce();
+            expect(read).toHaveBeenCalledOnce();
+            expect(apply).toHaveBeenCalledOnce();
+            expect(recover).not.toHaveBeenCalled();
+            expect(recoverPending).not.toHaveBeenCalled();
+            expect(options.setCart).toHaveBeenLastCalledWith(latest);
+            expect(options.setCheckoutOrder).toHaveBeenLastCalledWith(latest.checkoutOrder);
+            expect(options.setCartError).toHaveBeenLastCalledWith(null);
+            expect(options.navigate).not.toHaveBeenCalled();
+            controller.reset();
+        },
+    );
+
+    it('accepts a newer confirmed revision instead of treating a completed shipping update as failure', async () => {
+        const order = { id: 'order-a', currencyCode: 'MYR', customer: { id: 'customer-a' } } as Order;
+        const readCart = { ...cart, revision: 80, checkoutOrder: order };
+        const latest = { ...readCart, revision: 81, checkoutOrder: { ...order, totalWithTax: 192000 } };
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            confirmed: readCart,
+        });
+        api.cart.mockImplementation(() => {
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                confirmed: latest,
+            });
+            return Promise.resolve(readCart);
+        });
+        render();
+        await act(async () => {
+            expect(await value.refreshConfirmedCart()).toEqual(latest);
+        });
+        expect(options.setCheckoutOrder).toHaveBeenLastCalledWith(latest.checkoutOrder);
+        expect(options.setCartError).toHaveBeenLastCalledWith(null);
+        expect(recoverPendingSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(['unknown', 'recovering', 'checkout-starting'] as const)(
+        'does not disguise or clear a real pending result during a confirmed read: %s',
+        async phase => {
+            const error = new ShopApiError('UNKNOWN_RESULT', 'Original pending result');
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                error,
+                phase: phase === 'checkout-starting' ? 'idle' : phase,
+            });
+            if (phase === 'checkout-starting') options.checkoutStartingRef = { current: true };
+            render();
+            await expect(value.refreshConfirmedCart()).rejects.toBe(error);
+            expect(api.cart).not.toHaveBeenCalled();
+            expect(recoverPendingSpy).not.toHaveBeenCalled();
+            expect(options.setCartError).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['api', 'customer', 'controller'] as const)(
+        'ignores an acknowledged-write read that completes after the %s owner changes',
+        async changed => {
+            let finish!: (result: StorefrontCart) => void;
+            api.cart.mockReturnValue(
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+            );
+            render();
+            const request = value.refreshConfirmedCart();
+            if (changed === 'api') options.api = { ...api } as unknown as ShopApi;
+            if (changed === 'customer') options.customer = { id: 'customer-b' } as ActiveCustomer;
+            if (changed === 'controller') options.cartController = new CartController();
+            render();
+            await act(async () => {
+                finish(cart);
+                await expect(request).rejects.toThrow('Cart session changed');
+            });
+            expect(options.setCart).not.toHaveBeenCalled();
+            expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+            expect(options.setCartError).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['cart', 'order', 'currency'] as const)(
+        'ignores a confirmed-read response after its %s scope changes',
+        async changed => {
+            const order = { id: 'order-a', currencyCode: 'MYR', customer: { id: 'customer-a' } } as Order;
+            const initial = { ...cart, checkoutOrder: order };
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                confirmed: initial,
+            });
+            let finish!: (result: StorefrontCart) => void;
+            api.cart.mockReturnValue(
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+            );
+            render();
+            const request = value.refreshConfirmedCart();
+            const latest = {
+                ...initial,
+                id: changed === 'cart' ? 'cart-b' : initial.id,
+                checkoutOrder: {
+                    ...order,
+                    id: changed === 'order' ? 'order-b' : order.id,
+                    currencyCode: changed === 'currency' ? 'CNY' : order.currencyCode,
+                },
+            };
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                confirmed: latest,
+            });
+            await act(async () => {
+                finish(initial);
+                await expect(request).rejects.toThrow('Cart session changed');
+            });
+            expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+            expect(options.setCartError).not.toHaveBeenCalled();
+        },
+    );
+
+    it('keeps a genuine confirmed-total read failure visible without recovering or replaying writes', async () => {
+        const failure = new Error('Network unavailable');
+        api.cart.mockRejectedValue(failure);
+        render();
+        await act(async () => {
+            await expect(value.refreshConfirmedCart()).rejects.toBe(failure);
+        });
+        expect(options.setCart).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+        expect(options.setCartError).toHaveBeenCalledWith(expect.stringContaining('网络'));
+        expect(recoverPendingSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not let a stale confirmed-refresh callback borrow a new API owner', async () => {
+        render();
+        const oldRefresh = value.refreshConfirmedCart;
+        options.api = { ...api } as unknown as ShopApi;
+        render();
+        await expect(oldRefresh()).rejects.toThrow('Cart session changed');
+        expect(api.cart).not.toHaveBeenCalled();
+        expect(options.setCartError).not.toHaveBeenCalled();
     });
 });

@@ -57,6 +57,7 @@ export function useStorefrontCartActions({
     setAddingVariantId,
 }: StorefrontCartActionOptions) {
     const recoveryRequestRef = useRef<Promise<StorefrontCart> | null>(null);
+    const confirmedRefreshRef = useRef<Promise<StorefrontCart> | null>(null);
     const cartState = useSyncExternalStore(cartController.subscribe, cartController.getSnapshot);
     const actionOwnerRef = useRef({ api, cartController, customerId: customer?.id });
     const owner = actionOwnerRef.current;
@@ -68,6 +69,7 @@ export function useStorefrontCartActions({
     if (owner.api !== api || owner.cartController !== cartController || owner.customerId !== customer?.id) {
         actionOwnerRef.current = { api, cartController, customerId: customer?.id };
         recoveryRequestRef.current = null;
+        confirmedRefreshRef.current = null;
     }
     const mountedRef = useRef(false);
     useEffect(() => {
@@ -268,6 +270,80 @@ export function useStorefrontCartActions({
         ],
     );
 
+    const refreshConfirmedCart = useCallback((): Promise<StorefrontCart> => {
+        const requestOwner = actionOwnerRef.current;
+        if (
+            requestOwner.api !== api ||
+            requestOwner.cartController !== cartController ||
+            requestOwner.customerId !== customer?.id
+        )
+            return Promise.reject(new Error('Cart session changed.'));
+        if (confirmedRefreshRef.current) return confirmedRefreshRef.current;
+        const before = cartController.getSnapshot();
+        if (checkoutStartingRef?.current || before.phase === 'unknown' || before.phase === 'recovering')
+            return Promise.reject(
+                before.error ?? new ShopApiError('CART_BUSY', 'Cart confirmation is already in progress.'),
+            );
+        const expected = before.confirmed ?? cart;
+        const isCurrent = () => {
+            if (!mountedRef.current || actionOwnerRef.current !== requestOwner) return false;
+            const current = cartController.getSnapshot().confirmed;
+            return (
+                !current ||
+                !expected ||
+                (current.id === expected.id &&
+                    current.checkoutOrder?.id === expected.checkoutOrder?.id &&
+                    current.checkoutOrder?.currencyCode === expected.checkoutOrder?.currencyCode)
+            );
+        };
+        const request = (async () => {
+            // This is a read after an acknowledged write, not recovery. The controller's
+            // bounded read drains queued shipping changes before reading their latest total.
+            const fetched = await api.cart();
+            if (!isCurrent()) throw new Error('Cart session changed.');
+            const state = cartController.getSnapshot();
+            if (checkoutStartingRef?.current || state.phase === 'unknown' || state.phase === 'recovering')
+                throw state.error ?? new ShopApiError('CART_BUSY', 'Cart confirmation is still pending.');
+            const latest =
+                state.confirmed?.id === fetched.id && state.confirmed.revision >= fetched.revision
+                    ? state.confirmed
+                    : fetched;
+            if (
+                (expected &&
+                    (latest.id !== expected.id ||
+                        latest.checkoutOrder?.id !== expected.checkoutOrder?.id ||
+                        latest.checkoutOrder?.currencyCode !== expected.checkoutOrder?.currencyCode)) ||
+                (requestOwner.customerId &&
+                    latest.checkoutOrder &&
+                    latest.checkoutOrder.customer?.id !== requestOwner.customerId)
+            )
+                throw new Error('Cart session changed.');
+            setCart(latest);
+            setCheckoutOrder(latest.checkoutOrder);
+            setCartError(null);
+            return latest;
+        })()
+            .catch(error => {
+                if (isCurrent()) setCartError(cartErrorMessage(error));
+                throw error;
+            })
+            .finally(() => {
+                if (confirmedRefreshRef.current === request) confirmedRefreshRef.current = null;
+            });
+        confirmedRefreshRef.current = request;
+        return request;
+    }, [
+        api,
+        cart,
+        cartController,
+        cartErrorMessage,
+        checkoutStartingRef,
+        customer?.id,
+        setCart,
+        setCartError,
+        setCheckoutOrder,
+    ]);
+
     const mutateCart = useCallback(
         async (mutation: (revision: number) => Promise<StorefrontCart>) => {
             if (cartActionsBlocked()) return null;
@@ -439,6 +515,7 @@ export function useStorefrontCartActions({
 
     return {
         refreshCart,
+        refreshConfirmedCart,
         cancelPendingCartCommand: () => refreshCart(true),
         cartRecoveryPending,
         cartActionsBlocked,

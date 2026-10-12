@@ -635,6 +635,7 @@ export function CheckoutPage({
                               : `${physicalLines.length} ${physicalLines.length === 1 ? 'product' : 'products'}`
                     }
                     lines={physicalLines}
+                    currencyCode={order.currencyCode}
                     locale={locale}
                     language={language}
                     directPurchase={directPurchase}
@@ -664,6 +665,7 @@ export function CheckoutPage({
                               : `${digitalLines.length} ${digitalLines.length === 1 ? 'product' : 'products'}`
                     }
                     lines={digitalLines}
+                    currencyCode={order.currencyCode}
                     locale={locale}
                     language={language}
                     directPurchase={directPurchase}
@@ -1200,6 +1202,7 @@ function CheckoutItemsGroup({
     title,
     hint,
     lines,
+    currencyCode,
     locale,
     language,
     directPurchase = false,
@@ -1210,6 +1213,7 @@ function CheckoutItemsGroup({
     title: string;
     hint: string;
     lines: Order['lines'];
+    currencyCode: Order['currencyCode'];
     locale: string;
     language: StorefrontLanguage;
     directPurchase?: boolean;
@@ -1242,9 +1246,7 @@ function CheckoutItemsGroup({
                             <em>{checkoutLinePolicyText(line, isZh)}</em>
                         </div>
                         <span className={checkoutPageClassName('checkout-line-meta')}>
-                            <b>
-                                {formatMoney(line.linePriceWithTax, line.productVariant.currencyCode, locale)}
-                            </b>
+                            <b>{formatMoney(line.linePriceWithTax, currencyCode, locale)}</b>
                             {directPurchase ? (
                                 <QuantityControl
                                     value={line.quantity}
