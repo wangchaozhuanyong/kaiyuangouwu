@@ -91,6 +91,24 @@
     --skin-card-hover-shadow: 0 6px 18px rgba(37, 41, 45, 0.08);
     --skin-hero-shadow: 0 6px 24px rgba(37, 41, 45, 0.06);
     --skin-header-shadow: 0 2px 10px rgba(37, 41, 45, 0.04);
+    /* ACCOUNT_NAVY_CHAMPAGNE_20261012: approved shared identity surface,
+       independent of merchant skin settings and cached --skin-account-* roles. */
+    --account-card-surface: #14253d;
+    --account-card-ink: #ffffff;
+    --account-card-muted: #bcc8d8;
+    --account-card-emphasis: #e7c68d;
+    --account-card-divider: #384965;
+    --account-card-hover: #1d324e;
+    --account-card-focus: #e7c68d;
+    --account-card-avatar-surface: #ffffff;
+    --account-card-avatar-ink: #14253d;
+    --account-card-action-surface: #e7c68d;
+    --account-card-action-ink: #14253d;
+    --account-card-action-hover: #f0d5aa;
+    --account-card-action-pressed: #d6b575;
+    --account-card-action-hover-ink: #14253d;
+    --account-card-secondary-border: #e7c68d;
+    --account-card-secondary-hover-ink: #ffffff;
     /* Approved illustrated assistance identity, shared by support/coupon promotion
        slots across stores and skins; ordinary directory entries keep skin colors. */
     --service-promo-support-surface:
