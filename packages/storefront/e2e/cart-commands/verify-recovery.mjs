@@ -34,6 +34,10 @@ try {
             'acknowledged-read-failure',
             'direct-purchase',
             'buy-now-recovery',
+            'buy-now-auto-recovery',
+            'buy-now-timeout-recovery',
+            'buy-now-restored-recovery',
+            'login-buy-now-recovery',
             'checkout-recovery',
             'payment-recovery',
             'slow-payment-methods',
@@ -45,12 +49,19 @@ try {
                 locale: isZh ? 'zh-CN' : 'en-MY',
             });
             const fixture = structuredClone(fixtureData(preset));
+            const fixtureCustomer = fixture.activeCustomer;
+            if (scenario === 'login-buy-now-recovery') fixture.activeCustomer = null;
             const cart = fixture.storefrontCart;
             const errors = [];
             const commands = [];
             const recoveries = [];
             const receipts = new Map();
-            let recoverFails = scenario !== 'direct-purchase';
+            let recoverFails = ![
+                'direct-purchase',
+                'buy-now-auto-recovery',
+                'buy-now-timeout-recovery',
+                'login-buy-now-recovery',
+            ].includes(scenario);
             let cartReadFails = false;
             let chargeRequests = 0;
             let cartReads = 0;
@@ -58,6 +69,7 @@ try {
             let paymentMethodsResolved = false;
             let paymentMethodsFail = scenario === 'payment-methods-retry';
             let staleReadOnce = false;
+            let transientReadFailures = 0;
             const timings = {};
             const methods = [
                 {
@@ -119,6 +131,20 @@ try {
                     return route.fulfill({ status: 404, json: {} });
                 if (url.pathname === '/shop-api') {
                     const { query = '', variables = {} } = route.request().postDataJSON() || {};
+                    if (query.includes('mutation StorefrontLogin')) {
+                        fixture.activeCustomer = fixtureCustomer;
+                        return route.fulfill({
+                            json: {
+                                data: {
+                                    login: {
+                                        __typename: 'CurrentUser',
+                                        id: 'local-user',
+                                        identifier: 'qa@example.invalid',
+                                    },
+                                },
+                            },
+                        });
+                    }
                     if (
                         query.includes('addPaymentToOrder') ||
                         query.includes('createStorefrontUsdtCheckoutQuote')
@@ -205,10 +231,18 @@ try {
                         if (
                             (initial && scenario === 'acknowledged-read-failure') ||
                             (input.buyNow && scenario === 'buy-now-recovery') ||
+                            (input.buyNow && scenario === 'buy-now-restored-recovery') ||
                             (input.beginCheckout && scenario === 'checkout-recovery') ||
                             (input.preparePayment && scenario === 'payment-recovery')
                         )
                             cartReadFails = true;
+                        if (
+                            input.buyNow &&
+                            ['buy-now-auto-recovery', 'login-buy-now-recovery'].includes(scenario)
+                        )
+                            transientReadFailures = 1;
+                        if (input.buyNow && scenario === 'buy-now-timeout-recovery' && initial)
+                            await new Promise(done => setTimeout(done, 21_000));
                         if (initial && (scenario === 'lost-response' || scenario === 'cancel-not-found'))
                             return fail(route);
                         return route.fulfill({
@@ -241,6 +275,10 @@ try {
                     }
                     if (query.includes('query StorefrontCart')) {
                         cartReads++;
+                        if (transientReadFailures > 0) {
+                            transientReadFailures--;
+                            return fail(route);
+                        }
                         if (staleReadOnce) {
                             staleReadOnce = false;
                             return route.fulfill({
@@ -270,23 +308,36 @@ try {
             if (
                 scenario === 'direct-purchase' ||
                 scenario === 'buy-now-recovery' ||
+                scenario === 'buy-now-auto-recovery' ||
+                scenario === 'buy-now-timeout-recovery' ||
+                scenario === 'buy-now-restored-recovery' ||
+                scenario === 'login-buy-now-recovery' ||
                 scenario === 'slow-payment-methods' ||
                 scenario === 'payment-recovery' ||
                 scenario === 'payment-methods-retry'
             ) {
-                await page.goto(`${origin}/product?id=product-1`);
+                await page.goto(`${origin}/${language}/product?id=product-1`);
                 await page.getByRole('button', { name: isZh ? '立即购买' : 'Buy now', exact: true }).click();
-                if (scenario === 'buy-now-recovery') {
-                    const review = page.getByRole('button', { name: reviewName, exact: true });
+                if (scenario === 'login-buy-now-recovery') {
+                    await expect(page).toHaveURL(/\/login|[?&]auth=login/);
+                    await page.locator('input[type="email"]').fill('qa@example.invalid');
+                    await page.locator('input[type="password"]').fill('Local-fixture-only-123');
+                    await page
+                        .getByRole('button', { name: isZh ? '登录账户' : 'Sign in', exact: true })
+                        .click();
+                }
+                if (['buy-now-recovery', 'buy-now-restored-recovery'].includes(scenario)) {
+                    const review = page.getByRole('button', {
+                        name: isZh ? '继续确认购买' : 'Continue purchase',
+                        exact: true,
+                    });
                     await expect(review).toBeEnabled({ timeout: 15000 });
                     expect(commands.filter(command => command.buyNow)).toHaveLength(1);
-                    await review.click();
-                    await expect(page).toHaveURL(/\/cart/);
-                    await expect(page.locator('.cart-recovery-panel')).toBeVisible();
                     cartReadFails = false;
-                    await review.click();
+                    if (scenario === 'buy-now-restored-recovery') await page.reload();
+                    else await review.click();
                 }
-                await expect(page).toHaveURL(/\/purchase/);
+                await expect(page).toHaveURL(/\/purchase/, { timeout: 30_000 });
                 await expect.poll(() => commands.some(command => command.buyNow)).toBe(true);
                 const submit = page.getByRole('button', {
                     name: isZh ? /确认并支付|提交订单/ : /Confirm and pay|Place order/,
@@ -338,7 +389,7 @@ try {
                 expect(commands.some(command => command.preparePayment)).toBe(true);
                 expect(commands.filter(command => command.preparePayment)).toHaveLength(1);
             } else {
-                await page.goto(`${origin}/cart`);
+                await page.goto(`${origin}/${language}/cart`);
                 await expect(checkout).toBeEnabled({ timeout: 15000 });
                 if (scenario === 'checkout-recovery') await checkout.click();
                 else

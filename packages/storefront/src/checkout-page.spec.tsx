@@ -615,6 +615,33 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
     });
 
+    it('uses the shared payment continuation without a second page navigation', async () => {
+        const { api, props } = mount({ methods: [methods[1]] });
+        const onContinueCheckout = vi.fn().mockReturnValue(true);
+        await flush(() => root.render(createElement(CheckoutPage, { ...props, onContinueCheckout })));
+        await flush(() =>
+            element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        expect(api.preparePayment).toHaveBeenCalledOnce();
+        expect(onContinueCheckout).toHaveBeenCalledOnce();
+        expect(onContinueCheckout).toHaveBeenCalledWith(
+            expect.objectContaining({ order: { ...props.order } }),
+        );
+        expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('keeps checkout open when the shared payment continuation rejects a changed session', async () => {
+        const { api, props } = mount({ methods: [methods[1]] });
+        const onContinueCheckout = vi.fn().mockReturnValue(false);
+        await flush(() => root.render(createElement(CheckoutPage, { ...props, onContinueCheckout })));
+        await flush(() =>
+            element('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        expect(api.preparePayment).toHaveBeenCalledOnce();
+        expect(navigate).not.toHaveBeenCalled();
+        expect(container.textContent).toContain('当前没有可结算的订单');
+    });
+
     it.each(['zh', 'en'] as const)(
         'enters payment immediately while the module and methods take ten seconds: %s',
         async language => {

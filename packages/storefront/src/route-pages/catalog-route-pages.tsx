@@ -165,6 +165,7 @@ export function ProductRoutePage() {
                 logoUrl: runtime.logoUrl,
                 supportContent: runtime.supportContent,
                 initialVariantId: runtime.route.variantId,
+                initialQuantity: runtime.route.quantity,
                 flashSaleItems: runtime.activeFlashSaleItems.filter(
                     (item: { productId: string }) => item.productId === product.id,
                 ),
@@ -172,11 +173,17 @@ export function ProductRoutePage() {
                 customerCoupons: runtime.myCoupons,
                 addingVariantId: runtime.addingVariantId,
                 cartCommandUnknown: runtime.cartCommandUnknown,
+                purchaseResultUnknown:
+                    runtime.cartCommandUnknown && runtime.cartPendingCheckoutIntent === 'buyNow',
+                purchaseRecoveryPending:
+                    runtime.cartRecoveryPending && runtime.cartPendingCheckoutIntent === 'buyNow',
+                purchaseError: runtime.cartError,
                 favorite: runtime.favoriteProductIds.includes(product.id),
                 onAdd: (variant: ProductVariant, quantity: number) =>
                     void runtime.addToCart(variant, quantity),
                 onBuyNow: (variant: ProductVariant, quantity: number) =>
                     void runtime.startDirectPurchase(variant, quantity),
+                onContinuePurchase: () => void runtime.refreshCart().catch(() => undefined),
                 onFavorite: () => runtime.toggleFavoriteProduct(product.id),
                 onNotify: runtime.notify,
             }}

@@ -85,10 +85,11 @@ describe('desktop product purchase controls', () => {
     });
 
     it.each(['zh', 'en'] as const)(
-        'offers cart reconciliation instead of another write while the result is unknown: %s',
+        'continues the existing purchase in place instead of writing or visiting the cart: %s',
         language => {
             const onAdd = vi.fn();
             const onBuyNow = vi.fn();
+            const onContinuePurchase = vi.fn();
             host = document.createElement('div');
             document.body.append(host);
             root = createRoot(host);
@@ -110,10 +111,12 @@ describe('desktop product purchase controls', () => {
                             customerCoupons: [],
                             addingVariantId: null,
                             cartCommandUnknown: true,
+                            purchaseResultUnknown: true,
                             initialVariantId: 'sold-out',
                             favorite: false,
                             onAdd,
                             onBuyNow,
+                            onContinuePurchase,
                             onFavorite: vi.fn(),
                             onNotify: vi.fn(),
                         }}
@@ -125,14 +128,64 @@ describe('desktop product purchase controls', () => {
             const actions = host.querySelectorAll<HTMLButtonElement>('.detail-action-bar > button');
             expect(actions[2].disabled).toBe(true);
             expect(actions[3].disabled).toBe(false);
-            expect(actions[3].textContent).toBe(language === 'zh' ? '核对购物车' : 'Review cart');
+            expect(actions[3].textContent).toBe(language === 'zh' ? '继续确认购买' : 'Continue purchase');
             act(() => {
                 actions[2].click();
                 actions[3].click();
             });
             expect(onAdd).not.toHaveBeenCalled();
             expect(onBuyNow).not.toHaveBeenCalled();
-            expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/cart' }));
+            expect(onContinuePurchase).toHaveBeenCalledOnce();
+            expect(navigate).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['zh', 'en'] as const)(
+        'disables the purchase action while recovery is in progress: %s',
+        language => {
+            const onContinuePurchase = vi.fn();
+            host = document.createElement('div');
+            document.body.append(host);
+            root = createRoot(host);
+            act(() =>
+                root.render(
+                    <ProductDetailPageContext.Provider
+                        value={{
+                            api: {} as never,
+                            product,
+                            products: [],
+                            cartQuantity: 1,
+                            market,
+                            locale: market.locale,
+                            language,
+                            storefrontName: 'Store',
+                            logoUrl: null,
+                            flashSaleItems: [],
+                            couponCampaigns: [],
+                            customerCoupons: [],
+                            addingVariantId: null,
+                            cartCommandUnknown: true,
+                            purchaseResultUnknown: true,
+                            purchaseRecoveryPending: true,
+                            favorite: false,
+                            onAdd: vi.fn(),
+                            onBuyNow: vi.fn(),
+                            onContinuePurchase,
+                            onFavorite: vi.fn(),
+                            onNotify: vi.fn(),
+                        }}
+                    >
+                        <ProductDetailPage />
+                    </ProductDetailPageContext.Provider>,
+                ),
+            );
+            const action = host.querySelectorAll<HTMLButtonElement>('.detail-action-bar > button')[3];
+            expect(action.disabled).toBe(true);
+            expect(action.getAttribute('aria-busy')).toBe('true');
+            expect(action.textContent).toBe(language === 'zh' ? '正在确认购买' : 'Checking purchase');
+            act(() => action.click());
+            expect(onContinuePurchase).not.toHaveBeenCalled();
+            expect(navigate).not.toHaveBeenCalled();
         },
     );
 

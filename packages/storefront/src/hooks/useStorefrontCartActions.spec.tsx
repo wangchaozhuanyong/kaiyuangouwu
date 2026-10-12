@@ -247,9 +247,25 @@ describe('storefront cart action boundaries', () => {
         'resumes confirmed %s at %s from the recovered snapshot: zh=%s',
         async (checkoutIntent, destination, isZh) => {
             options.isZh = isZh;
-            const order = { id: 'order-a' } as Order;
-            const latest = { ...cart, revision: 8, checkoutOrder: order };
-            const session = { cart: latest, order, checkout: null };
+            const order = {
+                id: 'order-a',
+                state: checkoutIntent === 'preparePayment' ? 'ArrangingPayment' : 'AddingItems',
+                customer: { id: 'customer-a' },
+            } as Order;
+            const latest = {
+                ...cart,
+                revision: 8,
+                state: checkoutIntent === 'preparePayment' ? ('PAYMENT_PENDING' as const) : ('OPEN' as const),
+                checkoutOrder: order,
+            };
+            const session = {
+                cart: latest,
+                order,
+                checkout:
+                    checkoutIntent === 'preparePayment'
+                        ? { id: 'checkout-a', cartRevision: 8, state: 'PREPARED' as const, completedAt: null }
+                        : null,
+            };
             const recoveredState = {
                 ...controller.getSnapshot(),
                 phase: checkoutIntent === 'preparePayment' ? ('locked' as const) : ('idle' as const),
@@ -368,7 +384,7 @@ describe('storefront cart action boundaries', () => {
     );
 
     it('resumes an already applied checkout when cancellation arrived after its commit', async () => {
-        const order = { id: 'order-a' } as Order;
+        const order = { id: 'order-a', state: 'AddingItems', customer: { id: 'customer-a' } } as Order;
         const latest = { ...cart, checkoutOrder: order };
         const recoveredState = {
             ...controller.getSnapshot(),
@@ -522,11 +538,17 @@ describe('storefront cart action boundaries', () => {
     );
 
     it('publishes the confirmed buy-now session before navigating to its review page', async () => {
-        const order = { id: 'order-a' } as Order;
-        const session = { cart, order, checkout: null };
+        const order = { id: 'order-a', state: 'AddingItems', customer: { id: 'customer-a' } } as Order;
+        const latest = { ...cart, checkoutOrder: order };
+        const session = { cart: latest, order, checkout: null };
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            confirmed: latest,
+            cart: latest,
+        });
         const execute = vi
             .spyOn(controller, 'execute')
-            .mockResolvedValue({ ...acknowledgement, cart, session });
+            .mockResolvedValue({ ...acknowledgement, cart: latest, session });
         render();
         await value.startDirectPurchase(
             {
@@ -537,9 +559,281 @@ describe('storefront cart action boundaries', () => {
         );
         expect(execute).toHaveBeenCalledWith({ buyNow: { productVariantId: 'variant-a', quantity: 3 } });
         expect(options.setCheckoutOrder).toHaveBeenCalledWith(order);
-        expect(options.navigate).toHaveBeenCalledWith({ name: 'purchase' });
+        expect(options.navigate).toHaveBeenCalledWith({ name: 'purchase' }, false);
         expect(vi.mocked(options.setCheckoutOrder).mock.invocationCallOrder[0]).toBeLessThan(
             vi.mocked(options.navigate).mock.invocationCallOrder[0],
         );
+    });
+
+    it('continues a buy-now session restored by the initial cart read exactly once', () => {
+        const order = { id: 'order-a', state: 'AddingItems', customer: { id: 'customer-a' } } as Order;
+        const latest = { ...cart, revision: 8, checkoutOrder: order };
+        const result = { ...acknowledgement, cart: latest, session: { cart: latest, order, checkout: null } };
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            confirmed: latest,
+            cart: latest,
+            lastRecovery: {
+                commandId: result.commandId,
+                status: 'APPLIED',
+                checkoutIntent: 'buyNow',
+                result,
+            },
+        });
+        render();
+        render();
+        expect(options.navigate).toHaveBeenCalledExactlyOnceWith({ name: 'purchase' }, true);
+        expect(recoverPendingSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(['normal-first', 'recovery-first'] as const)(
+        'shares one continuation between automatic recovery and the successful waiter: %s',
+        async completionOrder => {
+            const order = { id: 'order-a', state: 'AddingItems', customer: { id: 'customer-a' } } as Order;
+            const latest = { ...cart, revision: 8, checkoutOrder: order };
+            const result = {
+                ...acknowledgement,
+                cart: latest,
+                session: { cart: latest, order, checkout: null },
+            };
+            let complete!: (value: typeof result) => void;
+            vi.spyOn(controller, 'execute').mockReturnValue(
+                new Promise(resolve => {
+                    complete = resolve;
+                }),
+            );
+            render();
+            let request!: Promise<void>;
+            act(() => {
+                request = value.startDirectPurchase({
+                    id: 'variant-a',
+                    customFields: { fulfillmentType: 'physical' },
+                } as ProductVariant);
+            });
+            const latestState = {
+                ...controller.getSnapshot(),
+                confirmed: latest,
+                cart: latest,
+                lastRecovery: {
+                    commandId: result.commandId,
+                    status: 'APPLIED' as const,
+                    checkoutIntent: 'buyNow' as const,
+                    result,
+                },
+            };
+            vi.mocked(controller.getSnapshot).mockReturnValue(latestState);
+            if (completionOrder === 'recovery-first') render();
+            await act(async () => {
+                complete(result);
+                await request;
+            });
+            render();
+            expect(options.navigate).toHaveBeenCalledOnce();
+            expect(options.navigate).toHaveBeenCalledWith(
+                { name: 'purchase' },
+                completionOrder === 'recovery-first',
+            );
+        },
+    );
+
+    it('does not continue another customer’s restored checkout', () => {
+        const order = { id: 'order-a', state: 'AddingItems', customer: { id: 'customer-b' } } as Order;
+        const latest = { ...cart, revision: 8, checkoutOrder: order };
+        const result = { ...acknowledgement, cart: latest, session: { cart: latest, order, checkout: null } };
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            confirmed: latest,
+            cart: latest,
+            lastRecovery: {
+                commandId: result.commandId,
+                status: 'APPLIED',
+                checkoutIntent: 'buyNow',
+                result,
+            },
+        });
+        render();
+        expect(options.navigate).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+    });
+
+    it('ignores a real controller recovery completed after its API owner changes', async () => {
+        controller = new CartController();
+        controller.repository.accept(cart);
+        options.cartController = controller;
+        const order = { id: 'order-a', state: 'AddingItems', customer: { id: 'customer-a' } } as Order;
+        const latest = { ...cart, revision: 8, checkoutOrder: order };
+        let complete!: (
+            result: typeof acknowledgement & {
+                cart: StorefrontCart;
+                session: { cart: StorefrontCart; order: Order; checkout: null };
+            },
+        ) => void;
+        const recovered = new Promise<
+            typeof acknowledgement & {
+                cart: StorefrontCart;
+                session: { cart: StorefrontCart; order: Order; checkout: null };
+            }
+        >(resolve => {
+            complete = resolve;
+        });
+        const apply = vi.fn().mockRejectedValue(new Error('Response lost'));
+        const recover = vi.fn().mockReturnValue(recovered);
+        controller.repository.setTransport({ read: () => Promise.resolve(cart), apply, recover });
+        render();
+        let request!: Promise<void>;
+        act(() => {
+            request = value.startDirectPurchase({
+                id: 'variant-a',
+                customFields: { fulfillmentType: 'physical' },
+            } as ProductVariant);
+        });
+        await act(async () => {
+            await vi.waitFor(() => expect(controller.getSnapshot().phase).toBe('recovering'));
+        });
+        const commandId = controller.getSnapshot().pendingCommandId;
+        expect(commandId).toBeTruthy();
+        options.api = { ...api } as unknown as ShopApi;
+        render();
+        await act(async () => {
+            complete({
+                ...acknowledgement,
+                commandId: commandId ?? '',
+                cart: latest,
+                session: { cart: latest, order, checkout: null },
+            });
+            await request;
+        });
+        expect(controller.getSnapshot().lastRecovery?.checkoutIntent).toBe('buyNow');
+        expect(options.navigate).not.toHaveBeenCalled();
+        expect(options.setCheckoutOrder).not.toHaveBeenCalled();
+        expect(apply).toHaveBeenCalledOnce();
+        expect(recover).toHaveBeenCalledOnce();
+        controller.reset();
+    });
+
+    it.each([
+        ['beginCheckout', 'checkout', 'normal-first'],
+        ['beginCheckout', 'checkout', 'recovery-first'],
+        ['preparePayment', 'payment', 'normal-first'],
+        ['preparePayment', 'payment', 'recovery-first'],
+    ] as const)(
+        'shares normal and recovered %s navigation: %s %s',
+        (intent, destination, completionOrder) => {
+            const paying = intent === 'preparePayment';
+            const order = {
+                id: 'order-a',
+                state: paying ? 'ArrangingPayment' : 'AddingItems',
+                customer: { id: 'customer-a' },
+            } as Order;
+            const latest = {
+                ...cart,
+                revision: 8,
+                state: paying ? ('PAYMENT_PENDING' as const) : ('OPEN' as const),
+                checkoutOrder: order,
+            };
+            const session = {
+                cart: latest,
+                order,
+                checkout: paying
+                    ? { id: 'checkout-a', state: 'PREPARED' as const, cartRevision: 8, completedAt: null }
+                    : null,
+            };
+            const result = { ...acknowledgement, cart: latest, session };
+            render();
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: paying ? 'locked' : 'idle',
+                confirmed: latest,
+                cart: latest,
+                lastRecovery: {
+                    commandId: result.commandId,
+                    status: 'APPLIED',
+                    checkoutIntent: intent,
+                    result,
+                },
+            });
+            if (completionOrder === 'recovery-first') render();
+            act(() => {
+                expect(value.continueCheckoutSession(session, intent)).toBe(true);
+            });
+            render();
+            expect(options.navigate).toHaveBeenCalledExactlyOnceWith({ name: destination }, true);
+        },
+    );
+
+    it('preserves the actual rejection after a manual receipt recovery', async () => {
+        vi.mocked(controller.getSnapshot).mockReturnValue({
+            ...controller.getSnapshot(),
+            phase: 'unknown',
+            editingBlocked: true,
+        });
+        recoverPendingSpy.mockImplementation(() => {
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: 'idle',
+                editingBlocked: false,
+                lastRecovery: {
+                    commandId: acknowledgement.commandId,
+                    status: 'REJECTED',
+                    checkoutIntent: 'buyNow',
+                    result: {
+                        ...acknowledgement,
+                        status: 'REJECTED',
+                        errorCode: 'INSUFFICIENT_STOCK_ERROR',
+                        message: 'Insufficient stock',
+                        cart,
+                        session: null,
+                    },
+                },
+            });
+            return Promise.resolve(true);
+        });
+        render();
+        await act(async () => {
+            await value.refreshCart();
+        });
+        expect(options.navigate).not.toHaveBeenCalled();
+        expect(options.setCartError).toHaveBeenLastCalledWith(expect.stringContaining('库存'));
+    });
+
+    it.each([
+        [true, false],
+        [true, true],
+        [false, false],
+        [false, true],
+    ])(
+        'formats controller buy-now errors in the purchase context: zh=%s acknowledged=%s',
+        (isZh, acknowledged) => {
+            options.isZh = isZh;
+            const error = new Error('The receipt could not be loaded');
+            vi.mocked(controller.getSnapshot).mockReturnValue({
+                ...controller.getSnapshot(),
+                phase: 'unknown',
+                error,
+                commandAcknowledged: acknowledged,
+                pendingCheckoutIntent: 'buyNow',
+            });
+            render();
+            const message = value.formatCartActionError(error);
+            expect(message).toContain(
+                isZh
+                    ? acknowledged
+                        ? '购买操作已确认'
+                        : '购买结果待确认'
+                    : acknowledged
+                      ? 'Your purchase is confirmed'
+                      : 'Your purchase result is unconfirmed',
+            );
+            expect(message).toContain(isZh ? '勿重复提交' : 'do not submit again');
+            expect(message).not.toContain(isZh ? '购物车' : 'cart');
+        },
+    );
+
+    it.each([true, false])('keeps a definitive stock rejection specific: zh=%s', isZh => {
+        options.isZh = isZh;
+        render();
+        const message = value.formatCartActionError(new ShopApiError('INSUFFICIENT_STOCK_ERROR', 'Stock'));
+        expect(message).toContain(isZh ? '库存' : 'stock');
+        expect(message).not.toContain(isZh ? '结果待确认' : 'unconfirmed');
     });
 });

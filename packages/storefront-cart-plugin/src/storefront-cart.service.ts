@@ -1,4 +1,5 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { CreateAddressInput, StockMovementType } from '@vendure/common/lib/generated-types';
 import {
     ActiveOrderService,
     ConfigService,
@@ -18,6 +19,8 @@ import {
     ProductVariantService,
     RequestContext,
     SessionService,
+    StockMovement,
+    StockMovementService,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
@@ -153,6 +156,22 @@ export class StorefrontCartService implements OnApplicationBootstrap {
         (ctx: RequestContext, variant: ProductVariant) => Promise<number | undefined>
     > = [];
 
+    private readonly projectionTransfers = new Map<
+        string,
+        (ctx: RequestContext, previous: Order) => Promise<(replacement: Order) => Promise<readonly string[]>>
+    >();
+
+    /** Installed plugins retain their own checkout entitlements without exposing their storage to the cart. */
+    registerProjectionTransfer(
+        id: string,
+        prepare: (
+            ctx: RequestContext,
+            previous: Order,
+        ) => Promise<(replacement: Order) => Promise<readonly string[]>>,
+    ): void {
+        this.projectionTransfers.set(id, prepare);
+    }
+
     /** Fulfillment plugins supply their inventory source without a reverse plugin dependency. */
     registerStockResolver(
         resolver: (ctx: RequestContext, variant: ProductVariant) => Promise<number | undefined>,
@@ -188,6 +207,7 @@ export class StorefrontCartService implements OnApplicationBootstrap {
         private readonly sessionService: SessionService,
         private readonly configService: ConfigService,
         private readonly paymentMethodService: PaymentMethodService,
+        private readonly stockMovementService: StockMovementService,
     ) {}
 
     async hasCart(ctx: RequestContext): Promise<boolean> {
@@ -973,8 +993,10 @@ export class StorefrontCartService implements OnApplicationBootstrap {
                 ? ctx.copy({ channel: ctx.channel, currencyCode: order.currencyCode })
                 : ctx;
 
+        let historicalProjection: Pick<Order, 'couponCodes' | 'shippingLines'> | undefined;
+        const restoreProjectionEntitlements: Array<(replacement: Order) => Promise<readonly string[]>> = [];
         if (order) {
-            // Checkout validates every retained line without destroying order line identity,
+            // Checkout normally preserves retained order line identity,
             // coupon allocations, delivery contacts or shipping selections.
             const retainedVariantIds = new Set<string>();
             const removedLineIds = order.lines
@@ -992,12 +1014,24 @@ export class StorefrontCartService implements OnApplicationBootstrap {
                 })
                 .map(line => line.id);
             if (removedLineIds.length > 0) {
-                const removeResult = await this.orderService.removeItemsFromOrder(
-                    orderCtx,
-                    order.id,
-                    removedLineIds,
-                );
+                const hasStockHistory = await this.connection
+                    .getRepository(ctx, StockMovement)
+                    .createQueryBuilder('movement')
+                    .where('movement.orderLineId IN (:...lineIds)', { lineIds: removedLineIds })
+                    .getExists();
+                if (hasStockHistory) {
+                    historicalProjection = {
+                        couponCodes: [...order.couponCodes],
+                        shippingLines: [...order.shippingLines],
+                    };
+                    for (const prepare of this.projectionTransfers.values())
+                        restoreProjectionEntitlements.push(await prepare(orderCtx, order));
+                }
+                const removeResult = hasStockHistory
+                    ? await this.replaceHistoricalProjection(orderCtx, cart, owner, order)
+                    : await this.orderService.removeItemsFromOrder(orderCtx, order.id, removedLineIds);
                 if (isGraphQlErrorResult(removeResult)) {
+                    if (removeResult instanceof CartProjectionError) return removeResult;
                     return new CartProjectionError(removeResult.errorCode, removeResult.message);
                 }
                 order = removeResult;
@@ -1045,6 +1079,62 @@ export class StorefrontCartService implements OnApplicationBootstrap {
                     return new CartProjectionError(error.errorCode, error.message);
                 }
                 order = addResult.order;
+            }
+            if (historicalProjection && selectedLines.length > 0) {
+                const transferredCodes = new Set<string>();
+                for (const restore of restoreProjectionEntitlements) {
+                    for (const code of await restore(order)) transferredCodes.add(code.toLocaleLowerCase());
+                }
+                if (restoreProjectionEntitlements.length > 0) {
+                    const restoredOrder = await this.orderService.findOne(
+                        orderCtx,
+                        order.id,
+                        undefined,
+                        'business',
+                    );
+                    if (!restoredOrder)
+                        return new CartProjectionError(
+                            'ORDER_MISSING',
+                            'The replacement checkout order no longer exists.',
+                        );
+                    order = restoredOrder;
+                }
+                for (const couponCode of historicalProjection.couponCodes) {
+                    if (transferredCodes.has(couponCode.toLocaleLowerCase())) continue;
+                    const restored = await this.orderService.applyCouponCode(orderCtx, order.id, couponCode);
+                    if (isGraphQlErrorResult(restored))
+                        return new CartProjectionError(restored.errorCode, restored.message);
+                    order = restored;
+                }
+                const previousShippingMethodIds = historicalProjection.shippingLines
+                    .map(line => line.shippingMethodId)
+                    .filter((id): id is ID => id != null);
+                // Use the existing fulfillment snapshot/variant contract. Legacy default
+                // shipping checkers can consider a digital order eligible based on its subtotal.
+                const containsPhysicalProducts = order.lines.some(line => {
+                    const snapshot = (line.customFields as { fulfillmentTypeSnapshot?: string } | undefined)
+                        ?.fulfillmentTypeSnapshot;
+                    const variantType = (
+                        line.productVariant?.customFields as { fulfillmentType?: string } | undefined
+                    )?.fulfillmentType;
+                    return (snapshot ?? variantType ?? 'physical') === 'physical';
+                });
+                if (containsPhysicalProducts && previousShippingMethodIds.length > 0) {
+                    const eligible = await this.orderService.getEligibleShippingMethods(orderCtx, order.id);
+                    const shippingMethodIds = previousShippingMethodIds.filter(id =>
+                        eligible.some(method => idsAreEqual(method.id, id)),
+                    );
+                    if (shippingMethodIds.length > 0) {
+                        const restored = await this.orderService.setShippingMethod(
+                            orderCtx,
+                            order.id,
+                            shippingMethodIds,
+                        );
+                        if (isGraphQlErrorResult(restored))
+                            return new CartProjectionError(restored.errorCode, restored.message);
+                        order = restored;
+                    }
+                }
             }
             if (force) order = await this.orderService.applyPriceAdjustments(orderCtx, order, order.lines);
         }
@@ -1094,6 +1184,122 @@ export class StorefrontCartService implements OnApplicationBootstrap {
         cart.projectedRevision = cart.revision;
         cart.updatedAt = new Date();
         return cart;
+    }
+
+    private async replaceHistoricalProjection(
+        ctx: RequestContext,
+        cart: StorefrontCart,
+        owner: CartOwner,
+        previous: Order,
+    ): Promise<Order | CartProjectionError> {
+        const original = await this.orderService.findOne(
+            ctx,
+            previous.id,
+            ['lines', 'customer', 'payments'],
+            'business',
+        );
+        if (
+            !original ||
+            !original.active ||
+            original.state !== 'AddingItems' ||
+            original.payments.length > 0 ||
+            (await this.connection
+                .getRepository(ctx, StorefrontPaymentAttempt)
+                .existsBy({ activeOrderKey: `${ctx.channelId}:${previous.id}` }))
+        ) {
+            return new CartProjectionError(
+                'ORDER_NOT_EDITABLE',
+                'The previous checkout cannot be replaced while a payment exists or remains unresolved.',
+            );
+        }
+        const customFields = Object.fromEntries(
+            Object.entries(previous.customFields ?? {}).filter(([key]) =>
+                ['customerNote', 'deliveryEmail', 'deliveryEmailContactId', 'paymentCurrencyCode'].includes(
+                    key,
+                ),
+            ),
+        );
+        let replacement = await this.orderService.create(ctx, ctx.activeUserId);
+        if (original.customer)
+            replacement = await this.orderService.addCustomerToOrder(ctx, replacement.id, original.customer);
+        // Detach the cart from the old projection before cancellation listeners
+        // release its coupon locks; those listeners must not add another cart revision.
+        await this.connection
+            .getRepository(ctx, StorefrontCart)
+            .update({ id: cart.id, channelId: ctx.channelId, ...owner }, { checkoutOrderId: replacement.id });
+        const cancelled = await this.orderService.cancelOrder(ctx, {
+            orderId: previous.id,
+            reason: 'Replacing an unpaid cart checkout projection.',
+        });
+        if (isGraphQlErrorResult(cancelled))
+            return new CartProjectionError(cancelled.errorCode, cancelled.message);
+
+        // Cancellation plugins normally release reservations. Reconcile any legacy
+        // physical allocation left behind using the existing stock service, once.
+        const movements = await this.connection
+            .getRepository(ctx, StockMovement)
+            .createQueryBuilder('movement')
+            .select('movement.orderLineId', 'orderLineId')
+            .addSelect('movement.type', 'type')
+            .addSelect('movement.quantity', 'quantity')
+            .where('movement.orderLineId IN (:...lineIds)', { lineIds: original.lines.map(line => line.id) })
+            .getRawMany<{ orderLineId: ID; type: StockMovementType; quantity: number | string }>();
+        const releases = original.lines.flatMap(line => {
+            const outstanding = movements
+                .filter(movement => idsAreEqual(movement.orderLineId, line.id))
+                .reduce((quantity, movement) => {
+                    if (movement.type === StockMovementType.ALLOCATION)
+                        return quantity + Number(movement.quantity);
+                    if (movement.type === StockMovementType.RELEASE)
+                        return quantity - Number(movement.quantity);
+                    if (movement.type === StockMovementType.SALE)
+                        return quantity - Math.abs(Number(movement.quantity));
+                    return quantity;
+                }, 0);
+            return outstanding > 0 ? [{ orderLineId: line.id, quantity: outstanding }] : [];
+        });
+        if (releases.length > 0) await this.stockMovementService.createReleasesForOrderLines(ctx, releases);
+
+        if (previous.shippingAddress?.countryCode)
+            replacement = await this.orderService.setShippingAddress(
+                ctx,
+                replacement.id,
+                this.copyAddress(previous.shippingAddress),
+            );
+        if (previous.billingAddress?.countryCode)
+            replacement = await this.orderService.setBillingAddress(
+                ctx,
+                replacement.id,
+                this.copyAddress(previous.billingAddress),
+            );
+        if (Object.keys(customFields).length > 0)
+            replacement = await this.orderService.updateCustomFields(ctx, replacement.id, customFields);
+        await this.connection
+            .getRepository(ctx, StorefrontCartLine)
+            .update({ cartId: cart.id }, { orderLineId: null });
+        await this.connection
+            .getRepository(ctx, StorefrontCart)
+            .update({ id: cart.id, channelId: ctx.channelId, ...owner }, { checkoutOrderId: replacement.id });
+        await this.connection
+            .getRepository(ctx, StorefrontCartCheckout)
+            .update({ cartId: cart.id, orderId: previous.id, state: 'PREPARED' }, { state: 'ABANDONED' });
+        return replacement;
+    }
+
+    private copyAddress(address: Order['shippingAddress']): CreateAddressInput {
+        const countryCode = address.countryCode;
+        if (!countryCode) throw new InternalServerError('The checkout address has no country code.');
+        return {
+            countryCode,
+            streetLine1: address.streetLine1 ?? '',
+            fullName: address.fullName,
+            company: address.company,
+            streetLine2: address.streetLine2,
+            city: address.city,
+            province: address.province,
+            postalCode: address.postalCode,
+            phoneNumber: address.phoneNumber,
+        };
     }
 
     private async saveCheckoutSnapshot(

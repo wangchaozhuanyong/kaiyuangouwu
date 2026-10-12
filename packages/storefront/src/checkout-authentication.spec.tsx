@@ -4,8 +4,9 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ShopApi } from './api';
+import { ShopApi, ShopApiError } from './api';
 import { LoginPage, RegisterPage } from './auth-pages';
+import { claimCheckoutContinuation } from './cart/checkout-continuation';
 import { completeStorefrontAuthentication, resumeAuthenticatedCheckout } from './checkout-authentication';
 import { RouteGate } from './route-pages/shared';
 import { RouteName } from './storefront-router';
@@ -29,8 +30,8 @@ const cart = {
     state: 'OPEN',
     checkoutOrder: null,
 } as StorefrontCart;
-const order = { id: 'rebuilt-order' } as Order;
-const session = { cart: { ...cart, checkoutOrder: order }, order };
+const order = { id: 'rebuilt-order', state: 'AddingItems', customer: { id: 'customer-1' } } as Order;
+const session = { cart: { ...cart, checkoutOrder: order }, order, checkout: null };
 
 function dependencies() {
     return {
@@ -51,6 +52,12 @@ function completionDependencies() {
         cartController: {
             reset: vi.fn(),
             execute: vi.fn().mockResolvedValue({ session }),
+            getSnapshot: vi.fn().mockReturnValue({
+                confirmed: session.cart,
+                phase: 'idle',
+                lastRecovery: null,
+                commandAcknowledged: false,
+            }),
         },
         clearPrivateQueryCache: vi.fn(),
         setCustomer: vi.fn(),
@@ -198,15 +205,107 @@ describe('on-demand authentication completion', () => {
         },
     );
 
-    it('keeps a confirmed session and returns checkout continuation failures to the cart', async () => {
+    it('keeps the signed-in customer and shows the actual checkout failure', async () => {
         const context = completionDependencies();
         context.api.beginCheckout.mockRejectedValue(new Error('Checkout continuation failed'));
         await completeStorefrontAuthentication(context, { name: 'login', returnTo: 'checkout' });
-        const message = '已登录，请在购物车确认商品后重新结算';
+        const message = '本次购买未能准备，请检查后重试。';
         expect(context.setCustomer).toHaveBeenCalledWith(context.customer);
         expect(context.setCartError).toHaveBeenLastCalledWith(message);
         expect(context.notify).toHaveBeenCalledExactlyOnceWith(message);
         expect(context.navigate).toHaveBeenCalledExactlyOnceWith({ name: 'cart' }, true);
+    });
+
+    it.each([true, false])(
+        'keeps an uncertain signed-in purchase on its original product: acknowledged=%s',
+        async acknowledged => {
+            const context = completionDependencies();
+            const background = {
+                name: 'product',
+                id: 'product-source',
+                variantId: 'chosen-variant',
+            } as const;
+            context.cartController.execute.mockRejectedValue(new ShopApiError('UNKNOWN_RESULT', 'Unknown'));
+            context.cartController.getSnapshot.mockReturnValue({
+                confirmed: cart,
+                phase: 'unknown',
+                commandAcknowledged: acknowledged,
+                pendingCheckoutIntent: 'buyNow',
+            });
+            await completeStorefrontAuthentication(
+                { ...context, purchaseFallbackRoute: background },
+                { name: 'login', returnTo: 'purchase', id: 'chosen-variant', quantity: 3 },
+            );
+            expect(context.navigate).toHaveBeenCalledExactlyOnceWith({ ...background, quantity: 3 }, true);
+            expect(context.setCartError).toHaveBeenLastCalledWith(
+                expect.stringContaining(acknowledged ? '购买操作已确认' : '购买结果待确认'),
+            );
+            expect(context.cartController.execute).toHaveBeenCalledOnce();
+        },
+    );
+
+    it('shows an actual stock rejection on the product without another purchase command', async () => {
+        const context = completionDependencies();
+        context.cartController.execute.mockRejectedValue(
+            new ShopApiError('INSUFFICIENT_STOCK_ERROR', 'Stock'),
+        );
+        await completeStorefrontAuthentication(
+            { ...context, purchaseFallbackRoute: { name: 'product', id: 'product-source' } },
+            { name: 'login', returnTo: 'purchase', id: 'chosen-variant', quantity: 3 },
+        );
+        expect(context.navigate).toHaveBeenCalledExactlyOnceWith(
+            {
+                name: 'product',
+                id: 'product-source',
+                variantId: 'chosen-variant',
+                quantity: 3,
+            },
+            true,
+        );
+        expect(context.setCartError).toHaveBeenLastCalledWith(expect.stringContaining('库存'));
+        expect(context.cartController.execute).toHaveBeenCalledOnce();
+    });
+
+    it('does not navigate twice when the shared recovery consumer already continued login buy-now', async () => {
+        const context = completionDependencies();
+        context.cartController.execute.mockResolvedValue({ session, commandId: 'login-command' });
+        expect(claimCheckoutContinuation(context.cartController, 'login-command')).toBe(true);
+        await completeStorefrontAuthentication(context, {
+            name: 'login',
+            returnTo: 'purchase',
+            id: 'chosen-variant',
+            quantity: 3,
+        });
+        expect(context.navigate).not.toHaveBeenCalled();
+        expect(context.setCheckoutOrder).toHaveBeenLastCalledWith(order);
+    });
+
+    it('rejects a checkout projection belonging to another customer', async () => {
+        const context = completionDependencies();
+        const otherOrder = { ...order, customer: { id: 'other-customer', emailAddress: '' } };
+        const otherCart = { ...session.cart, checkoutOrder: otherOrder };
+        context.cartController.execute.mockResolvedValue({
+            session: { ...session, cart: otherCart, order: otherOrder },
+        });
+        context.cartController.getSnapshot.mockReturnValue({
+            confirmed: otherCart,
+            phase: 'idle',
+            commandAcknowledged: false,
+        });
+        await completeStorefrontAuthentication(
+            { ...context, purchaseFallbackRoute: { name: 'product', id: 'product-source' } },
+            { name: 'login', returnTo: 'purchase', id: 'chosen-variant', quantity: 3 },
+        );
+        expect(context.navigate).toHaveBeenCalledExactlyOnceWith(
+            {
+                name: 'product',
+                id: 'product-source',
+                variantId: 'chosen-variant',
+                quantity: 3,
+            },
+            true,
+        );
+        expect(context.setCheckoutOrder).not.toHaveBeenCalledWith(otherOrder);
     });
 });
 

@@ -876,7 +876,11 @@ describe('bounded cart recovery and read ownership', () => {
 
             await controller.read();
 
-            expect(recover).toHaveBeenCalledTimes(2);
+            expect(recover.mock.calls.map(call => call.slice(0, 2))).toEqual([
+                ['persisted-command-1234', false],
+                ['persisted-command-1234', true],
+                ['persisted-command-1234', true],
+            ]);
             expect(controller.getSnapshot()).toMatchObject({
                 phase: 'unknown',
                 pending: true,
@@ -958,6 +962,47 @@ describe('bounded cart recovery and read ownership', () => {
         });
         expect(stored.size).toBe(0);
         expect(apply).not.toHaveBeenCalled();
+    });
+
+    it('shares the bounded automatic retry of a restored purchase with manual recovery', async () => {
+        const stored = recoveryStorage();
+        stored.set(
+            'storefront:cart-recovery:qa',
+            JSON.stringify({
+                commandId: 'persisted-command-1234',
+                cartId: 'cart-a',
+                checkoutIntent: 'buyNow',
+            }),
+        );
+        const controller = new CartController('qa');
+        const late = deferred<CartCommandResult>();
+        const apply = vi.fn();
+        const recover = vi
+            .fn((_id: string, _cancel: boolean, _context?: CartCommandContext) => late.promise)
+            .mockRejectedValueOnce(new Error('Temporary lookup failure'));
+        controller.repository.setTransport({ read: async () => snapshot(), apply, recover });
+        const reading = controller.read();
+        await vi.waitFor(() => expect(recover).toHaveBeenCalledTimes(2));
+        expect(controller.getSnapshot().pendingCommandId).toBe('persisted-command-1234');
+        const manual = controller.recoverPending();
+        expect(controller.recoverPending()).toBe(manual);
+        late.resolve(
+            result(
+                { commandId: 'persisted-command-1234', cartId: 'cart-a', expectedRevision: 0, changes: {} },
+                snapshot(),
+            ),
+        );
+        expect(await manual).toBe(true);
+        expect((await reading).revision).toBe(1);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'idle',
+            pending: false,
+            pendingCommandId: null,
+            lastRecovery: { checkoutIntent: 'buyNow', status: 'APPLIED' },
+        });
+        expect(stored.size).toBe(0);
+        expect(apply).not.toHaveBeenCalled();
+        expect(recover).toHaveBeenCalledTimes(2);
     });
 
     it('aborts an ownerless journal recovery and ignores its late receipt without discarding the journal', async () => {
@@ -1216,14 +1261,27 @@ describe('bounded cart recovery and read ownership', () => {
         expect(recover).not.toHaveBeenCalled();
     });
 
-    it('ends an unresponsive command at one overall deadline and ignores its late response', async () => {
+    it('bounds an unresponsive command and its fresh recovery cycle, ignoring both late responses', async () => {
         vi.useFakeTimers();
         const { controller, apply, recover } = await setup();
         const late = deferred<CartCommandResult>();
+        const lateRecovery = deferred<CartCommandResult>();
         apply.mockImplementationOnce(() => late.promise);
+        recover.mockImplementationOnce(() => lateRecovery.promise);
         const submitted = controller
             .execute({ buyNow: { productVariantId: '1', quantity: 1 } })
             .catch(error => error);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'recovering',
+            pending: true,
+            commandAcknowledged: false,
+        });
+        expect(recover).toHaveBeenCalledTimes(1);
+        expect(recover.mock.calls[0][2]?.signal.aborted).toBe(false);
+        late.resolve(result(apply.mock.calls[0][0], snapshot()));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'recovering', confirmed: { revision: 0 } });
         await vi.advanceTimersByTimeAsync(20_000);
         expect(await submitted).toMatchObject({ errorCode: 'UNKNOWN_RESULT' });
         expect(controller.getSnapshot()).toMatchObject({
@@ -1231,11 +1289,111 @@ describe('bounded cart recovery and read ownership', () => {
             pending: true,
             commandAcknowledged: false,
         });
-        expect(recover).not.toHaveBeenCalled();
+        expect(recover).toHaveBeenCalledTimes(1);
+        expect(recover.mock.calls[0][2]?.signal.aborted).toBe(true);
         expect(vi.getTimerCount()).toBe(0);
-        late.resolve(result(apply.mock.calls[0][0], snapshot()));
+        lateRecovery.resolve(result(apply.mock.calls[0][0], snapshot()));
         await vi.advanceTimersByTimeAsync(0);
         expect(controller.getSnapshot()).toMatchObject({ phase: 'unknown', confirmed: { revision: 0 } });
+    });
+
+    it('recovers a purchase after the original deadline while manual callers join one fresh cycle', async () => {
+        vi.useFakeTimers();
+        const { controller, apply, recover } = await setup();
+        const late = deferred<CartCommandResult>();
+        apply.mockImplementationOnce(() => new Promise(() => undefined));
+        recover.mockImplementationOnce(() => late.promise);
+        const submitted = controller.execute({ buyNow: { productVariantId: '1', quantity: 1 } });
+        await vi.advanceTimersByTimeAsync(20_000);
+        const command = apply.mock.calls[0][0];
+        expect(recover.mock.calls[0][2]?.deadlineAt).toBe(Date.now() + 20_000);
+        expect(controller.getSnapshot().pendingCommandId).toBe(command.commandId);
+        const manual = controller.recoverPending();
+        expect(controller.recoverPending()).toBe(manual);
+        await vi.advanceTimersByTimeAsync(19_999);
+        expect(recover).toHaveBeenCalledTimes(1);
+        expect(recover.mock.calls[0][2]?.signal.aborted).toBe(false);
+        late.resolve(result(command, snapshot()));
+        expect((await submitted).commandId).toBe(command.commandId);
+        expect(await manual).toBe(true);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'idle',
+            pending: false,
+            pendingCommandId: null,
+            lastRecovery: { commandId: command.commandId, checkoutIntent: 'buyNow', status: 'APPLIED' },
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(recover).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('automatically retries known checkout details without looking up or replaying the write', async () => {
+        vi.useFakeTimers();
+        const stored = recoveryStorage();
+        const { controller, apply, recover, read } = await setup('qa');
+        const order = { id: 'order-1', state: 'AddingItems' } as StorefrontCart['checkoutOrder'];
+        apply.mockImplementationOnce(async command => {
+            throw new CartCommandAcknowledgedReadError(command.commandId, 'Read offline', null, {
+                commandId: command.commandId,
+                status: 'APPLIED',
+                cart: { id: 'cart-a', revision: 1 },
+                appliedRevision: 1,
+                errorCode: null,
+                session: { orderId: 'order-1', checkout: null },
+            });
+        });
+        read.mockResolvedValueOnce({ ...snapshot(1), checkoutOrder: order });
+        const submitted = controller.execute({ beginCheckout: true });
+        await vi.advanceTimersByTimeAsync(80);
+        expect((await submitted).session?.order).toBe(order);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'idle',
+            pending: false,
+            lastRecovery: { checkoutIntent: 'beginCheckout', status: 'APPLIED' },
+        });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(recover).not.toHaveBeenCalled();
+        expect(stored.size).toBe(0);
+    });
+
+    it('bounds an acknowledged detail retry and ignores a late read while retaining its receipt', async () => {
+        vi.useFakeTimers();
+        const stored = recoveryStorage();
+        const { controller, apply, recover, read } = await setup('qa');
+        const late = deferred<StorefrontCart>();
+        apply.mockImplementationOnce(async command => {
+            throw new CartCommandAcknowledgedReadError(command.commandId, 'Read offline', null, {
+                commandId: command.commandId,
+                status: 'APPLIED',
+                cart: { id: 'cart-a', revision: 1 },
+                appliedRevision: 1,
+                errorCode: null,
+                session: null,
+            });
+        });
+        read.mockImplementationOnce(() => late.promise);
+        const submitted = controller.execute({ beginCheckout: true }).catch(error => error);
+        await vi.advanceTimersByTimeAsync(80);
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'recovering', commandAcknowledged: true });
+        const manual = controller.recoverPending();
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(await submitted).toMatchObject({ name: 'CartCommandAcknowledgedReadError' });
+        expect(await manual).toBe(false);
+        expect(controller.getSnapshot()).toMatchObject({
+            phase: 'unknown',
+            pending: true,
+            commandAcknowledged: true,
+            editingBlocked: true,
+        });
+        expect(JSON.parse(stored.get('storefront:cart-recovery:qa') ?? 'null')).toMatchObject({
+            terminalReceipt: { status: 'APPLIED', appliedRevision: 1 },
+        });
+        late.resolve(snapshot(1));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(controller.getSnapshot()).toMatchObject({ phase: 'unknown', confirmed: { revision: 0 } });
+        expect(apply).toHaveBeenCalledTimes(1);
+        expect(recover).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
     });
 
     it('ends known-detail waiting at the deadline while preserving the acknowledged outcome', async () => {
