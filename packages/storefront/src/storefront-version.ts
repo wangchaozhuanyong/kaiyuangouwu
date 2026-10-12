@@ -1,6 +1,8 @@
 import { createRequestSignal } from './api/helpers';
 
-const VERSIONED_ASSET_PATH = /\/assets\/[^/?#]+\.(?:css|js)$/i;
+// The document and /index.html share these build entries. SSR route styles and
+// later lazy chunks vary by page and must not make the same build look newer.
+const VERSIONED_ASSET_PATH = /\/assets\/(?:index|public-page-bootstrap)-[^/?#]+\.(?:css|js)$/i;
 
 export const STOREFRONT_VERSION_CHECK_INTERVAL_MS = 60_000;
 const STOREFRONT_VERSION_CHECK_TIMEOUT_MS = 5_000;

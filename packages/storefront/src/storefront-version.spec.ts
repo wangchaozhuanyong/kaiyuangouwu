@@ -34,6 +34,45 @@ describe('storefront version detection', () => {
         expect(first).toBe(second);
     });
 
+    it('compares the same build on SSR pages with route styles and the plain index', () => {
+        const entry =
+            '<script type="module" src="/assets/index-current.js"></script>' +
+            '<link rel="stylesheet" href="/assets/index-current.css">' +
+            '<script type="module" async src="/assets/public-page-bootstrap-current.js"></script>';
+        const routeStyles =
+            '<link rel="stylesheet" href="/assets/product-detail-page-current.css">' +
+            '<link rel="stylesheet" href="/assets/business-services-page-current.css">' +
+            '<link rel="stylesheet" href="/assets/account-catalog-surfaces-current.css">';
+        const indexFingerprint = extractStorefrontAssetFingerprint(entry, baseUrl);
+
+        expect(extractStorefrontAssetFingerprint(entry + routeStyles, baseUrl)).toBe(indexFingerprint);
+        expect(
+            storefrontAssetFingerprint(
+                [
+                    '/assets/index-current.js',
+                    '/assets/index-current.css',
+                    '/assets/public-page-bootstrap-current.js',
+                    '/assets/product-detail-page-current.css',
+                    '/assets/search-loading-current.css',
+                    '/assets/cart-current.js',
+                ],
+                baseUrl,
+            ),
+        ).toBe(indexFingerprint);
+        expect(
+            extractStorefrontAssetFingerprint(entry.replace('index-current.css', 'index-next.css'), baseUrl),
+        ).not.toBe(indexFingerprint);
+        expect(
+            extractStorefrontAssetFingerprint(entry.replace('index-current.js', 'index-next.js'), baseUrl),
+        ).not.toBe(indexFingerprint);
+        expect(
+            extractStorefrontAssetFingerprint(
+                entry.replace('public-page-bootstrap-current.js', 'public-page-bootstrap-next.js'),
+                baseUrl,
+            ),
+        ).not.toBe(indexFingerprint);
+    });
+
     it('ignores route modulepreloads injected after the entry bundle starts', () => {
         expect(
             extractStorefrontAssetFingerprint(

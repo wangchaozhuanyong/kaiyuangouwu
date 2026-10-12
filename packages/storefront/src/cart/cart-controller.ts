@@ -483,9 +483,13 @@ export class CartController {
         const cancelling = !!pending.cancelRequested;
         let result = await this.repository.recover(pending.command.commandId, cancelling, context);
         if (epoch !== this.epoch) return result;
-        // A cancellation joining an in-flight lookup must establish its tombstone
-        // before any original payload is allowed to be sent again.
-        if (result.status === 'NOT_FOUND' && pending.cancelRequested && !cancelling) {
+        // A restored journal has only an identity, so its missing original payload
+        // can never be replayed. Close that identity through the existing locked
+        // server boundary: it returns a concurrent receipt or creates a tombstone.
+        // NOT_FOUND alone is not proof that a delayed original request cannot run.
+        const orphanedJournal = pending.recoveryOnly && !pending.acknowledged;
+        if (result.status === 'NOT_FOUND' && (pending.cancelRequested || orphanedJournal) && !cancelling) {
+            pending.cancelRequested = true;
             result = await this.repository.recover(pending.command.commandId, true, context);
             if (epoch !== this.epoch) return result;
         }

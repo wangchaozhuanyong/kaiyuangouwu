@@ -180,6 +180,39 @@ describe('StorefrontUpdatePrompt', () => {
         expect(host?.textContent).toContain('发现新版本');
     });
 
+    it('does not announce another update after reloading the same SSR product build', async () => {
+        vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');
+        vi.stubGlobal(
+            'fetch',
+            vi
+                .fn<typeof fetch>()
+                .mockImplementation(() =>
+                    Promise.resolve(
+                        new Response(
+                            '<script type="module" src="/assets/index-current.js"></script>' +
+                                '<link rel="stylesheet" href="/assets/index-current.css">',
+                            { status: 200 },
+                        ),
+                    ),
+                ),
+        );
+        const ssrReferences = [
+            '/assets/index-current.js',
+            '/assets/index-current.css',
+            '/assets/product-detail-page-current.css',
+        ];
+        await mountUpdatePrompt(ssrReferences);
+        expect(host?.querySelector('[role="status"]')).toBeNull();
+        await act(async () => {
+            root?.unmount();
+            await Promise.resolve();
+        });
+        root = undefined;
+        host?.remove();
+        await mountUpdatePrompt(ssrReferences);
+        expect(host?.querySelector('[role="status"]')).toBeNull();
+    });
+
     it('aborts a pending request when the prompt unmounts', async () => {
         vi.useFakeTimers();
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');

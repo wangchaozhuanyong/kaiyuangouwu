@@ -130,7 +130,7 @@ describe('unified cart controller', () => {
         });
     });
 
-    it('recovers a persisted receipt before any pre-bootstrap edits and never resends an unknown payload', async () => {
+    it('closes a restored missing receipt before new edits and never resends its lost payload', async () => {
         vi.useFakeTimers();
         const stored = new Map([
             [
@@ -165,13 +165,16 @@ describe('unified cart controller', () => {
         await reading;
         expect(await editing).toBeInstanceOf(Error);
         expect(controller.getSnapshot()).toMatchObject({
-            phase: 'unknown',
-            pending: true,
-            editingBlocked: true,
+            phase: 'idle',
+            pending: false,
+            editingBlocked: false,
         });
         expect(apply).not.toHaveBeenCalled();
-        await controller.recoverPending(true);
-        expect(controller.getSnapshot().pending).toBe(false);
+        expect(recover).toHaveBeenCalledTimes(2);
+        expect(recover.mock.calls.map(call => call.slice(0, 2))).toEqual([
+            ['persisted-command-1234', false],
+            ['persisted-command-1234', true],
+        ]);
         expect(stored.size).toBe(0);
     });
 
@@ -810,6 +813,80 @@ describe('rejected selection recovery', () => {
 });
 
 describe('bounded cart recovery and read ownership', () => {
+    it.each(['APPLIED', 'REJECTED', 'CANCELLED'] as const)(
+        'accepts a concurrent %s receipt when closing a restored missing command',
+        async status => {
+            const stored = recoveryStorage();
+            stored.set(
+                'storefront:cart-recovery:qa',
+                JSON.stringify({ commandId: 'persisted-command-1234', cartId: 'cart-a' }),
+            );
+            const controller = new CartController('qa');
+            const apply = vi.fn();
+            const recover = vi.fn(async (commandId: string, cancel: boolean): Promise<CartCommandResult> => ({
+                commandId,
+                status: cancel ? status : 'NOT_FOUND',
+                cart: snapshot(cancel ? 1 : 0),
+                appliedRevision: cancel ? 1 : null,
+                errorCode: status === 'REJECTED' ? 'CART_LINE_UNAVAILABLE_ERROR' : null,
+                message: null,
+                session: null,
+            }));
+            controller.repository.setTransport({ read: async () => snapshot(), apply, recover });
+
+            await controller.read();
+
+            expect(recover.mock.calls.map(call => call.slice(0, 2))).toEqual([
+                ['persisted-command-1234', false],
+                ['persisted-command-1234', true],
+            ]);
+            expect(controller.getSnapshot()).toMatchObject({
+                phase: 'idle',
+                pending: false,
+                editingBlocked: false,
+                confirmed: { revision: 1 },
+                lastRecovery: { status },
+            });
+            expect(apply).not.toHaveBeenCalled();
+            expect(stored.size).toBe(0);
+        },
+    );
+
+    it.each(['NOT_FOUND', 'failed'] as const)(
+        'keeps a restored missing command protected when closing it is %s',
+        async outcome => {
+            const stored = recoveryStorage();
+            const journal = JSON.stringify({ commandId: 'persisted-command-1234', cartId: 'cart-a' });
+            stored.set('storefront:cart-recovery:qa', journal);
+            const controller = new CartController('qa');
+            const apply = vi.fn();
+            const recover = vi.fn(async (commandId: string, cancel: boolean): Promise<CartCommandResult> => {
+                if (cancel && outcome === 'failed') throw new Error('Closing response lost');
+                return {
+                    commandId,
+                    status: 'NOT_FOUND',
+                    cart: snapshot(),
+                    appliedRevision: null,
+                    errorCode: null,
+                    message: null,
+                    session: null,
+                };
+            });
+            controller.repository.setTransport({ read: async () => snapshot(), apply, recover });
+
+            await controller.read();
+
+            expect(recover).toHaveBeenCalledTimes(2);
+            expect(controller.getSnapshot()).toMatchObject({
+                phase: 'unknown',
+                pending: true,
+                editingBlocked: true,
+            });
+            expect(stored.get('storefront:cart-recovery:qa')).toBe(journal);
+            expect(apply).not.toHaveBeenCalled();
+        },
+    );
+
     it('keeps a restored unresolved command protected when a new edit times out during its recovery', async () => {
         vi.useFakeTimers();
         const stored = recoveryStorage();
