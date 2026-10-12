@@ -813,6 +813,88 @@ describe('rejected selection recovery', () => {
 });
 
 describe('bounded cart recovery and read ownership', () => {
+    it('proves that a later unformed operation was not submitted when an earlier command becomes unknown', async () => {
+        vi.useFakeTimers();
+        const { controller, apply, recover } = await setup();
+        const originalFailure = new Error('Fixture lost response');
+        apply.mockRejectedValue(originalFailure);
+        recover.mockRejectedValue(originalFailure);
+        const coupon = controller.execute({ coupon: { action: 'BEST' } }).catch(caught => caught);
+        const later = controller
+            .execute({ changes: { lines: [{ lineId: '1', quantity: 2 }] } })
+            .catch(caught => caught);
+        await vi.advanceTimersByTimeAsync(80);
+        const error: unknown = await coupon;
+        expect(await later).toBeInstanceOf(CartCommandNotExecutedError);
+        expect(await later).toMatchObject({ cause: error });
+        expect(apply).toHaveBeenCalledOnce();
+        expect(controller.getSnapshot().phase).toBe('unknown');
+        controller.reset();
+    });
+
+    it('identifies a shipping rejection before admission without writing or changing the existing command', async () => {
+        vi.useFakeTimers();
+        const { controller, apply } = await unknownCart();
+        const before = controller.getSnapshot();
+        expect(controller.canRecoverForShipping()).toBe(true);
+        await expect(
+            controller.execute({
+                prepareShipping: {
+                    shippingAddress: {
+                        fullName: 'Fixture',
+                        phoneNumber: '0',
+                        streetLine1: 'Fixture',
+                        city: 'Fixture',
+                        province: 'Fixture',
+                        postalCode: '10000',
+                        countryCode: 'MY',
+                    },
+                },
+            }),
+        ).rejects.toBeInstanceOf(CartCommandNotExecutedError);
+        expect(apply).toHaveBeenCalledOnce();
+        expect(controller.getSnapshot().pendingCommandId).toBe(before.pendingCommandId);
+        controller.reset();
+    });
+
+    it('honours an explicit cancelled command context before admission', async () => {
+        const { controller, apply } = await setup();
+        const owner = new AbortController();
+        const cancelled = new Error('Fixture owner cancelled');
+        owner.abort(cancelled);
+        await expect(
+            controller.execute(
+                { order: { note: 'fixture' } },
+                { signal: owner.signal, deadlineAt: Date.now() + 20_000 },
+            ),
+        ).rejects.toBe(cancelled);
+        expect(apply).not.toHaveBeenCalled();
+        expect(controller.getSnapshot().pending).toBe(false);
+        controller.reset();
+    });
+
+    it('uses an explicit command context through the queued write without installing a global workflow', async () => {
+        vi.useFakeTimers();
+        const { controller, apply } = await setup();
+        const owner = new AbortController();
+        const cancelled = new Error('Fixture owner cancelled');
+        const submitted = controller
+            .execute(
+                { order: { note: 'fixture' } },
+                { signal: owner.signal, deadlineAt: Date.now() + 20_000 },
+            )
+            .catch(error => error);
+        owner.abort(cancelled);
+        await vi.advanceTimersByTimeAsync(80);
+        expect(await submitted).toBe(cancelled);
+        expect(apply).not.toHaveBeenCalled();
+        const fresh = controller.execute({ order: { note: 'fresh fixture' } });
+        await vi.advanceTimersByTimeAsync(80);
+        await fresh;
+        expect(apply).toHaveBeenCalledOnce();
+        controller.reset();
+    });
+
     it.each(['APPLIED', 'REJECTED', 'CANCELLED'] as const)(
         'accepts a concurrent %s receipt when closing a restored missing command',
         async status => {
