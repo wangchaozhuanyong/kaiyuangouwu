@@ -1,4 +1,3 @@
-import yaml from 'js-yaml';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 
@@ -8,6 +7,114 @@ import { classifyChanges } from './ci-impact.mjs';
 const workflowPath = '.github/workflows/build_and_test.yml';
 const sha = /^[a-f0-9]{40}$/u;
 const digest = value => createHash('sha256').update(value).digest('hex');
+
+// Detection runs before dependency installation. This deliberately reads only the
+// checked workflow's explicit job identities; unsupported YAML cannot grant reuse.
+function sourceJobs(text) {
+    const lines = text.replace(/\r\n/gu, '\n').split('\n');
+    const roots = lines.filter(line => line && !/^[\s#]/u.test(line));
+    assert.ok(
+        roots.every(line => /^(name|on|env|concurrency|permissions|defaults|jobs|run-name):/u.test(line)),
+        'Unsupported native workflow root',
+    );
+    const headers = roots.filter(line => /^jobs:/u.test(line));
+    assert.ok(headers.length === 1 && headers[0] === 'jobs:', 'Missing or ambiguous native jobs block');
+    const start = lines.indexOf('jobs:') + 1;
+    const jobs = new Map();
+    let current;
+    for (const line of lines.slice(start)) {
+        if (line && !/^\s|#/u.test(line)) break;
+        if (!line.trim() || /^\s*#/u.test(line)) continue;
+        assert.ok(!line.startsWith('\t'), 'Unsupported native indentation');
+        if (/^ {4}\S/u.test(line)) {
+            const match = /^ {4}([a-zA-Z_][\w-]*):\s*$/u.exec(line);
+            assert.ok(match && !jobs.has(match[1]), 'Unsupported or duplicated native job');
+            current = [];
+            jobs.set(match[1], current);
+        } else {
+            assert.ok(current && /^ {8}/u.test(line), 'Unsupported native job indentation');
+            current.push(line);
+        }
+    }
+    assert.ok(jobs.size, 'Missing native workflow jobs');
+    return jobs;
+}
+
+function sourceScalar(raw) {
+    const value = raw.trim();
+    assert.ok(value && !/^[&*!>|{[]/u.test(value), 'Unsupported native scalar');
+    if (value.startsWith('"')) {
+        const parsed = JSON.parse(value);
+        assert.equal(typeof parsed, 'string', 'Invalid native quoted scalar');
+        return parsed;
+    }
+    if (value.startsWith("'")) {
+        assert.match(value, /^'(?:[^']|'')*'$/u, 'Invalid native quoted scalar');
+        return value.slice(1, -1).replace(/''/gu, "'");
+    }
+    assert.ok(!/\s#|\t/u.test(value), 'Unsupported native scalar comment or indentation');
+    return value;
+}
+
+function sourceList(raw) {
+    assert.match(raw, /^\[.*\]$/u, 'Unsupported native matrix list');
+    const parts = raw.slice(1, -1).match(/"(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^,]+/gu) ?? [];
+    assert.equal(
+        parts.join(',').replace(/\s/gu, ''),
+        raw.slice(1, -1).replace(/\s/gu, ''),
+        'Invalid native matrix separator',
+    );
+    assert.ok(parts.length && parts.length <= 100, 'Invalid native matrix values');
+    return parts.map(part => {
+        const value = sourceScalar(part);
+        if (/^-?\d+$/u.test(value)) return Number(value);
+        assert.ok(!/[:\[\]{},]/u.test(value), 'Unsupported native matrix object');
+        return value;
+    });
+}
+
+function sourceJob(text, jobId) {
+    const lines = sourceJobs(text).get(jobId);
+    assert.ok(lines, 'Missing source job recipe: ' + jobId);
+    const job = {};
+    let inStrategy = false;
+    let inMatrix = false;
+    for (const line of lines) {
+        if (/^ {8}\S/u.test(line)) {
+            inStrategy = false;
+            inMatrix = false;
+            assert.ok(!/^ {8}<</u.test(line), 'Unsupported native job merge');
+            const field = /^ {8}(name|uses|strategy):\s*(.*)$/u.exec(line);
+            if (!field) continue;
+            assert.ok(!(field[1] in job), 'Duplicate native job metadata');
+            if (field[1] === 'strategy') {
+                assert.equal(field[2], '', 'Unsupported native strategy shape');
+                job.strategy = {};
+                inStrategy = true;
+            } else job[field[1]] = sourceScalar(field[2]);
+        } else if (inStrategy && /^ {12}\S/u.test(line)) {
+            inMatrix = false;
+            assert.ok(!/^ {12}<</u.test(line), 'Unsupported native strategy merge');
+            const field = /^ {12}matrix:\s*(.*)$/u.exec(line);
+            if (!field) continue;
+            assert.ok(!job.strategy.matrix, 'Duplicate native matrix');
+            assert.equal(field[1], '', 'Unsupported native matrix shape');
+            job.strategy.matrix = {};
+            inMatrix = true;
+        } else if (inMatrix) {
+            const axis = /^ {16}([a-zA-Z_][\w-]*):\s*(\S.*)$/u.exec(line);
+            assert.ok(
+                axis && !['include', 'exclude'].includes(axis[1]),
+                'Unsupported native matrix structure',
+            );
+            assert.ok(!(axis[1] in job.strategy.matrix), 'Duplicate native matrix axis');
+            job.strategy.matrix[axis[1]] = axis[2].startsWith('[')
+                ? sourceList(axis[2])
+                : sourceScalar(axis[2]);
+        }
+    }
+    return job;
+}
 export function isFailedNativeSource(run, repository) {
     return (
         run.status === 'completed' &&
@@ -111,18 +218,18 @@ function matrixValues(value, plan) {
 
 export function expectedNativeJobNames(text, jobId, plan, readWorkflow, depth = 0) {
     assert.ok(depth < 3, 'Unsupported nested native workflow');
-    const job = yaml.load(text)?.jobs?.[jobId];
-    assert.ok(job, 'Missing source job recipe: ' + jobId);
+    const job = sourceJob(text, jobId);
     let variants = [{}];
     if (job.strategy?.matrix) {
         assert.ok(
             !job.strategy.matrix.include && !job.strategy.matrix.exclude,
             'Unsupported native matrix overrides',
         );
-        for (const [key, value] of Object.entries(job.strategy.matrix))
-            variants = variants.flatMap(variant =>
-                matrixValues(value, plan).map(item => ({ ...variant, [key]: item })),
-            );
+        for (const [key, value] of Object.entries(job.strategy.matrix)) {
+            const values = matrixValues(value, plan);
+            assert.ok(variants.length * values.length <= 100, 'Oversized native matrix');
+            variants = variants.flatMap(variant => values.map(item => ({ ...variant, [key]: item })));
+        }
     }
     assert.ok(variants.length && variants.length <= 100, 'Invalid native job matrix size');
     const template = String(job.name ?? jobId);
@@ -146,8 +253,7 @@ export function expectedNativeJobNames(text, jobId, plan, readWorkflow, depth = 
         'Unsupported native reusable workflow',
     );
     const child = readWorkflow(job.uses.slice(2));
-    const childJobs = Object.keys(yaml.load(child)?.jobs ?? {});
-    assert.ok(childJobs.length, 'Missing native reusable workflow jobs');
+    const childJobs = [...sourceJobs(child).keys()];
     return names.flatMap(prefix =>
         childJobs.flatMap(id =>
             expectedNativeJobNames(child, id, plan, readWorkflow, depth + 1).map(

@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { classifyChanges } from './ci-impact.mjs';
 import {
@@ -41,6 +44,63 @@ const readWorkflow = path => {
     assert.equal(path, '.github/workflows/codegen.yml');
     return codegenWorkflow;
 };
+
+test('release evidence bootstraps with builtins and relative control sources while external node_modules reads are denied', context => {
+    const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+    const reports = join(projectRoot, 'reports/experience-offline-20261013-ci-recovery');
+    mkdirSync(reports, { recursive: true });
+    const clean = mkdtempSync(join(reports, 'clean-bootstrap-'));
+    context.after(() => rmSync(clean, { recursive: true, force: true }));
+    const pending = [join(projectRoot, 'scripts/release-evidence.mjs')];
+    const copied = new Set();
+    while (pending.length) {
+        const source = pending.pop();
+        if (copied.has(source)) continue;
+        copied.add(source);
+        const sourcePath = relative(projectRoot, source);
+        assert.ok(!sourcePath.startsWith('..'), 'Control import escaped the project');
+        const target = join(clean, sourcePath);
+        mkdirSync(dirname(target), { recursive: true });
+        copyFileSync(source, target);
+        assert.equal(
+            digest(readFileSync(target)),
+            digest(readFileSync(source)),
+            'Clean control bytes differ',
+        );
+        const text = readFileSync(source, 'utf8');
+        for (const match of text.matchAll(/\b(?:from|import)\s*['"]([^'"]+)['"]/gu)) {
+            assert.ok(
+                match[1].startsWith('.') || match[1].startsWith('node:'),
+                'External bootstrap dependency',
+            );
+            if (match[1].startsWith('.')) pending.push(resolve(dirname(source), match[1]));
+        }
+    }
+    copyFileSync(
+        join(projectRoot, 'scripts/architecture-debt-baseline.json'),
+        join(clean, 'scripts/architecture-debt-baseline.json'),
+    );
+    const forbiddenModule = join(projectRoot, 'node_modules/js-yaml/package.json');
+    const childScript = [
+        "import assert from 'node:assert/strict';",
+        "import {readFileSync} from 'node:fs';",
+        `const denied = ${JSON.stringify(forbiddenModule)};`,
+        "assert.equal(process.permission.has('fs.read', denied), false);",
+        "assert.throws(() => readFileSync(denied), {code: 'ERR_ACCESS_DENIED'});",
+        `const control = await import(${JSON.stringify(pathToFileURL(join(clean, 'scripts/release-evidence.mjs')).href)});`,
+        "assert.equal(typeof control.findInputCoverage, 'function');",
+        "console.log('clean-bootstrap-ok ' + process.version);",
+    ].join('\n');
+    const result = spawnSync(
+        process.execPath,
+        ['--permission', `--allow-fs-read=${clean}`, '--input-type=module', '-e', childScript],
+        { cwd: clean, encoding: 'utf8', env: {}, timeout: 10000, maxBuffer: 1024 * 1024 },
+    );
+    assert.equal(result.status, 0, result.error?.message ?? result.stderr);
+    assert.match(result.stdout, /^clean-bootstrap-ok v\d+\.\d+\.\d+\s*$/u);
+    context.diagnostic(result.stdout.trim());
+    assert.ok(copied.has(join(projectRoot, 'scripts/ci-native-coverage.mjs')));
+});
 
 function provenanceApi({
     currentHead = sourceSha,
@@ -341,6 +401,61 @@ test('native matrix naming uses source key order for implicit Cartesian variants
         'backend (24.x, 1)',
         'backend (24.x, 2)',
     ]);
+});
+
+test('finite native workflow parsing preserves quoted identity scalars and local reusable paths', () => {
+    for (const scalar of ["'gate: # stable'", '"gate: # stable"']) {
+        const text = `jobs:\n    example:\n        name: ${scalar}\n        runs-on: ubuntu-latest\n`;
+        assert.deepEqual(expectedNativeJobNames(text, 'example', plan, readWorkflow), ['gate: # stable']);
+    }
+    for (const scalar of ["'./.github/workflows/codegen.yml'", '"./.github/workflows/codegen.yml"']) {
+        const text = `jobs:\n    example:\n        name: parent\n        uses: ${scalar}\n`;
+        assert.deepEqual(expectedNativeJobNames(text, 'example', plan, readWorkflow), ['parent / codegen']);
+    }
+});
+
+test('finite native workflow parsing rejects inline maps, anchors, aliases and block scalar identities', () => {
+    const cases = [
+        'jobs: {example: {name: gate}}\n',
+        'jobs:\n    example: {name: gate}\n',
+        'jobs:\n    example:\n        name: gate\n        strategy:\n            matrix: {node: [22.x]}\n',
+        'jobs:\n    example:\n        name: gate\n        strategy:\n            matrix:\n                node: [{value: 22.x}]\n',
+        'jobs:\n    example: &gate\n        name: gate\n',
+        'jobs:\n    example:\n        <<: *shared\n        name: gate\n',
+        'jobs:\n    example:\n        name: &gate gate\n',
+        'jobs:\n    example:\n        name: *gate\n',
+        'jobs:\n    example:\n        name: |\n            gate\n',
+        'jobs:\n    example:\n        name: >-\n            gate\n',
+        'jobs:\n    example:\n        name: {value: gate}\n',
+        'jobs:\n    example:\n        uses: &child ./.github/workflows/codegen.yml\n',
+    ];
+    for (const text of cases)
+        assert.throws(() => expectedNativeJobNames(text, 'example', plan, readWorkflow), undefined, text);
+});
+
+test('finite native workflow parsing rejects duplicate identity mappings instead of choosing a value', () => {
+    const cases = [
+        'jobs:\n    example:\n        name: gate\njobs:\n    other:\n        name: gate\n',
+        'jobs: {other: {name: shadow}}\njobs:\n    example:\n        name: gate\n',
+        'jobs:\n    example:\n        name: gate\njobs: {other: {name: shadow}}\n',
+        'jobs:\n    example:\n        name: one\n    example:\n        name: two\n',
+        'jobs:\n    example:\n        name: one\n        name: two\n',
+        'jobs:\n    example:\n        name: gate\n        uses: ./.github/workflows/codegen.yml\n        uses: ./.github/workflows/codegen.yml\n',
+        'jobs:\n    example:\n        name: gate\n        strategy:\n            matrix:\n                node: [22.x]\n                node: [24.x]\n',
+        [
+            'jobs:',
+            '    example:',
+            '        name: gate',
+            '        strategy:',
+            '            matrix:',
+            '                node: [22.x]',
+            '            matrix:',
+            '                node: [24.x]',
+            '',
+        ].join('\n'),
+    ];
+    for (const text of cases)
+        assert.throws(() => expectedNativeJobNames(text, 'example', plan, readWorkflow), undefined, text);
 });
 
 test('native scope logs preserve the checked source, original base and complete unique execution plan', () => {
