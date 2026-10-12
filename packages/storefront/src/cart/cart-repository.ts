@@ -12,7 +12,9 @@ export interface CartCommandContext {
 }
 
 export function cartAbortError(signal: AbortSignal): Error {
-    return signal.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError');
+    return signal.reason instanceof Error || signal.reason instanceof DOMException
+        ? signal.reason
+        : new DOMException('Aborted', 'AbortError');
 }
 
 /** A caller can stop waiting without cancelling a read owned by another caller. */
@@ -71,6 +73,13 @@ export class CartScopeChangedError extends Error {
     }
 }
 
+/** A newer write invalidated display data; callers may retry only this internal cancellation. */
+export class CartReadInvalidatedError extends DOMException {
+    constructor() {
+        super('The cart read was invalidated by a newer write.', 'AbortError');
+    }
+}
+
 /** Only the first apply may prove that execution never started. */
 export class CartCommandNotExecutedError extends Error {
     constructor(message: string, cause?: unknown) {
@@ -126,7 +135,7 @@ export class CartRepository {
     }
     invalidateReads(): void {
         this.generation++;
-        this.reading?.controller.abort();
+        this.reading?.controller.abort(new CartReadInvalidatedError());
         this.reading = null;
     }
     accept(cart: StorefrontCart): StorefrontCart {
@@ -161,6 +170,12 @@ export class CartRepository {
                 }
                 if (this.confirmed) return this.confirmed;
                 throw new Error('Cart session changed.');
+            })
+            .catch(error => {
+                // Some transports normalize AbortSignal reasons. Keep this boundary's
+                // exact cancellation reason so an ordinary abort is never retried.
+                if (controller.signal.aborted) throw cartAbortError(controller.signal);
+                throw error;
             })
             .finally(() => {
                 if (this.reading?.promise === promise) this.reading = null;

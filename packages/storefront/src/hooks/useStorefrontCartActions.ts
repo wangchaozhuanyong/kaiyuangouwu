@@ -4,6 +4,11 @@ import { ShopApi, ShopApiError } from '../api';
 import { CartController, type CartState } from '../cart/cart-controller';
 import { type CartCheckoutIntent, type CartCommandResult } from '../cart/cart-intents';
 import {
+    CART_COMMAND_TIMEOUT_MS,
+    CartCommandDeadline,
+    CartReadInvalidatedError,
+} from '../cart/cart-repository';
+import {
     checkoutContinuationIsCurrent,
     checkoutContinuationOwnerMatches,
     claimCheckoutContinuation,
@@ -296,10 +301,31 @@ export function useStorefrontCartActions({
                     current.checkoutOrder?.currencyCode === expected.checkoutOrder?.currencyCode)
             );
         };
+        const deadline = new CartCommandDeadline(CART_COMMAND_TIMEOUT_MS, undefined, false);
         const request = (async () => {
             // This is a read after an acknowledged write, not recovery. The controller's
             // bounded read drains queued shipping changes before reading their latest total.
-            const fetched = await api.cart();
+            let fetched: StorefrontCart;
+            try {
+                fetched = await api.cart(deadline.context.signal);
+            } catch (error) {
+                if (!(error instanceof CartReadInvalidatedError)) throw error;
+                deadline.context.signal.throwIfAborted();
+                if (!isCurrent()) throw new Error('Cart session changed.');
+                const retryState = cartController.getSnapshot();
+                if (
+                    checkoutStartingRef?.current ||
+                    retryState.phase === 'unknown' ||
+                    retryState.phase === 'recovering'
+                )
+                    throw (
+                        retryState.error ??
+                        new ShopApiError('CART_BUSY', 'Cart confirmation is still pending.')
+                    );
+                // A write can start after the first read. Retry its display read once,
+                // letting the controller drain it within the original shared budget.
+                fetched = await api.cart(deadline.context.signal);
+            }
             if (!isCurrent()) throw new Error('Cart session changed.');
             const state = cartController.getSnapshot();
             if (checkoutStartingRef?.current || state.phase === 'unknown' || state.phase === 'recovering')
@@ -328,6 +354,7 @@ export function useStorefrontCartActions({
                 throw error;
             })
             .finally(() => {
+                deadline.dispose();
                 if (confirmedRefreshRef.current === request) confirmedRefreshRef.current = null;
             });
         confirmedRefreshRef.current = request;
