@@ -182,6 +182,27 @@ function renderCheckout(
 }
 
 describe('CheckoutPage digital delivery', () => {
+    it.each(['PHYSICAL', 'DIGITAL', 'MIXED'] as const)(
+        'uses the %s order currency for item amounts when the catalog display currency differs',
+        type => {
+            const currentOrder = orderFor(type);
+            currentOrder.lines = currentOrder.lines.map(item => ({
+                ...item,
+                linePriceWithTax: 202000,
+                productVariant: { ...item.productVariant, currencyCode: 'CNY', priceWithTax: 330876 },
+            }));
+            currentOrder.subTotalWithTax = currentOrder.lines.length * 202000;
+            currentOrder.totalWithTax = currentOrder.subTotalWithTax;
+            const container = document.createElement('div');
+            container.innerHTML = renderCheckout(currentOrder);
+            const itemAmounts = [...container.querySelectorAll('section article b')].map(item =>
+                item.textContent?.replace(/\s+/g, ' '),
+            );
+            expect(itemAmounts).toEqual(currentOrder.lines.map(() => 'MYR 2,020'));
+            expect(container.textContent).not.toContain('¥2,020');
+        },
+    );
+
     it('shows an empty state for both routes when cart lines exist but none are selected', () => {
         const productOrder = orderFor('DIGITAL');
         const emptyOrder = {

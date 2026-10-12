@@ -103,7 +103,7 @@ describe('storefront coupon coordination', () => {
             couponCampaignsQueryKey: ['customer-a', 'campaigns'],
             notify: vi.fn(),
             navigate: vi.fn(),
-            refreshCart: vi.fn(),
+            refreshConfirmedCart: vi.fn(),
             setCartLoading: vi.fn(),
             setCartError: vi.fn(),
         };
@@ -156,13 +156,13 @@ describe('storefront coupon coordination', () => {
     it('refreshes the order total after applying and removing a coupon', async () => {
         await render();
         expect(await value.applyCoupon(coupon.id)).toBeNull();
-        expect(options.refreshCart).toHaveBeenCalledTimes(1);
+        expect(options.refreshConfirmedCart).toHaveBeenCalledTimes(1);
         expect(await value.removeCoupon(coupon.id)).toBeNull();
-        expect(options.refreshCart).toHaveBeenCalledTimes(2);
+        expect(options.refreshConfirmedCart).toHaveBeenCalledTimes(2);
     });
 
     it('reports a changed coupon when the refreshed order total is unavailable', async () => {
-        options.refreshCart = vi.fn().mockRejectedValueOnce(new Error('Network unavailable'));
+        options.refreshConfirmedCart = vi.fn().mockRejectedValueOnce(new Error('Network unavailable'));
         await render();
         expect(await value.applyCoupon(coupon.id)).toContain('优惠券已使用，但订单金额刷新失败');
         expect(options.notify).not.toHaveBeenCalled();
@@ -226,13 +226,13 @@ describe('storefront coupon coordination', () => {
         options.route = { name: 'cart' };
         await render();
         expect(options.setCartLoading).toHaveBeenCalledWith(true);
-        expect(options.refreshCart).not.toHaveBeenCalled();
+        expect(options.refreshConfirmedCart).not.toHaveBeenCalled();
 
         await act(async () => {
             resolve({ ...coupon, status: 'LOCKED', lockedOrderId: 'order-a' });
             await Promise.resolve();
         });
-        expect(options.refreshCart).toHaveBeenCalledTimes(1);
+        expect(options.refreshConfirmedCart).toHaveBeenCalledTimes(1);
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
     });
 
@@ -242,13 +242,74 @@ describe('storefront coupon coordination', () => {
             status: 'LOCKED',
             lockedOrderId: 'order-a',
         });
-        options.refreshCart = vi.fn().mockRejectedValueOnce(new Error('Network unavailable'));
+        options.refreshConfirmedCart = vi.fn().mockRejectedValueOnce(new Error('Network unavailable'));
         options.route = { name: 'cart' };
         await render();
         expect(options.setCartError).toHaveBeenCalledWith(
             '优惠券已自动选择，但订单金额刷新失败，请刷新购物车后确认。',
         );
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
+    });
+
+    it('waits for the confirmed read when shipping starts after automatic selection without reporting failure', async () => {
+        let select!: (selected: StoreCustomerCoupon | null) => void;
+        let finishRead!: (cart: StorefrontCart) => void;
+        api.applyBestCustomerCoupon.mockReturnValueOnce(
+            new Promise(resolve => {
+                select = resolve;
+            }),
+        );
+        options.refreshConfirmedCart = vi.fn().mockReturnValueOnce(
+            new Promise(resolve => {
+                finishRead = resolve;
+            }),
+        );
+        options.route = { name: 'purchase' };
+        await render();
+        options.cartState = { pending: true };
+        await render();
+        await act(async () => {
+            select({ ...coupon, status: 'LOCKED', lockedOrderId: 'order-a' });
+            await Promise.resolve();
+        });
+        expect(options.refreshConfirmedCart).toHaveBeenCalledOnce();
+        expect(options.setCartLoading).not.toHaveBeenLastCalledWith(false);
+        expect(options.setCartError).not.toHaveBeenCalled();
+        const original = options.cart;
+        if (!original) throw new Error('Missing coupon checkout fixture');
+        await act(async () => {
+            finishRead({ ...original, revision: 81 });
+            await Promise.resolve();
+        });
+        expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
+        expect(options.setCartError).not.toHaveBeenCalled();
+        expect(api.applyBestCustomerCoupon).toHaveBeenCalledOnce();
+    });
+
+    it('does not publish an old automatic selection read failure after the API owner changes', async () => {
+        api.applyBestCustomerCoupon.mockResolvedValueOnce({
+            ...coupon,
+            status: 'LOCKED',
+            lockedOrderId: 'order-a',
+        });
+        let failRead!: (error: Error) => void;
+        options.refreshConfirmedCart = vi.fn().mockReturnValueOnce(
+            new Promise((_resolve, reject) => {
+                failRead = reject;
+            }),
+        );
+        options.route = { name: 'purchase' };
+        await render();
+        expect(options.refreshConfirmedCart).toHaveBeenCalledOnce();
+        options.api = { ...api } as unknown as ShopApi;
+        options.cartState = { pending: true };
+        await render();
+        await act(async () => {
+            failRead(new Error('Old API read failed'));
+            await Promise.resolve();
+        });
+        expect(options.setCartError).not.toHaveBeenCalled();
+        expect(options.notify).not.toHaveBeenCalled();
     });
 
     it('keeps a late auto-selection response scoped to its original customer', async () => {
@@ -329,7 +390,7 @@ describe('storefront coupon coordination', () => {
         changeQuantity(2);
         await render();
         expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
-        expect(options.refreshCart).toHaveBeenCalledTimes(2);
+        expect(options.refreshConfirmedCart).toHaveBeenCalledTimes(2);
         options.myCoupons = [coupon];
         await render();
         expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
@@ -418,7 +479,7 @@ describe('storefront coupon coordination', () => {
             lockedOrderId: 'order-a',
         } as StoreCustomerCoupon;
         api.applyBestCustomerCoupon.mockResolvedValue(locked);
-        options.refreshCart = vi
+        options.refreshConfirmedCart = vi
             .fn()
             .mockRejectedValueOnce(new Error('Temporary failure'))
             .mockResolvedValue(options.cart);
@@ -427,6 +488,6 @@ describe('storefront coupon coordination', () => {
         options.myCoupons = [locked];
         await remount();
         expect(api.applyBestCustomerCoupon).toHaveBeenCalledTimes(2);
-        expect(options.refreshCart).toHaveBeenCalledTimes(2);
+        expect(options.refreshConfirmedCart).toHaveBeenCalledTimes(2);
     });
 });

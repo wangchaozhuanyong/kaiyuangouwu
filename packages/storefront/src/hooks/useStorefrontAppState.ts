@@ -431,6 +431,7 @@ export function useStorefrontAppState() {
 
     const {
         refreshCart,
+        refreshConfirmedCart,
         cancelPendingCartCommand,
         cartRecoveryPending,
         cartActionsBlocked,
@@ -468,7 +469,7 @@ export function useStorefrontAppState() {
         couponCampaignsQueryKey,
         notify,
         navigate,
-        refreshCart,
+        refreshConfirmedCart,
         setCartLoading,
         setCartError,
     });
