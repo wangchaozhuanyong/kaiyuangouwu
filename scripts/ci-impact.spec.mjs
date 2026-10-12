@@ -383,3 +383,19 @@ test('shared browser text renderers select both static apps without server check
         assert.equal(plan.publishing, false, file);
     }
 });
+
+test('fixed window test-order operations use controls without a website or database release', () => {
+    const plan = classifyChanges(
+        [
+            'deploy/window-test-order-cleanup.cjs',
+            'deploy/window-test-order-cleanup.spec.mjs',
+            '.github/workflows/production_operations.yml',
+        ],
+        inventory,
+    );
+    assert.equal(plan.lane, 'none');
+    assert.equal(plan.controls, true);
+    assert.deepEqual(plan.packages, []);
+    assert.deepEqual(plan.frontends, []);
+    assert.deepEqual(plan.databases, []);
+});
