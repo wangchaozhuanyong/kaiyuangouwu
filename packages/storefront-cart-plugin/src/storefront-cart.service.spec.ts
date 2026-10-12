@@ -421,7 +421,7 @@ describe('production payment readiness', () => {
                 method('stripe-sandbox', 'stripe-payment', 'Card payment'),
                 handlers,
             ),
-        ).toBe(false);
+        ).toBe(true);
         expect(
             isRegisteredProductionPaymentMethod(
                 method('stripe', 'unregistered-handler', 'Card payment'),

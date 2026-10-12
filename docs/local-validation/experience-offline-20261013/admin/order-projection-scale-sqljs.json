@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-12T20:16:49.973Z",
+  "scope": "isolated actual SQL; synthetic lifecycle fixtures; page graph hydration checked separately",
+  "measurements": [
+    {
+      "orders": 1000,
+      "pageSize": 20,
+      "sqlQueriesForFileReadinessPageAndCounts": 3,
+      "p95Milliseconds": 36.35,
+      "samples": [
+        36.35,
+        34.45,
+        34.75,
+        33.6,
+        33.3,
+        33,
+        32.64,
+        33.11,
+        32.83,
+        33.02
+      ],
+      "database": "sqljs",
+      "fullOrderHydration": 0
+    },
+    {
+      "orders": 10000,
+      "pageSize": 20,
+      "sqlQueriesForFileReadinessPageAndCounts": 3,
+      "p95Milliseconds": 219.53,
+      "samples": [
+        215.86,
+        214.54,
+        214.65,
+        211.84,
+        216.04,
+        216.15,
+        219.53,
+        216.85,
+        217.03,
+        215.89
+      ],
+      "database": "sqljs",
+      "fullOrderHydration": 0
+    }
+  ]
+}

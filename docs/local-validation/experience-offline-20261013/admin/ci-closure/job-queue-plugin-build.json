@@ -1,0 +1,69 @@
+{
+  "directory": "job-queue-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "rimraf package && tsc -p ./tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin",
+  "startedAt": "2026-10-12T20:24:00.218Z",
+  "finishedAt": "2026-10-12T20:24:01.357Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/job-queue-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/bullmq-job-queue-strategy.ts",
+      "sha256": "006414108dfbb368246b33c8dffe7492c1e81b0b674961bf0fcac0fda73475a1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/clean-indexed-sets-task.ts",
+      "sha256": "e01eab86b3fff68a6bf0a7436d565e3155ba777f47c29e410d882723635ca471"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/constants.ts",
+      "sha256": "78c2e59657d4bf0e02e79a100083689db6c55f5250c4c0af450142487d3e764a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/index.ts",
+      "sha256": "97fbf2dcd1c2165138f14320879e0ae833c3a6a0b9b4671c1f6fc7601f797138"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/job-list-index.service.ts",
+      "sha256": "da6abf0bf96cc161bbd570ddb3b556ba88561586927636f17562dfb1d977012e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/plugin.ts",
+      "sha256": "43641f53d66b501e7db277908a5d101ad6d4c14d7df7e540dac97cedf37b08bd"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/redis-health-check-strategy.ts",
+      "sha256": "11e258196ddaaaabfbd9bf290439985aacedc38a9e74282e8ce1ef79a3ed22b3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/redis-health-indicator.ts",
+      "sha256": "4b6bf5614ca81b5201b527abea687021ab2f4e0431f28d21192253c854507013"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/redis-job-buffer-storage-strategy.ts",
+      "sha256": "36965d2bf002f1d60da65f862c0507b9d7bd2e6f8501ccef83b9ee7102383a7d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/scripts/get-jobs-by-type.ts",
+      "sha256": "4e4362f3ecdfb4f0846261b2d31841e8b220aef9c2a92e9340f4020d4055dcdf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/types.ts",
+      "sha256": "cbaacfc476cc7ecb00bdebf22842fd134e16e09c03d842882e96d2c89faae3e5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/bullmq/utils.ts",
+      "sha256": "8bb363459be554d86f41da686c55178ba12634ca5bbd348c8fa7b4921fdbd526"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/job-queue-plugin/src/index.ts",
+      "sha256": "2e1afe69c5884dc09522cc3c79b5509df0a8d332d43fb38d3d9dcfb5f19f8ed2"
+    }
+  ],
+  "changedInputs": []
+}

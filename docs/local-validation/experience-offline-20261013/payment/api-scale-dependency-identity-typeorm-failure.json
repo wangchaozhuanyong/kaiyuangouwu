@@ -1,0 +1,48 @@
+{
+  "at": "2026-10-12T19:57:13.317Z",
+  "reason": "Second bootstrap failure: TypeOrmCoreModule ModuleRef; two remaining old contexts",
+  "contexts": {
+    "@nestjs/core": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/common": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/platform-express": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/platform-express/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/platform-express/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/graphql": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/apollo": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/apollo/dist/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/apollo/dist/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/typeorm": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+typeorm@11.0.3+37182595bf3ff21e/node_modules/@nestjs/typeorm/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/typeorm/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/testing": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+testing@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/testing/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/testing/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+core@11.2.1+f998e3c66b40d7c5/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+common@11.2.1+4175a4cef1e3cfc0/node_modules/@nestjs/common/index.js"
+    }
+  }
+}

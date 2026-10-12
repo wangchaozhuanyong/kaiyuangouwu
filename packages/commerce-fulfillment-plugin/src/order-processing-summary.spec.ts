@@ -41,6 +41,135 @@ function order(overrides: Partial<ProcessingSource> = {}): ProcessingSource {
     };
 }
 describe('canonical order processing summary', () => {
+    it('keeps a zero-price manual order in the real pending queue until finance confirms its original payment', () => {
+        const source = order({
+            state: 'AwaitingManualPayment',
+            totalWithTax: 0,
+            canFinance: true,
+            payments: [
+                {
+                    id: 'manual-1',
+                    state: 'PendingManual',
+                    amount: 0,
+                    method: 'merchant-named',
+                    kind: 'OFFLINE_MANUAL',
+                    canCancel: true,
+                    refunds: [],
+                },
+            ],
+        });
+        const summary = summarizeProcessing(source);
+        expect(summary).toMatchObject({
+            isTestOrder: false,
+            paymentStatus: 'PENDING_MANUAL',
+            needsProcessing: true,
+            nextAction: { code: 'CONFIRM_OFFLINE_PAYMENT', targetId: 'manual-1', enabled: true },
+        });
+        expect(summary.paymentCapabilities[0]).toMatchObject({
+            paymentKind: 'OFFLINE_MANUAL',
+            canConfirmOffline: true,
+            canCancel: true,
+            canRefund: false,
+        });
+        expect(matchesProcessingCategory(summary, 'PENDING', false)).toBe(true);
+        expect(matchesProcessingCategory(summary, 'TO_SETTLE', false)).toBe(true);
+        source.canFinance = false;
+        expect(summarizeProcessing(source).nextAction?.enabled).toBe(false);
+    });
+    it('does not offer cancellation of money with an actual offline receipt and retains review as actionable', () => {
+        const summary = summarizeProcessing(
+            order({
+                state: 'AwaitingManualPayment',
+                canFinance: true,
+                payments: [
+                    {
+                        id: 'manual-1',
+                        state: 'Error',
+                        amount: 1000,
+                        method: 'offline',
+                        kind: 'OFFLINE_MANUAL',
+                        hasActualReceipt: true,
+                        receivedReview: true,
+                        canCancel: true,
+                        refunds: [],
+                    },
+                ],
+            }),
+        );
+        expect(summary).toMatchObject({
+            paymentStatus: 'RECEIPT_REVIEW',
+            paymentLabel: '已核款，待业务复核',
+            hasException: true,
+            needsProcessing: true,
+            nextAction: { code: 'REVIEW_OFFLINE_PAYMENT' },
+        });
+        expect(summary.paymentCapabilities[0]).toMatchObject({ canCancel: false, canConfirmOffline: false });
+        const pendingWithReceipt = order({
+            state: 'AwaitingManualPayment',
+            canFinance: true,
+            payments: [
+                {
+                    id: 'manual-1',
+                    state: 'PendingManual',
+                    amount: 1000,
+                    method: 'offline',
+                    hasActualReceipt: true,
+                    canCancel: true,
+                    refunds: [],
+                },
+            ],
+        });
+        expect(summarizeProcessing(pendingWithReceipt).paymentCapabilities[0].canCancel).toBe(false);
+    });
+    it('keeps historical simulations in their explicit category and excludes them from real pending work', () => {
+        const summary = summarizeProcessing(
+            order({
+                payments: [
+                    {
+                        id: 'legacy-1',
+                        state: 'Settled',
+                        amount: 1000,
+                        method: 'controlled-test-payment-fixture',
+                        isTest: true,
+                        refunds: [],
+                    },
+                ],
+            }),
+        );
+        expect(matchesProcessingCategory(summary, 'LEGACY_TEST', false)).toBe(true);
+        expect(matchesProcessingCategory(summary, 'PENDING', false)).toBe(false);
+        expect(summary.paymentCapabilities[0]).toMatchObject({
+            paymentKind: 'CONTROLLED_TEST',
+            canConfirmOffline: false,
+        });
+    });
+    it('allows a receipt moved to Settled only for refund while still blocking physical delivery', () => {
+        const source = order({
+            canFinance: true,
+            payments: [
+                {
+                    id: 'manual-1',
+                    state: 'Settled',
+                    amount: 1000,
+                    method: 'offline',
+                    kind: 'OFFLINE_MANUAL',
+                    receivedReview: true,
+                    refundSettlementMode: 'manual',
+                    refunds: [],
+                },
+            ],
+        });
+        source.lines[0].type = 'physical';
+        source.lines[0].fulfillments = [{ state: 'Shipped', quantity: 2 }];
+        const summary = summarizeProcessing(source);
+        expect(summary).toMatchObject({
+            paymentStatus: 'RECEIPT_REVIEW',
+            canRefund: true,
+            needsProcessing: true,
+        });
+        expect(summary.lines[0].status).toBe('BLOCKED');
+        expect(matchesProcessingCategory(summary, 'IN_TRANSIT', false)).toBe(false);
+    });
     it('uses the current delivery email ahead of an old task recipient', () => {
         const source = order({ recipientEmail: 'updated@example.invalid' });
         requireFixture(source.lines[0].task).recipientEmail = 'old@example.invalid';

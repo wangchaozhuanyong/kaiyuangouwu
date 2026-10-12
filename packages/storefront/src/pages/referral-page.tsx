@@ -28,7 +28,7 @@ import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { ReferralPageContext } from '../storefront-page-contexts';
 import { EmptyState, Subpage, SubpageBody } from '../storefront-ui/page-shell';
-import { formatMoney, PriceDisplay } from '../storefront-ui/product-display';
+import { formatMoney } from '../storefront-ui/product-display';
 import { ActiveCustomer, MarketConfig, ReferralLedgerEntry, StorefrontLanguage } from '../types';
 
 import '../styles/referral.css';
@@ -277,7 +277,7 @@ export function ReferralPage() {
                             <SummaryCard
                                 label={isZh ? '可用奖励' : 'Available rewards'}
                                 value={
-                                    <PriceDisplay
+                                    <ReferralBalanceAmount
                                         value={wallet?.availableBalance ?? 0}
                                         currency={market.currencyCode}
                                         locale={locale}
@@ -288,7 +288,7 @@ export function ReferralPage() {
                             <SummaryCard
                                 label={isZh ? '待生效' : 'Pending rewards'}
                                 value={
-                                    <PriceDisplay
+                                    <ReferralBalanceAmount
                                         value={wallet?.pendingBalance ?? 0}
                                         currency={market.currencyCode}
                                         locale={locale}
@@ -389,21 +389,21 @@ export function ReferralPage() {
                                     <div className="referral-record-list">
                                         {paginatedInvitees.map(invitee => (
                                             <div key={invitee.id} className="referral-record-row">
-                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] weight-bold text-[var(--accent-ink)]">
+                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--referral-invite-surface)] weight-bold text-[var(--referral-invite-ink)]">
                                                     {invitee.displayName.slice(0, 1)}
                                                 </span>
                                                 <div className="min-w-0 flex-1">
-                                                    <strong className="block truncate type-body text-[var(--text)]">
+                                                    <strong className="block truncate type-body text-[var(--referral-reward-ink)]">
                                                         {invitee.displayName}
                                                     </strong>
-                                                    <small className="text-[var(--muted)]">
+                                                    <small className="text-[var(--referral-reward-muted)]">
                                                         {new Intl.DateTimeFormat(locale, {
                                                             dateStyle: 'medium',
                                                         }).format(new Date(invitee.boundAt))}
                                                     </small>
                                                 </div>
                                                 <span
-                                                    className={`shrink-0 rounded-full px-2 py-1 type-meta weight-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--surface))] text-[var(--success)]' : 'bg-[var(--soft)] text-[var(--muted)]'}`}
+                                                    className={`shrink-0 rounded-full px-2 py-1 type-meta weight-bold ${invitee.firstPaidOrderAt ? 'bg-[color-mix(in_srgb,var(--success)_12%,var(--referral-reward-surface))] text-[var(--success)]' : 'bg-[var(--referral-reward-surface)] text-[var(--referral-reward-muted)]'}`}
                                                 >
                                                     {invitee.firstPaidOrderAt
                                                         ? isZh
@@ -489,6 +489,31 @@ export function ReferralPage() {
                 />
             )}
         </Subpage>
+    );
+}
+
+function ReferralBalanceAmount({
+    value,
+    currency,
+    locale,
+}: {
+    value: number;
+    currency: string;
+    locale: string;
+}) {
+    const formatted = formatMoney(value, currency, locale);
+    const parts = formatted.match(/^([^\d]*?)(-?\d[\d,]*(?:\.\d+)?)([^\d]*)$/);
+    const number = parts?.[2] ?? formatted;
+    const currencyLabel = parts ? `${parts[1]}${parts[3]}`.trim() : '';
+    const length = number.length;
+    return (
+        <span
+            className={`referral-balance-amount${length > 6 ? ' is-long' : length > 4 ? ' is-medium' : ''}`}
+            title={formatted}
+        >
+            {currencyLabel && <span className="referral-balance-currency">{currencyLabel}</span>}
+            <span className="referral-balance-value">{number}</span>
+        </span>
     );
 }
 
@@ -615,15 +640,17 @@ function LedgerRow({
                 <WalletCards />
             </span>
             <div className="min-w-0 flex-1">
-                <strong className="block truncate type-body text-[var(--text)]">{label}</strong>
-                <small className="text-[var(--muted)]">
+                <strong className="block truncate type-body text-[var(--referral-reward-ink)]">
+                    {label}
+                </strong>
+                <small className="text-[var(--referral-reward-muted)]">
                     {new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(
                         new Date(entry.createdAt),
                     )}
                 </small>
             </div>
             <strong
-                className={`referral-ledger-amount ${isPositive ? 'text-[var(--success)]' : 'text-[var(--text)]'}`}
+                className={`referral-ledger-amount ${isPositive ? 'text-[var(--success)]' : 'text-[var(--referral-reward-ink)]'}`}
             >
                 {delta > 0 ? '+' : ''}
                 {formatMoney(delta, entry.currencyCode, locale)}
@@ -647,7 +674,7 @@ function ListPagination({
 }) {
     if (totalItems <= 0) return null;
     return (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pt-3 type-helper text-[var(--muted)]">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pt-3 type-helper text-[var(--referral-reward-muted)]">
             <span>
                 {isZh
                     ? `共 ${totalItems} 条 · 第 ${currentPage}/${totalPages} 页`
@@ -659,7 +686,7 @@ function ListPagination({
                     disabled={currentPage <= 1}
                     onClick={() => onPageChange(currentPage - 1)}
                     aria-label={isZh ? '上一页' : 'Previous page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 weight-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--referral-reward-divider)] bg-[var(--referral-reward-surface)] px-2.5 weight-medium text-[var(--referral-reward-muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--referral-reward-ink)_8%,var(--referral-reward-surface))] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <ChevronLeft className="size-3.5" aria-hidden="true" />
                     <span>{isZh ? '上一页' : 'Prev'}</span>
@@ -669,7 +696,7 @@ function ListPagination({
                     disabled={currentPage >= totalPages}
                     onClick={() => onPageChange(currentPage + 1)}
                     aria-label={isZh ? '下一页' : 'Next page'}
-                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--line)] bg-[var(--surface)] px-2.5 weight-medium text-[var(--muted)] transition-colors hover:bg-[var(--control-surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex min-h-11 items-center gap-1 rounded-[var(--skin-control-radius)] border border-[var(--referral-reward-divider)] bg-[var(--referral-reward-surface)] px-2.5 weight-medium text-[var(--referral-reward-muted)] transition-colors hover:bg-[color-mix(in_srgb,var(--referral-reward-ink)_8%,var(--referral-reward-surface))] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     <span>{isZh ? '下一页' : 'Next'}</span>
                     <ChevronRight className="size-3.5" aria-hidden="true" />

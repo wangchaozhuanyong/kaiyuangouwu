@@ -33,6 +33,7 @@ export const ORDER_OPERATIONS_QUERY = gql`
                 code
             }
             payments {
+                kind
                 id
                 createdAt
                 state
@@ -234,6 +235,7 @@ export const SETTLE_REFUND_MUTATION = gql`
 `;
 
 export interface OrderOperationPayment {
+    kind?: string;
     id: string;
     createdAt: string;
     state: string;
@@ -291,7 +293,14 @@ export interface OrderOperationsData {
 
 export interface PaymentMethodsForManualData {
     paymentMethods: {
-        items: Array<{ id: string; name: string; code: string; description: string; enabled: boolean }>;
+        items: Array<{
+            kind?: string;
+            id: string;
+            name: string;
+            code: string;
+            description: string;
+            enabled: boolean;
+        }>;
         totalItems: number;
     };
 }

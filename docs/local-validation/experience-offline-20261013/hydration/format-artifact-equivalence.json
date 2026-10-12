@@ -1,0 +1,8 @@
+{
+  "beforeCount": 300,
+  "afterCount": 300,
+  "identical": false,
+  "differences": [
+    "packages/storefront/dist/.server/public-page-renderer.cjs"
+  ]
+}

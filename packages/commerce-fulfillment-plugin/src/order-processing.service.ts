@@ -12,7 +12,6 @@ import {
     Order,
     orderItemsAreDelivered,
     OrderService,
-    Payment,
     PaymentMethod,
     Permission,
     Refund,
@@ -33,8 +32,8 @@ import { FulfillmentDeliveryRecord } from './entities/fulfillment-delivery-recor
 import { ManualDigitalDelivery } from './entities/manual-digital-delivery.entity';
 import { getOrderLineDigitalDeliveryMode, getOrderLineFulfillmentType } from './fulfillment-classification';
 import { OrderProcessingChangedEvent } from './order-processing-changed.event';
+import { OrderProcessingProjection } from './order-processing-projection';
 import {
-    matchesProcessingCategory,
     OrderProcessingSummary,
     ProcessingCategory,
     ProcessingSource,
@@ -51,6 +50,7 @@ export interface OrderProcessingListOptions {
 }
 
 const CATEGORIES = [
+    'LEGACY_TEST',
     'PENDING',
     'DIGITAL',
     'PHYSICAL',
@@ -268,48 +268,14 @@ export class OrderProcessingService implements OnModuleInit {
         const take = options.take ?? 20;
         if (!Number.isInteger(skip) || skip < 0 || !Number.isInteger(take) || take < 1 || take > 100)
             throw new UserInputError('订单分页参数无效');
-        const candidates = await this.candidates(ctx, options);
-        const items: ProcessingOrder[] = [];
-        // Lifecycle filtering happens before pagination, including digital and financial exceptions.
-        for (let offset = 0; offset < candidates.length; offset += 100) {
-            const orders = await this.load(ctx, candidates.slice(offset, offset + 100));
-            for (const order of await this.attach(ctx, orders)) {
-                if (!matchesProcessingCategory(this.requireSummary(order), category, order.active)) continue;
-                items.push(order);
-            }
-        }
-        if (options.sortBy === 'totalWithTax' || options.sortBy === 'totalQuantity') {
-            const key = options.sortBy;
-            const direction = options.sortOrder === 'ASC' ? 1 : -1;
-            items.sort(
-                (a, b) =>
-                    direction * (a[key] - b[key]) || direction * String(a.id).localeCompare(String(b.id)),
-            );
-        }
-        return { items: items.slice(skip, skip + take), totalItems: items.length };
+        const projection = await this.projection(ctx, options);
+        const page = await projection.page(category, skip, take);
+        const items = await this.attach(ctx, await this.load(ctx, page.ids));
+        return { items, totalItems: page.totalItems };
     }
 
     async counts(ctx: RequestContext) {
-        const result = { pending: 0, digital: 0, physical: 0, exceptions: 0, afterSales: 0 };
-        const ids = await this.candidates(ctx, {});
-        const categories = {
-            pending: 'PENDING',
-            digital: 'DIGITAL',
-            physical: 'PHYSICAL',
-            exceptions: 'EXCEPTIONS',
-            afterSales: 'AFTER_SALES',
-        } as const;
-        for (let offset = 0; offset < ids.length; offset += 100) {
-            for (const order of await this.attach(
-                ctx,
-                await this.load(ctx, ids.slice(offset, offset + 100)),
-            )) {
-                for (const [key, category] of Object.entries(categories))
-                    if (matchesProcessingCategory(this.requireSummary(order), category, order.active))
-                        result[key as keyof typeof result]++;
-            }
-        }
-        return result;
+        return (await this.projection(ctx, {})).counts();
     }
 
     async finishModification(ctx: RequestContext, orderId: ID) {
@@ -420,52 +386,11 @@ export class OrderProcessingService implements OnModuleInit {
         return summary;
     }
 
-    private async candidates(ctx: RequestContext, options: OrderProcessingListOptions): Promise<ID[]> {
-        const query = this.connection
-            .getRepository(ctx, Order)
-            .createQueryBuilder('order')
-            .select(['order.id'])
-            .leftJoin('order.customer', 'customer')
-            .where('(order.active = :inactive OR order.state = :draft)', { inactive: false, draft: 'Draft' });
-        scopeOrderQuery(ctx, query, 'read');
-        const term = options.term?.trim();
-        if (term) {
-            if (term.length > 120) throw new UserInputError('订单搜索词过长');
-            const paymentMatches = query
-                .subQuery()
-                .select('1')
-                .from(Payment, 'processing_payment')
-                .where('processing_payment.orderId = order.id')
-                .andWhere("processing_payment.transactionId LIKE :term ESCAPE '!'")
-                .getQuery();
-            query.andWhere(
-                `(order.code LIKE :term ESCAPE '!'
-                  OR customer.emailAddress LIKE :term ESCAPE '!'
-                  OR customer.firstName LIKE :term ESCAPE '!'
-                  OR customer.lastName LIKE :term ESCAPE '!'
-                  OR EXISTS ${paymentMatches})`,
-                { term: `%${term.replace(/[%_!]/gu, '!$&')}%` },
-            );
-        }
-        const sortMap: Record<string, string> = {
-            createdAt: 'order.createdAt',
-            orderPlacedAt: 'order.orderPlacedAt',
-            code: 'order.code',
-            totalWithTax: 'order.totalWithTax',
-            totalQuantity: 'order.totalQuantity',
-            state: 'order.state',
-            customerLastName: 'customer.lastName',
-        };
-        const sortBy = options.sortBy ?? 'orderPlacedAt';
-        const sortOrder = options.sortOrder ?? 'DESC';
-        if (!Object.prototype.hasOwnProperty.call(sortMap, sortBy) || !['ASC', 'DESC'].includes(sortOrder))
-            throw new UserInputError('订单排序参数无效');
-        // Derived money/quantity are sorted after loading the filtered rows, before pagination.
-        const persistedSort = ['totalWithTax', 'totalQuantity'].includes(sortBy)
-            ? 'order.createdAt'
-            : sortMap[sortBy];
-        query.orderBy(persistedSort, sortOrder).addOrderBy('order.id', sortOrder);
-        return (await query.getMany()).map(order => order.id);
+    private async projection(ctx: RequestContext, options: OrderProcessingListOptions) {
+        const projection = new OrderProcessingProjection(this.connection, ctx, options);
+        const candidates = await projection.fileCandidates();
+        projection.prepare(await this.receipts.processingFileAvailability(candidates));
+        return projection;
     }
 
     private async load(ctx: RequestContext, ids: ID[]): Promise<Order[]> {
@@ -514,137 +439,154 @@ export class OrderProcessingService implements OnModuleInit {
                 select: ['orderId', 'reviewReason'],
             }),
         ]);
-        return Promise.all(
-            orders.map(async order => {
-                const matchesOrder = (item: { orderId: ID }) => String(item.orderId) === String(order.id);
-                // Platform readers may inspect a different sales channel. The delivery projection
-                // uses its owner channel, while write capabilities still use the caller's channel.
-                const deliveryCtx =
-                    String(order.salesChannelId) === String(ctx.channelId)
-                        ? ctx
-                        : order.salesChannel
-                          ? ctx.copy({ channel: order.salesChannel })
-                          : undefined;
-                const statuses = deliveryCtx ? await this.receipts.statuses(deliveryCtx, order) : [];
-                const source: ProcessingSource = {
-                    id: String(order.id),
-                    state: order.state,
-                    active: order.active,
-                    placed: !!order.orderPlacedAt,
-                    totalWithTax: order.totalWithTax,
-                    recipientEmail: order.customFields?.deliveryEmail,
-                    resourceReviewReason:
-                        holds.find(matchesOrder)?.reviewReason ??
-                        (holds.some(matchesOrder)
-                            ? '付款或交付资源待核验，请核对后重试交付或处理退款'
-                            : null),
-                    canManage:
-                        order.salesChannelId != null &&
-                        String(order.salesChannelId) === String(ctx.channelId),
-                    canUpdate: ctx.userHasPermissions([Permission.UpdateOrder]),
-                    canFinance: ctx.userHasPermissions([sensitiveStoreFinancePermission.Permission]),
-                    canArrangePayment:
-                        ctx.userHasPermissions([Permission.ReadSettings]) ||
-                        ctx.userHasPermissions([Permission.ReadPaymentMethod]),
-                    shippingWithTax: order.shippingWithTax,
-                    payments: (order.payments ?? []).map(payment => {
-                        const method = paymentMethods.find(candidate => candidate.code === payment.method);
-                        const handler = this.config.paymentOptions.paymentMethodHandlers.find(
-                            candidate => candidate.code === method?.handler.code,
-                        );
-                        return {
-                            id: String(payment.id),
-                            state: payment.state,
-                            amount: payment.amount,
-                            method: payment.method,
-                            isTest: payment.metadata?.public?.testPayment === true,
-                            canCancel: handler?.supportsPaymentCancellation ?? false,
-                            refundSettlementMode: handler?.refundSettlementMode ?? 'unsupported',
-                            shippingBudget: payment.metadata?.refundBudget?.shippingWithTax,
-                            refunds: (payment.refunds ?? []).map(refund => ({
-                                id: String(refund.id),
-                                state: refund.state,
-                                total: refund.total,
-                                shipping: refund.shipping,
-                                metadata: {
-                                    refundRequest: {
-                                        quantityGroup: refund.metadata?.refundRequest?.quantityGroup,
-                                    },
-                                },
-                                lines: (refund.lines ?? []).map(line => ({
-                                    orderLineId: String(line.orderLineId),
-                                    quantity: line.quantity,
-                                })),
-                            })),
-                        };
-                    }),
-                    lines: (order.lines ?? []).map(line => {
-                        const task = [...manual, ...cards].find(
-                            item => matchesOrder(item) && String(item.orderLineId) === String(line.id),
-                        );
-                        const delivery = statuses.find(item => String(item.orderLineId) === String(line.id));
-                        return {
-                            id: String(line.id),
-                            quantity: line.quantity,
-                            placedQuantity: line.orderPlacedQuantity,
-                            productName:
-                                line.productVariant?.name ||
-                                line.productVariant?.translations?.[0]?.name ||
-                                line.productVariant?.sku ||
-                                '商品',
-                            sku: line.productVariant?.sku ?? '',
-                            type: getOrderLineFulfillmentType(line),
-                            mode: getOrderLineDigitalDeliveryMode(line),
-                            fulfillments: (order.fulfillments ?? []).flatMap(fulfillment =>
-                                (fulfillment.lines ?? [])
-                                    .filter(item => String(item.orderLineId) === String(line.id))
-                                    .map(item => ({
-                                        id: String(fulfillment.id),
-                                        state: fulfillment.state,
-                                        quantity: item.quantity,
-                                    })),
-                            ),
-                            task: task
-                                ? {
-                                      id: String(task.id),
-                                      state: task.state,
-                                      quantity: task.quantity,
-                                      recipientEmail: task.recipientEmail,
-                                      overdue:
-                                          'expectedAt' in task &&
-                                          task.expectedAt < new Date() &&
-                                          ['WAITING_PROCESSING', 'DRAFT'].includes(task.state),
-                                  }
-                                : undefined,
-                            delivery: delivery
-                                ? {
-                                      readyQuantity: delivery.readyQuantity,
-                                      claimedQuantity: delivery.claimedQuantity,
-                                      notificationStatus: notificationStatus(delivery.notificationState),
-                                  }
-                                : undefined,
-                            fileReady:
-                                getOrderLineDigitalDeliveryMode(line) === 'file_download' &&
-                                delivery?.state === 'READY',
-                        };
-                    }),
-                    afterSales: afterSales
-                        .filter(matchesOrder)
-                        .map(item => ({ id: String(item.id), state: item.state })),
-                    deliveryException: deliveries.some(
-                        item =>
-                            matchesOrder(item) &&
-                            (item.status === 'EXCEPTION' ||
-                                (item.status === 'IN_TRANSIT' &&
-                                    item.nextActionDueAt != null &&
-                                    item.nextActionDueAt < new Date())),
-                    ),
-                };
-                const result = order as ProcessingOrder;
-                result[summaryKey] = summarizeProcessing(source);
-                return result;
-            }),
+        const groups = new Map<string, { context: RequestContext; orders: Order[] }>();
+        for (const order of orders) {
+            const context =
+                String(order.salesChannelId) === String(ctx.channelId)
+                    ? ctx
+                    : order.salesChannel
+                      ? ctx.copy({ channel: order.salesChannel })
+                      : undefined;
+            if (!context) continue;
+            const channel = String(context.channelId);
+            const group = groups.get(channel) ?? { context, orders: [] };
+            group.orders.push(order);
+            groups.set(channel, group);
+        }
+        const receiptGroups = await Promise.all(
+            [...groups.values()].map(group => this.receipts.statusesForOrders(group.context, group.orders)),
         );
+        const receiptsByOrder = new Map(receiptGroups.flatMap(group => [...group]));
+        return orders.map(order => {
+            const matchesOrder = (item: { orderId: ID }) => String(item.orderId) === String(order.id);
+            const statuses = receiptsByOrder.get(String(order.id)) ?? [];
+            const source: ProcessingSource = {
+                id: String(order.id),
+                state: order.state,
+                active: order.active,
+                placed: !!order.orderPlacedAt,
+                totalWithTax: order.totalWithTax,
+                recipientEmail: order.customFields?.deliveryEmail,
+                resourceReviewReason:
+                    holds.find(matchesOrder)?.reviewReason ??
+                    (holds.some(matchesOrder) ? '付款或交付资源待核验，请核对后重试交付或处理退款' : null),
+                canManage:
+                    order.salesChannelId != null && String(order.salesChannelId) === String(ctx.channelId),
+                canUpdate: ctx.userHasPermissions([Permission.UpdateOrder]),
+                canFinance: ctx.userHasPermissions([sensitiveStoreFinancePermission.Permission]),
+                canArrangePayment:
+                    ctx.userHasPermissions([Permission.ReadSettings]) ||
+                    ctx.userHasPermissions([Permission.ReadPaymentMethod]),
+                shippingWithTax: order.shippingWithTax,
+                payments: (order.payments ?? []).map(payment => {
+                    const method = paymentMethods.find(candidate => candidate.code === payment.method);
+                    const handler = this.config.paymentOptions.paymentMethodHandlers.find(
+                        candidate => candidate.code === method?.handler.code,
+                    );
+                    return {
+                        id: String(payment.id),
+                        state: payment.state,
+                        amount: payment.amount,
+                        method: payment.method,
+                        isTest: payment.metadata?.public?.testPayment === true,
+                        kind:
+                            payment.metadata?.offlineManual?.kind === 'OFFLINE_MANUAL' ||
+                            method?.handler.code === 'offline-manual-payment-handler'
+                                ? 'OFFLINE_MANUAL'
+                                : payment.metadata?.public?.testPayment === true ||
+                                    isControlledTestPaymentMethod(payment.method)
+                                  ? 'CONTROLLED_TEST'
+                                  : 'OTHER',
+                        hasActualReceipt: payment.metadata?.offlineManual?.receiptProof != null,
+                        receivedReview:
+                            payment.metadata?.manualReview?.required === true &&
+                            payment.metadata?.manualReview?.receivedState === 'Settled',
+                        canCancel: handler?.supportsPaymentCancellation ?? false,
+                        refundSettlementMode: handler?.refundSettlementMode ?? 'unsupported',
+                        shippingBudget: payment.metadata?.refundBudget?.shippingWithTax,
+                        refunds: (payment.refunds ?? []).map(refund => ({
+                            id: String(refund.id),
+                            state: refund.state,
+                            total: refund.total,
+                            shipping: refund.shipping,
+                            metadata: {
+                                refundRequest: {
+                                    quantityGroup: refund.metadata?.refundRequest?.quantityGroup,
+                                },
+                            },
+                            lines: (refund.lines ?? []).map(line => ({
+                                orderLineId: String(line.orderLineId),
+                                quantity: line.quantity,
+                            })),
+                        })),
+                    };
+                }),
+                lines: (order.lines ?? []).map(line => {
+                    const task = [...manual, ...cards].find(
+                        item => matchesOrder(item) && String(item.orderLineId) === String(line.id),
+                    );
+                    const delivery = statuses.find(item => String(item.orderLineId) === String(line.id));
+                    return {
+                        id: String(line.id),
+                        quantity: line.quantity,
+                        placedQuantity: line.orderPlacedQuantity,
+                        productName:
+                            line.productVariant?.name ||
+                            line.productVariant?.translations?.[0]?.name ||
+                            line.productVariant?.sku ||
+                            '商品',
+                        sku: line.productVariant?.sku ?? '',
+                        type: getOrderLineFulfillmentType(line),
+                        mode: getOrderLineDigitalDeliveryMode(line),
+                        fulfillments: (order.fulfillments ?? []).flatMap(fulfillment =>
+                            (fulfillment.lines ?? [])
+                                .filter(item => String(item.orderLineId) === String(line.id))
+                                .map(item => ({
+                                    id: String(fulfillment.id),
+                                    state: fulfillment.state,
+                                    quantity: item.quantity,
+                                })),
+                        ),
+                        task: task
+                            ? {
+                                  id: String(task.id),
+                                  state: task.state,
+                                  quantity: task.quantity,
+                                  recipientEmail: task.recipientEmail,
+                                  overdue:
+                                      'expectedAt' in task &&
+                                      task.expectedAt < new Date() &&
+                                      ['WAITING_PROCESSING', 'DRAFT'].includes(task.state),
+                              }
+                            : undefined,
+                        delivery: delivery
+                            ? {
+                                  readyQuantity: delivery.readyQuantity,
+                                  claimedQuantity: delivery.claimedQuantity,
+                                  notificationStatus: notificationStatus(delivery.notificationState),
+                              }
+                            : undefined,
+                        fileReady:
+                            getOrderLineDigitalDeliveryMode(line) === 'file_download' &&
+                            delivery?.state === 'READY',
+                    };
+                }),
+                afterSales: afterSales
+                    .filter(matchesOrder)
+                    .map(item => ({ id: String(item.id), state: item.state })),
+                deliveryException: deliveries.some(
+                    item =>
+                        matchesOrder(item) &&
+                        (item.status === 'EXCEPTION' ||
+                            (item.status === 'IN_TRANSIT' &&
+                                item.nextActionDueAt != null &&
+                                item.nextActionDueAt < new Date())),
+                ),
+            };
+            const result = order as ProcessingOrder;
+            result[summaryKey] = summarizeProcessing(source);
+            return result;
+        });
     }
 }
 

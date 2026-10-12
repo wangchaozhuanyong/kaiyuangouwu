@@ -155,7 +155,11 @@ describe('OrdersPage route query', () => {
             expect(markup).not.toContain('立即付款');
             expect(markup).not.toContain('实付');
         }
-        expect(orderStatesForTab('pending')).toEqual(['ArrangingPayment', 'ArrangingAdditionalPayment']);
+        expect(orderStatesForTab('pending')).toEqual([
+            'ArrangingPayment',
+            'AwaitingManualPayment',
+            'ArrangingAdditionalPayment',
+        ]);
         expect(orderStateLabel('ArrangingPayment', 'zh')).toBe('待付款');
         expect(orderNotification(cartOrder, 'zh').title).toBe('商品仍在购物车');
     });

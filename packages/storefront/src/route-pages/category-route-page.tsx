@@ -1,6 +1,7 @@
 import '../commerce-styles';
 import { useDesktopLayout } from '../desktop-layout';
 import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
+import { usePageRouteCommit } from '../page-readiness';
 import { CategoryPage } from '../pages/category-page';
 import { DesktopCatalogPage } from '../pages/desktop-catalog-page';
 import { CategoryPageContext } from '../storefront-page-contexts';
@@ -9,6 +10,7 @@ import { FulfillmentType } from '../types';
 import { useRouteRuntime as useRuntime } from './shared';
 
 export function CategoryRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
     const desktop = useDesktopLayout();
     if (desktop) return <DesktopCatalogPage />;

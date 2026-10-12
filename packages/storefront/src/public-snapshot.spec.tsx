@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,6 +9,8 @@ import {
 import { fixtureKinds, fixtureLanguages, fixtureStores, syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { renderPublicPage } from './entry-public-server';
+import { ImagePlaceholder } from './safe-image';
+import { StorefrontPageFrame } from './storefront-page-frame';
 import { type StorefrontFlashSale, type StorefrontSystemAnnouncement } from './types';
 
 function fixtureValue<T>(value: T | null | undefined): T {
@@ -21,6 +24,94 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    it('releases per-request query GC timers even when a normalized category has no seeded result', async () => {
+        vi.useFakeTimers();
+        try {
+            const page = syntheticPage(fixtureStores[0], 'en', 'catalog');
+            page.request = {
+                kind: 'catalog',
+                path: '/category',
+                input: { sort: 'RECOMMENDED', inStockOnly: false, skip: 0, take: 12 },
+            };
+            page.requestKey = publicPageRequestKey(page.request);
+            page.route = '/en/category';
+            const timers = vi.getTimerCount();
+            const html = await renderPublicPage(page);
+            expect(html).toContain('class="page category-page"');
+            expect(html).toContain('aria-pressed="true"');
+            expect(html).toContain('list-skeleton category-product-list');
+            expect(vi.getTimerCount()).toBe(timers);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+    it.each(fixtureLanguages)(
+        '%s renders a confirmed missing product and guide as their empty route',
+        async languageCode => {
+            const productPage = syntheticPage(fixtureStores[0], languageCode, 'product');
+            productPage.product = null;
+            const productHtml = await renderPublicPage(productPage);
+            expect(productHtml).toContain(languageCode === 'en' ? 'Product not found' : '没有找到商品');
+            expect(productHtml).not.toContain('class="page home-page"');
+            const guidePage = syntheticPage(fixtureStores[0], languageCode, 'article');
+            delete guidePage.publicContent;
+            const guideHtml = await renderPublicPage(guidePage);
+            expect(guideHtml).toContain(
+                languageCode === 'en' ? 'Published guide not found' : '没有找到已发布的指南',
+            );
+            expect(guideHtml).not.toContain('class="page home-page"');
+        },
+    );
+    it.each(fixtureLanguages)(
+        '%s renders the persistent runtime frame and mobile navigation in HTML',
+        async languageCode => {
+            const page = syntheticPage(fixtureStores[0], languageCode, 'home');
+            const html = await renderPublicPage(page);
+            expect(html).toContain('data-page-readiness="ready"');
+            expect(html).toContain('class="page-readiness-stage"');
+            expect(html).toContain('data-route="home"');
+            expect(html).toContain('data-page-family="discovery"');
+            expect(html.match(/id="storefront-content"/gu)).toHaveLength(1);
+            expect(html.match(/class="storefront-bottom-nav"/gu)).toHaveLength(1);
+            expect(html).toContain(languageCode === 'en' ? 'Skip to content' : '跳到主要内容');
+        },
+    );
+
+    it('uses the same English accessibility fallback for missing media before hydration', async () => {
+        const imageHtml = renderToString(
+            <StorefrontPageFrame
+                routeName="support"
+                language="en"
+                desktop={false}
+                storefrontName="Example"
+                logoUrl={null}
+            >
+                <ImagePlaceholder />
+            </StorefrontPageFrame>,
+        );
+        expect(imageHtml).toContain('No product image');
+        expect(imageHtml).not.toContain('暂无商品图片');
+        const page = syntheticPage(fixtureStores[0], 'en', 'product');
+        const product = fixtureValue(page.product);
+        product.featuredAsset = null;
+        product.assets = [];
+        product.variants.forEach(variant => {
+            variant.featuredAsset = null;
+        });
+        const html = await renderPublicPage(page);
+        expect(html).toContain('No image');
+        expect(html).not.toContain('暂无商品图');
+    });
+
+    it('normalizes invalid legacy brand names identically to the interactive runtime', async () => {
+        const page = syntheticPage(fixtureStores[0], 'en', 'home');
+        page.config.customFields.storefrontNameEn =
+            'A legacy storefront name that exceeds the merchant display limit';
+        const html = await renderPublicPage(page);
+        expect(html).toContain('<span class="proto-brand-text">Store</span>');
+        expect(html).not.toContain('proto-brand-text">A legacy storefront');
+    });
+
     for (const languageCode of fixtureLanguages)
         for (const id of ['services', 'support', 'terms', 'privacy'] as const) {
             it(`${languageCode}/${id} loads the requested public page rather than homepage dependencies`, async () => {

@@ -106,6 +106,14 @@ import {
 } from './manual-digital-delivery.resolver';
 import { ManualDigitalDeliveryService } from './manual-digital-delivery.service';
 import { manualServiceFulfillmentHandler } from './manual-service-fulfillment-handler';
+import { createOfflineManualPayment, withOfflineOrderPlacement } from './offline-manual-payment';
+import {
+    offlineAdminResolvers,
+    offlineAdminSchema,
+    offlineShopResolvers,
+    offlineShopSchema,
+} from './offline-payment.resolver';
+import { OfflinePaymentService } from './offline-payment.service';
 import {
     OrderAdditionalPaymentShopResolver,
     orderAdditionalPaymentShopSchema,
@@ -176,6 +184,7 @@ import './types';
         CheckoutResourcesService,
         DigitalCatalogImportAdapter,
         ControlledTestPaymentConfigService,
+        OfflinePaymentService,
         CartDeliveryCommandAdapter,
         AfterSalesService,
         AfterSalesEvidenceService,
@@ -210,9 +219,11 @@ import './types';
         schema: gql`
             ${adminApiExtensions}
             ${digitalProductAdminSchema}
+            ${offlineAdminSchema}
         `,
         resolvers: [
             DigitalProductAdminResolver,
+            ...offlineAdminResolvers,
             AfterSalesAdminResolver,
             AfterSalesEvidenceFieldResolver,
             OrderOperationsAdminResolver,
@@ -233,9 +244,11 @@ import './types';
             ${shopApiExtensions}
             ${digitalReceiptShopSchema}
             ${orderAdditionalPaymentShopSchema}
+            ${offlineShopSchema}
         `,
         resolvers: [
             OrderFulfillmentResolver,
+            ...offlineShopResolvers,
             DigitalReceiptShopResolver,
             OrderAdditionalPaymentShopResolver,
             OrderConfirmationResolver,
@@ -572,6 +585,17 @@ import './types';
         config.orderOptions.orderByCodeAccessStrategy = new AuthenticatedOrderByCodeAccessStrategy();
         config.orderOptions.process = composeCommerceOrderProcesses(config.orderOptions.process);
         config.paymentOptions.process = [...(config.paymentOptions.process ?? []), commercePaymentProcess];
+        const offline = createOfflineManualPayment();
+        config.orderOptions.orderPlacedStrategy = withOfflineOrderPlacement(
+            config.orderOptions.orderPlacedStrategy,
+        );
+        config.orderOptions.process.push(offline.orderProcess);
+        config.paymentOptions.process.push(offline.paymentProcess);
+        config.paymentOptions.paymentMethodHandlers.push(offline.handler);
+        config.paymentOptions.paymentMethodEligibilityCheckers = [
+            ...(config.paymentOptions.paymentMethodEligibilityCheckers ?? []),
+            offline.checker,
+        ];
         const testPayment = createControlledTestPayment(CommerceFulfillmentPlugin.testPaymentsEnabled);
         config.orderOptions.process.push(testPayment.orderProcess);
         config.paymentOptions.process.push(testPayment.paymentProcess);

@@ -1,0 +1,165 @@
+{
+  "directory": "operations-dashboard-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin",
+  "startedAt": "2026-10-12T20:23:48.983Z",
+  "finishedAt": "2026-10-12T20:23:50.294Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/operations-dashboard-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-api.ts",
+      "sha256": "4f9eab77851914dea8b4994ba00e222c9d37beff844b00418cda46ddc58172b8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-config.service.spec.ts",
+      "sha256": "b28fa712b3d01b31907536c7c709e846615e8b05ce7659083bbf7ed07b53032e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-config.service.ts",
+      "sha256": "0eafc48ab34948802792954eb999af692436ada0eb6a491d69b4eccf59ebff1e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-event-subscriber.spec.ts",
+      "sha256": "0dc1f53756ca158ef4bade810c3196becc60f78d5b966a3a5d5c30828d153eb2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-event-subscriber.ts",
+      "sha256": "cccc91004d8e9238cd99e70dc3b2fd832c2a1bbc37efea8f93abfbc823da27bf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-health.controller.spec.ts",
+      "sha256": "1db90669c54911905307a0b43d4edba14611eadd289782b4297509bc0ec7ad41"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-health.controller.ts",
+      "sha256": "2709d1a6e3bf1068ef972558a8f14280b7881eb0f7e944ad45c8745ceba65a50"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification-requested.event.ts",
+      "sha256": "670345d76969b6670fa5dce1299262abc01877fae9fe8cfcb76d18b76f06a7ad"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification.resolver.ts",
+      "sha256": "09f2ceee8ae8c2eab6aa290f1c473788bd65aa560021d8fabffc3e91fb51b305"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification.service.spec.ts",
+      "sha256": "d04b87b14cecc8d8108fae7630cd3b1d2cda2d70c8cd50d5f7c635293520e99b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification.service.ts",
+      "sha256": "3074327b3dbbaedf2f7b01a79312279a9dc93033f9d3445c3a2fff614034dcdb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/admin-notification.tasks.ts",
+      "sha256": "a019de4ae9795624779e57e4f1d050588a130489690adaca3e5736cf4383ef11"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/department-notification-router.spec.ts",
+      "sha256": "bfa8ccde002148260df804b768e94bbaaf9cc475eb0d6b3471c321a77356f63a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/department-notification-router.ts",
+      "sha256": "3c5c6dbd60c546b88766a18b5af5e660b029a9083d63240fb99786e0297527b6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-incident-action.entity.ts",
+      "sha256": "d908389368e3b5237713ec0710a3e395613c3f2182c10fec520bf6ca76f53cda"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-incident-evidence.entity.ts",
+      "sha256": "55694246bed2a0cdc2aa7e9ce9ca870804381b283fe24f586f899f9cb2171242"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-notification-config-audit.entity.ts",
+      "sha256": "e8562ca8403a336eb9e96dd0bfedc36fcfcbf72818559e0ff62f10b07ee79d12"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-notification-config.entity.ts",
+      "sha256": "35eea18c99ca4f38f719338b05ae3a7f67ee3e1f3bcf138401e59788b2f00bcd"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-notification-delivery.entity.ts",
+      "sha256": "18886ea59605bc906efc4ec0a2b8d698e2f7b27a39588d46247c281681d9e820"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-notification-runtime.entity.ts",
+      "sha256": "62ce5d1333d219607124e8a57ecb29f1271418c644674d5ff4d91dce56ebeaa5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/entities/admin-notification-signal.entity.ts",
+      "sha256": "a5950fa995cd685dc967b9060ed275408ffbd94de401e4540cbabaa3016e8a04"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/incident-response.service.spec.ts",
+      "sha256": "8d9c4ff409ca180b4ad7a7b6e264d4331985619f9dfe31f563e6d31873911258"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/incident-response.service.ts",
+      "sha256": "c1434d3f84912ef39247d3501b74560c6945402ce02f05f7cd4f629ff719cab3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/index.ts",
+      "sha256": "05cb766e6ecd962f494cd6f8eede1e5f0db13d917d1be06fe431724596ea9a84"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/notification-payload.ts",
+      "sha256": "d2dbd5ca2ec6237c10de9888282fc45c15c87ec87abca70fc8fad5c6dc6b7735"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/notification-signal.service.ts",
+      "sha256": "683a360ed19002cb2a39aa9b6f07c1084ccf936d61428dc437727c1e5bac9ba5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/operations-dashboard.plugin.ts",
+      "sha256": "e4e6d531f567af1eab101872882532425cdd12d1306cb8b9a90cca2436fa6514"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/security-notification.service.spec.ts",
+      "sha256": "da4facc5e964476a140eb9bdc268fb397c6ffaf10d1cf17c5e5ed8153caa0700"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/security-notification.service.ts",
+      "sha256": "ae73cea4d7b1d48db3f2459a54952cb09476932ee68854d6453963d8cbc51d3e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/system-dependency-watchdog.service.spec.ts",
+      "sha256": "8545b96a6e787e10b4a56edc6df43d732db94ae1cac085f9e27bb7ba4266c9a4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/system-dependency-watchdog.service.ts",
+      "sha256": "489c0660ff92847f2020883eff9d8268b6dd338a610f32b1080143f186f1d623"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/telegram-client.spec.ts",
+      "sha256": "3fb530813d6910bfc74ebec57d5a3973fe7c1938f85708d539be3630728bd1c9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/telegram-client.ts",
+      "sha256": "10047398fafa4f6d9c009053f4aad80d1f8ee9212606a555059a8e687e41e594"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/telegram-notification-formatter.spec.ts",
+      "sha256": "8851e33fd9d78b98267374679bd59e1633fdcc9359638d5c8b92f258f6389489"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/telegram-notification-formatter.ts",
+      "sha256": "de37fe0e602115e790e99c14f3a32d6ed9d0b7e12c770bf7184661093a7d4f9c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/telegram-notification-worker.service.spec.ts",
+      "sha256": "627b8a57c8a22b4fb3b7981f71980f430c290bf93b138f7f6056d5288611ddde"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/operations-dashboard-plugin/src/telegram-notification-worker.service.ts",
+      "sha256": "606b38d854e2ca40f6995510c8710df02a99e0368acb233ed120bd642e4abd8c"
+    }
+  ],
+  "changedInputs": []
+}

@@ -29,5 +29,7 @@ describe('anonymous performance records', () => {
         expect(performanceMetricPayload({ name: 'CLS', value: NaN } as never)).toBeUndefined();
         expect(performancePageType('/order-detail')).toBe('other');
         expect(performancePageType('/category')).toBe('catalog');
+        expect(performancePageType('/en/category?token=private#item')).toBe('catalog');
+        expect(performancePageType('/zh/order-detail?id=private')).toBe('other');
     });
 });

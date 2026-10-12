@@ -23,6 +23,10 @@ import { resolveAccountRecommendationSettings } from '../../../storefront-conten
 import { ShopApi } from '../api';
 import { AccountIdentity } from '../components/common/account-identity';
 import { AccountOrderCarousel } from '../components/common/account-order-carousel';
+import {
+    CustomerOrdersStatus,
+    type CustomerOrdersStatusProps,
+} from '../components/common/customer-orders-status';
 import { useDesktopLayout } from '../desktop-layout';
 import { compactUiCopy, languageCodeFor } from '../i18n';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from '../query-client';
@@ -49,7 +53,7 @@ import { DesktopAccountPage } from './desktop-account-page';
 
 // TODO: Fix internal imports later
 
-export interface AccountPageProps {
+export interface AccountPageProps extends CustomerOrdersStatusProps {
     api: ShopApi;
     customer: ActiveCustomer | null;
     products: Product[];
@@ -81,6 +85,9 @@ export function AccountPage() {
     const {
         api,
         customer,
+        recentOrdersState = 'ready',
+        recentOrdersError,
+        onRetryRecentOrders,
         products,
         market,
         locale,
@@ -97,7 +104,7 @@ export function AccountPage() {
     const recommendationSettings = resolveAccountRecommendationSettings(accountRecommendations);
     const desktop = useDesktopLayout();
     const compactCopy = compactUiCopy[language];
-    const orders = customer?.orders.items ?? [];
+    const orders = customer?.orders?.items ?? [];
     const countsQuery = useQuery({
         queryKey: storefrontQueryKeys.customerOrderCounts(
             storefrontQueryKeys.market(market),
@@ -191,6 +198,9 @@ export function AccountPage() {
                 api={api}
                 pending={pagePending}
                 customer={customer}
+                recentOrdersState={recentOrdersState}
+                recentOrdersError={recentOrdersError}
+                onRetryRecentOrders={onRetryRecentOrders}
                 products={products}
                 market={market}
                 locale={locale}
@@ -293,6 +303,12 @@ export function AccountPage() {
                         onClick={() => navigateTo({ name: 'orders', tab: 'service' })}
                     />
                 </AccountOrderCarousel>
+                <CustomerOrdersStatus
+                    recentOrdersState={recentOrdersState}
+                    recentOrdersError={recentOrdersError}
+                    onRetryRecentOrders={onRetryRecentOrders}
+                    language={language}
+                />
             </section>
 
             {desktop && latestOrder ? (
@@ -364,7 +380,7 @@ export function AccountPage() {
                             </span>
                             <ChevronRight />
                         </button>
-                    ) : (
+                    ) : recentOrdersState !== 'ready' ? null : (
                         <div className="account-logistics-empty">
                             <Truck aria-hidden="true" />
                             <span>

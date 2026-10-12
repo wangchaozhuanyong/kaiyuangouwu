@@ -1,12 +1,15 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
+import { useState } from 'react';
 
 import { catalogRouteState } from '../catalog-route-query';
 import { useDesktopLayout } from '../desktop-layout';
 import { offlineLoadError } from '../loading-state';
+import { usePageRouteCommit } from '../page-readiness';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { HomePageContext, ProductDetailPageContext, SearchPageContext } from '../storefront-page-contexts';
+import { readInitialPublicPage } from '../storefront-page-data';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
 import { CollectionSummary, Product, ProductVariant } from '../types';
 
@@ -21,7 +24,9 @@ const ProductDetailPage = lazyRouteComponent(
 const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'SearchPage');
 
 export function HomeRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
+    const [initialRenderTime] = useState(() => readInitialPublicPage()?.generatedAt);
     const { language, configQuery, contentQuery, productsQuery } = runtime;
     const contentError =
         contentQuery.data === undefined
@@ -48,6 +53,8 @@ export function HomeRoutePage() {
                 managedContentProducts: runtime.managedContentProducts,
                 managedContentLoading: runtime.managedContentLoading,
                 managedContentResolved: runtime.managedContentResolved,
+                responsiveIntro: true,
+                initialRenderTime,
                 heroAutoplayIntervalSeconds: runtime.heroAutoplayIntervalSeconds,
                 configuredBlockTypes: runtime.configuredBlockTypes,
                 coupons: runtime.activeCoupons,
@@ -113,6 +120,7 @@ export function HomeRoutePage() {
 }
 
 export function ProductRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
     const isZh = runtime.language === 'zh';
     if (!runtime.selectedProduct && runtime.routeProductLoading) {
@@ -194,6 +202,7 @@ export function ProductRoutePage() {
 }
 
 export function SearchRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
     const desktop = useDesktopLayout();
     if (desktop) return <HomeRoutePage />;

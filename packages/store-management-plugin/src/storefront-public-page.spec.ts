@@ -299,6 +299,60 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
     };
 }
 
+describe('private-route public configuration bootstrap', () => {
+    it('peeks only already warm config and retains its source age without catalog assembly', async () => {
+        const h = accessHarness();
+        const ctx = h.ctx as Parameters<typeof h.service.peekBoot>[0];
+        const config = { code: 'a', customFields: {}, availableCountries: [] };
+        await h.cache.readThrough(ctx, 'config:a.test', 60_000, () => Promise.resolve(config));
+        const before = h.config.mock.calls.length;
+        const value = await h.service.peekBoot(ctx, 'a.test');
+        expect(value).toMatchObject({
+            config: { ...config, accessMode: 'LIVE' },
+            scope: { host: 'a.test', channelCode: 'a', priceContext: 'public' },
+        });
+        if (!value) throw new Error('Expected a warm public bootstrap');
+        expect(value.configUpdatedAt).toBeLessThanOrEqual(value.generatedAt);
+        expect(h.config.mock.calls).toHaveLength(before);
+        expect(await h.service.peekBoot(ctx, 'missing.test')).toBeUndefined();
+        expect(h.config.mock.calls).toHaveLength(before);
+    });
+    it('does not reuse customer/session, closed or preview configuration', async () => {
+        for (const mode of ['PREVIEW', 'CLOSED'] as const) {
+            const blocked = accessHarness(mode);
+            expect(await blocked.service.peekBoot(blocked.ctx, 'a.test')).toBeUndefined();
+        }
+        const h = accessHarness();
+        expect(
+            await h.service.peekBoot({ ...(h.ctx as object), activeUserId: 'buyer' } as never, 'a.test'),
+        ).toBeUndefined();
+        expect(
+            await h.service.peekBoot({ ...(h.ctx as object), session: {} } as never, 'a.test'),
+        ).toBeUndefined();
+        expect(h.raw.get).not.toHaveBeenCalled();
+    });
+    it('rejects channel mismatch and concurrent revision changes between config and visual reads', async () => {
+        const h = accessHarness();
+        const peek = vi.spyOn(h.cache, 'peekEntry');
+        peek.mockResolvedValueOnce({
+            value: { code: 'wrong' },
+            expiresAt: Date.now() + 60_000,
+            revision: 'one',
+        }).mockResolvedValueOnce(undefined);
+        expect(await h.service.peekBoot(h.ctx, 'a.test')).toBeUndefined();
+        peek.mockResolvedValueOnce({
+            value: { code: 'a' },
+            expiresAt: Date.now() + 60_000,
+            revision: 'one',
+        }).mockResolvedValueOnce({
+            value: { presetId: 'default' },
+            expiresAt: Date.now() + 60_000,
+            revision: 'two',
+        });
+        expect(await h.service.peekBoot(h.ctx, 'a.test')).toBeUndefined();
+    });
+});
+
 describe('authoritative public access modes', () => {
     afterEach(() => vi.restoreAllMocks());
 

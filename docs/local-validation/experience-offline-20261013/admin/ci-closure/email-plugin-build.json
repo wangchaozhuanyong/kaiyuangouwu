@@ -1,0 +1,105 @@
+{
+  "directory": "email-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "rimraf lib && tsc -p ./tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin",
+  "startedAt": "2026-10-12T20:23:42.323Z",
+  "finishedAt": "2026-10-12T20:23:43.706Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/email-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/attachment-utils.ts",
+      "sha256": "6ecd03c5433a65e3e2a69e49b26378d84c78f13886d85979665914f9db7efe0a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/common.ts",
+      "sha256": "827fb921e34de5a70f485f34453afe32780cef8a84980c884cbb83170c7085aa"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/constants.ts",
+      "sha256": "1a0a3ad890d39b8684484271f1f78d2d9ad7ebf4757ba34c513d80ea0afcb599"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/dev-mailbox.ts",
+      "sha256": "ca8d7def984b610f7fc0177b3741c7949bccdb640158a363c46da08d85a16a96"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/email-processor.ts",
+      "sha256": "0daf0acfd22982576a5acf0f25cc7888da15c3d7acc79ce2cfdf74b2c8825eb8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/email-send-event.ts",
+      "sha256": "7538324d5ae5e4730ba3eb536877a5aedeb7094c0440cf5c0e6697dbce481aeb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/event-listener.ts",
+      "sha256": "245ffd818651883ce2197534065bbbabf69f0682856ab019ea1688aa98c12cdc"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/generator/email-generator.ts",
+      "sha256": "ecceae047a54b76a1340fcf04b78e838003cc30a4418a86ffbb488966ca7a943"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/generator/handlebars-mjml-generator.ts",
+      "sha256": "c1eb0bb8ee80a7da47d1cad6e56ff946876734f8a6c367f53bc3821795a483b7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/generator/noop-email-generator.ts",
+      "sha256": "89b4d8ca7a58c3ff8f0a48a1b9954f5e9c4a1749bad2da2c074dea7b2920abbf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/handler/default-email-handlers.ts",
+      "sha256": "171ded3620c0114381876b28db3c9e733e5022e307875e7add97775d666f5126"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/handler/event-handler.ts",
+      "sha256": "a6a841b7738f0575e0ffbe397fc0331b1aae338766ade19d7db1487712c992ab"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/handler/mock-events.ts",
+      "sha256": "8a69c1c234536f4e33d54b10d99c31ffc1bddb6c39d5b08b598a663391326ea3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/package-dependencies.spec.ts",
+      "sha256": "eafd39978c0843d92d5d6aef7bb4308dba34b3a345b608aa5d5e9d78c724ca79"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/plugin.spec.ts",
+      "sha256": "6a2171cf530199ad36da798c99b4bdaba114447cdb8369f5f97f2eefc3e08856"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/plugin.ts",
+      "sha256": "f7ef03b2662eacd289095495955498bfa6f73e47836f0673ef3811dbd5828fff"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/sender/email-sender.ts",
+      "sha256": "4138e98e9dcc3fa88a406a4ff022b49ddbede946e02c222f9b74e94c3f9b00e6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/sender/nodemailer-email-sender.ts",
+      "sha256": "5d797e51fcda23e9b45fca2f0f28c7ee47a169e21d44715c15e405919917ade7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/template-loader/file-based-template-loader.ts",
+      "sha256": "6675e7ff0ad56d6b641fe789a41cd76d742e82d746e70df1093dd24743441bd9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/template-loader/template-loader.ts",
+      "sha256": "6537df16729b69139afd60b8e813388cd81836882ddb5f65384a4488e2c2b3c6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/transport-options.spec-d.ts",
+      "sha256": "46c09d8dd00eecdbebf3859153ae66787a705409e6fce2804ca9b399be592819"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/email-plugin/src/types.ts",
+      "sha256": "33c32edf1bf192ffa5bc81ad4d65dcca601067f5b621a96d0874232d64301f34"
+    }
+  ],
+  "changedInputs": []
+}

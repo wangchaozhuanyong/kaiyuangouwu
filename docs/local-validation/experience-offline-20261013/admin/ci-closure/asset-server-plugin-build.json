@@ -1,0 +1,129 @@
+{
+  "directory": "asset-server-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "rimraf lib && tsc -p ./tsconfig.build.json && node build.js",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin",
+  "startedAt": "2026-10-12T20:23:43.712Z",
+  "finishedAt": "2026-10-12T20:23:45.297Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/asset-server-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/asset-server.spec.ts",
+      "sha256": "d4176f6d1019d49ff7bcbef1dabc3d824ee434edf9b30ca24704b5a9277a69be"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/asset-server.ts",
+      "sha256": "95ee5986f72cab213d130762bafea6baccef014c2ad1d96c0527cd3570db14c8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/common.ts",
+      "sha256": "bd3ca7d6f167a86b55eab84dd3c148144e4e0eeb2993d9057d84c21e0cc70c57"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/customer-avatar-naming-strategy.ts",
+      "sha256": "9e4f7ff5c4ea7e783fc0ce3936f5bb2d06bfac25788ff7f2760098d620f14e00"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/customer-avatar-storage-strategy.spec.ts",
+      "sha256": "5fb5c377585aaa974540bdecbd27a254db6371268f9957feacf4024cfaee5d86"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/customer-avatar-storage-strategy.ts",
+      "sha256": "bddb8523acbcc2bdfdcbbfcbdb62da6c453b33c2efe390146ea3375a5ee33372"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/default-asset-storage-strategy-factory.ts",
+      "sha256": "acf9e455f528bc2c6e13f8d059c2b7734339fa97bcc1742df6acebcb25a20aa9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/hashed-asset-naming-strategy.ts",
+      "sha256": "bb917d5b8cb41966994c6ef0f86f9d7db42a4cc9f58d7a400808124757a7c9b8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/image-transform-strategy.ts",
+      "sha256": "f47afa29a55d6125e80cee87f66c6a589aa9c8c7028a366c05964efe340679c0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/local-asset-storage-strategy.ts",
+      "sha256": "114535a0603b37b2016ee41622bb88830e1deb0dab4a7c604913255a53e43da5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/preset-only-strategy.ts",
+      "sha256": "dc13cc54dff9e7ae3b52d0f9d702f9e7237098f8f202eb1e628432e0f12d9b3f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/private-image-object-store.integration.spec.ts",
+      "sha256": "ca31b25669b5ddae3a589d8590e7751fef62e85b54104b4410f944b2b46096bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/private-image-object-store.spec.ts",
+      "sha256": "d2695bcade2d387d0a6efd8f83d44c54b0c452eccd3bfc6872b53515b2054c8e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/private-image-object-store.ts",
+      "sha256": "2d110cf322dc7f640884f41534cbf70721639ed9b06231beb2c7e8b66ba15502"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/s3-asset-storage-strategy.spec.ts",
+      "sha256": "71d7e86159516b3b21d2b6684806528f6f8bdfa99d8c317e54550d496b493838"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/s3-asset-storage-strategy.ts",
+      "sha256": "1525ba0aab75246b8da8695940de2ad1bc7f5c95da37cd75a498c3efaf4c9706"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/config/sharp-asset-preview-strategy.ts",
+      "sha256": "160a0d83b00e8f77c01dab570b9e72fa2bf4c4bb909c43d6e7752d03258857cf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/constants.ts",
+      "sha256": "767017d7b2f28d64db247b942c319dc5f99656d03cd9811b811926c8bb5c10cb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/file-icon.png",
+      "sha256": "bbf0079ace7c6033845e9ec96abfe054ae08177a86ef92541b9860ebd2cd2cc1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/file-icon.psd",
+      "sha256": "2461b1e58430dc5eb5c010cef5fa46f7512e20f5c3221f0d23d6daa6410fb55e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/image-transform-queue.spec.ts",
+      "sha256": "a1125b70e36b7ed1ab06cf8445b345e043333e84a9e6b268987e8506c9fb7c3c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/image-transform-queue.ts",
+      "sha256": "88bd907c9f1c3a432b2a55a33cd639e0dfd8b760e9d3b73472db34fea4d322ce"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/package-dependencies.spec.ts",
+      "sha256": "32843b6fdb10d009671d6f31fb71f26da7cf4970c085c0486da12dbb9ca5a746"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/plugin.ts",
+      "sha256": "0bade8700472816ba75349513484d923b029b25ae7df09da7fede1b103b2d703"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/public-derivative.spec.ts",
+      "sha256": "7819ad2f12fc8a41966b0e22ae8a887b189e684d51c6aa86e5d94fdf1b4f2e10"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/transform-image.spec.ts",
+      "sha256": "1a31d22f34d6758b3db254d5c4c34dda263dcadeabdc188e509eadc0572c9e18"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/transform-image.ts",
+      "sha256": "f6e5e9537104e0475c787c9d0e945877b0b2bc974ec09e44f8397ccd7e72c3af"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/asset-server-plugin/src/types.ts",
+      "sha256": "b6a5c4e725cb3fb3f46a7710a72fe689d8e763ffa7e98a608e8d1733841d2056"
+    }
+  ],
+  "changedInputs": []
+}

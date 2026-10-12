@@ -1,0 +1,240 @@
+{
+  "synthetic": true,
+  "reads": [
+    {
+      "url": "http://127.0.0.1:62883/_storefront/page-data?kind=catalog&path=%2Fcategory&input=%7B%22sort%22%3A%22RECOMMENDED%22%2C%22inStockOnly%22%3Afalse%2C%22skip%22%3A0%2C%22take%22%3A12%7D&languageCode=en&currencyCode=MYR",
+      "status": 200,
+      "requestKey": "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}",
+      "request": {
+        "kind": "catalog",
+        "path": "/category",
+        "input": {
+          "sort": "RECOMMENDED",
+          "inStockOnly": false,
+          "skip": 0,
+          "take": 12
+        }
+      },
+      "scope": {
+        "host": "127.0.0.1:62883",
+        "channelCode": "synthetic-a",
+        "languageCode": "en",
+        "currencyCode": "MYR",
+        "priceContext": "public"
+      },
+      "catalogItems": 12,
+      "failures": []
+    },
+    {
+      "url": "http://127.0.0.1:62883/_storefront/page-data?kind=product&id=synthetic-a-product-1&languageCode=en&currencyCode=MYR",
+      "status": 200,
+      "requestKey": "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}",
+      "request": {
+        "kind": "product",
+        "id": "synthetic-a-product-1"
+      },
+      "scope": {
+        "host": "127.0.0.1:62883",
+        "channelCode": "synthetic-a",
+        "languageCode": "en",
+        "currencyCode": "MYR",
+        "priceContext": "public"
+      },
+      "failures": []
+    }
+  ],
+  "snapshots": [
+    {
+      "label": "intent0",
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 494,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "hasData": false,
+          "status": "pending",
+          "fetchStatus": "idle",
+          "age": 1791837413502,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "hasData": false,
+          "status": "pending",
+          "fetchStatus": "idle",
+          "age": 1791837413502,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 154,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 154,
+          "invalidated": false
+        }
+      ]
+    },
+    {
+      "label": "intent1",
+      "queries": [
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"home\"}"
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 1155,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-best-sellers",
+              "sort": "SALES",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "hasData": false,
+          "status": "pending",
+          "fetchStatus": "idle",
+          "age": 1791837414163,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "purpose": "home-recommendations",
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 16
+            }
+          ],
+          "hasData": false,
+          "status": "pending",
+          "fetchStatus": "idle",
+          "age": 1791837414163,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"catalog\",\"path\":\"/category\",\"input\":{\"sort\":\"RECOMMENDED\",\"inStockOnly\":false,\"skip\":0,\"take\":12}}"
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 815,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "catalog",
+            {
+              "sort": "RECOMMENDED",
+              "inStockOnly": false,
+              "take": 12
+            }
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 815,
+          "invalidated": false
+        },
+        {
+          "key": [
+            "storefront",
+            "synthetic-a:MYR",
+            "en",
+            "public-seo",
+            "{\"kind\":\"product\",\"id\":\"synthetic-a-product-1\"}"
+          ],
+          "hasData": true,
+          "status": "success",
+          "fetchStatus": "idle",
+          "age": 634,
+          "invalidated": false
+        }
+      ]
+    }
+  ]
+}

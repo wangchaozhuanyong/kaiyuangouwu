@@ -1,0 +1,3426 @@
+{
+    "environment": "Local actual production React components; synthetic business data; no production writes. Safe area and keyboard geometry are simulated.",
+    "cases": [
+        {
+            "label": "320/classic/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/classic/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/classic/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/classic/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/classic/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/classic/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/classic/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/classic/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/classic/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/classic/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/classic/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/classic/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/classic/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/classic/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/classic/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/classic/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/neo-minimalist/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "320/neo-minimalist/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/classic/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/classic/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/classic/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/classic/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/classic/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/classic/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/classic/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/classic/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/classic/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/classic/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/classic/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/classic/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/classic/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/classic/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/classic/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/classic/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/neo-minimalist/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "390/neo-minimalist/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/classic/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/classic/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/classic/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/classic/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/classic/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/classic/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/classic/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/classic/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/classic/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/classic/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/classic/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/classic/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/classic/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/classic/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/classic/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/classic/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/neo-minimalist/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 12,
+                "bottom": 12,
+                "top": 16,
+                "after": 16,
+                "gap": 16
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 16
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 16
+                }
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 92,
+            "clearance": "76px",
+            "bar": {
+                "height": 76,
+                "position": "fixed"
+            },
+            "safeArea": {
+                "height": 110,
+                "padding": 126,
+                "gap": 16
+            },
+            "keyboard": {
+                "offset": "300px",
+                "padding": 126
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "768/neo-minimalist/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/classic/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/classic/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/classic/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/classic/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/classic/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/classic/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/classic/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/classic/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/classic/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/classic/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/classic/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/classic/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/classic/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/classic/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/classic/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/classic/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 30.71875,
+                "bottom": 12,
+                "top": 24,
+                "after": 20,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1024/neo-minimalist/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/classic/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/classic/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/classic/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/classic/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/classic/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/classic/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/classic/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/classic/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/classic/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/classic/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/classic/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/classic/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/classic/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/classic/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(244, 241, 233)",
+                    "color": "rgb(37, 60, 53)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/classic/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/classic/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/zh/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/a",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/a",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/a",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/a",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/b",
+            "view": "home",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "geometry": {
+                "buttons": [
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    },
+                    {
+                        "width": 44,
+                        "height": 44
+                    }
+                ],
+                "right": 43.1875,
+                "bottom": 12,
+                "top": 24,
+                "after": -349.328125,
+                "gap": 24
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/b",
+            "view": "referral",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "colors": {
+                "invite": {
+                    "background": "rgb(23, 61, 57)",
+                    "color": "rgb(246, 247, 243)",
+                    "padding": 24
+                },
+                "overview": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                },
+                "records": {
+                    "background": "rgb(36, 59, 54)",
+                    "color": "rgb(233, 240, 235)",
+                    "padding": 24
+                }
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/b",
+            "view": "studio",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "bar": {
+                "height": 81,
+                "position": "static"
+            },
+            "history": {
+                "padding": 16,
+                "clearance": "0px"
+            }
+        },
+        {
+            "label": "1440/neo-minimalist/en/b",
+            "view": "support",
+            "overflow": false,
+            "paddingBottom": 16,
+            "clearance": "0px",
+            "qr": {
+                "overflow": false,
+                "imgSrc": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221200%22%20height%3D%22700%22%3E%3Crect%20width%3D%221200%22%20height%3D%22700%22%20fill%3D%22%23cabc9c%22%2F%3E%3Ccircle%20cx%3D%22970%22%20cy%3D%22260%22%20r%3D%22170%22%20fill%3D%22%23e9dec8%22%2F%3E%3Cpath%20d%3D%22M680%20600L830%20100%201120%20610%22%20fill%3D%22%23b29b74%22%2F%3E%3C%2Fsvg%3E",
+                "locked": "hidden",
+                "focused": true
+            }
+        }
+    ],
+    "errors": [],
+    "rechecked": {
+        "reason": "Corrected final-content selector (old probe selected the fixed action bar); await real trigger focus restoration.",
+        "states": 25
+    }
+}

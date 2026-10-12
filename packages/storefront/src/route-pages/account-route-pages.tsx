@@ -38,6 +38,9 @@ export function AccountRoutePage() {
                 value={{
                     api: runtime.api,
                     customer: runtime.customer,
+                    recentOrdersState: runtime.customerDetailsLoadState,
+                    recentOrdersError: runtime.customerDetailsLoadError,
+                    onRetryRecentOrders: () => void runtime.retryCustomerDetails(),
                     products: runtime.products,
                     market: runtime.market,
                     locale: runtime.locale,

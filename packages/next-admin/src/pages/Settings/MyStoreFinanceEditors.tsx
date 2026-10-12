@@ -8,6 +8,7 @@ import {
     type MyStoreSettingsResult,
 } from '../../graphql/management.graphql';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
+import { paymentHandlerPurposeLabel } from '../../utils/configurable-operation-localization';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { FieldInput } from './MyStoreFields';
 import { secondaryButton } from './settings-ui';
@@ -183,31 +184,41 @@ export function MyStorePaymentOptions({
                         </tr>
                     </thead>
                     <tbody>
-                        {options.map(option => (
-                            <tr key={option.id}>
-                                <td className="font-semibold text-slate-800">{option.name}</td>
-                                <td className="text-slate-500">
-                                    {option.platformEnabled ? '平台启用' : '平台已停用'}
-                                </td>
-                                <td className="text-slate-500">
-                                    {option.enabled ? '本店已开启' : '本店未开启'}
-                                </td>
-                                <td className="text-slate-500">
-                                    {option.effectiveEnabled ? '已启用' : '未启用'}
-                                </td>
-                                <td>
-                                    <AdminInput
-                                        type="checkbox"
-                                        checked={option.enabled}
-                                        disabled={
-                                            state.loading || (!option.platformEnabled && !option.enabled)
-                                        }
-                                        onChange={event => void toggle(option.id, event.target.checked)}
-                                        aria-label={`${option.name}启用状态`}
-                                    />
-                                </td>
-                            </tr>
-                        ))}
+                        {options.map(option => {
+                            const purposeLabel = paymentHandlerPurposeLabel(option.handlerCode);
+                            return (
+                                <tr key={option.id}>
+                                    <td className="font-semibold text-slate-800">
+                                        <span>{option.name}</span>
+                                        {purposeLabel && (
+                                            <span className="ml-2 whitespace-nowrap text-[11px] font-normal text-slate-500">
+                                                {purposeLabel}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="text-slate-500">
+                                        {option.platformEnabled ? '平台启用' : '平台已停用'}
+                                    </td>
+                                    <td className="text-slate-500">
+                                        {option.enabled ? '本店已开启' : '本店未开启'}
+                                    </td>
+                                    <td className="text-slate-500">
+                                        {option.effectiveEnabled ? '已启用' : '未启用'}
+                                    </td>
+                                    <td>
+                                        <AdminInput
+                                            type="checkbox"
+                                            checked={option.enabled}
+                                            disabled={
+                                                state.loading || (!option.platformEnabled && !option.enabled)
+                                            }
+                                            onChange={event => void toggle(option.id, event.target.checked)}
+                                            aria-label={`${option.name}${purposeLabel ? `（${purposeLabel}）` : ''}启用状态`}
+                                        />
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "command": "vitest run src/api/lazy-account.spec.ts src/api/customer-identity.spec.ts src/route-pages/route-gate-identity.spec.tsx src/hooks/useStorefrontCustomerData.spec.ts src/api.spec.ts",
+  "tests": { "passed": 142, "failed": 6 },
+  "failed": [
+    "accepts login even if a later guest request returns first",
+    "accepts verification even if a later guest request returns first",
+    "accepts reset even if a later guest request returns first",
+    "ignores a guest request started during login but returned after login",
+    "propagates cancellation to confirmation-token preparation",
+    "cancels a guest payment quote when its order view is abandoned"
+  ],
+  "cause": "These fixtures assumed account fetch begins synchronously at the method call. With deferred account code, authentication and cancellation fixtures must await the observable request-start event before starting the explicitly later request or aborting an already-started network request. No business assertions are removed. The new adapter suite separately covers cancellation during module loading with zero network calls.",
+  "unhandledRejections": "Three synthetic auth responses were assigned to the wrong request because sequence mocks received the guest read before deferred auth code began. Their missing auth result caused assertNoError exceptions."
+}

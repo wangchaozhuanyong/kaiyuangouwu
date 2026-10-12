@@ -1,0 +1,350 @@
+{
+  "at": "2026-10-12T20:15:24.039Z",
+  "scope": "actual owned MySQL, Vendure schema/DI and Admin HTTP GraphQL; synthetic awaiting-manual orders; full current storefront-admin order document; no external payments or email",
+  "measurements": [
+    {
+      "orders": 1000,
+      "pageSize": 20,
+      "cold": {
+        "durationMilliseconds": 311.68,
+        "sqlQueries": 126,
+        "hydratedOrders": 20,
+        "hydratedLines": 20,
+        "orderHydrationEvents": 20
+      },
+      "p95Milliseconds": 343.65,
+      "sqlQueryRange": [
+        103,
+        308
+      ],
+      "samples": [
+        {
+          "durationMilliseconds": 307.2,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 303.31,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 291.61,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 308.69,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 270.42,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 274.24,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 293.8,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 342.93,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 374.06,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 343.65,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 330.8,
+          "sqlQueries": 308,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 283.3,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 282.33,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 308.08,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 284.03,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 282.76,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 278.74,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 288.76,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 279.87,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 282.81,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        }
+      ],
+      "completeOrdersPerSample": 20,
+      "actualCurrentAdminDocument": "GET_SALES_ORDERS",
+      "database": "mysql",
+      "runtime": {
+        "node": "v24.19.0",
+        "cpuModel": "Apple M4",
+        "logicalCpuCount": 10,
+        "memoryGiB": 16,
+        "loadAverages": [
+          2.8828125,
+          3.3486328125,
+          3.55078125
+        ]
+      }
+    },
+    {
+      "orders": 10000,
+      "pageSize": 20,
+      "cold": {
+        "durationMilliseconds": 394.49,
+        "sqlQueries": 106,
+        "hydratedOrders": 20,
+        "hydratedLines": 20,
+        "orderHydrationEvents": 20
+      },
+      "p95Milliseconds": 597.98,
+      "sqlQueryRange": [
+        103,
+        106
+      ],
+      "samples": [
+        {
+          "durationMilliseconds": 361.28,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 381.61,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 380.45,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 382.85,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 371.69,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 391.28,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 359.15,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 379.39,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 409.91,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 481.11,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 615.46,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 597.98,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 410.23,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 511.37,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 421.59,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 373.4,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 385.59,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 379.12,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 366.68,
+          "sqlQueries": 103,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        },
+        {
+          "durationMilliseconds": 373.21,
+          "sqlQueries": 106,
+          "hydratedOrders": 20,
+          "hydratedLines": 20,
+          "orderHydrationEvents": 20
+        }
+      ],
+      "completeOrdersPerSample": 20,
+      "actualCurrentAdminDocument": "GET_SALES_ORDERS",
+      "database": "mysql",
+      "runtime": {
+        "node": "v24.19.0",
+        "cpuModel": "Apple M4",
+        "logicalCpuCount": 10,
+        "memoryGiB": 16,
+        "loadAverages": [
+          4.556640625,
+          3.6845703125,
+          3.6669921875
+        ]
+      }
+    }
+  ]
+}

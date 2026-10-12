@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TabPageContext } from '../layouts/tab-page-context';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
+import { adminReadTimeoutLink } from '../runtime/admin-read-timeout';
 import { useAdminQuery } from './use-admin-query';
 
 const scope = vi.hoisted(() => ({ value: 'store-a:zh' }));
@@ -31,11 +32,13 @@ async function setup() {
     const requests: Array<{ id: string; observer: any }> = [];
     const client = new ApolloClient({
         cache: new InMemoryCache(),
-        link: new ApolloLink(
-            operation =>
-                new Observable(observer => {
-                    requests.push({ id: operation.variables.id, observer });
-                }),
+        link: adminReadTimeoutLink.concat(
+            new ApolloLink(
+                operation =>
+                    new Observable(observer => {
+                        requests.push({ id: operation.variables.id, observer });
+                    }),
+            ),
         ),
     });
     const container = document.createElement('div');
@@ -81,6 +84,47 @@ async function setup() {
 }
 
 describe('real Apollo admin query lifecycle', () => {
+    it('bounds a stalled real Apollo read, preserves content and only retries the failed read', async () => {
+        vi.useFakeTimers();
+        const fixture = await setup();
+        await fixture.resolve(0, 'retained data');
+        let work!: Promise<unknown>;
+        await act(async () => {
+            work = fixture.result().refetch();
+        });
+        const error = work.catch(value => value);
+        await act(async () => vi.advanceTimersByTimeAsync(45_001));
+        expect(await error).toBeInstanceOf(Error);
+        expect(fixture.container.textContent).toBe('retained data');
+        expect(fixture.result().error).toBeDefined();
+        expect(getQueryRuntime(fixture.client).state('/catalog/products/1').failed).toBe(1);
+        expect(fixture.requests).toHaveLength(2);
+        await act(async () => {
+            work = fixture.result().refetch();
+        });
+        expect(fixture.requests).toHaveLength(3);
+        await fixture.resolve(2, 'recovered data');
+        await work;
+        expect(fixture.container.textContent).toBe('recovered data');
+        expect(getQueryRuntime(fixture.client).state('/catalog/products/1').failed).toBe(0);
+    });
+    it('uses document resource domains for events and updates hidden resources only on activation', async () => {
+        const fixture = await setup();
+        await fixture.resolve(0, 'catalog before');
+        const runtime = getQueryRuntime(fixture.client);
+        runtime.invalidateDomains(['orders']);
+        await runtime.refreshPage('/catalog/products/1', 'event', ['orders']);
+        expect(fixture.requests).toHaveLength(1);
+        await fixture.render('1', false);
+        runtime.invalidateDomains(['catalog']);
+        await runtime.refreshPage('/catalog/products/1', 'event', ['catalog']);
+        expect(fixture.requests).toHaveLength(1);
+        await fixture.render();
+        expect(fixture.requests).toHaveLength(2);
+        expect(fixture.container.textContent).toBe('catalog before');
+        await fixture.resolve(1, 'catalog after');
+        expect(fixture.container.textContent).toBe('catalog after');
+    });
     it('keeps a fresh resource across hidden tabs without another request', async () => {
         const fixture = await setup();
         expect(fixture.requests).toHaveLength(1);

@@ -1,0 +1,58 @@
+{
+  "at": "2026-10-12T19:59:45.025Z",
+  "allCanonical": true,
+  "contexts": {
+    "@nestjs/core": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/common": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/platform-express": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/platform-express/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/platform-express/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/graphql": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/apollo": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/apollo/dist/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/apollo/dist/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/typeorm": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/typeorm/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/typeorm/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/testing": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/testing/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/testing/index.js",
+      "internalCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "internalCommon": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "graphql": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql/index.js",
+      "internalGraphql": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql/index.js"
+    },
+    "typeorm": {
+      "fromCore": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm/index.js",
+      "fromRoot": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/typeorm/index.js"
+    }
+  },
+  "errors": []
+}

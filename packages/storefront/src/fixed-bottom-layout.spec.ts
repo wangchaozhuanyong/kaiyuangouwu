@@ -5,15 +5,19 @@ import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import { orderPageStyles } from './tailwind/order-page-styles';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
-const stylesheet = readStorefrontStylesheet();
+const stylesheet = readStorefrontStylesheet(['./styles/image-studio.css']);
 
 describe('fixed bottom layout clearance', () => {
     it('uses one page-level clearance model for every fixed bottom bar', () => {
-        expect(stylesheet).toContain('--root-page-end-gap: 24px');
+        expect(stylesheet).toContain('--root-page-end-gap: var(--space-16)');
         expect(stylesheet).toContain('--page-bottom-fixed-height: var(--bottom-navigation-height)');
         expect(stylesheet).toContain('--page-bottom-fixed-height: var(--detail-action-bar-height)');
         expect(stylesheet).toContain('--page-bottom-fixed-height: var(--checkout-action-bar-height)');
         expect(stylesheet).toContain('--page-bottom-fixed-height: var(--order-detail-action-bar-height)');
+        expect(stylesheet).toContain('--page-bottom-fixed-height: var(--image-studio-action-bar-height)');
+        expect(stylesheet).toContain('--page-bottom-measured-clearance');
+        expect(stylesheet).not.toContain('padding-bottom: calc(82px');
+        expect(stylesheet).not.toContain('padding: 16px 16px 32px');
         expect(stylesheet).toContain(
             '--page-bottom-fixed-height: calc(var(--bottom-navigation-height) + var(--cart-checkout-bar-height))',
         );

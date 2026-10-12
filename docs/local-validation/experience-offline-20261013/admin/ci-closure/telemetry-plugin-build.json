@@ -1,0 +1,53 @@
+{
+  "directory": "telemetry-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "rimraf dist && tsc -p ./tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin",
+  "startedAt": "2026-10-12T20:23:46.291Z",
+  "finishedAt": "2026-10-12T20:23:47.512Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/telemetry-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/config/default-method-hooks.ts",
+      "sha256": "249f040894172ac3b9f6a12e1b9023421592537be3736fc4717e3c1b25828362"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/config/otel-instrumentation-strategy.ts",
+      "sha256": "5c263d6dd63a7ad2db08bc1a56695c0d0254fa3b5b00ad493c96fcd4c17666e4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/config/otel-logger.ts",
+      "sha256": "9d7d331c6ddbdc00bc8da838701b92e9df6d30801c8a4971aa41e96ef702212a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/constants.ts",
+      "sha256": "1fdf04ac1516cd980b83e46f05d90b99950dcba96ff4698d392a1d96203cb5d5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/index.ts",
+      "sha256": "2767b10f32138ce6e7439fb27ee2736e567c3a78ea631d84222158ee9a1f1153"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/instrumentation.ts",
+      "sha256": "5c5a53c744b3ebe5c2419d91d96dfaf3dd09e225db8b665e011dd682d8347101"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/service/method-hooks.service.ts",
+      "sha256": "a78d9719546e1c861c51d2162862afe1449970fdbd18d0ce432c08a47728a39d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/telemetry.plugin.ts",
+      "sha256": "27fa79575ceef2d4b56d0a5a33bfdf0c41d7e5cc844abae9c245ef9633c09669"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/telemetry-plugin/src/types.ts",
+      "sha256": "851bdfba11198a7a3844f0f73bc5bf23fc2f4401d0872970ced37dc946a0b3a3"
+    }
+  ],
+  "changedInputs": []
+}

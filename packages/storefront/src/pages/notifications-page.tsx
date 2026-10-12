@@ -114,7 +114,7 @@ export function NotificationsPage() {
         }
     };
     const isZh = language === 'zh';
-    const orders = customer?.orders.items ?? [];
+    const orders = customer?.orders?.items ?? [];
     const afterSalesQuery = useQuery({
         queryKey: storefrontQueryKeys.afterSalesRequests(
             storefrontQueryKeys.market(market),

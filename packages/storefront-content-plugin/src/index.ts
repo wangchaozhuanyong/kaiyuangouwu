@@ -33,6 +33,7 @@ export { StorefrontContentPlugin } from './storefront-content.plugin';
 export { StorefrontContentService } from './storefront-content.service';
 
 export {
+    STOREFRONT_BOOT_DATA_ELEMENT_ID,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
     canonicalPublicPageRequest,
     isReusablePublicPageData,
@@ -40,13 +41,16 @@ export {
     publicPageRequestFromUrl,
     publicPageRequestKey,
     publicPageRouteHref,
+    serializeStorefrontBootData,
     serializeStorefrontPageData,
     storefrontNavigationCollections,
+    validateStorefrontBootData,
 } from './shared/public-page-data';
 export type {
     PublicNavigationCollection,
     PublicPageCatalogInput,
     PublicPageRequest,
+    StorefrontBootData,
     StorefrontPageData,
 } from './shared/public-page-data';
 export * from './shared/public-seo';

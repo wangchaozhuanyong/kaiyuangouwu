@@ -83,6 +83,7 @@ export function useStorefrontAppState() {
         refetchStorefront,
         toggleLanguage: toggleStoredLanguage,
         publicSeo,
+        publicMedia,
         products,
         productsQuery,
         collections,
@@ -199,6 +200,10 @@ export function useStorefrontAppState() {
         cartQuery,
         customerQuery,
         customer,
+        customerDetailsLoadState,
+        customerDetailsLoadError,
+        retryCustomerDetails,
+        customerHistoryPending,
         couponCampaignsQueryKey,
         couponCampaignsQuery,
         activeCoupons,
@@ -216,7 +221,13 @@ export function useStorefrontAppState() {
         couponCampaignsLoading,
         couponCampaignsError,
         cartQueryError,
-    } = useStorefrontCustomerData({ ...queryContext, configQuery });
+    } = useStorefrontCustomerData({
+        ...queryContext,
+        configQuery,
+        activeRoute: displayedRoute.name,
+        homepageCoupons: contentBlocks.some(block => block.type === 'COUPONS'),
+        homepageRecommendations: contentBlocks.some(block => block.type === 'RECOMMENDATIONS'),
+    });
 
     const productActivity = useCustomerProductActivity({
         api,
@@ -322,7 +333,8 @@ export function useStorefrontAppState() {
         ...queryContext,
         customer,
         recentProductIds,
-        personalizationReady: customerLoadState !== 'loading' && !productActivity.initialLoadPending,
+        personalizationReady:
+            customerLoadState !== 'loading' && !customerHistoryPending && !productActivity.initialLoadPending,
         products,
         contentBlocks,
         configuredBlockTypes,
@@ -344,9 +356,48 @@ export function useStorefrontAppState() {
             nextCustomer:
                 ActiveCustomer | null | ((currentCustomer: ActiveCustomer | null) => ActiveCustomer | null),
         ) => {
-            queryClient.setQueryData<ActiveCustomer | null>(customerQueryKey, currentCustomer =>
-                typeof nextCustomer === 'function' ? nextCustomer(currentCustomer ?? null) : nextCustomer,
+            const previous = queryClient.getQueryData<ActiveCustomer | null>(customerQueryKey);
+            const detailScope = storefrontQueryKeys.scope(
+                storefrontQueryKeys.market(market),
+                vendureLanguageCode,
             );
+            const previousAddresses = queryClient.getQueryData<ActiveCustomer['addresses']>([
+                ...detailScope,
+                'customer-addresses',
+                previous?.id ?? '',
+            ]);
+            const previousOrders = queryClient.getQueryData<ActiveCustomer['orders']>([
+                ...detailScope,
+                'customer-recent-orders',
+                previous?.id ?? '',
+            ]);
+            const current = previous
+                ? {
+                      ...previous,
+                      ...(previousAddresses !== undefined ? { addresses: previousAddresses } : {}),
+                      ...(previousOrders !== undefined ? { orders: previousOrders } : {}),
+                  }
+                : null;
+            const next = typeof nextCustomer === 'function' ? nextCustomer(current) : nextCustomer;
+            queryClient.setQueryData(customerQueryKey, next);
+            if (next?.addresses !== undefined)
+                queryClient.setQueryData(
+                    [
+                        ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
+                        'customer-addresses',
+                        next.id,
+                    ],
+                    next.addresses,
+                );
+            if (next?.orders !== undefined)
+                queryClient.setQueryData(
+                    [
+                        ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
+                        'customer-recent-orders',
+                        next.id,
+                    ],
+                    next.orders,
+                );
         },
         [market.code, market.currencyCode, queryClient, vendureLanguageCode],
     );
@@ -520,7 +571,7 @@ export function useStorefrontAppState() {
                 cancelledOrder,
             );
             setCustomer(current =>
-                current
+                current?.orders
                     ? {
                           ...current,
                           orders: {
@@ -804,6 +855,7 @@ export function useStorefrontAppState() {
         route,
         displayedRoute,
         api,
+        publicMedia,
         products,
         productsQuery,
         collections,
@@ -886,6 +938,9 @@ export function useStorefrontAppState() {
         customerLoadState,
         customerLoadError,
         customerQuery,
+        customerDetailsLoadState,
+        customerDetailsLoadError,
+        retryCustomerDetails,
         myCoupons,
         customerCouponQueryKey,
         customerCouponsQuery,

@@ -63,7 +63,11 @@ export function useStorefrontCartActions({
 }: StorefrontCartActionOptions) {
     const recoveryRequestRef = useRef<Promise<StorefrontCart> | null>(null);
     const confirmedRefreshRef = useRef<Promise<StorefrontCart> | null>(null);
-    const cartState = useSyncExternalStore(cartController.subscribe, cartController.getSnapshot);
+    const cartState = useSyncExternalStore(
+        cartController.subscribe,
+        cartController.getSnapshot,
+        cartController.getSnapshot,
+    );
     const actionOwnerRef = useRef({ api, cartController, customerId: customer?.id });
     const owner = actionOwnerRef.current;
     registerCheckoutContinuationOwner(

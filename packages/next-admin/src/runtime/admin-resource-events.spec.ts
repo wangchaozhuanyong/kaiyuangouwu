@@ -34,6 +34,42 @@ function execute(link: ApolloLink, document = mutation, context = {}) {
 afterEach(() => vi.useRealTimers());
 
 describe('accepted writes and bounded reads', () => {
+    it.each([
+        'confirmOfflinePayment',
+        'retryOfflinePaymentReview',
+        'prepareOfflinePaymentRefund',
+        'prepareLegacyOfflineOrder',
+        'submitLegacyOfflineOrder',
+    ])('invalidates inventory, order and coupon resources after %s', field => {
+        const domains = resourceDomains(gql(`mutation Offline { ${field} { id } }`));
+        expect(domains).toContain('catalog');
+        expect(domains).toContain('orders');
+        expect(domains).toContain('marketing');
+        expect(
+            resourceMatchesDomains(
+                gql`
+                    query Reads {
+                        productVariants {
+                            id
+                        }
+                    }
+                `,
+                domains,
+            ),
+        ).toBe(true);
+        expect(
+            resourceMatchesDomains(
+                gql`
+                    query Reads {
+                        coupons {
+                            id
+                        }
+                    }
+                `,
+                domains,
+            ),
+        ).toBe(true);
+    });
     it.each(['inspectAfterSalesReturn', 'updateAfterSalesReplacement'])(
         'invalidates both order and inventory reads after an accepted %s',
         field => {
@@ -89,6 +125,22 @@ describe('accepted writes and bounded reads', () => {
         const domains = resourceDomains(document);
         expect(domains).toContain(domain);
         expect(resourceMatchesDomains(`query Dependent { ${read} { id } }`, domains)).toBe(true);
+    });
+
+    it('uses real root fields through aliases and fragments, never operation names or arguments', () => {
+        const document = gql`
+            query OrdersNamedButCatalog($term: String) {
+                ...CatalogFields
+            }
+            fragment CatalogFields on Query {
+                ordersAlias: products(term: $term) {
+                    id
+                }
+            }
+        `;
+        expect(resourceDomains(document)).toEqual(['catalog']);
+        expect(resourceMatchesDomains(document, ['orders'])).toBe(false);
+        expect(resourceMatchesDomains(document, ['catalog'])).toBe(true);
     });
 
     it('leaves session-transition redirects and cache handling to the existing auth flow', () => {

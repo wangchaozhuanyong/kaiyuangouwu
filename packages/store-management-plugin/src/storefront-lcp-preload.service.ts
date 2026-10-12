@@ -3,7 +3,9 @@ import { ID, RequestContext } from '@vendure/core';
 import {
     isReusablePublicPageData,
     mediaDescriptor,
+    serializeStorefrontBootData,
     serializeStorefrontPageData,
+    STOREFRONT_BOOT_DATA_ELEMENT_ID,
     STOREFRONT_IMAGE_SIZES,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
     storefrontIcon,
@@ -63,6 +65,17 @@ export class StorefrontLcpPreloadService {
         private readonly cache: StorefrontPublicCacheService,
         @Optional() private readonly warmer?: StorefrontPublicPageWarmService,
     ) {}
+
+    async renderBoot(ctx: RequestContext, host: string): Promise<string> {
+        const boot = await this.pages.peekBoot(ctx, host);
+        void this.warmer?.observe(ctx, host, { kind: 'home' }).catch(() => undefined);
+        if (!boot) return '';
+        const config = boot.config as { logoUrl?: string | null };
+        return [
+            renderStorefrontIconLinks(config.logoUrl ?? null),
+            `<script id="${STOREFRONT_BOOT_DATA_ELEMENT_ID}" type="application/json">${serializeStorefrontBootData(boot)}</script>`,
+        ].join('\n');
+    }
 
     async render(
         ctx: RequestContext,

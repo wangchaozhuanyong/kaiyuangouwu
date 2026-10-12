@@ -255,7 +255,7 @@ export function OrdersPage({
 
     const tabCounts: Partial<Record<OrderTab, number>> = {
         ...countsQuery.data,
-        all: customer?.orders.totalItems,
+        all: customer?.orders?.totalItems,
         service: afterSalesQuery.data?.length,
     };
 

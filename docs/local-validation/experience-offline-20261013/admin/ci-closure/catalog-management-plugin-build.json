@@ -1,0 +1,385 @@
+{
+  "directory": "catalog-management-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin",
+  "startedAt": "2026-10-12T20:23:53.599Z",
+  "finishedAt": "2026-10-12T20:23:55.334Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/catalog-management-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/api-extensions.ts",
+      "sha256": "529f4f7aa4af1ecf6131c96c821d8ba5bfa617b1cbc202c912ca7bc35026812b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-export-file.spec.ts",
+      "sha256": "67fe3db3f378e542b726baf4478dbacc30e69747f6a59bebd68b4760f1eb4a72"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-export-file.ts",
+      "sha256": "0630df270d3f7b1902914fe5cd6a422141114b6dbfa041f0c9df5f12d01497f5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-export-file.worker.ts",
+      "sha256": "ecc3576c8a9cc7f9285b5d5ebf29b3e4a97b42b57d1bdc4e189e7f0474c39f4f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-export-types.ts",
+      "sha256": "08342da2b5221aeabb47d60c4c1a1abc98cb8c2d2daf9b808e12ebe743586c2a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-export-workbook.spec.ts",
+      "sha256": "b550fa4a03a9bc16364197563502a6679d7e2a333ab036e53f0dfdcac04a48a0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-export-workbook.ts",
+      "sha256": "e7bff9494cbb17b2f58a663324f8a8403ce962847658c9a7334886776f055917"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-import-batches.spec.ts",
+      "sha256": "b5892d98857d062c3829a3ce16b8d61875945d15f9db8e9eb8474887ab92fa07"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-import-batches.ts",
+      "sha256": "6708373b890d6c824668be65bcb480ebdb7b69c12961cb7fa86675006d8dbc45"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-import-template.ts",
+      "sha256": "207892a5bb89805e8273c571461222b7f1d4fe6236ddae686ddc2453d2cd1e9d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-local-file.spec.ts",
+      "sha256": "13bacdf301ba198bd0f79d94085ebc1adbd588a491e2814eeda6812e02a9627e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser/catalog-local-file.ts",
+      "sha256": "ba0063a3dc9e3788fc5a1456c676d155b9375a5a2bf2b4ef09a6833060ec4d97"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/browser.ts",
+      "sha256": "a40fb73d1257215599210b7833dae8350d270de9636860d63ac1f4e77b89ca27"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-channel-assignments.service.ts",
+      "sha256": "76c9df2198d5bdd88d5688dd0069240c2b10fa1d9453b3beaeb4b9b6ef3bfb94"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-channel-assignments.spec.ts",
+      "sha256": "45e77796ae4408c7a5bf987c571eaa77ee3abb00eca206a927eb8ca49814b62b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-field-definitions.ts",
+      "sha256": "b592e335f644b13b7a73e48ae8292819ccfcdf37d38f7610d50fc20ab4fbba22"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-file-parser.service.spec.ts",
+      "sha256": "6bc3436fc8df98c909146e9acf728c219e7318d0ff119d60879f385a05f76cf4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-file-parser.service.ts",
+      "sha256": "fdda99f8e4b1f0ebe531ee94b09a3b165d6f90e018575bf2588d2edfc43a2c2d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-category.service.spec.ts",
+      "sha256": "e0b57385533cb55e3379027b8b829cd4e0ec8f2dd23416a6f4331e2bf4ad73e0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-category.service.ts",
+      "sha256": "fe083bc2c32ce90e424aebbcb83ca2136ff670d84b0650260bcd8ea01d09bc7e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-classification.spec.ts",
+      "sha256": "3f2fb7eac44b72eee8eda29cafa1b131da1cb9b59efc6d070b4162d68d81fce4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-classification.ts",
+      "sha256": "b23ed304f46767cec9b402b74b8517b8601d592ebd6c10b7b4ea8fe6fa9608f2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-contract.spec.ts",
+      "sha256": "d886b7848473a475ca89581f61a93eeee6ba5af3d8d52509d7114713d0290486"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-domain.spec.ts",
+      "sha256": "157a1d857e73b732f2af29dd373861171c8a83c7a12d576771c57b832c17d350"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-execution.spec.ts",
+      "sha256": "ae29759cbaf6ab932038524e1904920ad9bd0b03e09d63e6c769ddcb6556a41f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-facets.ts",
+      "sha256": "fa01425f32760752420f277a3fdef563b4e67b3769f83e255792a64c25e90dba"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-helpers.ts",
+      "sha256": "b1d4fa68e37d11b516696df54f584b7c35b12c507bb8ac3bcd2279f0c48bf8fb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-identity.spec.ts",
+      "sha256": "e3c1575f19f9ec39f20c13fd89ad6758fd19e40b15e16115f25262f69f666899"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-options.service.ts",
+      "sha256": "f916a0ec6e24a641e660bcd8d796e4044a727007eaaac8e9c6d1c6ef5c53e5c5"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-options.spec.ts",
+      "sha256": "abd9fabd3c2841e08ee8eec4a7f4df79d4b74c77113f538f4ce739a9057c0e8e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-pagination.spec.ts",
+      "sha256": "e5f6919a5d4b6eb2f08d7586a5621e53462013211e1c7dc63de146bf423e8339"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-planning.ts",
+      "sha256": "d98ae553561e437b536c18dc15e8f8ee73499218ec5b730ebab574aaf0f292b3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-preview.ts",
+      "sha256": "ba5df76d19a20453df0c8aa6a4a99ef20388c1e8c31f02535b60966f5c3ae86c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-queue.service.ts",
+      "sha256": "2ce4ef745e533e679007a3a10e832138afa8966cadf674d83d96a57287b52be3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-rollback-safety.spec.ts",
+      "sha256": "e54111f0568a940afea5b4392a2a4dce7bdd2df26851ff255a63ea843d56e57a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-rollback-state.ts",
+      "sha256": "72af335beb543223ee0587db2d9975fc0bba99206d721a0ba0365f42631b2de4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-rollback.spec.ts",
+      "sha256": "96667f7c50610c7114aa16543aa463b0ecf088f63288b474acf1361d526e6a72"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-rollback.ts",
+      "sha256": "d2f05c7ab0ef13da341673bf951b2bb9941c46c587d624a8cac264caa2078d39"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-rules.spec.ts",
+      "sha256": "6142200a7a9029a78e6290e54567cd3b8b94a08d4adf41ef8cdd1728aa3af069"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-store.spec.ts",
+      "sha256": "4821b22694794638590afbe44a79a2891652aa643f0e83d3b15fe38704d49d4d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-store.ts",
+      "sha256": "54fd6a6970b4ec24964ad6ad12e700bc8d04bf4d967b818301c9990d6dff3c64"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import-writer.ts",
+      "sha256": "dc6eda54bd919ff12071686d9e425f48d449a1d52bcc2536b28139ec79203e96"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-import.service.ts",
+      "sha256": "36d6070e9ac299a3a745c11b251ac81fb02f0a996e82ad2c6b6a3c062fa82179"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-management.plugin.ts",
+      "sha256": "ac65501f1b142316e4129143bf229f73df914acaa6a79cee26493325259c3af3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-management.resolver.ts",
+      "sha256": "c98970f554242c0ce79814ad70726306d2664df4b0831e4ca8080fef314dae3b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-operations.service.spec.ts",
+      "sha256": "fc6984fb2d8f96c349ef4e6c0c806b25e28792a52210c761f1fbd5376f8508f7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-operations.service.ts",
+      "sha256": "dee32c4a6497aca7b689c04013240c2be5a8fe59e4ab879fcf6343f0d7583bab"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-profit-access.spec.ts",
+      "sha256": "bbdafb564e8c6d925272e4f159034cb267b6626da550b509f63576e70d7862e7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-profit-persistence.spec.ts",
+      "sha256": "483eb5cdf5971c41dd15a8af6d2d01cf78dd81adf7b17a08eb07d6a5bf66221c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-profit.service.spec.ts",
+      "sha256": "92e26074f37b981316d61606af3b73c94c8ad34f2e1b9fa8d8b4f1022296b1fe"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-profit.service.ts",
+      "sha256": "79cad08d7ae7eed80968efdae365d3ad1f29d13a5ced4e66a7466569940a4baf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-row-identity.ts",
+      "sha256": "572c64fc3c5490d41d9eddf8108145cf8d15df3d033c8cdb7c8ec855fc7f13de"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-supplier.service.spec.ts",
+      "sha256": "f746fdbe38610aeefd5b92defdb3a9599175713947a2bd071e4f5789395717f1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-supplier.service.ts",
+      "sha256": "cd638e3c84982981bfad8d59b5d643f879948cdc01c03b36ded57edebd351ed8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-template-library.service.ts",
+      "sha256": "6533f37ccc80d16ed989cd2b25e9ae53a4272d86e5b7206cc23c7a6392954005"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-variant-matrix.service.ts",
+      "sha256": "eb97ac5a20dd59ef8d39672c10f27de03870a2da522b4c5401f2e17b9129d040"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/catalog-variant-matrix.spec.ts",
+      "sha256": "d421897d3681cacca4a191d0c8b607670353652dcc2b9119791e31a7827e1881"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/constants.ts",
+      "sha256": "60f22a369d90d6e8a57876a16b13697e2192f46954dccf9c66d0cabe15b05f1c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/catalog-distribution-batch.entity.ts",
+      "sha256": "8eec7037fb08a4fc6ce286806019acd5fc18b305cf3bd37cf6f828f8fc66f9ce"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/catalog-import-job.entity.ts",
+      "sha256": "7f04f05a1a7caa5d384f71241d153bb690dadcdab6d5a1697cd87dc50b1a02f0"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/catalog-import-row.entity.ts",
+      "sha256": "df70bf432e87dd55c32f7eb7f6b57c7978a6a35c5177224693a5ad5623f460ba"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/catalog-source-binding.entity.ts",
+      "sha256": "1d64bdd6423c5aaa2df6cb9b372cfeb93764c801026c110965c4eefa17ce2880"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/catalog-supplier.entity.ts",
+      "sha256": "9ceef2d1ed273037d814d689fea6ba92acd1c4f1720024e635e73382c06f6973"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/catalog-variant-supplier.entity.ts",
+      "sha256": "3080e680fc2e765c71fa52a25396ef731d391c9e0f1068edc12957a70449019b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/inventory-lot-movement.entity.ts",
+      "sha256": "c614dbcbf8c5d4547b5a4ab5b753d88af579c58a6cb3fd5f3dccdefec6ba5bc4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/inventory-lot.entity.ts",
+      "sha256": "78e66e99169469513f0d0ea8c1fec00c0722a1861faa775d6afcfdfc04c23f14"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/inventory-operation-line.entity.ts",
+      "sha256": "b1f674c479e89581a933cc6b82880ba8aa51986aa3337c05ccd3953036f6ad19"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/inventory-operation.entity.ts",
+      "sha256": "6d01a046fea1bd40dc75ccc3e71ce5fcabf1b146714d81315db15abd3fa23fb3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/inventory-policy.entity.ts",
+      "sha256": "903541205a3089314e127f9410e2ca6c1ac72ac240c84e38af31544fe4b007bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/order-profit-expense-event.entity.ts",
+      "sha256": "affd31142ccf967db6dc145c96c3f5c973e5385f1326bc3e177ac17e2616ba0b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/order-profit-expense.entity.ts",
+      "sha256": "b6ca0ed51d5172ffcbd2e31588d3c4437983a44ee08d837a3f1e8c19c74301f2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-order-event.entity.ts",
+      "sha256": "6e19059d5d0d8ca460a061d90deb7f741e2851b054279516c434719d57b9d03a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-order-line.entity.ts",
+      "sha256": "5bbf78049f1239ddf2ea703d10b6c268ab4ef35d017a9fa7304c196ac190c233"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-order.entity.ts",
+      "sha256": "44b1d95985e4a9e2a263b4ee8a0cd43a1a550016cb043bb9ea1c218f716b939f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-receipt-line.entity.ts",
+      "sha256": "b399fa906b0128acf3868f4e6f5179a27c174a925bd5e8cb46f76c0a3728af25"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-receipt.entity.ts",
+      "sha256": "2c4503a28c587fbbec4f7d2809b5be459d7beef622be95db71e469f6f5abc88e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-supplier-return-line.entity.ts",
+      "sha256": "baa8c3880311e2f3cae8cb6103382e90fde65c90c98add6f839e77cb6cfbb25c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/purchase-supplier-return.entity.ts",
+      "sha256": "23222a2396b0bb3552b97e09f30e51c24983580bfaf62b006ea8cfd8d24dd6bb"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/entities/variant-cost-record.entity.ts",
+      "sha256": "3c556ede9000c43f4a34b8e54b3662ac2d91b001f61ae4d555947494f9e13a41"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/index.ts",
+      "sha256": "c04c4065f7d0f0fca7f0d4c3c4cc32562df2ed09baf34fb37cb77f7d6330bae3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/inventory-control.service.spec.ts",
+      "sha256": "1c7fc3e94ffae797a46d5a2939f8ca4e87db0c9e834e3bcf0d4e39fe8b6ee35b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/inventory-control.service.ts",
+      "sha256": "317c8f9fdc1fefa7a8a18c84658a87a3428c34184d9a02175936403ab76b25bf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/inventory-lot-lifecycle.service.spec.ts",
+      "sha256": "28581f131eb86ffb3b19fbd861593e540dbf676f71fb8f32d7522126b7365aa7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/inventory-lot-lifecycle.service.ts",
+      "sha256": "e2bbe191e65e73c54256de96785b16e9313cacaa330380846f942db257609b37"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/order-expense-local-file.spec.ts",
+      "sha256": "9f746a1d960595f8ed61b8683e3243963ed50c740b04fe589efec9033594c5fe"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/order-expense-local-file.ts",
+      "sha256": "bcc209293c46f0160789bafaac09390222682caae03d8a8a66ab48cc3ca72eac"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/order-sales-channel-isolation.spec.ts",
+      "sha256": "ec03b7c5def1d6431307eaba08ee57fff7731ae834cd75acbfe8456ee2f4dd9a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/platform-catalog.resolver.ts",
+      "sha256": "4b51dab729f65571a5346c129b60e21365ec25a41e3729b9c2bcdc58bac15b6e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/platform-catalog.service.ts",
+      "sha256": "7aecbd93e9ec50cc669d1315e396c9a4b164296b39d92b7f4f9c38fbf53c754e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/purchase-order.service.spec.ts",
+      "sha256": "2b3d45ce73b42a806d1ce29350fc81861b89be90bdeee25084b9bc2ded973447"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/purchase-order.service.ts",
+      "sha256": "b2be41838dbc1030b9b9b6fec0d81fe63c75467e63cc33ba1f93cb34e693238a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/catalog-management-plugin/src/types.ts",
+      "sha256": "c2ae725698b8206ccc254972135a0055c88dd0593e58fa443d2b2138c92da0f1"
+    }
+  ],
+  "changedInputs": []
+}

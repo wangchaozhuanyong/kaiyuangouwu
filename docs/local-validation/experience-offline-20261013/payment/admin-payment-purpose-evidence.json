@@ -1,0 +1,31 @@
+{
+  "at": "2026-10-12T20:44:26.494Z",
+  "scope": "Local Admin UI only; existing server handlerCode fields; no production writes, name changes, switch changes, backend changes or database additions",
+  "sourceSha256": {
+    "packages/next-admin/src/pages/Settings/PaymentShippingManager.tsx": "6a24aced94f2a92497bc4ba6fe1116bb11cd81774e77726a8f5601e3819ab90e",
+    "packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.tsx": "d7556b6ad6b0c0d9f820a6dc39e89ccb600b5e0d3b3f0beb04ca9f46e094630e",
+    "packages/next-admin/src/utils/configurable-operation-localization.ts": "e1733ad90fbbfd9c8b749064cc9bd07f75966d9caa09b46da820cf6cda164824",
+    "packages/next-admin/src/graphql/management.graphql.ts": "ed0142e42bccd90ada1726138a4ce12affb8ce3d1b072fde4c7f196c7575f772",
+    "packages/next-admin/src/pages/Settings/PaymentShippingManager.spec.tsx": "8b210fd381e1c4223e704fff73518011918d525256942f2cb54a10041e1a71dd",
+    "packages/next-admin/src/pages/Settings/MyStoreFinanceEditors.spec.tsx": "b867a52311d38ef86402f5e4f86e24c7463c41cdd19f25ed64f6c8d575b4ff56"
+  },
+  "pages": [
+    "Platform PaymentShippingManager payment table",
+    "Actual merchant MyStoreFinanceEditors/MyStorePaymentOptions",
+    "Existing PaymentShippingManager store-switch compatibility table"
+  ],
+  "rule": {
+    "offline-manual-payment-handler": "客服核款",
+    "controlled-test-payment-handler": "模拟测试",
+    "unknown": "Existing name only; never infer from merchant name or method code"
+  },
+  "query": "Actual MY_STORE_SETTINGS_QUERY now requests existing myStorePaymentOptions.handlerCode; direct AST regression verifies field",
+  "checks": {
+    "admin-payment-purpose-bound-input-tests.log": "17 passed / 3 target specs / exit 0",
+    "admin-payment-purpose-types.log": "Admin types exit 0",
+    "admin-payment-purpose-oxlint.log": "Configured package Oxlint on 6 owned files with max-warnings 0; exit 0",
+    "admin-payment-purpose-feedback.log": "Operation feedback and loading/refresh/interaction gate passed",
+    "git diff --check": "exit 0"
+  },
+  "build": "Parent must rebuild next-admin after this frozen input; backend and storefront production sources unaffected"
+}

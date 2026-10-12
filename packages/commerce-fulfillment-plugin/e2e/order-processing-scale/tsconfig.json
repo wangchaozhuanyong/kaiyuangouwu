@@ -1,0 +1,12 @@
+{
+    "extends": "../../../../tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "types": ["node", "vitest/globals"],
+        "lib": ["es2019", "dom", "dom.iterable"]
+    },
+    "include": [
+        "./order-processing-scale.e2e-spec.ts",
+        "../../../store-management-plugin/src/markdown-it.d.ts"
+    ]
+}

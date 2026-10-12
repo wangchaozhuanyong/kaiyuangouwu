@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    boundedMediaPreviews,
+    mediaDescriptor,
+    validInlineImagePreview,
+} from '../../storefront-content-plugin/src/shared/responsive-image';
+
+import {
     imageSources,
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
@@ -9,6 +15,41 @@ import {
 import { HERO_TOKEN_TOPUP_IMAGE } from './storefront-images';
 
 describe('responsiveImageSources', () => {
+    it('bounds complete inline preview bytes and rejects remote, oversized or non-raster hints', () => {
+        const prefix = 'data:image/webp;base64,';
+        const preview = prefix + 'A'.repeat(1024 - prefix.length);
+        expect(validInlineImagePreview(preview)).toBe(true);
+        expect(
+            mediaDescriptor('/assets/preview/cover.png', 'hero', { inlinePreview: preview }).placeholder
+                ?.inlineData,
+        ).toBe(preview);
+        for (const rejected of [
+            preview + 'A',
+            '/placeholder.png',
+            'data:image/svg+xml;base64,PHN2Zz4=',
+            'data:image/png;base64,<script>',
+        ]) {
+            expect(
+                mediaDescriptor('/cover.png', 'hero', { inlinePreview: rejected }).placeholder,
+            ).toBeUndefined();
+        }
+        const media = Array.from({ length: 9 }, (_, index) =>
+            mediaDescriptor(`/cover-${index}.png`, 'hero', { inlinePreview: preview }),
+        );
+        const bounded = boundedMediaPreviews(media);
+        expect(
+            bounded.reduce((sum, descriptor) => sum + (descriptor.placeholder?.inlineData.length ?? 0), 0),
+        ).toBe(8192);
+        expect(bounded[8].placeholder).toBeUndefined();
+        expect(bounded[8].identity).toBe('/cover-8.png');
+        expect(media[8].placeholder).toBeDefined();
+        expect(
+            boundedMediaPreviews([
+                { ...media[0], placeholder: { inlineData: 'https://example.invalid/preview' } },
+            ])[0].placeholder,
+        ).toBeUndefined();
+    });
+
     it('builds WebP-only card variants without losing existing query parameters', () => {
         const sources = responsiveImageSources('/assets/preview/product.jpg?token=public', 'card');
 

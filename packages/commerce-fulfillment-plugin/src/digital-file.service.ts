@@ -6,6 +6,7 @@ import { mkdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { In } from 'typeorm';
 
 import { DigitalDeliveryTokenService } from './digital-delivery-token.service';
 import { DigitalFileVersion } from './entities/digital-product.entity';
@@ -72,6 +73,23 @@ export class DigitalFileService {
             await unlink(destination).catch(() => undefined);
             throw error;
         }
+    }
+
+    /** Request-scoped bulk metadata; paths keep the same storage and file-existence guards. */
+    async resources(channelId: ID, versionIds: ID[]) {
+        const result = new Map<string, { path: string; downloadName: string }>();
+        if (!versionIds.length) return result;
+        const versions = await this.connection.rawConnection.getRepository(DigitalFileVersion).find({
+            where: { id: In([...new Set(versionIds)]), channelId },
+        });
+        await Promise.all(
+            versions.map(async version => {
+                const filePath = this.tokens.pathForStorageKey(version.storageKey);
+                if (filePath && (await stat(filePath).catch(() => undefined))?.isFile())
+                    result.set(String(version.id), { path: filePath, downloadName: version.fileName });
+            }),
+        );
+        return result;
     }
 
     async resource(channelId: ID, versionId: ID) {

@@ -3,6 +3,7 @@ import { useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useStat
 import { getAdminQueryScope } from '../apollo';
 import { TabPageContext } from '../layouts/tab-page-context';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
+import type { ResourceDomain } from '../runtime/admin-resource-events';
 import { PageRuntimeContext } from '../runtime/page-runtime-context';
 import { useActiveInterval, usePageActivity } from './use-page-activity';
 
@@ -11,6 +12,7 @@ export function useAdminReadResource<T>(
     id: string,
     read: (signal: AbortSignal) => Promise<T>,
     pollInterval = 0,
+    domains: readonly ResourceDomain[] = [],
 ) {
     const client = useApolloClient();
     const runtime = getQueryRuntime(client);
@@ -23,6 +25,7 @@ export function useAdminReadResource<T>(
     useLayoutEffect(() => {
         activeRef.current = active;
     }, [active]);
+    const domainKey = domains.join(',');
     const key = `${getAdminQueryScope()}|read:${id}`;
     const latest = useRef(read);
     useLayoutEffect(() => {
@@ -69,9 +72,10 @@ export function useAdminReadResource<T>(
                     staleTime: pollInterval || 30_000,
                     pollInterval,
                     stage: 0,
+                    domains: domainKey ? (domainKey.split(',') as ResourceDomain[]) : [],
                 },
             ),
-        [runtime, key, ownerId, page, fetch, pollInterval],
+        [runtime, key, ownerId, page, fetch, pollInterval, domainKey],
     );
     const previousLoading = useRef(false);
     useEffect(() => {

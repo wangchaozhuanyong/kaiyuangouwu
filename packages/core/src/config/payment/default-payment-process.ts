@@ -75,6 +75,10 @@ export const defaultPaymentProcess: PaymentProcess<PaymentState> = {
             },
         });
 
+        // Pending manual submissions (including zero-total orders) are placed but are not receipts.
+        // Only actual payment confirmations can advance the order into its paid workflow.
+        if (toState !== 'Authorized' && toState !== 'Settled') return;
+
         // Capturing an authorization after shipment must preserve the recorded fulfillment state.
         if (
             [

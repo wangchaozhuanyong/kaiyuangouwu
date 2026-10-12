@@ -1,8 +1,9 @@
 import { ArrowUpRight, ChevronRight, Heart, Share2, TicketPercent } from 'lucide-react';
 
-import { SafeImage } from '../../safe-image';
 import { type RouteState } from '../../storefront-router';
 import { type ActiveCustomer, type StorefrontLanguage } from '../../types';
+
+import { CustomerAvatar } from './customer-avatar';
 
 export function maskedAccountEmail(email: string): string {
     const separator = email.lastIndexOf('@');
@@ -85,11 +86,7 @@ export function AccountIdentity({
                         aria-label={isZh ? '个人信息与安全' : 'Profile and security'}
                         onClick={() => open({ name: 'account-security' })}
                     >
-                        {customer?.avatar?.preview ? (
-                            <SafeImage src={customer.avatar.preview} alt="" />
-                        ) : (
-                            Array.from(name)[0]?.toUpperCase()
-                        )}
+                        <CustomerAvatar customer={customer} size={48} />
                     </button>
                     <div className="account-identity-details">
                         <h2>{name}</h2>

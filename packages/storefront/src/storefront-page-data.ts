@@ -32,7 +32,11 @@ import {
 } from './query-client';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
-import { readStoredLanguage, readStoredSettlementCurrency } from './storefront-utils';
+import {
+    contentStringArraySetting,
+    readStoredLanguage,
+    readStoredSettlementCurrency,
+} from './storefront-utils';
 
 export type PublicPageData = StorefrontPageData<
     StorefrontConfig,
@@ -135,14 +139,14 @@ export function seedPublicPage(
     };
     if (includeConfig) set([...storefrontQueryKeys.config(market, language), 'public'], page.config);
     if (page.request) set(publicSeoQueryKey(market, language, page.request), page.seo ?? null);
-    if (page.request?.kind === 'article' && page.publicContent)
+    if (page.request?.kind === 'article')
         set(
             [
                 ...storefrontQueryKeys.scope(market, language),
                 'public-content',
                 publicPageRequestKey(page.request),
             ],
-            page.publicContent,
+            page.publicContent ?? null,
         );
     set([...storefrontQueryKeys.content(market, language), 'public'], page.content);
     set(
@@ -150,7 +154,26 @@ export function seedPublicPage(
         page.collections && storefrontNavigationCollections(page.collections),
     );
     set(storefrontQueryKeys.products(market, language, 12), page.products?.map(asListProduct));
+    const managedIds = Array.from(
+        new Set(
+            (page.content?.blocks ?? []).flatMap(block => [
+                ...contentStringArraySetting(block.settings?.selectedProductIds),
+                ...contentStringArraySetting(block.settings?.pinnedProductIds),
+                ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
+                ...(block.items ?? []).flatMap(item =>
+                    item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+                ),
+            ]),
+        ),
+    );
+    const managedProducts = managedIds.flatMap(id => {
+        const product = page.products?.find(candidate => candidate.id === id);
+        return product ? [asListProduct(product)] : [];
+    });
+    if (managedIds.length && managedProducts.length === managedIds.length)
+        set(storefrontQueryKeys.productsByIds(market, language, managedIds), managedProducts);
     set([...storefrontQueryKeys.scope(market, language), 'visual-preset'], page.visualPreset);
+    set([...storefrontQueryKeys.scope(market, language), 'public-media'], page.media);
     set(storefrontQueryKeys.flashSales(market, language), page.flashSales);
     // An API query in progress owns its result commit and pagination; do not collapse its pages.
     if (includeRoute && page.request?.kind === 'catalog' && page.catalog) {

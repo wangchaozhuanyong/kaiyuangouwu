@@ -45,7 +45,6 @@ import type {
 
 import { type StorefrontVisualPresetConfig } from '../../storefront-content-plugin/src/visual-presets';
 
-import { AccountApi } from './api/account';
 import { AuthTokenState } from './api/auth-token-state';
 import { CartCheckoutApi } from './api/cart-checkout';
 import { CatalogApi } from './api/catalog';
@@ -64,6 +63,7 @@ import {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
+import { type AccountApi, lazyAccountApi } from './api/lazy-account';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
 
@@ -113,7 +113,7 @@ export class ShopApi {
         };
         this.contentReviewsApi = new ContentReviewsApi(ctx);
         this.catalogApi = new CatalogApi(ctx);
-        this.accountApi = new AccountApi(ctx);
+        this.accountApi = lazyAccountApi(ctx);
         this.createReferralsApi = async () => {
             const { ReferralsApi } = await import('./api/referrals');
             return new ReferralsApi(ctx);
@@ -203,25 +203,25 @@ export class ShopApi {
         return this.catalogApi.collections(signal);
     }
 
-    async activeCustomer(signal?: AbortSignal): Promise<ActiveCustomer | null> {
-        return this.accountApi.activeCustomer(signal);
-    }
+    activeCustomer = (signal?: AbortSignal): Promise<ActiveCustomer | null> =>
+        this.accountApi.activeCustomer(signal);
+
+    customerIdentity = (signal?: AbortSignal) => this.accountApi.customerIdentity(signal);
+    customerAddresses = (signal?: AbortSignal) => this.accountApi.customerAddresses(signal);
+    customerRecentOrders = (signal?: AbortSignal) => this.accountApi.customerRecentOrders(signal);
 
     async uploadCustomerAvatar(file: File): Promise<Asset> {
         return this.accountApi.uploadCustomerAvatar(file);
     }
 
-    async customerAvatarHistory(signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> {
-        return this.accountApi.customerAvatarHistory(signal);
-    }
+    customerAvatarHistory = (signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> =>
+        this.accountApi.customerAvatarHistory(signal);
 
     async restoreCustomerAvatar(retentionId: string): Promise<Asset> {
         return this.accountApi.restoreCustomerAvatar(retentionId);
     }
 
-    async removeCustomerAvatar(): Promise<boolean> {
-        return this.accountApi.removeCustomerAvatar();
-    }
+    removeCustomerAvatar = (): Promise<boolean> => this.accountApi.removeCustomerAvatar();
 
     async dataSubjectRequests(signal?: AbortSignal): Promise<DataSubjectRequest[]> {
         return this.accountApi.dataSubjectRequests(signal);

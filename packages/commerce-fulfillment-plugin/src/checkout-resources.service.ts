@@ -20,6 +20,7 @@ import {
     RequestContextService,
     Sale,
     ScheduledTask,
+    StockLevel,
     StockMovementService,
     TransactionalConnection,
     UserInputError,
@@ -91,6 +92,16 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
             event: PaymentAttemptEvent,
             id: 'commerce-resource-payment-attempt',
             handler: async event => {
+                // A server-selected local offline submission cannot charge externally. Keep its hold
+                // inside the owning transaction (historical recovery may create it in this same request).
+                if (event.handlerCode === 'offline-manual-payment-handler') {
+                    if (event.phase === 'STARTED') {
+                        const local = await this.hold(event.ctx, event.order.id);
+                        if (!local || local.state !== 'HELD' || local.expiresAt <= new Date())
+                            throw new UserInputError('结算占用已失效，请重新核对订单');
+                    }
+                    return;
+                }
                 // Persist outside the payment DB transaction: a gateway charge cannot be rolled back with SQL.
                 const attempts = this.connection.rawConnection.getRepository(CheckoutResourceHold);
                 const hold = await attempts.findOne({
@@ -113,6 +124,14 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                     );
                     if (changed.affected !== 1) throw new UserInputError('付款已在处理中，请勿重复提交');
                 } else {
+                    // Offline submission has no external transfer and a known unpaid outcome.
+                    if (event.phase === 'RETURNED' && event.resultState === 'PendingManual') {
+                        await attempts.update(
+                            { orderId: event.order.id },
+                            { state: 'HELD', reviewReason: null },
+                        );
+                        return;
+                    }
                     // Even a network exception can follow a successful charge. Only explicit declines release resources.
                     const declined =
                         event.phase === 'RETURNED' &&
@@ -279,6 +298,67 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         );
     }
 
+    /** Offline submission is a known unpaid result, never an unresolved gateway charge. */
+    async awaitManualPayment(ctx: RequestContext, orderId: ID) {
+        await this.connection
+            .getRepository(ctx, CheckoutResourceHold)
+            .update({ orderId, channelId: ctx.channelId }, { state: 'HELD', reviewReason: null });
+    }
+
+    async prepareManualReceiptResources(ctx: RequestContext, order: Order) {
+        const hold = await this.hold(ctx, order.id);
+        if (hold && hold.state !== 'RELEASED' && hold.expiresAt > new Date()) return;
+        try {
+            await this.connection.withTransaction(ctx, async tx => {
+                const physical = order.lines.filter(line => getOrderLineFulfillmentType(line) === 'physical');
+                const rules = await this.packaging.rulesForVariantIds(
+                    tx,
+                    physical.map(line => line.productVariantId),
+                );
+                await this.packaging.ensureStockLevelPairs(tx, rules);
+                const ids = this.packaging.variantIdsForLock(
+                    physical.map(line => line.productVariantId),
+                    rules,
+                );
+                if (ids.length) {
+                    const repository = this.connection.getRepository(tx, StockLevel);
+                    const query = repository
+                        .createQueryBuilder('stock')
+                        .leftJoinAndSelect('stock.stockLocation', 'location')
+                        .leftJoinAndSelect('location.channels', 'channel')
+                        .where('stock.productVariantId IN (:...ids)', { ids })
+                        .orderBy('stock.productVariantId', 'ASC')
+                        .addOrderBy('stock.stockLocationId', 'ASC');
+                    if (
+                        !['sqljs', 'sqlite', 'better-sqlite3'].includes(
+                            repository.manager.connection.options.type,
+                        )
+                    )
+                        query.setLock('pessimistic_write');
+                    const locked = await query.getMany();
+                    const unpack = await this.packaging.autoUnpackForOrder(
+                        tx,
+                        order,
+                        physical,
+                        rules,
+                        locked,
+                    );
+                    if (unpack) throw new UserInputError(unpack);
+                    const { saleableStockFromLockedRows } = await import('./commerce-order-process.js');
+                    for (const line of physical) {
+                        const available = await saleableStockFromLockedRows(tx, line.productVariant, locked);
+                        if (line.quantity > available + (await this.outstandingAllocation(tx, line.id)))
+                            throw new UserInputError('核款时实物库存不足');
+                    }
+                }
+                await this.reserve(tx, order, physical);
+            });
+        } catch {
+            // The actual receipt must remain recorded even if an expired reservation cannot be restored.
+            await this.markReview(ctx, order, '实际收款已核实，库存或交付资源不足，请补货后处理交付');
+        }
+    }
+
     async confirm(ctx: RequestContext, order: Order) {
         // Payment events carry the caller's pre-payment Order. Read the linked, persisted evidence.
         await this.digital.lock(ctx, Order, order.id);
@@ -320,8 +400,18 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         if (
             order.payments.some(
                 payment =>
-                    !['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) ||
-                    payment.metadata?.manualReview?.required,
+                    (!['Authorized', 'Settled', 'Declined', 'Cancelled'].includes(payment.state) &&
+                        !(
+                            payment.state === 'PendingManual' &&
+                            payment.metadata?.offlineManual?.kind === 'OFFLINE_MANUAL'
+                        )) ||
+                    (payment.metadata?.manualReview?.required &&
+                        !(
+                            payment.metadata?.offlineManual?.refundOnly &&
+                            (payment.refunds ?? [])
+                                .filter(refund => refund.state === 'Settled')
+                                .reduce((sum, refund) => sum + refund.total, 0) >= payment.amount
+                        )),
             )
         )
             return 'REVIEW';
@@ -581,7 +671,11 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                         current.state !== 'HELD' ||
                         order.payments.some(
                             payment =>
-                                !['Declined', 'Cancelled'].includes(payment.state) ||
+                                (!['Declined', 'Cancelled'].includes(payment.state) &&
+                                    !(
+                                        payment.state === 'PendingManual' &&
+                                        payment.metadata?.offlineManual?.kind === 'OFFLINE_MANUAL'
+                                    )) ||
                                 payment.metadata?.manualReview?.required,
                         )
                     )

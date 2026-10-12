@@ -1,0 +1,21 @@
+{
+  "at": "2026-10-12T20:17:37.451Z",
+  "runnerSession": 36111,
+  "runnerShutdownRequest": {
+    "shutdown": true
+  },
+  "runnerExitCode": 0,
+  "ownedPid": 20295,
+  "ownedPort": 37406,
+  "ownedDirectory": "reports/order-closure-mysql/1791831421760",
+  "processProbe": {
+    "code": 1,
+    "output": ""
+  },
+  "listenerProbe": {
+    "code": 1,
+    "output": ""
+  },
+  "artifactsPreserved": true,
+  "scope": "Only original owner controlled runner child stopped; no other MySQL instance connected or stopped"
+}

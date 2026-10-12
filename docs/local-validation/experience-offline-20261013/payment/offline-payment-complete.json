@@ -1,0 +1,8 @@
+{
+    "finishedAt": "2026-10-12T19:15:31.598Z",
+    "cwd": "",
+    "args": ["run", "--config", "packages/commerce-fulfillment-plugin/e2e/offline-payment.vitest.config.mjs"],
+    "exitCode": 1,
+    "output": "reports/order-closure-mysql/1791831421760/offline-payment-complete.log",
+    "scope": "owned isolated MySQL; synthetic fixtures"
+}

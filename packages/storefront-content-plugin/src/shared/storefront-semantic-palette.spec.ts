@@ -7,10 +7,40 @@ import {
     resolveStorefrontSkinTreatment,
     semanticPaletteCssVariables,
     storefrontContrastRatio,
+    storefrontReferralCssVariables,
     storefrontSkinCssVariables,
 } from './storefront-semantic-palette';
 
 describe('storefront semantic palette', () => {
+    it.each(['classic', 'neo-minimalist'] as const)(
+        'shares accessible campaign roles independently of merchant colors in %s',
+        preset => {
+            const variables = storefrontReferralCssVariables(preset);
+            const palette = resolveStorefrontSemanticPalette(preset, { accentColor: '#ff0000' });
+            expect(storefrontSkinCssVariables(preset, palette)).toMatchObject(variables);
+            expect(variables['--referral-invite-surface']).toBe('#173d39');
+            expect(variables['--referral-reward-surface']).toBe(preset === 'classic' ? '#f4f1e9' : '#243b36');
+            for (const [foreground, surfaces] of [
+                [
+                    'invite-ink',
+                    ['invite-surface', 'invite-control', 'invite-control-hover', 'invite-control-pressed'],
+                ],
+                ['invite-muted', ['invite-surface']],
+                ['invite-on-action', ['invite-action', 'invite-action-hover', 'invite-action-pressed']],
+                ['reward-ink', ['reward-surface', 'reward-help-surface']],
+                ['reward-muted', ['reward-surface', 'reward-help-surface']],
+            ] as const) {
+                for (const surface of surfaces) {
+                    expect(
+                        storefrontContrastRatio(
+                            variables[`--referral-${foreground}`],
+                            variables[`--referral-${surface}`],
+                        ),
+                    ).toBeGreaterThanOrEqual(4.5);
+                }
+            }
+        },
+    );
     it.each(['classic', 'neo-minimalist'] as const)(
         'keeps all four configured coupon tones distinct and readable in %s',
         preset => {

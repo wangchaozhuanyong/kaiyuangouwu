@@ -1,0 +1,43 @@
+{
+  "phase": "read_only_pre_deployment_plan",
+  "oldMethod": {
+    "id": "11",
+    "code": "controlled-test-payment-platform",
+    "handlerCode": "controlled-test-payment-handler",
+    "enabled": true
+  },
+  "newCode": "offline-manual-11",
+  "kind": "OFFLINE_MANUAL",
+  "translations": [
+    {
+      "languageCode": "zh_Hans",
+      "name": "提交订单后联系客服支付",
+      "description": ""
+    },
+    {
+      "languageCode": "en",
+      "name": "Contact customer service to pay after submitting your order.",
+      "description": ""
+    }
+  ],
+  "stores": [
+    {
+      "displayName": "闪铸商城",
+      "priorEffectiveEnabled": true,
+      "newEnable": true
+    },
+    {
+      "displayName": "MOYAO AI｜模钥",
+      "priorEffectiveEnabled": true,
+      "newEnable": true
+    },
+    {
+      "displayName": "大马通",
+      "priorEffectiveEnabled": false,
+      "newEnable": false
+    }
+  ],
+  "historyConversion": "individual admin quote review only; no automatic conversion",
+  "actualWrites": false,
+  "readEvidence": "Authenticated production Admin UI and only the observed original payment metadata response; credentials and customer records not exported"
+}

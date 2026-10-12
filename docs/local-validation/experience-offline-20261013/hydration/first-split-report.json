@@ -1,0 +1,6243 @@
+{
+  "synthetic": true,
+  "mode": "production-artifact",
+  "checks": [
+    {
+      "id": "en-390-home",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-390-catalog",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-390-product",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-390-article",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-390-support",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-390-services",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-390-legal",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-home",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": false,
+        "navigation": false,
+        "removals": [
+          "navigation",
+          "image"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-catalog",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": false,
+        "image": false,
+        "navigation": false,
+        "removals": [
+          "navigation",
+          "page",
+          "image"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-product",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": false,
+        "navigation": true,
+        "removals": [
+          "image"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-article",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-support",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-services",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": false,
+        "removals": [
+          "navigation"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "en-1440-legal",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-home",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-catalog",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-product",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-article",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-support",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-services",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-390-legal",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-home",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": false,
+        "navigation": false,
+        "removals": [
+          "navigation",
+          "image"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-catalog",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": false,
+        "image": false,
+        "navigation": false,
+        "removals": [
+          "navigation",
+          "page",
+          "image"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-product",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": false,
+        "navigation": true,
+        "removals": [
+          "image"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-article",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-support",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-services",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": false,
+        "removals": [
+          "navigation"
+        ]
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    },
+    {
+      "id": "zh-1440-legal",
+      "retention": {
+        "frame": true,
+        "content": true,
+        "page": true,
+        "image": true,
+        "navigation": true,
+        "removals": []
+      },
+      "errors": [],
+      "privateAccountLoads": 0
+    }
+  ],
+  "failures": [],
+  "requests": [
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-DkrzLNvd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/home-page-CbKISeRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-tone-Dz9vH2FB.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-coupon-ticket-D1mh_Qky.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/chevron-left-f8CkMUuo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/_storefront/page-data?kind=product&id=synthetic-a-product-1&languageCode=en&currencyCode=MYR",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/index.html?__storefront_version=1791835734402",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-route-page-C0AWOQYd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-pagination-BUzwcEBw.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-vwVYfZgJ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/guides._slug-Dvl7tuRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-DJqeD4b4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-page-DjSVjA0h.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/arrow-up-right-CIsPRM7-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/store-notifications-BP44Ag3U.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "CurrentCustomerServiceReview"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/services-CpLmWiXj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-C4zMOaq0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-BpPmE1zg.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-route-page-Rqxzri1g.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-B4lsA6Tm.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-page-C8Pi4Nw2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-DkrzLNvd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/home-page-CbKISeRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-tone-Dz9vH2FB.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-coupon-ticket-D1mh_Qky.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/chevron-left-f8CkMUuo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/_storefront/page-data?kind=product&id=synthetic-a-product-1&languageCode=en&currencyCode=MYR",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/index.html?__storefront_version=1791835736834",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-route-page-C0AWOQYd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-pagination-BUzwcEBw.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-vwVYfZgJ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/guides._slug-Dvl7tuRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-DJqeD4b4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-page-DjSVjA0h.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/arrow-up-right-CIsPRM7-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/store-notifications-BP44Ag3U.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "CurrentCustomerServiceReview"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/services-CpLmWiXj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-C4zMOaq0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-BpPmE1zg.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/en/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-route-page-Rqxzri1g.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-B4lsA6Tm.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-page-C8Pi4Nw2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=en&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-DkrzLNvd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/home-page-CbKISeRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-tone-Dz9vH2FB.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-coupon-ticket-D1mh_Qky.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/chevron-left-f8CkMUuo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/_storefront/page-data?kind=product&id=synthetic-a-product-1&languageCode=zh_Hans&currencyCode=MYR",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/index.html?__storefront_version=1791835739032",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-route-page-C0AWOQYd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-pagination-BUzwcEBw.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-vwVYfZgJ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/guides._slug-Dvl7tuRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-DJqeD4b4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-page-DjSVjA0h.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/arrow-up-right-CIsPRM7-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/store-notifications-BP44Ag3U.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "CurrentCustomerServiceReview"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/services-CpLmWiXj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-C4zMOaq0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-BpPmE1zg.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-route-page-Rqxzri1g.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-B4lsA6Tm.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-page-C8Pi4Nw2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-DkrzLNvd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/home-page-CbKISeRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-tone-Dz9vH2FB.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-coupon-ticket-D1mh_Qky.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/chevron-left-f8CkMUuo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/_storefront/page-data?kind=product&id=synthetic-a-product-1&languageCode=zh_Hans&currencyCode=MYR",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/index.html?__storefront_version=1791835741407",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/category?collectionId=synthetic-a-collection&page=2",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-route-page-C0AWOQYd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-pagination-BUzwcEBw.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/category-vwVYfZgJ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/product?id=synthetic-a-product-1",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/qa/synthetic-image.svg",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/catalog-route-pages-cz-NO2s-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-DEpRZKEl.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-BHhxdano.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-OS9eFNjz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/quantity-control-nbaMEE18.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/plus-Blp5bpV0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-poster-surface-OVRInhEP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-detail-page-D36XUlW4.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/lazy-storefront-pages-CYthphj4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/review-pages-C2Cwk2GM.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/circle-check-dhS4TwdA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/image-plus-3jafEpXd.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-coupons-BkFmhzTW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/share-2-W1tKR6rk.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/message-circle-Dy3Psi9e.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/guides/synthetic-a-guide",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/guides._slug-Dvl7tuRv.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/support",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-DJqeD4b4.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/support-page-DjSVjA0h.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/copy-iIL8L7XC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/arrow-up-right-CIsPRM7-.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/modals-and-support-B0-nzLIx.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/store-notifications-BP44Ag3U.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "CurrentCustomerServiceReview"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/services",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-route-pages-8VGxJwIN.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-page-contexts-BTQeEYeg.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-ui-DKmMbx_G.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/content-target-href-DZO20fnK.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-display-BgOxtEx2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/download-BTETqgah.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/account-catalog-surfaces-Cclm4kLF.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-section-DoUXEIOf.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/product-card-BvqPl0qj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/commerce-styles-CeZu7E44.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/services-CpLmWiXj.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-C4zMOaq0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mobile-page-header-DilL6La0.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/client-plugin-registry-Cz9KasdQ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/mail-CEOh0rE6.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/key-round-CAA5K7Gy.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/wand-sparkles-B0MhpjPS.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/business-services-page-BpPmE1zg.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/external-link-C_ldrjuz.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/desktop-search-B2DVCXiW.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-BokBrawW.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/search-loading-DKmNS85z.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/zh/legal?id=privacy",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront/restore-theme.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-react-GZY1VIEG.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-EErxBMJq.css",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-tanstack-DVwx907a.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/responsive-image-BsoLEgJC.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/vendor-content-sanitizer-CJpyhneo.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/public-page-bootstrap-BcuTPFdT.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/index-C0qC87yp.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-route-page-Rqxzri1g.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/shared-7TdUCgwP.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-B4lsA6Tm.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-performance-CmszITmA.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-CBdWaL2j.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/legal-page-C8Pi4Nw2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontCustomerIdentity"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "StorefrontReviewSettings"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/shop-api?languageCode=zh_Hans&currencyCode=MYR",
+      "method": "POST",
+      "operation": "ActiveStoreCommerceMode"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/realtime-C8e7l5xu.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-observer-Bbh_pIK2.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/refresh-cw-C9DeNWxV.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/fixed-bottom-viewport-30RgheX5.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontQueryFeedback-CrHe2Dne.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/StorefrontUpdatePrompt-PznhUtXZ.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/assets/storefront-traffic-preference-DqLat5rh.js",
+      "method": "GET"
+    },
+    {
+      "host": "127.0.0.1:59662",
+      "path": "/storefront-realtime/events?client=storefront",
+      "method": "GET"
+    }
+  ]
+}

@@ -97,6 +97,12 @@ export function orderNotification(
             tone: 'progress',
         };
     }
+    if (order.state === 'AwaitingManualPayment')
+        return {
+            title: isZh ? '待客服确认收款' : 'Awaiting payment confirmation',
+            detail: isZh ? '联系客服核实到账后处理交付' : 'Contact support to verify receipt before delivery',
+            tone: 'pending',
+        };
     if (order.state === 'ArrangingPayment') {
         return {
             title: isZh ? '订单等待支付' : 'Order awaiting payment',
@@ -157,6 +163,7 @@ export function addressText(address: CustomerAddress): string {
 export function orderStateLabel(state: string, language: StorefrontLanguage): string {
     const customerLabels: Record<string, [string, string]> = {
         AddingItems: ['购物车中', 'In cart'],
+        AwaitingManualPayment: ['待客服核款', 'Awaiting payment confirmation'],
         ArrangingAdditionalPayment: ['待补款', 'Additional payment needed'],
         Modifying: ['商家调整中', 'Order being updated'],
     };
@@ -193,7 +200,7 @@ export function customerOrderStateLabel(
 }
 
 export function orderStatesForTab(tab: OrderTab): string[] | undefined {
-    if (tab === 'pending') return ['ArrangingPayment', 'ArrangingAdditionalPayment'];
+    if (tab === 'pending') return ['ArrangingPayment', 'AwaitingManualPayment', 'ArrangingAdditionalPayment'];
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
     if (tab === 'completed') return ['Delivered'];

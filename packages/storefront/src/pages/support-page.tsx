@@ -11,6 +11,7 @@ import qqIcon from '../assets/support/qq.svg';
 import telegramIcon from '../assets/support/telegram.svg';
 import wechatIcon from '../assets/support/wechat.svg';
 import whatsappIcon from '../assets/support/whatsapp.svg';
+import { SupportQrSave } from '../components/common/support-qr-save';
 import { SafeImage } from '../safe-image';
 import { goBackInStorefront } from '../storefront-navigation-history';
 import { SupportPageContext } from '../storefront-page-contexts';
@@ -417,7 +418,11 @@ export function SupportContent({
                                 }
                             />
                         </div>
-                        <p>{isZh ? '长按保存或使用微信扫一扫' : 'Save the code or scan it with WeChat'}</p>
+                        <p>
+                            {isZh
+                                ? '手机长按上方二维码，选择保存图片；也可在系统分享中保存。'
+                                : 'On mobile, touch and hold the QR code and choose Save Image. You can also use the system share panel.'}
+                        </p>
                         {typeof qrChannel.item.settings?.supportAccount === 'string' ? (
                             <SupportQrAccount
                                 key={qrChannel.item.settings.supportAccount}
@@ -425,15 +430,11 @@ export function SupportContent({
                                 language={language}
                             />
                         ) : null}
-                        <a
-                            className="support-qr-save"
-                            href={qrChannel.item.imageUrl}
-                            download
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            {isZh ? '保存二维码' : 'Save QR code'}
-                        </a>
+                        <SupportQrSave
+                            key={`${qrChannel.item.imageUrl}:${qrImageRetryKey}`}
+                            imageUrl={qrChannel.item.imageUrl}
+                            language={language}
+                        />
                     </div>
                 </Sheet>
             ) : null}

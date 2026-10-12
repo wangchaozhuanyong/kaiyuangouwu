@@ -11,6 +11,7 @@ import {
 
 import { resolveAccountRecommendationSettings } from '../../../storefront-content-plugin/src/shared/account-recommendation-settings';
 import { AccountIdentity } from '../components/common/account-identity';
+import { CustomerOrdersStatus } from '../components/common/customer-orders-status';
 import { RouteState } from '../storefront-router';
 import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
 import { orderStateLabel } from '../storefront-ui/order-ui';
@@ -38,6 +39,9 @@ export function DesktopAccountPage({
     api,
     pending,
     customer,
+    recentOrdersState = 'ready',
+    recentOrdersError,
+    onRetryRecentOrders,
     market,
     locale,
     language,
@@ -60,7 +64,7 @@ export function DesktopAccountPage({
 }: DesktopAccountPageProps) {
     const isZh = language === 'zh';
     const recommendationSettings = resolveAccountRecommendationSettings(accountRecommendations);
-    const orders = customer?.orders.items ?? [];
+    const orders = customer?.orders?.items ?? [];
     const statuses = [
         {
             tab: 'pending',
@@ -181,7 +185,14 @@ export function DesktopAccountPage({
                         <ChevronRight />
                     </button>
                 </header>
-                {orders.length ? (
+                {recentOrdersState !== 'ready' ? (
+                    <CustomerOrdersStatus
+                        recentOrdersState={recentOrdersState}
+                        recentOrdersError={recentOrdersError}
+                        onRetryRecentOrders={onRetryRecentOrders}
+                        language={language}
+                    />
+                ) : orders.length ? (
                     <div className="desktop-recent-orders">
                         {orders.slice(0, 3).map(order => (
                             <article key={order.id}>

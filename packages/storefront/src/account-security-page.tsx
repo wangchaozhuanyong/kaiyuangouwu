@@ -21,9 +21,9 @@ import { serviceMessageDisplay } from '../../common/src/display-localization';
 
 import './styles/account-security.css';
 
+import { CustomerAvatar } from './components/common/customer-avatar';
 import { isInputMethodKey } from './input-method';
 import { Overlay } from './overlay-host';
-import { SafeImage } from './safe-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions } from './storefront-router';
 import { EmptyState, InlineError, SubHeader, Subpage, SubpageBody } from './storefront-ui/page-shell';
@@ -286,16 +286,12 @@ export function AccountSecurityPage({
                         aria-describedby={avatarError ? 'avatar-upload-message' : undefined}
                         onClick={() => avatarInputRef.current?.click()}
                     >
-                        {avatarUrl ? (
-                            <SafeImage
-                                frameClassName="security-user-avatar-image"
-                                className="security-user-avatar-image"
-                                src={avatarUrl}
-                                alt=""
-                            />
-                        ) : (
-                            <span aria-hidden="true">{initial}</span>
-                        )}
+                        <CustomerAvatar
+                            customer={customer}
+                            source={avatarUrl}
+                            size={64}
+                            className="security-user-avatar-image"
+                        />
                         <span className="security-avatar-edit" aria-hidden="true">
                             {avatarUploading ? <LoaderCircle /> : <Camera />}
                         </span>

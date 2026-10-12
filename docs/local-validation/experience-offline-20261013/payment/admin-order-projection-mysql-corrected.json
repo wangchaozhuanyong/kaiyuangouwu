@@ -1,0 +1,13 @@
+{
+    "finishedAt": "2026-10-12T19:05:33.291Z",
+    "cwd": "",
+    "args": [
+        "run",
+        "--config",
+        "packages/commerce-fulfillment-plugin/order-closure.unit.vitest.config.mjs",
+        "packages/commerce-fulfillment-plugin/src/order-processing-projection.spec.ts"
+    ],
+    "exitCode": 0,
+    "output": "reports/order-closure-mysql/1791831421760/admin-order-projection-mysql-corrected.log",
+    "scope": "owned isolated MySQL; synthetic fixtures"
+}

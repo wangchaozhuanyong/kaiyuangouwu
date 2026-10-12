@@ -10,9 +10,12 @@ import {
     storefrontQueryClient,
     watchPublicQueryCache,
 } from './query-client';
+import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { router } from './router';
+import { readInitialStorefrontBoot, seedStorefrontBoot } from './storefront-boot-data';
 import { restoreStorefrontIcons } from './storefront-icons';
 import { readInitialPublicPage, seedPublicPage, type PublicPageData } from './storefront-page-data';
+import { routeFromRouterLocation } from './storefront-router';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import './storefront-styles';
 
@@ -28,10 +31,15 @@ restoreStorefrontIcons();
 let initialPublicPage: PublicPageData | undefined;
 if (!embeddedPreview) {
     try {
+        const initialBoot = readInitialStorefrontBoot();
         const initialPage = readInitialPublicPage();
         initialPublicPage = initialPage;
         if (initialPage) seedPublicPage(storefrontQueryClient, initialPage);
-        restorePublicQueryCache(storefrontQueryClient);
+        else if (initialBoot) seedStorefrontBoot(storefrontQueryClient, initialBoot);
+        // The exact HTML snapshot owns hydration. Newer session data may be adopted
+        // by bootstrap after the first commit, but must not change that first tree.
+        if (!initialPage || appRootElement.dataset.publicRendered !== '1')
+            restorePublicQueryCache(storefrontQueryClient);
         watchPublicQueryCache(storefrontQueryClient);
         window.addEventListener('pagehide', () => {
             try {
@@ -61,11 +69,15 @@ async function mountStorefront() {
         </StrictMode>
     );
     if (!embeddedPreview && initialPublicPage && appRootElement.dataset.publicRendered === '1') {
-        const { createPublicSnapshotApp } = await import('./public-snapshot');
-        const initialTree = await createPublicSnapshotApp(initialPublicPage, () =>
-            root.render(interactiveApp),
-        );
-        const root = hydrateRoot(appRootElement, initialTree);
+        const location = router.state.location;
+        const route = routeFromRouterLocation(location.pathname, location.search);
+        // TanStack keeps the server's root boundary structure for a hydrated app.
+        // Asset metadata is supplied by the HTML controller rather than a Start manifest.
+        router.ssr = { manifest: undefined };
+        // Load the real router and its page before React adopts the existing HTML.
+        // There is one browser router, one cache and one tree for this document.
+        await Promise.all([preloadStorefrontRouteComponent(route.name), router.load()]);
+        hydrateRoot(appRootElement, interactiveApp);
     } else {
         createRoot(appRootElement).render(interactiveApp);
     }

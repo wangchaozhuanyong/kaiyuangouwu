@@ -9,6 +9,8 @@ export class PaymentAttemptEvent extends VendureEvent {
         public order: Order,
         public phase: 'STARTED' | 'RETURNED' | 'FAILED',
         public resultState?: string,
+        /** Server-selected operation, never copied from customer metadata. */
+        public handlerCode?: string,
     ) {
         super();
     }

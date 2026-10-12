@@ -1,0 +1,37 @@
+{
+  "directory": "harden-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "rimraf lib && tsc -p ./tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/harden-plugin",
+  "startedAt": "2026-10-12T20:23:45.299Z",
+  "finishedAt": "2026-10-12T20:23:46.289Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/harden-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/harden-plugin/src/constants.ts",
+      "sha256": "0fe5edcbd27ab852f9130f5267955ce8b9efb68707779a833e61b1934276266f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/harden-plugin/src/harden.plugin.ts",
+      "sha256": "da9dd0e77086c48cd269fe69bada7b819155b00752f98692d018e384f6a242d4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/harden-plugin/src/middleware/hide-validation-errors-plugin.ts",
+      "sha256": "b8637847226eaefbc8112bbd607c05ab439f2bfbdc096e78d685a5f2d034222c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/harden-plugin/src/middleware/query-complexity-plugin.ts",
+      "sha256": "7b1dfa3d12e79355b9db5cc0ecadd01957361a1f49528ea3ae393faac60f237d"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/harden-plugin/src/types.ts",
+      "sha256": "4e1990b594a14fc371f691f3728d3eb9728ef8c9b14ce39219e3f5219a41dbed"
+    }
+  ],
+  "changedInputs": []
+}

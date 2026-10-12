@@ -110,12 +110,17 @@
     .page,
     .subpage {
         --page-bottom-fixed-offset: 0px;
-        --page-end-gap: 48px;
+        --page-end-gap: var(--space-16);
         min-height: 100dvh;
         padding-inline: 0;
         padding-bottom: calc(
-            var(--page-bottom-fixed-height) + var(--page-bottom-fixed-offset) + var(--page-end-gap) +
-                var(--safe-bottom)
+            var(
+                    --page-bottom-measured-clearance,
+                    calc(
+                        var(--page-bottom-fixed-height) + var(--page-bottom-fixed-offset) + var(--safe-bottom)
+                    )
+                ) +
+                var(--page-end-gap)
         );
     }
 
@@ -204,10 +209,10 @@
     }
 
     .homepage-modules {
-        --homepage-module-gap: 16px;
-        --homepage-section-gap: 24px;
+        --homepage-module-gap: var(--space-section);
+        --homepage-section-gap: var(--space-major);
 
-        padding-top: 16px;
+        padding-top: var(--homepage-module-gap);
     }
 
     .homepage-modules > .notice-strip {

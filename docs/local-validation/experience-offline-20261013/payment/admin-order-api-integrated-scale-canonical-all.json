@@ -1,0 +1,12 @@
+{
+  "finishedAt": "2026-10-12T19:59:57.748Z",
+  "cwd": "",
+  "args": [
+    "run",
+    "--config",
+    "packages/commerce-fulfillment-plugin/e2e/order-processing-scale/order-processing-scale.vitest.config.mjs"
+  ],
+  "exitCode": 1,
+  "output": "reports/order-closure-mysql/1791831421760/admin-order-api-integrated-scale-canonical-all.log",
+  "scope": "owned isolated MySQL; synthetic fixtures"
+}

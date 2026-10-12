@@ -100,6 +100,8 @@ const operationLabels: Record<string, string> = {
     'default-shipping-calculator': '按固定金额收取运费',
     'default-shipping-eligibility-checker': '订单商品小计达到指定金额',
     'dummy-payment-handler': '测试支付方式',
+    'offline-manual-payment-handler': '客服核款支付',
+    'offline-manual-payment-checker': '正式下单后等待客服核款',
     'facet-value-filter': '按筛选属性值匹配商品 SKU',
     minimum_order_amount: '订单商品小计达到指定金额',
     order_fixed_discount: '订单商品小计固定金额立减',
@@ -115,6 +117,12 @@ const operationLabels: Record<string, string> = {
     'variant-id-filter': '手动选择商品 SKU',
     'variant-name-filter': '按商品 SKU 名称筛选',
 };
+
+export function paymentHandlerPurposeLabel(handlerCode?: string): '客服核款' | '模拟测试' | null {
+    if (handlerCode === 'offline-manual-payment-handler') return '客服核款';
+    if (handlerCode === 'controlled-test-payment-handler') return '模拟测试';
+    return null;
+}
 
 const optionLabels: Record<string, string> = {
     auto: '跟随店铺设置',
@@ -139,7 +147,8 @@ const operationArgumentDescriptions: Record<string, string> = {
 export const normalizeConfigurableIdentifier = (value: string) =>
     value.replace(/[^a-z0-9]/giu, '').toLowerCase();
 
-const hasChinese = (value?: string | null) => Boolean(value && /\p{Script=Han}/u.test(value));
+const hasChinese = (value?: string | null): value is string =>
+    Boolean(value && /\p{Script=Han}/u.test(value));
 
 export function configurableUiRecord(value: unknown): Record<string, unknown> | null {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -161,8 +170,10 @@ function localizedOptionText(value: unknown, fallbackValue: string, index: numbe
         const translations = value.flatMap(item =>
             item && typeof item === 'object' ? [item as Record<string, unknown>] : [],
         );
-        const chinese = translations.find(item =>
-            ['zh_hans', 'zh_cn', 'zh'].includes(String(item.languageCode ?? '').toLowerCase()),
+        const chinese = translations.find(
+            item =>
+                typeof item.languageCode === 'string' &&
+                ['zh_hans', 'zh_cn', 'zh'].includes(item.languageCode.toLowerCase()),
         );
         if (typeof chinese?.value === 'string' && chinese.value.trim()) return chinese.value.trim();
     }
@@ -176,7 +187,7 @@ export function configurableArgumentLabel(
 ): string {
     const operationLabel = operationArgumentLabels[`${operationCode ?? ''}.${definition.name}`];
     if (operationLabel) return operationLabel;
-    if (hasChinese(definition.label)) return definition.label!.trim();
+    if (hasChinese(definition.label)) return definition.label.trim();
     const knownLabel = argumentLabels[normalizeConfigurableIdentifier(definition.name)];
     if (knownLabel) return knownLabel;
     const type = definition.type.toLowerCase();
@@ -197,7 +208,7 @@ export function configurableArgumentDescription(
     if (operationDescription) return operationDescription;
     if (hasChinese(definition.description)) {
         const suffix = definition.list ? '每行填写一项。' : '';
-        return [definition.description!.trim(), suffix].filter(Boolean).join(' ');
+        return [definition.description.trim(), suffix].filter(Boolean).join(' ');
     }
     const knownDescription = argumentDescriptions[normalizeConfigurableIdentifier(definition.name)];
     if (knownDescription) return knownDescription;
@@ -216,7 +227,13 @@ export function configurableArgumentOptions(definition: ConfigurableArgumentDefi
     return options.flatMap((option, index) => {
         if (!option || typeof option !== 'object') return [];
         const record = option as Record<string, unknown>;
-        if (record.value == null) return [];
+        if (
+            typeof record.value !== 'string' &&
+            typeof record.value !== 'number' &&
+            typeof record.value !== 'boolean' &&
+            typeof record.value !== 'bigint'
+        )
+            return [];
         const value = String(record.value);
         return [{ value, label: localizedOptionText(record.label, value, index) }];
     });
@@ -227,7 +244,7 @@ export function configurableOperationLabel(
     fallback = '服务端规则',
 ): string {
     const base = hasChinese(definition.description)
-        ? definition.description!.trim()
+        ? definition.description.trim()
         : (operationLabels[definition.code] ?? fallback);
     return base
         .replace(/\{\s*([A-Za-z0-9_.-]+)\s*\}/gu, (_match, name: string) => {

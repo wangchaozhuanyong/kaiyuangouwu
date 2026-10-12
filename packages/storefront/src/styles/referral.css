@@ -1,9 +1,9 @@
-/* Approved coral invitation and ice-blue reward roles are fixed across storefront skins. */
+/* Approved campaign roles retain the forest identity and adapt reward surfaces to dark mode. */
 .referral-invite {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    padding: var(--space-24) var(--space-16) var(--space-16);
+    padding: var(--space-card);
     border-radius: var(--skin-card-radius);
     background: var(--referral-invite-surface);
     color: var(--referral-invite-ink);
@@ -167,12 +167,12 @@
 }
 .referral-overview,
 .referral-records {
-    padding: 20px;
+    padding: var(--space-card);
     border-radius: var(--skin-card-radius);
-    background: var(--surface);
-    color: var(--text);
+    background: var(--referral-reward-surface);
+    color: var(--referral-reward-ink);
     box-shadow: var(--skin-card-shadow);
-    border: var(--skin-card-outline);
+    border: 0;
 }
 .referral-overview {
     display: flex;
@@ -288,13 +288,40 @@
     font-size: var(--type-metric-size);
     line-height: var(--type-metric-leading);
 }
-.referral-balance-summary .price-lockup {
+.referral-balance-amount {
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
     max-width: 100%;
-    flex-wrap: wrap;
     color: inherit;
 }
-.referral-balance-summary .price-integer {
+.referral-balance-currency {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.referral-balance-value {
+    display: block;
     min-width: 0;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.referral-balance-amount.is-medium .referral-balance-value {
+    font-size: var(--type-metric-size);
+    line-height: var(--type-metric-leading);
+}
+.referral-balance-amount.is-long .referral-balance-value {
+    font-size: var(--type-price-size);
+    line-height: var(--type-price-leading);
+}
+.referral-balance-summary:has(.referral-balance-amount.is-long) {
+    grid-template-columns: minmax(0, 1fr);
+}
+.referral-balance-summary:has(.referral-balance-amount.is-long) > .referral-stat + .referral-stat {
+    padding-inline-start: 0;
+    border-inline-start: 0;
 }
 .referral-balance-summary .is-prominent dt {
     color: var(--referral-reward-ink);
@@ -328,7 +355,7 @@
     text-align: end;
 }
 .referral-stat-icon {
-    color: var(--accent-ink);
+    color: var(--referral-reward-ink);
 }
 .referral-overview .referral-stat-icon {
     display: inline-flex;
@@ -346,7 +373,7 @@
     margin-bottom: 16px;
     padding: 4px;
     border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    background: color-mix(in srgb, var(--referral-reward-ink) 7%, var(--referral-reward-surface));
 }
 .referral-record-tabs button {
     display: inline-flex;
@@ -359,7 +386,7 @@
     border: 0;
     border-radius: var(--skin-control-radius);
     background: transparent;
-    color: var(--muted);
+    color: var(--referral-reward-muted);
     font: inherit;
     font-size: var(--type-label-size);
     font-weight: var(--font-weight-medium);
@@ -367,11 +394,11 @@
     cursor: pointer;
 }
 .referral-record-tabs button:hover {
-    background: var(--control-surface-hover);
+    background: color-mix(in srgb, var(--referral-reward-ink) 12%, var(--referral-reward-surface));
 }
 .referral-record-tabs button[aria-selected='true'] {
-    background: var(--navigation-surface, var(--selection));
-    color: var(--navigation-foreground, var(--selection-foreground));
+    background: var(--referral-invite-surface);
+    color: var(--referral-invite-ink);
     font-weight: var(--font-weight-semibold);
 }
 .referral-record-tabs span {
@@ -380,7 +407,7 @@
     font-variant-numeric: tabular-nums;
 }
 .referral-records :focus-visible {
-    outline: 2px solid var(--focus);
+    outline: 2px solid var(--referral-reward-focus);
     outline-offset: 3px;
 }
 .referral-record-panel[hidden] {
@@ -419,7 +446,7 @@
     gap: 12px;
     margin: 0;
     padding: 28px 12px;
-    color: var(--muted);
+    color: var(--referral-reward-muted);
     font-size: var(--type-body-size);
     line-height: var(--type-body-leading);
     text-align: center;
@@ -427,7 +454,7 @@
 .referral-record-empty > svg {
     width: 32px;
     height: 32px;
-    color: var(--accent-ink);
+    color: var(--referral-reward-ink);
     stroke-width: 1.4;
 }
 @media (min-width: 1024px) {

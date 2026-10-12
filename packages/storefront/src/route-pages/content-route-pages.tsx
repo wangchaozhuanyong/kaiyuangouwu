@@ -1,6 +1,7 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
 import { resolveQueryLoadState } from '../loading-state';
+import { usePageRouteCommit } from '../page-readiness';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
 import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
@@ -31,6 +32,7 @@ const MailQueryPage = lazyRouteComponent(
 );
 
 export function ServicesRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
     const contentLoadState = resolveQueryLoadState({
         hasData: runtime.contentQuery.data !== undefined,
@@ -189,6 +191,7 @@ export function ReviewsRoutePage() {
 }
 
 export function SupportRoutePage() {
+    usePageRouteCommit();
     const runtime = useRuntime();
     return (
         <SupportPageContext.Provider

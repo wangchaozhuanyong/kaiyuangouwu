@@ -1,0 +1,65 @@
+{
+  "directory": "storefront-review-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin",
+  "startedAt": "2026-10-12T20:23:51.542Z",
+  "finishedAt": "2026-10-12T20:23:52.664Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/storefront-review-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/api-extensions.ts",
+      "sha256": "343da4afcf3ca863a33c52b2c2c5475fae1c33c45af7de57a79a65d9070f3d3a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/entities/storefront-review.entity.ts",
+      "sha256": "5d6dd4648f9d0295c275a3e099d59670d15dc15fbca6fe95114d9c32452e4399"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/index.ts",
+      "sha256": "d6b91cd310c2af18f2e558f5108e39bb40012659283b3b9088b97f572506f528"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/review.constants.ts",
+      "sha256": "5786c26b8367ae79f909be90626f8916ebb67ae31379740ffc48709fa152c686"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review-changed.event.ts",
+      "sha256": "1cc4e3daf9aea7eed2e09640500e2694d492f47d9b8fe70288334ac480053d1f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review-settings.service.spec.ts",
+      "sha256": "82c9d88015492b884bed8cca5be2eff8e1b4e51f833a35259f21abd3392622a9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review-settings.service.ts",
+      "sha256": "1702b0179fec4a35897836a758683036d841658556607a04b1faefaf95ab9820"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review.plugin.ts",
+      "sha256": "73e622c3873ebfcdc116a3386cddd3a57d71ae3641b8c30dc2d759e28c1baa08"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review.resolver.ts",
+      "sha256": "fed1561a283eccc8d72b63bbb328894d62c27dca736a1d3ae4287afeb9f0ce79"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review.service.spec.ts",
+      "sha256": "f15b438457e5e6ec4143e11799e93ebbba7765f92f2cc407e42d95e433819568"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/storefront-review.service.ts",
+      "sha256": "bb8b8b3f984b3166e7f73ceac21109df6eb080ad0564d2b07e79cb69fb5213f2"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/storefront-review-plugin/src/types.ts",
+      "sha256": "6b36741fafe8e0e7a19ba3e6db3d4e4e432609a477030058c56494beb6886cf9"
+    }
+  ],
+  "changedInputs": []
+}

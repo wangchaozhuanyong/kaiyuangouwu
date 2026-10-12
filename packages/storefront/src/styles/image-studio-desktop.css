@@ -1,13 +1,8 @@
 /* Independent desktop workbench. Every rule stays behind the desktop breakpoint. */
 @media (min-width: 1024px) {
     .desktop-store-layout .ai-studio-page {
-        display: flex;
-        flex-direction: column;
-        height: calc(100dvh - var(--desktop-header-height, 0px));
-        min-height: 640px;
         --page-bottom-fixed-height: 0px;
-        --page-end-gap: 0px;
-        padding-bottom: 0;
+        --page-end-gap: var(--space-16);
     }
 
     .desktop-store-layout .ai-studio-shell {

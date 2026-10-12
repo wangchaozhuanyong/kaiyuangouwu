@@ -3,6 +3,7 @@ import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { STOREFRONT_IMAGE_SIZES } from '../../../storefront-content-plugin/src/shared/responsive-image.ts';
+import { startSeoFixtureServer } from '../seo-public/preview-server.mjs';
 
 import { buildPublicPage, createPreviewServer } from './preview-server.mjs';
 
@@ -159,4 +160,20 @@ test('home/detail and a successful empty aggregate have distinct route contracts
     assert.equal(product.product.id, 'product-2');
     assert.ok(product.media.some(item => item.kind === 'detail'));
     assert.deepEqual(buildPublicPage({ kind: 'home' }, 'localhost', { empty: true }).products, []);
+});
+
+test('SEO fixture can bind the browser IPv4 address without loading built SSR for an aggregate read', async () => {
+    const seo = await startSeoFixtureServer(0, { listenHost: '127.0.0.1' });
+    try {
+        const origin = `http://127.0.0.1:${seo.port}`;
+        const response = await fetch(origin + '/_storefront/page-data?kind=home');
+        assert.equal(response.status, 200);
+        const page = await response.json();
+        assert.equal(page.scope.host, new URL(origin).host);
+        assert.equal(page.scope.channelCode, 'synthetic-a');
+        assert.equal(page.request.kind, 'home');
+        assert.equal(seo.requests.at(-1).path, '/_storefront/page-data?kind=home');
+    } finally {
+        await seo.close();
+    }
 });

@@ -151,11 +151,11 @@
 
     .home-page .hero.hero-image-overlay .hero-overlay-controls {
         bottom: 12px;
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
+        left: auto;
+        right: 12px;
+        transform: none;
         width: max-content;
-        max-width: calc(100% - 32px);
+        max-width: min(132px, calc(100% - 24px));
         margin: 0;
         padding: 0;
     }

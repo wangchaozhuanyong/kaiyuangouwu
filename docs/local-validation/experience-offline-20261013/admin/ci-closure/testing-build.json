@@ -1,0 +1,113 @@
+{
+  "directory": "testing",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc -p ./tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing",
+  "startedAt": "2026-10-12T20:24:01.360Z",
+  "finishedAt": "2026-10-12T20:24:02.314Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/testing-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/config/test-config.ts",
+      "sha256": "56991a169a5f00e388e100b160cc0061106976483d3ab74a20131300b4184af4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/config/testing-asset-preview-strategy.ts",
+      "sha256": "b9b26d9f3bf3745efbadee70b973955bbefc719f43eef1ca982fc3c04e517e62"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/config/testing-asset-storage-strategy.ts",
+      "sha256": "55a03baad32eaf0c8c5c8abd70a82781c96c7e5fef04f4c5a56f364d18f0cff6"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/config/testing-entity-id-strategy.ts",
+      "sha256": "a4a931bd8e5666c7dd8a975d7a3b20282c0565eb3a04c8ac6a9c10c98accaf7c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/create-test-environment.ts",
+      "sha256": "45749c2f7b9be03f78098f062abbdfa7529d79d990c1476abc5aefd57285d4e3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/data-population/clear-all-tables.ts",
+      "sha256": "6f584c9f06c017c57fe689865980eadc826e3cebaf5da087fc8d0a0a429f8c89"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/data-population/mock-data.service.ts",
+      "sha256": "8ff41e1041f036d4782ada792c2a77d5c988c7e595ff07e63156b733543c070b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/data-population/populate-customers.ts",
+      "sha256": "940e229ba2116ce127488fdee37ec5759111397cd18af644f88f1fdd310f22a9"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/data-population/populate-for-testing.ts",
+      "sha256": "4ea969fdab475896cb62418db81fcb3ac9318343a04fc671406b560dc761cda3"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/error-result-guard.ts",
+      "sha256": "ce120e919b03244b763a6c65e3da6f6ccbbbfde350669724c14318bc7b3c3d64"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/index.ts",
+      "sha256": "de78a6471f1f1621ac66376eea269cd064e25fa0f661fa64cf430efcb018546f"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/initializers/initializers.ts",
+      "sha256": "00e48faa602f1d0eda6b6cc6873338fb6204d6ee71b733b02eebb1bd3cf1f304"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/initializers/mysql-initializer.ts",
+      "sha256": "8600631aa0c0ca326fef6d36de128fc8c70b952ccab0e930613600b2b614a52c"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/initializers/postgres-initializer.ts",
+      "sha256": "29077e6810334e1d4968c12fc6f284c3b7c06ffc9887f9a572d344534cb58c98"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/initializers/sqljs-initializer.spec.ts",
+      "sha256": "49f53bb982b575a9260a951808f5b6135613b95799d6f95be781d74cafd121b1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/initializers/sqljs-initializer.ts",
+      "sha256": "a1ca2020cae7f22af2f0aefce8694542115f5fff23bdf70915889cf6901c9989"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/initializers/test-db-initializer.ts",
+      "sha256": "d46e76534750b8f520ef1564d3c076744e691dd5319ce627e10e18f8a2f3ba46"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/simple-graphql-client.ts",
+      "sha256": "b4fdc5d5a21ccdbfb0bda83af9a99ff304ec0cd7b06bfefc4cd79d293b4cf384"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/test-server.ts",
+      "sha256": "9405b7cdccb4867a2ffa76b804d39e6726bd36a8bb6f1a0e5c3947480ebe4064"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/testing-logger.ts",
+      "sha256": "bb8f43b8fff4b9f6424371c1ef5ba0eaf64d4fff4fd160ebdba25332aefc15bf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/types.ts",
+      "sha256": "2b40023b4ea9cf86ba160cf1cd83419f42aafdf824ce3b3dc4d7fd4e7ebd450e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/utils/create-upload-post-data.spec.ts",
+      "sha256": "939e51e990a6a0364311d372bb2c27537febb3c2269ecaf5774b490ed8ce7902"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/utils/create-upload-post-data.ts",
+      "sha256": "a3a5385a71cb9e95ec31c8311d7e1c9a77f7c6737b2268a8763e9d0eaa985978"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/testing/src/utils/get-superadmin-context.ts",
+      "sha256": "2aaa5523c54f761611308249170469d3fa6001759c1463695b17b13095d7c520"
+    }
+  ],
+  "changedInputs": []
+}

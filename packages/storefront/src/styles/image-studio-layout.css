@@ -1,6 +1,10 @@
 /* The page reserves the fixed action bar through the shared page clearance model. */
 .ai-studio-page {
-    --page-bottom-fixed-height: 68px;
+    --page-bottom-fixed-height: var(--image-studio-action-bar-height);
+}
+
+.ai-studio-page:not(:has(.ai-studio-create-panel:not([hidden]) .page-action-bar)) {
+    --page-bottom-fixed-height: 0px;
 }
 
 .ai-studio-shell {
@@ -8,7 +12,7 @@
     min-width: 0;
     padding: 20px var(--page-section-inset, 16px) 0;
     display: grid;
-    gap: 24px;
+    gap: var(--space-section);
 }
 
 .ai-studio-controls {

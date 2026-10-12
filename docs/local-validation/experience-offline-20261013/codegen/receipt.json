@@ -1,0 +1,40 @@
+{
+    "exitCode": 1,
+    "snapshottedAndRestored": [
+        "schema-admin.json",
+        "schema-shop.json",
+        "packages/core/src/common/error/generated-graphql-admin-errors.ts",
+        "packages/core/src/common/error/generated-graphql-shop-errors.ts",
+        "packages/admin-ui/src/lib/core/src/common/generated-types.ts",
+        "packages/admin-ui/src/lib/core/src/common/introspection-result.ts",
+        "packages/common/src/generated-types.ts",
+        "packages/common/src/generated-shop-types.ts",
+        "packages/core/e2e/graphql/graphql-env-admin.d.ts",
+        "packages/core/e2e/graphql/graphql-admin.ts",
+        "packages/core/e2e/graphql/graphql-env-shop.d.ts",
+        "packages/core/e2e/graphql/graphql-shop.ts",
+        "packages/asset-server-plugin/e2e/graphql/graphql-env-admin.d.ts",
+        "packages/asset-server-plugin/e2e/graphql/graphql-admin.ts",
+        "packages/asset-server-plugin/e2e/graphql/graphql-env-shop.d.ts",
+        "packages/asset-server-plugin/e2e/graphql/graphql-shop.ts"
+    ],
+    "changedGeneratedOutputs": [],
+    "restoredHashes": {
+        "schema-admin.json": "bff57f423bb37620f6f78bb4b87a1939370a7f8dbb1deff97d51593823c14d62",
+        "schema-shop.json": "384cb80197ffbf83c1ff661bc021c31b9bf36a20cb861dea15c59d369ae45d85",
+        "packages/core/src/common/error/generated-graphql-admin-errors.ts": "cb8a3e4ffa73aff9fc04f2ceb71b5ea8a319c3199393a988c74c5d7a4a51b629",
+        "packages/core/src/common/error/generated-graphql-shop-errors.ts": "ddfd334ae3cc7a37b7f266d956006f500d4d3b2dadc05be8961d495fffe6a12c",
+        "packages/admin-ui/src/lib/core/src/common/generated-types.ts": "a5f02e9ab8748e6d5998013f17632a25c99118a5f8e850b6596676e0ffac5621",
+        "packages/admin-ui/src/lib/core/src/common/introspection-result.ts": "18d7041db5f4282589724dddec7dbabcd3a7a83629a43ff56b4dfc60991084ad",
+        "packages/common/src/generated-types.ts": "88fe7c66f0b2d68f83fec523cc53c0c98b509070bc635931fe39b8950a7bdf79",
+        "packages/common/src/generated-shop-types.ts": "a6c904cd01675b0ce6a64512318f8d3df0abcd76731a8df567444bae3b655a52",
+        "packages/core/e2e/graphql/graphql-env-admin.d.ts": "131b578ff301e89adaf675e9e0ab2e6e61acb5f4aa5d718f37fd1394216b8fa0",
+        "packages/core/e2e/graphql/graphql-admin.ts": "770acb647b3f5672881538945f4cdf1a97693622f987d7edb927eb52552a7052",
+        "packages/core/e2e/graphql/graphql-env-shop.d.ts": "c9d79fc0c6cad543dcf655c21b25a77696f3cb96f84ab5bb9fff7cb7fe25296b",
+        "packages/core/e2e/graphql/graphql-shop.ts": "d727091f96e5d34123cb0acaebf56bd47b15db9e1493fe7ca26fb79e74d66a7f",
+        "packages/asset-server-plugin/e2e/graphql/graphql-env-admin.d.ts": "131b578ff301e89adaf675e9e0ab2e6e61acb5f4aa5d718f37fd1394216b8fa0",
+        "packages/asset-server-plugin/e2e/graphql/graphql-admin.ts": "770acb647b3f5672881538945f4cdf1a97693622f987d7edb927eb52552a7052",
+        "packages/asset-server-plugin/e2e/graphql/graphql-env-shop.d.ts": "c9d79fc0c6cad543dcf655c21b25a77696f3cb96f84ab5bb9fff7cb7fe25296b",
+        "packages/asset-server-plugin/e2e/graphql/graphql-shop.ts": "d727091f96e5d34123cb0acaebf56bd47b15db9e1493fe7ca26fb79e74d66a7f"
+    }
+}

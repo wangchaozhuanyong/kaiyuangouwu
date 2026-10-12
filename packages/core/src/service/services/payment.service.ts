@@ -284,7 +284,7 @@ export class PaymentService {
                 });
             }
         }
-        await this.eventBus.publish(new PaymentAttemptEvent(ctx, order, 'STARTED'));
+        await this.eventBus.publish(new PaymentAttemptEvent(ctx, order, 'STARTED', undefined, handler.code));
         let result: Awaited<ReturnType<typeof handler.createPayment>>;
         try {
             result = await handler.createPayment(
@@ -296,10 +296,14 @@ export class PaymentService {
                 paymentMethod,
             );
         } catch (error) {
-            await this.eventBus.publish(new PaymentAttemptEvent(ctx, order, 'FAILED'));
+            await this.eventBus.publish(
+                new PaymentAttemptEvent(ctx, order, 'FAILED', undefined, handler.code),
+            );
             throw error;
         }
-        await this.eventBus.publish(new PaymentAttemptEvent(ctx, order, 'RETURNED', result.state));
+        await this.eventBus.publish(
+            new PaymentAttemptEvent(ctx, order, 'RETURNED', result.state, handler.code),
+        );
         const initialState = 'Created';
         // The DB-write sequence below (payment create, state transition, save, relation
         // add, onTransitionEnd hooks) is wrapped in withTransaction so it commits or

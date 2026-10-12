@@ -19,10 +19,11 @@ import {
     WalletCards,
 } from 'lucide-react';
 
-import { SafeImage } from '../../safe-image';
 import { RouteState } from '../../storefront-router';
 import { useStorefront } from '../../StorefrontContext';
 import { storefrontSupportChannels, supportServiceDetails } from '../../support-content';
+
+import { CustomerAvatar } from './customer-avatar';
 
 type AccountPath =
     | '/account'
@@ -140,11 +141,7 @@ export function DesktopAccountNavigation() {
         >
             <div className="desktop-account-profile" data-identity-theme="mist">
                 <span className="desktop-account-profile-avatar" aria-hidden="true">
-                    {customer?.avatar?.preview ? (
-                        <SafeImage src={customer.avatar.preview} alt="" />
-                    ) : (
-                        <UserRound />
-                    )}
+                    <CustomerAvatar customer={customer} size={40} />
                 </span>
                 <div className="desktop-account-profile-copy">
                     <strong>{name}</strong>

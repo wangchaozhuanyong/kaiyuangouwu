@@ -1,0 +1,70 @@
+{
+  "at": "2026-10-12T20:18:27.310Z",
+  "scope": "local implementation and owned synthetic MySQL only; no production state changed",
+  "source_sha256": {
+    "packages/core/src/config/payment/default-payment-process.ts": "83404b45c80fb0ef9e58485d27eddc036e2445871ee831fcc47162144d8985dd",
+    "packages/core/src/event-bus/events/payment-attempt-event.ts": "dda8559bbe94a3c19cf5e25a2fc8ac03349b07aa7eecee689cd589a47f8449d5",
+    "packages/core/src/service/services/payment.service.ts": "4888627f1bf8955795c325a9f909df4a28addb5547d6005a815ed4017296d525",
+    "packages/commerce-fulfillment-plugin/src/offline-manual-payment.ts": "7e837c7c9e73d757392342b02ed56c352a28f1da7c41fb0b04b45d8a7e7cbcc5",
+    "packages/commerce-fulfillment-plugin/src/offline-payment.resolver.ts": "aaffd6c3787ac874db61c87255aa691901868199d92440c39f74cd6b754077cd",
+    "packages/commerce-fulfillment-plugin/src/offline-payment.service.ts": "84e6d3951337d632735c5c57dca124913f29085109c7ff59dcb94dc724037313",
+    "packages/commerce-fulfillment-plugin/src/checkout-resources.service.ts": "95e9e255dea199eabf1127c099d242c40a1e6024c3376e2a14c27fe826d55244",
+    "packages/store-management-plugin/src/offline-payment-proof.ts": "118d6613f3be2b3d43dcb87dc4281787c34e33c3c6fab6d3459fac89ed6b54c0",
+    "packages/store-management-plugin/src/promotion/store-coupon-lifecycle.service.ts": "94c7b51c68299f43d6db451f28c1c2d71a86e8cd6a83df6445048c355e838378",
+    "packages/store-management-plugin/src/referral/referral.service.ts": "e51bc5467de5502cf5dfa4fc0e0953ec4a42cbcb33309b223dcdce07d475b0df",
+    "packages/storefront-cart-plugin/src/storefront-cart.service.ts": "03fdf6f11fd7a08397b5769eebe87e902a035cc9d5b4b553e392d605b929987f",
+    "packages/storefront-cart-plugin/src/storefront-payment-attempt.service.ts": "587b4035ebddd0cbb26811b0e6fb95797a5c7852548dc5637bd2c8ac83e22e06",
+    "packages/next-admin/src/pages/Sales/OfflineOrderPaymentPanel.tsx": "5f0fcc11e1580220f3de9c4d017db11639d6341f6f5698e033824bb096d00a0c",
+    "packages/storefront/src/payment-pages.tsx": "2c772a44cc3df360cfd620d2f49f7b9d9eb793fd21523f0b0dd8fb6d1ba2f824",
+    "packages/next-admin/src/utils/configurable-operation-localization.ts": "d827f25cd99b12aeddeed072f7139c46fe1fc6edca6be3af0ef6ab7d55a261ce"
+  },
+  "mysql_composite": [
+    "offline-payment-complete: 8 cases passed; legacy catalog fixture update failed",
+    "offline-legacy-quote-final: legacy repricing/restoration case passed",
+    "offline-limited-inventory-query-corrected: finite inventory expiry, unavailable-at-receipt, then replenish/retry passed"
+  ],
+  "build_logs": {
+    "core": "core-build.log",
+    "storefront-cart-plugin": "cart-build.log",
+    "store-management-plugin": "store-management-build.log",
+    "commerce-fulfillment-plugin": "commerce-build.log"
+  },
+  "not_built_here": [
+    "common (unchanged)",
+    "storefront-content-plugin (parent owns content-boot-build.log)",
+    "front/admin full builds (parent owns)"
+  ],
+  "remaining": "parent consolidates lint, production mapping, release, and live acceptance",
+  "lint": "offline-lint.log: 0 errors / 0 warnings",
+  "additional_checks": [
+    "offline-e2e-types.log: exit 0",
+    "referral-today-time-final.log: 4 passed",
+    "front-manual-flow-test.log: 45 passed",
+    "admin-offline-panel-test.log: 4 passed",
+    "offline-coupon-resources-test.log: 108 passed",
+    "admin-feedback.log: passed",
+    "front-interaction.log: passed",
+    "admin-types.log: exit 0",
+    "admin-payment-settings-final.log: 13 passed",
+    "admin-payment-label-lint.log: exit 0; 0 errors / 0 warnings",
+    "admin-order-projection-classification-final.log: 2 passed / 1 unchanged benchmark skipped",
+    "payment-finance-lint-final.log: exit 0; 0 errors / 0 warnings",
+    "offline-coupon-finance-final.log: 3 passed",
+    "api-scale-final-evidence.json: actual Admin HTTP p95 343.65 / 597.98ms; 20 full Orders / 20 Lines; isolated runner shutdown",
+    "front-qa-tests-final.log: 13 passed / 2 QA files",
+    "front-qa-lint-final.log: exit 0; 0 errors / 0 warnings"
+  ],
+  "build_log_sha256": {
+    "core": "8fd58364a394f9dc1274868c395194f3607c1a4e96039222e385fb5b1a1e6cac",
+    "storefront-cart-plugin": "4486f3c6a4711f10b2d3e8f40cab06329fbd35b3ed23d0adf3541cb51c71fa29",
+    "store-management-plugin": "4486f3c6a4711f10b2d3e8f40cab06329fbd35b3ed23d0adf3541cb51c71fa29",
+    "commerce-fulfillment-plugin": "4486f3c6a4711f10b2d3e8f40cab06329fbd35b3ed23d0adf3541cb51c71fa29"
+  },
+  "mysql_runner": {
+    "sessionId": 36111,
+    "port": 37406,
+    "ownership": "Owned isolated control-stdin runner; no production connection",
+    "artifactDirectory": "reports/order-closure-mysql/1791831421760",
+    "state": "shutdown successful exit 0; owned pid/listener absent; artifacts retained"
+  }
+}

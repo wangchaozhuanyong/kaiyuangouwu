@@ -40,6 +40,44 @@ function responseMock() {
 }
 
 describe('storefront LCP preload', () => {
+    it('renders only anonymous configuration on private routes and leaves authority errors visible', async () => {
+        const ctx = {
+            channel: { availableCurrencyCodes: ['MYR'] },
+            languageCode: 'en',
+            currencyCode: 'MYR',
+            copy: vi.fn(),
+        };
+        ctx.copy.mockReturnValue(ctx);
+        const render = vi.fn();
+        const renderBoot = vi
+            .fn()
+            .mockResolvedValue('<script type="application/json">public config</script>');
+        const controller = new StorefrontLcpPreloadController(
+            { resolveRequest: vi.fn().mockResolvedValue({ ctx, host: 'a.test' }) } as never,
+            { render, renderBoot } as never,
+        );
+        const request = {
+            socket: { remoteAddress: '127.0.0.1' },
+            headers: {
+                'x-storefront-original-uri': '/account',
+                'x-storefront-language': 'en',
+                'x-storefront-currency': 'MYR',
+            },
+        };
+        const res = responseMock();
+        await controller.preload(request as never, res as never);
+        expect(render).not.toHaveBeenCalled();
+        expect(renderBoot).toHaveBeenCalledWith(ctx, 'a.test');
+        expect(res.status).toHaveBeenCalledWith(200);
+        renderBoot.mockRejectedValueOnce(new StorefrontClosedError());
+        const closed = responseMock();
+        await controller.preload(request as never, closed as never);
+        expect(closed.status).toHaveBeenCalledWith(403);
+        renderBoot.mockRejectedValueOnce(new Error('origin unavailable'));
+        await expect(controller.preload(request as never, responseMock() as never)).rejects.toThrow(
+            'origin unavailable',
+        );
+    });
     it.each(['PREVIEW', undefined])('refuses SSI reuse for access metadata %s', async accessMode => {
         const pages = { peek: vi.fn().mockResolvedValue({ config: { accessMode }, media: [] }) };
         const service = new StorefrontLcpPreloadService(pages as never, {} as never);
@@ -329,7 +367,7 @@ describe('storefront LCP preload', () => {
         const render = vi.fn().mockResolvedValue('<link />');
         const controller = new StorefrontLcpPreloadController(
             { resolveRequest: vi.fn().mockResolvedValue({ ctx, host: 'a.test' }) } as never,
-            { render } as never,
+            { render, renderBoot: vi.fn().mockResolvedValue('') } as never,
         );
         const request = {
             socket: { remoteAddress: '127.0.0.1' },

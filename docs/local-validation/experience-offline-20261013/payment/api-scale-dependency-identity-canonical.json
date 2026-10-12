@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-12T19:56:15.897Z",
+  "allCanonical": true,
+  "paths": {
+    "@nestjs/core": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/core/index.js"
+    },
+    "@nestjs/common": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/common/index.js"
+    },
+    "@nestjs/platform-express": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/platform-express/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/platform-express/index.js"
+    },
+    "@nestjs/graphql": {
+      "core": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js",
+      "root": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql/dist/index.js"
+    }
+  }
+}

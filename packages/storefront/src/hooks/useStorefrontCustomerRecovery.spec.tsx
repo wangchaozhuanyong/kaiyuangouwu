@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => {
     const runtime: Record<string, unknown> = {};
     return {
         config: vi.fn(),
-        activeCustomer: vi.fn(),
+        customerIdentity: vi.fn(),
         activeCouponCampaigns: vi.fn(),
         runtime,
     };
@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('../api', () => ({
     ShopApi: class {
         enableCartCommands = () => undefined;
-        activeCustomer = mocks.activeCustomer;
+        customerIdentity = mocks.customerIdentity;
         activeCouponCampaigns = mocks.activeCouponCampaigns;
         cart = () => Promise.resolve(null);
         myAvailableCoupons = () => Promise.resolve([]);
@@ -106,6 +106,8 @@ describe('account and home coupon dependency recovery', () => {
         account = useStorefrontCustomerData({
             ...bootstrap.queryContext,
             configQuery: bootstrap.configQuery,
+            activeRoute: 'home',
+            homepageCoupons: true,
         });
         mocks.runtime = {
             ...bootstrap,
@@ -119,7 +121,7 @@ describe('account and home coupon dependency recovery', () => {
         notifyManager.setNotifyFunction(callback => act(callback));
         vi.spyOn(navigator, 'language', 'get').mockReturnValue('zh-CN');
         mocks.config.mockReset().mockResolvedValue(config);
-        mocks.activeCustomer.mockReset().mockResolvedValue(customer);
+        mocks.customerIdentity.mockReset().mockResolvedValue(customer);
         mocks.activeCouponCampaigns.mockReset().mockResolvedValue([]);
         client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         host = document.createElement('div');
@@ -153,7 +155,7 @@ describe('account and home coupon dependency recovery', () => {
         await eventually(() => expect(bootstrap.configQuery.isError).toBe(true));
         expect(bootstrap.storefrontContextResolved).toBe(false);
         expect(account.customer).toBeNull();
-        expect(mocks.activeCustomer).not.toHaveBeenCalled();
+        expect(mocks.customerIdentity).not.toHaveBeenCalled();
         expect(account.customerLoadState).toBe('error');
         expect(account.customerLoadError).toBe('操作暂时未能完成，请稍后重试。');
         await act(async () => {
@@ -165,7 +167,7 @@ describe('account and home coupon dependency recovery', () => {
     });
 
     it('retries the failed account from the coupon action, then loads coupons under that customer key', async () => {
-        mocks.activeCustomer.mockRejectedValueOnce(new Error('Synthetic account failure'));
+        mocks.customerIdentity.mockRejectedValueOnce(new Error('Synthetic account failure'));
         render();
         await eventually(() => expect(account.customerQuery.isError).toBe(true));
         expect(mocks.activeCouponCampaigns).not.toHaveBeenCalled();
@@ -173,17 +175,17 @@ describe('account and home coupon dependency recovery', () => {
         act(() => clickRetry());
         await eventually(() => expect(account.couponCampaignsError).toBe(''));
         await eventually(() => expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(1));
-        expect(mocks.activeCustomer).toHaveBeenCalledTimes(2);
+        expect(mocks.customerIdentity).toHaveBeenCalledTimes(2);
         expect(account.couponCampaignsQueryKey).toContain(customer.id);
         expect(account.activeCoupons).toEqual([]);
     });
 
     it('deduplicates repeated recovery clicks while the account read is pending', async () => {
-        mocks.activeCustomer.mockRejectedValueOnce(new Error('Synthetic account failure'));
+        mocks.customerIdentity.mockRejectedValueOnce(new Error('Synthetic account failure'));
         render();
         await eventually(() => expect(account.customerQuery.isError).toBe(true));
         let resolveAccount!: (value: ActiveCustomer) => void;
-        mocks.activeCustomer.mockImplementationOnce(
+        mocks.customerIdentity.mockImplementationOnce(
             () =>
                 new Promise<ActiveCustomer>(resolve => {
                     resolveAccount = resolve;
@@ -193,7 +195,7 @@ describe('account and home coupon dependency recovery', () => {
             clickRetry();
             clickRetry();
         });
-        expect(mocks.activeCustomer).toHaveBeenCalledTimes(2);
+        expect(mocks.customerIdentity).toHaveBeenCalledTimes(2);
         expect(mocks.activeCouponCampaigns).not.toHaveBeenCalled();
         await act(async () => {
             resolveAccount(customer);
@@ -213,7 +215,7 @@ describe('account and home coupon dependency recovery', () => {
         await eventually(() => expect(bootstrap.configQuery.isError).toBe(true));
         expect(account.customer).toBeNull();
         expect(account.customerLoadState).toBe('error');
-        expect(mocks.activeCustomer).not.toHaveBeenCalled();
+        expect(mocks.customerIdentity).not.toHaveBeenCalled();
         expect(mocks.activeCouponCampaigns).not.toHaveBeenCalled();
     });
 
@@ -221,11 +223,11 @@ describe('account and home coupon dependency recovery', () => {
         mocks.activeCouponCampaigns.mockRejectedValueOnce(new Error('Synthetic coupon failure'));
         render();
         await eventually(() => expect(account.couponCampaignsQuery.isError).toBe(true));
-        const accountReads = mocks.activeCustomer.mock.calls.length;
+        const accountReads = mocks.customerIdentity.mock.calls.length;
         act(() => clickRetry());
         await eventually(() => expect(account.couponCampaignsError).toBe(''));
         expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(2);
-        expect(mocks.activeCustomer).toHaveBeenCalledTimes(accountReads);
+        expect(mocks.customerIdentity).toHaveBeenCalledTimes(accountReads);
     });
 
     it('keeps a resolved account and coupons usable when configuration refresh fails', async () => {
@@ -244,7 +246,7 @@ describe('account and home coupon dependency recovery', () => {
     });
 
     it('treats a successfully resolved anonymous session as ready, without retrying or fetching private coupons', async () => {
-        mocks.activeCustomer.mockResolvedValue(null);
+        mocks.customerIdentity.mockResolvedValue(null);
         render();
         await eventually(() => expect(account.customerLoadState).toBe('ready'));
         expect(account.customer).toBeNull();

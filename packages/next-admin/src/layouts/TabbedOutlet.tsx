@@ -1,4 +1,13 @@
-import { Suspense, useContext, useState, type ComponentType, type ContextType, type ReactNode } from 'react';
+import {
+    memo,
+    Suspense,
+    useContext,
+    useMemo,
+    useState,
+    type ComponentType,
+    type ContextType,
+    type ReactNode,
+} from 'react';
 import { UNSAFE_LocationContext, UNSAFE_NavigationContext, useOutlet } from 'react-router-dom';
 
 import { isAdminPageDirty } from '../hooks/use-unsaved-changes-warning';
@@ -59,23 +68,52 @@ export function TabbedOutlet({
     }
 
     return pages.map(page => (
-        <div
+        <CachedTabPage
             key={page.path}
-            hidden={page.path !== path}
-            inert={page.path !== path}
-            className="admin-tab-page relative isolate h-full min-h-0"
-        >
-            <TabPageContext.Provider value={{ path: page.path, basename, active: page.path === path }}>
-                <UNSAFE_LocationContext.Provider value={page.locationContext}>
-                    {PageFrame ? (
-                        <PageFrame page={page.path} active={page.path === path}>
-                            <Suspense fallback={fallback}>{page.outlet}</Suspense>
-                        </PageFrame>
-                    ) : (
-                        <Suspense fallback={fallback}>{page.outlet}</Suspense>
-                    )}
-                </UNSAFE_LocationContext.Provider>
-            </TabPageContext.Provider>
-        </div>
+            page={page}
+            basename={basename}
+            active={page.path === path}
+            fallback={fallback}
+            PageFrame={PageFrame}
+        />
     ));
 }
+
+const CachedTabPage = memo(
+    function CachedTabPage({
+        page,
+        basename,
+        active,
+        fallback,
+        PageFrame,
+    }: {
+        page: CachedPage;
+        basename: string;
+        active: boolean;
+        fallback: ReactNode;
+        PageFrame?: ComponentType<{ page: string; active: boolean; children: ReactNode }>;
+    }) {
+        const context = useMemo(() => ({ path: page.path, basename, active }), [page.path, basename, active]);
+        return (
+            <div hidden={!active} inert={!active} className="admin-tab-page relative isolate h-full min-h-0">
+                <TabPageContext.Provider value={context}>
+                    <UNSAFE_LocationContext.Provider value={page.locationContext}>
+                        {PageFrame ? (
+                            <PageFrame page={page.path} active={active}>
+                                <Suspense fallback={fallback}>{page.outlet}</Suspense>
+                            </PageFrame>
+                        ) : (
+                            <Suspense fallback={fallback}>{page.outlet}</Suspense>
+                        )}
+                    </UNSAFE_LocationContext.Provider>
+                </TabPageContext.Provider>
+            </div>
+        );
+    },
+    (previous, next) =>
+        previous.page === next.page &&
+        previous.active === next.active &&
+        previous.basename === next.basename &&
+        previous.PageFrame === next.PageFrame &&
+        (!next.active || previous.fallback === next.fallback),
+);

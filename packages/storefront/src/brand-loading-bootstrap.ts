@@ -1,6 +1,7 @@
 import {
     isReusablePublicPageData,
     publicPageRequestKey,
+    validateStorefrontBootData,
     type PublicPageRequest,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 import {
@@ -13,6 +14,30 @@ export interface InitialLoadingBrand {
     storefrontName: string;
     language: 'en' | 'zh_Hans';
     secondaryName?: string;
+}
+
+/** Private routes may brand their loader using public configuration only. */
+export function initialLoadingBrandForBootData(
+    value: unknown,
+    scope: { host: string; languageCode?: string; currencyCode?: string; now?: number },
+): InitialLoadingBrand | undefined {
+    if (!validateStorefrontBootData(value, scope)) return;
+    const config = value.config as {
+        logoUrl?: unknown;
+        customFields: { storefrontNameZh?: unknown; storefrontNameEn?: unknown };
+    };
+    const language = value.scope.languageCode as 'en' | 'zh_Hans';
+    const name =
+        language === 'en' ? config.customFields.storefrontNameEn : config.customFields.storefrontNameZh;
+    return {
+        language,
+        storefrontName: typeof name === 'string' ? name.trim() : '',
+        secondaryName:
+            language === 'zh_Hans' && typeof config.customFields.storefrontNameEn === 'string'
+                ? config.customFields.storefrontNameEn.trim()
+                : '',
+        logoUrl: typeof config.logoUrl === 'string' ? normalizeStorefrontAssetUrl(config.logoUrl) : '',
+    };
 }
 
 /** The parser-time loader uses only the current host's reusable public snapshot. */

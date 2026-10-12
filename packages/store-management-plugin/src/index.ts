@@ -185,4 +185,9 @@ export { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalo
 export { StorefrontPublicCacheInvalidatedEvent } from './performance/storefront-cache-invalidation.service';
 export { StorefrontMediaDeliveryService } from './performance/storefront-media-delivery.service';
 
+export {
+    createOfflinePaymentProof,
+    verifyOfflinePaymentProof,
+    type OfflinePaymentReceipt,
+} from './offline-payment-proof';
 export { storefrontCdnPurgeConfiguration } from './performance/storefront-cdn-purge-config';

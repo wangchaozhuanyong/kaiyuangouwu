@@ -126,7 +126,7 @@ export function useStorefrontMerchandising({
         language,
     });
 
-    const purchaseSourceIds = (customer?.orders.items ?? []).flatMap(order =>
+    const purchaseSourceIds = (customer?.orders?.items ?? []).flatMap(order =>
         order.lines.map(line => line.productVariant.product.id),
     );
 

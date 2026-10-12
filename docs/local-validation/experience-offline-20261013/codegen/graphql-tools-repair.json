@@ -1,0 +1,26 @@
+[
+    {
+        "link": "packages/core/node_modules/@graphql-tools/stitch",
+        "originalPhysicalPath": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@graphql-tools+stitch@10.2.2+58eb7c2115f4b47a/node_modules/@graphql-tools/stitch",
+        "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@graphql-tools/stitch",
+        "version": "10.2.2",
+        "previousEntryHashMatched": true,
+        "removed": true
+    },
+    {
+        "link": "packages/core/node_modules/@nestjs/graphql",
+        "target": "../../../../node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+        "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/@nestjs+graphql@13.4.4+32e387350d286277/node_modules/@nestjs/graphql",
+        "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/@nestjs/graphql",
+        "version": "13.4.4",
+        "removed": true
+    },
+    {
+        "link": "packages/core/node_modules/graphql-tag",
+        "target": "../../../node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+        "real": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/.bun/graphql-tag@2.12.7+58eb7c2115f4b47a/node_modules/graphql-tag",
+        "canonical": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/node_modules/graphql-tag",
+        "version": "2.12.7",
+        "removed": true
+    }
+]

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, lazy, useEffect, useState } from 'react';
+import { act, lazy, useContext, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
     MemoryRouter,
@@ -20,6 +20,7 @@ import {
     useUnsavedChangesWarning,
 } from '../hooks/use-unsaved-changes-warning';
 import { TabbedOutlet } from './TabbedOutlet';
+import { TabPageContext } from './tab-page-context';
 
 const cleanups: Array<() => void> = [];
 afterEach(async () => {
@@ -34,6 +35,8 @@ async function renderTabs(basename = '/') {
     const root = createRoot(container);
     const mounts: string[] = [];
     const unmounts: string[] = [];
+    const renders: string[] = [];
+    let updateShell!: () => void;
     let navigate!: ReturnType<typeof useNavigate>;
     let setOpenPaths!: (paths: string[]) => void;
     let setScope!: (scope: string) => void;
@@ -46,7 +49,9 @@ async function renderTabs(basename = '/') {
     );
 
     function Page() {
+        useContext(TabPageContext);
         const location = useLocation();
+        renders.push(location.pathname);
         const { id } = useParams();
         const [searchParams, setSearchParams] = useSearchParams();
         const [draft, setDraft] = useState('');
@@ -84,6 +89,10 @@ async function renderTabs(basename = '/') {
     }
     function Shell() {
         const routerNavigate = useNavigate();
+        const [, setTick] = useState(0);
+        useEffect(() => {
+            updateShell = () => setTick(tick => tick + 1);
+        }, []);
         const [openPaths, updatePaths] = useState([
             '/catalog/list',
             '/catalog/products/1',
@@ -123,6 +132,8 @@ async function renderTabs(basename = '/') {
         container,
         mounts,
         unmounts,
+        renders,
+        rerenderShell: () => act(async () => updateShell()),
         page,
         go: async (to: string | number) => {
             await act(async () => {
@@ -155,6 +166,14 @@ async function renderTabs(basename = '/') {
 }
 
 describe('retained admin tabs', () => {
+    it('does not propagate unrelated shell renders into retained hidden page consumers', async () => {
+        const tabs = await renderTabs();
+        await tabs.go('/catalog/products/1');
+        tabs.renders.length = 0;
+        await tabs.rerenderShell();
+        expect(tabs.renders).not.toContain('/catalog/list');
+    });
+
     it('bounds clean cached pages without evicting an inactive dirty editor', async () => {
         const tabs = await renderTabs();
         const paths = Array.from({ length: 10 }, (_, index) => `/catalog/products/${index + 1}`);

@@ -3,7 +3,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PageReadinessBoundary, usePageReadiness } from './page-readiness';
+import { PageReadinessBoundary, usePageReadiness, usePageRouteCommit } from './page-readiness';
 import { PageSkeleton, RouteTransitionLoader } from './route-loading';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 
@@ -36,6 +36,44 @@ describe('explicit route readiness', () => {
         vi.useRealTimers();
     });
     const retry = vi.fn();
+    it('waits for the real public route commit before publishing ready or adopting the HTML', () => {
+        host.id = 'root';
+        host.dataset.publicRendered = '1';
+        const ready = vi.fn();
+        document.addEventListener('storefront:page-ready', ready);
+        function CommittedRoute() {
+            usePageRouteCommit();
+            return <main>Public route</main>;
+        }
+        const boundary = (route: boolean) => (
+            <PageReadinessBoundary
+                pending={false}
+                online
+                language="en"
+                onRetry={retry}
+                onBack={retry}
+                initialScopeKey="public-store"
+                requireInitialRouteCommit
+            >
+                {route ? <CommittedRoute /> : null}
+            </PageReadinessBoundary>
+        );
+        try {
+            act(() => root.render(boundary(false)));
+            expect(host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness')).toBe(
+                'ready',
+            );
+            expect(host.querySelector<HTMLElement>('.page-readiness-stage')?.hidden).toBe(false);
+            expect(ready).not.toHaveBeenCalled();
+            expect(host.dataset.publicAdopted).toBeUndefined();
+            act(() => root.render(boundary(true)));
+            expect(ready).toHaveBeenCalled();
+            expect(host.dataset.publicAdopted).toBe('1');
+            expect(host.textContent).toContain('Public route');
+        } finally {
+            document.removeEventListener('storefront:page-ready', ready);
+        }
+    });
     function render(
         queryPending = false,
         key = 'category',

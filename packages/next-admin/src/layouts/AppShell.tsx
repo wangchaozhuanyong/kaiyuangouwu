@@ -80,7 +80,7 @@ import {
     type AppShellProfileContextData,
 } from '../graphql/auth.graphql';
 import { useMobileLayout } from '../hooks/use-mobile-layout';
-import { useActiveInterval } from '../hooks/use-page-activity';
+import { useActiveInterval, usePageActivity } from '../hooks/use-page-activity';
 import { requestAppNavigation, requestAppTabsClose } from '../hooks/use-unsaved-changes-warning';
 import { allowsBackgroundRoutePreload, preloadCommonRoutes, preloadRoute } from '../route-modules';
 import { getQueryRuntime } from '../runtime/admin-query-runtime';
@@ -241,8 +241,11 @@ export function AppShell() {
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isChannelSwitching, setIsChannelSwitching] = useState(false);
     const [channelError, setChannelError] = useState('');
+    const shellActive = usePageActivity();
     const appShellQuery = useQuery<AppShellBootstrapData>(APP_SHELL_BOOTSTRAP_QUERY, {
+        context: { adminManagedRead: true },
         fetchPolicy: 'cache-first',
+        skip: !shellActive,
     });
     const {
         data: channelData,
@@ -279,9 +282,11 @@ export function AppShell() {
             : permissions;
     }, [channelData, isSuperAdmin]);
     const profileContextQuery = useQuery<AppShellProfileContextData>(APP_SHELL_PROFILE_CONTEXT_QUERY, {
+        context: { adminManagedRead: true },
         fetchPolicy: 'cache-first',
         errorPolicy: 'ignore',
         skip:
+            !shellActive ||
             !channelData ||
             isPlatformContext ||
             !hasAnyAdminPermission(activePermissions, ['ReadStoreProfile']),
@@ -335,15 +340,27 @@ export function AppShell() {
     useActiveInterval(() => {
         if (!isChannelSwitching) void refetchAppShell().catch(() => undefined);
     }, 30_000);
+    const previousShellActive = useRef(shellActive);
+    const capabilityInvalidated = useRef(false);
+    useEffect(() => {
+        const resumed = shellActive && !previousShellActive.current;
+        previousShellActive.current = shellActive;
+        if (shellActive && (resumed || capabilityInvalidated.current) && channelData) {
+            capabilityInvalidated.current = false;
+            void refetchAppShell().catch(() => undefined);
+        }
+    }, [shellActive, channelData, refetchAppShell]);
     useEffect(() => {
         const refreshCapabilities = (event: Event) => {
             const domains = (event as CustomEvent<{ domains: string[] }>).detail?.domains ?? [];
-            if (domains.some(domain => ['settings', 'plugins'].includes(domain)))
-                void refetchAppShell().catch(() => undefined);
+            if (domains.some(domain => ['settings', 'plugins'].includes(domain))) {
+                if (shellActive) void refetchAppShell().catch(() => undefined);
+                else capabilityInvalidated.current = true;
+            }
         };
         window.addEventListener(RESOURCE_INVALIDATION_EVENT, refreshCapabilities);
         return () => window.removeEventListener(RESOURCE_INVALIDATION_EVENT, refreshCapabilities);
-    }, [refetchAppShell]);
+    }, [refetchAppShell, shellActive]);
 
     const preloadState = useRef({ path: location.pathname, loading: appShellLoading });
     useLayoutEffect(() => {

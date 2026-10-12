@@ -1,0 +1,105 @@
+{
+  "directory": "store-domain-plugin",
+  "command": [
+    "bun",
+    "run",
+    "build"
+  ],
+  "script": "tsc --project tsconfig.build.json",
+  "cwd": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin",
+  "startedAt": "2026-10-12T20:23:52.668Z",
+  "finishedAt": "2026-10-12T20:23:53.586Z",
+  "exitCode": 0,
+  "log": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/docs/local-validation/experience-offline-20261013/admin/ci-closure/store-domain-plugin-build.log",
+  "inputs": [
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/api-extensions.ts",
+      "sha256": "58e726b05b524bcf0aa8ce09603fbab9ac9d6ac430eea4e6cbe85aeff5b4a961"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/cloudflare-saas-domain.provider.spec.ts",
+      "sha256": "ca5f14e2b935f8bb4f1f382f82805c1bf25d4698b077ca312a0d5c502471ff2a"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/cloudflare-saas-domain.provider.ts",
+      "sha256": "5bc67de27fc70a40519f9eaeb0c01d40f8c5a91fe38247002376303c34143a4e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/constants.ts",
+      "sha256": "7b070b05c3a14281411c3290d0799ef83dbeeb17638aab51c25c2e3beca63e31"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/dashboard/index.tsx",
+      "sha256": "5040fa6b23b0f30de51d112c716188498f45f30efd12ec6723ea034949e03529"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/dashboard/my-store-domains-page.tsx",
+      "sha256": "fc29463bbebfff966c8e6cf57618bf27cb176c8bdcfa949d9d3bf420e1b19faf"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/dashboard/store-domain-page-block.tsx",
+      "sha256": "c671efc33ca5eea82ff39133c32d18b28d0cd415518ab81bb6b76928e0377410"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/dashboard/store-domain.graphql.ts",
+      "sha256": "fd5c0123c1113c182ae4d760c525e41c5379baf8181309614b0393f2f42124b8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/domain-utils.spec.ts",
+      "sha256": "e48ab82e09e268e001f7ad2366dd2c771888a1e822dff6ca8008c5892031020e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/domain-utils.ts",
+      "sha256": "36a66e0b9d745d8a802a7d69aa907708c58d07f332d53db1684128235c1f02a8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/entities/store-domain.entity.ts",
+      "sha256": "84e7cb4bf960a82e3cda30a1dda4597877f859d374ce475cfcd1bdca7dbd9259"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/index.ts",
+      "sha256": "52f27c5670257f2d5820db207e38af2e180d6a662e5d6647a8a92c563d060c55"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.event.ts",
+      "sha256": "c08752dcde2f0e3270dc17197d42a54e70af24103ba4612711ee21e854add3c7"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.middleware.spec.ts",
+      "sha256": "e7ba3890136f4b1014df6d703d9d4eeacd2ddd031d8cac1f386a2789560661c4"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.middleware.ts",
+      "sha256": "9a7e7da8723d17cb3a8127fa9e8a5dd03e9b3a7b5446b6ca03fff2e1fa869c31"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.plugin.spec.ts",
+      "sha256": "9fcc6ef3fda8fc4e0f0c03340def108b9dfb3de3fe3711553ad8389626df8d0e"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.plugin.ts",
+      "sha256": "b50ae2b6fa29e1ea82d9635338248df2aa31558d2fc312a6fbcc4442584641d8"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.resolver.ts",
+      "sha256": "f482d2a73fe08baf89bebabe074cd47e3be3b5ab001d0cb11bdb4af82b4f76e1"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.service.spec.ts",
+      "sha256": "88243707e09a1f5202a107e2bd0fce8c8667f145ef5ceb6570590a7e681e8293"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.service.ts",
+      "sha256": "ddc64a53f2eb2c86a7036bd43f01caf1369bb9421562119b985d45319d17483b"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/store-domain.tasks.ts",
+      "sha256": "6f515fc69853cba637c2970d21b24c3efe6482203218d0f82ed3d5056d2c16ff"
+    },
+    {
+      "path": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/packages/store-domain-plugin/src/types.ts",
+      "sha256": "dce0be77117bf67bda9decc26e25ac5abea3a145a0bfa7925bae8be37dd2f675"
+    }
+  ],
+  "changedInputs": []
+}

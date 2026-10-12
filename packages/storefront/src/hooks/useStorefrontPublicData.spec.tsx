@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
 import { ContentReviewsApi } from '../api/content-reviews';
+import { CustomerIdentityApi } from '../api/customer-identity';
 import { enabledMarkets } from '../i18n';
 import {
     STOREFRONT_CONFIG_REFRESH_INTERVAL,
@@ -427,7 +428,7 @@ describe('resolved storefront requests', () => {
             failConfig = reject;
         });
         vi.spyOn(ShopApi.prototype, 'storefrontConfig').mockReturnValue(pendingConfig);
-        vi.spyOn(ShopApi.prototype, 'activeCustomer').mockResolvedValue(null);
+        vi.spyOn(CustomerIdentityApi.prototype, 'customerIdentity').mockResolvedValue(null);
         vi.spyOn(ShopApi.prototype, 'storefrontVisualPreset').mockResolvedValue({
             channelId: config.code,
             presetId: 'classic',

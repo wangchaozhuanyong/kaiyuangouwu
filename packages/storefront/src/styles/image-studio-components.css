@@ -19,7 +19,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: var(--space-section);
 }
 
 .ai-studio-heading span,
@@ -971,7 +971,7 @@
 
 .ai-studio-shell.ai-studio-workflow {
     width: 100%;
-    padding: 16px 16px 32px;
+    padding: var(--space-section) var(--page-section-inset, var(--experience-page-gutter-mobile)) 0;
     display: block;
     color: var(--text);
     background: var(--bg);
@@ -1018,15 +1018,15 @@
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-create-panel {
-    padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 0;
     display: grid;
-    gap: 16px;
+    gap: var(--space-section);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-controls {
     min-width: 0;
     display: grid;
-    gap: 16px;
+    gap: var(--space-section);
 }
 
 .ai-studio-shell.ai-studio-workflow
@@ -1339,8 +1339,8 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-fixed-generate {
     width: min(520px, 100%);
-    min-height: 76px;
-    padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(var(--image-studio-action-bar-height) + var(--safe-bottom));
+    padding: var(--space-12) var(--space-16) calc(var(--space-12) + var(--safe-bottom));
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(168px, 1.6fr);
     align-items: center;
@@ -1384,7 +1384,7 @@
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-history {
     display: grid;
-    gap: 16px;
+    gap: var(--space-section);
 }
 
 .ai-studio-shell.ai-studio-workflow .ai-studio-history-heading h3 {
@@ -1620,7 +1620,7 @@
 
 @media (min-width: 1024px) {
     .ai-studio-shell.ai-studio-workflow {
-        padding: 20px 28px 40px;
+        padding: var(--space-section) 0 0;
     }
 
     .ai-studio-shell.ai-studio-workflow .ai-studio-view-tabs {

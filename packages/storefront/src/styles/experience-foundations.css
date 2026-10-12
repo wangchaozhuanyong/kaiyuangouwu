@@ -135,8 +135,9 @@
     --detail-action-bar-height: 62px;
     --checkout-action-bar-height: 72px;
     --order-detail-action-bar-height: 68px;
-    --root-page-end-gap: 24px;
-    --subpage-end-gap: 24px;
+    --image-studio-action-bar-height: 76px;
+    --root-page-end-gap: var(--space-16);
+    --subpage-end-gap: var(--space-16);
     --footer-end-gap: 0px;
     /* Keep sticky headers above product-card hit areas when their bounds overlap. */
     --layer-sticky: 30;

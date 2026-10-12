@@ -1,0 +1,14 @@
+{
+    "finishedAt": "2026-10-12T19:17:06.677Z",
+    "cwd": "",
+    "args": [
+        "run",
+        "--config",
+        "packages/commerce-fulfillment-plugin/e2e/offline-payment.vitest.config.mjs",
+        "-t",
+        "restores legacy orders"
+    ],
+    "exitCode": 0,
+    "output": "reports/order-closure-mysql/1791831421760/offline-legacy-quote-final.log",
+    "scope": "owned isolated MySQL; synthetic fixtures"
+}

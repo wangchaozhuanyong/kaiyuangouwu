@@ -38,6 +38,23 @@ export function RouteGate({ name, children }: { name: RouteName; children: React
     if (isCheckoutRoute(name) && !runtime.customer) {
         return <Navigate to="/login" search={{ returnTo: name }} replace />;
     }
+    if (
+        name !== 'account' &&
+        runtime.customer &&
+        runtime.customerDetailsLoadState &&
+        runtime.customerDetailsLoadState !== 'ready'
+    ) {
+        return (
+            <AsyncRouteStatePage
+                routeName={name}
+                state={runtime.customerDetailsLoadState}
+                error={runtime.customerDetailsLoadError}
+                language={runtime.language}
+                onBack={runtime.goBack}
+                onRetry={() => void runtime.retryCustomerDetails()}
+            />
+        );
+    }
     if (cartResolvedRoutes.includes(name) && runtime.cartLoadState !== 'ready') {
         return (
             <AsyncRouteStatePage

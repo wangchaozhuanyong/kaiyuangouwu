@@ -75,6 +75,35 @@ export interface MediaDescriptor {
     placeholder?: { inlineData: string };
 }
 
+export const INLINE_IMAGE_PREVIEW_LIMIT = 1024;
+export const PAGE_IMAGE_PREVIEW_LIMIT = 8192;
+
+/** The complete ASCII data URL counts toward the wire budget, not only its decoded bytes. */
+export function validInlineImagePreview(value: unknown): value is string {
+    return (
+        typeof value === 'string' &&
+        value.length <= INLINE_IMAGE_PREVIEW_LIMIT &&
+        /^data:image\/(?:webp|png|jpeg);base64,[a-z0-9+/]+={0,2}$/iu.test(value)
+    );
+}
+
+/** Deterministic per-page hints: no request, persistent cache or render-time budget mutation. */
+export function boundedMediaPreviews(media: readonly MediaDescriptor[]): MediaDescriptor[] {
+    let bytes = 0;
+    return media.flatMap(descriptor => {
+        if (!descriptor || typeof descriptor.identity !== 'string' || typeof descriptor.src !== 'string') {
+            return [];
+        }
+        const { placeholder, ...source } = descriptor;
+        const preview = placeholder?.inlineData;
+        if (!validInlineImagePreview(preview) || bytes + preview.length > PAGE_IMAGE_PREVIEW_LIMIT) {
+            return [source];
+        }
+        bytes += preview.length;
+        return [{ ...source, placeholder: { inlineData: preview } }];
+    });
+}
+
 export function mediaDescriptor(
     source: string,
     kind?: StorefrontImageKind,
@@ -108,11 +137,7 @@ export function mediaDescriptor(
         sizes: options.sizes ?? responsive?.sizes,
         width: options.width ?? responsive?.width,
         height: options.height ?? responsive?.height,
-        ...(inlineData &&
-        /^data:image\/(?:webp|png|jpeg);base64,[a-z0-9+/=]+$/iu.test(inlineData) &&
-        inlineData.length <= 8192
-            ? { placeholder: { inlineData } }
-            : {}),
+        ...(validInlineImagePreview(inlineData) ? { placeholder: { inlineData } } : {}),
     };
 }
 

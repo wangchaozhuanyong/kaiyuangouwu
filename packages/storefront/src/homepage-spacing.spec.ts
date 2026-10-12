@@ -10,9 +10,9 @@ describe('homepage module spacing', () => {
     it('uses one mobile spacing system for every top-level module', () => {
         expect(stylesheet).toMatch(
             new RegExp(
-                '\\.homepage-modules\\s*\\{[^}]*--homepage-module-gap:\\s*12px;' +
-                    '[^}]*--homepage-section-gap:\\s*20px;[^}]*gap:\\s*var\\(--homepage-module-gap\\);' +
-                    '[^}]*padding-top:\\s*8px;',
+                '\\.homepage-modules\\s*\\{[^}]*--homepage-module-gap:\\s*var\\(--space-section\\);' +
+                    '[^}]*--homepage-section-gap:\\s*var\\(--space-major\\);[^}]*gap:\\s*var\\(--homepage-module-gap\\);' +
+                    '[^}]*padding-top:\\s*var\\(--homepage-module-gap\\);',
             ),
         );
         expect(stylesheet).toMatch(
@@ -24,10 +24,14 @@ describe('homepage module spacing', () => {
     });
 
     it('keeps mobile module edges and quick-link content balanced', () => {
-        expect(stylesheet).toMatch(/\.quick-grid\s*\{[^}]*margin:\s*0 12px 10px;[^}]*padding:\s*14px 8px;/);
+        expect(stylesheet).toMatch(
+            /\.quick-grid\s*\{[^}]*margin:\s*0 var\(--page-section-inset, var\(--experience-page-gutter-mobile\)\);[^}]*padding:\s*14px 8px;/,
+        );
         expect(stylesheet).toMatch(/\.quick-grid :is\(button, a\)\s*\{[^}]*justify-content:\s*center;/);
         expect(stylesheet).toMatch(/\.quick-grid b\s*\{[^}]*min-height:\s*0;[^}]*margin-top:\s*0;/);
-        expect(stylesheet).toMatch(/\.home-dual-showcase\s*\{[^}]*margin:\s*12px;/);
+        expect(stylesheet).toMatch(
+            /\.home-dual-showcase\s*\{[^}]*margin:\s*0 var\(--page-section-inset, var\(--experience-page-gutter-mobile\)\);/,
+        );
         expect(stylesheet).toMatch(
             /\.legal-footer\s*\{[^}]*margin:\s*var\(--space-section\) var\(--page-section-inset, var\(--experience-page-gutter-mobile\)\) 0;/,
         );
@@ -45,8 +49,8 @@ describe('homepage module spacing', () => {
         expect(stylesheet).toMatch(
             new RegExp(
                 '@media \\(min-width:\\s*1024px\\)[\\s\\S]*?\\.homepage-modules\\s*\\{' +
-                    '[^}]*--homepage-module-gap:\\s*16px;[^}]*--homepage-section-gap:\\s*24px;' +
-                    '[^}]*padding-top:\\s*16px;',
+                    '[^}]*--homepage-module-gap:\\s*var\\(--space-section\\);[^}]*--homepage-section-gap:\\s*var\\(--space-major\\);' +
+                    '[^}]*padding-top:\\s*var\\(--homepage-module-gap\\);',
             ),
         );
         expect(stylesheet).toMatch(

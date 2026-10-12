@@ -2,6 +2,7 @@ import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-te
 import { effectiveRefundLines } from '@vendure/core';
 
 export type ProcessingCategory =
+    | 'LEGACY_TEST'
     | 'PENDING'
     | 'DIGITAL'
     | 'PHYSICAL'
@@ -33,6 +34,9 @@ export interface ProcessingSource {
         amount: number;
         method: string;
         isTest?: boolean;
+        kind?: string;
+        hasActualReceipt?: boolean;
+        receivedReview?: boolean;
         canCancel?: boolean;
         refundSettlementMode?: string;
         shippingBudget?: number;
@@ -99,6 +103,8 @@ export function summarizeProcessing(source: ProcessingSource) {
         .reduce((sum, refund) => sum + refund.total, 0);
     const outstandingAmount = Math.max(0, source.totalWithTax - settledAmount - authorizedAmount);
     const canFinance = source.canFinance ?? source.canUpdate;
+    const pendingManual = payments.find(payment => payment.state === 'PendingManual');
+    const receiptReview = payments.some(payment => payment.receivedReview === true);
     const paymentCapabilities = source.payments.map(payment => {
         const simulated = payment.isTest === true || isControlledTestPaymentMethod(payment.method);
         const balance = Math.max(
@@ -122,11 +128,20 @@ export function summarizeProcessing(source: ProcessingSource) {
                     : null;
         return {
             paymentId: payment.id,
+            paymentKind: payment.kind ?? (simulated ? 'CONTROLLED_TEST' : 'OTHER'),
+            canConfirmOffline:
+                !simulated &&
+                payment.state === 'PendingManual' &&
+                source.state === 'AwaitingManualPayment' &&
+                source.canManage &&
+                source.canUpdate &&
+                canFinance,
             canRefund: reason === null && source.canManage && source.canUpdate,
             refundBlockedReason: reason,
             canCancel:
                 !simulated &&
-                payment.state === 'Authorized' &&
+                (payment.state === 'Authorized' ||
+                    (payment.state === 'PendingManual' && !payment.hasActualReceipt)) &&
                 payment.canCancel === true &&
                 source.canManage &&
                 source.canUpdate &&
@@ -154,11 +169,13 @@ export function summarizeProcessing(source: ProcessingSource) {
         ? '模拟订单不进入真实交付与资金流程'
         : cancelled
           ? '订单已取消，停止交付'
-          : !(containsDigital ? paidEnough : physicalFunded)
-            ? '请先确认足额实际收款'
-            : source.state === 'Modifying'
-              ? '请先结束订单修改'
-              : (source.resourceReviewReason ?? null);
+          : receiptReview
+            ? '实际收款待业务复核，停止交付'
+            : !(containsDigital ? paidEnough : physicalFunded)
+              ? '请先确认足额实际收款'
+              : source.state === 'Modifying'
+                ? '请先结束订单修改'
+                : (source.resourceReviewReason ?? null);
     const unavailableReason = !source.canManage
         ? '请切换到订单所属经营店铺处理'
         : !source.canUpdate
@@ -233,6 +250,8 @@ export function summarizeProcessing(source: ProcessingSource) {
             physicalFunded &&
             !cancelled &&
             !isTestOrder &&
+            !receiptReview &&
+            !source.resourceReviewReason &&
             source.state !== 'Modifying'
                 ? null
                 : deliveryUnavailableReason;
@@ -332,7 +351,7 @@ export function summarizeProcessing(source: ProcessingSource) {
                         .filter(refund => ['Pending', 'Settled'].includes(refund.state))
                         .reduce((sum, refund) => sum + refund.total, 0),
         );
-    const hasException = hasDeliveryException || hasNotificationException || !!failedRefund;
+    const hasException = hasDeliveryException || hasNotificationException || !!failedRefund || receiptReview;
     const complete = lines.length > 0 && lines.every(line => ['COMPLETE', 'CANCELLED'].includes(line.status));
     const inTransit = physical.some(line => line.status === 'IN_TRANSIT');
     const fulfillmentStatus = cancelled
@@ -348,21 +367,25 @@ export function summarizeProcessing(source: ProcessingSource) {
                 : 'WAITING';
     const paymentStatus = isTestOrder
         ? 'TEST'
-        : pendingRefundAmount > 0
-          ? 'REFUND_PENDING'
-          : failedRefund
-            ? 'REFUND_FAILED'
-            : refundedAmount > 0 && refundedAmount >= settledAmount
-              ? 'REFUNDED'
-              : refundedAmount > 0
-                ? 'PARTIALLY_REFUNDED'
-                : source.totalWithTax > settledAmount && settledAmount > 0
-                  ? 'ADDITIONAL_PAYMENT'
-                  : settledAmount > 0 || hasCollectedMoney
-                    ? 'PAID'
-                    : authorizedAmount > 0
-                      ? 'AUTHORIZED'
-                      : 'UNPAID';
+        : receiptReview
+          ? 'RECEIPT_REVIEW'
+          : pendingManual && source.state === 'AwaitingManualPayment'
+            ? 'PENDING_MANUAL'
+            : pendingRefundAmount > 0
+              ? 'REFUND_PENDING'
+              : failedRefund
+                ? 'REFUND_FAILED'
+                : refundedAmount > 0 && refundedAmount >= settledAmount
+                  ? 'REFUNDED'
+                  : refundedAmount > 0
+                    ? 'PARTIALLY_REFUNDED'
+                    : source.totalWithTax > settledAmount && settledAmount > 0
+                      ? 'ADDITIONAL_PAYMENT'
+                      : settledAmount > 0 || hasCollectedMoney
+                        ? 'PAID'
+                        : authorizedAmount > 0
+                          ? 'AUTHORIZED'
+                          : 'UNPAID';
     const action = (
         code: string,
         label: string,
@@ -370,7 +393,21 @@ export function summarizeProcessing(source: ProcessingSource) {
         blocked = unavailableReason,
     ): ProcessingAction => ({ code, label, targetId, enabled: blocked == null, reason: blocked });
     let nextAction: ProcessingAction | null = null;
-    if (source.state === 'Modifying')
+    if (receiptReview)
+        nextAction = action(
+            'REVIEW_OFFLINE_PAYMENT',
+            '核对收款与业务状态',
+            source.id,
+            source.canManage && source.canUpdate && canFinance ? null : '请在订单所属店铺使用财务处理权限',
+        );
+    else if (pendingManual && source.state === 'AwaitingManualPayment')
+        nextAction = action(
+            'CONFIRM_OFFLINE_PAYMENT',
+            '确认实际收款',
+            pendingManual.id,
+            source.canManage && source.canUpdate && canFinance ? null : '请在订单所属店铺使用财务处理权限',
+        );
+    else if (source.state === 'Modifying')
         nextAction = action(
             'FINISH_MODIFICATION',
             '结束修改',
@@ -466,7 +503,9 @@ export function summarizeProcessing(source: ProcessingSource) {
     }
     const needsProcessing =
         !isTestOrder &&
-        (source.state === 'Modifying' ||
+        (receiptReview ||
+            (pendingManual != null && source.state === 'AwaitingManualPayment') ||
+            source.state === 'Modifying' ||
             (cancelled && (refundableAmount > 0 || authorizedAmount > 0)) ||
             pendingRefundAmount > 0 ||
             !!activeAfterSales ||
@@ -495,6 +534,8 @@ export function summarizeProcessing(source: ProcessingSource) {
         paymentStatus,
         paymentLabel: (
             {
+                PENDING_MANUAL: '待客服核款',
+                RECEIPT_REVIEW: '已核款，待业务复核',
                 TEST: '模拟付款，无真实收款',
                 UNPAID: '未收款',
                 AUTHORIZED: '支付已授权，尚未收款',
@@ -556,6 +597,8 @@ export function matchesProcessingCategory(
     active: boolean,
 ) {
     switch (category) {
+        case 'LEGACY_TEST':
+            return summary.isTestOrder;
         case 'PENDING':
             return summary.needsProcessing;
         case 'DIGITAL':
@@ -592,7 +635,9 @@ export function matchesProcessingCategory(
         case 'CANCELLED':
             return summary.businessState === 'Cancelled';
         case 'TO_SETTLE':
-            return ['AUTHORIZED', 'ADDITIONAL_PAYMENT'].includes(summary.paymentStatus);
+            return ['PENDING_MANUAL', 'RECEIPT_REVIEW', 'AUTHORIZED', 'ADDITIONAL_PAYMENT'].includes(
+                summary.paymentStatus,
+            );
         default:
             return !active || summary.businessState === 'Draft';
     }
