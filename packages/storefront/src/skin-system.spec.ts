@@ -417,15 +417,14 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
-                        // Account dividers retain their geometry while each preset supplies its approved color.
+                        // The approved fixed account theme changes divider color, never its geometry.
                         if (
                             file === path.join(__dirname, 'styles/account-identity.css') &&
                             [
                                 '.account-identity-assets > button + button|left',
                                 '.account-identity-promotion|top',
                             ].includes(`${selector.trim()}|${border[1]}`) &&
-                            border[2].trim() ===
-                                '1px solid var(--skin-account-divider, color-mix(in srgb, var(--accent-foreground) 24%, transparent))'
+                            border[2].trim() === '1px solid var(--account-card-divider)'
                         ) {
                             continue;
                         }
@@ -759,7 +758,7 @@ describe('storefront skin system', () => {
     });
 
     it('keeps color ownership in the shared semantic palette instead of preset CSS copies', () => {
-        // Account B replaces the former blue exception: prevent fixed colors returning on skin changes.
+        // The approved account theme stays in shared root roles, never literal component colors.
         expect(stylesheet('./styles/account-identity.css')).not.toMatch(
             /#[\da-f]{3,8}\b|rgba?\(|hsla?\(|data-storefront-preset|!important/iu,
         );
