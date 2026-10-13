@@ -72,6 +72,42 @@ void test('missing or malformed retention diagnostics never forward raw output',
     );
 });
 
+void test('checksum probe reports version permission failures without exposing metadata or child errors', () => {
+    const calls = [];
+    const report = operations.inspectFileBackupRetention({
+        exists: () => true,
+        run(binary, args) {
+            calls.push([binary, ...args]);
+            if (binary === 'python3')
+                return args[0] === '-c'
+                    ? { status: 0, stdout: JSON.stringify({ version: '3.12.3', rmtreeDirFd: true }) }
+                    : {
+                          status: 1,
+                          stdout: JSON.stringify({
+                              status: 'blocked',
+                              blocked: [
+                                  {
+                                      name: 'vendure-files-20261001T000000Z.tar.gz',
+                                      reason: 'offsite-checksum-read-failed',
+                                  },
+                              ],
+                          }),
+                      };
+            if (args[1] === 'head-object' || !args.includes('--version-id'))
+                return { status: 0, stdout: JSON.stringify({ VersionId: 'verified-version' }) };
+            return { status: 1, stderr: 'An error occurred (AccessDenied) PRIVATE_FIXTURE', stdout: '' };
+        },
+    });
+    assert.deepEqual(report.checksumReadProbe, {
+        status: 'complete',
+        pinnedVersionRead: 'access-denied',
+        currentVersionRead: 'ok',
+        currentVersionMatchesHead: true,
+    });
+    assert.ok(!JSON.stringify(report).includes('PRIVATE_FIXTURE'));
+    assert.equal(calls.filter(call => call[2] === 'get-object').length, 2);
+});
+
 void test('mailbox inspection pins the live revision and never forwards secrets or raw child errors', () => {
     const runtimeSha = 'b'.repeat(40);
     const request = operations.validateRequest({

@@ -799,6 +799,65 @@ function readCommand(command, arguments_) {
 }
 
 /** Inspect the exact installed gate without pruning or forwarding settings and child stderr. */
+function probeBackupChecksumRead(name, run) {
+    if (!/^vendure-files-[0-9]{8}T[0-9]{6}Z\.tar\.gz$/u.test(name ?? '')) return null;
+    const object = [
+        '--bucket',
+        'yunqiao-vendure-prod-backup-079740175286-apne1',
+        '--key',
+        `files/${name}.sha256`,
+    ];
+    const options = { encoding: 'utf8', timeout: 30000, maxBuffer: 65536 };
+    const output = path.join(__dirname, `.retention-read-probe-${randomBytes(12).toString('hex')}`);
+    const descriptor = openSync(
+        output,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+        0o600,
+    );
+    closeSync(descriptor);
+    try {
+        const head = run('aws', ['s3api', 'head-object', ...object, '--output', 'json'], options);
+        const version = JSON.parse(head.stdout).VersionId;
+        if (head.status !== 0 || typeof version !== 'string' || !version || version === 'null')
+            return { status: 'unavailable' };
+        const read = extra =>
+            run(
+                'aws',
+                [
+                    's3api',
+                    'get-object',
+                    ...object,
+                    ...extra,
+                    '--range',
+                    'bytes=0-8191',
+                    output,
+                    '--output',
+                    'json',
+                ],
+                options,
+            );
+        const pinned = read(['--version-id', version]);
+        const current = read([]);
+        const status = result =>
+            result.status === 0
+                ? 'ok'
+                : /\(AccessDenied\)/u.test(result.stderr ?? '')
+                  ? 'access-denied'
+                  : 'failed';
+        return {
+            status: 'complete',
+            pinnedVersionRead: status(pinned),
+            currentVersionRead: status(current),
+            currentVersionMatchesHead:
+                current.status === 0 && JSON.parse(current.stdout).VersionId === version,
+        };
+    } catch {
+        return { status: 'unavailable' };
+    } finally {
+        unlinkSync(output);
+    }
+}
+
 function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {}) {
     const script = '/usr/local/sbin/vendure-file-backup-retention.py';
     if (!exists(script)) return { status: 'unavailable', reason: 'retention-tool-unavailable' };
@@ -831,6 +890,7 @@ function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {
             'retention-inspection-failed',
         ]);
         const blocked = Array.isArray(report.blocked) ? report.blocked : [];
+        const checksumBlock = blocked.find(item => item.reason === 'offsite-checksum-read-failed');
         return {
             status: result.status === 0 && report.status === 'ok' ? 'ok' : 'blocked',
             pythonVersion: /^\d+\.\d+\.\d+$/u.test(python.version) ? python.version : 'unknown',
@@ -844,6 +904,7 @@ function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {
             residualCandidateCount: Array.isArray(report.residualCandidates)
                 ? report.residualCandidates.length
                 : null,
+            checksumReadProbe: checksumBlock ? probeBackupChecksumRead(checksumBlock.name, run) : null,
         };
     } catch {
         return { status: 'unavailable', reason: 'retention-diagnostic-invalid' };
