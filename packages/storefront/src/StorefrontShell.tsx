@@ -222,6 +222,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             accessMode={state.storefrontAccessMode}
                             storefrontName={storefrontContextValue.storefrontName}
                             logoUrl={storefrontContextValue.logoUrl}
+                            displayCurrencyCode={storefrontContextValue.displayCurrencyCode}
+                            navigationBlock={navigationBlock}
                             publicMedia={storefrontContextValue.publicMedia}
                             accountLayout={Boolean(customer && isDesktopAccountRoute(displayedRoute.name))}
                             header={

@@ -8,7 +8,7 @@ import { desktopPageFamily } from './desktop-page-contract';
 import { ImageLanguageContext, SafeImageMediaProvider } from './safe-image';
 import { isBrowsingStorefrontRoute } from './storefront-access';
 import { type RouteName } from './storefront-router';
-import { type StorefrontLanguage } from './types';
+import { type StorefrontContentBlock, type StorefrontLanguage } from './types';
 
 /** The public HTML and interactive application keep the same layout node owners. */
 export function StorefrontPageFrame({
@@ -20,6 +20,8 @@ export function StorefrontPageFrame({
     accessMode,
     storefrontName,
     logoUrl,
+    displayCurrencyCode = '',
+    navigationBlock,
     accountLayout = false,
     header,
     accountNavigation,
@@ -35,6 +37,8 @@ export function StorefrontPageFrame({
     accessMode?: string;
     storefrontName: string;
     logoUrl: string | null;
+    displayCurrencyCode?: string;
+    navigationBlock?: StorefrontContentBlock;
     accountLayout?: boolean;
     header?: ReactNode;
     accountNavigation?: ReactNode;
@@ -85,7 +89,14 @@ export function StorefrontPageFrame({
                         </aside>
                     )}
                     {!desktop && responsiveCommerce && isBrowsingStorefrontRoute(routeName) && (
-                        <ResponsiveHomeHeaderPlaceholder name={storefrontName} logoUrl={logoUrl} />
+                        <ResponsiveHomeHeaderPlaceholder
+                            name={storefrontName}
+                            logoUrl={logoUrl}
+                            language={language}
+                            currencyCode={displayCurrencyCode}
+                            routeName={routeName}
+                            navigationBlock={navigationBlock}
+                        />
                     )}
                     {header}
                     {deferred}

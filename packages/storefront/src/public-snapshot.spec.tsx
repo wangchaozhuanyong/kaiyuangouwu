@@ -30,6 +30,27 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    it.each(fixtureLanguages)(
+        '%s includes the desktop navigation and idle controls before scripts load',
+        async languageCode => {
+            const page = syntheticPage(fixtureStores[0], languageCode, 'home');
+            const html = await renderPublicPage(page);
+            const header = fixtureValue(
+                html.match(/<header class="responsive-home-header-placeholder[^]*?<\/header>/u)?.[0],
+            );
+            expect(header).toContain('class="proto-nav-links"');
+            expect(header).toContain(languageCode === 'en' ? 'Home' : '首页');
+            expect(header).toContain(
+                `placeholder="${languageCode === 'en' ? 'Search products' : '搜索商品、分类'}"`,
+            );
+            expect(header).toContain('locale-preferences-trigger');
+            expect(header).toContain(`<span>${page.scope.currencyCode}</span>`);
+            expect(header).toContain('proto-cart-icon');
+            expect(header).toContain('proto-login-btn');
+            expect(header).toContain('inert=""');
+        },
+    );
+
     it('hides the mobile navigation on desktop before viewport hooks run', async () => {
         const { readFileSync } = await import('node:fs');
         const stylesheet = readFileSync(new URL('./styles/desktop-layout.css', import.meta.url), 'utf8');
