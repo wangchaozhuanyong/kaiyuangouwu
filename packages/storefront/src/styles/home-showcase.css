@@ -28,6 +28,12 @@
     cursor: default;
 }
 
+/* The pager already has a 44px touch row. Reserve it in the server frame;
+   measured overlays can still grow for larger text or different content. */
+.home-page .hero-scene-wrapper:has(.hero-page-picker) {
+    --hero-overlay-height: 44px;
+}
+
 .hero-page-picker :is(button, .hero-page-static-number) {
     position: relative;
     flex: 0 0 44px;
