@@ -52,7 +52,7 @@ test('native runtime SSM command refuses deployment if protected disk maintenanc
     const directory = mkdtempSync(join(output, 'native-'));
     t.after(() => rmSync(directory, { recursive: true, force: true }));
     const producer = `
-import pathlib,textwrap,os
+import pathlib,textwrap,os,subprocess
 w=pathlib.Path('.github/workflows/deploy_production_runtime.yml').read_text()
 s=w.index('                  import base64\\n',w.index('Prepare Systems Manager')) if 'Prepare Systems Manager' in w else w.index('                  import base64\\n')
 e=w.index('\\n                  PY',s)
@@ -60,6 +60,15 @@ code=textwrap.dedent(w[s:e])
 import re
 for name in re.findall(r"quote\\('([^']+)'\\)",code):os.environ[name]='fixture'
 os.environ['RUNNER_TEMP']=${JSON.stringify(directory)}
+base=pathlib.Path(${JSON.stringify(join(directory, 'base'))})
+(base/'deploy/systemd').mkdir(parents=True)
+(base/'deploy/systemd/vendure-file-backup-retention.py').write_text('print("base fixture")\\n')
+subprocess.run(['git','init','-q',str(base)],check=True)
+subprocess.run(['git','-C',str(base),'add','.'],check=True)
+subprocess.run(['git','-C',str(base),'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','fixture'],check=True)
+os.environ['RELEASE_BASE_SHA']=subprocess.check_output(['git','-C',str(base),'rev-parse','HEAD'],text=True).strip()
+code=code.replace("Path('.release-base-control')",'Path('+repr(str(base))+')')
+code=code.replace("Path('deploy/install-file-retention-repair.py').read_text()",repr('import sys;sys.stdin.buffer.read();print("RETENTION_REPAIR_INSTALLED")'))
 exec(compile(code,'workflow-producer','exec'))
 `;
     const generated = spawnSync('python3', ['-c', producer], { cwd: root, encoding: 'utf8' });
