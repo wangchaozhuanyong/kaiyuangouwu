@@ -8,6 +8,7 @@ import {
 import { createCircularQrSvgDataUrl } from '../../../../storefront/src/poster-qr';
 import { renderPosterDesignGuide } from '../../../../storefront/src/referral-poster-layout';
 import { AdminButton } from '../../components/AdminControls';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { resizeArtworkCanvas } from './poster-artwork-helpers';
 import { FormSelect, NumberField } from './referral-ui';
 
@@ -94,7 +95,10 @@ export function PosterArtworkEditor({
     };
     return (
         <section className="sm:col-span-2 space-y-4" aria-label="整图海报规格">
-            <h3 className="text-xs font-bold text-slate-700">02 · 画布与固定圆位</h3>
+            <h3 className="text-xs font-bold text-slate-700">
+                02 · 画布与固定圆位{' '}
+                <FeatureHelpButton topic="marketing.poster-templates" title="海报画布与二维码圆位" />
+            </h3>
             <FormSelect
                 label="海报规格"
                 value={preset}
@@ -272,7 +276,10 @@ export function PosterArtworkEditor({
                     恢复默认规格
                 </AdminButton>
             </div>
-            <h3 className="text-xs font-bold text-slate-700">03 · 圆形二维码款式</h3>
+            <h3 className="text-xs font-bold text-slate-700">
+                03 · 圆形二维码款式{' '}
+                <FeatureHelpButton topic="marketing.poster-templates" title="圆形二维码款式" />
+            </h3>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {thumbnails.map(style => (
                     <AdminButton

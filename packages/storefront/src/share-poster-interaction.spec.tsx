@@ -129,7 +129,7 @@ describe('product poster QR readiness and store ownership', () => {
         expect(read.mock.calls[0]?.[0]).toBeInstanceOf(AbortSignal);
         pending.resolve(program());
         await settle();
-        expect(decodeURIComponent(qr().src)).toContain('#246d5f');
+        expect(decodeURIComponent(qr().src)).toContain('#194a3d');
         expect(save().disabled).toBe(true);
         act(() => {
             qr().dispatchEvent(new Event('error'));
@@ -158,7 +158,7 @@ describe('product poster QR readiness and store ownership', () => {
         expect(save().disabled).toBe(true);
         next.resolve(program('aurora'));
         await settle();
-        expect(decodeURIComponent(qr().src)).toContain('#6656d9');
+        expect(decodeURIComponent(qr().src)).toContain('#393b71');
         expect(save().disabled).toBe(true);
         load();
         expect(save().disabled).toBe(false);

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { ReferralPosterTemplate } from '../../src/types';
 
 import { DEFAULT_ARTWORK_POSTER_DESIGN, POSTER_QR_STYLES } from '../../../common/src/referral-poster-design';
 import {
@@ -12,6 +11,7 @@ import {
 import { ReferralPosterModal } from '../../src/referral-poster-modal';
 import '../../src/styles.css';
 import '../../src/styles/visual-presets.css';
+import { type ReferralPosterTemplate } from '../../src/types';
 import { applyStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
 
 applyStorefrontVisualPreset(document.documentElement, 'classic');

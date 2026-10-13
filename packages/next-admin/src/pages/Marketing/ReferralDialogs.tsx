@@ -737,7 +737,8 @@ export function PosterEditor({
                                 onError={onError}
                             />
                             <h3 className="sm:col-span-2 text-xs font-bold text-slate-700">
-                                04 · 复制分享文案（不叠加到图片）
+                                04 · 复制分享文案（不叠加到图片）{' '}
+                                <FeatureHelpButton topic="marketing.poster-templates" title="复制分享文案" />
                             </h3>
                             <TextField
                                 label="中文分享文案 *"
