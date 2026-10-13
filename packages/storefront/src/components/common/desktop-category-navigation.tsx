@@ -1,13 +1,14 @@
 import { ChevronRight, LayoutGrid } from 'lucide-react';
+import { useContext } from 'react';
 
 import { catalogRouteWithChanges } from '../../catalog-route-query';
 import { interceptContentNavigation } from '../../content-target-href';
 import { routeHref, RouteState } from '../../storefront-router';
 import { collectionImage, SafeImage } from '../../storefront-ui/product-display';
-import { useStorefront } from '../../StorefrontContext';
+import { StorefrontContext } from '../../StorefrontContext';
 import { CollectionSummary, Product, StorefrontLanguage } from '../../types';
 
-interface DesktopCategoryNavigationContext {
+export interface DesktopCategoryNavigationContext {
     route: RouteState;
     language: StorefrontLanguage;
     collections: CollectionSummary[];
@@ -18,8 +19,13 @@ interface DesktopCategoryNavigationContext {
     navigate: (route: RouteState) => void;
 }
 
-export function DesktopCategoryNavigation({ expandChildren = false }: { expandChildren?: boolean } = {}) {
-    const runtime: DesktopCategoryNavigationContext = useStorefront();
+export function DesktopCategoryNavigation({
+    expandChildren = false,
+    context,
+}: { expandChildren?: boolean; context?: DesktopCategoryNavigationContext } = {}) {
+    const storefront = useContext(StorefrontContext);
+    const runtime = context ?? storefront;
+    if (!runtime) throw new Error('Desktop category navigation requires its current page context');
     const { route, language, collections, navigate } = runtime;
     const products = runtime.products ?? [];
     const isZh = language === 'zh';
@@ -113,7 +119,10 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
                                         aria-hidden={!isExpanded}
                                     >
                                         <div className="desktop-category-children-clip">
-                                            <DesktopSubcategoryNavigation collection={collection} />
+                                            <DesktopSubcategoryNavigation
+                                                collection={collection}
+                                                context={runtime}
+                                            />
                                         </div>
                                     </div>
                                 ) : null}
@@ -140,8 +149,13 @@ export function DesktopCategoryNavigation({ expandChildren = false }: { expandCh
     );
 }
 
-export function DesktopSubcategoryNavigation({ collection }: { collection?: CollectionSummary } = {}) {
-    const runtime: DesktopCategoryNavigationContext = useStorefront();
+export function DesktopSubcategoryNavigation({
+    collection,
+    context,
+}: { collection?: CollectionSummary; context?: DesktopCategoryNavigationContext } = {}) {
+    const storefront = useContext(StorefrontContext);
+    const runtime = context ?? storefront;
+    if (!runtime) throw new Error('Desktop subcategory navigation requires its current page context');
     const { route, language, collections, navigate } = runtime;
     if (route.name !== 'category') return null;
 

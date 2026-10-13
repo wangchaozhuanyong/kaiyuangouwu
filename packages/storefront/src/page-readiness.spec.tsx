@@ -366,7 +366,7 @@ describe('store-scoped initial loading and recovery', () => {
         expect(stage()?.hidden).toBe(false);
         expect(document.activeElement).toBe(navigation);
         expect(host.querySelector('.brand-loading')).toBeNull();
-        expect(host.querySelector('.page-loading-indicator')).not.toBeNull();
+        expect(host.querySelector('.route-static-skeleton')).not.toBeNull();
         await advance(10_100);
         expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
         expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
@@ -379,7 +379,7 @@ describe('store-scoped initial loading and recovery', () => {
         render({ compact: true });
         expect(initial()).toBeNull();
         expect(stage()?.hidden).toBe(false);
-        expect(host.querySelector('.page-loading-indicator')).not.toBeNull();
+        expect(host.querySelector('.route-static-skeleton')).not.toBeNull();
         await advance(10_100);
         expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
         expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
@@ -424,7 +424,7 @@ describe('store-scoped initial loading and recovery', () => {
         render({ request: 'en-new-route', language: 'en', routeModule: true });
         expect(initial()).toBeNull();
         expect(stage()?.hidden).toBe(false);
-        expect(host.querySelector('.route-transition')?.textContent).toContain('Loading page');
+        expect(host.querySelector('.route-transition')?.getAttribute('aria-label')).toBe('Loading page');
         await advance(10_100);
         expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
         expect(host.textContent).toContain('The page took too long');

@@ -1,4 +1,12 @@
+.responsive-home-header-placeholder {
+    display: none;
+}
+
 @media (min-width: 1024px) {
+    .responsive-home-header-placeholder {
+        display: block;
+        height: var(--desktop-header-height, 72px);
+    }
     :root {
         --app-width: 1440px;
         --desktop-shell-width: var(--experience-content-max);

@@ -22,8 +22,10 @@ import {
     catalogRouteState,
     type CatalogRouteState,
 } from '../catalog-route-query';
+import { CommercePageStyles } from '../commerce-styles';
 import { CatalogFilterSheet, type CatalogFilterValues } from '../components/common/catalog-filter-sheet';
 import { PageBackButton } from '../components/common/page-back-button';
+import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { ProductRow } from '../components/common/product-row';
 import { useDesktopLayout } from '../desktop-layout';
 import { languageCodeFor } from '../i18n';
@@ -241,7 +243,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         : '';
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))
-        .slice(0, desktop ? 4 : 2);
+        .slice(0, 4);
     const hasFilters =
         filters.collectionId !== 'all' ||
         filters.childId !== 'all' ||
@@ -434,6 +436,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                 term && !showSuggestions && (searching || searchQuery.isPlaceholderData) ? 'query' : undefined
             }
         >
+            <CommercePageStyles />
             <h1 className="visually-hidden">{isZh ? '搜索商品' : 'Search products'}</h1>
             {!embedded && (
                 <header className="search-header">
@@ -485,12 +488,10 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                     <button className="search-submit" type="button" onClick={() => submit()}>
                         <span>{isZh ? '搜索' : 'Search'}</span>
                     </button>
-                    {desktop && (
-                        <button className="search-close" type="button" onClick={closeSearch}>
-                            <X size={18} aria-hidden="true" />
-                            <span>{isZh ? '关闭搜索' : 'Close search'}</span>
-                        </button>
-                    )}
+                    <button className="search-close" type="button" onClick={closeSearch}>
+                        <X size={18} aria-hidden="true" />
+                        <span>{isZh ? '关闭搜索' : 'Close search'}</span>
+                    </button>
                 </header>
             )}
             {showSuggestions ? (
@@ -706,27 +707,24 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                         </div>
                     )}
                     {searching ? (
-                        desktop && !embedded ? (
-                            <div className="product-list">
-                                <ProductSection
-                                    products={[]}
-                                    loading
-                                    skeletonCount={STOREFRONT_CATALOG_PAGE_SIZE}
-                                    appearance="plain"
-                                    market={market}
-                                    locale={locale}
-                                    language={language}
-                                    onProduct={() => undefined}
-                                />
-                            </div>
-                        ) : (
+                        embedded ? (
                             <ListSkeleton
                                 className="product-list"
-                                layout={embedded ? 'compact' : 'rows'}
+                                layout="compact"
                                 count={STOREFRONT_CATALOG_PAGE_SIZE}
                                 showDescription={false}
                                 label={isZh ? '正在搜索商品' : 'Searching products'}
                             />
+                        ) : (
+                            <div
+                                className="list-skeleton product-list search-route-product-list"
+                                role="status"
+                                aria-label={isZh ? '正在搜索商品' : 'Searching products'}
+                            >
+                                {Array.from({ length: STOREFRONT_CATALOG_PAGE_SIZE }, (_, index) => (
+                                    <ProductCardSkeleton key={index} appearance="plain" responsiveRow />
+                                ))}
+                            </div>
                         )
                     ) : searchError && !results.length ? (
                         <EmptyState
@@ -738,31 +736,38 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                             onAction={() => void searchQuery.refetch({ cancelRefetch: false })}
                         />
                     ) : results.length ? (
-                        <div className="product-list" aria-busy={searchQuery.isPlaceholderData}>
-                            {desktop && !embedded ? (
-                                <ProductSection
-                                    products={results}
-                                    appearance="plain"
-                                    market={market}
-                                    locale={locale}
-                                    language={language}
-                                    onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                                />
-                            ) : (
-                                results.map((product, index) => (
+                        <div
+                            className={`product-list${embedded ? '' : ' search-route-product-list'}`}
+                            aria-busy={searchQuery.isPlaceholderData}
+                        >
+                            {results.map((product, index) =>
+                                embedded ? (
                                     <ProductRow
                                         key={product.id}
                                         priority={index < 2}
                                         fetchPriority={index === 0 ? 'high' : 'auto'}
                                         product={product}
-                                        layout={embedded ? 'compact' : 'row'}
+                                        layout="compact"
                                         showDescription={false}
                                         market={market}
                                         locale={locale}
                                         language={language}
                                         onOpen={() => navigateTo({ name: 'product', id: product.id })}
                                     />
-                                ))
+                                ) : (
+                                    <ProductCard
+                                        key={product.id}
+                                        priority={index === 0}
+                                        eager={index < 5}
+                                        responsiveRow
+                                        appearance="plain"
+                                        product={product}
+                                        market={market}
+                                        locale={locale}
+                                        language={language}
+                                        onOpen={() => navigateTo({ name: 'product', id: product.id })}
+                                    />
+                                ),
                             )}
                             {loadMoreError && (
                                 <div className="search-load-error" role="alert">
@@ -825,6 +830,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                     )}
                     {!searching && !searchError && !results.length && !!relatedProducts.length && (
                         <ProductSection
+                            className="search-related-products"
                             title={isZh ? '继续看看' : 'Keep exploring'}
                             subtitle={isZh ? '店内在售商品' : 'Available in store'}
                             subtitlePlacement="end"

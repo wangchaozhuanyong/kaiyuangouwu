@@ -1,4 +1,5 @@
 // organize-imports-ignore
+import type { ShopApi } from './api';
 import type { CollectionSummary, Product, StorefrontConfig, StorefrontContentResponse } from './types';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
@@ -15,6 +16,8 @@ import {
 
 import { storefrontNavigationCollections } from './api/catalog';
 import { SEND_CLIENT_CHANNEL_TOKEN } from './api/helpers';
+import { nextCatalogPageParam, validateCatalogPage } from './catalog-pagination';
+import { catalogInputFromRoute } from './catalog-route-query';
 import { languageCodeFor, marketForStorefrontConfig } from './i18n';
 import { asListProduct } from './product-summary';
 import {
@@ -26,12 +29,16 @@ import {
 } from './public-page-transport';
 import {
     isStorefrontScopeAccessDenied,
+    PUBLIC_QUERY_STALE_TIME,
+    PUBLIC_QUERY_GC_TIME,
+    publicQueryMeta,
     markStorefrontPublicQuerySource,
     restrictStorefrontScopePersistence,
     storefrontQueryKeys,
 } from './query-client';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
+import { routeFromRouterLocation } from './storefront-router';
 import {
     contentStringArraySetting,
     readStoredLanguage,
@@ -296,13 +303,24 @@ export function currentPublicPageRequest(href?: string): PublicPageRequest {
     }
 }
 
-let navigationScope: { channelCode: string; currencyCode: string; languageCode: string } | undefined;
+let navigationScope:
+    | {
+          channelCode: string;
+          currencyCode: string;
+          languageCode: string;
+          api?: Pick<ShopApi, 'product' | 'catalog'>;
+      }
+    | undefined;
 export function setPublicPageNavigationScope(scope: typeof navigationScope) {
     navigationScope = scope;
 }
 
 /** Navigation starts code and data together; the route query adopts this exact response. */
-export async function prefetchPublicPage(client: QueryClient, href: string): Promise<void> {
+export async function prefetchPublicPage(
+    client: QueryClient,
+    href: string,
+    signal?: AbortSignal,
+): Promise<void> {
     const scope = navigationScope;
     if (!scope) return;
     if (
@@ -329,24 +347,68 @@ export async function prefetchPublicPage(client: QueryClient, href: string): Pro
             : request.kind === 'product'
               ? storefrontQueryKeys.product(market, language, request.id)
               : request.kind === 'home'
-                ? storefrontQueryKeys.products(market, language, 12)
+                ? [...storefrontQueryKeys.content(market, language), 'public']
                 : publicSeoQueryKey(market, language, request);
     const cached = client.getQueryState(key);
+    const queryOwned = Boolean(
+        scope.api &&
+        language === scope.languageCode &&
+        (request.kind === 'product' || request.kind === 'catalog'),
+    );
     if (
         cached?.data !== undefined &&
         !cached.isInvalidated &&
-        Date.now() - cached.dataUpdatedAt < 30_000 &&
-        client.getQueryData(publicSeoQueryKey(market, language, request)) !== undefined
+        Date.now() - cached.dataUpdatedAt < (queryOwned ? PUBLIC_QUERY_STALE_TIME : 30_000) &&
+        (queryOwned || client.getQueryData(publicSeoQueryKey(market, language, request)) !== undefined)
     )
         return;
     const read = async () => {
-        const page = await fetchPublicPage(
-            language,
-            scope.currencyCode,
-            undefined,
-            request,
-            scope.channelCode,
-        );
+        const scopeApi = scope.api;
+        // Warm the same query that the destination observes. Required read failures
+        // stay in Query rather than disappearing in a speculative loader catch.
+        // A cancelled router wait must not cancel a query still used by another page.
+        if (scopeApi && language === scope.languageCode && request.kind === 'product') {
+            const productId = request.id;
+            await awaitPublicPage(
+                client.fetchQuery({
+                    queryKey: storefrontQueryKeys.product(market, language, productId),
+                    queryFn: ({ signal: querySignal }) => scopeApi.product(productId, querySignal),
+                    staleTime: PUBLIC_QUERY_STALE_TIME,
+                    gcTime: PUBLIC_QUERY_GC_TIME,
+                    meta: publicQueryMeta(),
+                }),
+                signal,
+            );
+            return;
+        }
+        if (scopeApi && language === scope.languageCode && request.kind === 'catalog') {
+            const url = new URL(href, window.location.origin);
+            const input = catalogInputFromRoute(
+                routeFromRouterLocation(url.pathname, Object.fromEntries(url.searchParams)),
+            );
+            await awaitPublicPage(
+                client.fetchInfiniteQuery({
+                    queryKey: key,
+                    queryFn: async ({ pageParam, signal: querySignal }) =>
+                        validateCatalogPage(
+                            await scopeApi.catalog({ ...input, skip: pageParam, take: 12 }, querySignal),
+                            pageParam,
+                            new Set<string>(),
+                            language === 'zh_Hans'
+                                ? '暂时无法加载商品，请重试'
+                                : 'Could not load products. Please retry.',
+                        ),
+                    initialPageParam: input.skip ?? 0,
+                    getNextPageParam: nextCatalogPageParam,
+                    staleTime: PUBLIC_QUERY_STALE_TIME,
+                    gcTime: PUBLIC_QUERY_GC_TIME,
+                    meta: publicQueryMeta(),
+                }),
+                signal,
+            );
+            return;
+        }
+        const page = await fetchPublicPage(language, scope.currencyCode, signal, request, scope.channelCode);
         if (page && navigationScope === scope) seedPublicPage(client, page);
     };
     if (cached?.data !== undefined) {

@@ -33,6 +33,7 @@ import { isStorefrontClosedError } from '../storefront-access';
 import { readInitialStorefrontBoot } from '../storefront-boot-data';
 import { readInitialPublicPage, setPublicPageNavigationScope } from '../storefront-page-data';
 import { storefrontPreviewParameters } from '../storefront-preview-parameters';
+import { routeHref, type RouteState } from '../storefront-router';
 import { readStoredStrings, scopedStorageKey } from '../storefront-storage';
 import {
     DEFAULT_STOREFRONT_NAMES,
@@ -73,7 +74,7 @@ function initialAvailableCurrencies(config: StorefrontConfig): string[] {
     ];
 }
 
-export function useStorefrontBootstrap() {
+export function useStorefrontBootstrap(presentedRoute?: RouteState) {
     const queryClient = useQueryClient();
     const [initialPage, setInitialPage] = useState(
         () => readInitialPublicPage() ?? readInitialStorefrontBoot(),
@@ -98,7 +99,7 @@ export function useStorefrontBootstrap() {
     const initializedPreferenceScope = useRef('');
     const restoredCacheScopes = useRef(new Set<string>());
 
-    const [{ market, language }, setStorefrontContext] = useState<{
+    const [{ market, language: storedLanguage }, setStorefrontContext] = useState<{
         market: MarketConfig;
         language: StorefrontLanguage;
     }>(() => {
@@ -115,6 +116,9 @@ export function useStorefrontBootstrap() {
             ),
         };
     });
+    // The new match and its language/query scope must be adopted in one render.
+    // Persisting the preference can happen later without painting old-language data.
+    const language = previewLanguage(presentedRoute?.publicLanguage ?? storedLanguage);
     const [displayCurrencyCode, setDisplayCurrencyCode] = useState(() =>
         initialPage &&
         typeof document !== 'undefined' &&
@@ -205,7 +209,10 @@ export function useStorefrontBootstrap() {
         storefrontContextResolved && !accessDenied,
     );
 
-    const publicData = useStorefrontPublicData(queryContext);
+    const publicData = useStorefrontPublicData({
+        ...queryContext,
+        presentedHref: presentedRoute ? routeHref(presentedRoute) : undefined,
+    });
     const { configQuery } = publicData;
     const storefrontUnavailable =
         accessDenied ||
@@ -398,6 +405,7 @@ export function useStorefrontBootstrap() {
             return;
         }
         setPublicPageNavigationScope({
+            api,
             channelCode: market.code,
             currencyCode: market.currencyCode,
             languageCode: vendureLanguageCode,
@@ -411,6 +419,7 @@ export function useStorefrontBootstrap() {
             document.cookie = `storefront_public_currency=${market.currencyCode}; Path=/; SameSite=Lax; Max-Age=31536000${secure}`;
         return () => setPublicPageNavigationScope(undefined);
     }, [
+        api,
         storefrontContextResolved,
         storefrontUnavailable,
         vendureLanguageCode,

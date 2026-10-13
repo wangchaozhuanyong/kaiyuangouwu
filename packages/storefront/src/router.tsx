@@ -62,7 +62,7 @@ router.subscribe('onBeforeNavigate', event => {
 });
 
 function StorefrontPendingPage() {
-    const location = useRouterState({ select: s => s.location });
+    const location = useRouterState({ select: s => s.matches.at(-1) ?? s.location });
     const variant = pageSkeletonVariantForPathname(location.pathname);
     return <PageSkeleton variant={variant} root />;
 }

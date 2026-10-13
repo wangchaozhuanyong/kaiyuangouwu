@@ -34,6 +34,15 @@
     margin: var(--space-section) 0 0;
 }
 
+/* Content-derived geometry and picture sources use the same breakpoint from the first paint. */
+.business-services-page .business-services-heading[data-services-hero-layout='image-overlay'] {
+    --services-hero-image-ratio: var(--services-hero-mobile-image-ratio, 1.6);
+}
+
+.business-services-page .business-services-desktop-empty-hero {
+    display: none;
+}
+
 .business-services-advertising-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -63,6 +72,19 @@
 }
 
 @media (min-width: 1024px) {
+    .business-services-mobile-header,
+    .business-services-page .business-services-heading.business-services-mobile-only-hero {
+        display: none;
+    }
+
+    .business-services-page .business-services-desktop-empty-hero {
+        display: flex;
+    }
+
+    .business-services-page .business-services-heading[data-services-hero-layout='image-overlay'] {
+        --services-hero-image-ratio: var(--services-hero-desktop-image-ratio, 2.5);
+    }
+
     .desktop-store-layout .business-services-page {
         padding-top: var(--space-major);
         padding-inline: 0;

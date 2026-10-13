@@ -153,13 +153,24 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
             const payload = page(fixtureStores[0], 'en', 'catalog');
             if (payload.request?.kind !== 'catalog') throw new Error('Expected catalog fixture');
             payload.request.path = '/search';
-            payload.route = payload.route.replace('/category?', '/search?');
+            payload.request.input.term = 'Synthetic product';
+            const searchUrl = new URL(payload.route, `https://${payload.scope.host}`);
+            searchUrl.pathname = searchUrl.pathname.replace('/category', '/search');
+            searchUrl.searchParams.set('term', payload.request.input.term);
+            payload.route = searchUrl.pathname + searchUrl.search;
             payload.requestKey = JSON.stringify(payload.request);
             payload.seo.requestKey = payload.requestKey;
             payload.seo.canonical = `https://${payload.scope.host}${payload.route}`;
             const html = await service.render(payload);
             const dom = load(html);
             expect(dom('link[rel="stylesheet"][href^="/assets/search-page-"]').length).toBeGreaterThan(0);
+            expect(dom('link[rel="stylesheet"][href^="/assets/search-loading-"]')).toHaveLength(1);
+            expect(html.indexOf('href="/assets/account-catalog-surfaces-')).toBeLessThan(
+                html.indexOf('href="/assets/search-loading-'),
+            );
+            expect(html.indexOf('href="/assets/search-loading-')).toBeLessThan(
+                html.indexOf('href="/assets/search-page-'),
+            );
             if (!payload.catalog) throw new Error('Expected fixture catalog');
             expect(dom('#root').text()).toContain(payload.catalog.items[0].name);
             scenarios.push('search: actual matching route CSS and catalog body');

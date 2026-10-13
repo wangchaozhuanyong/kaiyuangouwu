@@ -61,11 +61,13 @@ export default function BrandLoadingContent({
 
     return (
         <span className={`brand-loading${compact ? ' brand-loading--compact' : ''}`} aria-hidden="true">
-            <BrandLoadingLogo key={owner} source={source} />
+            <BrandLoadingLogo key={owner} source={source} reserveSpace={!compact} />
             {compact && label && <span>{label}</span>}
-            {!compact && name && <strong className="brand-loading-name">{name}</strong>}
-            {!compact && name && secondaryName && secondaryName !== name && (
-                <span className="brand-loading-subtitle">{secondaryName}</span>
+            {!compact && <strong className="brand-loading-name">{name}</strong>}
+            {!compact && (
+                <span className="brand-loading-subtitle">
+                    {name && secondaryName !== name ? secondaryName : ''}
+                </span>
             )}
             {pending && (
                 <span className="brand-loading-caption">
@@ -87,13 +89,19 @@ export default function BrandLoadingContent({
     );
 }
 
-function BrandLoadingLogo({ source }: { source: string }) {
+function BrandLoadingLogo({ source, reserveSpace = false }: { source: string; reserveSpace?: boolean }) {
     const imageRef = useRef<HTMLImageElement>(null);
     const [originalSource, setOriginalSource] = useState(false);
     const [failed, setFailed] = useState(false);
     const [readySource, setReadySource] = useState('');
     const src = source ? (originalSource ? source : storefrontWebpUrl(source, 'thumbnail')) : '';
     const ready = Boolean(src && readySource === src && !failed);
+
+    function failCandidate() {
+        setReadySource('');
+        if (src !== source) setOriginalSource(true);
+        else setFailed(true);
+    }
 
     function reveal(image: HTMLImageElement) {
         const show = () => {
@@ -102,7 +110,9 @@ function BrandLoadingLogo({ source }: { source: string }) {
             }
         };
         if (typeof image.decode === 'function') {
-            void image.decode().then(show, show);
+            void image.decode().then(show, () => {
+                if (imageRef.current === image && image.getAttribute('src') === src) failCandidate();
+            });
         } else {
             show();
         }
@@ -114,7 +124,7 @@ function BrandLoadingLogo({ source }: { source: string }) {
         if (image?.complete && image.naturalWidth > 0) reveal(image);
     }, [src]);
 
-    if (!src || failed) return null;
+    if ((!src || failed) && !reserveSpace) return null;
 
     return (
         <span className={`route-transition-mark${ready ? ' is-logo-ready' : ''}`}>
@@ -129,10 +139,7 @@ function BrandLoadingLogo({ source }: { source: string }) {
                     decoding="async"
                     fetchPriority="high"
                     onLoad={event => reveal(event.currentTarget)}
-                    onError={() => {
-                        if (src !== source) setOriginalSource(true);
-                        else setFailed(true);
-                    }}
+                    onError={failCandidate}
                 />
             )}
         </span>

@@ -26,6 +26,45 @@ export default function DesktopSearch() {
     const context = useStorefront();
     const route = context.displayedRoute ?? context.route;
     const isZh = context.language === 'zh';
+    const focusRouteSearch = () =>
+        document
+            .querySelector<HTMLInputElement>('.search-page:not(.is-embedded-search) input[type="search"]')
+            ?.focus();
+    useEffect(() => {
+        if (route.name !== 'search') return;
+        const onShortcut = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                focusRouteSearch();
+            }
+        };
+        window.addEventListener('keydown', onShortcut);
+        return () => window.removeEventListener('keydown', onShortcut);
+    }, [route.name]);
+    // A direct search URL already owns its input and result query. Header discovery on
+    // other pages retains the existing popover; never mount a second search over this route.
+    if (route.name === 'search') {
+        return (
+            <button
+                type="button"
+                className="proto-search-form proto-search-route-trigger"
+                aria-label={isZh ? '编辑搜索关键词' : 'Edit search keywords'}
+                onClick={focusRouteSearch}
+            >
+                <Search className="proto-search-icon" aria-hidden="true" />
+                <span className="proto-search-route-label">
+                    {route.term || (isZh ? '搜索商品、分类' : 'Search products')}
+                </span>
+            </button>
+        );
+    }
+    return <DesktopSearchPopover />;
+}
+
+function DesktopSearchPopover() {
+    const context = useStorefront();
+    const route = context.displayedRoute ?? context.route;
+    const isZh = context.language === 'zh';
     const [query, setQuery] = useState(route.name === 'search' ? (route.term ?? '') : '');
     const [submittedQuery, setSubmittedQuery] = useState(query);
     const [submission, setSubmission] = useState(0);

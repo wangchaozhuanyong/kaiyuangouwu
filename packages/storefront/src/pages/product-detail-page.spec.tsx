@@ -15,7 +15,8 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
     useNavigate: () => navigate,
     useRouter: () => ({ history: { back: vi.fn() } }),
 }));
-vi.mock('../desktop-layout', () => ({ useDesktopLayout: () => true }));
+const viewport = vi.hoisted(() => ({ desktop: true }));
+vi.mock('../desktop-layout', () => ({ useDesktopLayout: () => viewport.desktop }));
 const posterLoad = vi.hoisted(() => ({ resolve: undefined as (() => void) | undefined }));
 vi.mock('../lazy-storefront-pages', async () => {
     const { lazy } = await import('react');
@@ -82,6 +83,58 @@ describe('desktop product purchase controls', () => {
         act(() => root.unmount());
         host.remove();
         navigate.mockClear();
+        viewport.desktop = true;
+    });
+
+    it('retains the gallery, summary, quantity and purchase controls when the viewport is adopted', () => {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        const onAdd = vi.fn();
+        const value = {
+            api: {} as never,
+            product,
+            products: [],
+            cartQuantity: 0,
+            market,
+            locale: market.locale,
+            language: 'zh' as const,
+            storefrontName: 'Store',
+            logoUrl: null,
+            reviewEnabled: false,
+            flashSaleItems: [],
+            couponCampaigns: [],
+            customerCoupons: [],
+            addingVariantId: null,
+            favorite: false,
+            onAdd,
+            onBuyNow: vi.fn(),
+            onFavorite: vi.fn(),
+            onNotify: vi.fn(),
+        };
+        const render = () =>
+            act(() =>
+                root.render(
+                    <ProductDetailPageContext.Provider value={value}>
+                        <ProductDetailPage />
+                    </ProductDetailPageContext.Provider>,
+                ),
+            );
+        viewport.desktop = false;
+        render();
+        const gallery = host.querySelector('.detail-gallery');
+        const summary = host.querySelector('.detail-summary');
+        const actions = host.querySelector('.detail-action-bar');
+        act(() => host.querySelector<HTMLButtonElement>('[aria-label="增加数量"]')?.click());
+        viewport.desktop = true;
+        render();
+        expect(host.querySelector('.detail-gallery')).toBe(gallery);
+        expect(host.querySelector('.detail-summary')).toBe(summary);
+        expect(host.querySelector('.detail-action-bar')).toBe(actions);
+        expect(host.querySelectorAll('.detail-action-bar')).toHaveLength(1);
+        expect(host.querySelector('.detail-quantity output')?.textContent).toBe('2');
+        act(() => host.querySelectorAll<HTMLButtonElement>('.detail-action-bar > button')[2].click());
+        expect(onAdd).toHaveBeenCalledWith(product.variants[0], 2);
     });
 
     it.each(['zh', 'en'] as const)(
@@ -309,7 +362,10 @@ describe('desktop product purchase controls', () => {
         );
         act(() => button('用户评价')?.click());
         expect(host.textContent).toContain('真实评价内容');
-        expect(host.querySelector('.detail-description')).toBeNull();
+        expect(host.querySelector('.product-detail-body')?.getAttribute('data-active-section')).toBe(
+            'reviews',
+        );
+        expect(host.querySelector('.detail-description')?.textContent).toContain('后台商品说明');
     });
 
     it.each([

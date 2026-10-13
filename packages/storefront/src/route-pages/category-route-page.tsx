@@ -1,9 +1,7 @@
 import '../commerce-styles';
-import { useDesktopLayout } from '../desktop-layout';
 import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
 import { CategoryPage } from '../pages/category-page';
-import { DesktopCatalogPage } from '../pages/desktop-catalog-page';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { FulfillmentType } from '../types';
 
@@ -12,8 +10,6 @@ import { useRouteRuntime as useRuntime } from './shared';
 export function CategoryRoutePage() {
     usePageRouteCommit();
     const runtime = useRuntime();
-    const desktop = useDesktopLayout();
-    if (desktop) return <DesktopCatalogPage />;
     return (
         <CategoryPageContext.Provider
             value={{
@@ -22,6 +18,7 @@ export function CategoryRoutePage() {
                 products: runtime.products,
                 collections: runtime.collections,
                 contentBlocks: runtime.contentBlocks,
+                storefrontName: runtime.storefrontName,
                 loading:
                     runtime.loading || storefrontQueryPresentation(runtime.collectionsQuery).initialLoading,
                 error:

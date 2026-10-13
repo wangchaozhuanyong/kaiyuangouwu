@@ -5,7 +5,10 @@ import { HomeRoutePage } from '../route-pages/catalog-route-pages';
 import { prefetchPublicPage } from '../storefront-page-data';
 
 export const Route = createFileRoute('/')({
-    loader: ({ location }) =>
-        prefetchPublicPage(storefrontQueryClient, location.publicHref).catch(() => undefined),
+    loader: ({ location, abortController }) =>
+        // This only warms data. The mounted page's Query owns success, empty and error UI.
+        prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
+            () => undefined,
+        ),
     component: HomeRoutePage,
 });

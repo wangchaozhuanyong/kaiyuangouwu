@@ -7,7 +7,11 @@ import { fileURLToPath } from 'node:url';
 import { startSeoFixtureServer } from './preview-server.mjs';
 
 const project = path.resolve(fileURLToPath(new URL('../../../../', import.meta.url)));
-const output = path.join(project, 'docs/local-validation/experience-offline-20261013/hydration');
+const output = path.resolve(
+    project,
+    process.env.WARM_NAVIGATION_QA_OUTPUT ?? 'docs/local-validation/experience-offline-20261013/hydration',
+);
+assert.ok(output.startsWith(project + path.sep), 'Evidence belongs inside this project');
 await mkdir(output, { recursive: true });
 const widthOption = process.argv.find(argument => argument.startsWith('--width='));
 const widths = widthOption ? [Number(widthOption.split('=')[1])] : [390, 1440];
@@ -135,9 +139,7 @@ try {
                     target === 'product'
                         ? '#storefront-content .product-detail-page'
                         : target === 'category'
-                          ? width < 1024
-                              ? '#storefront-content .category-page'
-                              : '#storefront-content .desktop-catalog-main'
+                          ? '#storefront-content .category-page'
                           : '#storefront-content .home-page';
                 await page.evaluate(value => window.__warmNavigation.arm(value), {
                     direction,
@@ -222,6 +224,11 @@ try {
                 p50Ms: percentile(values, 0.5),
                 p95Ms,
                 maxMs: Math.max(...values),
+                // A fully visible destination is also feedback. This is a conservative
+                // upper bound, not a measurement of earlier pressed/loading styling.
+                feedbackUpperBoundP95Ms: p95Ms,
+                feedbackUpperBoundMaxMs: Math.max(...values),
+                feedbackUpperBoundWithin100Ms: Math.max(...values) <= 100,
                 targetMs: 200,
                 passed: p95Ms <= 200,
                 directions,

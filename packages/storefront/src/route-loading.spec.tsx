@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BrandLoadingIndicator } from './brand-loading';
 import {
     loadingPageLabel,
     PageSkeleton,
@@ -81,7 +82,20 @@ describe('route loading skeletons', () => {
         expect(markup).toContain('page-skeleton--compact');
         expect(markup).not.toContain('route-transition-mark');
         expect(markup).not.toContain('page-loading-spinner');
-        expect(markup).toContain('>正在加载优惠活动<');
+        expect(markup).toContain('aria-label="正在加载优惠活动"');
+        expect(markup).toContain('route-static-skeleton');
+    });
+
+    it('uses target product geometry during normal navigation without an extra brand stage or actions', () => {
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(<PageSkeleton variant="catalog" language="en" />);
+        expect(host.querySelectorAll('.product-card-skeleton')).toHaveLength(12);
+        expect(host.querySelector('.brand-loading, header, nav, button, a')).toBeNull();
+        expect(host.querySelector('[role="status"]')?.getAttribute('aria-label')).toBe('Loading page');
+        host.innerHTML = renderToStaticMarkup(<PageSkeleton variant="detail" />);
+        expect(host.querySelector('.skeleton-media')).not.toBeNull();
+        expect(host.querySelector('.skeleton-price')).not.toBeNull();
+        expect(host.querySelector('.brand-loading, button, a')).toBeNull();
     });
 
     it('maps storefront paths to stable layout variants', () => {
@@ -147,7 +161,7 @@ describe('transition logo loading', () => {
                         } as StorefrontContextValue
                     }
                 >
-                    <PageSkeleton />
+                    <BrandLoadingIndicator />
                 </StorefrontContext.Provider>,
             ),
         );
@@ -163,11 +177,12 @@ describe('transition logo loading', () => {
                         } as StorefrontContextValue
                     }
                 >
-                    <PageSkeleton />
+                    <BrandLoadingIndicator />
                 </StorefrontContext.Provider>,
             ),
         );
         expect(container.querySelector('img')).toBeNull();
+        expect(container.querySelector('.route-transition-mark')).not.toBeNull();
         expect(container.textContent).toContain('Second store');
         expect(container.textContent).not.toContain('First store');
     });
@@ -211,6 +226,22 @@ describe('transition logo loading', () => {
         expect(container.textContent).toContain('当前店铺');
         expect(container.querySelector('.brand-loading-bar')).not.toBeNull();
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
+    });
+
+    it('retains the identity slots when image decoding fails and never reveals an undecodable logo', async () => {
+        await render('/brand.svg');
+        const image = logoImage();
+        const slot = image.parentElement;
+        Object.defineProperties(image, {
+            naturalWidth: { value: 160 },
+            decode: { value: () => Promise.reject(new Error('decode failed')) },
+        });
+        await interact(() => image.dispatchEvent(new Event('load')));
+        expect(container.querySelector('img')).toBeNull();
+        expect(container.querySelector('.route-transition-mark')).toBe(slot);
+        expect(container.querySelector('.is-logo-ready')).toBeNull();
+        expect(container.querySelector('.brand-loading-name')).not.toBeNull();
+        expect(container.querySelector('.brand-loading-subtitle')).not.toBeNull();
     });
 
     it('recognizes a cached logo even when its load event has already fired', async () => {

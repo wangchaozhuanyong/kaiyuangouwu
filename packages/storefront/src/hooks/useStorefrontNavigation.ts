@@ -89,39 +89,39 @@ export function useStorefrontNavigation({
 
     const isNavigationPending = useRouterState({ select: state => state.status === 'pending' });
 
-    const resolvedRouterLocation = useRouterState({ select: state => state.resolvedLocation });
-
-    const displayedRouterLocation =
-        isNavigationPending && resolvedRouterLocation ? resolvedRouterLocation : routerLocation;
-
-    const rawRoute = useMemo(
-        () =>
-            routeFromRouterLocation(
-                routerLocation.pathname,
-                routerLocation.search as Record<string, unknown>,
-            ),
+    // Router keeps the old matches before its pending threshold, then publishes the
+    // destination pending match. resolvedLocation lags behind that second commit.
+    // Every consumer (including action callbacks) must use the same published match.
+    const presentedMatch = useRouterState({ select: state => state.matches.at(-1) });
+    const displayedRouterLocation = presentedMatch ?? routerLocation;
+    const targetRoute = useMemo(
+        () => routeFromRouterLocation(routerLocation.pathname, routerLocation.search),
         [routerLocation.pathname, routerLocation.search],
     );
-    const route = useMemo(() => resolveCategoryRoute(rawRoute, collections), [rawRoute, collections]);
+    const resolvedTargetRoute = useMemo(
+        () => resolveCategoryRoute(targetRoute, collections),
+        [targetRoute, collections],
+    );
     useEffect(() => {
-        if (route === rawRoute) return;
-        const options = routeNavigateOptions(route);
+        if (resolvedTargetRoute === targetRoute) return;
+        const options = routeNavigateOptions(resolvedTargetRoute);
         void tanstackNavigate({
             ...options,
             search: { ...routerLocation.search, ...options.search },
             replace: true,
             resetScroll: false,
         } as never);
-    }, [route, rawRoute, routerLocation.search, tanstackNavigate]);
+    }, [resolvedTargetRoute, targetRoute, routerLocation.search, tanstackNavigate]);
 
-    const displayedRoute = useMemo(
+    const route = useMemo(
         () =>
-            routeFromRouterLocation(
-                displayedRouterLocation.pathname,
-                displayedRouterLocation.search as Record<string, unknown>,
+            resolveCategoryRoute(
+                routeFromRouterLocation(displayedRouterLocation.pathname, displayedRouterLocation.search),
+                collections,
             ),
-        [displayedRouterLocation.pathname, displayedRouterLocation.search],
+        [displayedRouterLocation.pathname, displayedRouterLocation.search, collections],
     );
+    const displayedRoute = route;
 
     // The URL is the rendering source of truth. This ref only remembers the last explicit
     // category URL so links returning from another route can preserve the user's filters.

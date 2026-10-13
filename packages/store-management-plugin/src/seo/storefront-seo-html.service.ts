@@ -45,14 +45,19 @@ export function assemblePublicHtml(
         document('head').append(`<link rel="stylesheet" href="/assets/${style}">`);
     }
     document('#root').attr('data-public-rendered', '1').html(body);
-    // React's hoisted resource belongs before the common desktop overrides,
-    // including on the server's first response before hydration can run.
-    const homeStyle = document('style[data-href="storefront-home-showcase"]');
+    // Match the client cascade before hydration: shared commerce presentation
+    // precedes common overrides; page-specific resources follow them.
+    const commerceStyles = document(
+        'style[data-href="storefront-home-showcase"], style[data-href="storefront-service-entries"]',
+    );
     const commonStyle = document('head link[rel="stylesheet"]').first();
-    if (homeStyle.length) {
-        if (commonStyle.length) commonStyle.before(homeStyle);
-        else document('head').append(homeStyle);
+    if (commerceStyles.length) {
+        if (commonStyle.length) commonStyle.before(commerceStyles);
+        else document('head').append(commerceStyles);
     }
+    document('head').append(
+        document('style[data-href="storefront-business-services"], style[data-href="storefront-support"]'),
+    );
     document('#storefront-public-page-data').remove();
     document('body').append(
         `<script type="application/json" id="storefront-public-page-data">${serializeStorefrontPageData(page)}</script>`,
@@ -86,14 +91,13 @@ export class StorefrontSeoHtmlService {
                     : page.request?.kind === 'catalog'
                       ? [
                             'account-catalog-surfaces-',
-                            ...(page.request.path === '/search' ? ['search-page-'] : []),
+                            ...(page.request.path === '/search' ? ['search-loading-', 'search-page-'] : []),
                         ]
                       : [];
-            const styles = prefixes.length
-                ? (await readdir(resolve(root, 'assets'))).filter(
-                      file => file.endsWith('.css') && prefixes.some(prefix => file.startsWith(prefix)),
-                  )
-                : [];
+            const assets = prefixes.length ? await readdir(resolve(root, 'assets')) : [];
+            const styles = prefixes.flatMap(prefix =>
+                assets.filter(file => file.endsWith('.css') && file.startsWith(prefix)).sort(),
+            );
             if (prefixes.some(prefix => !styles.some(file => file.startsWith(prefix))))
                 throw new Error('Missing public route stylesheet');
             const body = await renderer.renderPublicPage(page);
