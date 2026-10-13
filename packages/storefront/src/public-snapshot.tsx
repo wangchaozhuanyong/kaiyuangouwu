@@ -431,6 +431,8 @@ function SnapshotShell({ page }: { page: PublicPageData }) {
                             accessMode={page.config.accessMode}
                             storefrontName={storefrontName}
                             logoUrl={page.config.logoUrl ?? null}
+                            displayCurrencyCode={page.scope.currencyCode}
+                            navigationBlock={navigationBlock}
                             publicMedia={page.media}
                         >
                             <Suspense

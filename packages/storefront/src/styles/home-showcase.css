@@ -219,6 +219,10 @@
 .home-page .hero.hero-image-overlay .safe-image-preview {
     object-fit: cover;
 }
+.home-page .hero.hero-image-overlay .hero-rich-backdrop {
+    /* The native image must paint above its fallback even before hydration. */
+    z-index: 1;
+}
 .home-page .hero.hero-image-overlay :is(.hero-rich-title, .hero-rich-pill, .stat-num) {
     color: var(--hero-image-copy-foreground, var(--text));
     text-shadow: var(--hero-title-shadow);

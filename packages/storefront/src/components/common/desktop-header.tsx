@@ -11,6 +11,7 @@ import { StorefrontContentBlock } from '../../types';
 import { resolveBottomNavigationItems } from './bottom-navigation';
 import { CountBadge, countBadgeLabel } from './count-badge';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
+import { DesktopHeaderSearchPlaceholder } from './responsive-home-header-placeholder';
 
 const DesktopSearch = lazy(() => import('./desktop-search'));
 
@@ -125,7 +126,7 @@ export function DesktopHeader({
                 </div>
 
                 <div className="proto-header-search">
-                    <Suspense fallback={<div className="proto-search-placeholder" aria-busy="true" />}>
+                    <Suspense fallback={<DesktopHeaderSearchPlaceholder language={context.language} />}>
                         <DesktopSearch />
                     </Suspense>
                 </div>

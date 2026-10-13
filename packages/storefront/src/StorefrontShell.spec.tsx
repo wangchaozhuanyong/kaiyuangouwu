@@ -39,7 +39,8 @@ vi.mock('@tanstack/react-router', () => ({
     lazyRouteComponent: (_loader: unknown, name: string) =>
         name === 'LoginRoutePage' ? () => <div>SIGN_IN_FORM</div> : () => <div>LAZY_SHELL_CONTENT</div>,
 }));
-vi.mock('./components/common/bottom-navigation', () => ({
+vi.mock('./components/common/bottom-navigation', async importOriginal => ({
+    ...(await importOriginal<typeof import('./components/common/bottom-navigation')>()),
     BottomNavigation: () => <div>CATALOG_NAVIGATION</div>,
     shouldShowBottomNavigation: () => true,
 }));
