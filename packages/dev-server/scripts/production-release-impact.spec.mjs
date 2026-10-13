@@ -1,10 +1,75 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
     classifyProductionReleaseImpact,
     inspectProductionReleaseImpact,
 } from '../../../deploy/production-release-impact.mjs';
+
+const posterPresetsPath = 'packages/store-management-plugin/src/referral/referral-poster-presets.ts';
+const posterPresetsSource = readFileSync(
+    new URL('../../store-management-plugin/src/referral/referral-poster-presets.ts', import.meta.url),
+    'utf8',
+);
+function inspectPosterChange(targetSource, releaseScope = {}) {
+    return inspectProductionReleaseImpact({
+        baseSha: 'a'.repeat(40),
+        targetSha: 'b'.repeat(40),
+        releaseScope,
+        git(_command, args) {
+            if (args[0] === 'diff') return `${posterPresetsPath}\n`;
+            if (args[0] === 'show') return args[1].startsWith('a') ? posterPresetsSource : targetSource;
+            return '';
+        },
+    });
+}
+
+test('poster runtime helpers do not require or authorize publishing unchanged managed data', () => {
+    const source = `${posterPresetsSource}\nexport type RuntimePosterFields = string;\n`;
+    const impact = inspectPosterChange(source);
+    assert.equal(impact.dataRisk, 'runtime-only');
+    assert.ok(!impact.affectedChecks.includes('managed-content'));
+    assert.throws(
+        () => inspectPosterChange(source, { referralPosters: 'primary' }),
+        /without a matching change/u,
+    );
+});
+
+test('poster copy, palettes and content identities still require an explicit reviewed publisher scope', () => {
+    for (const [before, after] of [
+        ['精选商品与服务', 'New published copy'],
+        ["foregroundColor: '#152c49'", "foregroundColor: '#102030'"],
+        ['referral-poster-${id.toLowerCase()', 'new-poster-${id.toLowerCase()'],
+    ]) {
+        const source = posterPresetsSource.replace(before, after);
+        assert.notEqual(source, posterPresetsSource);
+        assert.throws(() => inspectPosterChange(source), /reviewed release scope was not selected/u);
+        const impact = inspectPosterChange(source, { referralPosters: 'primary' });
+        assert.equal(impact.dataRisk, 'managed-content');
+        assert.equal(impact.backupPolicy, 'fresh');
+    }
+});
+
+test('unknown or deleted poster manifest declarations fail closed', () => {
+    assert.throws(() => inspectPosterChange('export const otherData = [];'), /Cannot isolate/u);
+    assert.throws(
+        () => inspectPosterChange(`import { data } from './other';\n${posterPresetsSource}`),
+        /Cannot isolate/u,
+    );
+});
+
+test('poster assets and publisher changes continue to require review regardless of unchanged preset data', () => {
+    for (const file of [
+        'packages/dev-server/assets/referral-posters/manifest.json',
+        'packages/dev-server/scripts/sync-referral-posters.mjs',
+    ]) {
+        assert.throws(
+            () => classifyProductionReleaseImpact([file], {}, { referralPosterManifestChanged: false }),
+            /reviewed release scope was not selected/u,
+        );
+    }
+});
 
 test('runtime-only releases reuse a recent verified backup and keep all-store acceptance', () => {
     const impact = classifyProductionReleaseImpact(['packages/next-admin/src/App.tsx']);

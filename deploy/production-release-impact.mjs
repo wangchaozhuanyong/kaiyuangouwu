@@ -10,6 +10,24 @@ const SHA_PATTERN = /^[a-f0-9]{40}$/u;
 const STOREFRONT_MEDIA_SCRIPT = 'packages/dev-server/scripts/sync-storefront-media.mjs';
 const MEDIA_MANIFEST_START = 'const scriptDirectory = ';
 const MEDIA_MANIFEST_END = 'const LOGIN_MUTATION = ';
+const REFERRAL_POSTER_PRESETS = 'packages/store-management-plugin/src/referral/referral-poster-presets.ts';
+
+/** Compare only the exports consumed by the reviewed poster publisher, never execute historical code. */
+function referralPosterManifestSource(source) {
+    const declarations = [
+        /export const referralPosterCopy = [\s\S]*?\n\} as const;/gu,
+        /export const referralPosterPresets = [\s\S]*?\n\] as const;/gu,
+        /export function referralPosterContentCode\(id: string\): string \{[\s\S]*?\n\}/gu,
+    ].map(pattern => {
+        const matches = Array.from(source.matchAll(pattern));
+        if (matches.length !== 1)
+            throw new Error('Cannot isolate the referral poster manifest for release review');
+        return matches[0][0];
+    });
+    if (/^import\s/mu.test(source))
+        throw new Error('Cannot isolate imported referral poster data for release review');
+    return declarations.join('\n');
+}
 
 function storefrontMediaManifestSource(source) {
     const start = source.indexOf(MEDIA_MANIFEST_START);
@@ -33,7 +51,11 @@ function hasPath(changedFiles, predicate) {
     return changedFiles.some(predicate);
 }
 
-function validateManagedReleaseScope(files, releaseScope, { storefrontMediaManifestChanged = true } = {}) {
+function validateManagedReleaseScope(
+    files,
+    releaseScope,
+    { storefrontMediaManifestChanged = true, referralPosterManifestChanged = true } = {},
+) {
     const authVisualChange = files.includes('packages/dev-server/scripts/sync-auth-visuals.mjs');
     const brandChange = hasPath(
         files,
@@ -60,7 +82,7 @@ function validateManagedReleaseScope(files, releaseScope, { storefrontMediaManif
         file =>
             file === 'packages/dev-server/scripts/sync-referral-posters.mjs' ||
             file.startsWith('packages/dev-server/assets/referral-posters/') ||
-            file === 'packages/store-management-plugin/src/referral/referral-poster-presets.ts',
+            (file === REFERRAL_POSTER_PRESETS && referralPosterManifestChanged),
     );
     const managedStorefrontChanges = files.filter(
         file =>
@@ -211,6 +233,16 @@ export function inspectProductionReleaseImpact({ baseSha, targetSha, releaseScop
                 }),
             );
         inspection.storefrontMediaManifestChanged = readManifest(baseSha) !== readManifest(targetSha);
+    }
+    if (changedFiles.includes(REFERRAL_POSTER_PRESETS)) {
+        const readManifest = sha =>
+            referralPosterManifestSource(
+                git('git', ['show', `${sha}:${REFERRAL_POSTER_PRESETS}`], {
+                    encoding: 'utf8',
+                    maxBuffer: 4 * 1024 * 1024,
+                }),
+            );
+        inspection.referralPosterManifestChanged = readManifest(baseSha) !== readManifest(targetSha);
     }
     return classifyProductionReleaseImpact(changedFiles, releaseScope, inspection);
 }
