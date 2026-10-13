@@ -10,6 +10,10 @@ import {
 } from 'lucide-react';
 import React from 'react';
 import { missingDisplayLabel } from '../../../../common/src/display-localization';
+import {
+    DEFAULT_ARTWORK_POSTER_DESIGN,
+    validateArtworkPosterDesign,
+} from '../../../../common/src/referral-poster-design';
 import { referralStatusDisplayLabel as statusLabel } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
@@ -463,7 +467,13 @@ export function posterDraft(source: ReferralPosterRecord | 'NEW'): PosterDraft {
         name: source === 'NEW' ? '' : source.id ? source.name : `${source.name} · 本店`,
         enabled: source === 'NEW' ? false : source.enabled,
         position: source === 'NEW' ? 0 : source.position,
-        layoutVariant: 'STANDARD_CENTER',
+        layoutVariant: source === 'NEW' ? 'ARTWORK_QR' : source.layoutVariant,
+        design:
+            source === 'NEW'
+                ? structuredClone(DEFAULT_ARTWORK_POSTER_DESIGN)
+                : source.design
+                  ? structuredClone(source.design)
+                  : null,
         posterBackgroundAssetId: source === 'NEW' ? '' : (source.posterBackgroundAsset?.id ?? ''),
         shareBackgroundAssetId: source === 'NEW' ? '' : (source.shareBackgroundAsset?.id ?? ''),
         foregroundColor: source === 'NEW' ? '#152c49' : source.foregroundColor,
@@ -472,14 +482,20 @@ export function posterDraft(source: ReferralPosterRecord | 'NEW'): PosterDraft {
     };
 }
 export function posterDraftError(draft: PosterDraft) {
-    if (
-        ![draft.name, draft.titleZh, draft.headlineZh, draft.rewardTextZh, draft.siteIntroZh].every(value =>
-            value.trim(),
-        )
-    )
-        return '模板名称和中文文案不能为空，英文会在后台补齐';
+    if (!draft.name.trim()) return '请填写模板名称';
     if (!Number.isInteger(draft.position) || draft.position < 0 || draft.position > 100_000)
         return '排序必须是0到100000的整数';
+    if (draft.layoutVariant === 'ARTWORK_QR') {
+        const designError = validateArtworkPosterDesign(draft.design);
+        if (designError) return designError;
+        if (!draft.posterBackgroundAssetId) return '请上传或选择完整设计图';
+        if (!draft.headlineZh.trim()) return '请填写中文分享文案，英文会在后台补齐';
+        return '';
+    }
+    if (
+        ![draft.titleZh, draft.headlineZh, draft.rewardTextZh, draft.siteIntroZh].every(value => value.trim())
+    )
+        return '模板名称和中文文案不能为空，英文会在后台补齐';
     if (!Number.isInteger(draft.overlayOpacity) || draft.overlayOpacity < 0 || draft.overlayOpacity > 80)
         return '遮罩透明度必须是0到80的整数';
     return '';

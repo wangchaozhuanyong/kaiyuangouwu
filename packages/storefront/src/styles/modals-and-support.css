@@ -31,6 +31,8 @@
     position: relative;
     width: 100%;
     max-width: 360px;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
     background: var(--surface);
     color: var(--text);
     border-radius: var(--skin-hero-radius);
@@ -39,14 +41,17 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     border: var(--skin-card-outline, 0);
 }
 
 .poster-close-btn {
-    position: absolute;
-    top: 14px;
-    right: 14px;
+    position: sticky;
+    top: 0;
+    align-self: flex-end;
+    flex-shrink: 0;
+    margin-bottom: -48px;
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -167,6 +172,7 @@
     align-items: center;
     justify-content: space-between;
     padding-top: 8px;
+    gap: 12px;
 }
 
 .poster-scan-prompt {
@@ -188,12 +194,28 @@
 }
 
 .poster-qrcode {
-    width: 58px;
-    height: 58px;
-    border-radius: 6px;
-    border: 1px solid #e2e8f0;
-    padding: 2px;
+    width: 120px;
+    height: auto;
+    max-width: 40%;
+    aspect-ratio: 1;
+    flex-shrink: 0;
+    object-fit: contain;
+    border-radius: 50%;
+    border: 0;
+    padding: 0;
     background: #ffffff;
+}
+
+.poster-qr-status {
+    color: var(--text-muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+
+.poster-qr-status button {
+    color: var(--accent);
+    text-decoration: underline;
+    min-height: 44px;
 }
 
 .poster-actions-row {
@@ -260,8 +282,9 @@
 /* Keep the 9:16 canvas intact when the mobile viewport height is the limiting axis. */
 .referral-poster-preview {
     aspect-ratio: 9 / 16;
-    width: min(100%, calc(54vh * 9 / 16));
-    width: min(100%, calc(54dvh * 9 / 16));
+    aspect-ratio: var(--poster-ratio, 0.5625);
+    width: min(100%, calc(54vh * var(--poster-ratio, 0.5625)));
+    width: min(100%, calc(54dvh * var(--poster-ratio, 0.5625)));
 }
 
 .referral-poster-dialog {

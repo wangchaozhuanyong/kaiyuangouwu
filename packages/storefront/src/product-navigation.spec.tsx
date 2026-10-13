@@ -1,3 +1,4 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -5,6 +6,7 @@ import { minimumProductPrice } from './catalog-page-utils';
 import { ProductCard } from './components/common/product-card';
 import { buildProductRowSmartInfo, ProductRow } from './components/common/product-row';
 import { ProductDetailPage } from './pages/product-detail-page';
+import { createStorefrontQueryClient } from './query-client';
 import { STOREFRONT_IMAGE_SIZES } from './responsive-image';
 import { SharePosterModal } from './share-poster-modal';
 import { ProductDetailPageContext } from './storefront-page-contexts';
@@ -324,15 +326,19 @@ describe('product image navigation layers', () => {
             </ProductDetailPageContext.Provider>,
         );
         const poster = renderToStaticMarkup(
-            <SharePosterModal
-                product={product}
-                storefrontName="Store"
-                logoUrl={null}
-                language="zh"
-                formattedPrice="¥99"
-                onClose={vi.fn()}
-                onNotify={vi.fn()}
-            />,
+            <QueryClientProvider client={createStorefrontQueryClient()}>
+                <SharePosterModal
+                    api={{ referralProgram: vi.fn() } as unknown as import('./api').ShopApi}
+                    market={market}
+                    product={product}
+                    storefrontName="Store"
+                    logoUrl={null}
+                    language="zh"
+                    formattedPrice="¥99"
+                    onClose={vi.fn()}
+                    onNotify={vi.fn()}
+                />
+            </QueryClientProvider>,
         );
 
         for (const markup of [card, row, poster]) {

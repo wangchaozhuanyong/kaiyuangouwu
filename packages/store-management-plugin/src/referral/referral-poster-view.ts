@@ -20,6 +20,7 @@ import { convertChannelAmount } from '../store-currency-price-selection-strategy
 
 import { normalizeReferralPosterInput, SaveReferralPosterTemplateInput } from './referral-input';
 import {
+    artworkPosterCopyPaths,
     effectivePosterDefault,
     enabledPosterIds,
     referralPosterContentCode,
@@ -51,6 +52,12 @@ export class ReferralPosterView {
                 ? templates
                 : templates.filter(template =>
                       customerFacingContentRegistry.ReferralPosterTemplate.fields.every(field => {
+                          if (
+                              template.layoutVariant === 'ARTWORK_QR' &&
+                              !artworkPosterCopyPaths.includes(field.path)
+                          ) {
+                              return true;
+                          }
                           const values = template as unknown as Record<string, string>;
                           return (
                               !values[`${field.path}Zh`]?.trim() ||
@@ -168,6 +175,20 @@ export class ReferralPosterView {
         const normalized = normalizeReferralPosterInput(input);
         const posterBackgroundAsset = await this.assetForChannel(ctx, input.posterBackgroundAssetId);
         const shareBackgroundAsset = await this.assetForChannel(ctx, input.shareBackgroundAssetId);
+        if (normalized.layoutVariant === 'ARTWORK_QR' && normalized.design?.version === 3) {
+            if (!posterBackgroundAsset) throw new UserInputError('请上传成品海报图片');
+            const { width, height } = normalized.design.canvas;
+            // Artwork renders only the poster image; preserve an unused legacy share image unchanged.
+            if (
+                !Number.isFinite(posterBackgroundAsset.width) ||
+                !Number.isFinite(posterBackgroundAsset.height) ||
+                posterBackgroundAsset.width <= 0 ||
+                posterBackgroundAsset.height <= 0 ||
+                posterBackgroundAsset.width * height !== posterBackgroundAsset.height * width
+            ) {
+                throw new UserInputError('海报图片宽高比必须与画布规格一致，请按后台规格重新导出图片');
+            }
+        }
         return {
             ...normalized,
             posterBackgroundAssetId: posterBackgroundAsset?.id ?? null,

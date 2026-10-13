@@ -5,6 +5,22 @@ const copy = (zh: string, en: string): Copy => ({ zh, en });
 
 /** Only reviewed customer-facing copy crosses the error presentation boundary. Keep raw errors intact. */
 export const storefrontErrorCopy = {
+    POSTER_IMAGE_RATIO: copy(
+        '海报图片比例不符，请联系店铺调整模板。',
+        'The poster artwork has the wrong proportions. Please contact the store.',
+    ),
+    POSTER_IMAGE_UNAVAILABLE: copy(
+        '海报图片暂时无法加载，请重试。',
+        'The poster image could not load. Please try again.',
+    ),
+    POSTER_DESIGN_INVALID: copy(
+        '海报规格配置无效，请联系店铺调整模板。',
+        'The poster layout is invalid. Please contact the store.',
+    ),
+    POSTER_QR_TOO_SMALL: copy(
+        '二维码区域太小，无法清晰显示此链接，请联系店铺调整模板。',
+        'The QR area is too small for this link. Please contact the store.',
+    ),
     UNKNOWN: copy(
         '操作暂时未能完成，请稍后重试。',
         'The request could not be completed. Please try again later.',

@@ -450,12 +450,16 @@ export const REFERRAL_PROGRAM_FRAGMENT = gql`
                 name
                 preview
                 source
+                width
+                height
             }
             shareBackgroundAsset {
                 id
                 name
                 preview
                 source
+                width
+                height
             }
             titleZh
             titleEn
@@ -517,12 +521,16 @@ export const REFERRAL_PROGRAM_FRAGMENT = gql`
                 name
                 preview
                 source
+                width
+                height
             }
             shareBackgroundAsset {
                 id
                 name
                 preview
                 source
+                width
+                height
             }
             titleZh
             titleEn
@@ -966,7 +974,14 @@ export interface ReferralPosterRecord {
     enabled: boolean;
     position: number;
     layoutVariant: string;
-    posterBackgroundAsset: { id: string; name: string; preview: string; source: string } | null;
+    posterBackgroundAsset: {
+        id: string;
+        name: string;
+        preview: string;
+        source: string;
+        width?: number;
+        height?: number;
+    } | null;
     shareBackgroundAsset: { id: string; name: string; preview: string; source: string } | null;
     titleZh: string;
     titleEn: string;

@@ -1,6 +1,11 @@
 import { useMutation } from '@apollo/client/react';
 import { AlertCircle, ChevronRight, LoaderCircle, Search } from 'lucide-react';
 import { useDeferredValue, useState } from 'react';
+import {
+    DEFAULT_ARTWORK_POSTER_DESIGN,
+    isArtworkPosterDesign,
+    type ArtworkPosterDesign,
+} from '../../../../common/src/referral-poster-design';
 import { posterLayoutFields, type PosterCopyField } from '../../../../storefront/src/referral-poster-layout';
 import { sensitiveActionContext } from '../../apollo';
 import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
@@ -20,10 +25,13 @@ import {
 } from '../../graphql/marketing.graphql';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { omitUnchangedEnglish } from '../../utils/english-edit-intent';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { formatMoney } from '../Sales/sales-utils';
 import { LoadingState, Modal } from '../Settings/settings-ui';
+import { artworkAssetRatioError } from './poster-artwork-helpers';
+import { PosterArtworkEditor } from './PosterArtworkEditor';
 import { withdrawalActionLabel, withdrawalSuccess } from './referral-display';
 import {
     FormSelect,
@@ -32,13 +40,12 @@ import {
     NumberField,
     SmallMetric,
     TextField,
-    ToggleField,
     errorText,
     posterDraft,
     posterDraftError,
     signedMoney,
 } from './referral-ui';
-import { ReferralPosterPreview } from './ReferralPosterPreview';
+import { ReferralPosterPreview, type PosterPreviewBrand } from './ReferralPosterPreview';
 import { PosterAssetChoice, PosterAssetLookupResult, PosterDraft, WithdrawalAction } from './referrals-types';
 
 export function WithdrawalActionDialog({
@@ -458,6 +465,7 @@ export function PosterEditor({
     source,
     programUpdatedAt,
     rewardRate,
+    brand,
     onClose,
     onSaved,
     onError,
@@ -466,6 +474,7 @@ export function PosterEditor({
     source: ReferralPosterRecord | 'NEW';
     programUpdatedAt: string;
     rewardRate: number;
+    brand?: PosterPreviewBrand;
     onClose: () => void;
     onSaved: (message: string) => Promise<void>;
     onError: (message: string) => void;
@@ -476,6 +485,14 @@ export function PosterEditor({
     const [expectedUpdatedAt] = useState(programUpdatedAt);
     const [originalDraft] = useState(() => posterDraft(source));
     const [draft, setDraft] = useState<PosterDraft>(() => posterDraft(source));
+    const dirty = JSON.stringify(draft) !== JSON.stringify(originalDraft);
+    const confirmDiscard = useUnsavedChangesWarning(dirty, '海报还有未保存的修改，确定放弃吗？');
+    const versionChanged = expectedUpdatedAt !== programUpdatedAt;
+    const artwork = draft.layoutVariant === 'ARTWORK_QR';
+    const design =
+        draft.design?.version === 3 && draft.design.canvas && draft.design.qr
+            ? (draft.design as ArtworkPosterDesign)
+            : DEFAULT_ARTWORK_POSTER_DESIGN;
     const [assetSearch, setAssetSearch] = useState('');
     const [previewValidation, setPreviewValidation] = useState({ pending: true, error: '' });
     const [knownAssets, setKnownAssets] = useState<PosterAssetChoice[]>(() => {
@@ -533,11 +550,22 @@ export function PosterEditor({
         setAssetSearch('');
         if (canReadAssets) void assetQuery.refetch().catch(() => undefined);
     };
-    const validation = posterDraftError(draft);
+    const selectedAsset = assets.find(asset => asset.id === draft.posterBackgroundAssetId);
+    const ratioError =
+        artwork && isArtworkPosterDesign(draft.design)
+            ? artworkAssetRatioError(draft.design, selectedAsset?.width, selectedAsset?.height)
+            : '';
+    const validation = posterDraftError(draft) || ratioError;
+    const closeEditor = () => {
+        if (createState.loading || updateState.loading) return;
+        if (confirmDiscard()) onClose();
+    };
     const submit = async () => {
         if (createState.loading || updateState.loading) return;
+        if (versionChanged)
+            return onError('店铺分享设置已更新。请保留所需文案，关闭并重新载入模板后再保存。');
         if (validation || previewValidation.pending || previewValidation.error)
-            return onError(validation || previewValidation.error || '请等待中英文排版检查');
+            return onError(validation || previewValidation.error || '请等待海报与二维码检查');
         const input = {
             ...omitUnchangedEnglish(draft, originalDraft),
             posterBackgroundAssetId: draft.posterBackgroundAssetId || null,
@@ -549,9 +577,11 @@ export function PosterEditor({
                 await update({ variables: { input: { ...contentInput, expectedUpdatedAt } } });
             } else {
                 const { id: _id, ...createInput } = input;
-                await create({ variables: { input: createInput } });
+                await create({ variables: { input: { ...createInput, enabled: false } } });
             }
-            await onSaved('中文海报已保存，英文待同步');
+            await onSaved(
+                draft.id ? '海报模板已保存，英文文案待同步' : '海报模板已保存为停用状态，预览确认后可启用',
+            );
         } catch (error) {
             onError(errorText(error));
         }
@@ -559,18 +589,24 @@ export function PosterEditor({
     return (
         <Modal
             title={draft.id ? '编辑分享海报模板' : '新建分享海报模板'}
-            description="按固定区域编辑中英文文案。店名、网址、二维码自动读取当前店铺；奖励比例使用 {rewardRate}。背景请使用无字的 1080×1920 图片。"
-            onClose={onClose}
+            description="先设定画布与圆形二维码位置，再下载参考图、设计并上传。新模板保存后默认停用。"
+            width="max-w-6xl"
+            onClose={closeEditor}
         >
             {error && (
                 <p role="alert" className="mb-4 rounded-lg bg-rose-50 p-3 text-xs text-rose-700">
                     {error}
                 </p>
             )}
-            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_260px]">
+            {versionChanged && (
+                <p role="alert" className="mb-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                    店铺分享设置已被更新，当前草稿已保留。请保留需要的文案，关闭后重新编辑最新模板；当前版本不能保存。
+                </p>
+            )}
+            <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_300px]">
                 <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                     <h3 className="sm:col-span-2 text-xs font-bold text-slate-700">
-                        01 · 基本信息与背景{' '}
+                        01 · 模板与完整设计图{' '}
                         <FeatureHelpButton topic="marketing.poster-templates" title="海报基本信息与背景" />
                     </h3>
                     <TextField
@@ -584,6 +620,35 @@ export function PosterEditor({
                         value={String(draft.position)}
                         onChange={value => setDraft({ ...draft, position: Number(value) })}
                     />
+                    <div className="sm:col-span-2">
+                        <FormSelect
+                            label="设计模式"
+                            value={artwork ? 'ARTWORK_QR' : 'LEGACY'}
+                            onChange={mode =>
+                                setDraft(current => ({
+                                    ...current,
+                                    layoutVariant:
+                                        mode === 'ARTWORK_QR'
+                                            ? mode
+                                            : originalDraft.layoutVariant === 'ARTWORK_QR'
+                                              ? 'STANDARD_CENTER'
+                                              : originalDraft.layoutVariant,
+                                    design:
+                                        mode === 'ARTWORK_QR'
+                                            ? isArtworkPosterDesign(current.design)
+                                                ? current.design
+                                                : structuredClone(DEFAULT_ARTWORK_POSTER_DESIGN)
+                                            : originalDraft.layoutVariant === 'ARTWORK_QR'
+                                              ? null
+                                              : originalDraft.design,
+                                }))
+                            }
+                            options={[
+                                ['ARTWORK_QR', '上传完整设计图 · 只叠加圆形二维码'],
+                                ['LEGACY', '旧版固定排版 · 背景与文字分开编辑'],
+                            ]}
+                        />
+                    </div>
                     <div className="sm:col-span-2">
                         <TextField
                             label="搜索全部图片素材"
@@ -619,7 +684,7 @@ export function PosterEditor({
                     </div>
                     <div>
                         <FormSelect
-                            label="海报背景图"
+                            label={artwork ? '完整设计图 *' : '海报背景图'}
                             value={draft.posterBackgroundAssetId}
                             onChange={posterBackgroundAssetId =>
                                 selectAsset('posterBackgroundAssetId', posterBackgroundAssetId)
@@ -629,118 +694,169 @@ export function PosterEditor({
                         <ImageAssetUploadButton
                             className="mt-2"
                             ariaLabel="上传并设为海报背景图"
-                            label="上传海报背景"
+                            label={artwork ? '上传完整设计图' : '上传海报背景'}
                             onUploaded={uploaded => selectUploadedAsset('posterBackgroundAssetId', uploaded)}
                         />
                     </div>
-                    <div>
-                        <FormSelect
-                            label="分享背景图"
-                            value={draft.shareBackgroundAssetId}
-                            onChange={shareBackgroundAssetId =>
-                                selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
-                            }
-                            options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
-                        />
-                        <ImageAssetUploadButton
-                            className="mt-2"
-                            ariaLabel="上传并设为分享背景图"
-                            label="上传分享背景"
-                            onUploaded={uploaded => selectUploadedAsset('shareBackgroundAssetId', uploaded)}
-                        />
-                    </div>
-                    {posterLayoutFields
-                        .filter(field => field.field.endsWith('Zh'))
-                        .flatMap(field => {
-                            const groups: Partial<Record<string, string>> = {
-                                tag: '02 · 主标题与介绍',
-                                feature1: '03 · 服务卖点',
-                                qrlabel: '04 · 扫码与邀请奖励',
-                                scene1: '05 · 场景标签',
-                                cta: '06 · 行动引导与页脚',
-                            };
-                            return [
-                                groups[field.id] ? (
-                                    <h3
-                                        key={`group-${field.id}`}
-                                        className="sm:col-span-2 border-t border-slate-200 pt-4 text-xs font-bold text-slate-700"
-                                    >
-                                        {groups[field.id]}
-                                        <FeatureHelpButton
-                                            topic="marketing.poster-templates"
-                                            title={groups[field.id]!}
-                                        />
-                                    </h3>
-                                ) : null,
-                                ...(['Zh', 'En'] as const).map(locale => {
-                                    const key = field.field.replace(/Zh$/, locale) as PosterCopyField;
-                                    return (
-                                        <label
-                                            key={key}
-                                            className="block text-[11px] font-bold text-slate-600"
-                                        >
-                                            {field.label} · {locale === 'Zh' ? '中文' : 'English'}（最多{' '}
-                                            {field.lines} 行）
-                                            <AdminTextArea
-                                                value={draft[key]}
-                                                rows={field.lines}
-                                                onChange={event =>
-                                                    setDraft(current => ({
-                                                        ...current,
-                                                        [key]: event.target.value,
-                                                    }))
-                                                }
-                                                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
-                                            />
-                                        </label>
-                                    );
-                                }),
-                            ];
-                        })}
-                    <h3 className="sm:col-span-2 border-t border-slate-200 pt-4 text-xs font-bold text-slate-700">
-                        07 · 样式与显示
-                        <FeatureHelpButton topic="marketing.poster-templates" title="海报样式与显示" />
-                    </h3>
-                    <details className="sm:col-span-2 text-xs text-slate-500">
-                        <summary>历史服务说明字段（保留兼容，不占用卖点区）</summary>
-                        <TextField
-                            label="中文服务说明"
-                            value={draft.serviceTextZh}
-                            onChange={serviceTextZh => setDraft({ ...draft, serviceTextZh })}
-                        />
-                        <TextField
-                            label="英文服务文案"
-                            value={draft.serviceTextEn}
-                            onChange={serviceTextEn => setDraft({ ...draft, serviceTextEn })}
-                        />
-                    </details>
-                    <TextField
-                        label="前景色"
-                        type="color"
-                        value={draft.foregroundColor}
-                        onChange={foregroundColor => setDraft({ ...draft, foregroundColor })}
-                    />
-                    <TextField
-                        label="强调色"
-                        type="color"
-                        value={draft.accentColor}
-                        onChange={accentColor => setDraft({ ...draft, accentColor })}
-                    />
-                    <NumberField
-                        label="遮罩透明度 (%)"
-                        value={draft.overlayOpacity}
-                        min={0}
-                        max={80}
-                        step={1}
-                        onChange={overlayOpacity => setDraft({ ...draft, overlayOpacity })}
-                    />
+                    {!artwork && (
+                        <div>
+                            <FormSelect
+                                label="分享背景图"
+                                value={draft.shareBackgroundAssetId}
+                                onChange={shareBackgroundAssetId =>
+                                    selectAsset('shareBackgroundAssetId', shareBackgroundAssetId)
+                                }
+                                options={[['', '不使用图片'], ...assets.map(asset => [asset.id, asset.name])]}
+                            />
+                            <ImageAssetUploadButton
+                                className="mt-2"
+                                ariaLabel="上传并设为分享背景图"
+                                label="上传分享背景"
+                                onUploaded={uploaded =>
+                                    selectUploadedAsset('shareBackgroundAssetId', uploaded)
+                                }
+                            />
+                        </div>
+                    )}
+                    {artwork && (
+                        <>
+                            <p className="sm:col-span-2 text-xs text-slate-500">
+                                上传与画布同一比例的完整成品图，保留圆形空位。系统只添加用户二维码，不添加标题、卖点或按钮，不裁切底图。图片内的文字不会自动翻译。
+                            </p>
+                            {ratioError && (
+                                <p role="alert" className="sm:col-span-2 text-xs text-rose-600">
+                                    {ratioError}
+                                </p>
+                            )}
+                            <PosterArtworkEditor
+                                design={design}
+                                onChange={design => setDraft(current => ({ ...current, design }))}
+                                backgroundUrl={
+                                    ratioError ? undefined : selectedAsset?.source || selectedAsset?.preview
+                                }
+                                onError={onError}
+                            />
+                            <h3 className="sm:col-span-2 text-xs font-bold text-slate-700">
+                                04 · 复制分享文案（不叠加到图片）
+                            </h3>
+                            <TextField
+                                label="中文分享文案 *"
+                                value={draft.headlineZh}
+                                onChange={headlineZh => setDraft(current => ({ ...current, headlineZh }))}
+                            />
+                            <TextField
+                                label="英文分享文案"
+                                value={draft.headlineEn}
+                                onChange={headlineEn => setDraft(current => ({ ...current, headlineEn }))}
+                            />
+                            <TextField
+                                label="中文奖励说明（可选）"
+                                value={draft.rewardTextZh}
+                                onChange={rewardTextZh => setDraft(current => ({ ...current, rewardTextZh }))}
+                            />
+                            <TextField
+                                label="英文奖励说明（可选）"
+                                value={draft.rewardTextEn}
+                                onChange={rewardTextEn => setDraft(current => ({ ...current, rewardTextEn }))}
+                            />
+                        </>
+                    )}
+                    {!artwork && (
+                        <>
+                            {posterLayoutFields
+                                .filter(field => field.field.endsWith('Zh'))
+                                .flatMap(field => {
+                                    const groups: Partial<Record<string, string>> = {
+                                        tag: '02 · 主标题与介绍',
+                                        feature1: '03 · 服务卖点',
+                                        qrlabel: '04 · 扫码与邀请奖励',
+                                        scene1: '05 · 场景标签',
+                                        cta: '06 · 行动引导与页脚',
+                                    };
+                                    return [
+                                        groups[field.id] ? (
+                                            <h3
+                                                key={`group-${field.id}`}
+                                                className="sm:col-span-2 border-t border-slate-200 pt-4 text-xs font-bold text-slate-700"
+                                            >
+                                                {groups[field.id]}
+                                                <FeatureHelpButton
+                                                    topic="marketing.poster-templates"
+                                                    title={groups[field.id]!}
+                                                />
+                                            </h3>
+                                        ) : null,
+                                        ...(['Zh', 'En'] as const).map(locale => {
+                                            const key = field.field.replace(/Zh$/, locale) as PosterCopyField;
+                                            return (
+                                                <label
+                                                    key={key}
+                                                    className="block text-[11px] font-bold text-slate-600"
+                                                >
+                                                    {field.label} · {locale === 'Zh' ? '中文' : 'English'}
+                                                    （最多 {field.lines} 行）
+                                                    <AdminTextArea
+                                                        value={draft[key]}
+                                                        rows={field.lines}
+                                                        onChange={event =>
+                                                            setDraft(current => ({
+                                                                ...current,
+                                                                [key]: event.target.value,
+                                                            }))
+                                                        }
+                                                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-normal text-slate-900"
+                                                    />
+                                                </label>
+                                            );
+                                        }),
+                                    ];
+                                })}
+                            <h3 className="sm:col-span-2 border-t border-slate-200 pt-4 text-xs font-bold text-slate-700">
+                                07 · 样式与显示
+                                <FeatureHelpButton
+                                    topic="marketing.poster-templates"
+                                    title="海报样式与显示"
+                                />
+                            </h3>
+                            <details className="sm:col-span-2 text-xs text-slate-500">
+                                <summary>历史服务说明字段（保留兼容，不占用卖点区）</summary>
+                                <TextField
+                                    label="中文服务说明"
+                                    value={draft.serviceTextZh}
+                                    onChange={serviceTextZh => setDraft({ ...draft, serviceTextZh })}
+                                />
+                                <TextField
+                                    label="英文服务文案"
+                                    value={draft.serviceTextEn}
+                                    onChange={serviceTextEn => setDraft({ ...draft, serviceTextEn })}
+                                />
+                            </details>
+                            <TextField
+                                label="前景色"
+                                type="color"
+                                value={draft.foregroundColor}
+                                onChange={foregroundColor => setDraft({ ...draft, foregroundColor })}
+                            />
+                            <TextField
+                                label="强调色"
+                                type="color"
+                                value={draft.accentColor}
+                                onChange={accentColor => setDraft({ ...draft, accentColor })}
+                            />
+                            <NumberField
+                                label="遮罩透明度 (%)"
+                                value={draft.overlayOpacity}
+                                min={0}
+                                max={80}
+                                step={1}
+                                onChange={overlayOpacity => setDraft({ ...draft, overlayOpacity })}
+                            />
+                        </>
+                    )}
                     {!draft.id && (
-                        <ToggleField
-                            label="启用模板"
-                            detail="停用后客户端不会提供该模板。"
-                            checked={draft.enabled}
-                            onChange={enabled => setDraft({ ...draft, enabled })}
-                        />
+                        <p className="sm:col-span-2 text-xs text-slate-500">
+                            新模板将保存为停用状态。回到模板列表预览确认后，开启显示并设为默认。
+                        </p>
                     )}
                 </div>
                 <aside className="min-w-0 md:sticky md:top-0 md:self-start">
@@ -748,16 +864,19 @@ export function PosterEditor({
                         draft={draft}
                         assets={assets}
                         rewardRate={rewardRate}
+                        brand={brand}
                         onValidation={setPreviewValidation}
                     />
                 </aside>
             </div>
             {validation && <p className="mt-3 text-xs text-rose-600">{validation}</p>}
             <ModalFooter
-                onCancel={onClose}
+                onCancel={closeEditor}
                 onConfirm={() => void submit()}
                 pending={createState.loading || updateState.loading}
-                disabled={Boolean(validation || previewValidation.error || previewValidation.pending)}
+                disabled={Boolean(
+                    versionChanged || validation || previewValidation.error || previewValidation.pending,
+                )}
                 confirmLabel="保存海报模板"
             />
         </Modal>

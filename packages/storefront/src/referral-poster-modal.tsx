@@ -1,10 +1,11 @@
 import { Check, Copy, Download, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Overlay } from './overlay-host';
 import { referralShareUrl } from './referral-attribution';
 import {
     availablePosterTemplates,
+    posterCanvasSize,
     posterRenderKey,
     renderReferralPoster,
     replacePosterTokens,
@@ -126,6 +127,7 @@ export function ReferralPosterModal({
             });
     }, [selectedId]);
     if (!style) return null;
+    const canvasSize = posterCanvasSize(style);
 
     const copyText = async () => {
         const headline = localized(style.headlineZh, style.headlineEn, isZh);
@@ -196,7 +198,10 @@ export function ReferralPosterModal({
                     )}{' '}
                     {isZh ? '我的邀请码' : 'My invitation code'} {inviteCode}
                 </p>
-                <div className="referral-poster-preview relative mx-auto shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner">
+                <div
+                    className="referral-poster-preview relative mx-auto shrink-0 overflow-hidden rounded-[20px] bg-slate-100 shadow-inner"
+                    style={{ '--poster-ratio': canvasSize.width / canvasSize.height } as CSSProperties}
+                >
                     {posterDataUrl ? (
                         <img
                             className={`size-full object-contain transition-opacity duration-150 ${generating ? 'opacity-70' : 'opacity-100'}`}

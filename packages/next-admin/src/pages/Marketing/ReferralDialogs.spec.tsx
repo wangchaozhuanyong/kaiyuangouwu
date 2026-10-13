@@ -22,7 +22,7 @@ vi.mock('./ReferralPosterPreview', () => ({
 
 afterEach(() => vi.restoreAllMocks());
 
-it('keeps the opening version after a background refresh and preserves the draft on conflict', async () => {
+it('blocks saving a stale opening version and preserves the draft after refresh', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
     const host = document.createElement('div');
     document.body.append(host);
@@ -32,6 +32,7 @@ it('keeps the opening version after a background refresh and preserves the draft
         id: 'poster-1',
         name: 'Local draft',
         enabled: true,
+        layoutVariant: 'STANDARD_CENTER',
         titleZh: '分享',
         titleEn: 'Share',
         headlineEn: 'Share good products',
@@ -61,24 +62,14 @@ it('keeps the opening version after a background refresh and preserves the draft
         await act(async () => render());
         version = '2026-09-06T10:01:00Z';
         await act(async () => render());
-        mocks.update.mockRejectedValueOnce(new Error('CONCURRENT_MODIFICATION: 请重新载入后合并修改'));
         const save = Array.from(host.querySelectorAll('button')).find(button =>
             button.textContent?.includes('保存海报模板'),
         )!;
-        expect(save.disabled).toBe(false);
+        expect(save.disabled).toBe(true);
+        expect(host.textContent).toContain('当前草稿已保留');
         await act(async () => save.click());
-        expect(mocks.update).toHaveBeenCalledWith({
-            variables: {
-                input: expect.objectContaining({
-                    id: 'poster-1',
-                    name: 'Local draft',
-                    expectedUpdatedAt: '2026-09-06T10:00:00Z',
-                }),
-            },
-        });
-        expect(mocks.update.mock.calls[0][0].variables.input).not.toHaveProperty('enabled');
+        expect(mocks.update).not.toHaveBeenCalled();
         expect(onSaved).not.toHaveBeenCalled();
-        expect(onError).toHaveBeenCalledWith(expect.stringContaining('CONCURRENT_MODIFICATION'));
         expect(Array.from(host.querySelectorAll('input')).some(input => input.value === 'Local draft')).toBe(
             true,
         );

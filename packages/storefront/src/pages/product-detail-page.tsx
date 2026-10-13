@@ -911,6 +911,8 @@ export function ProductDetailPage() {
                         >
                             <LazySharePosterModal
                                 embedded
+                                api={api}
+                                market={market}
                                 product={product}
                                 storefrontName={storefrontName}
                                 logoUrl={logoUrl}

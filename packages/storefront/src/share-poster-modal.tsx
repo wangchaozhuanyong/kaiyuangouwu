@@ -1,26 +1,54 @@
+// organize-imports-ignore -- Preserve ESLint import groups and CSS side-effect order.
+import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import QRCode from 'qrcode';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { isArtworkPosterDesign, type PosterQrStyle } from '../../common/src/referral-poster-design';
+
+import { ShopApi } from './api';
 import { SharePosterSurface } from './components/common/share-poster-surface';
+import { languageCodeFor } from './i18n';
+import { storefrontInitialQueryError } from './loading-state';
 import { Overlay } from './overlay-host';
+import { createCircularQrSvgDataUrl } from './poster-qr';
 import { productImage } from './product-media';
+import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { storefrontWebpUrl } from './responsive-image';
 import './styles/modals-and-support.css';
-import { Product, StorefrontLanguage } from './types';
+import { MarketConfig, Product, ReferralProgram, StorefrontLanguage } from './types';
 
-export async function createQrCodeSvgDataUrl(value: string): Promise<string> {
-    const svg = await QRCode.toString(value, {
-        type: 'svg',
-        width: 240,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-        color: { dark: '#0f172a', light: '#ffffff' },
+export function productPosterQrStyle(program: ReferralProgram | undefined): PosterQrStyle {
+    if (!program) return 'minimal';
+    const template = [
+        ...(program.systemPosterTemplateConfigs ?? []).filter(item =>
+            program.posterTemplates.includes(item.id),
+        ),
+        ...(program.posterTemplateConfigs ?? []),
+    ].find(item => item.enabled && item.id === program.defaultPosterTemplate);
+    return isArtworkPosterDesign(template?.design) ? template.design.qr.style : 'minimal';
+}
+
+function loadPosterImage(source: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        if (!source.startsWith('data:')) image.crossOrigin = 'anonymous';
+        const timer = setTimeout(() => reject(new Error('Poster image timed out')), 15000);
+        image.onload = () => {
+            clearTimeout(timer);
+            if (image.naturalWidth > 0) resolve(image);
+            else reject(new Error('Poster image unavailable'));
+        };
+        image.onerror = () => {
+            clearTimeout(timer);
+            reject(new Error('Poster image unavailable'));
+        };
+        image.src = source;
     });
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export function SharePosterModal({
+    api,
+    market,
     product,
     storefrontName,
     logoUrl,
@@ -30,6 +58,8 @@ export function SharePosterModal({
     onNotify,
     embedded = false,
 }: {
+    api: ShopApi;
+    market: MarketConfig;
     product: Product;
     storefrontName: string;
     logoUrl: string | null;
@@ -43,27 +73,68 @@ export function SharePosterModal({
     const posterRef = useRef<HTMLDivElement>(null);
     const [copied, setCopied] = useState(false);
     const [downloading, setDownloading] = useState(false);
-    const [qrCodeUrl, setQrCodeUrl] = useState('');
+    const [qrAttempt, setQrAttempt] = useState(0);
+    const [qrImage, setQrImage] = useState<{ source: string; attempt: number; ready: boolean } | null>(null);
+    const exportBusy = useRef(false);
+    const exportOwner = useRef('');
+    const programQuery = useQuery({
+        queryKey: storefrontQueryKeys.referralProgram(
+            storefrontQueryKeys.market(market),
+            languageCodeFor(language),
+        ),
+        queryFn: ({ signal }) => api.referralProgram(signal),
+        staleTime: ROUTE_QUERY_STALE_TIME,
+        gcTime: PUBLIC_QUERY_GC_TIME,
+    });
 
     const productUrl = typeof window !== 'undefined' ? window.location.href : '';
     const mainImageSource = productImage(product);
     const mainImage = mainImageSource ? storefrontWebpUrl(mainImageSource, 'detail') : '';
-    const storefrontLogo = logoUrl ? storefrontWebpUrl(logoUrl, 'thumbnail') : '';
-
+    const qrStyle = productPosterQrStyle(programQuery.data);
+    const configReady = programQuery.data !== undefined;
+    const qr = useMemo(() => {
+        if (!configReady || !productUrl) return { source: '', error: false };
+        try {
+            return { source: createCircularQrSvgDataUrl(productUrl, qrStyle, 480), error: false };
+        } catch {
+            return { source: '', error: true };
+        }
+    }, [configReady, productUrl, qrStyle, qrAttempt]);
+    const imageMatches = qrImage?.source === qr.source && qrImage?.attempt === qrAttempt;
+    const qrReady = Boolean(qr.source && imageMatches && qrImage?.ready);
+    const qrError =
+        storefrontInitialQueryError(programQuery, language) ||
+        (qr.error || (imageMatches && !qrImage?.ready)
+            ? isZh
+                ? '二维码生成失败，请重试'
+                : 'Could not prepare the QR code. Please retry.'
+            : '');
     useEffect(() => {
-        if (!productUrl) return;
-        let cancelled = false;
-        void createQrCodeSvgDataUrl(productUrl)
-            .then(url => {
-                if (!cancelled) setQrCodeUrl(url);
-            })
-            .catch(() => {
-                if (!cancelled) setQrCodeUrl('');
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [productUrl]);
+        if (!qr.source || qrReady || qrError) return;
+        const timer = setTimeout(() => {
+            setQrImage({ source: qr.source, attempt: qrAttempt, ready: false });
+        }, 15000);
+        return () => clearTimeout(timer);
+    }, [qr.source, qrAttempt, qrReady, qrError]);
+    exportOwner.current = JSON.stringify([
+        storefrontQueryKeys.market(market),
+        language,
+        product.id,
+        productUrl,
+        qr.source,
+    ]);
+    useEffect(
+        () => () => {
+            exportOwner.current = '';
+        },
+        [],
+    );
+
+    const retryQr = () => {
+        setQrImage(null);
+        setQrAttempt(attempt => attempt + 1);
+        if (!configReady) void programQuery.refetch({ cancelRefetch: false });
+    };
 
     // 复制图文口令
     const copyShareText = async () => {
@@ -82,10 +153,15 @@ export function SharePosterModal({
 
     // 保存海报图片 (Canvas 离线高精度绘制与下载)
     const downloadPoster = async () => {
+        if (!qrReady || exportBusy.current) return;
+        exportBusy.current = true;
+        const owner = exportOwner.current;
         setDownloading(true);
         try {
+            // The displayed SVG is also the export source; a failed code can never produce a saved poster.
+            const qrImg = await loadPosterImage(qr.source);
             const canvas = document.createElement('canvas');
-            const scale = 2; // 2x 视网膜高清导出
+            const scale = 4;
             canvas.width = 360 * scale;
             canvas.height = 540 * scale;
             const ctx = canvas.getContext('2d');
@@ -114,22 +190,18 @@ export function SharePosterModal({
             ctx.fillText(isZh ? '✓ 商品信息 · 扫码直达' : '✓ Product details · Scan to view', 24, 58);
 
             // 3. 商品大图
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.src = mainImage;
-
-            await new Promise(resolve => {
-                img.onload = resolve;
-                img.onerror = resolve;
-            });
+            const img = mainImage ? await loadPosterImage(mainImage).catch(() => null) : null;
 
             // 绘制商品图 (带圆角和阴影)
             ctx.save();
             ctx.beginPath();
             ctx.roundRect(24, 76, 312, 240, 12);
             ctx.clip();
-            if (img.complete && img.naturalWidth > 0) {
-                ctx.drawImage(img, 24, 76, 312, 240);
+            if (img) {
+                const fit = Math.min(312 / img.naturalWidth, 240 / img.naturalHeight);
+                const width = img.naturalWidth * fit;
+                const height = img.naturalHeight * fit;
+                ctx.drawImage(img, 24 + (312 - width) / 2, 76 + (240 - height) / 2, width, height);
             } else {
                 ctx.fillStyle = '#f1f5f9';
                 ctx.fillRect(24, 76, 312, 240);
@@ -147,28 +219,21 @@ export function SharePosterModal({
             ctx.fillText(displayName, 24, 376);
 
             // 5. 底部二维码与扫码指引
-            if (qrCodeUrl) {
-                const qrImg = new Image();
-                qrImg.src = qrCodeUrl;
-                await new Promise(resolve => {
-                    qrImg.onload = resolve;
-                    qrImg.onerror = resolve;
-                });
-                ctx.drawImage(qrImg, 246, 420, 90, 90);
-            }
+            ctx.drawImage(qrImg, 216, 396, 120, 120);
 
             ctx.fillStyle = '#64748b';
             ctx.font = '12px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-            ctx.fillText('长按识别或扫码直达', 24, 456);
+            ctx.fillText(isZh ? '扫码直达选购' : 'Scan to explore', 24, 450);
 
             ctx.fillStyle = '#94a3b8';
             ctx.font = '11px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif';
-            ctx.fillText('探索更多优质好物', 24, 476);
+            ctx.fillText(isZh ? '查看商品详情' : 'View product details', 24, 470);
 
             // 触发下载
-            const dataUrl = canvas.toDataURL('image/webp', 0.92);
+            if (exportOwner.current !== owner) return;
+            const dataUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
-            link.download = `${product.name}-海报.webp`;
+            link.download = `${product.name}-海报.png`;
             link.href = dataUrl;
             link.click();
 
@@ -176,6 +241,7 @@ export function SharePosterModal({
         } catch {
             onNotify(isZh ? '海报生成失败，请使用口令分享' : 'Could not export poster');
         } finally {
+            exportBusy.current = false;
             setDownloading(false);
         }
     };
@@ -188,7 +254,13 @@ export function SharePosterModal({
             language={language}
             formattedPrice={formattedPrice}
             previewRef={posterRef}
-            qrCodeUrl={qrCodeUrl}
+            qrCodeUrl={qr.source}
+            qrReady={qrReady}
+            qrError={qrError}
+            qrAttempt={qrAttempt}
+            onQrLoad={() => setQrImage({ source: qr.source, attempt: qrAttempt, ready: true })}
+            onQrError={() => setQrImage({ source: qr.source, attempt: qrAttempt, ready: false })}
+            onQrRetry={retryQr}
             copied={copied}
             downloading={downloading}
             onDownload={() => void downloadPoster()}

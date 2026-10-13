@@ -743,17 +743,18 @@ export const adminApiExtensions = gql`
         enabled: Boolean!
         position: Int!
         layoutVariant: String!
+        design: JSON
         posterBackgroundAssetId: ID
         shareBackgroundAssetId: ID
-        titleZh: String!
+        titleZh: String
         titleEn: String
         headlineZh: String!
         headlineEn: String
-        rewardTextZh: String!
+        rewardTextZh: String
         rewardTextEn: String
-        siteIntroZh: String!
+        siteIntroZh: String
         siteIntroEn: String
-        serviceTextZh: String!
+        serviceTextZh: String
         serviceTextEn: String
         featureOneTitleZh: String
         featureOneTitleEn: String
@@ -798,17 +799,18 @@ export const adminApiExtensions = gql`
         name: String!
         position: Int!
         layoutVariant: String!
+        design: JSON
         posterBackgroundAssetId: ID
         shareBackgroundAssetId: ID
-        titleZh: String!
+        titleZh: String
         titleEn: String
         headlineZh: String!
         headlineEn: String
-        rewardTextZh: String!
+        rewardTextZh: String
         rewardTextEn: String
-        siteIntroZh: String!
+        siteIntroZh: String
         siteIntroEn: String
-        serviceTextZh: String!
+        serviceTextZh: String
         serviceTextEn: String
         featureOneTitleZh: String
         featureOneTitleEn: String

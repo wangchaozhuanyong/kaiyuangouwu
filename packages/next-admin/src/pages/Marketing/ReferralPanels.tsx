@@ -869,7 +869,7 @@ export function PostersPanel({
                                 topic="marketing.poster-templates"
                                 title="店铺自定义海报模板"
                                 description={
-                                    '上传您自己设计的专属背景图（建议尺寸 1080×1920 竖版）。开启开关后，买家在前台即可选用该海报。'
+                                    '每张模板可设置画布规格和固定圆形二维码区域，再上传完整设计图。新模板默认停用，确认后可启用并设为默认。'
                                 }
                             />
                         </h2>
@@ -877,13 +877,7 @@ export function PostersPanel({
                     <AdminButton
                         type="button"
                         disabled={!canCreate || isProgramBusy}
-                        onClick={() =>
-                            onEdit(
-                                program.systemPosterTemplateConfigs[0]
-                                    ? { ...program.systemPosterTemplateConfigs[0], id: '', enabled: false }
-                                    : 'NEW',
-                            )
-                        }
+                        onClick={() => onEdit('NEW')}
                         className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"
                     >
                         <Plus className="h-3.5 w-3.5" />
@@ -893,6 +887,11 @@ export function PostersPanel({
                 <div className="mt-4 grid gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                     {program.posterTemplateConfigs.map(template => {
                         const isDefault = program.defaultPosterTemplate === template.id;
+                        const artwork = template.layoutVariant === 'ARTWORK_QR';
+                        const dimensions =
+                            artwork && template.design?.canvas
+                                ? template.design.canvas
+                                : { width: 1080, height: 1920 };
                         return (
                             <article
                                 key={template.id}
@@ -900,28 +899,33 @@ export function PostersPanel({
                             >
                                 <div>
                                     <div
-                                        className="aspect-[16/9] bg-slate-100"
+                                        className="bg-slate-100"
                                         style={{
+                                            aspectRatio: artwork
+                                                ? `${dimensions.width} / ${dimensions.height}`
+                                                : '16 / 9',
                                             background: template.posterBackgroundAsset
-                                                ? `url(${template.posterBackgroundAsset.preview}) center/cover`
+                                                ? `url(${template.posterBackgroundAsset.preview}) center/${artwork ? 'contain' : 'cover'} no-repeat`
                                                 : `linear-gradient(135deg, ${template.accentColor}, ${template.foregroundColor})`,
                                         }}
                                     >
-                                        <div
-                                            className="flex h-full items-end p-3"
-                                            style={{
-                                                backgroundColor: `rgba(15,23,42,${template.overlayOpacity / 100})`,
-                                            }}
-                                        >
-                                            <div style={{ color: template.foregroundColor }}>
-                                                <div className="text-[11px] font-bold">
-                                                    {template.titleZh}
-                                                </div>
-                                                <div className="mt-0.5 text-sm font-bold">
-                                                    {template.headlineZh}
+                                        {!artwork && (
+                                            <div
+                                                className="flex h-full items-end p-3"
+                                                style={{
+                                                    backgroundColor: `rgba(15,23,42,${template.overlayOpacity / 100})`,
+                                                }}
+                                            >
+                                                <div style={{ color: template.foregroundColor }}>
+                                                    <div className="text-[11px] font-bold">
+                                                        {template.titleZh}
+                                                    </div>
+                                                    <div className="mt-0.5 text-sm font-bold">
+                                                        {template.headlineZh}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        )}
                                     </div>
                                     <div className="p-3 space-y-1">
                                         <div className="flex items-center justify-between">
@@ -946,7 +950,8 @@ export function PostersPanel({
                                             </div>
                                         </div>
                                         <p className="text-[10px] text-slate-400">
-                                            移动端 1080×1920 · 排序 {template.position}
+                                            {dimensions.width}×{dimensions.height} ·{' '}
+                                            {artwork ? '完整设计图' : '固定排版'} · 排序 {template.position}
                                         </p>
                                     </div>
                                 </div>
@@ -965,7 +970,7 @@ export function PostersPanel({
                                             className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                                         />
                                     </label>
-                                    <div className="grid grid-cols-3 gap-1">
+                                    <div className="grid grid-cols-2 gap-1">
                                         <AdminButton
                                             type="button"
                                             onClick={() => onEdit(template)}
@@ -974,6 +979,14 @@ export function PostersPanel({
                                         >
                                             <Edit3 className="h-3 w-3" />
                                             编辑
+                                        </AdminButton>
+                                        <AdminButton
+                                            type="button"
+                                            disabled={!canCreate || isProgramBusy}
+                                            onClick={() => onEdit({ ...template, id: '', enabled: false })}
+                                            className="rounded-lg border border-slate-200 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                                        >
+                                            复制模板
                                         </AdminButton>
                                         <AdminButton
                                             type="button"

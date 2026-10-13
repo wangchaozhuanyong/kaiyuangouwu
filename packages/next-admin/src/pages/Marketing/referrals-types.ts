@@ -1,4 +1,4 @@
-import { ReferralReportsResult } from '../../graphql/marketing.graphql';
+import { ReferralPosterRecord, ReferralReportsResult } from '../../graphql/marketing.graphql';
 
 export const REFERRAL_TABS = {
     settings: 'SETTINGS',
@@ -48,6 +48,7 @@ export interface PosterDraft {
     enabled: boolean;
     position: number;
     layoutVariant: string;
+    design?: ReferralPosterRecord['design'];
     posterBackgroundAssetId: string;
     shareBackgroundAssetId: string;
     titleZh: string;
