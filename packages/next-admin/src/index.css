@@ -29,6 +29,13 @@
     font-size: 0.75rem;
 }
 
+@layer base {
+    /* Override browser-centered headers while preserving explicit alignment utilities. */
+    :where(.admin-compact-table) > thead > tr > th {
+        text-align: inherit;
+    }
+}
+
 .admin-compact-table > :is(thead, tbody) > tr > :is(th, td) {
     padding-inline: 0.75rem;
     white-space: nowrap;
