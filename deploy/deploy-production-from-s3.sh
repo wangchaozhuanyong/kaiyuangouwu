@@ -319,9 +319,39 @@ fi
 referral_poster_change=false
 if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
     packages/dev-server/scripts/sync-referral-posters.mjs \
-    packages/dev-server/assets/referral-posters/ \
-    packages/store-management-plugin/src/referral/referral-poster-presets.ts; then
+    packages/dev-server/assets/referral-posters/; then
     referral_poster_change=true
+fi
+if ! git diff --quiet "${deployed_sha}" "${target_sha}" -- \
+    packages/store-management-plugin/src/referral/referral-poster-presets.ts; then
+    referral_poster_manifest_snapshot() {
+        # Match the reviewed classifier's three publisher inputs without
+        # executing either revision's TypeScript or unrelated runtime helpers.
+        git show "${1}:packages/store-management-plugin/src/referral/referral-poster-presets.ts" | python3 -c '
+import re
+import sys
+
+source = sys.stdin.read()
+patterns = (
+    r"export const referralPosterCopy = [\s\S]*?\n\} as const;",
+    r"export const referralPosterPresets = [\s\S]*?\n\] as const;",
+    r"export function referralPosterContentCode\(id: string\): string \{[\s\S]*?\n\}",
+)
+if re.search(r"^import\s", source, re.MULTILINE):
+    raise SystemExit(1)
+declarations = [re.findall(pattern, source) for pattern in patterns]
+if any(len(matches) != 1 for matches in declarations):
+    raise SystemExit(1)
+print("\n".join(matches[0] for matches in declarations))
+'
+    }
+    base_poster_manifest="$(referral_poster_manifest_snapshot "${deployed_sha}")" ||
+        fail 'could not inspect the deployed referral poster manifest'
+    target_poster_manifest="$(referral_poster_manifest_snapshot "${target_sha}")" ||
+        fail 'could not inspect the target referral poster manifest'
+    if [[ "${base_poster_manifest}" != "${target_poster_manifest}" ]]; then
+        referral_poster_change=true
+    fi
 fi
 if [[ "${referral_poster_change}" == "true" && "${reviewed_referral_posters}" == "none" ]]; then
     fail 'managed referral posters changed; select the reviewed referral poster scope'
