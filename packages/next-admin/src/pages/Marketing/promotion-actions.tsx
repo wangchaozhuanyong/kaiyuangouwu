@@ -57,7 +57,7 @@ export function CouponAppearanceDialog({
                                 aria-hidden="true"
                             >
                                 <strong className="text-xl font-bold tabular-nums">50</strong>
-                                <span className="border-l border-dashed border-current pl-2 text-[10px] font-medium">
+                                <span className="border-l border-dashed pl-2 text-[10px] font-medium">
                                     优惠券
                                 </span>
                             </span>
