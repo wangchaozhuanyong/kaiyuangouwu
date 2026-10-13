@@ -20,6 +20,7 @@ export function ProductCard({
     eager = priority,
     imageSizes,
     appearance = 'card',
+    responsiveRow = false,
 }: {
     product: Product;
     market: MarketConfig;
@@ -32,17 +33,20 @@ export function ProductCard({
     eager?: boolean;
     imageSizes?: string;
     appearance?: 'card' | 'plain' | 'gallery' | 'mosaic';
+    responsiveRow?: boolean;
 }) {
     const isZh = language === 'zh';
     const gallery = appearance === 'gallery' || appearance === 'mosaic';
     const variant = lowestPricedProductVariant(product);
     const availability = productListingAvailability(product.variants, language);
     const stockLabel = availability.label;
-    const subtitle = resolveProductSubtitle(product, 26, true);
+    const subtitle = resolveProductSubtitle(product, responsiveRow ? 48 : 26, !responsiveRow);
     const smartInfo = buildProductRowSmartInfo(product, language);
 
     return (
-        <article className={`product-card${appearance !== 'card' ? ` is-${appearance}` : ''}`}>
+        <article
+            className={`product-card${appearance !== 'card' ? ` is-${appearance}` : ''}${responsiveRow ? ' is-responsive-row' : ''}`}
+        >
             <ProductDetailLink
                 className="product-card-detail-link"
                 product={product}

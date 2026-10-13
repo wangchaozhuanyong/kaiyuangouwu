@@ -4043,18 +4043,13 @@ html[lang='en'] .primary-category-image {
 /* One responsive first-frame structure; hidden shortcut images remain native lazy reads. */
 @media (max-width: 1023px) {
     .home-intro-grid .desktop-quick-row,
-    .home-intro-grid .desktop-quick-pagination,
-    .responsive-home-header-placeholder {
+    .home-intro-grid .desktop-quick-pagination {
         display: none;
     }
 }
 @media (min-width: 1024px) {
     .home-intro-grid .mobile-quick-tile {
         display: none;
-    }
-    .responsive-home-header-placeholder {
-        display: block;
-        height: var(--desktop-header-height, 72px);
     }
 }
 

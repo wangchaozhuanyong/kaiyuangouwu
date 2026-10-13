@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// organize-imports-ignore -- Keep the repository's type import grouping.
+import type { RouteState } from '../storefront-router';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -34,9 +36,10 @@ describe('storefront bootstrap boundaries', () => {
     let listedProducts: Product[] | undefined;
     let brandFrames: Array<{ code: string; name: string; logo: string | null }>;
     let beforeCommit: (() => void) | undefined;
+    let presentedRoute: RouteState | undefined;
     const dataUpdatedAt = 123_000;
     function Harness() {
-        value = useStorefrontBootstrap();
+        value = useStorefrontBootstrap(presentedRoute);
         brandFrames.push({ code: value.storefrontCode, name: value.storefrontName, logo: value.logoUrl });
         beforeCommit?.();
         return null;
@@ -83,6 +86,7 @@ describe('storefront bootstrap boundaries', () => {
         listedProducts = undefined;
         brandFrames = [];
         beforeCommit = undefined;
+        presentedRoute = undefined;
         queries.read.mockReset().mockImplementation(() => ({
             configQuery: { data: config, error: configError, dataUpdatedAt, refetch: vi.fn() },
             productsQuery: { data: listedProducts, refetch: vi.fn() },
@@ -94,6 +98,20 @@ describe('storefront bootstrap boundaries', () => {
         client.clear();
         localStorage.clear();
         vi.restoreAllMocks();
+    });
+
+    it('uses the presented route language for data and copy on its very first render', () => {
+        presentedRoute = { name: 'product', id: 'p1', publicLanguage: 'zh' };
+        render();
+        expect(value.language).toBe('zh');
+        const frames: Array<[string, string | undefined]> = [];
+        presentedRoute = { name: 'product', id: 'p2', publicLanguage: 'en' };
+        beforeCommit = () =>
+            frames.push([value.language, queries.read.mock.lastCall?.[0].vendureLanguageCode]);
+        render();
+        expect(frames.length).toBeGreaterThan(0);
+        expect(frames.every(([copy, query]) => copy === 'en' && query === 'en')).toBe(true);
+        expect(queries.read.mock.lastCall?.[0].presentedHref).toBe('/en/product?id=p2');
     });
 
     it('keeps public requests gated until a configuration has resolved', () => {

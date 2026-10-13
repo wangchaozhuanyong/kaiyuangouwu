@@ -13,6 +13,12 @@ import { ImagePlaceholder } from './safe-image';
 import { StorefrontPageFrame } from './storefront-page-frame';
 import { type StorefrontFlashSale, type StorefrontSystemAnnouncement } from './types';
 
+// Vitest disables CSS processing by default; use the real resource bytes for the SSR contract.
+vi.mock('./styles/modals-and-support.css?inline', async () => {
+    const { readFileSync } = await import('node:fs');
+    return { default: readFileSync(new URL('./styles/modals-and-support.css', import.meta.url), 'utf8') };
+});
+
 function fixtureValue<T>(value: T | null | undefined): T {
     if (value == null) throw new Error('Expected the synthetic fixture value');
     return value;
@@ -37,7 +43,9 @@ describe('anonymous shared public component server render', () => {
             page.route = '/en/category';
             const timers = vi.getTimerCount();
             const html = await renderPublicPage(page);
-            expect(html).toContain('class="page category-page"');
+            expect(html).toContain(
+                'class="page category-page responsive-category-page desktop-catalog-main"',
+            );
             expect(html).toContain('aria-pressed="true"');
             expect(html).toContain('list-skeleton category-product-list');
             expect(vi.getTimerCount()).toBe(timers);
@@ -76,6 +84,90 @@ describe('anonymous shared public component server render', () => {
             expect(html).toContain(languageCode === 'en' ? 'Skip to content' : '跳到主要内容');
         },
     );
+
+    it.each(['catalog', 'product'] as const)(
+        'renders responsive %s structure before knowing the browser viewport',
+        async kind => {
+            const page = syntheticPage(fixtureStores[0], 'en', kind);
+            const html = await renderPublicPage(page);
+            expect(html).toContain('class="storefront-app desktop-store-layout"');
+            expect(html).toContain('class="desktop-shell-frame"');
+            expect(html).toContain('responsive-home-header-placeholder');
+            if (kind === 'catalog') {
+                expect(html).toContain('desktop-catalog-toolbar');
+                expect(html).toContain('desktop-category-navigation');
+                expect(html.match(/class="product-card is-responsive-row"/gu)?.length).toBe(
+                    page.catalog?.items.length,
+                );
+                expect(html.match(/class="page category-page /gu)).toHaveLength(1);
+            } else {
+                expect(html.match(/class="desktop-product-purchase"/gu)).toHaveLength(1);
+                expect(html.match(/class="detail-summary"/gu)).toHaveLength(1);
+                expect(html.match(/detail-action-bar page-action-bar/gu)).toHaveLength(1);
+                expect(html).toContain('data-active-section="description"');
+            }
+        },
+    );
+
+    it('renders a direct search URL as one responsive search result tree', async () => {
+        const page = syntheticPage(fixtureStores[0], 'en', 'catalog');
+        page.request = {
+            kind: 'catalog',
+            path: '/search',
+            input: { term: 'fixture', sort: 'RECOMMENDED', inStockOnly: false, skip: 0, take: 12 },
+        };
+        page.requestKey = publicPageRequestKey(page.request);
+        page.route = '/en/search?term=fixture';
+        const html = await renderPublicPage(page);
+        expect(html).toContain('class="desktop-shell-frame"');
+        expect(html).toContain('responsive-home-header-placeholder');
+        expect(html.match(/class="page subpage search-page"/gu)).toHaveLength(1);
+        expect(html.match(/class="product-card is-plain is-responsive-row"/gu)?.length).toBe(
+            page.catalog?.items.length,
+        );
+        expect(html).not.toContain('class="page home-page"');
+        expect(html).not.toContain('desktop-search-popover');
+    });
+
+    it.each(['guide', 'services', 'support', 'legal'] as const)(
+        'reserves only the desktop navigation available on the public %s route',
+        routeName => {
+            const renderFrame = (desktop: boolean) =>
+                renderToString(
+                    <StorefrontPageFrame
+                        routeName={routeName}
+                        language="en"
+                        desktop={desktop}
+                        storefrontName="Example"
+                        logoUrl={null}
+                    >
+                        <main>Public content</main>
+                    </StorefrontPageFrame>,
+                );
+            const initial = renderFrame(false);
+            const adopted = renderFrame(true);
+            expect(initial).toContain('class="storefront-app desktop-store-layout"');
+            expect(initial).toContain('class="desktop-shell-frame"');
+            expect(adopted).toContain('class="desktop-shell-frame"');
+            expect(initial.includes('responsive-home-header-placeholder')).toBe(
+                routeName === 'guide' || routeName === 'services',
+            );
+            expect(adopted).not.toContain('responsive-home-header-placeholder');
+        },
+    );
+
+    it('provides support layout CSS in the HTML before the lazy route hydrates', async () => {
+        const page = syntheticPage(fixtureStores[0], 'en', 'home');
+        page.request = { kind: 'page', id: 'support' };
+        page.requestKey = publicPageRequestKey(page.request);
+        page.route = '/en/support';
+        const html = await renderPublicPage(page);
+        expect(html.match(/data-href="storefront-support"/gu)).toHaveLength(1);
+        expect(html).toContain('data-precedence="services"');
+        expect(html).toMatch(/\.support-desktop-hero\s*\{\s*display: none;/u);
+        expect(html).toMatch(/\.support-contact-panel\s*\{[^}]*display: grid;/u);
+        expect(html).not.toContain('responsive-home-header-placeholder');
+    });
 
     it('uses the same English accessibility fallback for missing media before hydration', async () => {
         const imageHtml = renderToString(

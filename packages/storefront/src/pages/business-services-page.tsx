@@ -1,10 +1,11 @@
 import { ExternalLink, Puzzle } from 'lucide-react';
-import './business-services-page.css';
+import type { CSSProperties, ReactNode } from 'react';
 
 import {
     BusinessServicesHero,
     resolveBusinessServicesHeroLayout,
 } from '../../../storefront-content-plugin/src/shared/business-services-hero';
+import heroStyles from '../../../storefront-content-plugin/src/shared/business-services-hero.css?inline';
 import { heroImageForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import {
     ClientPluginSlot,
@@ -14,16 +15,18 @@ import {
 import { resolveBottomNavigationItems } from '../components/common/bottom-navigation';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
-import { useDesktopLayout } from '../desktop-layout';
 import { SafeImage } from '../safe-image';
 import { BusinessServicesPageContext } from '../storefront-page-contexts';
 import { type RouteState } from '../storefront-router';
 import { EmptyState } from '../storefront-ui/page-shell';
+import serviceStyles from '../styles/service-entries.css?inline';
 import {
     type StorefrontContentBlock,
     type StorefrontContentTargetType,
     type StorefrontLanguage,
 } from '../types';
+
+import pageStyles from './business-services-page.css?inline';
 
 const CLIENT_PLUGIN_BLOCK_CODE = 'storefront-client-plugins';
 const BUSINESS_SERVICES_COPY_VERSION = 1;
@@ -60,7 +63,6 @@ export function BusinessServicesPage() {
         onContentTarget,
     } = BusinessServicesPageContext.useValue();
     const isZh = language === 'zh';
-    const desktop = useDesktopLayout();
     const clientPluginBlock = contentBlocks.find(
         block => block.type === 'CLIENT_PLUGINS' && block.code === CLIENT_PLUGIN_BLOCK_CODE,
     );
@@ -82,22 +84,26 @@ export function BusinessServicesPage() {
             : null;
     const plugins = resolveClientPlugins(clientPluginBlock, 'BUSINESS_SERVICES_MAIN');
     const heroLayout = resolveBusinessServicesHeroLayout(clientPluginBlock?.settings);
-    const heroImage = heroImageForViewport(
-        clientPluginBlock?.enabled ? clientPluginBlock : undefined,
-        desktop || heroLayout === 'shared-banner',
-    );
-    const heroImageUrl = heroImage.imageUrl;
+    const artwork = clientPluginBlock?.enabled ? clientPluginBlock : undefined;
+    const desktopImage = heroImageForViewport(artwork, true);
+    const mobileImage = heroLayout === 'shared-banner' ? desktopImage : heroImageForViewport(artwork, false);
+    const heroImageUrl = desktopImage.imageUrl || mobileImage.imageUrl;
+    const mobileOnlyImage = !desktopImage.imageUrl && Boolean(mobileImage.imageUrl);
+    const heroImageStyle = {
+        '--services-hero-mobile-image-ratio': imageRatio(mobileImage.imageAsset),
+        '--services-hero-desktop-image-ratio': imageRatio(desktopImage.imageAsset),
+    } as CSSProperties;
 
     const showAssistanceSidebar =
         heroLayout === 'shared-banner' && !!heroImageUrl && plugins.some(isAssistanceClientPlugin);
-    const hero = (
+    const renderHero = (image?: ReactNode, className?: string) => (
         <BusinessServicesHero
             title={heroTitle}
             body={heroDescription}
             visual={clientPluginBlock}
             layout={heroLayout}
-            imageDimensions={heroImage.imageAsset}
-            image={heroImageUrl ? <SafeImage src={heroImageUrl} alt="" imageKind="hero" /> : undefined}
+            className={className}
+            image={image}
             decoration={<ServiceArchitectureMotif />}
             action={
                 heroLinkTarget ? (
@@ -116,26 +122,62 @@ export function BusinessServicesPage() {
             }
         />
     );
+    const hero = (
+        <>
+            {renderHero(
+                heroImageUrl ? (
+                    <SafeImage
+                        src={heroImageUrl}
+                        alt=""
+                        imageKind="hero"
+                        loading={mobileOnlyImage ? 'lazy' : undefined}
+                        width={desktopImage.imageAsset?.width ?? mobileImage.imageAsset?.width}
+                        height={desktopImage.imageAsset?.height ?? mobileImage.imageAsset?.height}
+                        mediaSources={
+                            mobileImage.imageUrl && mobileImage.imageUrl !== desktopImage.imageUrl
+                                ? [
+                                      {
+                                          media: '(max-width: 1023px)',
+                                          src: mobileImage.imageUrl,
+                                          width: mobileImage.imageAsset?.width,
+                                          height: mobileImage.imageAsset?.height,
+                                      },
+                                  ]
+                                : undefined
+                        }
+                    />
+                ) : undefined,
+                mobileOnlyImage ? 'business-services-mobile-only-hero' : undefined,
+            )}
+            {/* A phone-only binding must not invent a desktop advertisement. Both variants are
+                pure presentation; CSS selects the existing layout before JavaScript runs. */}
+            {mobileOnlyImage && renderHero(undefined, 'business-services-desktop-empty-hero')}
+        </>
+    );
 
     return (
         // The advertisement and assistance share a row; the growing tool directory stays below.
         <main className="page business-services-page" data-services-layout="directory-b">
-            {!desktop && (
-                <MobilePageHeader
-                    className="business-services-mobile-header"
-                    title={pageTitle}
-                    storefrontName={storefrontName}
-                    logoUrl={logoUrl}
-                    language={language}
-                    displayCurrencyCode={displayCurrencyCode}
-                    availableCurrencyCodes={availableCurrencyCodes}
-                    currencyLoading={currencyLoading}
-                    onToggleLanguage={onToggleLanguage}
-                    onCurrencyChange={onCurrencyChange}
-                    onNotifications={onNotifications}
-                />
-            )}
-            <div className="business-services-workspace">
+            <style href="storefront-service-entries" precedence="commerce">
+                {serviceStyles}
+            </style>
+            <style href="storefront-business-services" precedence="services">
+                {heroStyles + pageStyles}
+            </style>
+            <MobilePageHeader
+                className="business-services-mobile-header"
+                title={pageTitle}
+                storefrontName={storefrontName}
+                logoUrl={logoUrl}
+                language={language}
+                displayCurrencyCode={displayCurrencyCode}
+                availableCurrencyCodes={availableCurrencyCodes}
+                currencyLoading={currencyLoading}
+                onToggleLanguage={onToggleLanguage}
+                onCurrencyChange={onCurrencyChange}
+                onNotifications={onNotifications}
+            />
+            <div className="business-services-workspace" style={heroImageStyle}>
                 {showAssistanceSidebar ? (
                     <div className="business-services-advertising-row">
                         {hero}
@@ -180,6 +222,11 @@ export function BusinessServicesPage() {
             ) : null}
         </main>
     );
+}
+
+function imageRatio(dimensions?: { width?: number; height?: number }): number | undefined {
+    const ratio = dimensions?.width && dimensions?.height ? dimensions.width / dimensions.height : undefined;
+    return ratio && Number.isFinite(ratio) && ratio > 0 ? ratio : undefined;
 }
 
 // Abstract linework, not a merchant project photo or portfolio claim.

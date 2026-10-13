@@ -7,7 +7,15 @@ import { normalizeRouteSearch } from '../storefront-router';
 
 export const Route = createFileRoute('/category')({
     validateSearch: normalizeRouteSearch,
-    loader: ({ location }) =>
-        prefetchPublicPage(storefrontQueryClient, location.publicHref).catch(() => undefined),
+    loaderDeps: ({ search }) => ({
+        ...search,
+        auth: undefined,
+        authTarget: undefined,
+    }),
+    loader: ({ location, abortController }) =>
+        // This only warms data. The mounted page's Query owns success, empty and error UI.
+        prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
+            () => undefined,
+        ),
     component: CategoryRoutePage,
 });

@@ -1487,3 +1487,24 @@
 .desktop-search-popover-heading button:hover {
     background: var(--control-surface-hover);
 }
+
+@media (min-width: 1024px) {
+    .proto-search-route-trigger {
+        min-height: 44px;
+        border: 0;
+        border-radius: var(--skin-control-radius);
+        background: var(--control-surface);
+        color: var(--muted);
+        cursor: pointer;
+        text-align: left;
+    }
+    .proto-search-route-label {
+        min-width: 0;
+        padding: 10px 12px 10px 34px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
+    }
+}

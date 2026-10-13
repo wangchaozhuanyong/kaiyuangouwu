@@ -6,6 +6,7 @@ import { type MediaDescriptor } from '../../storefront-content-plugin/src/shared
 import { ResponsiveHomeHeaderPlaceholder } from './components/common/responsive-home-header-placeholder';
 import { desktopPageFamily } from './desktop-page-contract';
 import { ImageLanguageContext, SafeImageMediaProvider } from './safe-image';
+import { isBrowsingStorefrontRoute } from './storefront-access';
 import { type RouteName } from './storefront-router';
 import { type StorefrontLanguage } from './types';
 
@@ -42,6 +43,17 @@ export function StorefrontPageFrame({
     children: ReactNode;
 }) {
     const isZh = language === 'zh';
+    // Public commerce uses responsive CSS from the first HTML frame, before viewport subscription.
+    const responsiveCommerce = [
+        'home',
+        'category',
+        'product',
+        'search',
+        'guide',
+        'services',
+        'support',
+        'legal',
+    ].includes(routeName);
     return (
         <ImageLanguageContext.Provider value={language}>
             <SafeImageMediaProvider media={publicMedia}>
@@ -49,7 +61,7 @@ export function StorefrontPageFrame({
                     data-route={routeName}
                     data-page-family={desktopPageFamily(routeName)}
                     data-preview-embedded={previewEmbedded ? 'true' : undefined}
-                    className={`storefront-app${online ? '' : ' is-offline'}${desktop || routeName === 'home' ? ' desktop-store-layout' : ''}`}
+                    className={`storefront-app${online ? '' : ' is-offline'}${desktop || responsiveCommerce ? ' desktop-store-layout' : ''}`}
                 >
                     <a className="skip-link" href="#storefront-content">
                         {isZh ? '跳到主要内容' : 'Skip to content'}
@@ -72,14 +84,14 @@ export function StorefrontPageFrame({
                             </span>
                         </aside>
                     )}
-                    {!desktop && routeName === 'home' && (
+                    {!desktop && responsiveCommerce && isBrowsingStorefrontRoute(routeName) && (
                         <ResponsiveHomeHeaderPlaceholder name={storefrontName} logoUrl={logoUrl} />
                     )}
                     {header}
                     {deferred}
                     <div
                         className={
-                            desktop
+                            desktop || responsiveCommerce
                                 ? `desktop-shell-frame${accountLayout ? ' desktop-account-layout' : ''}`
                                 : undefined
                         }

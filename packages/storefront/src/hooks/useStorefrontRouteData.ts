@@ -40,6 +40,8 @@ export function useStorefrontRouteData({
         ),
         queryFn: ({ signal }) => api.product(route.id ?? '', signal),
         enabled: storefrontContextResolved && route.name === 'product' && !!route.id,
+        // A failed navigation read already belongs to this query; show its retry UI.
+        retryOnMount: false,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         meta: publicQueryMeta(),

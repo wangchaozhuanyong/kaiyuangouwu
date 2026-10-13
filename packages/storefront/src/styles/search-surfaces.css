@@ -348,3 +348,26 @@
         gap: 0 16px;
     }
 }
+
+/* Standalone search retains one responsive result tree; header popovers stay compact. */
+@media (max-width: 1023px) {
+    .search-header > button.search-close,
+    .search-related-products .product-grid > :nth-child(n + 3) {
+        display: none;
+    }
+}
+@media (min-width: 1024px) {
+    .search-page .search-route-product-list {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 24px;
+    }
+    .search-route-product-list > :is(.search-load-error, .search-load-more) {
+        grid-column: 1 / -1;
+    }
+}
+@media (min-width: 1280px) {
+    .search-page .search-route-product-list {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}

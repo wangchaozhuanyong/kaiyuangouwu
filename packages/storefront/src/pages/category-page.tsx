@@ -17,15 +17,16 @@ import { minimumProductPrice } from '../catalog-page-utils';
 import { catalogInputFromRoute } from '../catalog-route-query';
 import { animateCategoryScroll, centeredHorizontalScrollLeft } from '../category-navigation';
 import { CategoryClientPluginSlot } from '../client-plugins/client-plugin-registry';
+import { CommercePageStyles } from '../commerce-styles';
 import { CatalogFilterSheet } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
-import { ProductRow } from '../components/common/product-row';
+import { DesktopCategoryNavigation } from '../components/common/desktop-category-navigation';
+import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
-import { offlineLoadError } from '../loading-state';
+import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
 import { productAvailability } from '../product-availability';
 import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
-import { storefrontErrorMessage } from '../storefront-errors';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { EmptyState, ListSkeleton } from '../storefront-ui/page-shell';
@@ -48,6 +49,7 @@ export interface CategoryPageProps {
     products: Product[];
     collections: CollectionSummary[];
     contentBlocks: StorefrontContentBlock[];
+    storefrontName?: string;
     loading: boolean;
     contextResolved?: boolean;
     error: string | null;
@@ -88,6 +90,7 @@ export function CategoryPage() {
         loading,
         error,
         contentBlocks,
+        storefrontName = '',
         market,
         locale,
         language,
@@ -224,6 +227,35 @@ export function CategoryPage() {
         },
     });
     const catalogQuery = pagination.query;
+    const desktopNavigationContext = {
+        route: {
+            name: 'category',
+            collectionId: activeCollectionId,
+            childId: activeChildId,
+            sort: sortMode,
+            fulfillment: fulfillmentFilter,
+            inStockOnly,
+            minPrice: minimumPriceInput,
+            maxPrice: maximumPriceInput,
+            page,
+        } as RouteState,
+        language,
+        collections,
+        products,
+        loading,
+        error,
+        refetchStorefront: async () => {
+            await Promise.resolve(onRetry());
+        },
+        navigate: navigateTo,
+    };
+    const openFilters = () => {
+        setDraftType(fulfillmentFilter);
+        setDraftStock(inStockOnly);
+        setDraftMinimumPrice(minimumPriceInput);
+        setDraftMaximumPrice(maximumPriceInput);
+        setFilterOpen(true);
+    };
 
     const matchesFilters = useCallback(
         (
@@ -252,15 +284,11 @@ export function CategoryPage() {
     const visibleProducts = categoryProducts;
     const totalItems = categoryResolved ? pagination.totalItems : 0;
     const categoryLoading = categoryResolved
-        ? catalogQuery.isPending && !catalogQuery.isError && !categoryProducts.length
+        ? storefrontQueryPresentation(catalogQuery).initialLoading
         : loading && !error;
-    const categoryError = !categoryResolved
-        ? (error ?? '')
-        : catalogQuery.isPaused && catalogQuery.data === undefined
-          ? offlineLoadError(language)
-          : catalogQuery.error instanceof Error
-            ? storefrontErrorMessage(catalogQuery.error, language)
-            : '';
+    const categoryError = categoryResolved
+        ? (storefrontInitialQueryError(catalogQuery, language) ?? '')
+        : (error ?? '');
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
     const allCategoriesTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -314,7 +342,11 @@ export function CategoryPage() {
             : null;
 
     return (
-        <main className="page category-page" aria-label={isZh ? '商品' : 'Products'}>
+        <main
+            className="page category-page responsive-category-page desktop-catalog-main"
+            aria-label={isZh ? '商品' : 'Products'}
+        >
+            <CommercePageStyles />
             <div className="category-navigation-shell">
                 <header className="topbar category-topbar">
                     <button
@@ -332,13 +364,15 @@ export function CategoryPage() {
                     </button>
                 </header>
 
-                <CategoryClientPluginSlot
-                    block={clientPluginBlock}
-                    placement="AFTER_HEADER"
-                    categoryContext={clientPluginCategoryContext}
-                    language={language}
-                    onNavigate={navigateTo}
-                />
+                <div className="desktop-catalog-header-extras">
+                    <CategoryClientPluginSlot
+                        block={clientPluginBlock}
+                        placement="AFTER_HEADER"
+                        categoryContext={clientPluginCategoryContext}
+                        language={language}
+                        onNavigate={navigateTo}
+                    />
+                </div>
 
                 <section
                     ref={allCategoriesRef}
@@ -478,13 +512,29 @@ export function CategoryPage() {
                         </div>
                     )}
                 </section>
-                <CategoryClientPluginSlot
-                    block={clientPluginBlock}
-                    placement="AFTER_CATEGORY_NAVIGATION"
-                    categoryContext={clientPluginCategoryContext}
-                    language={language}
-                    onNavigate={navigateTo}
-                />
+                <aside className="desktop-catalog-sidebar category-responsive-sidebar">
+                    <div className="category-desktop-only">
+                        <DesktopCategoryNavigation expandChildren context={desktopNavigationContext} />
+                    </div>
+                    <CategoryClientPluginSlot
+                        block={clientPluginBlock}
+                        placement="AFTER_CATEGORY_NAVIGATION"
+                        categoryContext={clientPluginCategoryContext}
+                        language={language}
+                        onNavigate={navigateTo}
+                    />
+                    <section className="desktop-catalog-help category-desktop-only">
+                        <h2>{isZh ? '需要帮助？' : 'Need help?'}</h2>
+                        <p>
+                            {isZh
+                                ? '咨询商品、订单与售后问题'
+                                : 'Get help with products, orders and after-sales'}
+                        </p>
+                        <button type="button" onClick={() => navigateTo({ name: 'support' })}>
+                            {isZh ? '联系客服' : 'Contact support'}
+                        </button>
+                    </section>
+                </aside>
             </div>
 
             <div className={`category-layout${hasChildCategories ? ' has-sidebar' : ' is-full-width'}`}>
@@ -536,10 +586,97 @@ export function CategoryPage() {
                 )}
 
                 <section
-                    className="category-results"
+                    className="category-results desktop-catalog-workspace desktop-catalog-results"
                     ref={pagination.resultsRef}
                     data-scroll-restoration-id="category-results"
                 >
+                    <div className="desktop-catalog-toolbar category-desktop-only">
+                        <div className="section-heading-inline desktop-catalog-heading">
+                            <h1 className="desktop-catalog-label">
+                                {children.find(child => child.id === activeChildId)?.name ||
+                                    primary?.name ||
+                                    (isZh ? '商品' : 'Products')}
+                            </h1>
+                            <span className="desktop-result-count" role="status">
+                                {categoryLoading
+                                    ? isZh
+                                        ? '加载中…'
+                                        : 'Loading…'
+                                    : catalogQuery.data === undefined
+                                      ? isZh
+                                          ? '暂不可用'
+                                          : 'Unavailable'
+                                      : isZh
+                                        ? `${totalItems} 件商品`
+                                        : `${totalItems} products`}
+                            </span>
+                        </div>
+                        <div className="desktop-catalog-actions">
+                            <nav className="desktop-sort" aria-label={isZh ? '商品排序' : 'Sort products'}>
+                                {(
+                                    [
+                                        ['recommended', isZh ? '全部' : 'All'],
+                                        ['sales', isZh ? '销量' : 'Best sellers'],
+                                        ['newest', isZh ? '最新' : 'Newest'],
+                                        ['price-asc', isZh ? '价格从低到高' : 'Price: low to high'],
+                                        ['price-desc', isZh ? '价格从高到低' : 'Price: high to low'],
+                                    ] as const
+                                ).map(([value, label]) => (
+                                    <button
+                                        key={value}
+                                        type="button"
+                                        aria-pressed={
+                                            sortMode === value && (value !== 'recommended' || !hasFilters)
+                                        }
+                                        onClick={() =>
+                                            value === 'recommended'
+                                                ? navigateTo({
+                                                      ...desktopNavigationContext.route,
+                                                      page: 1,
+                                                      sort: value,
+                                                      fulfillment: 'all',
+                                                      inStockOnly: false,
+                                                      minPrice: undefined,
+                                                      maxPrice: undefined,
+                                                  })
+                                                : onSortChange(value)
+                                        }
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </nav>
+                            <label className="desktop-stock-filter">
+                                <input
+                                    type="checkbox"
+                                    checked={inStockOnly}
+                                    onChange={event =>
+                                        onFilterChange(
+                                            fulfillmentFilter,
+                                            event.target.checked,
+                                            minimumPriceInput,
+                                            maximumPriceInput,
+                                        )
+                                    }
+                                />
+                                {isZh ? '仅看有货' : 'In stock only'}
+                            </label>
+                            <button
+                                type="button"
+                                aria-expanded={filterOpen}
+                                aria-haspopup="dialog"
+                                onClick={openFilters}
+                            >
+                                <SlidersHorizontal aria-hidden="true" />
+                                {isZh ? '筛选' : 'Filter'}
+                            </button>
+                            {hasFilters && (
+                                <button type="button" onClick={() => onFilterChange('all', false, '', '')}>
+                                    {isZh ? '重置' : 'Reset'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
                     <nav
                         className="sort-bar sort-bar-five"
                         aria-label={isZh ? '排序和筛选' : 'Sort and filter'}
@@ -590,13 +727,7 @@ export function CategoryPage() {
                         <button
                             type="button"
                             className={hasFilters ? 'is-active' : undefined}
-                            onClick={() => {
-                                setDraftType(fulfillmentFilter);
-                                setDraftStock(inStockOnly);
-                                setDraftMinimumPrice(minimumPriceInput);
-                                setDraftMaximumPrice(maximumPriceInput);
-                                setFilterOpen(true);
-                            }}
+                            onClick={openFilters}
                         >
                             {isZh ? '筛选' : 'Filter'} <SlidersHorizontal aria-hidden="true" />
                         </button>
@@ -612,7 +743,7 @@ export function CategoryPage() {
 
                     {categoryLoading ? (
                         <ListSkeleton
-                            className="category-product-list"
+                            className="category-product-list desktop-product-grid"
                             count={12}
                             label={isZh ? '正在加载商品' : 'Loading products'}
                         />
@@ -631,25 +762,18 @@ export function CategoryPage() {
                         />
                     ) : categoryProducts.length ? (
                         <>
-                            <div
-                                className={`category-product-list${
-                                    catalogQuery.isPlaceholderData ||
-                                    (catalogQuery.isFetching &&
-                                        !catalogQuery.isFetchingNextPage &&
-                                        !categoryLoading)
-                                        ? ' is-updating'
-                                        : ''
-                                }`}
-                            >
+                            <div className="category-product-list desktop-product-grid">
                                 {visibleProducts.map((product, index) => (
-                                    <ProductRow
+                                    <ProductCard
                                         key={product.id}
-                                        priority={index < 2}
-                                        fetchPriority={index === 0 ? 'high' : 'auto'}
+                                        responsiveRow
+                                        eager={index < 5}
+                                        priority={index === 0}
                                         imageSizes={
-                                            hasChildCategories
+                                            '(min-width: 1024px) 220px, ' +
+                                            (hasChildCategories
                                                 ? STOREFRONT_IMAGE_SIZES.categorySidebarRow
-                                                : undefined
+                                                : STOREFRONT_IMAGE_SIZES.productRow)
                                         }
                                         product={product}
                                         market={market}
@@ -707,6 +831,20 @@ export function CategoryPage() {
                         language={language}
                         onNavigate={navigateTo}
                     />
+                    <footer className="desktop-catalog-footer category-desktop-only">
+                        <span>{storefrontName}</span>
+                        <nav aria-label={isZh ? '店铺政策' : 'Store policies'}>
+                            <button
+                                type="button"
+                                onClick={() => navigateTo({ name: 'legal', id: 'privacy' })}
+                            >
+                                {isZh ? '隐私政策' : 'Privacy'}
+                            </button>
+                            <button type="button" onClick={() => navigateTo({ name: 'legal', id: 'terms' })}>
+                                {isZh ? '使用条款' : 'Terms'}
+                            </button>
+                        </nav>
+                    </footer>
                 </section>
             </div>
 

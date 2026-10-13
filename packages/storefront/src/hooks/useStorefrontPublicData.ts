@@ -36,14 +36,17 @@ export function useStorefrontPublicData({
     language,
     vendureLanguageCode,
     storefrontContextResolved,
-}: StorefrontQueryContext) {
+    presentedHref,
+}: StorefrontQueryContext & { presentedHref?: string }) {
     const text = uiCopy[language];
     const queryClient = useQueryClient();
-    const request = currentPublicPageRequest();
+    const request = currentPublicPageRequest(presentedHref);
     const publicRoute = (() => {
         if (typeof window === 'undefined') return true;
         try {
-            return Boolean(publicPageRequestFromUrl(window.location.pathname + window.location.search));
+            return Boolean(
+                publicPageRequestFromUrl(presentedHref ?? window.location.pathname + window.location.search),
+            );
         } catch {
             return false;
         }
@@ -74,15 +77,16 @@ export function useStorefrontPublicData({
                 : undefined,
     });
     const locationKey =
-        typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search;
+        presentedHref ??
+        (typeof window === 'undefined' ? '/' : window.location.pathname + window.location.search);
     const [readyLocation, setReadyLocation] = useState('');
     useEffect(() => {
-        const ready = () => setReadyLocation(window.location.pathname + window.location.search);
+        const ready = () => setReadyLocation(locationKey);
         document.addEventListener('storefront:page-ready', ready);
         // Subscribe after the first layout commit, which may already have declared cached data ready.
         if (document.querySelector('[data-page-readiness=ready]')) ready();
         return () => document.removeEventListener('storefront:page-ready', ready);
-    }, []);
+    }, [locationKey]);
     async function publicSection<T>(
         name: 'products' | 'collections' | 'content' | 'flashSales',
         fallback: () => Promise<T>,
@@ -93,7 +97,7 @@ export function useStorefrontPublicData({
             vendureLanguageCode,
             market.currencyCode,
             signal,
-            currentPublicPageRequest(),
+            request,
             market.code,
         );
         if (!page) return fallback();
@@ -135,7 +139,7 @@ export function useStorefrontPublicData({
                 querySignal => api.storefrontVisualPreset(querySignal),
             ],
         ];
-        if (currentPublicPageRequest().kind === 'home')
+        if (request.kind === 'home')
             missing.push([
                 storefrontQueryKeys.products(marketCode, vendureLanguageCode, 12),
                 page?.products,
@@ -198,7 +202,7 @@ export function useStorefrontPublicData({
                 vendureLanguageCode,
                 storefrontContextResolved ? market.currencyCode : undefined,
                 signal,
-                currentPublicPageRequest(),
+                request,
                 storefrontContextResolved ? market.code : undefined,
             );
             if (!page) {

@@ -352,6 +352,30 @@ describe('storefront skin system', () => {
                         ) {
                             continue;
                         }
+                        // The responsive catalog migrates the same row divider without adding card outlines.
+                        // Accept only this exact rule inside the mobile breakpoint, never its desktop grid.
+                        if (
+                            file === path.join(__dirname, 'styles/product-card.css') &&
+                            selector.trim() ===
+                                '.product-card.is-responsive-row + .product-card.is-responsive-row' &&
+                            border[1] === 'top' &&
+                            border[2].trim() === '1px solid var(--skin-divider)'
+                        ) {
+                            const matchingRules: postcss.Rule[] = [];
+                            postcss.parse(source).walkRules(selector.trim(), rule => {
+                                matchingRules.push(rule);
+                            });
+                            if (
+                                matchingRules.length &&
+                                matchingRules.every(
+                                    rule =>
+                                        rule.parent?.type === 'atrule' &&
+                                        rule.parent.name === 'media' &&
+                                        rule.parent.params === '(max-width: 1023px)',
+                                )
+                            )
+                                continue;
+                        }
                         // Product details and verified reviews use skin-toned reading separators.
                         if (
                             [

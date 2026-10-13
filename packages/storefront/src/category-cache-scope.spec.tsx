@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
 import { ShopApiTimeoutError } from './api/helpers';
-import { CategoryPage, categoryFilterActionLabel } from './pages/category-page';
+import { CategoryPage, categoryFilterActionLabel, type CategoryPageProps } from './pages/category-page';
 import { storefrontQueryKeys } from './query-client';
 import { CategoryPageContext } from './storefront-page-contexts';
 
@@ -15,7 +15,7 @@ vi.mock('@tanstack/react-router', async original => ({
     ...(await original<any>()),
     useNavigate: () => navigate,
 }));
-vi.mock('./components/common/product-row', () => ({ ProductRow: () => null }));
+vi.mock('./components/common/product-card', () => ({ ProductCard: () => null }));
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 
 it('shows a trusted catalog count or a count-free apply action', () => {
@@ -472,5 +472,71 @@ it.each(
     } finally {
         act(() => root.unmount());
         queryClient.clear();
+    }
+});
+
+it('retains a confirmed empty catalog when its background refresh fails', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const api = {
+        catalog: vi
+            .fn()
+            .mockResolvedValueOnce({ items: [], totalItems: 0 })
+            .mockRejectedValue(new ShopApiTimeoutError('refresh timed out')),
+    };
+    const noop = () => undefined;
+    const value: CategoryPageProps = {
+        api: api as never,
+        products: [],
+        collections: [{ id: 'category', name: 'Category', children: [] }] as never,
+        contentBlocks: [],
+        loading: false,
+        error: null,
+        market: { code: 'test-store', currencyCode: 'MYR' } as never,
+        locale: 'en-MY',
+        language: 'en',
+        activeCollectionId: 'category',
+        activeChildId: 'all',
+        sortMode: 'recommended',
+        fulfillmentFilter: 'all',
+        inStockOnly: false,
+        minimumPrice: '',
+        maximumPrice: '',
+        onCollectionChange: noop,
+        onChildChange: noop,
+        onSortChange: noop,
+        onFilterChange: noop,
+        onNotify: noop,
+        onRetry: noop,
+    };
+    try {
+        await act(async () => {
+            root.render(
+                <QueryClientProvider client={client}>
+                    <CategoryPageContext.Provider value={value}>
+                        <CategoryPage />
+                    </CategoryPageContext.Provider>
+                </QueryClientProvider>,
+            );
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.textContent).toContain('No products in this category');
+        const empty = container.querySelector('.empty-state');
+        await act(async () => {
+            await client.refetchQueries({ type: 'active' });
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(api.catalog).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('.empty-state')).toBe(empty);
+        expect(container.textContent).toContain('No products in this category');
+        expect(container.textContent).not.toContain('Could not load products');
+        expect(container.querySelector('[aria-label="Loading products"]')).toBeNull();
+    } finally {
+        act(() => root.unmount());
+        client.clear();
     }
 });

@@ -16,7 +16,7 @@ import { SafeImage } from '../safe-image';
 import { goBackInStorefront } from '../storefront-navigation-history';
 import { SupportPageContext } from '../storefront-page-contexts';
 import { EmptyState, Sheet, Subpage, SubpageBody } from '../storefront-ui/page-shell';
-import '../styles/modals-and-support.css';
+import supportStyles from '../styles/modals-and-support.css?inline';
 import {
     StorefrontSupportChannel,
     SupportChannelKey,
@@ -67,6 +67,9 @@ export function SupportPage() {
             onBack={goBack}
             surfaceColor={content?.backgroundColor}
         >
+            <style href="storefront-support" precedence="services">
+                {supportStyles}
+            </style>
             {content ? (
                 <SupportContent
                     api={api}
@@ -653,10 +656,15 @@ function CustomerServiceEvaluationSection({
                     <ThumbsUp size={18} aria-hidden="true" />
                     <strong>{isZh ? '客服服务评价' : 'Customer service evaluation'}</strong>
                 </div>
-                <span>{isZh ? '您的反馈是我们进步的动力' : 'Help us improve our service'}</span>
+                <span className="support-evaluation-status" role="status" data-loading={loading}>
+                    <span className="support-evaluation-help" aria-hidden={loading}>
+                        {isZh ? '您的反馈是我们进步的动力' : 'Help us improve our service'}
+                    </span>
+                    <span className="support-evaluation-loading" aria-hidden={!loading}>
+                        {isZh ? '正在读取您的评价…' : 'Loading your feedback…'}
+                    </span>
+                </span>
             </header>
-
-            {loading && <p role="status">{isZh ? '正在读取您的评价…' : 'Loading your feedback…'}</p>}
             {loadError && (
                 <p role="alert" className="support-evaluation-error">
                     {loadError}

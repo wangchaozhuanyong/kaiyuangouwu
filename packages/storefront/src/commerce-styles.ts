@@ -1,3 +1,5 @@
+import { createElement } from 'react';
+
 import commerceStyles from './styles/commerce-surfaces.css?inline';
 import homeStyles from './styles/home-showcase.css?inline';
 
@@ -19,4 +21,9 @@ if (typeof document !== 'undefined' && !document.querySelector('style[data-store
     style.setAttribute('data-storefront-commerce', '');
     style.textContent = commerceStyles;
     document.head.insertBefore(style, commonStyle);
+}
+
+/** Emit the same resource during SSR so the first frame has its category/media layout. */
+export function CommercePageStyles() {
+    return createElement('style', { href: 'storefront-home-showcase', precedence: 'commerce' }, homeStyles);
 }

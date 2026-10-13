@@ -323,3 +323,68 @@
     line-height: var(--type-card-leading);
     font-weight: var(--font-weight-semibold);
 }
+
+/* Category results keep the existing compact mobile rows and desktop cards in one DOM tree. */
+@media (max-width: 1023px) {
+    .product-card.is-responsive-row {
+        container-type: normal;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+    .product-card.is-responsive-row + .product-card.is-responsive-row {
+        padding-top: 12px;
+        border-top: 1px solid var(--skin-divider);
+    }
+    .product-card.is-responsive-row .product-card-detail-link {
+        display: grid;
+        grid-template-columns: clamp(64px, 30%, 104px) minmax(0, 1fr);
+        align-items: start;
+        gap: 0 12px;
+    }
+    .product-card.is-responsive-row .product-card-media {
+        position: relative;
+        border-radius: var(--skin-media-radius);
+    }
+    .product-card.is-responsive-row .product-card-content {
+        align-self: stretch;
+        padding: 0;
+    }
+    .product-card.is-responsive-row .product-card-name {
+        margin: 0;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-leading);
+    }
+    .product-card.is-responsive-row .product-card-subtitle {
+        margin: 0;
+        font-size: var(--type-helper-size);
+        line-height: var(--type-helper-leading);
+    }
+    .product-card.is-responsive-row .product-card-meta {
+        margin: 0;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
+    }
+    .product-card.is-responsive-row .product-card-delivery {
+        color: var(--muted);
+    }
+    .product-card.is-responsive-row .product-card-content > footer {
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 4px 8px;
+        margin-top: auto;
+        padding-top: 0;
+    }
+    .product-card.is-responsive-row .product-card-price .price-lockup {
+        font-size: var(--type-price-size);
+        line-height: var(--type-price-leading);
+    }
+    .product-card.is-responsive-row .product-card-stock {
+        margin-left: auto;
+        text-align: right;
+        font-size: var(--type-meta-size);
+        line-height: var(--type-meta-leading);
+    }
+}
