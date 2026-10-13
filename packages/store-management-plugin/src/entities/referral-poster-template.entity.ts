@@ -3,7 +3,8 @@ import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Asset, Channel, EntityId, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
-import { LegacyPosterDesign, referralPosterCopy } from '../referral/referral-poster-presets';
+import { LegacyPosterDesign } from '../referral/referral-poster-design';
+import { referralPosterCopy } from '../referral/referral-poster-presets';
 
 @Entity({ name: 'referral_poster_template' })
 @Index('IDX_referral_poster_template_channel_position', ['channelId', 'position'])

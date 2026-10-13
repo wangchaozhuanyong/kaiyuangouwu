@@ -19,8 +19,8 @@ import { ReferralProgramConfig } from '../entities/referral-program-config.entit
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 
 import { normalizeReferralPosterInput, SaveReferralPosterTemplateInput } from './referral-input';
+import { artworkPosterCopyPaths } from './referral-poster-design';
 import {
-    artworkPosterCopyPaths,
     effectivePosterDefault,
     enabledPosterIds,
     referralPosterContentCode,

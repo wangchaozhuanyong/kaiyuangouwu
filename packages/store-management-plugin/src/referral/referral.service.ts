@@ -58,7 +58,8 @@ import {
     UpdateReferralPosterTemplateInput,
 } from './referral-input';
 import { createReferralPaymentProof } from './referral-payment-proof';
-import { artworkPosterCopyPaths, effectivePosterDefault, enabledPosterIds } from './referral-poster-presets';
+import { artworkPosterCopyPaths } from './referral-poster-design';
+import { effectivePosterDefault, enabledPosterIds } from './referral-poster-presets';
 import { ReferralPosterView } from './referral-poster-view';
 import { ReferralReportQuery } from './referral-report-query';
 import { businessDateKey, customerName, maskedCustomerName, withdrawalView } from './referral-view-helpers';

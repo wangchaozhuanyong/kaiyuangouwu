@@ -1,7 +1,8 @@
 import { ArtworkPosterDesign, validateArtworkPosterDesign } from '@vendure/common/lib/referral-poster-design';
 import { ID, UserInputError } from '@vendure/core';
 
-import { legacyPosterColorFields, LegacyPosterDesign, referralPosterCopy } from './referral-poster-presets';
+import { legacyPosterColorFields, LegacyPosterDesign } from './referral-poster-design';
+import { referralPosterCopy } from './referral-poster-presets';
 
 export interface SaveReferralPosterTemplateInput {
     expectedUpdatedAt?: Date;
