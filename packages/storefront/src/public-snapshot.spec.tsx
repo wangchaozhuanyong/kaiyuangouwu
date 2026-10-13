@@ -30,6 +30,16 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    it('hides the mobile navigation on desktop before viewport hooks run', async () => {
+        const { readFileSync } = await import('node:fs');
+        const stylesheet = readFileSync(new URL('./styles/desktop-layout.css', import.meta.url), 'utf8');
+        expect(stylesheet).toMatch(
+            /@media \(min-width: 1024px\)\s*\{\s*\.storefront-bottom-nav\s*\{\s*display: none;/u,
+        );
+        const html = await renderPublicPage(syntheticPage(fixtureStores[0], 'en', 'catalog'));
+        expect(html.match(/class="storefront-bottom-nav"/gu)).toHaveLength(1);
+    });
+
     it('releases per-request query GC timers even when a normalized category has no seeded result', async () => {
         vi.useFakeTimers();
         try {
