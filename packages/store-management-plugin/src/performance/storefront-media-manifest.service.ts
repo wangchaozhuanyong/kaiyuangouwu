@@ -9,6 +9,7 @@ import {
 } from '@vendure/core';
 import { StorefrontContentService, type StorefrontImageKind } from '@vendure/storefront-content-plugin';
 
+import { StoreProfile } from '../entities/store-profile.entity';
 import { promotionAssetPaths } from '../promotion/promotion-public-assets';
 import { StorefrontPromotionService } from '../promotion/storefront-promotion.service';
 
@@ -50,7 +51,7 @@ export class StorefrontMediaManifestService {
     get(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest> {
         return this.cache.readThrough(
             ctx,
-            `media-manifest:${host}`,
+            `media-manifest:v2:${host}`,
             STOREFRONT_MEDIA_MANIFEST_TTL_MS,
             () => this.build(ctx, host),
             { requireSharedRevision: true },
@@ -58,17 +59,25 @@ export class StorefrontMediaManifestService {
     }
 
     peek(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest | undefined> {
-        return this.cache.peek(ctx, `media-manifest:${host}`);
+        return this.cache.peek(ctx, `media-manifest:v2:${host}`);
     }
 
     private async build(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest> {
         const origin = new URL(`https://${host}`).origin;
-        const [blocks, html, products, variants, collections] = await Promise.all([
+        const [blocks, html, products, variants, collections, profile] = await Promise.all([
             this.content.findPublished(ctx, false, LanguageCode.zh_Hans),
             this.promotion.renderPublished(ctx, ''),
             this.catalogPaths(ctx, Product),
             this.catalogPaths(ctx, ProductVariant),
             this.catalogPaths(ctx, Collection),
+            this.connection.getRepository(ctx, StoreProfile).findOne({
+                where: { channelId: ctx.channelId },
+                relations: {
+                    logoAsset: { channels: true, tags: true },
+                    logoOnLightAsset: { channels: true, tags: true },
+                    logoOnDarkAsset: { channels: true, tags: true },
+                },
+            }),
         ]);
         const paths = new Set<string>();
         const uses = new Map<string, { path: string; kind: StorefrontImageKind }>();
@@ -79,6 +88,23 @@ export class StorefrontMediaManifestService {
             if (path && /^(?:preview|source)\//u.test(path) && !path.split('/').includes('..'))
                 paths.add(path);
         };
+        // The public branding resolver exposes these exact bound logo variants.
+        // Keep channel ownership and avatar privacy even for legacy profile rows.
+        if (profile && String(profile.channelId) === String(ctx.channelId)) {
+            for (const asset of [profile.logoAsset, profile.logoOnLightAsset, profile.logoOnDarkAsset]) {
+                if (
+                    !asset?.mimeType?.startsWith('image/') ||
+                    !asset?.channels?.some(channel => String(channel.id) === String(ctx.channelId)) ||
+                    !Array.isArray(asset.tags) ||
+                    asset.tags.some(tag => tag.value === 'customer-avatar')
+                )
+                    continue;
+                const path =
+                    asset.mimeType === 'image/svg+xml' ? asset.source : asset.preview || asset.source;
+                add(path);
+                for (const kind of PUBLIC_MEDIA_USES.logo) use(path, kind);
+            }
+        }
         for (const block of blocks) {
             const mobileImageUrl = publicHeroMobileImage(block, origin);
             for (const image of [
