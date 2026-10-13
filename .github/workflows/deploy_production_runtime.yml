@@ -236,6 +236,13 @@ jobs:
                   ).decode('ascii')
                   command = "/bin/bash <<'VENDURE_DEPLOY_SCRIPT'\n" + '\n'.join([
                       'set -Eeuo pipefail',
+                      'disk_maintenance=/usr/local/sbin/vendure-production-disk-maintenance',
+                      'if [[ -e "$disk_maintenance" || -L "$disk_maintenance" ]]; then',
+                      '  [[ -f "$disk_maintenance" && -x "$disk_maintenance" ]] || exit 1',
+                      '  "$disk_maintenance" --apply',
+                      'else',
+                      '  printf "PRODUCTION_DISK_MAINTENANCE_NOT_INSTALLED bootstrap requires policy installation\\n"',
+                      'fi',
                       'deploy_script="$(mktemp /tmp/vendure-production-deploy.XXXXXX)"',
                       "trap 'rm -f -- \"$deploy_script\"' EXIT",
                       f"printf '%s' '{script}' | base64 -d | gzip -d > \"$deploy_script\"",

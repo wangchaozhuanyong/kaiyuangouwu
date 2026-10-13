@@ -70,7 +70,7 @@ check_production_disk_usage() {
 
 check_production_disk_staging_headroom() {
     local maximum="${VENDURE_MAXIMUM_DISK_USAGE_PERCENT:-85}"
-    local total_kib available_kib runtime_kib archive_bytes archive_kib runtime_budget_kib reserve_kib required_kib
+    local total_kib available_kib runtime_kib archive_bytes archive_kib runtime_budget_kib reserve_kib required_kib backup_budget_bytes
     [[ "${maximum}" =~ ^([1-9][0-9]?|100)$ ]] || fail 'invalid production disk usage limit'
     read -r total_kib available_kib < <(df -Pk / | awk 'NR == 2 { print $2, $4 }')
     runtime_kib="$(du -sk "${previous_runtime}" | awk '{ print $1 }')"
@@ -90,8 +90,22 @@ check_production_disk_staging_headroom() {
     required_kib=$(( reserve_kib + archive_kib + runtime_budget_kib + 65536 ))
     printf 'DEPLOY_STAGING_DISK available_kib=%s required_kib=%s archive_kib=%s runtime_budget_kib=%s\n' \
         "${available_kib}" "${required_kib}" "${archive_kib}" "${runtime_budget_kib}"
-    (( available_kib > required_kib )) ||
-        fail 'root disk cannot stage a release within the health limit; review retention or expand the volume'
+    # Budget a possible additional full file backup, even when readiness can
+    # reuse an existing set. Its own source/snapshot gate runs before capture.
+    backup_budget_bytes="$(sudo -n python3 - <<'PYBACKUPBUDGET'
+from pathlib import Path
+import re
+root = Path('/var/backups/vendure-files')
+sizes = [item.stat().st_size for item in (root.iterdir() if root.is_dir() else [])
+         if item.is_file() and not item.is_symlink()
+         and re.fullmatch(r'vendure-files-[0-9]{8}T[0-9]{6}Z\.tar\.gz', item.name)]
+print(max(sizes, default=0))
+PYBACKUPBUDGET
+)"
+    python3 "${repository}/deploy/systemd/vendure-disk-budget.py" --maximum "$maximum" stage \
+        --archive-bytes "$archive_bytes" --runtime-bytes "$((runtime_kib * 1024))" \
+        --extra-bytes "$backup_budget_bytes" ||
+        fail 'root disk cannot stage a release and its possible file backup within the health limit'
     printf 'DEPLOY_STAGING_DISK_OK\n'
 }
 
@@ -733,6 +747,7 @@ check_production_disk_usage
 deploy_stage="persistent-file-backup-readiness"
 for file_backup_tool in \
     vendure-file-backup vendure-file-backup.py vendure-file-backup-retention \
+    vendure-file-backup-retention.py vendure-disk-budget.py \
     vendure-file-restore-drill vendure-s3-prefix-snapshot.py vendure-backup-s3-guard.py; do
     sudo -n install -o root -g root -m 0755 \
         "${repository}/deploy/systemd/${file_backup_tool}" "/usr/local/sbin/${file_backup_tool}"
@@ -1158,6 +1173,23 @@ sudo -n install -o root -g root -m 0644 \
 sudo -n install -o root -g root -m 0644 \
     "${repository}/deploy/systemd/vendure-production-release-retention.path" \
     /etc/systemd/system/vendure-production-release-retention.path
+for disk_policy_tool in \
+    vendure-production-disk-maintenance vendure-production-release-retention.cjs \
+    vendure-frontend-release-retention.cjs; do
+    sudo -n install -o root -g root -m 0755 \
+        "${repository}/deploy/systemd/${disk_policy_tool}" "/usr/local/sbin/${disk_policy_tool}"
+done
+sudo -n install -o root -g root -m 0755 \
+    "${repository}/deploy/systemd/vendure-file-backup" /usr/local/sbin/vendure-file-backup-bounded
+for disk_policy_unit in \
+    vendure-production-release-retention.service.d/50-disk-budget.conf \
+    vendure-production-release-retention.path.d/50-disk-budget.conf \
+    vendure-file-backup-retention.service.d/60-verified-local-count.conf \
+    vendure-file-backup.service.d/60-bounded-disk.conf; do
+    sudo -n install -d -o root -g root -m 0755 "/etc/systemd/system/${disk_policy_unit%/*}"
+    sudo -n install -o root -g root -m 0644 \
+        "${repository}/deploy/systemd/${disk_policy_unit}" "/etc/systemd/system/${disk_policy_unit}"
+done
 sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/deploy-production-from-s3.sh" \
     /usr/local/sbin/vendure-production-deploy-from-s3

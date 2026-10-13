@@ -81,6 +81,10 @@ jobs:
                       packages/dev-server/scripts/production-release-smoke.spec.mjs \
                       packages/dev-server/scripts/production-release-retention.spec.mjs
                   node --test scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
+                  node --test deploy/frontend-retention.spec.mjs deploy/frontend-disk-guard.spec.mjs deploy/runtime-disk-guard.spec.mjs
+                  python3 deploy/systemd/tests/file-backup-retention.spec.py
+                  python3 deploy/systemd/tests/file-backup.spec.py
+                  python3 deploy/systemd/tests/disk-budget.spec.py
                   node --test deploy/icloud-relay-diagnostic.spec.mjs deploy/window-test-order-cleanup.spec.mjs
             - name: Build lint prerequisites
               if: needs.detect-changes.outputs.has_lint_packages == 'true'

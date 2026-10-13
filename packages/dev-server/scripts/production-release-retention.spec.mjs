@@ -99,6 +99,56 @@ void test('refuses cleanup when the marker or PM2 state does not match the curre
     );
 });
 
+void test('protects an active frontend owned by a runtime older than the backend rollback window', async () => {
+    const current = await fixture();
+    const currentRuntime = path.join(current.releasesDir, releases.current);
+    const frontendDirectory = path.join(current.releasesDir, releases.oldest, 'packages/storefront/dist');
+    const pointer = path.join(current.root, 'storefront-current');
+    await mkdir(frontendDirectory, { recursive: true });
+    await symlink(frontendDirectory, pointer);
+    const plan = retention.inspectReleaseState({
+        releasesDir: current.releasesDir,
+        currentPointer: current.currentPointer,
+        pm2Processes: pm2Processes(currentRuntime),
+        frontendPointers: [pointer],
+    });
+    assert.ok(plan.keepDirectories.includes(path.join(current.releasesDir, releases.oldest)));
+    assert.ok(!plan.deleteDirectories.includes(path.join(current.releasesDir, releases.oldest)));
+    assert.ok(!plan.deleteArchives.includes(path.join(current.releasesDir, `${releases.oldest}.tar.gz`)));
+    retention.applyRetentionPlan(plan);
+    await access(frontendDirectory);
+    await access(path.join(current.releasesDir, `${releases.oldest}.tar.gz`));
+});
+
+void test('rejects a dangling or non-symbolic active frontend pointer before pruning runtimes', async () => {
+    const current = await fixture();
+    const currentRuntime = path.join(current.releasesDir, releases.current);
+    const pointer = path.join(current.root, 'invalid-frontend');
+    await symlink(path.join(current.root, 'missing'), pointer);
+    assert.throws(
+        () =>
+            retention.inspectReleaseState({
+                releasesDir: current.releasesDir,
+                currentPointer: current.currentPointer,
+                pm2Processes: pm2Processes(currentRuntime),
+                frontendPointers: [pointer],
+            }),
+        /ENOENT/u,
+    );
+    const regular = path.join(current.root, 'regular-frontend');
+    await mkdir(regular);
+    assert.throws(
+        () =>
+            retention.inspectReleaseState({
+                releasesDir: current.releasesDir,
+                currentPointer: current.currentPointer,
+                pm2Processes: pm2Processes(currentRuntime),
+                frontendPointers: [regular],
+            }),
+        /symbolic link/u,
+    );
+});
+
 void test('requires an explicit production guard before applying deletions', async () => {
     const current = await fixture();
     const currentRuntime = path.join(current.releasesDir, releases.current);

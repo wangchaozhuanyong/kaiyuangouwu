@@ -10,6 +10,11 @@ const path = require('node:path');
 const DEFAULT_RELEASES_DIR = '/var/www/kaiyuangouwu-releases';
 const DEFAULT_CURRENT_POINTER = '/var/www/kaiyuangouwu-current';
 const DEFAULT_KEEP_COUNT = 3;
+const DEFAULT_FRONTEND_POINTERS = [
+    '/var/www/kaiyuangouwu-storefront-current',
+    '/var/www/kaiyuangouwu-next-admin-current',
+    '/var/www/kaiyuangouwu-two-factor-current',
+];
 const EXPECTED_PM2_PROCESSES = ['vendure-api', 'vendure-worker'];
 const RELEASE_NAME_PATTERN = /^(?<sha>[a-f0-9]{40})-(?<runId>[0-9]+)-(?<attempt>[0-9]+)-linux-x64$/u;
 
@@ -77,6 +82,7 @@ function inspectReleaseState({
     currentShaFile,
     keepCount = DEFAULT_KEEP_COUNT,
     pm2Processes,
+    frontendPointers = DEFAULT_FRONTEND_POINTERS,
 }) {
     const configuredReleasesDir = normalizeAbsolutePath(releasesDir, 'VENDURE_RELEASES_DIR');
     const releasesRealPath = realpathSync(configuredReleasesDir);
@@ -127,6 +133,36 @@ function inspectReleaseState({
         .sort((left, right) => compareReleaseOrder(right, left))
         .slice(0, normalizedRetentionCount - 1);
     const keepNames = new Set([currentRelease.name, ...rollbackReleases.map(release => release.name)]);
+    // A static frontend can remain on an older runtime after newer backends
+    // deploy. Protect its actual owner, independently of backend rollback age.
+    const protectedRuntimeDirectories = [];
+    for (const frontendPointer of frontendPointers) {
+        let pointerStat;
+        try {
+            pointerStat = lstatSync(frontendPointer);
+        } catch (error) {
+            if (error.code === 'ENOENT') continue;
+            throw error;
+        }
+        assert.ok(pointerStat.isSymbolicLink(), 'Frontend pointer must be a symbolic link');
+        const frontendDirectory = realpathSync(frontendPointer);
+        const relative = path.relative(releasesRealPath, frontendDirectory);
+        if (relative.startsWith(`..${path.sep}`) || relative === '..' || path.isAbsolute(relative)) continue;
+        const name = relative.split(path.sep)[0];
+        assert.ok(parseReleaseName(name), 'Frontend pointer has an invalid runtime owner');
+        const release = releases.find(item => item.name === name);
+        assert.ok(release, 'Frontend runtime owner is missing from release inventory');
+        keepNames.add(name);
+        if (!protectedRuntimeDirectories.includes(release.path))
+            protectedRuntimeDirectories.push(release.path);
+    }
+    const keepDirectories = [
+        ...new Set([
+            currentRuntime,
+            ...rollbackReleases.map(release => release.path),
+            ...protectedRuntimeDirectories.sort(),
+        ]),
+    ];
 
     const deleteDirectories = releases
         .filter(release => !keepNames.has(release.name))
@@ -146,7 +182,8 @@ function inspectReleaseState({
         currentRuntime,
         markerSha,
         keepCount: normalizedRetentionCount,
-        keepDirectories: [currentRuntime, ...rollbackReleases.map(release => release.path)],
+        keepDirectories,
+        protectedRuntimeDirectories,
         deleteDirectories,
         deleteArchives,
     };

@@ -121,7 +121,9 @@ test('immutable backend check precedes static mutation and retains the tracked-s
 });
 
 test('static deployment runs target control files while preserving the active backend checkout', t => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), 'frontend-target-controls-')));
+    const temporaryRoot = fileURLToPath(new URL('../.local-validation/frontend-controls/', import.meta.url));
+    mkdirSync(temporaryRoot, { recursive: true });
+    const root = realpathSync(mkdtempSync(join(temporaryRoot, 'case-')));
     t.after(() => rmSync(root, { recursive: true, force: true }));
     const repository = join(root, 'repository');
     mkdirSync(join(repository, 'deploy'), { recursive: true });
@@ -157,12 +159,12 @@ test('static deployment runs target control files while preserving the active ba
         .replace('sudo -H -u ubuntu /bin/bash', '/bin/bash')
         .replaceAll('/var/www/kaiyuangouwu-frontend-releases', join(root, 'frontends'))
         .replaceAll('/var/www/kaiyuangouwu', repository);
-    const deployed = spawnSync('bash', ['-c', command], { encoding: 'utf8' });
+    const deployed = spawnSync('sh', ['-c', command], { encoding: 'utf8' });
     assert.equal(deployed.status, 0, deployed.stderr);
     assert.ok(deployed.stdout.includes(`TARGET_CONTROLS_OK ${target} frontends-${target}-123-1.tar.gz`));
     assert.equal(git('rev-parse', 'HEAD'), active);
     assert.equal(git('status', '--porcelain'), '');
-    const stale = spawnSync('bash', ['-c', command.replaceAll(target, active)], { encoding: 'utf8' });
+    const stale = spawnSync('sh', ['-c', command.replaceAll(target, active)], { encoding: 'utf8' });
     assert.notEqual(stale.status, 0);
     assert.ok(stale.stderr.includes('Target is no longer current main'));
     assert.equal(git('rev-parse', 'HEAD'), active);
