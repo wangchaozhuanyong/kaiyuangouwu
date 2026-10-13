@@ -38,7 +38,7 @@ void test('backup retention diagnosis only reads the installed gate and masks un
         exists: () => true,
         run(binary, args) {
             calls.push([binary, ...args]);
-            return args[0] === '-c'
+            return args.length === 2
                 ? { status: 0, stdout: JSON.stringify({ version: '3.10.12', rmtreeDirFd: false }) }
                 : {
                       status: 1,
@@ -46,7 +46,7 @@ void test('backup retention diagnosis only reads the installed gate and masks un
                       stdout: JSON.stringify({
                           status: 'blocked',
                           blocked: [{ reason: 'offsite-policy-unverified' }, { reason: secret }],
-                          kept: ['one', 'two', 'three'],
+                          protected: ['one', 'two', 'three'],
                           residualCandidates: [],
                       }),
                   };
@@ -58,7 +58,9 @@ void test('backup retention diagnosis only reads the installed gate and masks un
     assert.equal(report.keptCount, 3);
     assert.deepEqual(report.reasons, ['offsite-policy-unverified', 'unclassified-retention-blocker']);
     assert.equal(JSON.stringify(report).includes(secret), false);
-    assert.deepEqual(calls[1], ['python3', '/usr/local/sbin/vendure-file-backup-retention.py', '--dry-run']);
+    assert.deepEqual(calls[1].slice(0, 2), ['python3', '-c']);
+    assert.deepEqual(calls[1].slice(3), ['/usr/local/sbin/vendure-file-backup-retention.py', '--dry-run']);
+    assert.deepEqual(report.awsGetObjectFailureCounts, {});
 });
 
 void test('missing or malformed retention diagnostics never forward raw output', () => {
@@ -70,6 +72,114 @@ void test('missing or malformed retention diagnostics never forward raw output',
         }).reason,
         'retention-diagnostic-invalid',
     );
+});
+
+void test('installed dry-run observer preserves actual Python failures and only returns AWS categories', () => {
+    let observerArgs;
+    const runtime = { status: 0, stdout: JSON.stringify({ version: '3.12.3', rmtreeDirFd: true }) };
+    operations.inspectFileBackupRetention({
+        exists: () => true,
+        run(_binary, args, options) {
+            if (args.length === 2) return runtime;
+            observerArgs = args;
+            assert.equal(options.env.PATH, process.env.PATH);
+            assert.equal(options.env.PYTHONDONTWRITEBYTECODE, '1');
+            return { status: 0, stdout: '{"status":"ok"}' };
+        },
+    });
+    const secret = 'private-bucket-key-token-never-forward';
+    const cases = [
+        {
+            category: 'AccessDenied',
+            stderr: `An error occurred (AccessDenied) when calling the GetObject operation: ${secret}`,
+            bytes: true,
+        },
+        {
+            category: 'NoSuchVersion',
+            stderr: `An error occurred (NoSuchVersion) when calling the GetObject operation: ${secret}`,
+        },
+        { category: 'credentials-unavailable', stderr: `Unable to locate credentials ${secret}` },
+        { category: 'endpoint-unavailable', stderr: `Could not connect to the endpoint URL ${secret}` },
+        { category: 'tls-validation-failed', stderr: `SSL validation failed ${secret}` },
+        {
+            category: 'unclassified-aws-error',
+            stderr: `An error occurred (${secret}) when calling the GetObject operation`,
+        },
+        { category: 'subprocess-timeout', kind: 'timeout' },
+        { category: 'command-unavailable', kind: 'missing' },
+        {
+            category: null,
+            operation: 'head-object',
+            stderr: `An error occurred (AccessDenied) when calling the GetObject operation: ${secret}`,
+        },
+        { category: null, kind: 'success' },
+    ];
+    for (const awsCase of cases) {
+        const prelude = `
+import json,runpy,subprocess,sys
+fixture=json.loads(${JSON.stringify(JSON.stringify(awsCase))})
+command=["aws","s3api",fixture.get("operation","get-object"),"--key",${JSON.stringify(secret)}]
+raw=fixture.get("stderr",${JSON.stringify(secret)})
+if fixture.get("bytes"): raw=raw.encode()
+kind=fixture.get("kind")
+if kind=="timeout": expected_error=subprocess.TimeoutExpired(command,30,stderr=raw)
+elif kind=="missing": expected_error=FileNotFoundError(${JSON.stringify(secret)})
+else: expected_error=subprocess.CalledProcessError(254,command,stderr=raw)
+def fake_run(actual,*args,**kwargs):
+    assert actual==command and args==()
+    assert kwargs=={"check":True,"capture_output":True,"timeout":30}
+    if kind=="success": return subprocess.CompletedProcess(command,0)
+    raise expected_error
+def fake_script(location,run_name):
+    assert location=="/usr/local/sbin/vendure-file-backup-retention.py"
+    assert sys.argv==[location,"--dry-run"] and run_name=="__main__"
+    try:
+        subprocess.run(command,check=True,capture_output=True,timeout=30)
+    except (subprocess.CalledProcessError,subprocess.TimeoutExpired,OSError) as error:
+        assert error is expected_error
+        print(json.dumps({"status":"blocked","reason":"offsite-checksum-read-failed","protected":["one","two","three"]}))
+        raise SystemExit(1)
+    print(json.dumps({"status":"ok","protected":["one","two","three"]}))
+subprocess.run=fake_run
+runpy.run_path=fake_script
+`;
+        const result = spawnSync('python3', ['-c', prelude + observerArgs[1], ...observerArgs.slice(2)], {
+            encoding: 'utf8',
+            timeout: 10000,
+        });
+        assert.equal(result.status, awsCase.kind === 'success' ? 0 : 1, awsCase.category ?? awsCase.kind);
+        assert.equal(result.stderr.includes(secret), false);
+        assert.equal(JSON.parse(result.stdout).status, awsCase.kind === 'success' ? 'ok' : 'blocked');
+        const report = operations.inspectFileBackupRetention({
+            exists: () => true,
+            run: (_binary, args) => (args.length === 2 ? runtime : result),
+        });
+        assert.equal(report.exitCode, result.status);
+        assert.equal(report.keptCount, 3);
+        assert.deepEqual(report.awsGetObjectFailureCounts, awsCase.category ? { [awsCase.category]: 1 } : {});
+        assert.equal(JSON.stringify(report).includes(secret), false);
+        if (awsCase.kind !== 'success') assert.deepEqual(report.reasons, ['offsite-checksum-read-failed']);
+    }
+});
+
+void test('AWS diagnostic marker never forwards unapproved keys and survives malformed gate JSON', () => {
+    for (const stdout of ['not-json', '{"status":"blocked","reason":"offsite-checksum-read-failed"}']) {
+        const report = operations.inspectFileBackupRetention({
+            exists: () => true,
+            run: (_binary, args) =>
+                args.length === 2
+                    ? { status: 0, stdout: '{"version":"3.12.3","rmtreeDirFd":true}' }
+                    : {
+                          status: 1,
+                          stdout,
+                          stderr:
+                              'private-raw-stderr\nVENDURE_RETENTION_AWS_DIAGNOSTIC=' +
+                              '{"AccessDenied":1,"private-key":4,"NoSuchKey":"private-value","NoSuchVersion":-1}\n',
+                      },
+        });
+        assert.deepEqual(report.awsGetObjectFailureCounts, { AccessDenied: 1 });
+        assert.equal(JSON.stringify(report).includes('private-'), false);
+    }
 });
 
 void test('mailbox inspection pins the live revision and never forwards secrets or raw child errors', () => {
