@@ -1,6 +1,7 @@
+import { ArtworkPosterDesign, validateArtworkPosterDesign } from '@vendure/common/lib/referral-poster-design';
 import { ID, UserInputError } from '@vendure/core';
 
-import { referralPosterCopy } from './referral-poster-presets';
+import { legacyPosterColorFields, LegacyPosterDesign, referralPosterCopy } from './referral-poster-presets';
 
 export interface SaveReferralPosterTemplateInput {
     expectedUpdatedAt?: Date;
@@ -8,18 +9,19 @@ export interface SaveReferralPosterTemplateInput {
     enabled: boolean;
     position: number;
     layoutVariant: string;
+    design?: unknown;
     posterBackgroundAssetId?: ID | null;
     shareBackgroundAssetId?: ID | null;
-    titleZh: string;
+    titleZh?: string;
     titleEn?: string;
     headlineZh: string;
     headlineEn?: string;
-    rewardTextZh: string;
+    rewardTextZh?: string;
     rewardTextEn?: string;
-    siteIntroZh: string;
-    siteIntroEn: string;
-    serviceTextZh: string;
-    serviceTextEn: string;
+    siteIntroZh?: string;
+    siteIntroEn?: string;
+    serviceTextZh?: string;
+    serviceTextEn?: string;
     featureOneTitleZh?: string;
     featureOneTitleEn?: string;
     featureOneTextZh?: string;
@@ -66,11 +68,48 @@ export interface UpdateReferralPosterTemplateInput extends Omit<
 }
 
 export function normalizeReferralPosterInput(input: SaveReferralPosterTemplateInput) {
+    const artwork = input.layoutVariant === 'ARTWORK_QR';
     if (!Number.isInteger(input.position) || input.position < 0 || input.position > 100_000) {
         throw new UserInputError('模板排序必须是0至100000之间的整数');
     }
-    if (input.layoutVariant !== 'STANDARD_CENTER') {
+    if (!artwork && input.layoutVariant !== 'STANDARD_CENTER') {
         throw new UserInputError('海报版式无效');
+    }
+    let design: ArtworkPosterDesign | LegacyPosterDesign | null = null;
+    if (artwork) {
+        const error = validateArtworkPosterDesign(input.design);
+        if (error) throw new UserInputError(error);
+        const validated = input.design as ArtworkPosterDesign;
+        // Store only the supported contract, never arbitrary JSON submitted alongside it.
+        design = {
+            version: 3,
+            canvas: { width: validated.canvas.width, height: validated.canvas.height },
+            qr: {
+                shape: 'circle',
+                centerX: validated.qr.centerX,
+                centerY: validated.qr.centerY,
+                diameter: validated.qr.diameter,
+                style: validated.qr.style,
+            },
+        };
+    } else if (input.design != null) {
+        if (
+            typeof input.design !== 'object' ||
+            Array.isArray(input.design) ||
+            (input.design as Record<string, unknown>).version !== 2
+        ) {
+            throw new UserInputError('标准海报配色版本无效');
+        }
+        const submitted = input.design as Record<string, unknown>;
+        const palette: LegacyPosterDesign = { version: 2 };
+        for (const field of legacyPosterColorFields) {
+            if (submitted[field] === undefined) continue;
+            if (typeof submitted[field] !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(submitted[field])) {
+                throw new UserInputError('标准海报配色必须使用 #RRGGBB 格式');
+            }
+            palette[field] = submitted[field];
+        }
+        design = palette;
     }
     if (!Number.isInteger(input.overlayOpacity) || input.overlayOpacity < 0 || input.overlayOpacity > 80) {
         throw new UserInputError('遮罩透明度必须在0至80之间');
@@ -80,11 +119,14 @@ export function normalizeReferralPosterInput(input: SaveReferralPosterTemplateIn
         enabled: input.enabled,
         position: input.position,
         layoutVariant: input.layoutVariant,
-        titleZh: requiredText(input.titleZh, '中文小标题', 80),
+        design,
+        titleZh: artwork ? clippedText(input.titleZh, 80) : requiredText(input.titleZh, '中文小标题', 80),
         titleEn: clippedText(input.titleEn, 80),
         headlineZh: requiredText(input.headlineZh, '中文主标题', 180),
         headlineEn: clippedText(input.headlineEn, 180),
-        rewardTextZh: requiredText(input.rewardTextZh, '中文奖励文案', 220),
+        rewardTextZh: artwork
+            ? clippedText(input.rewardTextZh, 220)
+            : requiredText(input.rewardTextZh, '中文奖励文案', 220),
         rewardTextEn: clippedText(input.rewardTextEn, 220),
         siteIntroZh: clippedText(input.siteIntroZh, 260),
         siteIntroEn: clippedText(input.siteIntroEn, 260),
@@ -140,8 +182,8 @@ export function normalizeReferralPosterInput(input: SaveReferralPosterTemplateIn
     };
 }
 
-export function requiredText(value: string, label: string, maxLength: number): string {
-    const normalized = value.trim();
+export function requiredText(value: string | null | undefined, label: string, maxLength: number): string {
+    const normalized = value?.trim() ?? '';
     if (!normalized || normalized.length > maxLength) {
         throw new UserInputError(`${label}不能为空且不能超过${maxLength}个字符`);
     }

@@ -9,6 +9,6 @@ describe('sharing settings query', () => {
         );
         expect(
             operation?.selectionSet.selections.map(node => (node.kind === Kind.FIELD ? node.name.value : '')),
-        ).toEqual(['activeChannel', 'referralProgram']);
+        ).toEqual(['activeChannel', 'myStoreProfile', 'referralProgram']);
     });
 });

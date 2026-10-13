@@ -1,8 +1,9 @@
+import { ArtworkPosterDesign } from '@vendure/common/lib/referral-poster-design';
 import { DeepPartial, ID } from '@vendure/common/lib/shared-types';
 import { Asset, Channel, EntityId, VendureEntity } from '@vendure/core';
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 
-import { referralPosterCopy } from '../referral/referral-poster-presets';
+import { LegacyPosterDesign, referralPosterCopy } from '../referral/referral-poster-presets';
 
 @Entity({ name: 'referral_poster_template' })
 @Index('IDX_referral_poster_template_channel_position', ['channelId', 'position'])
@@ -29,6 +30,9 @@ export class ReferralPosterTemplate extends VendureEntity {
 
     @Column({ type: 'varchar', length: 32, default: 'STANDARD_CENTER' })
     layoutVariant: string;
+
+    @Column({ type: 'simple-json', nullable: true })
+    design: ArtworkPosterDesign | LegacyPosterDesign | null;
 
     @ManyToOne(() => Asset, { nullable: true, onDelete: 'SET NULL' })
     @JoinColumn({

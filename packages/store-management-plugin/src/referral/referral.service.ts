@@ -58,7 +58,7 @@ import {
     UpdateReferralPosterTemplateInput,
 } from './referral-input';
 import { createReferralPaymentProof } from './referral-payment-proof';
-import { effectivePosterDefault, enabledPosterIds } from './referral-poster-presets';
+import { artworkPosterCopyPaths, effectivePosterDefault, enabledPosterIds } from './referral-poster-presets';
 import { ReferralPosterView } from './referral-poster-view';
 import { ReferralReportQuery } from './referral-report-query';
 import { businessDateKey, customerName, maskedCustomerName, withdrawalView } from './referral-view-helpers';
@@ -244,7 +244,9 @@ export class ReferralService implements OnApplicationBootstrap {
         if (input.expectedUpdatedAt) this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
         const repository = this.connection.getRepository(ctx, ReferralPosterTemplate);
         const localized = await this.translations.prepareLocalizedColumns(
-            customerFacingContentRegistry.ReferralPosterTemplate.fields.map(field => field.path),
+            input.layoutVariant === 'ARTWORK_QR'
+                ? artworkPosterCopyPaths
+                : customerFacingContentRegistry.ReferralPosterTemplate.fields.map(field => field.path),
             input,
         );
         const saved = await repository.save(
@@ -271,7 +273,9 @@ export class ReferralService implements OnApplicationBootstrap {
         this.assertExpectedUpdatedAt(config.updatedAt, input.expectedUpdatedAt);
         if ('enabled' in input) throw new UserInputError('请使用海报启停操作修改展示状态');
         const localized = await this.translations.prepareLocalizedColumns(
-            customerFacingContentRegistry.ReferralPosterTemplate.fields.map(field => field.path),
+            input.layoutVariant === 'ARTWORK_QR'
+                ? artworkPosterCopyPaths
+                : customerFacingContentRegistry.ReferralPosterTemplate.fields.map(field => field.path),
             input,
             template,
             {},

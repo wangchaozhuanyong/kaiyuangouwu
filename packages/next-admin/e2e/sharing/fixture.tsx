@@ -77,6 +77,17 @@ const asset = {
     source: '',
 };
 asset.source = asset.preview;
+const squareAsset = { ...asset, id: 'asset-square', name: '比例错误方图', height: 1080 };
+squareAsset.preview = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080"><rect width="1080" height="1080" fill="#eef4fe"/></svg>')}`;
+squareAsset.source = squareAsset.preview;
+const brokenAsset = {
+    ...asset,
+    id: 'asset-broken',
+    name: '读取失败设计图',
+    source: '/missing-artwork.png',
+    preview: '/missing-artwork.png',
+};
+const assets = [asset, squareAsset, brokenAsset];
 Object.assign(window, {
     sharingFixture: {
         operations,
@@ -116,7 +127,22 @@ const client = new ApolloClient({
                                     id: channelId,
                                     code: channelId === 'fixture-a' ? '分享测试店 A' : '分享测试店 B',
                                     defaultCurrencyCode: 'MYR',
+                                    customFields: {
+                                        storefrontNameZh:
+                                            channelId === 'fixture-a' ? '分享测试店 A' : '分享测试店 B',
+                                        storefrontNameEn: 'Sharing Test Store',
+                                    },
                                 },
+                                ...(operation.variables.includeStoreProfile
+                                    ? {
+                                          myStoreProfile: {
+                                              id: 'profile-' + channelId,
+                                              channel: { id: channelId },
+                                              storefrontUrl: 'https://sharing-test.example',
+                                              logoAsset: null,
+                                          },
+                                      }
+                                    : {}),
                                 referralProgram: program,
                             };
                         } else if (name === 'AdminUpdateReferralProgram') {
@@ -131,7 +157,8 @@ const client = new ApolloClient({
                             Object.assign(template, { enabled, updatedAt: stamp() });
                             program.updatedAt = stamp();
                             data = { setReferralPosterTemplateEnabled: program };
-                        } else if (name === 'GetAssets') data = { assets: { items: [asset], totalItems: 1 } };
+                        } else if (name === 'GetAssets')
+                            data = { assets: { items: assets, totalItems: assets.length } };
                         else if (
                             name === 'AdminCreateReferralPoster' ||
                             name === 'AdminUpdateReferralPoster'
@@ -147,8 +174,10 @@ const client = new ApolloClient({
                                 ...input,
                                 id: input.id || `custom-${++revision}`,
                                 updatedAt: stamp(),
-                                posterBackgroundAsset: input.posterBackgroundAssetId ? asset : null,
-                                shareBackgroundAsset: input.shareBackgroundAssetId ? asset : null,
+                                posterBackgroundAsset:
+                                    assets.find(asset => asset.id === input.posterBackgroundAssetId) || null,
+                                shareBackgroundAsset:
+                                    assets.find(asset => asset.id === input.shareBackgroundAssetId) || null,
                             };
                             program.posterTemplateConfigs = input.id
                                 ? program.posterTemplateConfigs.map(t => (t.id === input.id ? next : t))

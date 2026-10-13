@@ -4,6 +4,39 @@ import { describe, expect, it } from 'vitest';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 
 describe('store management API extensions', () => {
+    it('exposes artwork design while only requiring the actual headline copy', () => {
+        for (const name of ['CreateReferralPosterTemplateInput', 'UpdateReferralPosterTemplateInput']) {
+            const definition = adminApiExtensions.definitions.find(
+                value => value.kind === Kind.INPUT_OBJECT_TYPE_DEFINITION && value.name.value === name,
+            );
+            if (definition?.kind !== Kind.INPUT_OBJECT_TYPE_DEFINITION) throw new Error(name);
+            expect(definition.fields?.find(field => field.name.value === 'design')?.type).toMatchObject({
+                kind: Kind.NAMED_TYPE,
+                name: { value: 'JSON' },
+            });
+            expect(definition.fields?.find(field => field.name.value === 'headlineZh')?.type.kind).toBe(
+                Kind.NON_NULL_TYPE,
+            );
+            for (const fieldName of ['titleZh', 'rewardTextZh', 'siteIntroZh', 'serviceTextZh']) {
+                expect(definition.fields?.find(field => field.name.value === fieldName)?.type.kind).toBe(
+                    Kind.NAMED_TYPE,
+                );
+            }
+        }
+        for (const document of [adminApiExtensions, shopApiExtensions]) {
+            const poster = document.definitions.find(
+                value =>
+                    value.kind === Kind.OBJECT_TYPE_DEFINITION &&
+                    value.name.value === 'ReferralPosterTemplate',
+            );
+            if (poster?.kind !== Kind.OBJECT_TYPE_DEFINITION) throw new Error('ReferralPosterTemplate');
+            expect(poster.fields?.find(field => field.name.value === 'design')?.type).toMatchObject({
+                kind: Kind.NAMED_TYPE,
+                name: { value: 'JSON' },
+            });
+        }
+    });
+
     it('adds the channel-scoped branding preview only to the Admin API', () => {
         const adminFields = queryExtension(adminApiExtensions).fields ?? [];
         expect(adminFields.filter(field => field.name.value === 'storefrontPreviewBranding')).toHaveLength(1);

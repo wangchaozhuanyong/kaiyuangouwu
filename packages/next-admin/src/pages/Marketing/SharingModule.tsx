@@ -1,4 +1,5 @@
 import { AdminButton } from '../../components/AdminControls';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 
 import { RefreshCw } from 'lucide-react';
@@ -14,8 +15,10 @@ import { PostersPanel } from './ReferralPanels';
 import { errorText } from './referral-ui';
 
 export function SharingModule() {
+    const { hasAnyPermission } = useAdminPermissions();
     const query = useQuery<SharingSettingsResult>(SHARING_SETTINGS_QUERY, {
         notifyOnNetworkStatusChange: true,
+        variables: { includeStoreProfile: hasAnyPermission(['ReadStoreProfile']) },
     });
 
     if (query.loading && !query.data) return <LoadingState />;
@@ -86,6 +89,7 @@ function SharingSettings({
                         </p>
                     </div>
                     <AdminButton
+                        refreshPage
                         type="button"
                         disabled={loading}
                         onClick={() => {
@@ -131,6 +135,23 @@ function SharingSettings({
                     source={editing}
                     programUpdatedAt={data.referralProgram.updatedAt}
                     rewardRate={data.referralProgram.rewardRate}
+                    brand={{
+                        nameZh:
+                            data.activeChannel.customFields?.storefrontNameZh ||
+                            getChannelDisplayName(data.activeChannel),
+                        nameEn:
+                            data.activeChannel.customFields?.storefrontNameEn ||
+                            getChannelDisplayName(data.activeChannel),
+                        storefrontUrl:
+                            data.myStoreProfile?.channel.id === data.activeChannel.id
+                                ? data.myStoreProfile.storefrontUrl
+                                : null,
+                        logoUrl:
+                            data.myStoreProfile?.channel.id === data.activeChannel.id
+                                ? data.myStoreProfile.logoAsset?.source ||
+                                  data.myStoreProfile.logoAsset?.preview
+                                : null,
+                    }}
                     error={editorError}
                     onError={setEditorError}
                     onClose={() => setEditing(null)}

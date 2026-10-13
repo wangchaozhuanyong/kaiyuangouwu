@@ -1,17 +1,28 @@
 import { useEffect, useState } from 'react';
+import { isArtworkPosterDesign } from '../../../../common/src/referral-poster-design';
 import { renderReferralPoster } from '../../../../storefront/src/referral-poster-layout';
 import { AdminInput, AdminSelect } from '../../components/AdminControls';
+import { artworkAssetRatioError, posterPreviewUrl } from './poster-artwork-helpers';
 import { PosterAssetChoice, PosterDraft } from './referrals-types';
+
+export interface PosterPreviewBrand {
+    nameZh: string;
+    nameEn: string;
+    storefrontUrl?: string | null;
+    logoUrl?: string | null;
+}
 
 export function ReferralPosterPreview({
     draft,
     assets,
     rewardRate,
+    brand,
     onValidation,
 }: {
     draft: PosterDraft;
     assets: PosterAssetChoice[];
     rewardRate: number;
+    brand?: PosterPreviewBrand;
     onValidation: (value: { pending: boolean; error: string }) => void;
 }) {
     const [language, setLanguage] = useState<'zh' | 'en'>('zh');
@@ -20,11 +31,22 @@ export function ReferralPosterPreview({
     const selected = assets.find(asset => asset.id === draft.posterBackgroundAssetId);
     const assetSource = selected?.source || selected?.preview;
     const assetPreview = selected?.preview || '';
-    const inputKey = JSON.stringify([draft, assetSource, assetPreview, rewardRate, safe]);
-    const images = rendered.key === inputKey ? rendered : { zh: '', en: '' };
-    const error = rendered.key === inputKey ? rendered.error : '';
+    const artwork = draft.layoutVariant === 'ARTWORK_QR';
+    const design = isArtworkPosterDesign(draft.design) ? draft.design : null;
+    const dimensions = artwork && design ? design.canvas : { width: 1080, height: 1920 };
+    const ratioError =
+        artwork && design ? artworkAssetRatioError(design, selected?.width, selected?.height) : '';
+    const inputError = ratioError || (artwork && !assetSource ? '上传完整设计图后即可预览效果' : '');
+    const shareUrl = posterPreviewUrl(brand?.storefrontUrl);
+    const inputKey = JSON.stringify([draft, assetSource, assetPreview, rewardRate, safe, brand, ratioError]);
+    const images = !inputError && rendered.key === inputKey ? rendered : { zh: '', en: '' };
+    const error = inputError || (rendered.key === inputKey ? rendered.error : '');
     useEffect(() => {
         let cancelled = false;
+        if (inputError) {
+            onValidation({ pending: false, error: inputError });
+            return;
+        }
         onValidation({ pending: true, error: '' });
         const timer = setTimeout(() => {
             const template = {
@@ -41,10 +63,10 @@ export function ReferralPosterPreview({
                     renderReferralPoster({
                         template,
                         isZh,
-                        storefrontName: isZh ? '当前店铺' : 'Your store',
-                        logoUrl: null,
+                        storefrontName: isZh ? brand?.nameZh || '当前店铺' : brand?.nameEn || 'Your store',
+                        logoUrl: brand?.logoUrl || null,
                         rewardRate,
-                        shareUrl: 'https://store.example/register?ref=PREVIEW&source=POSTER',
+                        shareUrl,
                         showSafeArea: safe,
                     }),
                 ),
@@ -66,11 +88,26 @@ export function ReferralPosterPreview({
             cancelled = true;
             clearTimeout(timer);
         };
-    }, [draft, assetSource, assetPreview, rewardRate, safe, onValidation, inputKey]);
+    }, [
+        draft,
+        assetSource,
+        assetPreview,
+        rewardRate,
+        safe,
+        onValidation,
+        inputKey,
+        inputError,
+        shareUrl,
+        brand?.nameZh,
+        brand?.nameEn,
+        brand?.logoUrl,
+    ]);
     return (
         <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <strong className="text-xs text-slate-700">完整海报预览 · 1080×1920</strong>
+                <strong className="text-xs text-slate-700">
+                    完整效果 · {dimensions.width}×{dimensions.height}
+                </strong>
                 <div className="flex gap-3 text-xs">
                     <label>
                         预览语言{' '}
@@ -101,16 +138,23 @@ export function ReferralPosterPreview({
                 />
             ) : (
                 <p className="py-6 text-center text-xs text-slate-500" role="status">
-                    {error || '正在检查中英文排版…'}
+                    {error || '正在生成预览并检查二维码…'}
                 </p>
             )}
-            {selected?.width && selected?.height && selected.width * 16 !== selected.height * 9 ? (
+            {!artwork &&
+            selected?.width &&
+            selected?.height &&
+            selected.width * 16 !== selected.height * 9 ? (
                 <p className="mt-3 text-[11px] text-amber-700">
                     所选图片为 {selected.width}×{selected.height}，预览按 9:16 居中裁切；导出仍为 1080×1920。
                 </p>
             ) : null}
             <p className="mt-3 text-[11px] text-slate-500">
-                这里使用示例店名和示例二维码。正式海报自动使用当前网站品牌、域名、用户邀请码与奖励比例。两种语言都通过排版检查后才能保存。
+                当前店铺：{brand?.nameZh || '当前店铺'}。预览使用测试邀请码
+                PREVIEW，不用于真实邀请；正式海报使用当前用户的邀请码。
+                {artwork
+                    ? '图片中的文字不会自动翻译；复制分享文案独立支持中英文。'
+                    : '中英文预览均通过排版检查后才能保存。'}
             </p>
         </section>
     );

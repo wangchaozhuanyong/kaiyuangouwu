@@ -16,6 +16,12 @@ export interface SharePosterSurfaceProps {
     pending?: boolean;
     previewRef?: RefObject<HTMLDivElement | null>;
     qrCodeUrl?: string;
+    qrReady?: boolean;
+    qrError?: string;
+    qrAttempt?: number;
+    onQrLoad?: () => void;
+    onQrError?: () => void;
+    onQrRetry?: () => void;
     copied?: boolean;
     downloading?: boolean;
     onDownload?: () => void;
@@ -31,6 +37,12 @@ export function SharePosterSurface({
     pending = false,
     previewRef,
     qrCodeUrl = '',
+    qrReady = false,
+    qrError = '',
+    qrAttempt = 0,
+    onQrLoad,
+    onQrError,
+    onQrRetry,
     copied = false,
     downloading = false,
     onDownload,
@@ -80,19 +92,38 @@ export function SharePosterSurface({
                         <small>{isZh ? '支持微信 / 浏览器扫码' : 'WeChat / Browser direct scan'}</small>
                     </div>
                     {qrCodeUrl ? (
-                        <img className="poster-qrcode" src={qrCodeUrl} alt="QR Code" />
+                        <img
+                            key={`${qrAttempt}:${qrCodeUrl}`}
+                            className="poster-qrcode"
+                            src={qrCodeUrl}
+                            alt={isZh ? '商品二维码' : 'Product QR code'}
+                            onLoad={onQrLoad}
+                            onError={onQrError}
+                        />
                     ) : (
                         <span className="poster-qrcode" aria-hidden="true" />
                     )}
                 </div>
             </div>
 
+            {!pending && !qrReady && (
+                <div className="poster-qr-status" role={qrError ? 'alert' : 'status'}>
+                    <span>{qrError || (isZh ? '正在准备二维码…' : 'Preparing QR code…')}</span>
+                    {qrError && onQrRetry && (
+                        <button type="button" onClick={onQrRetry}>
+                            {isZh ? '重试' : 'Retry'}
+                        </button>
+                    )}
+                </div>
+            )}
+
             <div className="poster-actions-row">
                 <button
                     type="button"
                     className="poster-action-btn primary"
                     onClick={onDownload}
-                    disabled={pending || downloading}
+                    disabled={pending || !qrReady || downloading}
+                    aria-busy={downloading || (!pending && !qrReady && !qrError)}
                 >
                     <Download size={16} />
                     <span>

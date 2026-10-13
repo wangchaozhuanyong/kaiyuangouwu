@@ -1,5 +1,13 @@
 import QRCode from 'qrcode';
 
+import {
+    isArtworkPosterDesign,
+    validateArtworkPosterDesign,
+    type ArtworkPosterDesign,
+} from '../../common/src/referral-poster-design';
+
+import { createCircularQrSvgDataUrl } from './poster-qr';
+
 export type PosterCopyBase =
     | 'title'
     | 'headline'
@@ -26,6 +34,8 @@ export type PosterCopyField = `${PosterCopyBase}${'Zh' | 'En'}`;
 export type PosterCopy = Record<PosterCopyField, string>;
 export interface PosterDesign {
     version?: number;
+    canvas?: ArtworkPosterDesign['canvas'];
+    qr?: ArtworkPosterDesign['qr'];
     background?: string;
     muted?: string;
     panel?: string;
@@ -315,7 +325,7 @@ export const posterLayoutFields = [
         anchor: 'middle',
     },
 ] as const;
-export const POSTER_LAYOUT_VERSION = 2;
+export const POSTER_LAYOUT_VERSION = 3;
 const FONT = '"PingFang SC", "Microsoft YaHei", -apple-system, sans-serif';
 
 export function replacePosterTokens(text: string, rewardRate: number, storeName: string): string {
@@ -360,14 +370,26 @@ function loadImage(url: string): Promise<HTMLImageElement> {
     const promise = new Promise<HTMLImageElement>((resolve, reject) => {
         const image = new Image();
         if (!url.startsWith('data:')) image.crossOrigin = 'anonymous';
-        const timer = setTimeout(() => reject(new Error('Image loading timed out')), 15000);
+        const timer = setTimeout(
+            () =>
+                reject(
+                    Object.assign(new Error('Image loading timed out'), {
+                        errorCode: 'POSTER_IMAGE_UNAVAILABLE',
+                    }),
+                ),
+            15000,
+        );
         image.onload = () => {
             clearTimeout(timer);
             resolve(image);
         };
         image.onerror = () => {
             clearTimeout(timer);
-            reject(new Error('Poster image unavailable'));
+            reject(
+                Object.assign(new Error('Poster image unavailable'), {
+                    errorCode: 'POSTER_IMAGE_UNAVAILABLE',
+                }),
+            );
         };
         image.src = url;
     }).catch(error => {
@@ -435,6 +457,91 @@ export function wrapPosterText(
     }
     return lines;
 }
+
+export function posterCanvasSize(template: Pick<PosterRenderTemplate, 'layoutVariant' | 'design'>) {
+    return template.layoutVariant === 'ARTWORK_QR' && isArtworkPosterDesign(template.design)
+        ? template.design.canvas
+        : { width: 1080, height: 1920 };
+}
+
+function artworkCanvas(design: ArtworkPosterDesign) {
+    const error = validateArtworkPosterDesign(design);
+    if (error) throw new Error(error);
+    const canvas = document.createElement('canvas');
+    canvas.width = design.canvas.width;
+    canvas.height = design.canvas.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas unavailable');
+    return { canvas, ctx };
+}
+
+function drawArtworkGuide(ctx: CanvasRenderingContext2D, design: ArtworkPosterDesign) {
+    const { centerX, centerY, diameter } = design.qr;
+    ctx.save();
+    ctx.strokeStyle = '#bf5900';
+    ctx.lineWidth = Math.max(2, design.canvas.width / 270);
+    ctx.setLineDash([12, 8]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, diameter / 2, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(centerX - 20, centerY);
+    ctx.lineTo(centerX + 20, centerY);
+    ctx.moveTo(centerX, centerY - 20);
+    ctx.lineTo(centerX, centerY + 20);
+    ctx.stroke();
+    ctx.restore();
+}
+
+/** This reference is never used as the downloadable customer poster. */
+export function renderPosterDesignGuide(design: ArtworkPosterDesign): string {
+    const { canvas, ctx } = artworkCanvas(design);
+    ctx.fillStyle = '#f5f5f2';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const { centerX, centerY, diameter } = design.qr;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, diameter / 2, 0, Math.PI * 2);
+    ctx.fill();
+    drawArtworkGuide(ctx, design);
+    ctx.fillStyle = '#243731';
+    ctx.textAlign = 'left';
+    ctx.font = `600 ${Math.round(canvas.width / 30)}px ${FONT}`;
+    ctx.fillText(`设计参考图 · ${canvas.width} × ${canvas.height}`, 40, 70);
+    ctx.font = `${Math.round(canvas.width / 42)}px ${FONT}`;
+    ctx.fillText('请在圆形区域留白，不放文字或人物', 40, 120);
+    ctx.fillText(`圆心 (${centerX}, ${centerY}) · 直径 ${diameter}px`, 40, 165);
+    ctx.fillText('参考标记仅用于设计，正式底图请移除', 40, 210);
+    return canvas.toDataURL('image/png');
+}
+
+async function renderArtworkPoster(template: PosterRenderTemplate, shareUrl: string, guide: boolean) {
+    const design = template.design;
+    if (!isArtworkPosterDesign(design))
+        throw Object.assign(new Error(validateArtworkPosterDesign(design)), {
+            errorCode: 'POSTER_DESIGN_INVALID',
+        });
+    const source = template.posterBackgroundAsset?.source || template.posterBackgroundAsset?.preview;
+    if (!source)
+        throw Object.assign(new Error('请上传完整海报设计图'), { errorCode: 'POSTER_IMAGE_UNAVAILABLE' });
+    const image = await loadImage(source);
+    const { canvas, ctx } = artworkCanvas(design);
+    if (image.naturalWidth * canvas.height !== image.naturalHeight * canvas.width)
+        throw Object.assign(
+            new Error(`图片比例不符，请上传与 ${canvas.width}×${canvas.height} 同比例的设计图`),
+            { errorCode: 'POSTER_IMAGE_RATIO' },
+        );
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const { centerX, centerY, diameter, style } = design.qr;
+    const qr = await loadImage(createCircularQrSvgDataUrl(shareUrl, style, diameter));
+    ctx.drawImage(qr, centerX - diameter / 2, centerY - diameter / 2, diameter, diameter);
+    if (guide) drawArtworkGuide(ctx, design);
+    return canvas.toDataURL('image/png');
+}
+
 export async function renderReferralPoster(input: {
     template: PosterRenderTemplate;
     storefrontName: string;
@@ -446,6 +553,9 @@ export async function renderReferralPoster(input: {
 }): Promise<string> {
     const { template, storefrontName, isZh, rewardRate, shareUrl } = input;
     const domain = posterDomain(shareUrl);
+    if (template.layoutVariant === 'ARTWORK_QR') {
+        return renderArtworkPoster(template, shareUrl, input.showSafeArea ?? false);
+    }
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
