@@ -37,6 +37,18 @@ for app in "${apps[@]}"; do
     [[ -L "$pointer" && -s "$pointer/index.html" ]] || fail "Full release must initialize $app first"
 done
 sudo -n nginx -T 2>/dev/null | awk '/kaiyuangouwu-next-admin-current/ { admin=1 } /kaiyuangouwu-storefront-current/ { storefront=1 } END { exit !(admin && storefront) }' || fail 'Static routing has not been initialized'
+readonly disk_budget="$controls_root/deploy/systemd/vendure-disk-budget.py"
+[[ -s "$disk_budget" ]] || fail 'Target controls omit the frontend disk budget gate'
+archive_bytes="$(aws s3api head-object --bucket "$artifact_bucket" \
+    --key "deployments/$target_sha/$archive_name" --query ContentLength --output text)" || \
+    fail 'Could not read the verified frontend archive size'
+[[ "$archive_bytes" =~ ^[1-9][0-9]*$ ]] || fail 'Invalid frontend archive size'
+readonly archive_bytes
+# The archive and extracted payload coexist. Use the existing 1 GiB extraction
+# ceiling as the conservative static runtime budget before downloading bytes.
+python3 "$disk_budget" stage --archive-bytes "$archive_bytes" --runtime-bytes 1073741824 || \
+    fail 'Root disk cannot stage the frontend within the health limit; review retention or expand the volume'
+printf 'FRONTEND_STAGING_DISK_OK archive_bytes=%s runtime_budget_bytes=1073741824\n' "$archive_bytes"
 sudo -n install -d -o ubuntu -g ubuntu -m 0755 "$releases_dir"
 readonly staging="$(mktemp -d "$releases_dir/.incoming-XXXXXX")"
 trap 'rm -rf -- "$staging"' EXIT

@@ -277,8 +277,9 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /deploy\/usdt-migration-guard\.cjs/u);
     assert.match(workflow, /packages\/dev-server\/migrations\/index\.ts/u);
     assert.match(workflow, /ref: \$\{\{ inputs\.source_sha \|\| github\.sha \}\}/u);
-    assert.match(workflow, /gzip\.compress\(Path\(path\)\.read_bytes\(\), mtime=0\)/u);
-    assert.match(workflow, /\| base64 -d \| gzip -d >/u);
+    assert.match(workflow, /gzip\.compress\(contents, mtime=0\)/u);
+    assert.match(workflow, /Path\(path\)\.read_bytes\(\)\.decode\('utf-8'\)/u);
+    assert.match(workflow, /\| base64 -d \| gzip -d \| python3 -c/u);
     assert.match(workflow, /len\(payload\.encode\('utf-8'\)\) <= 80_000/u);
     assert.match(
         workflow,
@@ -366,16 +367,19 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         ],
         [...commonFiles, 'deploy/systemd/vendure-backup-s3-guard.py'],
     ];
-    const encodedBytes = bundles.map(files =>
-        files.reduce(
-            (total, file) =>
-                total +
-                gzipSync(readFileSync(path.join(repositoryRoot, file), 'utf8'), {
-                    mtime: 0,
-                    level: 9,
-                }).toString('base64').length,
-            0,
-        ),
+    const encodedBytes = bundles.map(
+        files =>
+            gzipSync(
+                JSON.stringify(
+                    files.map(file => ({
+                        path: file.startsWith('deploy/')
+                            ? file.slice('deploy/'.length)
+                            : `repository/${file}`,
+                        content: readFileSync(path.join(repositoryRoot, file), 'utf8'),
+                    })),
+                ),
+                { mtime: 0, level: 9 },
+            ).toString('base64').length,
     );
     assert.ok(
         Math.max(...encodedBytes) < 78_000,
@@ -389,7 +393,7 @@ void test('every existing production operation fits both unchanged transport bud
         'utf8',
     );
     const generator = workflow.match(/python3 - <<'PY'\n([\s\S]*?)\n\s+PY/u)?.[1];
-    assert.ok(generator?.includes('def encode_file(path):'));
+    assert.ok(generator?.includes('def encode_files(files):'));
     const source = readFileSync(path.join(repositoryRoot, 'deploy/production-operations.cjs'), 'utf8');
     const allowed = source.match(
         /function validateRequest\(environment\)[\s\S]*?\[([\s\S]*?)\]\.includes\(operation\)/u,
@@ -402,7 +406,7 @@ void test('every existing production operation fits both unchanged transport bud
         'python3',
         [
             '-c',
-            `import json, os, re, sys, textwrap
+            `import base64, gzip, json, os, re, shlex, subprocess, sys, tempfile, textwrap
 from pathlib import Path
 request = json.load(sys.stdin)
 generator = compile(textwrap.dedent(request['generator']), '<existing-transport>', 'exec')
@@ -411,10 +415,42 @@ budgets = []
 for operation in request['operations']:
     os.environ['OPS_OPERATION'] = operation
     os.environ['OPS_NOTIFICATION_PUBLIC_KEY'] = 'A' * 1000 if operation == 'prepare-notification-secret-transfer' else ''
-    exec(generator, {})
+    scope = {}
+    exec(generator, scope)
     payload = Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').read_bytes()
     command = json.loads(payload)['commands'][0]
     encoded = re.findall(r"printf '%s' '([A-Za-z0-9+/=]+)'", command)
+    assert len(encoded) == 1, 'Production controls must share one compressed package'
+    entries = json.loads(gzip.decompress(base64.b64decode(encoded[0])))
+    assert entries == scope['selected_files'], 'Compressed controls differ from selected dependencies'
+    with tempfile.TemporaryDirectory(prefix='unpack-', dir=os.environ['RUNNER_TEMP']) as directory:
+        root = Path(directory)
+        for name in ['systemd', 'repository/packages/dev-server/migrations', 'repository/packages/dev-server/scripts']:
+            (root / name).mkdir(parents=True, exist_ok=True)
+        wire_lines = scope['lines'][:scope['bundle_index'] + 1]
+        wire_lines = ['operations_dir=' + shlex.quote(str(root)) if line.startswith('operations_dir=')
+                      else ':' if line.startswith("trap '") else line for line in wire_lines]
+        unpacked = subprocess.run(['bash', '-c', '\\n'.join(wire_lines)], text=True, capture_output=True)
+        assert unpacked.returncode == 0, unpacked.stderr
+        for entry in entries:
+            source = entry['path'].removeprefix('repository/') if entry['path'].startswith('repository/') else 'deploy/' + entry['path']
+            assert (root / entry['path']).read_bytes() == Path(source).read_bytes(), 'Unpacked control bytes differ'
+        repeated = subprocess.run([sys.executable, '-c', scope['unpack'], str(root), json.dumps(scope['expected_paths'])],
+                                  input=json.dumps(entries), text=True, capture_output=True)
+        assert repeated.returncode != 0, 'Decoder must not overwrite an existing control'
+    if not budgets:
+        bad_cases = [
+            ([{'path': '/outside.cjs', 'content': 'fixture'}], ['/outside.cjs']),
+            ([{'path': '../outside.cjs', 'content': 'fixture'}], ['../outside.cjs']),
+            ([{'path': 'unknown.cjs', 'content': 'fixture'}], ['production-operations.cjs']),
+            ([entries[0], entries[0]], [entries[0]['path'], 'systemd/fixture.cjs']),
+        ]
+        for bad_entries, expected in bad_cases:
+            with tempfile.TemporaryDirectory(prefix='refuse-', dir=os.environ['RUNNER_TEMP']) as directory:
+                rejected = subprocess.run([sys.executable, '-c', scope['unpack'], directory, json.dumps(expected)],
+                                          input=json.dumps(bad_entries), text=True, capture_output=True)
+                assert rejected.returncode != 0, 'Unsafe, unknown or repeated destination must be rejected'
+                assert not list(Path(directory).iterdir()), 'Decoder wrote before validating all paths'
     budgets.append({
         'operation': operation, 'payloadBytes': len(payload),
         'encodedSourceBytes': sum(map(len, encoded)),

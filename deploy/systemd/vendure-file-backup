@@ -82,12 +82,40 @@ for root in "${roots[@]}"; do
     fi
 done
 
-install -d -m 0700 "${vendure_backup_dir}"
+# Validate and create the real lock without following links or truncating a
+# recovery file. The shell subsequently opens it read-only for flock inheritance.
+python3 - "${vendure_backup_dir}" <<'PY'
+import os
+from pathlib import Path
+import stat
+import sys
+
+try:
+    directory = Path(sys.argv[1])
+    if not directory.is_absolute() or directory == Path("/") or ".." in directory.parts or directory.resolve() != directory:
+        raise ValueError("unsafe directory")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    root_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fchmod(root_fd, 0o700)
+        lock_fd = os.open(".backup.lock", os.O_RDONLY | os.O_CREAT | os.O_NOFOLLOW, 0o600, dir_fd=root_fd)
+        try:
+            metadata = os.fstat(lock_fd)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                raise ValueError("unsafe lock")
+        finally:
+            os.close(lock_fd)
+    finally:
+        os.close(root_fd)
+except (OSError, ValueError):
+    print("Persistent file backup directory or lock is unsafe", file=sys.stderr)
+    raise SystemExit(1)
+PY
 command -v flock >/dev/null 2>&1 || {
     printf 'The flock utility is required for persistent file backup serialization\n' >&2
     exit 1
 }
-exec 8>"${vendure_backup_dir}/.backup.lock"
+exec 8<"${vendure_backup_dir}/.backup.lock"
 if ! flock --nonblock 8; then
     printf 'Another persistent file backup is already running\n' >&2
     exit 1
@@ -96,6 +124,17 @@ fi
 readonly backup_tool="$(dirname "$(readlink -f "$0")")/vendure-file-backup.py"
 readonly s3_policy_guard="$(dirname "$(readlink -f "$0")")/vendure-backup-s3-guard.py"
 readonly s3_snapshot_tool="$(dirname "$(readlink -f "$0")")/vendure-s3-prefix-snapshot.py"
+readonly retention_tool="$(dirname "$(readlink -f "$0")")/vendure-file-backup-retention.py"
+readonly disk_budget_tool="$(dirname "$(readlink -f "$0")")/vendure-disk-budget.py"
+
+retain_after_success() {
+    # A verified capture/upload remains successful if remote retention proof is
+    # temporarily unavailable. The next capture is still gated by strict cleanup.
+    if ! python3 "${retention_tool}" --apply --lock-fd 8; then
+        printf 'Persistent file backup succeeded; retention is blocked and local recovery copies were preserved\n' >&2
+    fi
+}
+
 if [[ -n "${offsite_backup_uri}" ]]; then
     command -v aws >/dev/null 2>&1 || {
         printf 'AWS CLI is required to verify the offsite file backup\n' >&2
@@ -180,11 +219,33 @@ if [[ -n "${offsite_backup_uri}" ]]; then
             gzip -t "${latest_archive}"
             python3 "${backup_tool}" verify "${latest_archive}" >/dev/null
             upload_offsite_backup "${latest_archive}"
+            retain_after_success
             printf 'Resumed verified persistent file backup: %s offsite=yes encrypted=yes\n' \
                 "${latest_archive}"
             exit 0
         fi
     fi
+fi
+
+# Reuse the capture process's open lock description, then budget peak writes
+# before creating a partial archive or downloading any customer-image snapshot.
+if ! python3 "${retention_tool}" --apply --lock-fd 8; then
+    printf 'Persistent file backup capture blocked by unverified local retention\n' >&2
+    exit 1
+fi
+budget_arguments=(backup)
+for root in "${roots[@]}"; do
+    budget_arguments+=(--source-root "${root#*=}")
+done
+if [[ "${customer_image_storage}" == "s3" ]]; then
+    budget_arguments+=(
+        --s3-source "${CUSTOMER_AVATAR_S3_BUCKET}" 'avatars/v2/'
+        --s3-source "${CUSTOMER_PRIVATE_IMAGE_S3_BUCKET}" 'private/v1/'
+    )
+fi
+if ! python3 "${disk_budget_tool}" "${budget_arguments[@]}"; then
+    printf 'Persistent file backup capture blocked by insufficient or unverifiable disk budget\n' >&2
+    exit 1
 fi
 
 readonly backup_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -235,6 +296,7 @@ if [[ -n "${offsite_backup_uri}" ]]; then
 fi
 preserve_failed_backup
 trap - EXIT
+retain_after_success
 
 printf 'Created verified persistent file backup: %s offsite=%s encrypted=%s\n' \
     "${backup_file}" "$([[ -n "${offsite_backup_uri}" ]] && printf yes || printf no)" \

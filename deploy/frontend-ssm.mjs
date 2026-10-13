@@ -8,7 +8,18 @@ export function frontendDeployCommand({ sha, archive, checksum, components }) {
     assert.match(archive ?? '', new RegExp(`^frontends-${sha}-[0-9]+-[0-9]+\\.tar\\.gz$`, 'u'));
     assert.match(checksum ?? '', /^[a-f0-9]{64}$/u);
     assert.ok(['storefront', 'next-admin', 'next-admin,storefront'].includes(components));
-    return `sudo -H -u ubuntu /bin/bash -s -- ${sha} ${archive} ${checksum} ${components} <<'VENDURE_FRONTEND_CONTROLS'
+    return `/bin/bash -s <<'VENDURE_FRONTEND_HOST'
+set -Eeuo pipefail
+# Maintenance acquires the production lock before the deployment opens FD 9.
+# Running it inside the locked ubuntu script would deadlock through sudo.
+readonly disk_maintenance=/usr/local/sbin/vendure-production-disk-maintenance
+if [[ -e "$disk_maintenance" || -L "$disk_maintenance" ]]; then
+    [[ -f "$disk_maintenance" && -x "$disk_maintenance" ]] || { echo 'Installed production disk maintenance is unavailable' >&2; exit 1; }
+    "$disk_maintenance" --apply
+else
+    printf 'FRONTEND_DISK_MAINTENANCE_NOT_INSTALLED bootstrap requires a full production installation\\n'
+fi
+sudo -H -u ubuntu /bin/bash -s -- ${sha} ${archive} ${checksum} ${components} <<'VENDURE_FRONTEND_CONTROLS'
 set -Eeuo pipefail
 cd /var/www/kaiyuangouwu
 git fetch origin main --no-tags
@@ -19,7 +30,8 @@ controls=$(mktemp -d /var/www/kaiyuangouwu-frontend-releases/.controls-XXXXXX)
 trap 'rm -rf -- "$controls"' EXIT
 git archive "$1" deploy scripts | tar -x -C "$controls"
 /bin/bash "$controls/deploy/deploy-frontends-from-s3.sh" "$@"
-VENDURE_FRONTEND_CONTROLS`;
+VENDURE_FRONTEND_CONTROLS
+VENDURE_FRONTEND_HOST`;
 }
 
 async function main() {

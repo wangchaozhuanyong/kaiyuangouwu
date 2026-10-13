@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+readonly tools_directory="$(dirname "$(readlink -f "$0")")"
+readonly production_lock=/run/lock/vendure-production-deploy.lock
+readonly mode="${1:---dry-run}"
+[[ $# -le 1 && ( "$mode" == --apply || "$mode" == --dry-run ) ]] || {
+    printf 'Expected --apply or --dry-run\n' >&2
+    exit 1
+}
+[[ -f "$production_lock" && ! -L "$production_lock" ]] || {
+    printf 'Existing production deployment lock is unavailable\n' >&2
+    exit 1
+}
+# Use the existing ubuntu-owned inode. Never recreate it as root or ask a
+# service to acquire a lock already held by a parent deployment.
+exec 9<"$production_lock"
+flock --exclusive --wait 300 9
+
+node - "$tools_directory" "$mode" <<'NODE'
+const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const directory = process.argv[2];
+const mode = process.argv[3];
+const apply = mode === '--apply';
+const invoke = (binary, args) => {
+    const result = spawnSync(binary, args, { encoding: 'utf8', timeout: 600000, maxBuffer: 1024 * 1024 });
+    assert.equal(result.status, 0, 'Production disk maintenance did not pass a protected retention gate');
+    return JSON.parse(result.stdout);
+};
+// Read PM2 through its existing owner; root reads the verified control module.
+// This also works when a reviewed candidate package is root-private.
+const pm2Processes = invoke('/usr/sbin/runuser', ['-u', 'ubuntu', '--', 'env',
+    'HOME=/home/ubuntu', 'PM2_HOME=/home/ubuntu/.pm2',
+    'pm2', 'jlist']);
+const backend = require(path.join(directory, 'vendure-production-release-retention.cjs')).run({
+    arguments_: [mode], pm2Processes,
+    environment: { ...process.env, VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE: '1' },
+});
+const frontend = require(path.join(directory, 'vendure-frontend-release-retention.cjs')).run({
+    arguments_: [mode, '--lock-fd', '9'],
+    environment: { ...process.env, VENDURE_ALLOW_PRODUCTION_RELEASE_PRUNE: '1' },
+});
+const backup = invoke('python3', [path.join(directory, 'vendure-file-backup-retention.py'), mode]);
+const disk = spawnSync('df', ['-Pk', '/'], { encoding: 'utf8' });
+assert.equal(disk.status, 0, 'Could not read disk after maintenance');
+process.stdout.write(JSON.stringify({
+    operation: 'production-disk-maintenance', mode, observedAt: new Date().toISOString(),
+    backend: { keptDirectories: backend.keepDirectories, deletedDirectories: backend.deleteDirectories,
+        deletedArchives: backend.deleteArchives },
+    frontend: { keptDirectories: frontend.keepDirectories,
+        deletedDirectories: apply ? frontend.removedDirectories : frontend.deleteDirectories,
+        preservedEntryCount: frontend.preservedEntries.length,
+        reviewedBytes: frontend.candidates.filter(item => frontend.deleteDirectories.includes(item.directory))
+            .reduce((total, item) => total + item.tree.allocatedBytes, 0) },
+    backup, disk: disk.stdout.trim(),
+}) + '\n');
+NODE

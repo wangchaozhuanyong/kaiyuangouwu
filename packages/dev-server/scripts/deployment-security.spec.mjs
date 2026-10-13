@@ -270,6 +270,7 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
         archive_name=runtime.tar.gz
         expected_bucket=reviewed-backup-bucket
         previous_runtime=/fake/runtime
+        repository="$FIXTURE_REPOSITORY"
         fail() { printf '%s\\n' "$1" >&2; exit 1; }
         df() { printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\\n/dev/root %s 0 %s 0%% /\\n' \\
             "$FIXTURE_DISK_TOTAL" "$FIXTURE_DISK_AVAILABLE"; }
@@ -281,12 +282,41 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
             [[ "$*" == "$expected" ]] || return 2
             printf '%s\\n' "$FIXTURE_ARCHIVE_BYTES"
             return "$FIXTURE_AWS_STATUS"
+        }
+        sudo() {
+            [[ "$*" == '-n python3 -' ]] || return 2
+            printf '%s\\n' "$FIXTURE_BACKUP_BYTES"
+        }
+        python3() {
+            [[ "$1" == "$repository/deploy/systemd/vendure-disk-budget.py" ]] || return 2
+            shift
+            command python3 - "$repository" "$@" <<'PYDISKFIXTURE'
+import importlib.util
+import os
+from pathlib import Path
+import sys
+from types import SimpleNamespace
+
+location = Path(sys.argv[1]) / 'deploy/systemd/vendure-disk-budget.py'
+specification = importlib.util.spec_from_file_location('fixture_disk_budget', location)
+module = importlib.util.module_from_spec(specification)
+specification.loader.exec_module(module)
+module.os.statvfs = lambda _: SimpleNamespace(
+    f_blocks=int(os.environ['FIXTURE_DISK_TOTAL']),
+    f_frsize=1024,
+    f_bavail=int(os.environ['FIXTURE_DISK_AVAILABLE']),
+)
+sys.argv = [str(location), *sys.argv[2:]]
+raise SystemExit(module.main())
+PYDISKFIXTURE
         }`;
-    for (const [available, archiveBytes, awsStatus, passes] of [
+    for (const [available, archiveBytes, awsStatus, passes, backupBytes = '0'] of [
         ['8669144', '156515815', '0', true],
         ['8200000', '156515815', '0', false],
         ['8669144', '900000000', '0', false],
         ['8669144', '156515815', '1', false],
+        ['8669144', '156515815', '0', false, '3191755364'],
+        ['11800000', '156515815', '0', true, '3191755364'],
     ]) {
         const result = spawnSync(
             'bash',
@@ -300,6 +330,8 @@ void test('prunes abandoned candidates and checks disk before worker pause and d
                     FIXTURE_RUNTIME_KIB: '700000',
                     FIXTURE_ARCHIVE_BYTES: archiveBytes,
                     FIXTURE_AWS_STATUS: awsStatus,
+                    FIXTURE_BACKUP_BYTES: backupBytes,
+                    FIXTURE_REPOSITORY: repositoryRoot,
                 },
             },
         );

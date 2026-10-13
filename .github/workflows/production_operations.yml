@@ -240,12 +240,14 @@ jobs:
                   from pathlib import Path
                   import shlex
 
-                  def encode_file(path):
-                      return base64.b64encode(gzip.compress(Path(path).read_bytes(), mtime=0)).decode('ascii')
+                  def encode_files(files):
+                      contents = json.dumps(files, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+                      return base64.b64encode(gzip.compress(contents, mtime=0)).decode('ascii')
 
+                  selected_files = []
                   def transport(path, target):
-                      encoded = encode_file(path)
-                      return f"printf '%s' '{encoded}' | base64 -d | gzip -d > \"$operations_dir/{target}\""
+                      selected_files.append({'path': target, 'content': Path(path).read_bytes().decode('utf-8')})
+                      return ''
 
                   operation_name = os.environ['OPS_OPERATION']
                   operation = shlex.quote(operation_name)
@@ -261,9 +263,12 @@ jobs:
                       'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
                       f"trap 'code=$?; if [ {operation} != plan-platform-store-governance ] || [ \"$code\" != 0 ]; then rm -rf -- \"$operations_dir\"; fi' EXIT",
                       'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts"',
+                  ]
+                  bundle_index = len(lines)
+                  lines.extend([
                       transport('deploy/production-operations.cjs', 'production-operations.cjs'),
                       transport('deploy/systemd/vendure-production-release-retention.cjs', 'systemd/vendure-production-release-retention.cjs'),
-                  ]
+                  ])
                   backup_operations = {
                       'backup-database',
                       'apply-window-test-order-cleanup-reviewed',
@@ -352,10 +357,42 @@ jobs:
                       lines.append(transport('packages/dev-server/scripts/moyao-default-store-migration.mjs', 'repository/packages/dev-server/scripts/moyao-default-store-migration.mjs'))
                   if 'asset-webp-migration' in operation_name:
                       lines.append(transport('packages/dev-server/scripts/asset-webp-migration.mjs', 'repository/packages/dev-server/scripts/asset-webp-migration.mjs'))
+                  expected_paths = [entry['path'] for entry in selected_files]
+                  assert len(expected_paths) == len(set(expected_paths)), 'Duplicate production control destination'
+                  unpack = '\n'.join([
+                      'import json, os, pathlib, sys',
+                      'root = pathlib.Path(sys.argv[1])',
+                      'assert root.is_absolute() and root.is_dir() and not root.is_symlink()',
+                      'assert root.resolve() == root and root.stat().st_mode & 0o077 == 0',
+                      'expected = json.loads(sys.argv[2])',
+                      'assert isinstance(expected, list) and len(expected) == len(set(expected))',
+                      'entries = json.load(sys.stdin)',
+                      'assert isinstance(entries, list) and len(entries) == len(expected)',
+                      'prepared = {}',
+                      'for entry in entries:',
+                      '    assert isinstance(entry, dict) and set(entry) == {"path", "content"}',
+                      '    name, content = entry["path"], entry["content"]',
+                      '    assert isinstance(name, str) and name in expected and name not in prepared',
+                      '    assert not pathlib.PurePosixPath(name).is_absolute()',
+                      '    assert all(part not in {"", ".", ".."} for part in name.split("/"))',
+                      '    assert isinstance(content, str)',
+                      '    target = root / name',
+                      '    assert target.parent.resolve().is_relative_to(root)',
+                      '    prepared[name] = (target, content.encode("utf-8"))',
+                      'assert set(prepared) == set(expected)',
+                      'for target, contents in prepared.values():',
+                      '    with target.open("xb") as output:',
+                      '        output.write(contents)',
+                  ])
+                  encoded = encode_files(selected_files)
+                  expected_argument = shlex.quote(json.dumps(expected_paths, separators=(',', ':')))
+                  lines.insert(bundle_index,
+                      f"printf '%s' '{encoded}' | base64 -d | gzip -d | python3 -c {shlex.quote(unpack)} \"$operations_dir\" {expected_argument}"
+                  )
                   lines.append(
                       f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} OPS_PRODUCT_ID={product_id} OPS_NOTIFICATION_PUBLIC_KEY={notification_public_key} /usr/bin/node "$operations_dir/production-operations.cjs"'
                   )
-                  command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join(lines) + '\nVENDURE_OPERATIONS_SCRIPT'
+                  command = "/bin/bash <<'VENDURE_OPERATIONS_SCRIPT'\n" + '\n'.join(line for line in lines if line) + '\nVENDURE_OPERATIONS_SCRIPT'
                   payload = json.dumps({'commands': [command], 'executionTimeout': ['600']})
                   assert len(payload.encode('utf-8')) <= 80_000, 'Production operation SSM payload exceeds the safe request limit'
                   Path(os.environ['RUNNER_TEMP'], 'operations-ssm-parameters.json').write_text(

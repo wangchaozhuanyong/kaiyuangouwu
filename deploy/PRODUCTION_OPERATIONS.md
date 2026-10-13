@@ -1,5 +1,44 @@
 # Production operations
 
+## Bounded disk policy
+
+The production disk maintenance helper preserves the active backend plus its two
+rollback runtimes, every runtime still owning an active storefront/Admin/2FA
+pointer, and two usable historical frontend outputs for each component. It prunes
+only verified, strictly named generated releases; unknown output and changed
+pointers fail closed or remain protected.
+
+Persistent-file backups retain the newest three complete, locally verified
+recovery sets. An older local set can be removed only after the fixed offsite
+30-day policy, local checksums, encrypted/versioned remote objects and the
+version-pinned remote checksum agree. A blocked offsite verification preserves
+the local files and prevents another capture from increasing the footprint.
+Successful uploads run retention while reusing the backup lock; an upload failure
+resumes the existing complete set on the next run.
+
+The installer accepts a SHA-256-bound control package and saves replaced control
+files under `/var/backups/vendure`. Independent systemd overrides keep the disk
+policy active when an older application release reinstalls a base unit. The
+existing release path unit additionally watches `/var/www` to detect atomic
+replacement of the frontend current pointers. Watching the symlinks themselves
+follows their targets and does not trigger on the actual publication operation;
+backup capture checks the coexistence of the source snapshot and compressed
+archive before writing. Runtime and frontend downloads use the existing 85%
+maximum-usage reserve without lowering the protection threshold.
+
+Install or update this server policy only within explicit operations authorization:
+
+```bash
+bash deploy/install-production-disk-policy.sh <verified-package-root> <manifest-sha256> --check
+bash deploy/install-production-disk-policy.sh <verified-package-root> <manifest-sha256> --apply
+```
+
+The installation does not promote an application version. Production source,
+installed policy fingerprints, resulting counts, disk headroom and service health
+must be recorded separately. Retention bounds derived files, not business assets;
+if protected source data itself outgrows capacity, the peak-write budget stops
+before filling the volume.
+
 `Production Operations` uses the existing GitHub OIDC deployment role and AWS SSM
 connection to the Vendure production instance. It does not need a local AWS login,
 an open SSH port, or a stored AWS access key. The external SSH key remains a fallback.

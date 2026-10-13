@@ -16,11 +16,13 @@ import importlib.util
 SCRIPT = Path(__file__).resolve().parents[1] / "vendure-file-backup.py"
 SERVICE_SCRIPT = SCRIPT.with_name("vendure-file-backup")
 OFFHOST_SCRIPT = SCRIPT.parents[1] / "offsite-file-restore-drill.py"
+TEST_OUTPUT = SCRIPT.parent / "tests/.file-backup-test-output"
+TEST_OUTPUT.mkdir(exist_ok=True)
 
 
 class FileBackupTest(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(dir=TEST_OUTPUT)
         self.root = Path(self.temporary.name)
         self.assets = self.root / "assets"
         self.private = self.root / "private"
@@ -148,7 +150,7 @@ class FileBackupTest(unittest.TestCase):
 
 class OffhostFileRestoreTest(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(dir=TEST_OUTPUT)
         self.root = Path(self.temporary.name)
         self.files = self.root / "files"
         self.files.mkdir()
@@ -218,7 +220,7 @@ class OffhostFileRestoreTest(unittest.TestCase):
 
 class FileBackupServiceResumeTest(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(dir=TEST_OUTPUT)
         self.root = Path(self.temporary.name)
         self.backups = self.root / "backups"
         self.backups.mkdir()
@@ -228,6 +230,56 @@ class FileBackupServiceResumeTest(unittest.TestCase):
         self.state.write_text("{}")
         self.upload_log = self.root / "uploads.json"
         self.upload_log.write_text("[]")
+        self.event_log = self.root / "lifecycle.json"
+        self.event_log.write_text("[]")
+        self.tools = self.root / "tools"
+        self.tools.mkdir()
+        self.service_script = self.tools / "vendure-file-backup"
+        self.service_script.write_bytes(SERVICE_SCRIPT.read_bytes())
+        (self.tools / "vendure-backup-s3-guard.py").write_bytes(
+            SCRIPT.with_name("vendure-backup-s3-guard.py").read_bytes()
+        )
+        event_prelude = '''import json
+import os
+from pathlib import Path
+import sys
+log_path = Path(os.environ["FAKE_LIFECYCLE_LOG"])
+events = json.loads(log_path.read_text())
+'''
+        (self.tools / "vendure-file-backup-retention.py").write_text(event_prelude + '''
+assert sys.argv[1:] == ["--apply", "--lock-fd", "8"]
+opened = os.fstat(8)
+expected = (Path(os.environ["VENDURE_FILE_BACKUP_DIR"]) / ".backup.lock").stat()
+assert (opened.st_dev, opened.st_ino) == (expected.st_dev, expected.st_ino)
+events.append({"operation": "retention", "fd": 8})
+log_path.write_text(json.dumps(events))
+count = sum(item["operation"] == "retention" for item in events)
+blocked = count == int(os.environ.get("FAKE_RETENTION_BLOCK_CALL", "0"))
+print(json.dumps({"status": "blocked" if blocked else "ok"}))
+raise SystemExit(1 if blocked else 0)
+''')
+        (self.tools / "vendure-disk-budget.py").write_text(event_prelude + '''
+assert sys.argv[1] == "backup"
+events.append({"operation": "budget", "arguments": sys.argv[1:]})
+log_path.write_text(json.dumps(events))
+blocked = os.environ.get("FAKE_BUDGET_BLOCK") == "1"
+print(json.dumps({"status": "insufficient" if blocked else "ok"}))
+raise SystemExit(1 if blocked else 0)
+''')
+        (self.tools / "vendure-file-backup.py").write_text(event_prelude + f'''
+import runpy
+events.append({{"operation": sys.argv[1]}})
+log_path.write_text(json.dumps(events))
+runpy.run_path({str(SCRIPT)!r}, run_name="__main__")
+''')
+        (self.tools / "vendure-s3-prefix-snapshot.py").write_text(event_prelude + '''
+assert sys.argv[1] == "capture"
+events.append({"operation": "snapshot", "arguments": sys.argv[1:]})
+log_path.write_text(json.dumps(events))
+destination = Path(sys.argv[4])
+destination.mkdir(parents=True)
+(destination / "fixture-image.bin").write_bytes(b"synthetic customer image")
+''')
         roots = {}
         for label in ("public-assets", "digital-delivery", "customer-avatars", "private-images"):
             path = self.root / label
@@ -291,6 +343,8 @@ elif operation == "head-object":
     result = state[key]
 elif operation == "s3":
     assert args[1] == "cp"
+    if os.environ.get("FAKE_S3_FAIL_UPLOAD") == "1":
+        raise SystemExit("Synthetic upload failure")
     source = Path(args[2])
     key = args[3].split("/", 3)[3]
     state[key] = {"ContentLength": source.stat().st_size, "ServerSideEncryption": "AES256"}
@@ -314,7 +368,7 @@ if result is not None:
         path.write_text(source)
         path.chmod(0o755)
 
-    def run_service(self):
+    def run_service(self, overrides=None):
         environment = dict(os.environ)
         environment.update({
             "PATH": f"{self.bin}:{environment['PATH']}",
@@ -322,10 +376,24 @@ if result is not None:
             "VENDURE_FILE_BACKUP_DIR": str(self.backups),
             "FAKE_S3_STATE": str(self.state),
             "FAKE_S3_UPLOAD_LOG": str(self.upload_log),
+            "FAKE_LIFECYCLE_LOG": str(self.event_log),
         })
+        environment.update(overrides or {})
         return subprocess.run(
-            ["bash", str(SERVICE_SCRIPT)], capture_output=True, text=True, env=environment,
+            ["bash", str(self.service_script)], capture_output=True, text=True, env=environment, timeout=20,
         )
+
+    def remove_initial_archive(self):
+        for path in (self.archive, Path(str(self.archive) + ".manifest.json"), Path(str(self.archive) + ".sha256")):
+            path.unlink()
+
+    def events(self):
+        return json.loads(self.event_log.read_text())
+
+    def enable_s3_customer_images(self):
+        self.env_file.write_text(self.env_file.read_text().replace("CUSTOMER_IMAGE_STORAGE=local", "CUSTOMER_IMAGE_STORAGE=s3") +
+                                 "AWS_REGION=ap-northeast-1\nCUSTOMER_AVATAR_S3_BUCKET=avatar-test\n"
+                                 "CUSTOMER_PRIVATE_IMAGE_S3_BUCKET=private-test\n")
 
     def test_resumes_missing_offsite_objects_without_new_archive(self):
         result = self.run_service()
@@ -377,6 +445,115 @@ if result is not None:
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("differs from the verified local file", result.stderr)
         self.assertEqual(json.loads(self.upload_log.read_text()), [])
+
+    def test_retention_then_budget_precede_capture_and_successful_cleanup(self):
+        self.remove_initial_archive()
+        result = self.run_service()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.backups.stat().st_mode & 0o777, 0o700)
+        self.assertEqual([item["operation"] for item in self.events()],
+                         ["retention", "budget", "capture", "verify", "retention"])
+        arguments = self.events()[1]["arguments"]
+        self.assertEqual(arguments[0], "backup")
+        sources = [arguments[index + 1] for index, arg in enumerate(arguments) if arg == "--source-root"]
+        self.assertEqual(set(sources), {str(self.root / label) for label in
+                                      ("public-assets", "digital-delivery", "customer-avatars", "private-images")})
+
+    def test_blocked_pre_retention_does_not_create_archive_or_snapshot(self):
+        self.remove_initial_archive()
+        self.enable_s3_customer_images()
+        result = self.run_service({"FAKE_RETENTION_BLOCK_CALL": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("capture blocked by unverified local retention", result.stderr)
+        self.assertEqual([item["operation"] for item in self.events()], ["retention"])
+        self.assertEqual({path.name for path in self.backups.iterdir()}, {".backup.lock"})
+        self.assertEqual(json.loads(self.upload_log.read_text()), [])
+
+    def test_budget_shortfall_does_not_create_archive_or_snapshot(self):
+        self.remove_initial_archive()
+        self.enable_s3_customer_images()
+        result = self.run_service({"FAKE_BUDGET_BLOCK": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("capture blocked by insufficient or unverifiable disk budget", result.stderr)
+        self.assertEqual([item["operation"] for item in self.events()], ["retention", "budget"])
+        self.assertEqual({path.name for path in self.backups.iterdir()}, {".backup.lock"})
+
+    def test_s3_budget_includes_snapshot_sources_before_download(self):
+        self.remove_initial_archive()
+        self.enable_s3_customer_images()
+        result = self.run_service()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        events = self.events()
+        self.assertEqual([item["operation"] for item in events],
+                         ["retention", "budget", "snapshot", "snapshot", "capture", "verify", "retention"])
+        arguments = events[1]["arguments"]
+        sources = [arguments[index + 1] for index, arg in enumerate(arguments) if arg == "--source-root"]
+        self.assertEqual(sources, [str(self.root / "public-assets"), str(self.root / "digital-delivery")])
+        s3_sources = [arguments[index + 1:index + 3] for index, arg in enumerate(arguments) if arg == "--s3-source"]
+        self.assertEqual(s3_sources, [["avatar-test", "avatars/v2/"], ["private-test", "private/v1/"]])
+        self.assertEqual(list(self.backups.glob(".s3-source-*")), [])
+
+    def test_resume_success_runs_retention_without_budget_or_capture(self):
+        result = self.run_service()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([item["operation"] for item in self.events()], ["verify", "retention"])
+        self.assertIn("Resumed verified persistent file backup", result.stdout)
+        self.assertEqual(len(list(self.backups.glob("*.tar.gz"))), 1)
+
+    def test_post_capture_retention_failure_does_not_erase_success(self):
+        self.remove_initial_archive()
+        result = self.run_service({"FAKE_RETENTION_BLOCK_CALL": "2"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Created verified persistent file backup", result.stdout)
+        self.assertIn("backup succeeded; retention is blocked", result.stderr)
+        self.assertEqual(len(list(self.backups.glob("*.tar.gz"))), 1)
+        self.assertEqual(len(json.loads(self.upload_log.read_text())), 3)
+
+    def test_post_resume_retention_failure_does_not_erase_success(self):
+        result = self.run_service({"FAKE_RETENTION_BLOCK_CALL": "1"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Resumed verified persistent file backup", result.stdout)
+        self.assertIn("backup succeeded; retention is blocked", result.stderr)
+        self.assertEqual([item["operation"] for item in self.events()], ["verify", "retention"])
+
+    def test_failed_upload_preserves_complete_local_set_then_resumes_without_capture(self):
+        self.remove_initial_archive()
+        failed = self.run_service({"FAKE_S3_FAIL_UPLOAD": "1"})
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertNotIn("Created verified persistent file backup", failed.stdout)
+        archives = list(self.backups.glob("*.tar.gz"))
+        self.assertEqual(len(archives), 1)
+        for suffix in (".manifest.json", ".sha256"):
+            self.assertTrue(Path(str(archives[0]) + suffix).exists())
+        self.assertEqual([item["operation"] for item in self.events()],
+                         ["retention", "budget", "capture", "verify"])
+        self.event_log.write_text("[]")
+        resumed = self.run_service()
+        self.assertEqual(resumed.returncode, 0, resumed.stderr)
+        self.assertIn("Resumed verified persistent file backup", resumed.stdout)
+        self.assertEqual([item["operation"] for item in self.events()], ["verify", "retention"])
+        self.assertEqual(list(self.backups.glob("*.tar.gz")), archives)
+
+    def test_symlink_lock_is_rejected_without_truncating_its_target(self):
+        target = self.root / "outside-recovery-record"
+        target.write_text("keep recovery record")
+        (self.backups / ".backup.lock").symlink_to(target)
+        result = self.run_service()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("directory or lock is unsafe", result.stderr)
+        self.assertEqual(target.read_text(), "keep recovery record")
+        self.assertEqual(self.events(), [])
+        self.assertEqual(json.loads(self.upload_log.read_text()), [])
+
+    def test_hardlinked_lock_is_rejected_without_truncating_its_target(self):
+        target = self.root / "outside-recovery-record"
+        target.write_text("keep recovery record")
+        os.link(target, self.backups / ".backup.lock")
+        result = self.run_service()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("directory or lock is unsafe", result.stderr)
+        self.assertEqual(target.read_text(), "keep recovery record")
+        self.assertEqual(self.events(), [])
 
 
 if __name__ == "__main__":
