@@ -4,7 +4,6 @@ import {
     useLayoutEffect,
     useRef,
     useState,
-    type CSSProperties,
     type MouseEventHandler,
     type ReactNode,
 } from 'react';
@@ -75,7 +74,7 @@ export function HeroScene({
     );
     const sampledSource = useRef('');
     const mediaRef = useRef<HTMLDivElement>(null);
-    const [overlayHeight, setOverlayHeight] = useState(0);
+    const [overlayHeight, setOverlayHeight] = useState<number>();
 
     const sampleRenderedImage = useCallback(
         (artworkElement: HTMLImageElement) => {
@@ -114,7 +113,10 @@ export function HeroScene({
     return (
         <div
             className={`hero-scene-wrapper${preset === 'bright' ? ' is-original-image' : ''}`}
-            style={{ ...adaptiveStyle, '--hero-overlay-height': `${overlayHeight}px` } as CSSProperties}
+            style={{
+                ...adaptiveStyle,
+                ...(overlayHeight !== undefined ? { '--hero-overlay-height': `${overlayHeight}px` } : {}),
+            }}
             data-copy-layout="overlay"
             data-hero-artwork-layout={resolveHeroArtworkLayout(content.settings)}
         >

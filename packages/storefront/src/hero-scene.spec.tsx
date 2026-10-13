@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HeroScene, type HeroSceneData } from '../../storefront-content-plugin/src/shared/hero-scene';
@@ -12,6 +13,28 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
+    it('leaves the server-rendered pager reservation to CSS before measuring its actual height', () => {
+        const content: HeroSceneData = {
+            title: 'Published store promotion',
+            subtitle: '',
+            body: 'The first frame retains space for the carousel controls.',
+            ctaLabel: '',
+            targetType: 'NONE',
+            items: [],
+        };
+        const markup = renderToString(
+            <HeroScene
+                content={content}
+                image={<img src="/synthetic.jpg" alt="Synthetic artwork" />}
+                imageLabel="Open promotion"
+                mediaOverlay={<div className="hero-page-picker">1</div>}
+            />,
+        );
+        expect(markup).toContain('class="hero-page-picker"');
+        expect(markup).not.toContain('--hero-overlay-height:0px');
+        expect(markup).toContain('The first frame retains space for the carousel controls.');
+    });
+
     it('keeps one copy and action structure across every artwork ratio with phone-only scroll semantics', async () => {
         vi.stubGlobal(
             'ResizeObserver',
