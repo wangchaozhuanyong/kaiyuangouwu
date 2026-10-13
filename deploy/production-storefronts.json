@@ -8,6 +8,10 @@
         {
             "origin": "https://damatong.net",
             "expectedChannelCode": "美宜佳"
+        },
+        {
+            "origin": "https://shop.flashcast.com.my",
+            "expectedChannelCode": "flashcast-mall"
         }
     ]
 }

@@ -1,10 +1,21 @@
 import { PresetOnlyStrategy } from '@vendure/asset-server-plugin';
-import { ConfigService, SessionService } from '@vendure/core';
 import {
+    AdministratorService,
+    Asset,
+    Channel,
+    ConfigService,
+    CustomerService,
+    Permission,
+    SessionService,
+    TransactionalConnection,
+} from '@vendure/core';
+import {
+    AdministratorAccessService,
     StorefrontMediaDeliveryService,
     StorefrontMediaManifestService,
     StorefrontPromotionAccessService,
 } from '@vendure/store-management-plugin';
+import { AdminTwoFactorService } from '@vendure/two-factor-dashboard-plugin';
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -20,14 +31,35 @@ vi.mock('@vendure/store-management-plugin', () => ({
     StorefrontMediaManifestService: class {},
     StorefrontMediaDeliveryService: class {},
     StorefrontPromotionAccessService: class {},
+    AdministratorAccessService: class {},
 }));
+vi.mock('@vendure/two-factor-dashboard-plugin', () => ({ AdminTwoFactorService: class {} }));
 function harness(userId?: string) {
     const ctx = { channelId: 'shop-a', languageCode: 'en' };
     const isPublic = vi.fn((_ctx: unknown, _host: string, path: string) =>
         Promise.resolve(path === 'preview/public-hero.jpg'),
     );
     const record = vi.fn(() => Promise.resolve(true));
-    const getSessionFromToken = vi.fn().mockResolvedValue(userId ? { user: { id: userId } } : undefined);
+    const channel = new Channel({ id: 'shop-a', code: 'shop-a' });
+    const session = {
+        id: 'session-a',
+        user: { id: userId ?? 'guest', channelPermissions: [] },
+        authenticationStrategy: 'native',
+    };
+    const getSessionFromToken = vi.fn().mockResolvedValue(userId ? session : undefined);
+    const findAsset = vi.fn().mockResolvedValue(
+        new Asset({
+            id: 'asset-a',
+            source: 'source/private.jpg',
+            preview: 'preview/private.jpg',
+            channels: [channel],
+            tags: [],
+        }),
+    );
+    const findCustomer = vi.fn().mockResolvedValue(undefined);
+    const findAdministrator = vi.fn().mockResolvedValue(undefined);
+    const currentForChannel = vi.fn().mockResolvedValue({ status: 'ACTIVE' });
+    const assertSession = vi.fn().mockResolvedValue(undefined);
     const resolveRequest = vi.fn().mockResolvedValue({ host: 'shop.example.com', ctx });
     const instances = new Map<unknown, unknown>([
         [ConfigService, { authOptions: { tokenMethod: ['cookie', 'bearer'], apiKeyHeaderKey: 'x-api-key' } }],
@@ -35,6 +67,11 @@ function harness(userId?: string) {
         [StorefrontPromotionAccessService, { resolveRequest }],
         [StorefrontMediaManifestService, { isPublic }],
         [StorefrontMediaDeliveryService, { record }],
+        [TransactionalConnection, { rawConnection: { getRepository: () => ({ findOne: findAsset }) } }],
+        [CustomerService, { findOneByUserId: findCustomer }],
+        [AdministratorService, { findOneByUserId: findAdministrator }],
+        [AdministratorAccessService, { currentForChannel }],
+        [AdminTwoFactorService, { assertSession }],
     ]);
     const headers = { setHeader: vi.fn() };
     const strategy = new CatalogAssetAccessStrategy();
@@ -51,7 +88,22 @@ function harness(userId?: string) {
             input: { preset: 'thumbnail' },
             availablePresets: [],
         } as never);
-    return { read, isPublic, record, resolveRequest, getSessionFromToken, ctx, headers };
+    return {
+        read,
+        isPublic,
+        record,
+        resolveRequest,
+        getSessionFromToken,
+        ctx,
+        headers,
+        channel,
+        session,
+        findAsset,
+        findCustomer,
+        findAdministrator,
+        currentForChannel,
+        assertSession,
+    };
 }
 describe('catalog media boundary', () => {
     it('encodes an existing WebP logo as a real bounded PNG', async () => {
@@ -139,31 +191,118 @@ describe('catalog media boundary', () => {
         await expect(test.read('/preview/public-hero.jpg')).rejects.toThrow('Asset access denied');
         expect(test.isPublic).toHaveBeenLastCalledWith(other, 'other.example.com', 'preview/public-hero.jpg');
     });
-    it('preserves authenticated private reads without making them cacheable', async () => {
+    it('rejects logged-in customers reading known unpublished catalog paths', async () => {
         const test = harness('customer-a');
-        await expect(test.read('/preview/private.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+        await expect(test.read('/preview/private.jpg')).rejects.toThrow('Asset access denied');
         expect(test.headers.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
         expect(test.headers.setHeader).not.toHaveBeenCalledWith(
             'Cache-Control',
             PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
         );
     });
-    it('keeps authenticated reads available on public lookup failure and rejects guests', async () => {
+    it('fails closed on publication lookup failure for guests and authenticated customers', async () => {
         for (const user of [undefined, 'customer-a']) {
             const test = harness(user);
             test.isPublic.mockRejectedValue(new Error('Publication lookup unavailable'));
-            if (user)
-                await expect(test.read('/preview/private.jpg')).resolves.toEqual({ preset: 'thumbnail' });
-            else
-                await expect(test.read('/preview/private.jpg')).rejects.toThrow(
-                    'Publication lookup unavailable',
-                );
+            await expect(test.read('/preview/private.jpg')).rejects.toThrow('Publication lookup unavailable');
             expect(test.headers.setHeader).not.toHaveBeenCalledWith(
                 'Cache-Control',
                 PUBLIC_CATALOG_ASSET_CACHE_CONTROL,
             );
         }
     });
+    it('keeps current and historical owned avatar originals and previews private', async () => {
+        const test = harness('customer-a');
+        test.findCustomer.mockResolvedValue({ id: 'owner-a' });
+        test.findAsset.mockResolvedValue(
+            new Asset({
+                channels: [test.channel],
+                tags: [{ value: 'customer-avatar' }, { value: 'customer-avatar-owner:owner-a' }],
+            }),
+        );
+        for (const path of ['/source/avatar.webp', '/preview/avatar.webp'])
+            await expect(test.read(path)).resolves.toEqual({ preset: 'thumbnail' });
+        expect(test.findAsset).toHaveBeenLastCalledWith({
+            where: [{ source: 'preview/avatar.webp' }, { preview: 'preview/avatar.webp' }],
+            relations: ['channels', 'tags'],
+        });
+        expect(test.record).not.toHaveBeenCalled();
+        test.findCustomer.mockResolvedValue({ id: 'other-owner' });
+        await expect(test.read('/preview/avatar.webp')).rejects.toThrow('Asset access denied');
+    });
+    it('rejects owned avatars from a different store and an unresolved public host', async () => {
+        const test = harness('customer-a');
+        test.findCustomer.mockResolvedValue({ id: 'owner-a' });
+        test.findAsset.mockResolvedValue(
+            new Asset({
+                channels: [new Channel({ id: 'shop-b' })],
+                tags: [{ value: 'customer-avatar' }, { value: 'customer-avatar-owner:owner-a' }],
+            }),
+        );
+        await expect(test.read('/preview/avatar.webp')).rejects.toThrow('Asset access denied');
+        test.resolveRequest.mockResolvedValue(null);
+        await expect(test.read('/preview/avatar.webp')).rejects.toThrow('Asset access denied');
+    });
+    it.each([Permission.ReadAsset, Permission.ReadCatalog, Permission.SuperAdmin])(
+        'preserves Admin private catalog reads with scoped %s and all security gates',
+        async permission => {
+            const test = harness('admin-a');
+            test.session.user.channelPermissions = [{ id: 'shop-a', permissions: [permission] }] as never;
+            test.findAdministrator.mockResolvedValue({ id: 'administrator-a' });
+            await expect(test.read('/preview/private.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+            expect(test.currentForChannel).toHaveBeenCalledOnce();
+            expect(test.assertSession).toHaveBeenCalledOnce();
+            expect(test.record).not.toHaveBeenCalled();
+        },
+    );
+    it('allows the central Admin host only within the actual asset channel permission', async () => {
+        const test = harness('admin-a');
+        test.resolveRequest.mockResolvedValue(null);
+        test.session.user.channelPermissions = [
+            { id: 'shop-a', permissions: [Permission.ReadAsset] },
+        ] as never;
+        test.findAdministrator.mockResolvedValue({ id: 'administrator-a' });
+        await expect(test.read('/preview/private.jpg')).resolves.toEqual({ preset: 'thumbnail' });
+        test.session.user.channelPermissions = [
+            { id: 'shop-b', permissions: [Permission.ReadAsset] },
+        ] as never;
+        await expect(test.read('/preview/private.jpg')).rejects.toThrow('Asset access denied');
+    });
+    it('does not grant customer-avatar reads from ReadCatalog alone', async () => {
+        const test = harness('admin-a');
+        test.session.user.channelPermissions = [
+            { id: 'shop-a', permissions: [Permission.ReadCatalog] },
+        ] as never;
+        test.findAdministrator.mockResolvedValue({ id: 'administrator-a' });
+        test.findAsset.mockResolvedValue(
+            new Asset({
+                channels: [test.channel],
+                tags: [{ value: 'customer-avatar' }, { value: 'customer-avatar-owner:owner-a' }],
+            }),
+        );
+        await expect(test.read('/preview/avatar.webp')).rejects.toThrow('Asset access denied');
+    });
+    it.each(['scope', '2fa', 'lookup'])('fails closed on private Admin %s failure', async failure => {
+        const test = harness('admin-a');
+        test.session.user.channelPermissions = [
+            { id: 'shop-a', permissions: [Permission.SuperAdmin] },
+        ] as never;
+        test.findAdministrator.mockResolvedValue({ id: 'administrator-a' });
+        if (failure === 'scope')
+            test.currentForChannel.mockRejectedValue(new Error('Suspended or wrong store'));
+        if (failure === '2fa') test.assertSession.mockRejectedValue(new Error('2FA required'));
+        if (failure === 'lookup') test.findAsset.mockRejectedValue(new Error('Asset lookup unavailable'));
+        await expect(test.read('/preview/private.jpg')).rejects.toThrow();
+        expect(test.record).not.toHaveBeenCalled();
+    });
+    it.each(['/cache/preview/private_hash.webp', '/preview/../private.jpg', '/%ZZ'])(
+        'rejects malformed/private cache paths even with Admin credentials: %s',
+        async path => {
+            const test = harness('admin-a');
+            await expect(test.read(path)).rejects.toThrow('Asset access denied');
+            expect(test.findAsset).not.toHaveBeenCalled();
+        },
+    );
     it('serves a public image privately when exact purge tracking is unavailable', async () => {
         const test = harness();
         test.record.mockResolvedValue(false);

@@ -23,6 +23,43 @@ const language = params.get('lang') === 'en' ? 'en' : 'zh';
 const preset = params.get('skin') === 'neo-minimalist' ? 'neo-minimalist' : 'classic';
 const view = params.get('view') || 'home';
 const count = Math.max(1, Math.min(6, Number(params.get('count')) || 6));
+const currencyCode = params.get('currency') === 'MYR' ? 'MYR' : 'CNY';
+const requestedAmountCase = params.get('amountcase');
+const amountCase =
+    requestedAmountCase === 'small' || requestedAmountCase === 'large' || requestedAmountCase === 'decimal'
+        ? requestedAmountCase
+        : 'default';
+// Synthetic backend minor-unit responses; no exchange or pricing behavior is changed here.
+const amountSamples = {
+    default: {
+        minimumSpend: [100000, 300000, 10000, 100000, 20000, 0],
+        discountAmount: [5000, 0, 500, 10000, 2000, 12345678900],
+    },
+    small: {
+        minimumSpend: [50, 100, 199, 200, 50, 0],
+        discountAmount: [50, 0, 99, 1, 25, 75],
+    },
+    large: {
+        minimumSpend: [1234567, 12345678, 1000000, 987654321, 50000000, 0],
+        discountAmount: [1234567, 0, 1000000, 123456789, 12345600, 12345678900],
+    },
+    decimal: {
+        minimumSpend: [100001, 300001, 10001, 100031, 2000001, 0],
+        discountAmount: [3053, 0, 305, 10001, 20005, 1234501],
+    },
+}[amountCase];
+const minorAmount = (value: number) => (currencyCode === 'MYR' ? Math.round(value * 0.6105) : value);
+function viewUrl(nextView: string) {
+    const nextParams = new URLSearchParams({
+        skin: preset,
+        lang: language,
+        view: nextView,
+        count: String(count),
+        currency: currencyCode,
+    });
+    if (amountCase !== 'default') nextParams.set('amountcase', amountCase);
+    return `?${nextParams}`;
+}
 const palette = resolveStorefrontSemanticPalette(preset);
 document.documentElement.dataset.storefrontPreset = preset;
 document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
@@ -81,9 +118,9 @@ const coupons: StorefrontCouponCampaign[] = (['emerald', 'blue', 'gold', 'rose',
         claimStartsAt: null,
         claimEndsAt: null,
         validityDays: 30,
-        minimumSpend: [100000, 300000, 10000, 100000, 20000, 0][i],
-        currencyCode: 'CNY',
-        discountAmount: [5000, 0, 500, 10000, 2000, 12345678900][i],
+        minimumSpend: minorAmount(amountSamples.minimumSpend[i]),
+        currencyCode,
+        discountAmount: minorAmount(amountSamples.discountAmount[i]),
         discountRate: i === 1 ? 9.5 : null,
         remainingIssueCount: 10,
         claimed: false,
@@ -97,7 +134,7 @@ const owned: StoreCustomerCoupon[] = coupons.map((coupon, i) => ({
     appearanceTheme: coupon.appearanceTheme,
     status: i === 4 ? 'EXPIRED' : 'AVAILABLE',
     minimumSpend: coupon.minimumSpend,
-    currencyCode: 'CNY',
+    currencyCode: coupon.currencyCode,
     discountAmount: coupon.discountAmount,
     discountRate: coupon.discountRate,
     claimedAt: '2026-10-01T00:00:00Z',
@@ -123,10 +160,10 @@ function Fixture() {
     };
     const market = {
         code: 'local-coupon-layout',
-        currencyCode: 'CNY',
-        countryCode: 'CN',
+        currencyCode,
+        countryCode: currencyCode === 'MYR' ? 'MY' : 'CN',
         defaultLanguageCode: 'zh_Hans',
-        locale: language === 'zh' ? 'zh-CN' : 'en',
+        locale: language === 'zh' ? (currencyCode === 'MYR' ? 'zh-MY' : 'zh-CN') : 'en',
         label: 'Local sample',
     };
     const homeProps: HomePageProps = {
@@ -154,9 +191,9 @@ function Fixture() {
         storefrontName: '',
         storefrontDescription: '',
         storefrontTagline: '',
-        availableCurrencyCodes: ['CNY'],
+        availableCurrencyCodes: [currencyCode],
         currencySelectorEnabled: false,
-        displayCurrencyCode: 'CNY',
+        displayCurrencyCode: currencyCode,
         currencyLoading: false,
         onCurrencyChange: noop,
         logoUrl: null,
@@ -175,8 +212,8 @@ function Fixture() {
         coupons,
         myCoupons: owned,
         usageRecords: [],
-        currencyCode: 'CNY',
-        displayCurrencyCode: 'CNY',
+        currencyCode,
+        displayCurrencyCode: currencyCode,
         language,
         loading: false,
         campaignsLoading: false,
@@ -206,10 +243,8 @@ function Fixture() {
                                 : 'Actual shared components · Local samples · No production writes · Not published'}
                         </p>
                         <nav className="type-action" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-                            <a href={`?skin=${preset}&lang=${language}&view=home&count=${count}`}>
-                                {language === 'zh' ? '首页' : 'Home'}
-                            </a>
-                            <a href={`?skin=${preset}&lang=${language}&view=center&count=${count}`}>
+                            <a href={viewUrl('home')}>{language === 'zh' ? '首页' : 'Home'}</a>
+                            <a href={viewUrl('center')}>
                                 {language === 'zh' ? '优惠券中心' : 'Coupon center'}
                             </a>
                             <button onClick={() => setCartOpen(true)}>
@@ -234,7 +269,7 @@ function Fixture() {
                         <CouponSheet
                             coupons={owned}
                             orderId="local-order"
-                            currencyCode="CNY"
+                            currencyCode={currencyCode}
                             language={language}
                             loading={false}
                             onApply={mockClaim}

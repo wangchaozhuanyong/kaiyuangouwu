@@ -442,3 +442,25 @@ workflow source SHA. It loads the dependencies from that validated immutable
 runtime, rejects resolution outside the runtime, and checks the actual qs and
 Tiptap vulnerability behavior. The result contains only package versions and
 pass/fail evidence. It does not install dependencies or execute supplied code.
+
+## Bound completed Node core dumps
+
+The runtime release installs `vendure-node-core-retention.timer`, which runs five
+minutes after boot and every fifteen minutes. Ubuntu Apport and its existing
+three-day age policy remain enabled. The additional capacity policy is limited
+to regular, singly linked Node UID 1000 dumps in `/var/lib/apport/coredump`.
+It reads only filesystem and process-reference metadata, never dump contents,
+environment files or crash reports.
+
+The helper defaults to `--dry-run`; the installed oneshot service uses `--apply`.
+It keeps the newest completed full diagnostic and removes older completed dumps
+only when their allocated storage exceeds a 2 GiB soft budget. Active PIDs,
+open descriptors, unknown names or owners, symlinks and changing metadata are
+protected. Unverifiable permissions or references block the operation. Each
+unlink rechecks directory and file identity and records only safe metadata.
+
+If protected files or the latest individual dump exceed the budget, the helper
+reports `protected-over-budget` and retains them. The existing root-disk health
+threshold still applies. This maintenance neither changes process core limits
+nor restarts Apport or the website. Backups, uploads, databases, logs and formal
+runtime/frontend releases are outside its scope.
