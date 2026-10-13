@@ -14,6 +14,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
+import { renderStorefrontIconLinks } from '../storefront-lcp-preload.service';
+
 type Renderer = { renderPublicPage(page: StorefrontPageData): Promise<string> };
 const loadRenderer = createRequire(__filename);
 
@@ -47,11 +49,20 @@ export function assemblePublicHtml(
     const config = page.config as {
         code?: string;
         accessMode?: string;
+        logoUrl?: string | null;
         brandBackgroundColor?: string | null;
         brandPrimaryColor?: string | null;
         brandAccentColor?: string | null;
         brandHighlightColor?: string | null;
     };
+    // Public HTML removes the SSI fragment, so the already resolved Channel
+    // must also supply its icons before the browser parses the document.
+    const logoUrl =
+        config.code && config.code === page.scope.channelCode && config.accessMode === 'LIVE'
+            ? (config.logoUrl ?? null)
+            : null;
+    document('link[rel~="icon"], link[rel="apple-touch-icon"]').remove();
+    document('head').prepend(renderStorefrontIconLinks(logoUrl));
     const presetId = page.visualPreset?.presetId;
     // The confirmed public facts own the first frame, just as they own hydration.
     // An absent/failed preset or a different Channel must leave the shell neutral.
