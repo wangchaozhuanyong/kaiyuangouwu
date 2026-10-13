@@ -1,8 +1,13 @@
 // organize-imports-ignore -- Keep the production stylesheet cascade.
-import type { StorefrontContentBlock, StorefrontCouponCampaign, StoreCustomerCoupon } from '../../src/types';
+import type {
+    StorefrontContentBlock,
+    StorefrontCouponCampaign,
+    StoreCustomerCoupon,
+    StoreCouponUsageRecord,
+} from '../../src/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import {
@@ -22,6 +27,8 @@ const params = new URLSearchParams(location.search);
 const language = params.get('lang') === 'en' ? 'en' : 'zh';
 const preset = params.get('skin') === 'neo-minimalist' ? 'neo-minimalist' : 'classic';
 const view = params.get('view') || 'home';
+const fullRules = params.get('rules') === 'full';
+const centerTab = params.get('tab');
 const count = Math.max(1, Math.min(6, Number(params.get('count')) || 6));
 const currencyCode = params.get('currency') === 'MYR' ? 'MYR' : 'CNY';
 const requestedAmountCase = params.get('amountcase');
@@ -57,6 +64,9 @@ function viewUrl(nextView: string) {
         count: String(count),
         currency: currencyCode,
     });
+    if (params.has('storefrontPreviewEmbedded')) nextParams.set('storefrontPreviewEmbedded', '1');
+    if (fullRules) nextParams.set('rules', 'full');
+    if (centerTab) nextParams.set('tab', centerTab);
     if (amountCase !== 'default') nextParams.set('amountcase', amountCase);
     return `?${nextParams}`;
 }
@@ -113,11 +123,11 @@ const coupons: StorefrontCouponCampaign[] = (['emerald', 'blue', 'gold', 'rose',
         name: names[i],
         kind: i === 1 ? 'ORDER_PERCENTAGE' : 'ORDER_FIXED',
         appearanceTheme: tone,
-        startsAt: null,
-        endsAt: null,
-        claimStartsAt: null,
-        claimEndsAt: null,
-        validityDays: 30,
+        startsAt: fullRules ? '2026-10-01T00:00:00+08:00' : null,
+        endsAt: fullRules ? '2026-12-31T23:59:59+08:00' : null,
+        claimStartsAt: fullRules ? '2026-10-01T09:00:00+08:00' : null,
+        claimEndsAt: fullRules ? '2026-11-30T23:59:59+08:00' : null,
+        validityDays: fullRules && i % 2 === 1 ? null : 30,
         minimumSpend: minorAmount(amountSamples.minimumSpend[i]),
         currencyCode,
         discountAmount: minorAmount(amountSamples.discountAmount[i]),
@@ -126,34 +136,73 @@ const coupons: StorefrontCouponCampaign[] = (['emerald', 'blue', 'gold', 'rose',
         claimed: false,
         claimable: true,
     }));
-const owned: StoreCustomerCoupon[] = coupons.map((coupon, i) => ({
-    id: `local-owned-${i}`,
-    campaignId: coupon.id,
-    campaignName: coupon.name,
-    campaignKind: coupon.kind,
-    appearanceTheme: coupon.appearanceTheme,
-    status: i === 4 ? 'EXPIRED' : 'AVAILABLE',
-    minimumSpend: coupon.minimumSpend,
-    currencyCode: coupon.currencyCode,
-    discountAmount: coupon.discountAmount,
-    discountRate: coupon.discountRate,
-    claimedAt: '2026-10-01T00:00:00Z',
-    validFrom: '2026-10-01T00:00:00Z',
-    validUntil: null,
-    lockedAt: null,
-    usedAt: null,
-    returnedAt: null,
-    expiredAt: i === 4 ? '2026-10-02T00:00:00Z' : null,
-    lockedOrderId: null,
-    usedOrderId: null,
-    returnCount: 0,
-    usable: i !== 4,
-}));
+const owned: StoreCustomerCoupon[] = coupons
+    .map<StoreCustomerCoupon>((coupon, i) => ({
+        id: `local-owned-${i}`,
+        campaignId: coupon.id,
+        campaignName: coupon.name,
+        campaignKind: coupon.kind,
+        appearanceTheme: coupon.appearanceTheme,
+        status: i === 4 ? 'EXPIRED' : 'AVAILABLE',
+        minimumSpend: coupon.minimumSpend,
+        currencyCode: coupon.currencyCode,
+        discountAmount: coupon.discountAmount,
+        discountRate: coupon.discountRate,
+        claimedAt: '2026-10-01T00:00:00Z',
+        validFrom: '2026-10-01T00:00:00Z',
+        validUntil: fullRules ? (i === 4 ? '2026-10-02T00:00:00Z' : '2026-12-31T23:59:59+08:00') : null,
+        lockedAt: null,
+        usedAt: null,
+        returnedAt: null,
+        expiredAt: i === 4 ? '2026-10-02T00:00:00Z' : null,
+        lockedOrderId: null,
+        usedOrderId: null,
+        returnCount: 0,
+        usable: i !== 4,
+    }))
+    .filter((_, index) => !fullRules || index >= 2);
+const usageRecords: StoreCouponUsageRecord[] = fullRules
+    ? coupons.slice(0, 4).map((coupon, i) => ({
+          id: `local-usage-${i}`,
+          customerCouponId: `local-used-coupon-${i}`,
+          campaignId: coupon.id,
+          campaignName: coupon.name,
+          campaignKind: coupon.kind,
+          appearanceTheme: coupon.appearanceTheme,
+          status: i % 2 === 1 ? 'REFUNDED' : 'USED',
+          currencyCode: coupon.currencyCode || currencyCode,
+          minimumSpend: coupon.minimumSpend,
+          discountAmount: coupon.discountAmount,
+          discountRate: coupon.discountRate,
+          savedAmount: coupon.discountAmount || minorAmount(2_000),
+          usedAt: '2026-10-10T15:30:00+08:00',
+          refundedAt: i % 2 === 1 ? '2026-10-12T18:45:00+08:00' : null,
+          orderId: `local-order-${i}`,
+          orderCode: `LOCAL-COUPON-ORDER-20261010-${i + 1}`,
+      }))
+    : [];
 const noop = () => undefined;
 function Fixture() {
     const desktop = useDesktopViewport();
+    const fixtureRef = useRef<HTMLDivElement>(null);
     const [claims, setClaims] = useState(0);
     const [cartOpen, setCartOpen] = useState(view === 'cart');
+    useEffect(() => {
+        if (view !== 'center') return;
+        const index =
+            centerTab === 'unclaimed'
+                ? 1
+                : centerTab === 'unused'
+                  ? 2
+                  : centerTab === 'history'
+                    ? 3
+                    : undefined;
+        if (index === undefined) return;
+        // Drive the real local tab once; no production-only props or state overrides.
+        fixtureRef.current
+            ?.querySelectorAll<HTMLButtonElement>('.coupon-center-tabs > button')
+            [index]?.click();
+    }, []);
     const mockClaim = () => {
         setClaims(n => n + 1);
         return Promise.resolve(null);
@@ -211,7 +260,7 @@ function Fixture() {
     const centerProps: CouponCenterPageProps = {
         coupons,
         myCoupons: owned,
-        usageRecords: [],
+        usageRecords,
         currencyCode,
         displayCurrencyCode: currencyCode,
         language,
@@ -230,12 +279,16 @@ function Fixture() {
     return (
         <QueryClientProvider client={client}>
             <DesktopLayoutContext.Provider value={desktop}>
-                <div className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
+                <div ref={fixtureRef} className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}>
                     <header style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }}>
                         <p className="type-section">
-                            {language === 'zh'
-                                ? '优惠券原款 · 108px单行横滑'
-                                : 'Original coupon design · Compact single row'}
+                            {view === 'center'
+                                ? language === 'zh'
+                                    ? '优惠券中心 · 规则区布局'
+                                    : 'Coupon center · Rules layout'
+                                : language === 'zh'
+                                  ? '优惠券原款 · 108px单行横滑'
+                                  : 'Original coupon design · Compact single row'}
                         </p>
                         <p className="type-helper">
                             {language === 'zh'

@@ -1,4 +1,4 @@
-/* Approved campaign roles retain the forest identity and adapt reward surfaces to dark mode. */
+/* Only the invitation retains campaign colors; overview and records use the active skin. */
 .referral-invite {
     min-width: 0;
     display: flex;
@@ -373,7 +373,7 @@
     margin-bottom: 16px;
     padding: 4px;
     border-radius: var(--skin-control-radius);
-    background: color-mix(in srgb, var(--referral-reward-ink) 7%, var(--referral-reward-surface));
+    background: var(--control-surface);
 }
 .referral-record-tabs button {
     display: inline-flex;
@@ -394,11 +394,11 @@
     cursor: pointer;
 }
 .referral-record-tabs button:hover {
-    background: color-mix(in srgb, var(--referral-reward-ink) 12%, var(--referral-reward-surface));
+    background: var(--control-surface-hover);
 }
 .referral-record-tabs button[aria-selected='true'] {
-    background: var(--referral-invite-surface);
-    color: var(--referral-invite-ink);
+    background: var(--navigation-surface, var(--selection));
+    color: var(--navigation-foreground, var(--selection-foreground));
     font-weight: var(--font-weight-semibold);
 }
 .referral-record-tabs span {

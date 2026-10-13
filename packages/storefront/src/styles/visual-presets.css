@@ -63,8 +63,7 @@ html[data-storefront-preset] {
     --skin-referral-focus: var(--accent-foreground);
     --skin-referral-link-surface: var(--surface);
     --skin-referral-link-ink: var(--text);
-    /* REFERRAL_FOREST_IVORY_20261013: fixed roles for the approved campaign panels,
-       independent of merchant palette/inline --skin-referral-* variables. */
+    /* The invitation retains its campaign identity; the lower panels follow the active skin. */
     --referral-invite-surface: #173d39;
     --referral-invite-ink: #f6f7f3;
     --referral-invite-muted: #cbdad4;
@@ -77,12 +76,12 @@ html[data-storefront-preset] {
     --referral-invite-control-pressed: #3a635b;
     --referral-invite-control-border: #7faaa0;
     --referral-invite-focus: #f4f1e9;
-    --referral-reward-surface: #f4f1e9;
-    --referral-reward-ink: #253c35;
-    --referral-reward-muted: #5b6b63;
-    --referral-reward-divider: #d6ded6;
-    --referral-reward-help-surface: #ffffff;
-    --referral-reward-focus: #253c35;
+    --referral-reward-surface: var(--surface);
+    --referral-reward-ink: var(--text);
+    --referral-reward-muted: var(--muted);
+    --referral-reward-divider: var(--line-subtle);
+    --referral-reward-help-surface: var(--surface-elevated);
+    --referral-reward-focus: var(--focus);
     --skin-coupon-tint: initial;
     --skin-coupon-action-surface: initial;
     --skin-coupon-action-hover: initial;
@@ -94,10 +93,14 @@ html[data-storefront-preset] {
     --skin-coupon-pending-surface: initial;
     --skin-coupon-pending-ink: initial;
     --skin-coupon-focus: initial;
-    --coupon-rose-ink: #9b432c;
-    --coupon-gold-ink: #84600e;
-    --coupon-blue-ink: #245f92;
-    --coupon-emerald-ink: #236b50;
+    --coupon-rose-surface: #f8ddd5;
+    --coupon-rose-ink: #963f32;
+    --coupon-gold-surface: #f4e5ba;
+    --coupon-gold-ink: #79520f;
+    --coupon-blue-surface: #dce8f6;
+    --coupon-blue-ink: #285b91;
+    --coupon-emerald-surface: #d7eadf;
+    --coupon-emerald-ink: #23634b;
 }
 /* Match the runtime classic outline before cached content is painted. Without
    this token, hydration adds two pixels to each auto-height bordered module. */
@@ -150,16 +153,14 @@ html[data-storefront-preset='classic'] {
     --skin-coupon-focus: #735b36;
 }
 html[data-storefront-preset='neo-minimalist'] {
-    --referral-reward-surface: #243b36;
-    --referral-reward-ink: #e9f0eb;
-    --referral-reward-muted: #becfc5;
-    --referral-reward-divider: #526e60;
-    --referral-reward-help-surface: #243b36;
-    --referral-reward-focus: #e9f0eb;
-    --coupon-rose-ink: #e99084;
-    --coupon-gold-ink: #d8bc80;
-    --coupon-blue-ink: #91bfc9;
-    --coupon-emerald-ink: #88c8b1;
+    --coupon-rose-surface: #3b292e;
+    --coupon-rose-ink: #f3ad9e;
+    --coupon-gold-surface: #383121;
+    --coupon-gold-ink: #e5c778;
+    --coupon-blue-surface: #233247;
+    --coupon-blue-ink: #a7c9f5;
+    --coupon-emerald-surface: #233b34;
+    --coupon-emerald-ink: #9dd6b8;
     --account-hero-bg: linear-gradient(135deg, #0e121c 0%, #1e1b4b 100%);
     --product-card-surface: var(--surface-elevated);
     --availability-unavailable: var(--muted);

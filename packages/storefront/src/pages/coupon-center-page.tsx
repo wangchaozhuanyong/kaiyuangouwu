@@ -383,6 +383,7 @@ export function CouponCenterPage() {
                                                 }
                                                 meta={
                                                     <CouponDetails
+                                                        title={isZh ? '使用规则' : 'Usage rules'}
                                                         rows={[
                                                             [
                                                                 isZh ? '有效期' : 'Validity',
@@ -623,16 +624,19 @@ function couponScopeSummary(kind: StorefrontCouponCampaign['kind'], language: St
     return `${language === 'zh' ? '适用范围：' : 'Applies to: '}${couponScopeLabel(kind, language)}`;
 }
 
-function CouponDetails({ rows }: { rows: Array<[string, string]> }) {
+function CouponDetails({ title, rows }: { title: string; rows: Array<[string, string]> }) {
     return (
-        <dl className="coupon-center-details">
-            {rows.map(([label, value]) => (
-                <div key={label}>
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
-                </div>
-            ))}
-        </dl>
+        <div className="coupon-center-rules">
+            <h3 className="coupon-center-rules-title">{title}</h3>
+            <dl className="coupon-center-details">
+                {rows.map(([label, value]) => (
+                    <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{value}</dd>
+                    </div>
+                ))}
+            </dl>
+        </div>
     );
 }
 
@@ -658,7 +662,7 @@ function CampaignDetails({
         rows.push([isZh ? '领取时间' : 'Claim period', window]);
     }
     rows.push([isZh ? '有效期' : 'Validity', campaignValidity(campaign, language)]);
-    return <CouponDetails rows={rows} />;
+    return <CouponDetails title={isZh ? '活动规则' : 'Offer rules'} rows={rows} />;
 }
 
 function CouponUsageDetails({
@@ -682,7 +686,7 @@ function CouponUsageDetails({
     if (record.status === 'REFUNDED' && record.refundedAt) {
         rows.push([isZh ? '退款时间' : 'Refunded on', formatDateTime(record.refundedAt, locale)]);
     }
-    return <CouponDetails rows={rows} />;
+    return <CouponDetails title={isZh ? '使用详情' : 'Usage details'} rows={rows} />;
 }
 
 function CouponTabEmpty({

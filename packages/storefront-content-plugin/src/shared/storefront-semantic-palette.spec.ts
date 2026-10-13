@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    STOREFRONT_COUPON_PALETTES,
     auditStorefrontSemanticPalette,
     normalizeStorefrontColor,
     resolveStorefrontSemanticPalette,
@@ -13,13 +14,26 @@ import {
 
 describe('storefront semantic palette', () => {
     it.each(['classic', 'neo-minimalist'] as const)(
-        'shares accessible campaign roles independently of merchant colors in %s',
+        'keeps invitation colors while reward roles inherit the active %s skin',
         preset => {
             const variables = storefrontReferralCssVariables(preset);
             const palette = resolveStorefrontSemanticPalette(preset, { accentColor: '#ff0000' });
             expect(storefrontSkinCssVariables(preset, palette)).toMatchObject(variables);
             expect(variables['--referral-invite-surface']).toBe('#173d39');
-            expect(variables['--referral-reward-surface']).toBe(preset === 'classic' ? '#f4f1e9' : '#243b36');
+            expect(variables).toMatchObject({
+                '--referral-reward-surface': 'var(--surface)',
+                '--referral-reward-ink': 'var(--text)',
+                '--referral-reward-muted': 'var(--muted)',
+                '--referral-reward-divider': 'var(--line-subtle)',
+                '--referral-reward-help-surface': 'var(--surface-elevated)',
+                '--referral-reward-focus': 'var(--focus)',
+            });
+            const semanticVariables = semanticPaletteCssVariables(palette);
+            const resolvedColor = (role: string) => {
+                const value = variables[`--referral-${role}`];
+                const reference = /^var\((--[^)]+)\)$/.exec(value)?.[1];
+                return reference ? semanticVariables[reference] : value;
+            };
             for (const [foreground, surfaces] of [
                 [
                     'invite-ink',
@@ -32,10 +46,7 @@ describe('storefront semantic palette', () => {
             ] as const) {
                 for (const surface of surfaces) {
                     expect(
-                        storefrontContrastRatio(
-                            variables[`--referral-${foreground}`],
-                            variables[`--referral-${surface}`],
-                        ),
+                        storefrontContrastRatio(resolvedColor(foreground), resolvedColor(surface)),
                     ).toBeGreaterThanOrEqual(4.5);
                 }
             }
@@ -46,22 +57,27 @@ describe('storefront semantic palette', () => {
         preset => {
             const palette = resolveStorefrontSemanticPalette(preset);
             const variables = storefrontSkinCssVariables(preset, palette);
-            const inks = ['rose', 'gold', 'blue', 'emerald'].map(tone => variables[`--coupon-${tone}-ink`]);
-            expect(new Set(inks).size).toBe(4);
-            for (const ink of inks) {
-                // The actual ticket uses 10% of its ink on the shared surface.
-                const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-                const surface = rgb(palette.surface);
-                const tint =
-                    '#' +
-                    rgb(ink)
-                        .map((channel, i) =>
-                            Math.round(channel * 0.1 + surface[i] * 0.9)
-                                .toString(16)
-                                .padStart(2, '0'),
-                        )
-                        .join('');
-                expect(storefrontContrastRatio(ink, tint)).toBeGreaterThanOrEqual(4.5);
+            const tones = Object.entries(STOREFRONT_COUPON_PALETTES[preset]);
+            expect(new Set(tones.map(([, colors]) => colors.surface)).size).toBe(4);
+            expect(new Set(tones.map(([, colors]) => colors.ink)).size).toBe(4);
+            // Ticket secondary text adds a little body ink to remain readable on the colored surface.
+            const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+            const text = rgb(palette.text);
+            const muted =
+                '#' +
+                rgb(palette.muted)
+                    .map((channel, i) =>
+                        Math.round(channel * 0.84 + text[i] * 0.16)
+                            .toString(16)
+                            .padStart(2, '0'),
+                    )
+                    .join('');
+            for (const [tone, { ink, surface }] of tones) {
+                expect(variables[`--coupon-${tone}-ink`]).toBe(ink);
+                expect(variables[`--coupon-${tone}-surface`]).toBe(surface);
+                for (const foreground of [ink, palette.text, muted]) {
+                    expect(storefrontContrastRatio(foreground, surface)).toBeGreaterThanOrEqual(4.5);
+                }
             }
         },
     );
@@ -236,10 +252,10 @@ describe('storefront semantic palette', () => {
             '--navigation-surface': palette.selection,
             '--navigation-foreground': palette.onSelection,
             '--navigation-hover': palette.selectionHover,
-            '--coupon-rose-ink': '#e99084',
-            '--coupon-gold-ink': '#d8bc80',
-            '--coupon-blue-ink': '#91bfc9',
-            '--coupon-emerald-ink': '#88c8b1',
+            '--coupon-rose-ink': '#f3ad9e',
+            '--coupon-gold-ink': '#e5c778',
+            '--coupon-blue-ink': '#a7c9f5',
+            '--coupon-emerald-ink': '#9dd6b8',
         });
         for (const token of [
             '--accent-pressed',

@@ -1,5 +1,21 @@
 import type { StorefrontVisualPresetId } from '../visual-presets';
 
+/** Whole-ticket colors shared by storefront skins and the Admin appearance preview. */
+export const STOREFRONT_COUPON_PALETTES = {
+    classic: {
+        rose: { surface: '#f8ddd5', ink: '#963f32' },
+        gold: { surface: '#f4e5ba', ink: '#79520f' },
+        blue: { surface: '#dce8f6', ink: '#285b91' },
+        emerald: { surface: '#d7eadf', ink: '#23634b' },
+    },
+    'neo-minimalist': {
+        rose: { surface: '#3b292e', ink: '#f3ad9e' },
+        gold: { surface: '#383121', ink: '#e5c778' },
+        blue: { surface: '#233247', ink: '#a7c9f5' },
+        emerald: { surface: '#233b34', ink: '#9dd6b8' },
+    },
+} as const;
+
 export interface StorefrontBrandPaletteInput {
     backgroundColor?: string | null;
     primaryColor?: string | null;
@@ -356,9 +372,8 @@ export function resolveStorefrontSkinTreatment(presetId: StorefrontVisualPresetI
     return { ...SKIN_TREATMENTS[presetId] };
 }
 
-/** Campaign roles are shared by HTML first frames, storefronts and merchant previews. */
-export function storefrontReferralCssVariables(presetId: StorefrontVisualPresetId): Record<string, string> {
-    const dark = presetId === 'neo-minimalist';
+/** Only the invitation keeps campaign colors; reward roles resolve from the active skin. */
+export function storefrontReferralCssVariables(_presetId: StorefrontVisualPresetId): Record<string, string> {
     return {
         '--referral-invite-surface': '#173d39',
         '--referral-invite-ink': '#f6f7f3',
@@ -372,12 +387,12 @@ export function storefrontReferralCssVariables(presetId: StorefrontVisualPresetI
         '--referral-invite-control-pressed': '#3a635b',
         '--referral-invite-control-border': '#7faaa0',
         '--referral-invite-focus': '#f4f1e9',
-        '--referral-reward-surface': dark ? '#243b36' : '#f4f1e9',
-        '--referral-reward-ink': dark ? '#e9f0eb' : '#253c35',
-        '--referral-reward-muted': dark ? '#becfc5' : '#5b6b63',
-        '--referral-reward-divider': dark ? '#526e60' : '#d6ded6',
-        '--referral-reward-help-surface': dark ? '#243b36' : '#ffffff',
-        '--referral-reward-focus': dark ? '#e9f0eb' : '#253c35',
+        '--referral-reward-surface': 'var(--surface)',
+        '--referral-reward-ink': 'var(--text)',
+        '--referral-reward-muted': 'var(--muted)',
+        '--referral-reward-divider': 'var(--line-subtle)',
+        '--referral-reward-help-surface': 'var(--surface-elevated)',
+        '--referral-reward-focus': 'var(--focus)',
     };
 }
 
@@ -569,37 +584,12 @@ export function storefrontSkinCssVariables(
                 focus: '#735b36',
             },
         ],
-        [
-            '--coupon-',
-            '#e99084',
-            {
-                'rose-ink': '#9b432c',
-            },
-        ],
-        [
-            '--coupon-',
-            '#d8bc80',
-            {
-                'gold-ink': '#84600e',
-            },
-        ],
-        [
-            '--coupon-',
-            '#91bfc9',
-            {
-                'blue-ink': '#245f92',
-            },
-        ],
-        [
-            '--coupon-',
-            '#88c8b1',
-            {
-                'emerald-ink': '#236b50',
-            },
-        ],
     ];
     for (const [prefix, fallback, colors] of moduleColors) {
         assignColorVariables(variables, prefix, colors, fallback, !classic);
+    }
+    for (const [tone, colors] of Object.entries(STOREFRONT_COUPON_PALETTES[presetId])) {
+        assignColorVariables(variables, `--coupon-${tone}-`, colors);
     }
     // Transparent icons sit directly on the shared surfaces, including hover states.
     // Derive their contrast from the resolved palette rather than a former icon tile.

@@ -356,8 +356,8 @@ describe('HomePage carousel pointer interactions', () => {
             expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(body);
             expect(activeButton('.hero-rich-cta-btn').textContent).toBe(action);
             const copy = requiredElement(activeSlide(), '.hero-rich-copy-region');
-            expect(copy.hasAttribute('role')).toBe(false);
-            expect(copy.hasAttribute('tabindex')).toBe(false);
+            expect(copy.hasAttribute('role')).toBe(width < 1024);
+            expect(copy.hasAttribute('tabindex')).toBe(width < 1024);
             const artwork = requiredElement(
                 activeSlide(),
                 '.hero-rich-image-link img:not([aria-hidden="true"])',
@@ -845,16 +845,16 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.is-neighbor')).toBeNull();
     });
     it.each([
-        { desktop: false, expectedHeight: '726px' },
+        { desktop: false, expectedHeight: '293px' },
         { desktop: true, expectedHeight: '520px' },
     ])(
-        'measures the full mobile scene and the desktop copy surface ($desktop)',
+        'measures the fixed mobile frame and the flexible desktop copy surface ($desktop)',
         async ({ desktop, expectedHeight }) => {
             boundsMock.mockImplementation(function (this: Element) {
                 const height = this.matches('.hero-rich-content')
                     ? 520
                     : this.matches('.hero-scene-wrapper')
-                      ? 726
+                      ? 293
                       : 206;
                 return {
                     x: 0,
@@ -874,10 +874,22 @@ describe('HomePage carousel pointer interactions', () => {
     );
 
     it.each([false, true])(
-        'includes overflowing copy beyond the constrained scene bounds (desktop=%s)',
+        'ignores mobile overlay copy overflow while retaining flexible desktop sizing (desktop=%s)',
         async desktop => {
             const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
             let contentHeight = 480;
+            const frameHeight = desktop ? 320 : 293;
+            boundsMock.mockReturnValue({
+                x: 0,
+                y: 0,
+                top: 0,
+                left: 0,
+                right: 366,
+                bottom: frameHeight,
+                width: 366,
+                height: frameHeight,
+                toJSON: () => ({}),
+            });
             vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function (this: Element) {
                 return this.matches(heightSelector) ? contentHeight : 0;
             });
@@ -888,9 +900,9 @@ describe('HomePage carousel pointer interactions', () => {
             );
             const stage = requiredElement(host, '.hero-carousel-stage');
             const surface = requiredElement(activeSlide(), heightSelector);
-            expect(surface.getBoundingClientRect().height).toBe(320);
+            expect(surface.getBoundingClientRect().height).toBe(frameHeight);
             expect(surface.scrollHeight).toBe(480);
-            expect(stage.style.height).toBe('480px');
+            expect(stage.style.height).toBe(desktop ? '480px' : '293px');
             expect(surface.textContent).toContain('A longer English description');
 
             const observer = resizeObservers.find(candidate => candidate.elements.has(surface));
@@ -898,11 +910,11 @@ describe('HomePage carousel pointer interactions', () => {
             if (!observer) throw new Error('Expected the current slide resize observer');
             contentHeight = 640;
             await interact(() => observer.notify());
-            expect(stage.style.height).toBe('640px');
+            expect(stage.style.height).toBe(desktop ? '640px' : '293px');
 
             contentHeight = 240;
             await interact(() => observer.notify());
-            expect(stage.style.height).toBe('320px');
+            expect(stage.style.height).toBe(`${frameHeight}px`);
         },
     );
 
@@ -1053,7 +1065,7 @@ describe('HomePage carousel pointer interactions', () => {
     });
 
     it.each([false, true])(
-        'grows before entrance, observes content changes and shrinks after settling (desktop=%s)',
+        'preserves growing copy for flexible desktop and mobile editorial layouts (desktop=%s)',
         async desktop => {
             let tallHeight = 520;
             const heightSelector = desktop ? '.hero-rich-content' : '.hero-scene-wrapper';
@@ -1074,7 +1086,11 @@ describe('HomePage carousel pointer interactions', () => {
                     toJSON: () => ({}),
                 };
             });
-            await render(desktop, [heroes[0], { ...heroes[1], body: 'Tall copy' }]);
+            const settings = desktop ? undefined : { heroArtworkLayout: 'editorial' };
+            await render(desktop, [
+                { ...heroes[0], settings },
+                { ...heroes[1], settings, body: 'Tall copy' },
+            ]);
             const stage = requiredElement(host, '.hero-carousel-stage');
             expect(stage.style.height).toBe('320px');
             await pointer('pointerdown', 250);
@@ -1105,4 +1121,51 @@ describe('HomePage carousel pointer interactions', () => {
             expect(stage.style.height).toBe('320px');
         },
     );
+
+    it('keeps the mobile overlay at 293px through long-copy transitions and content resizing', async () => {
+        let copyHeight = 640;
+        boundsMock.mockImplementation(function (this: Element) {
+            const height = this.matches('.hero-rich-content') ? copyHeight : 293;
+            return {
+                x: 0,
+                y: 0,
+                top: 0,
+                left: 0,
+                right: 408,
+                bottom: height,
+                width: 408,
+                height,
+                toJSON: () => ({}),
+            };
+        });
+        vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockImplementation(function (this: Element) {
+            return this.matches('.hero-scene-wrapper, .hero-rich-content') ? copyHeight : 0;
+        });
+        await render(false, [heroes[0], { ...heroes[1], body: 'Tall copy'.repeat(80) }]);
+        const stage = requiredElement(host, '.hero-carousel-stage');
+        expect(stage.style.height).toBe('293px');
+        await pointer('pointerdown', 300);
+        await pointer('pointermove', 150);
+        expect(stage.style.height).toBe('293px');
+        await pointer('pointerup', 150);
+        // A fixed frame starts horizontal settling without waiting for a height animation.
+        expect(host.querySelector('.is-settling')).not.toBeNull();
+        await advance();
+        expect(activeSlide().textContent).toContain('Tall copy');
+        const copy = requiredElement(activeSlide(), '.hero-rich-copy-region');
+        expect(copy.getAttribute('role')).toBe('region');
+        expect(copy.getAttribute('tabindex')).toBe('0');
+        const scene = requiredElement(activeSlide(), '.hero-scene-wrapper');
+        const observer = resizeObservers.find(candidate => candidate.elements.has(scene));
+        expect(observer).toBeDefined();
+        copyHeight = 1200;
+        await interact(() => observer?.notify());
+        expect(stage.style.height).toBe('293px');
+        await pointer('pointerdown', 100);
+        await pointer('pointermove', 300);
+        await pointer('pointerup', 300);
+        await advance();
+        expect(activeSlide().textContent).toContain('First slide');
+        expect(stage.style.height).toBe('293px');
+    });
 });

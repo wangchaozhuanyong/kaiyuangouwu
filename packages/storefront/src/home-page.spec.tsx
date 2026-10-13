@@ -509,8 +509,15 @@ describe('HomePage hero carousel', () => {
         expect(markup).toContain('只显示后台配置的内容');
         expect(markup).toMatch(/class="[^"]*\bhero-rich-backdrop\b[^"]*"/);
         const copyAttributes = markup.match(/<div class="hero-rich-copy-region"([^>]*)>/)?.[1] ?? '';
-        expect(copyAttributes).not.toContain('tabindex');
-        expect(copyAttributes).not.toContain('role="region"');
+        if (desktop) {
+            expect(copyAttributes).not.toContain('tabindex');
+            expect(copyAttributes).not.toContain('role="region"');
+        } else {
+            // The fixed mobile overlay keeps long copy readable by keyboard inside its frame.
+            expect(copyAttributes).toContain('tabindex="0"');
+            expect(copyAttributes).toContain('role="region"');
+            expect(copyAttributes).toContain('aria-label="后台配置的首页轮播"');
+        }
     });
 
     it('pairs the current store icon with a separate store name in the main header', () => {

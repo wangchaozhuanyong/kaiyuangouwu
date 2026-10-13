@@ -389,7 +389,7 @@ export function ReferralPage() {
                                     <div className="referral-record-list">
                                         {paginatedInvitees.map(invitee => (
                                             <div key={invitee.id} className="referral-record-row">
-                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--referral-invite-surface)] weight-bold text-[var(--referral-invite-ink)]">
+                                                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[var(--accent-soft)] weight-bold text-[var(--accent-ink)]">
                                                     {invitee.displayName.slice(0, 1)}
                                                 </span>
                                                 <div className="min-w-0 flex-1">

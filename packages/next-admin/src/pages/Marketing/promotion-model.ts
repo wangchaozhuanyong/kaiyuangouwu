@@ -1,3 +1,4 @@
+import { STOREFRONT_COUPON_PALETTES } from '../../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import {
     PromotionProductRecord,
     StoreCouponAppearanceTheme,
@@ -58,14 +59,24 @@ export const couponKindLabels: Record<StoreCouponKind, string> = {
 export const couponAppearanceOptions: ReadonlyArray<{
     value: StoreCouponAppearanceTheme | 'default';
     label: string;
-    swatchClass: string;
 }> = [
-    { value: 'default', label: '按券种默认', swatchClass: 'bg-slate-300' },
-    { value: 'rose', label: '朱砂红', swatchClass: 'bg-rose-700' },
-    { value: 'gold', label: '古铜金', swatchClass: 'bg-amber-700' },
-    { value: 'blue', label: '黛青蓝', swatchClass: 'bg-slate-700' },
-    { value: 'emerald', label: '松石绿', swatchClass: 'bg-emerald-700' },
+    { value: 'default', label: '按券种默认' },
+    { value: 'rose', label: '朱砂红' },
+    { value: 'gold', label: '古铜金' },
+    { value: 'blue', label: '黛青蓝' },
+    { value: 'emerald', label: '松石绿' },
 ];
+
+const defaultCouponAppearance: Record<StoreCouponKind, StoreCouponAppearanceTheme> = {
+    ORDER_FIXED: 'rose',
+    ORDER_PERCENTAGE: 'gold',
+    COLLECTION_PERCENTAGE: 'blue',
+    PRODUCT_PERCENTAGE: 'emerald',
+};
+
+export function couponAppearancePalette(theme: StoreCouponAppearanceTheme | null, kind: StoreCouponKind) {
+    return STOREFRONT_COUPON_PALETTES.classic[theme ?? defaultCouponAppearance[kind]];
+}
 
 export const ledgerLabels: Record<string, string> = {
     CLAIMED: '已领取',

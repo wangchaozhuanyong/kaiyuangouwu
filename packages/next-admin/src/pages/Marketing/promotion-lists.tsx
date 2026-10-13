@@ -5,6 +5,7 @@ import { formatMoney } from '../Sales/sales-utils';
 import {
     SensitiveAction,
     couponAppearanceOptions,
+    couponAppearancePalette,
     couponIsActive,
     couponKindLabels,
     couponRule,
@@ -228,6 +229,7 @@ function CouponAppearanceButton({
     const option =
         couponAppearanceOptions.find(item => item.value === (coupon.appearanceTheme ?? 'default')) ??
         couponAppearanceOptions[0];
+    const palette = couponAppearancePalette(coupon.appearanceTheme, coupon.kind);
     return (
         <AdminButton
             type="button"
@@ -236,7 +238,13 @@ function CouponAppearanceButton({
             aria-label={`修改${coupon.name}的券面配色`}
             className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-50"
         >
-            <span className={`h-3 w-3 rounded-sm ${option.swatchClass}`} aria-hidden="true" />
+            <span
+                className="inline-flex h-6 min-w-8 items-center justify-center rounded px-1.5 text-xs font-bold tabular-nums"
+                style={{ backgroundColor: palette.surface, color: palette.ink }}
+                aria-hidden="true"
+            >
+                50
+            </span>
             券面：{option.label}
         </AdminButton>
     );
