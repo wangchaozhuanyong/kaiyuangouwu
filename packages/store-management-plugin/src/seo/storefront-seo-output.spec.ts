@@ -35,6 +35,68 @@ const facts = (host = 'store-a.test'): PublicSeoFacts => ({
 });
 
 describe('one public SEO policy', () => {
+    it.each(['store-a', 'store-b'])('declares %s icons in the initial public HTML without SSI', code => {
+        const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
+        const html = assemblePublicHtml(
+            '<html><head><link rel="icon" href="/previous-store.png">' +
+                '<link rel="apple-touch-icon" href="/previous-store-touch.png">' +
+                '<!--# include virtual="/_storefront/lcp-preload" -->' +
+                '<script type="module" src="/assets/test.js"></script></head><body><div id="root"></div></body></html>',
+            {
+                scope: { channelCode: code },
+                config: {
+                    code,
+                    accessMode: 'LIVE',
+                    logoUrl: `https://${code}.test/assets/preview/brand.webp?label=%22%3Cbrand%3E`,
+                },
+                seo,
+            } as never,
+            '<main>Public content</main>',
+        );
+        const dom = load(html);
+        for (const rel of ['icon', 'apple-touch-icon']) {
+            const icon = dom(`head link[rel="${rel}"]`);
+            expect(icon).toHaveLength(1);
+            expect(icon.attr('type')).toBe('image/png');
+            expect(icon.attr('data-storefront-icon')).toBe('server');
+            const href = icon.attr('href');
+            if (!href) throw new Error('Expected a parser-time icon URL');
+            const url = new URL(href);
+            expect(url.origin).toBe(`https://${code}.test`);
+            expect(url.pathname).toBe('/assets/preview/brand.webp');
+            expect(url.searchParams.get('format')).toBe('png');
+            expect(url.searchParams.get('preset')).toBe(
+                rel === 'icon' ? 'storefront-icon-96' : 'storefront-thumbnail-fit-320',
+            );
+            expect(url.searchParams.get('label')).toBe('"<brand>');
+        }
+        expect(dom('head').html()).not.toContain('previous-store');
+        expect(html).not.toContain('<!--# include');
+    });
+
+    it.each([
+        {},
+        { code: 'store-b', accessMode: 'LIVE', logoUrl: '/foreign-store.png' },
+        { code: 'store-a', accessMode: 'PREVIEW', logoUrl: '/preview-store.png' },
+        { code: 'store-a', accessMode: 'CLOSED', logoUrl: '/closed-store.png' },
+        { code: 'store-a', accessMode: 'LIVE', logoUrl: null },
+    ])('keeps unavailable or unconfirmed public icons neutral: %j', config => {
+        const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
+        const html = assemblePublicHtml(
+            '<html><head><link rel="icon" href="/previous-store.png">' +
+                '<script type="module" src="/assets/test.js"></script></head><body><div id="root"></div></body></html>',
+            { scope: { channelCode: 'store-a' }, config, seo } as never,
+            '<main>Public content</main>',
+        );
+        const dom = load(html);
+        for (const rel of ['icon', 'apple-touch-icon']) {
+            const icon = dom(`head link[rel="${rel}"]`);
+            expect(icon).toHaveLength(1);
+            expect(icon.attr('href')).toBe('/storefront/neutral-store.png?storefront-icon=2');
+            expect(icon.attr('data-storefront-icon')).toBe('server');
+        }
+    });
+
     it.each(['classic', 'neo-minimalist'] as const)(
         'renders the confirmed %s theme before scripts or a browser cache are available',
         presetId => {

@@ -3,19 +3,22 @@ import { storefrontIcon } from '../../storefront-content-plugin/src/shared/store
 export function applyStorefrontIcons(logoUrl: string | null) {
     for (const rel of ['icon', 'apple-touch-icon'] as const) {
         const icon = storefrontIcon(logoUrl, rel);
-        // Invalidate Safari's retained page icon once, without clearing a user's
-        // browser cache. Keep the same host-resolved image and bounded PNG size.
-        const href = icon.href.replace(/#|$/u, '&iv=3$&');
         const links = [...document.querySelectorAll<HTMLLinkElement>(`link[rel=${rel}]`)];
-        const link = (links.find(item => item.dataset.storefrontIcon === 'server')?.cloneNode() ??
-            document.createElement('link')) as HTMLLinkElement;
-        link.rel = rel;
-        link.href = href;
-        link.type = icon.type;
-        // Set the complete URL before insertion: an empty icon declaration can
-        // make Safari request and retain the shared static fallback instead.
-        links.forEach(old => old.remove());
-        document.head.append(link);
+        const link =
+            links.find(item => item.dataset.storefrontIcon === 'server') ??
+            links[0] ??
+            document.createElement('link');
+        // Keep the parser's icon node and URL through hydration. Removing it or
+        // adding a client-only revision needlessly restarts browser icon loading.
+        if (link.rel !== rel) link.rel = rel;
+        if (link.type !== icon.type) link.type = icon.type;
+        if (link.href !== new URL(icon.href, document.baseURI).href) link.href = icon.href;
+        // Initialize a missing declaration before insertion; never leave an
+        // empty interval when updating an existing store's branding.
+        if (!link.isConnected) document.head.append(link);
+        links.forEach(old => {
+            if (old !== link) old.remove();
+        });
     }
 }
 

@@ -238,25 +238,25 @@ describe('runtime channel branding', () => {
             '/store-b.png',
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            '/store-b.png?storefront-icon=2&iv=3',
+            '/store-b.png?storefront-icon=2',
         );
         const migratedLogo = '/assets/preview/6e/store-icon__preview__webp_migrated_502.webp';
         act(() => root.render(<Fixture logo={migratedLogo} />));
         expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
-            `${migratedLogo}?v=webp-readable-1&preset=storefront-icon-96&format=png&q=82&storefront-icon=2&iv=3`,
+            `${migratedLogo}?v=webp-readable-1&preset=storefront-icon-96&format=png&q=82&storefront-icon=2`,
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            `${migratedLogo}?v=webp-readable-1&preset=storefront-thumbnail-fit-320&format=png&q=82&storefront-icon=2&iv=3`,
+            `${migratedLogo}?v=webp-readable-1&preset=storefront-thumbnail-fit-320&format=png&q=82&storefront-icon=2`,
         );
         act(() => root.render(<Fixture logo={null} />));
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
             '/storefront/neutral-social.png',
         );
         expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
-            '/storefront/neutral-store.png?storefront-icon=2&iv=3',
+            '/storefront/neutral-store.png?storefront-icon=2',
         );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
-            '/storefront/neutral-store.png?storefront-icon=2&iv=3',
+            '/storefront/neutral-store.png?storefront-icon=2',
         );
         expect(document.documentElement.style.getPropertyValue('--store-background')).toBe('#f1f5f9');
         expect(document.title).not.toContain('MOYAO');
@@ -278,7 +278,7 @@ describe('runtime channel branding', () => {
             );
             act(() => root.render(<Fixture logo="/current-store.png" />));
             expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
-                '/current-store.png?storefront-icon=2&iv=3',
+                '/current-store.png?storefront-icon=2',
             );
             expect(document.querySelector('link[rel="apple-touch-icon"]')).not.toBeNull();
         } finally {
