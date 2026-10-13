@@ -215,6 +215,15 @@ jobs:
                   echo "RELEASE_BACKUP_POLICY=$RELEASE_BACKUP_POLICY" >> "$GITHUB_ENV"
                   echo "RELEASE_AFFECTED_CHECKS=$RELEASE_AFFECTED_CHECKS" >> "$GITHUB_ENV"
 
+            - name: Read the verified release base retention tool
+              uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+              with:
+                  ref: ${{ env.RELEASE_BASE_SHA }}
+                  path: .release-base-control
+                  sparse-checkout: deploy/systemd/vendure-file-backup-retention.py
+                  sparse-checkout-cone-mode: false
+                  persist-credentials: false
+
             - name: Prepare fixed deployment entrypoint
               run: |
                   set -Eeuo pipefail
@@ -223,10 +232,12 @@ jobs:
                   python3 - <<'PY'
                   import base64
                   import gzip
+                  import hashlib
                   import json
                   import os
                   from pathlib import Path
                   import shlex
+                  import subprocess
 
                   def quote(name):
                       return shlex.quote(os.environ[name])
@@ -234,11 +245,30 @@ jobs:
                   script = base64.b64encode(
                       gzip.compress(Path('deploy/deploy-production-from-s3.sh').read_bytes(), mtime=0)
                   ).decode('ascii')
+                  base_directory = Path('.release-base-control')
+                  base_sha = subprocess.check_output(
+                      ['git', '-C', str(base_directory), 'rev-parse', 'HEAD'], text=True
+                  ).strip()
+                  assert base_sha == os.environ['RELEASE_BASE_SHA'], 'Retention source does not match verified release base'
+                  retention_path = Path('deploy/systemd/vendure-file-backup-retention.py')
+                  old_source = subprocess.check_output(
+                      ['git', '-C', str(base_directory), 'show', f'{base_sha}:{retention_path.as_posix()}']
+                  )
+                  old_hash = hashlib.sha256(old_source).hexdigest()
+                  candidate = retention_path.read_bytes()
+                  new_hash = hashlib.sha256(candidate).hexdigest()
+                  encoded_candidate = base64.b64encode(gzip.compress(candidate, mtime=0)).decode('ascii')
+                  installer = Path('deploy/install-file-retention-repair.py').read_text()
+                  repair_command = (
+                      f"printf '%s' '{encoded_candidate}' | base64 -d | gzip -d | "
+                      f"python3 -c {shlex.quote(installer)} {old_hash} {new_hash}"
+                  )
                   command = "/bin/bash <<'VENDURE_DEPLOY_SCRIPT'\n" + '\n'.join([
                       'set -Eeuo pipefail',
                       'disk_maintenance=/usr/local/sbin/vendure-production-disk-maintenance',
                       'if [[ -e "$disk_maintenance" || -L "$disk_maintenance" ]]; then',
-                      '  [[ -f "$disk_maintenance" && -x "$disk_maintenance" ]] || exit 1',
+                      '  [[ -f "$disk_maintenance" && -x "$disk_maintenance" && ! -L "$disk_maintenance" ]] || exit 1',
+                      '  ' + repair_command,
                       '  "$disk_maintenance" --apply',
                       'else',
                       '  printf "PRODUCTION_DISK_MAINTENANCE_NOT_INSTALLED bootstrap requires policy installation\\n"',
