@@ -304,20 +304,42 @@ class FileBackupRetentionTest(unittest.TestCase):
         with self.assertRaisesRegex(TOOL.RetentionError, "duplicate-backup-setting"):
             TOOL.read_settings({}, envfile)
 
-    def test_remote_checksum_read_is_small_version_pinned_and_project_local(self):
+    def test_remote_checksum_read_matches_verified_version_and_is_small_and_project_local(self):
         payload = b"synthetic remote checksum"
         def aws_read(command, **kwargs):
             self.assertEqual(command[:3], ["aws", "s3api", "get-object"])
-            self.assertEqual(command[command.index("--version-id") + 1], "pinned-version")
+            self.assertNotIn("--version-id", command)
             self.assertEqual(command[command.index("--range") + 1], "bytes=0-8191")
             output = Path(command[-3])
             self.assertEqual(output.parent, self.backups)
             output.write_bytes(payload)
-            return subprocess.CompletedProcess(command, 0, b"{}", b"")
+            return subprocess.CompletedProcess(command, 0, b'{"VersionId":"pinned-version"}', b"")
         with mock.patch.object(TOOL.subprocess, "run", side_effect=aws_read):
             result = TOOL.remote_checksum(self.backups, "fixture.sha256", "pinned-version")
         self.assertEqual(result, payload)
         self.assertEqual(list(self.backups.glob(".retention-checksum-*")), [])
+
+    def test_changed_or_missing_remote_checksum_version_is_rejected(self):
+        for metadata in ({"VersionId": "replacement-version"}, {}, {"VersionId": None}):
+            def aws_read(command, **kwargs):
+                Path(command[-3]).write_bytes(b"synthetic checksum")
+                return subprocess.CompletedProcess(command, 0, json.dumps(metadata).encode(), b"")
+            with mock.patch.object(TOOL.subprocess, "run", side_effect=aws_read):
+                with self.assertRaisesRegex(TOOL.RetentionError, "offsite-checksum-version-changed"):
+                    TOOL.remote_checksum(self.backups, "fixture.sha256", "pinned-version")
+            self.assertEqual(list(self.backups.glob(".retention-checksum-*")), [])
+
+    def test_remote_checksum_permission_and_malformed_response_fail_closed(self):
+        def denied(command, **kwargs):
+            raise subprocess.CalledProcessError(1, command, stderr=b"PRIVATE_FIXTURE")
+        def malformed(command, **kwargs):
+            Path(command[-3]).write_bytes(b"synthetic checksum")
+            return subprocess.CompletedProcess(command, 0, b"not-json", b"")
+        for reader in (denied, malformed):
+            with mock.patch.object(TOOL.subprocess, "run", side_effect=reader):
+                with self.assertRaisesRegex(TOOL.RetentionError, "offsite-checksum-read-failed"):
+                    TOOL.remote_checksum(self.backups, "fixture.sha256", "pinned-version")
+            self.assertEqual(list(self.backups.glob(".retention-checksum-*")), [])
 
     def test_existing_service_wrapper_uses_configured_env_and_keeps_three(self):
         names = [self.create(day) for day in range(1, 4)]
