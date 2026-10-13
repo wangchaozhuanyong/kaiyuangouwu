@@ -151,11 +151,15 @@ describe('all announcements and detail navigation', () => {
 
     it('renders a successful empty list as empty, not loading or an error', async () => {
         const view = fixture();
-        await settle();
+        await vi.waitFor(async () => {
+            await settle();
+            expect(view.host.textContent).toContain('暂无系统公告');
+        });
         expect(view.host.textContent).toContain('暂无系统公告');
         expect(view.host.textContent).toContain('共 0 条');
         expect(view.host.textContent).not.toContain('页面数据加载失败');
         expect(view.host.querySelector('[data-page-pending]')).toBeNull();
+        expect(view.list).toHaveBeenCalledOnce();
     });
 
     it('offers a first-page recovery when records are removed from the requested page', async () => {

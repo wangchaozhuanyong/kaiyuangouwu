@@ -30,7 +30,7 @@ import {
     StorefrontDataChangedEvent,
 } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
-import { In, IsNull, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { In, IsNull, LessThan, LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import { AutoCardDeliveryReadyEvent } from './auto-card-delivery.event';
@@ -52,6 +52,7 @@ import {
     manageAutoCardSecretsPermission,
     readSoldAutoCardsPermission,
 } from './auto-card.constants';
+import { DeliveryRecoveryCursors, scanDeliveryRecoveryPage } from './delivery-recovery-scan';
 import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { DigitalProductService } from './digital-product.service';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
@@ -846,36 +847,54 @@ export class AutoCardService {
         return delivery;
     }
 
-    async reconcilePending(): Promise<{
+    async reconcilePending(cursors: DeliveryRecoveryCursors = {}): Promise<{
         allocated: number;
         redispatched: number;
         completedFulfillments: number;
     }> {
         const repository = this.connection.rawConnection.getRepository(AutoCardDelivery);
-        const pending = await repository.find({
-            where: [
-                { state: In(['WAITING_STOCK', 'ALLOCATED', 'RETRYING']) },
-                { state: 'SENT', fulfillmentId: IsNull() },
-            ],
-            relations: {
-                channel: true,
-                order: { payments: { refunds: { lines: true } } },
-                orderLine: { productVariant: true },
-                config: true,
-                poolItems: true,
-            },
-            order: { createdAt: 'ASC' },
-            take: 200,
-        });
+        const retryBase = {
+            state: In(['ALLOCATED', 'RETRYING']),
+            attemptCount: LessThan(MAX_EMAIL_ATTEMPTS),
+        };
+        const pending = (
+            await Promise.all([
+                scanDeliveryRecoveryPage(
+                    repository,
+                    [
+                        { ...retryBase, lastDispatchedAt: IsNull() },
+                        {
+                            ...retryBase,
+                            lastDispatchedAt: LessThanOrEqual(new Date(Date.now() - 15 * 60_000)),
+                        },
+                    ],
+                    cursors,
+                    'email',
+                    67,
+                    { channel: true },
+                ),
+                scanDeliveryRecoveryPage(
+                    repository,
+                    [{ state: 'SENT', fulfillmentId: IsNull() }],
+                    cursors,
+                    'fulfillment',
+                    67,
+                    { channel: true },
+                ),
+                scanDeliveryRecoveryPage(repository, [{ state: 'WAITING_STOCK' }], cursors, 'stock', 66, {
+                    channel: true,
+                }),
+            ])
+        ).flat();
         let allocated = 0;
         let redispatched = 0;
         let completedFulfillments = 0;
         for (const item of pending) {
-            const ctx = await this.requestContextService.create({
-                apiType: 'admin',
-                channelOrToken: item.channel,
-            });
             try {
+                const ctx = await this.requestContextService.create({
+                    apiType: 'admin',
+                    channelOrToken: item.channel,
+                });
                 await this.connection.withTransaction(ctx, async tx => {
                     let delivery = await this.lockDeliveryOrThrow(tx, item.id);
                     if (delivery.order.state === 'Cancelled') return;
@@ -891,7 +910,11 @@ export class AutoCardService {
                     const stale =
                         !delivery.lastDispatchedAt ||
                         Date.now() - delivery.lastDispatchedAt.getTime() > 15 * 60_000;
-                    if (['ALLOCATED', 'RETRYING'].includes(delivery.state) && stale) {
+                    if (
+                        ['ALLOCATED', 'RETRYING'].includes(delivery.state) &&
+                        stale &&
+                        delivery.attemptCount < MAX_EMAIL_ATTEMPTS
+                    ) {
                         await this.dispatch(tx, delivery, 'EMAIL_QUEUED', '定时检查重新投递发卡邮件');
                         redispatched++;
                     }

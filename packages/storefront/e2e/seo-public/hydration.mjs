@@ -171,7 +171,31 @@ const server = await startSeoFixtureServer(0, {
                   });
               },
           }
-        : {}),
+        : {
+              // Keep this fixture aligned with StorefrontSeoHtmlService. Production
+              // renders these lazy-route styles with the initial public HTML.
+              transformHtml: async route => {
+                  const dist = path.join(storefront, 'dist');
+                  const prefixes = route.includes('/product')
+                      ? ['product-detail-page-']
+                      : /\/(?:category|search)/u.test(route)
+                        ? [
+                              'account-catalog-surfaces-',
+                              ...(route.includes('/search') ? ['search-loading-', 'search-page-'] : []),
+                          ]
+                        : [];
+                  const emittedAssets = await readdir(path.join(dist, 'assets'));
+                  const styles = prefixes.flatMap(prefix =>
+                      emittedAssets.filter(file => file.endsWith('.css') && file.startsWith(prefix)),
+                  );
+                  assert.ok(prefixes.every(prefix => styles.some(file => file.startsWith(prefix))));
+                  return (await readFile(path.join(dist, 'index.html'), 'utf8')).replace(
+                      '</head>',
+                      styles.map(file => `<link rel="stylesheet" href="/assets/${file}">`).join('') +
+                          '</head>',
+                  );
+              },
+          }),
 });
 const browser = await chromium.launch({ headless: true });
 const checks = [];
@@ -390,6 +414,7 @@ try {
                         retention.frame && retention.content,
                         `${id}: persistent shell DOM was replaced`,
                     );
+                    assert.ok(retention.page, `${id}: first page DOM was replaced`);
                     if (width < 1024)
                         assert.ok(
                             retention.page && retention.image && retention.navigation,

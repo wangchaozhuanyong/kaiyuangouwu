@@ -10,7 +10,7 @@
     color: var(--muted);
 }
 
-.page-skeleton--route,
+.page-skeleton--brand,
 .route-transition {
     min-height: 60svh;
 }
@@ -26,6 +26,11 @@
 
 .page-skeleton--compact {
     min-height: 100px;
+}
+
+.page-skeleton--structure {
+    display: block;
+    padding: var(--page-section-inset);
 }
 
 .list-skeleton {
@@ -80,6 +85,50 @@
 .route-static-skeleton .skeleton-row {
     width: 100%;
     height: 104px;
+}
+.route-static-skeleton .skeleton-banner {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+}
+.route-static-skeleton .skeleton-media {
+    width: 100%;
+    aspect-ratio: var(--product-media-ratio);
+}
+.route-static-skeleton .skeleton-text {
+    width: 85%;
+    min-height: var(--type-body-leading);
+}
+.route-static-skeleton .skeleton-price {
+    width: 35%;
+    min-height: var(--type-price-detail-leading);
+}
+.route-static-skeleton .skeleton-action {
+    width: 100%;
+    min-height: var(--experience-control-min);
+}
+.route-skeleton-products {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-16);
+}
+.route-skeleton-panels {
+    display: grid;
+    gap: var(--space-16);
+}
+.route-detail-skeleton-copy {
+    align-content: start;
+}
+@media (min-width: 1024px) {
+    .route-skeleton-products {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .route-detail-skeleton,
+    .route-skeleton-panels {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .route-static-skeleton .skeleton-banner {
+        aspect-ratio: 3 / 1;
+    }
 }
 
 .catalog-static-skeleton {
@@ -159,18 +208,22 @@
     visibility: visible;
 }
 .brand-loading-name {
+    width: 100%;
     max-width: 100%;
     font-size: var(--type-page-size);
     line-height: var(--type-page-leading);
+    min-height: var(--type-page-leading);
     font-weight: var(--font-weight-semibold);
     text-align: center;
     overflow-wrap: anywhere;
 }
 .brand-loading-subtitle {
+    width: 100%;
     max-width: 100%;
     color: var(--muted);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
+    min-height: var(--type-meta-leading);
     letter-spacing: var(--tracking-eyebrow);
     text-align: center;
     overflow-wrap: anywhere;

@@ -1,6 +1,7 @@
 // organize-imports-ignore -- Shared client cascade; import order affects rendered styles.
 /* eslint-disable import/order -- Load desktop composition after the base layout and selected visual preset. */
 import './styles.css';
+import './styles/quantity-control.css';
 import './styles/subpage-content.css';
 import './styles/desktop-layout.css';
 import './styles/visual-presets.css';

@@ -11,10 +11,11 @@ import {
     Truck,
     X,
 } from 'lucide-react';
-import { Fragment, Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ShopApi } from '../api';
+import { CommercePageStyles } from '../commerce-styles';
 import { CountBadge, countBadgeLabel } from '../components/common/count-badge';
 import { QuantityControl } from '../components/common/quantity-control';
 import { SharePosterSurface } from '../components/common/share-poster-surface';
@@ -651,15 +652,11 @@ export function ProductDetailPage() {
         </div>
     );
 
-    // The shared content body owns desktop section spacing; phone media keeps its overlay flow.
-    const ProductBody = desktop ? SubpageBody : Fragment;
-
     return (
         <main className="page subpage product-detail-page">
+            <CommercePageStyles />
             <SubHeader
-                className={
-                    desktop ? undefined : `product-detail-header${headerScrolled ? ' is-scrolled' : ''}`
-                }
+                className={`product-detail-header${headerScrolled ? ' is-scrolled' : ''}`}
                 title={isZh ? '商品详情' : 'Product details'}
                 language={language}
                 onBack={goBack}
@@ -670,30 +667,14 @@ export function ProductDetailPage() {
                         aria-label={isZh ? '分享' : 'Share'}
                     >
                         <Share2 aria-hidden="true" />
-                        {desktop && <span>{isZh ? '分享' : 'Share'}</span>}
+                        <span className="detail-share-label">{isZh ? '分享' : 'Share'}</span>
                     </button>
                 }
             />
-            <ProductBody>
-                {desktop ? (
-                    <div className="desktop-product-purchase">
-                        <ProductGallery product={product} language={language} />
-                        <div className="desktop-product-buying">
-                            {summary}
-                            {options}
-                            {!quoteOnly && quantityControl}
-                            {!quoteOnly && services}
-                            {purchaseError && (
-                                <p className="type-helper" role="status">
-                                    {purchaseError}
-                                </p>
-                            )}
-                            {actions}
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        <ProductGallery product={product} language={language} />
+            <SubpageBody className="product-detail-body" data-active-section={activeSection}>
+                <div className="desktop-product-purchase">
+                    <ProductGallery product={product} language={language} />
+                    <div className="desktop-product-buying">
                         {summary}
                         {options}
                         {!quoteOnly && quantityControl}
@@ -703,166 +684,158 @@ export function ProductDetailPage() {
                                 {purchaseError}
                             </p>
                         )}
-                    </>
-                )}
-                {desktop && (
-                    <nav
-                        className="detail-content-tabs"
-                        aria-label={isZh ? '商品信息' : 'Product information'}
-                    >
-                        {(
-                            [
-                                ['description', isZh ? '商品详情' : 'Description'],
-                                ['reviews', isZh ? '用户评价' : 'Reviews'],
-                                ['params', isZh ? '商品参数' : 'Specifications'],
-                                ['after-sales', isZh ? '配送与售后' : 'Delivery and returns'],
-                            ] as const
-                        )
-                            .filter(([section]) => reviewEnabled || section !== 'reviews')
-                            .map(([section, label]) => (
-                                <button
-                                    key={section}
-                                    type="button"
-                                    className={activeSection === section ? 'is-active' : undefined}
-                                    aria-pressed={activeSection === section}
-                                    onClick={() => setActiveSection(section)}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                    </nav>
-                )}
+                        {actions}
+                    </div>
+                </div>
+                <nav className="detail-content-tabs" aria-label={isZh ? '商品信息' : 'Product information'}>
+                    {(
+                        [
+                            ['description', isZh ? '商品详情' : 'Description'],
+                            ['reviews', isZh ? '用户评价' : 'Reviews'],
+                            ['params', isZh ? '商品参数' : 'Specifications'],
+                            ['after-sales', isZh ? '配送与售后' : 'Delivery and returns'],
+                        ] as const
+                    )
+                        .filter(([section]) => reviewEnabled || section !== 'reviews')
+                        .map(([section, label]) => (
+                            <button
+                                key={section}
+                                type="button"
+                                className={activeSection === section ? 'is-active' : undefined}
+                                aria-pressed={activeSection === section}
+                                onClick={() => setActiveSection(section)}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                </nav>
                 {reviewEnabled && (!desktop || activeSection === 'reviews') && (
-                    <ProductReviewsSection
-                        api={api}
-                        productId={product.id}
-                        market={market}
-                        language={language}
-                    />
+                    <div className="detail-review-panel">
+                        <ProductReviewsSection
+                            api={api}
+                            productId={product.id}
+                            market={market}
+                            language={language}
+                        />
+                    </div>
                 )}
-                {(!desktop || activeSection === 'params') && (
-                    <section className="detail-block detail-params">
-                        <header>
-                            <strong>{isZh ? '商品参数' : 'Product details'}</strong>
-                        </header>
-                        <dl>
-                            <div>
-                                <dt>{isZh ? '类型' : 'Type'}</dt>
-                                <dd>
-                                    {isAutoCard
+                <section className="detail-block detail-params">
+                    <header>
+                        <strong>{isZh ? '商品参数' : 'Product details'}</strong>
+                    </header>
+                    <dl>
+                        <div>
+                            <dt>{isZh ? '类型' : 'Type'}</dt>
+                            <dd>
+                                {isAutoCard
+                                    ? isZh
+                                        ? '虚拟自动发卡商品'
+                                        : 'Automatic credential product'
+                                    : isFileDownload
+                                      ? isZh
+                                          ? '数字文件下载商品'
+                                          : 'Digital file download'
+                                      : isDigital
                                         ? isZh
-                                            ? '虚拟自动发卡商品'
-                                            : 'Automatic credential product'
-                                        : isFileDownload
-                                          ? isZh
-                                              ? '数字文件下载商品'
-                                              : 'Digital file download'
-                                          : isDigital
-                                            ? isZh
-                                                ? '人工数字服务'
-                                                : 'Manual digital service'
-                                            : isZh
-                                              ? '普通商品'
-                                              : 'Physical'}
-                                </dd>
-                            </div>
-                            <div>
-                                <dt>{isZh ? '规格' : 'Variant'}</dt>
-                                <dd>{variant?.name ?? '--'}</dd>
-                            </div>
-                            <div>
-                                <dt>{isZh ? '库存' : 'Stock'}</dt>
-                                <dd>{quoteOnly ? (isZh ? '按需确认' : 'Confirm on request') : stockLabel}</dd>
-                            </div>
-                            <div>
-                                <dt>{isZh ? '交付' : 'Delivery'}</dt>
-                                <dd>
-                                    {quoteOnly
-                                        ? isZh
-                                            ? '按需求确认'
-                                            : 'Confirm on request'
-                                        : isAutoCard
-                                          ? isZh
-                                              ? '付款后邮箱发卡'
-                                              : 'Email after payment'
-                                          : isFileDownload
-                                            ? isZh
-                                                ? '付款后文件下载'
-                                                : 'File download after payment'
-                                            : isDigital
-                                              ? isZh
-                                                  ? '商家处理后通知'
-                                                  : 'Merchant processed with updates'
-                                              : isZh
-                                                ? '快递配送'
-                                                : 'Shipping'}
-                                </dd>
-                            </div>
-                        </dl>
-                    </section>
-                )}
-                {(!desktop || activeSection === 'description') && (
-                    <section className="detail-block detail-description">
-                        <h2>{isZh ? '商品详情' : 'Description'}</h2>
-                        {descriptionHtml ? (
-                            <ContentText as="div" className="detail-rich-text" html={descriptionHtml} />
-                        ) : (
-                            <p>
-                                {isZh
-                                    ? '商品详细信息由商家后台维护。'
-                                    : 'Product information is managed by the merchant.'}
-                            </p>
-                        )}
-                    </section>
-                )}
-                {(!desktop || activeSection === 'after-sales') && (
-                    <section className="detail-block detail-after-sales">
-                        <h2>{isZh ? '配送与售后说明' : 'Delivery and returns'}</h2>
-                        <div className="detail-after-sales-copy">
-                            <p>
+                                            ? '人工数字服务'
+                                            : 'Manual digital service'
+                                        : isZh
+                                          ? '普通商品'
+                                          : 'Physical'}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '规格' : 'Variant'}</dt>
+                            <dd>{variant?.name ?? '--'}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '库存' : 'Stock'}</dt>
+                            <dd>{quoteOnly ? (isZh ? '按需确认' : 'Confirm on request') : stockLabel}</dd>
+                        </div>
+                        <div>
+                            <dt>{isZh ? '交付' : 'Delivery'}</dt>
+                            <dd>
                                 {quoteOnly
                                     ? isZh
-                                        ? '此商品仅供展示。请联系客服确认报价、交期及售后条件。'
-                                        : 'Display only. Contact support to confirm price, lead time and after-sales terms.'
-                                    : isDigital
-                                      ? isAutoCard
-                                          ? isZh
-                                              ? '付款成功后自动发送到下单邮箱。'
-                                              : 'Sent to your order email after payment.'
-                                          : isFileDownload
-                                            ? isZh
-                                                ? '付款成功后可在订单中下载。'
-                                                : 'Download from your order after payment.'
-                                            : isZh
-                                              ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱。`
-                                              : `Merchant processed and emailed within ${manualSlaText}.`
-                                      : isZh
-                                        ? '配送方式与运费在结算页按收货地址确认。'
-                                        : 'Shipping method and fee are confirmed at checkout.'}
-                            </p>
-                            {!quoteOnly && (
-                                <p>
-                                    {refundPolicy === 'NON_REFUNDABLE'
+                                        ? '按需求确认'
+                                        : 'Confirm on request'
+                                    : isAutoCard
+                                      ? isZh
+                                          ? '付款后邮箱发卡'
+                                          : 'Email after payment'
+                                      : isFileDownload
                                         ? isZh
-                                            ? '该商品不支持退款。'
-                                            : 'This product is non-refundable.'
-                                        : refundPolicy === 'SEVEN_DAY_NO_REASON'
+                                            ? '付款后文件下载'
+                                            : 'File download after payment'
+                                        : isDigital
                                           ? isZh
-                                              ? '该商品支持 7 天无理由退货，具体条件以订单售后规则为准。'
-                                              : 'Seven-day returns apply subject to the order policy.'
+                                              ? '商家处理后通知'
+                                              : 'Merchant processed with updates'
                                           : isZh
-                                            ? '退款申请由商家审核，具体结果以售后处理为准。'
-                                            : 'Refund requests are reviewed by the merchant.'}
-                                </p>
-                            )}
+                                            ? '快递配送'
+                                            : 'Shipping'}
+                            </dd>
                         </div>
-                        <button type="button" onClick={() => navigateTo({ name: 'support' })}>
-                            <MessageCircle aria-hidden="true" />
-                            {isZh ? '咨询客服' : 'Contact support'}
-                            <ChevronRight aria-hidden="true" />
-                        </button>
-                    </section>
-                )}
+                    </dl>
+                </section>
+                <section className="detail-block detail-description">
+                    <h2>{isZh ? '商品详情' : 'Description'}</h2>
+                    {descriptionHtml ? (
+                        <ContentText as="div" className="detail-rich-text" html={descriptionHtml} />
+                    ) : (
+                        <p>
+                            {isZh
+                                ? '商品详细信息由商家后台维护。'
+                                : 'Product information is managed by the merchant.'}
+                        </p>
+                    )}
+                </section>
+                <section className="detail-block detail-after-sales">
+                    <h2>{isZh ? '配送与售后说明' : 'Delivery and returns'}</h2>
+                    <div className="detail-after-sales-copy">
+                        <p>
+                            {quoteOnly
+                                ? isZh
+                                    ? '此商品仅供展示。请联系客服确认报价、交期及售后条件。'
+                                    : 'Display only. Contact support to confirm price, lead time and after-sales terms.'
+                                : isDigital
+                                  ? isAutoCard
+                                      ? isZh
+                                          ? '付款成功后自动发送到下单邮箱。'
+                                          : 'Sent to your order email after payment.'
+                                      : isFileDownload
+                                        ? isZh
+                                            ? '付款成功后可在订单中下载。'
+                                            : 'Download from your order after payment.'
+                                        : isZh
+                                          ? `付款后由商家处理，预计${manualSlaText}内发送至邮箱。`
+                                          : `Merchant processed and emailed within ${manualSlaText}.`
+                                  : isZh
+                                    ? '配送方式与运费在结算页按收货地址确认。'
+                                    : 'Shipping method and fee are confirmed at checkout.'}
+                        </p>
+                        {!quoteOnly && (
+                            <p>
+                                {refundPolicy === 'NON_REFUNDABLE'
+                                    ? isZh
+                                        ? '该商品不支持退款。'
+                                        : 'This product is non-refundable.'
+                                    : refundPolicy === 'SEVEN_DAY_NO_REASON'
+                                      ? isZh
+                                          ? '该商品支持 7 天无理由退货，具体条件以订单售后规则为准。'
+                                          : 'Seven-day returns apply subject to the order policy.'
+                                      : isZh
+                                        ? '退款申请由商家审核，具体结果以售后处理为准。'
+                                        : 'Refund requests are reviewed by the merchant.'}
+                            </p>
+                        )}
+                    </div>
+                    <button type="button" onClick={() => navigateTo({ name: 'support' })}>
+                        <MessageCircle aria-hidden="true" />
+                        {isZh ? '咨询客服' : 'Contact support'}
+                        <ChevronRight aria-hidden="true" />
+                    </button>
+                </section>
                 <ProductSection
                     title={isZh ? '相似商品' : 'Similar products'}
                     subtitle={isZh ? '继续看看同店好物' : 'More from this store'}
@@ -873,8 +846,7 @@ export function ProductDetailPage() {
                     language={language}
                     onProduct={item => navigateTo({ name: 'product', id: item.id })}
                 />
-            </ProductBody>
-            {!desktop && actions}
+            </SubpageBody>
 
             {posterOpen && (
                 <Overlay

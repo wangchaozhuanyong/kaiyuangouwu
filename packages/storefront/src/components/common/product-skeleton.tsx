@@ -1,7 +1,13 @@
-export function ProductCardSkeleton({ appearance = 'card' }: { appearance?: 'card' | 'plain' }) {
+export function ProductCardSkeleton({
+    appearance = 'card',
+    responsiveRow = false,
+}: {
+    appearance?: 'card' | 'plain';
+    responsiveRow?: boolean;
+}) {
     return (
         <div
-            className={`product-card product-card-skeleton${appearance === 'plain' ? ' is-plain' : ''}`}
+            className={`product-card product-card-skeleton${appearance === 'plain' ? ' is-plain' : ''}${responsiveRow ? ' is-responsive-row' : ''}`}
             aria-hidden="true"
         >
             <div className="product-card-detail-link">

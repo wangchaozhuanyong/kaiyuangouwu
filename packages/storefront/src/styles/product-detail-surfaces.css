@@ -864,14 +864,14 @@
 }
 
 @media (max-width: 1023px) {
-    .product-detail-page > .detail-gallery-shell {
+    .product-detail-page .desktop-product-purchase > .detail-gallery-shell {
         width: 100%;
         margin: 0;
     }
-    .product-detail-page > .detail-gallery-shell .detail-gallery {
+    .product-detail-page .desktop-product-purchase > .detail-gallery-shell .detail-gallery {
         border-radius: 0;
     }
-    .product-detail-page > :is(.detail-summary, .detail-options, .detail-quantity, .detail-block) {
+    .product-detail-page :is(.detail-summary, .detail-options, .detail-quantity, .detail-block) {
         width: min(calc(100% - 2 * var(--page-section-inset)), 720px);
         margin-inline: auto;
     }
@@ -881,7 +881,7 @@
         margin-inline: 0;
         padding-inline: max(var(--page-section-inset, 16px), calc((100% - 720px) / 2));
     }
-    .product-detail-page > .product-section {
+    .product-detail-page .product-detail-body > .product-section {
         width: min(calc(100% - 2 * var(--page-section-inset)), 720px);
         margin-block: var(--space-section) 0;
         margin-inline: auto;
@@ -945,5 +945,26 @@
         width: 22px;
         height: 22px;
         padding: 5px;
+    }
+}
+
+/* The first HTML frame owns the same gallery, buying controls and information sections. */
+@media (max-width: 1023px) {
+    .product-detail-body,
+    .product-detail-body > .desktop-product-purchase,
+    .product-detail-body .desktop-product-buying {
+        display: contents;
+    }
+    .product-detail-page .detail-content-tabs,
+    .product-detail-page .detail-share-label {
+        display: none;
+    }
+}
+@media (min-width: 1024px) {
+    .product-detail-body:not([data-active-section='reviews']) > .detail-review-panel,
+    .product-detail-body:not([data-active-section='description']) > .detail-description,
+    .product-detail-body:not([data-active-section='params']) > .detail-params,
+    .product-detail-body:not([data-active-section='after-sales']) > .detail-after-sales {
+        display: none;
     }
 }

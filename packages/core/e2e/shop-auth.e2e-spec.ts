@@ -6,6 +6,7 @@ import { pick } from '@vendure/common/lib/pick';
 import {
     AccountRegistrationEvent,
     ConfigService,
+    Customer,
     EventBus,
     EventBusModule,
     IdentifierChangeEvent,
@@ -13,10 +14,13 @@ import {
     PasswordResetEvent,
     PasswordValidationStrategy,
     RequestContext,
+    TransactionalConnection,
     VendurePlugin,
     mergeConfig,
 } from '@vendure/core';
 import { ErrorResultGuard, createErrorResultGuard, createTestEnvironment } from '@vendure/testing';
+import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import path from 'path';
 import { Mock, afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -43,6 +47,10 @@ import {
     updateEmailAddressDocument,
     verifyEmailDocument,
 } from './graphql/shop-definitions';
+
+const { CustomerHistoryEntry } = createRequire(__filename)(
+    '@vendure/core/dist/entity/history-entry/customer-history-entry.entity',
+) as typeof import('../dist/entity/history-entry/customer-history-entry.entity');
 
 let sendEmailFn: Mock;
 
@@ -213,12 +221,7 @@ describe('Shop auth & accounts', () => {
             ).toEqual(input);
         });
 
-        it('issues a new token if attempting to register a second time', async () => {
-            const sendEmail = new Promise<string>(resolve => {
-                sendEmailFn.mockImplementation((event: AccountRegistrationEvent) => {
-                    resolve(event.user.getNativeAuthenticationMethod().verificationToken);
-                });
-            });
+        it('keeps the current link and does not resend when registering again during cooldown', async () => {
             const input: RegisterCustomerInput = {
                 firstName: 'Sean',
                 lastName: 'Tester',
@@ -229,16 +232,30 @@ describe('Shop auth & accounts', () => {
             });
             successErrorGuard.assertSuccess(registerCustomerAccount);
 
-            const newVerificationToken = await sendEmail;
-
             expect(registerCustomerAccount.success).toBe(true);
-            expect(sendEmailFn).toHaveBeenCalled();
-            expect(newVerificationToken).not.toBe(verificationToken);
-
-            verificationToken = newVerificationToken;
+            await waitForSendEmailFn();
+            expect(sendEmailFn).not.toHaveBeenCalled();
+            const connection = server.app.get(TransactionalConnection);
+            const customer = await connection.rawConnection.getRepository(Customer).findOneOrFail({
+                where: { emailAddress },
+                relations: ['user', 'user.authenticationMethods'],
+            });
+            expect(customer.user!.getNativeAuthenticationMethod().verificationToken).toBe(verificationToken);
         });
 
-        it('refreshCustomerVerification issues a new token', async () => {
+        it('refreshCustomerVerification issues a new token after cooldown', async () => {
+            const connection = server.app.get(TransactionalConnection);
+            const customer = await connection.rawConnection
+                .getRepository(Customer)
+                .findOneOrFail({ where: { emailAddress } });
+            await connection.rawConnection
+                .getRepository(CustomerHistoryEntry)
+                .createQueryBuilder()
+                .update()
+                .set({ createdAt: new Date(Date.now() - 61_000) })
+                .where('customerId = :customerId', { customerId: customer.id })
+                .andWhere('data LIKE :action', { action: '%"authTokenAction":"verification"%' })
+                .execute();
             const sendEmail = new Promise<string>(resolve => {
                 sendEmailFn.mockImplementation((event: AccountRegistrationEvent) => {
                     resolve(event.user.getNativeAuthenticationMethod().verificationToken);
@@ -255,6 +272,24 @@ describe('Shop auth & accounts', () => {
             expect(newVerificationToken).not.toBe(verificationToken);
 
             verificationToken = newVerificationToken;
+        });
+
+        it('refreshCustomerVerification does not resend during the new cooldown window', async () => {
+            const { refreshCustomerVerification } = await shopClient.query(refreshTokenDocument, {
+                emailAddress,
+            });
+            successErrorGuard.assertSuccess(refreshCustomerVerification);
+            await waitForSendEmailFn();
+            expect(refreshCustomerVerification.success).toBe(true);
+            expect(sendEmailFn).not.toHaveBeenCalled();
+            const customer = await server.app
+                .get(TransactionalConnection)
+                .rawConnection.getRepository(Customer)
+                .findOneOrFail({
+                    where: { emailAddress },
+                    relations: ['user', 'user.authenticationMethods'],
+                });
+            expect(customer.user!.getNativeAuthenticationMethod().verificationToken).toBe(verificationToken);
         });
 
         it('refreshCustomerVerification does nothing with an unrecognized emailAddress', async () => {
@@ -354,9 +389,29 @@ describe('Shop auth & accounts', () => {
 
             expect(customer?.history.items.map(pick(['type', 'data']))).toEqual([
                 {
+                    type: HistoryEntryType.CUSTOMER_NOTE,
+                    data: {
+                        note: 'Authentication email requested',
+                        authTokenAction: 'verification',
+                        authTokenRequestKey: createHash('sha256')
+                            .update(`auth-token:${emailAddress}:verification`)
+                            .digest('hex'),
+                    },
+                },
+                {
                     type: HistoryEntryType.CUSTOMER_REGISTERED,
                     data: {
                         strategy: 'native',
+                    },
+                },
+                {
+                    type: HistoryEntryType.CUSTOMER_NOTE,
+                    data: {
+                        note: 'Authentication email requested',
+                        authTokenAction: 'verification',
+                        authTokenRequestKey: createHash('sha256')
+                            .update(`auth-token:${emailAddress}:verification`)
+                            .digest('hex'),
                     },
                 },
                 {
@@ -571,6 +626,16 @@ describe('Shop auth & accounts', () => {
 
             expect(result.customer?.history.items.map(pick(['type', 'data']))).toEqual([
                 {
+                    type: HistoryEntryType.CUSTOMER_NOTE,
+                    data: {
+                        note: 'Authentication email requested',
+                        authTokenAction: 'password-reset',
+                        authTokenRequestKey: createHash('sha256')
+                            .update(`auth-token:${customer.emailAddress.toLowerCase()}:password-reset`)
+                            .digest('hex'),
+                    },
+                },
+                {
                     type: HistoryEntryType.CUSTOMER_PASSWORD_RESET_REQUESTED,
                     data: {},
                 },
@@ -780,7 +845,8 @@ describe('Shop auth & accounts', () => {
             const result = await adminClient.query(getCustomerHistoryDocument, {
                 id: customer!.id,
                 options: {
-                    skip: 5,
+                    // Seed history + the reset's private durable cooldown claim.
+                    skip: 6,
                 },
             });
 

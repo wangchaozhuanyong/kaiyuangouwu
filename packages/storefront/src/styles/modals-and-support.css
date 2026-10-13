@@ -1010,6 +1010,19 @@
     text-align: right;
 }
 
+/* Keep helper and read status in the same measured header slot at every viewport. */
+.support-evaluation-header .support-evaluation-status {
+    display: grid;
+}
+.support-evaluation-status > span {
+    grid-area: 1 / 1;
+    margin: 0;
+}
+.support-evaluation-status[data-loading='true'] > .support-evaluation-help,
+.support-evaluation-status[data-loading='false'] > .support-evaluation-loading {
+    visibility: hidden;
+}
+
 .support-evaluation-form {
     display: flex;
     flex-direction: column;

@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { VerifyCustomerAccountResult } from '@vendure/common/lib/generated-shop-types';
+import { HistoryEntryType } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
-import { SelectQueryBuilder } from 'typeorm';
+import { createHash } from 'node:crypto';
+import { IsNull, SelectQueryBuilder } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { ErrorResultUnion, isGraphQlErrorResult } from '../../common/error/error-result';
@@ -26,6 +28,7 @@ import { TransactionalConnection } from '../../connection/transactional-connecti
 import { Role } from '../../entity';
 import { NativeAuthenticationMethod } from '../../entity/authentication-method/native-authentication-method.entity';
 import { Customer } from '../../entity/customer/customer.entity';
+import { CustomerHistoryEntry } from '../../entity/history-entry/customer-history-entry.entity';
 import { User } from '../../entity/user/user.entity';
 import { PasswordCipher } from '../helpers/password-cipher/password-cipher';
 import { VerificationTokenGenerator } from '../helpers/verification-token-generator/verification-token-generator';
@@ -228,11 +231,21 @@ export class UserService {
      * flow.
      */
     async setVerificationToken(ctx: RequestContext, user: User): Promise<User> {
+        return (await this.setVerificationTokenIfAllowed(ctx, user)) ?? user;
+    }
+
+    /** A suppressed request must not publish another registration email event. */
+    async setVerificationTokenIfAllowed(ctx: RequestContext, user: User): Promise<User | undefined> {
         return this.connection.withTransaction(ctx, async txCtx => {
             const current = await this.lockActiveUser(txCtx, user.id);
             if (!current) throw new EntityNotFoundError('User', user.id);
             user.verified = current.verified;
-            if (current.verified) return user;
+            if (current.verified) return;
+            const currentUser = await this.getUserById(txCtx, user.id);
+            if (!currentUser) return;
+            user.authenticationMethods = currentUser.authenticationMethods;
+            if (!user.getNativeAuthenticationMethod(false)) return;
+            if (!(await this.claimCustomerTokenRequest(txCtx, currentUser, 'verification'))) return;
             const nativeAuthMethod = user.getNativeAuthenticationMethod();
             nativeAuthMethod.verificationToken =
                 await this.verificationTokenGenerator.generateVerificationToken(txCtx);
@@ -327,20 +340,80 @@ export class UserService {
      * flow.
      */
     async setPasswordResetToken(ctx: RequestContext, emailAddress: string): Promise<User | undefined> {
-        const user = await this.getUserByEmailAddress(ctx, emailAddress);
-        if (!user) {
-            return;
-        }
-        const nativeAuthMethod = user.getNativeAuthenticationMethod(false);
-        if (!nativeAuthMethod) {
-            return undefined;
-        }
-        nativeAuthMethod.passwordResetToken =
-            await this.verificationTokenGenerator.generateVerificationToken(ctx);
-        await this.connection.getRepository(ctx, NativeAuthenticationMethod).update(nativeAuthMethod.id, {
-            passwordResetToken: nativeAuthMethod.passwordResetToken,
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const candidate = await this.getUserByEmailAddress(txCtx, emailAddress);
+            if (!candidate || !(await this.lockActiveUser(txCtx, candidate.id))) return;
+            // Read after the account lock: another process may just have issued/consumed a token.
+            const user = await this.getUserById(txCtx, candidate.id);
+            const nativeAuthMethod = user?.getNativeAuthenticationMethod(false);
+            if (!user || !nativeAuthMethod) return;
+            if (!(await this.claimCustomerTokenRequest(txCtx, user, 'password-reset'))) return;
+            nativeAuthMethod.passwordResetToken =
+                await this.verificationTokenGenerator.generateVerificationToken(txCtx);
+            await this.connection
+                .getRepository(txCtx, NativeAuthenticationMethod)
+                .update(nativeAuthMethod.id, {
+                    passwordResetToken: nativeAuthMethod.passwordResetToken,
+                });
+            return user;
         });
-        return user;
+    }
+
+    /**
+     * Existing private history rows are the durable budget; the account row serializes
+     * claims across API instances. Actions share the global identity, not a channel cache.
+     * No tokens, raw email addresses or client-supplied forwarding headers are recorded.
+     */
+    private async claimCustomerTokenRequest(
+        ctx: RequestContext,
+        user: User,
+        action: 'verification' | 'password-reset',
+    ): Promise<boolean> {
+        const customer = await this.connection.getRepository(ctx, Customer).findOne({
+            where: { user: { id: user.id }, deletedAt: IsNull() },
+        });
+        // This service is also used by trusted administrative recovery tooling.
+        // Public Shop requests only resolve customer identities; keep that legacy
+        // internal Admin capability without opening it to a customer-facing resolver.
+        if (!customer) return ctx.apiType === 'admin';
+        const requestKey = createHash('sha256')
+            .update(`auth-token:${normalizeEmailAddress(user.identifier)}:${action}`)
+            .digest('hex');
+        const now = new Date();
+        const history = this.connection.getRepository(ctx, CustomerHistoryEntry);
+        const recent = history
+            .createQueryBuilder('history')
+            .where('history.customerId = :customerId', { customerId: customer.id })
+            .andWhere('history.type = :type', { type: HistoryEntryType.CUSTOMER_NOTE })
+            .andWhere('history.data LIKE :requestKey', {
+                requestKey: `%"authTokenRequestKey":"${requestKey}"%`,
+            })
+            .andWhere('history.createdAt > :cutoff', { cutoff: new Date(now.getTime() - 3_600_000) })
+            .orderBy('history.createdAt', 'DESC')
+            .take(5);
+        if (
+            ['mysql', 'mariadb', 'postgres', 'aurora-mysql', 'aurora-postgres'].includes(
+                this.connection.rawConnection.options.type,
+            )
+        ) {
+            // A locking read sees the committed winner even under MySQL repeatable-read.
+            recent.setLock('pessimistic_read');
+        }
+        const claims = await recent.getMany();
+        if (claims.length >= 5 || (claims[0] && now.getTime() - claims[0].createdAt.getTime() < 60_000))
+            return false;
+        const claim = new CustomerHistoryEntry({
+            customer,
+            type: HistoryEntryType.CUSTOMER_NOTE,
+            isPublic: false,
+        });
+        claim.data = {
+            note: 'Authentication email requested',
+            authTokenAction: action,
+            authTokenRequestKey: requestKey,
+        };
+        await history.save(claim);
+        return true;
     }
 
     /**

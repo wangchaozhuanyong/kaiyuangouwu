@@ -343,7 +343,6 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
     /** @internal */
     async onApplicationBootstrap(): Promise<void> {
         await this.initInjectableStrategies();
-        this.setupEventSubscribers();
         const transport = await resolveTransportSettings(this.options, new Injector(this.moduleRef));
         if (!isDevModeOptions(this.options) && transport.type === 'testing') {
             // When running tests, we don't want to go through the JobQueue system,
@@ -359,6 +358,8 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
                 },
             });
         }
+        // Register only after persistence is ready so bootstrap events cannot be silently lost.
+        this.setupEventSubscribers();
     }
 
     async onApplicationShutdown() {
@@ -371,7 +372,8 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
             this.devMailbox = new DevMailbox();
             consumer.apply(this.devMailbox.serve(this.options)).forRoutes(this.options.route);
             this.devMailbox.handleMockEvent((handler, event) => {
-                void this.handleEvent(handler, event);
+                // The dev mailbox has no business transaction to fail; handleEvent already logs the error.
+                void this.handleEvent(handler, event).catch(() => undefined);
             });
             registerPluginStartupMessage('Dev mailbox', this.options.route);
         }
@@ -397,10 +399,22 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
     }
 
     private setupEventSubscribers() {
-        for (const handler of EmailPlugin.options.handlers) {
-            this.eventBus.ofType(handler.event).subscribe(event => {
-                void this.handleEvent(handler, event);
-            });
+        for (const [index, handler] of this.options.handlers.entries()) {
+            if (this.jobQueue) {
+                // The existing SQL JobRecord is the durable email intent. Saving it with the
+                // publisher's context commits/rolls back with the business change; SMTP stays
+                // in the worker and failed sends remain inspectable/retryable in the job queue.
+                this.eventBus.registerBlockingEventHandler({
+                    event: handler.event,
+                    id: `email-plugin:${handler.type}:${index}`,
+                    handler: event => this.handleEvent(handler, event),
+                });
+            } else {
+                // Testing transport retains its direct, post-commit processor path.
+                this.eventBus.ofType(handler.event).subscribe(event => {
+                    void this.handleEvent(handler, event);
+                });
+            }
         }
     }
 
@@ -411,21 +425,28 @@ export class EmailPlugin implements OnApplicationBootstrap, OnApplicationShutdow
         Logger.debug(`Handling event "${handler.type}"`, loggerCtx);
         try {
             const injector = new Injector(this.moduleRef);
-            let globalTemplateVars = this.options.globalTemplateVars;
-            if (typeof globalTemplateVars === 'function') {
-                globalTemplateVars = await globalTemplateVars(event.ctx, injector);
-            }
-            const result = await handler.handle(event as any, globalTemplateVars, injector);
+            const globalTemplateVars = this.options.globalTemplateVars;
+            const result = await handler.handle(
+                event as any,
+                typeof globalTemplateVars === 'function'
+                    ? () => globalTemplateVars(event.ctx, injector)
+                    : globalTemplateVars,
+                injector,
+            );
             if (!result) {
                 return;
             }
             if (this.jobQueue) {
-                await this.jobQueue.add(result, { retries: 5 });
+                await this.jobQueue.add(result, { retries: 5, ctx: event.ctx });
             } else if (this.testingProcessor) {
                 await this.testingProcessor.process(result);
             }
         } catch (e: any) {
             Logger.error(e.message, loggerCtx, e.stack);
+            if (this.jobQueue) {
+                // Do not acknowledge a business event when its email intent was not persisted.
+                throw e;
+            }
         }
     }
 }

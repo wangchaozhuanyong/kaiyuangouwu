@@ -273,6 +273,54 @@ describe('support content', () => {
         );
     });
 
+    it('keeps evaluation feedback in the same header slot as its read completes', async () => {
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+        let finish: (value: null) => void = vi.fn();
+        const currentCustomerServiceReview = vi.fn(
+            () =>
+                new Promise<null>(resolve => {
+                    finish = resolve;
+                }),
+        );
+        try {
+            await act(async () => {
+                root.render(
+                    <SupportContent
+                        content={supportBlock}
+                        language="en"
+                        api={{ contentReviewsApi: { currentCustomerServiceReview } } as never}
+                    />,
+                );
+                await Promise.resolve();
+            });
+            const status = container.querySelector('.support-evaluation-status');
+            const form = container.querySelector('.support-evaluation-form');
+            const header = container.querySelector('.support-evaluation-header');
+            expect(status?.getAttribute('data-loading')).toBe('true');
+            expect(status?.querySelector('.support-evaluation-loading')?.getAttribute('aria-hidden')).toBe(
+                'false',
+            );
+            expect(container.querySelector('.support-evaluation-card > p[role="status"]')).toBeNull();
+            await act(async () => {
+                finish(null);
+                await Promise.resolve();
+            });
+            expect(container.querySelector('.support-evaluation-status')).toBe(status);
+            expect(container.querySelector('.support-evaluation-form')).toBe(form);
+            expect(container.querySelector('.support-evaluation-header')).toBe(header);
+            expect(status?.getAttribute('data-loading')).toBe('false');
+            expect(status?.querySelector('.support-evaluation-help')?.getAttribute('aria-hidden')).toBe(
+                'false',
+            );
+            expect(currentCustomerServiceReview).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => root.unmount());
+            container.remove();
+        }
+    });
+
     it('marks the order evaluation section as the focused destination', () => {
         const markup = renderToStaticMarkup(
             <SupportContent content={supportBlock} language="zh" orderCode="T0001" focus="evaluation" />,

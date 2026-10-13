@@ -1124,6 +1124,13 @@ sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-production-release-retention.cjs" \
     /usr/local/sbin/vendure-production-release-retention
 sudo -n install -o root -g root -m 0755 \
+    "${repository}/deploy/systemd/vendure-node-core-retention.cjs" \
+    /usr/local/sbin/vendure-node-core-retention
+for node_core_unit in vendure-node-core-retention.service vendure-node-core-retention.timer; do
+    sudo -n install -o root -g root -m 0644 \
+        "${repository}/deploy/systemd/${node_core_unit}" "/etc/systemd/system/${node_core_unit}"
+done
+sudo -n install -o root -g root -m 0755 \
     "${repository}/deploy/systemd/vendure-production-healthcheck" \
     /usr/local/sbin/vendure-production-healthcheck
 sudo -n install -o root -g root -m 0644 \
@@ -1160,6 +1167,7 @@ cmp --silent "${repository}/deploy/deploy-production-from-s3.sh" \
 printf 'PRODUCTION_BOOTSTRAP_VERIFIED sha=%s homepage_carousel_guard=enabled referral_poster_guard=enabled storefront_configuration_guard=enabled\n' "${target_sha}"
 sudo -n systemctl daemon-reload
 sudo -n systemctl enable --now vendure-production-release-retention.path
+sudo -n systemctl enable --now vendure-node-core-retention.timer
 sudo -n systemctl enable --now vendure-mysql-restore-drill.timer
 sudo -n systemctl enable --now vendure-file-backup.timer
 sudo -n systemctl enable --now vendure-file-backup-retention.timer

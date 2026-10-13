@@ -205,6 +205,7 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
                     products,
                     collections,
                     contentBlocks,
+                    storefrontName,
                     loading: false,
                     contextResolved: true,
                     error: null,

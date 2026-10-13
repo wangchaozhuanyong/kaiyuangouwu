@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +13,29 @@ import {
     type StorefrontContentItem,
     type StorefrontContentTargetType,
 } from './types';
+
+// Vitest stubs CSS imports by default. Keep the real resource text for SSR assertions.
+vi.mock('./styles/service-entries.css?inline', async () => ({
+    default: (await import('node:fs')).readFileSync(
+        new URL('./styles/service-entries.css', new URL(import.meta.url)),
+        'utf8',
+    ),
+}));
+vi.mock('../../storefront-content-plugin/src/shared/business-services-hero.css?inline', async () => ({
+    default: (await import('node:fs')).readFileSync(
+        new URL(
+            '../../storefront-content-plugin/src/shared/business-services-hero.css',
+            new URL(import.meta.url),
+        ),
+        'utf8',
+    ),
+}));
+vi.mock('./pages/business-services-page.css?inline', async () => ({
+    default: (await import('node:fs')).readFileSync(
+        new URL('./pages/business-services-page.css', new URL(import.meta.url)),
+        'utf8',
+    ),
+}));
 
 function businessPluginBlock(): StorefrontContentBlock {
     const item: StorefrontContentItem = {
@@ -122,10 +145,28 @@ function pageElement(
 }
 
 function renderPage(contentBlocks: StorefrontContentBlock[], language: 'zh' | 'en' = 'zh', desktop = false) {
-    return renderToStaticMarkup(pageElement(contentBlocks, language, desktop));
+    // Existing assertions describe rendered elements/copy, not matching selectors inside CSS text.
+    return renderToStaticMarkup(pageElement(contentBlocks, language, desktop)).replace(
+        /<style\b[^>]*>[\s\S]*?<\/style>/gu,
+        '',
+    );
 }
 
 describe('business services page', () => {
+    it('emits the real directory, hero and page CSS with SSR instead of waiting for a lazy stylesheet', () => {
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(pageElement([businessPluginBlock()]));
+        const directory = host.querySelector('style[data-href="storefront-service-entries"]');
+        const page = host.querySelector('style[data-href="storefront-business-services"]');
+        expect(directory?.getAttribute('data-precedence')).toBe('commerce');
+        expect(directory?.textContent).toContain('.category-client-plugin');
+        expect(page?.getAttribute('data-precedence')).toBe('services');
+        expect(page?.textContent).toContain('.business-services-heading');
+        expect(page?.textContent).toContain('.business-services-mobile-header');
+        expect(page?.textContent).toContain('--services-hero-mobile-image-ratio');
+        expect(page?.textContent).toContain('--services-hero-desktop-image-ratio');
+    });
+
     function sidebarBlock(): StorefrontContentBlock {
         const block = businessPluginBlock();
         block.settings = { businessServicesCopyVersion: 1, businessServicesHeroLayout: 'shared-banner' };
@@ -419,12 +460,16 @@ describe('business services page', () => {
         const phone = document.createElement('div');
         phone.innerHTML = renderPage([block], 'zh', false);
         expect(phone.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
+            '/assets/desktop-wide.webp',
+        );
+        expect(phone.querySelector('picture source')?.getAttribute('media')).toBe('(max-width: 1023px)');
+        expect(phone.querySelector('picture source')?.getAttribute('srcset')).toContain(
             '/assets/phone-square.webp',
         );
         expect(
             phone
-                .querySelector<HTMLElement>('.business-services-heading')
-                ?.style.getPropertyValue('--services-hero-image-ratio'),
+                .querySelector<HTMLElement>('.business-services-workspace')
+                ?.style.getPropertyValue('--services-hero-mobile-image-ratio'),
         ).toBe('1');
         const desktop = document.createElement('div');
         desktop.innerHTML = renderPage([block], 'en', true);
@@ -434,8 +479,8 @@ describe('business services page', () => {
         expect(
             Number(
                 desktop
-                    .querySelector<HTMLElement>('.business-services-heading')
-                    ?.style.getPropertyValue('--services-hero-image-ratio'),
+                    .querySelector<HTMLElement>('.business-services-workspace')
+                    ?.style.getPropertyValue('--services-hero-desktop-image-ratio'),
             ),
         ).toBeCloseTo(2169 / 725);
         block.settings.mobileImageUrl = null;
@@ -447,6 +492,82 @@ describe('business services page', () => {
         expect(renderPage([{ ...block, enabled: false }], 'zh', false)).not.toContain(
             '/assets/phone-square.webp',
         );
+    });
+
+    it('hydrates the same header and picture nodes and keeps them when desktop capability is adopted', async () => {
+        vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+        const block = businessPluginBlock();
+        block.settings = {
+            businessServicesHeroLayout: 'image-overlay',
+            mobileImageUrl: '/assets/phone-square.webp',
+            mobileImageWidth: 1000,
+            mobileImageHeight: 1000,
+        };
+        block.imageUrl = '/assets/desktop-wide.webp';
+        block.imageAsset = { width: 2000, height: 800 };
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(pageElement([block], 'zh', false));
+        document.body.append(host);
+        const header = host.querySelector('.business-services-mobile-header');
+        const hero = host.querySelector('.business-services-heading');
+        const image = host.querySelector('.business-services-hero-media img');
+        const errors = vi.fn();
+        let root: ReturnType<typeof hydrateRoot> | undefined;
+        try {
+            await act(async () => {
+                root = hydrateRoot(host, pageElement([block], 'zh', false), { onRecoverableError: errors });
+                await Promise.resolve();
+            });
+            if (!root) throw new Error('Expected hydrated services root');
+            const hydratedRoot = root;
+            await act(async () => {
+                hydratedRoot.render(pageElement([block], 'zh', true));
+                await Promise.resolve();
+            });
+            expect(errors).not.toHaveBeenCalled();
+            expect(host.querySelector('.business-services-mobile-header')).toBe(header);
+            expect(host.querySelector('.business-services-heading')).toBe(hero);
+            expect(host.querySelector('.business-services-hero-media img')).toBe(image);
+            expect(image?.getAttribute('src')).toContain('/assets/desktop-wide.webp');
+            expect(host.querySelector('source')?.getAttribute('srcset')).toContain(
+                '/assets/phone-square.webp',
+            );
+        } finally {
+            const mountedRoot = root;
+            if (mountedRoot)
+                await act(async () => {
+                    mountedRoot.unmount();
+                    await Promise.resolve();
+                });
+            host.remove();
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('keeps a mobile-only binding out of the desktop fallback without cloning tools or action ids', () => {
+        const block = businessPluginBlock();
+        block.settings = {
+            businessServicesCopyVersion: 1,
+            businessServicesHeroLayout: 'image-overlay',
+            mobileImageUrl: '/assets/phone-only.webp',
+            mobileImageWidth: 1000,
+            mobileImageHeight: 1000,
+        };
+        block.targetType = 'URL';
+        block.targetValue = '/services';
+        const host = document.createElement('div');
+        host.innerHTML = renderPage([block], 'zh', false);
+        const mobileHero = host.querySelector('.business-services-mobile-only-hero');
+        const desktopFallback = host.querySelector('.business-services-desktop-empty-hero');
+        expect(mobileHero?.querySelector('img')?.getAttribute('src')).toContain('/assets/phone-only.webp');
+        expect(mobileHero?.querySelector('img')?.getAttribute('loading')).toBe('lazy');
+        expect(desktopFallback?.getAttribute('data-services-hero-layout')).toBe('stacked');
+        expect(desktopFallback?.querySelector('img')).toBeNull();
+        expect(desktopFallback?.querySelector('.business-services-architecture')).not.toBeNull();
+        expect(host.querySelectorAll('.business-services-hero-media img')).toHaveLength(1);
+        expect(host.querySelectorAll('.category-client-plugin-support')).toHaveLength(1);
+        expect(host.querySelectorAll('.business-services-heading-link[id]')).toHaveLength(0);
+        expect(renderPage([block], 'zh', true)).toBe(renderPage([block], 'zh', false));
     });
 
     it('retains the existing stacked image and copy until a merchant explicitly selects the new layout', () => {

@@ -13,6 +13,7 @@ import {
     rmSync,
     statSync,
     symlinkSync,
+    utimesSync,
     writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -26,6 +27,7 @@ const require = createRequire(import.meta.url);
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const operations = require('../../../deploy/production-operations.cjs');
 const orderErrorSummary = require('../../../deploy/production-order-error-summary.cjs');
+const nodeCoreRetention = require('../../../deploy/systemd/vendure-node-core-retention.cjs');
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
@@ -2586,4 +2588,200 @@ void test('retired custom Dashboard UI sources stay absent from the managed rele
         assert.equal(existsSync(path.join(repositoryRoot, 'packages', name, 'src/dashboard')), false);
         assert.ok(existsSync(path.join(repositoryRoot, 'packages', name, 'src/index.ts')));
     }
+});
+
+function nodeCoreFixture(t, count = 3) {
+    const parent = path.join(repositoryRoot, 'artifacts', 'node-core-retention-tests');
+    mkdirSync(parent, { recursive: true });
+    const root = mkdtempSync(path.join(parent, 'fixture-'));
+    t.after(() => rmSync(root, { recursive: true, force: false }));
+    const directory = path.join(root, 'cores');
+    const procRoot = path.join(root, 'proc');
+    mkdirSync(directory, { mode: 0o755 });
+    mkdirSync(procRoot);
+    const files = Array.from({ length: count }, (_, index) => {
+        const pid = 910001 + index;
+        const name = `core._usr_bin_node.1000.7cd4e271-7224-40ac-8b46-3dfba399d1a3.${pid}.12345`;
+        const file = path.join(directory, name);
+        writeFileSync(file, 'synthetic fixture; never read by the retention helper');
+        utimesSync(file, 1_700_000_000 + index, 1_700_000_000 + index);
+        return { file, pid, allocatedBytes: Number(statSync(file, { bigint: true }).blocks * 512n) };
+    });
+    const options = {
+        directory,
+        procRoot,
+        directoryUid: statSync(directory).uid,
+        fileUid: statSync(files[0]?.file ?? directory).uid,
+        byteBudget: files[0]?.allocatedBytes ?? 4096,
+    };
+    return { root, directory, procRoot, files, options };
+}
+
+void test('Node core retention defaults to dry-run and reclaims only oldest completed dumps above its budget', t => {
+    const coreSetup = nodeCoreFixture(t);
+    const { files, options } = coreSetup;
+    const dry = nodeCoreRetention.run({ arguments_: [], options });
+    assert.equal(dry.mode, 'dry-run');
+    assert.equal(dry.removedFiles.length, 0);
+    assert.deepEqual(
+        dry.deleteFiles.map(item => item.file),
+        files.slice(0, 2).map(item => item.file),
+    );
+    assert.ok(files.every(item => existsSync(item.file)));
+    const result = nodeCoreRetention.run({ arguments_: ['--apply'], options });
+    assert.equal(result.removedFiles.length, 2);
+    assert.equal(existsSync(files[2].file), true);
+    assert.equal(result.latestCompleted, files[2].file);
+    assert.equal(nodeCoreRetention.run({ arguments_: ['--apply'], options }).removedFiles.length, 0);
+    assert.throws(() => nodeCoreRetention.run({ arguments_: ['--root', coreSetup.root], options }));
+    assert.throws(() => nodeCoreRetention.run({ arguments_: ['--apply', '--dry-run'], options }));
+});
+
+void test('Node core retention preserves the newest oversized diagnostic and every file below budget', t => {
+    const { files, options } = nodeCoreFixture(t);
+    const generous = nodeCoreRetention.run({ options: { ...options, byteBudget: 10 * options.byteBudget } });
+    assert.equal(generous.deleteFiles.length, 0);
+    const small = nodeCoreRetention.run({
+        arguments_: ['--apply'],
+        options: { ...options, byteBudget: options.byteBudget - 1 },
+    });
+    assert.equal(small.status, 'protected-over-budget');
+    assert.equal(small.latestCompleted, files[2].file);
+    assert.equal(existsSync(files[2].file), true);
+    assert.equal(nodeCoreRetention.BYTE_BUDGET, 2 * 1024 ** 3);
+});
+
+void test('Node core retention protects active PIDs, open descriptors and unrecognized entries', t => {
+    const { directory, files, procRoot, options } = nodeCoreFixture(t);
+    mkdirSync(path.join(procRoot, String(files[0].pid), 'fd'), { recursive: true });
+    mkdirSync(path.join(procRoot, '910099', 'fd'), { recursive: true });
+    symlinkSync(files[1].file, path.join(procRoot, '910099', 'fd', '7'));
+    const unknown = path.join(directory, 'customer-file-do-not-touch');
+    writeFileSync(unknown, 'fixture');
+    const linked = path.join(
+        directory,
+        'core._usr_bin_node.1000.7cd4e271-7224-40ac-8b46-3dfba399d1a3.910088.12345',
+    );
+    symlinkSync(files[2].file, linked);
+    const result = nodeCoreRetention.run({ arguments_: ['--apply'], options });
+    assert.equal(result.removedFiles.length, 0);
+    assert.equal(result.status, 'protected-over-budget');
+    assert.deepEqual(
+        new Set(result.protectedFiles.map(item => item.reason)),
+        new Set(['active-pid', 'open-descriptor', 'unknown-name', 'unmanaged-file']),
+    );
+    assert.ok(files.every(item => existsSync(item.file)));
+    assert.equal(existsSync(unknown), true);
+});
+
+void test('an empty newer Node core never replaces the latest complete oversized diagnostic', t => {
+    const { directory, files, options } = nodeCoreFixture(t, 2);
+    const empty = path.join(
+        directory,
+        'core._usr_bin_node.1000.7cd4e271-7224-40ac-8b46-3dfba399d1a3.910088.12345',
+    );
+    writeFileSync(empty, '');
+    utimesSync(empty, 1_700_000_100, 1_700_000_100);
+    const result = nodeCoreRetention.run({ arguments_: ['--apply'], options: { ...options, byteBudget: 1 } });
+    assert.equal(result.latestCompleted, files[1].file);
+    assert.equal(result.status, 'protected-over-budget');
+    assert.equal(existsSync(files[1].file), true);
+    assert.equal(existsSync(empty), true);
+    assert.ok(result.protectedFiles.some(item => item.file === empty && item.reason === 'incomplete-file'));
+});
+
+void test('Node core retention rejects foreign ownership, hard links and redirected directories', t => {
+    const { root, directory, files, options } = nodeCoreFixture(t);
+    const wrongOwner = nodeCoreRetention.inspect({ ...options, fileUid: options.fileUid + 1 });
+    assert.equal(wrongOwner.deleteFiles.length, 0);
+    assert.ok(wrongOwner.protectedFiles.every(item => item.reason === 'unmanaged-file'));
+    linkSync(files[0].file, path.join(root, 'external-reference'));
+    const linked = nodeCoreRetention.inspect(options);
+    assert.ok(
+        linked.protectedFiles.some(item => item.file === files[0].file && item.reason === 'unmanaged-file'),
+    );
+    const redirect = path.join(root, 'redirect');
+    symlinkSync(directory, redirect);
+    assert.throws(() => nodeCoreRetention.inspect({ ...options, directory: redirect }), /real directory/u);
+    chmodSync(directory, 0o777);
+    assert.throws(() => nodeCoreRetention.inspect(options), /writable by another account/u);
+});
+
+void test('Node core retention fails closed when process references cannot be verified, without reading dumps', t => {
+    const { files, options } = nodeCoreFixture(t);
+    const denied = Object.assign(new Error('unavailable fixture metadata'), { code: 'EACCES' });
+    const io = {
+        ...require('node:fs'),
+        readFileSync: () => assert.fail('Dump contents must never be read'),
+        readdirSync: file => {
+            if (file === options.procRoot) throw denied;
+            return require('node:fs').readdirSync(file);
+        },
+    };
+    assert.throws(
+        () => nodeCoreRetention.run({ arguments_: ['--apply'], options: { ...options, io } }),
+        denied,
+    );
+    assert.ok(files.every(item => existsSync(item.file)));
+    assert.equal(
+        nodeCoreRetention.run({
+            options: { ...options, io: { ...require('node:fs'), readFileSync: io.readFileSync } },
+        }).mode,
+        'dry-run',
+    );
+});
+
+void test('Node core retention rejects a changed inventory and rechecks each unlink after the previous deletion', t => {
+    const { files, options } = nodeCoreFixture(t);
+    const plan = nodeCoreRetention.inspect(options);
+    writeFileSync(files[0].file, 'changed metadata');
+    assert.throws(() => nodeCoreRetention.apply(plan, options), /inventory changed/u);
+    assert.ok(files.every(item => existsSync(item.file)));
+    const current = nodeCoreRetention.inspect(options);
+    const changedCandidate = current.deleteFiles[1].file;
+    assert.throws(
+        () =>
+            nodeCoreRetention.apply(current, {
+                ...options,
+                onRemoved: () => writeFileSync(changedCandidate, 'changed after the first unlink'),
+            }),
+        /metadata changed/u,
+    );
+    assert.equal(existsSync(changedCandidate), true);
+    assert.equal(existsSync(current.latestCompleted), true);
+});
+
+void test('Node core maintenance installs only its fixed helper and hardened timer without bypassing release guards', () => {
+    const script = readFileSync(path.join(repositoryRoot, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+    const service = readFileSync(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-node-core-retention.service'),
+        'utf8',
+    );
+    const timer = readFileSync(
+        path.join(repositoryRoot, 'deploy/systemd/vendure-node-core-retention.timer'),
+        'utf8',
+    );
+    assert.match(script, /deploy\/systemd\/vendure-node-core-retention[.]cjs/u);
+    assert.match(script, /systemctl enable --now vendure-node-core-retention[.]timer/u);
+    assert.ok(
+        script.indexOf('check_production_disk_staging_headroom\n') <
+            script.indexOf('vendure-node-core-retention.cjs'),
+    );
+    assert.match(
+        service,
+        /^ExecStart=\/usr\/bin\/node \/usr\/local\/sbin\/vendure-node-core-retention --apply$/mu,
+    );
+    assert.match(service, /^ReadWritePaths=\/var\/lib\/apport\/coredump$/mu);
+    for (const setting of [
+        'NoNewPrivileges',
+        'ProtectKernelTunables',
+        'ProtectKernelModules',
+        'ProtectControlGroups',
+    ]) {
+        assert.match(service, new RegExp(`^${setting}=true$`, 'mu'));
+    }
+    assert.match(service, /^ProtectSystem=strict$/mu);
+    assert.match(timer, /^OnBootSec=5m$/mu);
+    assert.match(timer, /^OnUnitActiveSec=15m$/mu);
+    assert.equal(nodeCoreRetention.CORE_DIRECTORY, '/var/lib/apport/coredump');
 });

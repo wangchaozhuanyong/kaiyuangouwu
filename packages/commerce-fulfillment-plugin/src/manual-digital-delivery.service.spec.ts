@@ -12,6 +12,7 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
     const events: ManualDigitalDeliveryEvent[] = [];
     const delivery = new ManualDigitalDelivery({
         id: 'delivery-1',
+        createdAt: new Date('2026-10-13T00:00:00.000Z'),
         state,
         recipientEmail: 'buyer@example.com',
         languageCode: 'zh_Hans',
@@ -51,7 +52,31 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
         find: vi.fn().mockResolvedValue([delivery]),
         findOne: vi.fn().mockResolvedValue(delivery),
         save: vi.fn((value: ManualDigitalDelivery) => Promise.resolve(value)),
+        manager: { connection: { options: { type: 'sqljs' } } },
+        createQueryBuilder: vi.fn(() => recoveryQuery()),
     };
+    function recoveryQuery(options: unknown = {}): any {
+        const query = {
+            setFindOptions: (value: unknown) => {
+                options = value;
+                return query;
+            },
+            addSelect: () => query,
+            andWhere: () => query,
+            clone: () => recoveryQuery(options),
+            getRawAndEntities: async () => {
+                const rows = await deliveryRepository.find(options);
+                return {
+                    entities: rows,
+                    raw: rows.map((item: ManualDigitalDelivery) => ({
+                        recovery_id: item.id,
+                        recovery_cursor_timestamp: item.createdAt.toISOString(),
+                    })),
+                };
+            },
+        };
+        return query;
+    }
     const eventRepository = {
         save: vi.fn((value: ManualDigitalDeliveryEvent) => {
             value.createdAt = new Date();

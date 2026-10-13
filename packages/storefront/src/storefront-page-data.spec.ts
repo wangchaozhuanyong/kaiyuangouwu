@@ -679,3 +679,136 @@ describe('canonical route hydration', () => {
         client.clear();
     });
 });
+
+describe('navigation query ownership', () => {
+    beforeEach(() => {
+        vi.stubGlobal('window', { location: { origin: 'https://store.test', host: 'store.test' } });
+    });
+    afterEach(async () => {
+        const { setPublicPageNavigationScope } = await import('./storefront-page-data');
+        setPublicPageNavigationScope(undefined);
+        vi.unstubAllGlobals();
+    });
+    it('does not refetch a fresh query merely because a legacy endpoint supplied no SEO envelope', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const product = vi.fn();
+        const key = storefrontQueryKeys.product('store-a:MYR', 'en', 'p1');
+        client.setQueryDefaults(key, { queryFn: product });
+        client.setQueryData(key, { id: 'p1' }, { updatedAt: Date.now() - 45_000 });
+        setPublicPageNavigationScope({
+            channelCode: 'store-a',
+            currencyCode: 'MYR',
+            languageCode: 'en',
+            api: { product, catalog: vi.fn() },
+        });
+        try {
+            await prefetchPublicPage(client, '/en/product?id=p1');
+            expect(product).not.toHaveBeenCalled();
+            expect(client.getQueryData(key)).toEqual({ id: 'p1' });
+        } finally {
+            client.clear();
+        }
+    });
+
+    it('stores a failed required product read in the exact query, without inventing an empty result', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const failure = new Error('Network failed');
+        const product = vi.fn().mockRejectedValue(failure);
+        setPublicPageNavigationScope({
+            channelCode: 'store-a',
+            currencyCode: 'MYR',
+            languageCode: 'en',
+            api: { product, catalog: vi.fn() },
+        });
+        try {
+            await expect(prefetchPublicPage(client, '/en/product?id=p1')).rejects.toBe(failure);
+            expect(product).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
+            expect(
+                client.getQueryState(storefrontQueryKeys.product('store-a:MYR', 'en', 'p1')),
+            ).toMatchObject({ status: 'error', error: failure, data: undefined });
+            expect(
+                client.getQueryData(storefrontQueryKeys.product('store-a:MYR', 'en', 'p2')),
+            ).toBeUndefined();
+        } finally {
+            client.clear();
+        }
+    });
+    it('cancels the navigation wait without cancelling its shared product query or a later target', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        let finish!: (value: unknown) => void;
+        let querySignal!: AbortSignal;
+        const product = vi.fn((id: string, signal?: AbortSignal) => {
+            if (id === 'b') return Promise.resolve({ id: 'b' });
+            if (!signal) throw new Error('Expected Query abort signal');
+            querySignal = signal;
+            return new Promise(resolve => {
+                finish = resolve;
+            });
+        });
+        setPublicPageNavigationScope({
+            channelCode: 'store-a',
+            currencyCode: 'MYR',
+            languageCode: 'en',
+            api: { product: product as never, catalog: vi.fn() },
+        });
+        const controller = new AbortController();
+        try {
+            const first = prefetchPublicPage(client, '/en/product?id=a', controller.signal);
+            const rejection = expect(first).rejects.toMatchObject({ name: 'AbortError' });
+            controller.abort();
+            await rejection;
+            expect(querySignal.aborted).toBe(false);
+            await prefetchPublicPage(client, '/en/product?id=b');
+            finish({ id: 'a' });
+            await vi.waitFor(() =>
+                expect(client.getQueryData(storefrontQueryKeys.product('store-a:MYR', 'en', 'a'))).toEqual({
+                    id: 'a',
+                }),
+            );
+            expect(client.getQueryData(storefrontQueryKeys.product('store-a:MYR', 'en', 'b'))).toEqual({
+                id: 'b',
+            });
+        } finally {
+            client.clear();
+        }
+    });
+    it('warms filtered catalog data in the existing infinite query shape and keeps valid empty results', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        setPublicPageNavigationScope({
+            channelCode: 'store-a',
+            currencyCode: 'MYR',
+            languageCode: 'en',
+            api: { product: vi.fn(), catalog },
+        });
+        try {
+            await prefetchPublicPage(client, '/en/category?collectionId=c1&sort=price-asc&minPrice=10');
+            const key = storefrontQueryKeys.catalog('store-a:MYR', 'en', {
+                collectionId: 'c1',
+                sort: 'price-asc',
+                minPriceWithTax: 1000,
+            });
+            expect(catalog).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    collectionId: 'c1',
+                    sort: 'price-asc',
+                    minPriceWithTax: 1000,
+                    skip: 0,
+                    take: 12,
+                }),
+                expect.any(AbortSignal),
+            );
+            expect(client.getQueryData(key)).toEqual({
+                pages: [{ items: [], totalItems: 0 }],
+                pageParams: [0],
+            });
+            expect(client.getQueryState(key)?.status).toBe('success');
+        } finally {
+            client.clear();
+        }
+    });
+});

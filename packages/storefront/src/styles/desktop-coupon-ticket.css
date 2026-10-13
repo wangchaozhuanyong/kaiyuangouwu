@@ -73,20 +73,23 @@
 .desktop-coupon-ticket.is-unavailable .desktop-coupon-value {
     background: var(--skin-coupon-inactive-surface, var(--control-surface));
 }
-.desktop-coupon-value > div {
+.desktop-coupon-value-line {
     display: flex;
-    flex-wrap: wrap;
     justify-content: center;
     align-items: baseline;
-    gap: 2px;
-    max-width: 100%;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
-.desktop-coupon-value > .is-unit-before {
-    flex-direction: column;
-    align-items: center;
+.desktop-coupon-value-text {
+    display: inline-flex;
+    flex: none;
+    align-items: baseline;
+    gap: 2px;
+    white-space: nowrap;
+    transform-origin: center;
 }
 .desktop-coupon-value strong {
-    max-width: 100%;
     white-space: nowrap;
     font-family: var(--font-numeric);
     font-size: var(--type-coupon-size);
@@ -96,11 +99,17 @@
     font-variant-numeric: tabular-nums;
 }
 .desktop-coupon-value small,
-.desktop-coupon-value > span {
+.desktop-coupon-value > span,
+.desktop-coupon-exact-amount {
     max-width: 100%;
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     overflow-wrap: anywhere;
+}
+.desktop-coupon-value small {
+    flex: none;
+    white-space: nowrap;
+    overflow-wrap: normal;
 }
 .desktop-coupon-info {
     display: flex;
@@ -118,11 +127,15 @@
     overflow-wrap: anywhere;
 }
 .desktop-coupon-threshold {
+    justify-content: flex-start;
     color: var(--coupon-face);
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
     font-variant-numeric: tabular-nums;
     overflow-wrap: anywhere;
+}
+.desktop-coupon-threshold .desktop-coupon-value-text {
+    transform-origin: left center;
 }
 .desktop-coupon-scope {
     color: var(--muted);
@@ -206,28 +219,6 @@
     line-height: var(--type-meta-leading);
     overflow-wrap: anywhere;
 }
-/* Long monetary values get a full-width amount strip instead of splitting digits. */
-.desktop-coupon-ticket.has-long-value .desktop-coupon-main {
-    grid-template-columns: minmax(0, 1fr) 80px;
-}
-.desktop-coupon-ticket.has-long-value .desktop-coupon-value {
-    grid-column: 1 / -1;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 10px;
-    border-inline-end: 0;
-    border-start-end-radius: var(--skin-card-radius);
-    border-end-start-radius: 0;
-}
-.desktop-coupon-ticket.has-long-value .desktop-coupon-value > div {
-    flex-direction: row;
-    align-items: baseline;
-    gap: 4px;
-}
-.desktop-coupon-ticket.has-long-value .desktop-coupon-value::before,
-.desktop-coupon-ticket.has-long-value .desktop-coupon-value::after {
-    display: none;
-}
 @media (max-width: 374px) {
     .desktop-coupon-main {
         grid-template-columns: 76px minmax(0, 1fr) 68px;
@@ -268,7 +259,7 @@
     grid-template-columns: 80px minmax(0, 1fr) 64px;
     min-height: 106px;
 }
-.coupon-hub-scroll .desktop-coupon-ticket:not(.has-long-value) .desktop-coupon-main {
+.coupon-hub-scroll .desktop-coupon-main {
     height: 106px;
 }
 .coupon-hub-scroll .desktop-coupon-info {
@@ -281,7 +272,6 @@
     -webkit-line-clamp: 2;
     overflow: hidden;
 }
-.coupon-hub-scroll .desktop-coupon-threshold,
 .coupon-hub-scroll .desktop-coupon-scope {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -292,10 +282,7 @@
     padding: 8px 6px;
     gap: 2px;
 }
-.coupon-hub-scroll .desktop-coupon-value > .is-unit-before {
-    flex-direction: row;
-    align-items: baseline;
-    flex-wrap: nowrap;
+.coupon-hub-scroll .desktop-coupon-value-text {
     gap: 3px;
 }
 .coupon-hub-scroll .desktop-coupon-action {
@@ -313,9 +300,6 @@
 .coupon-hub-scroll .coupon-claim-btn:is(.is-claimed, .is-claiming) .coupon-btn-text-wrap {
     white-space: normal;
     overflow-wrap: anywhere;
-}
-.coupon-hub-scroll .has-long-value .desktop-coupon-main {
-    grid-template-columns: minmax(0, 1fr) 64px;
 }
 @media (min-width: 1024px) and (max-width: 1199px) {
     .coupon-hub-scroll .desktop-coupon-main {

@@ -6,12 +6,15 @@ import {
     EntityHydrator,
     EventBus,
     Injector,
+    JobQueue,
     JobQueueService,
     LanguageCode,
     Logger,
+    ModuleRef,
     Order,
     OrderStateTransitionEvent,
     PluginCommonModule,
+    ProcessContext,
     RequestContext,
     VendureEvent,
 } from '@vendure/core';
@@ -36,6 +39,8 @@ import {
     Partial as EmailPartial,
     EmailPluginOptions,
     EmailTransportOptions,
+    InitializedEmailPluginOptions,
+    IntermediateEmailDetails,
     LoadTemplateInput,
 } from './types';
 
@@ -1105,6 +1110,100 @@ describe('EmailPlugin', () => {
 
             expect(result).toContain('German body');
         });
+    });
+});
+
+describe('EmailPlugin durable enqueue', () => {
+    function handler() {
+        return new EmailEventListener('fixture-email')
+            .on(MockEvent)
+            .filter(event => event.shouldSend)
+            .setFrom('fixture@example.invalid')
+            .setRecipient(() => 'recipient@example.invalid')
+            .setSubject('Fixture');
+    }
+
+    async function fixture(
+        emailHandler = handler(),
+        globalTemplateVars: InitializedEmailPluginOptions['globalTemplateVars'] = {},
+    ) {
+        const add = vi.fn();
+        const queue = { add } as unknown as JobQueue<IntermediateEmailDetails>;
+        const eventBus = new EventBus({} as never);
+        const processor = { init: vi.fn(), process: vi.fn() };
+        const plugin = new EmailPlugin(
+            eventBus,
+            {} as ModuleRef,
+            processor as unknown as EmailProcessor,
+            { createQueue: vi.fn().mockResolvedValue(queue) } as unknown as JobQueueService,
+            {} as ProcessContext,
+            {
+                handlers: [emailHandler],
+                transport: { type: 'none' },
+                templateLoader: new FileBasedTemplateLoader(path.join(__dirname, '../test-templates')),
+                globalTemplateVars,
+            },
+        );
+        await plugin.onApplicationBootstrap();
+        const ctx = RequestContext.deserialize({
+            _channel: { code: DEFAULT_CHANNEL_CODE },
+            _languageCode: LanguageCode.en,
+        } as any);
+        return { eventBus, add, processor, ctx };
+    }
+
+    it('does not acknowledge the business event until its transaction-bound job is saved', async () => {
+        const { eventBus, add, processor, ctx } = await fixture();
+        let acknowledge!: () => void;
+        add.mockImplementation(() => new Promise<void>(resolve => (acknowledge = resolve)));
+        let acknowledged = false;
+        const published = eventBus.publish(new MockEvent(ctx, true)).then(() => (acknowledged = true));
+        await vi.waitFor(() => expect(add).toHaveBeenCalledOnce());
+        expect(add).toHaveBeenCalledWith(expect.objectContaining({ type: 'fixture-email' }), {
+            retries: 5,
+            ctx,
+        });
+        expect(acknowledged).toBe(false);
+        expect(processor.process).not.toHaveBeenCalled();
+        acknowledge();
+        await published;
+        expect(acknowledged).toBe(true);
+    });
+
+    it('propagates the initial enqueue failure instead of acknowledging lost mail', async () => {
+        const { eventBus, add, processor, ctx } = await fixture();
+        add.mockRejectedValueOnce(new Error('Synthetic queue unavailable'));
+        await expect(eventBus.publish(new MockEvent(ctx, true))).rejects.toThrow(
+            'Synthetic queue unavailable',
+        );
+        expect(processor.process).not.toHaveBeenCalled();
+        await expect(eventBus.publish(new MockEvent(ctx, true))).resolves.toBeUndefined();
+        expect(add).toHaveBeenCalledTimes(2);
+    });
+
+    it('propagates data preparation and attachment failures without queuing incomplete mail', async () => {
+        const dataHandler = handler().loadData(() => Promise.reject(new Error('Synthetic data unavailable')));
+        const data = await fixture(dataHandler);
+        await expect(data.eventBus.publish(new MockEvent(data.ctx, true))).rejects.toThrow(
+            'Synthetic data unavailable',
+        );
+        expect(data.add).not.toHaveBeenCalled();
+        const attachmentHandler = handler().setAttachments(() =>
+            Promise.reject(new Error('Synthetic attachment unavailable')),
+        );
+        const attachment = await fixture(attachmentHandler);
+        await expect(attachment.eventBus.publish(new MockEvent(attachment.ctx, true))).rejects.toThrow(
+            'Synthetic attachment unavailable',
+        );
+        expect(attachment.add).not.toHaveBeenCalled();
+    });
+
+    it('does not load branding or queue a job for an unrelated filtered business transition', async () => {
+        const globalTemplateVars = vi.fn(() => Promise.reject(new Error('Branding must not be queried')));
+        const { eventBus, add, ctx } = await fixture(handler(), globalTemplateVars);
+        await expect(eventBus.publish(new MockEvent(ctx, false))).resolves.toBeUndefined();
+        expect(globalTemplateVars).not.toHaveBeenCalled();
+        expect(add).not.toHaveBeenCalled();
     });
 });
 

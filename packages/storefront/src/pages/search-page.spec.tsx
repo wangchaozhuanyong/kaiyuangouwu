@@ -447,6 +447,30 @@ describe('search result and product-detail cache separation', () => {
         ).toBeUndefined();
         expect(container.textContent).toContain('Tea');
     });
+    it('retains the search input, result link and action identity when desktop layout adopts', () => {
+        render();
+        const input = required(container.querySelector<HTMLInputElement>('.search-header input'));
+        const result = required(
+            container.querySelector<HTMLAnchorElement>(
+                '.search-route-product-list .product-card-detail-link',
+            ),
+        );
+        void act(() => input.focus());
+        viewport.desktop = true;
+        render();
+        expect(container.querySelector('.search-header input')).toBe(input);
+        expect(container.querySelector('.search-route-product-list .product-card-detail-link')).toBe(result);
+        expect(document.activeElement).toBe(input);
+        expect(container.querySelectorAll('.search-page')).toHaveLength(1);
+        expect(container.querySelector('.home-page')).toBeNull();
+        void act(() => result.click());
+        expect(navigate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                to: '/product',
+                search: expect.objectContaining({ id: product.id }),
+            }),
+        );
+    });
     it('closes a directly opened desktop search page to the home page', () => {
         viewport.desktop = true;
         render();

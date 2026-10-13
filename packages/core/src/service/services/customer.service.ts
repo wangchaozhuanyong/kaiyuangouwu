@@ -452,8 +452,8 @@ export class CustomerService {
                 !existingUser.verified &&
                 existingUser.authenticationMethods.some(m => m instanceof NativeAuthenticationMethod)
             ) {
-                const refreshed = await this.userService.setVerificationToken(ctx, existingUser);
-                if (!refreshed.verified)
+                const refreshed = await this.userService.setVerificationTokenIfAllowed(ctx, existingUser);
+                if (refreshed && !refreshed.verified)
                     await this.eventBus.publish(new AccountRegistrationEvent(ctx, refreshed));
             }
             // An email submitted on a public form is not proof of account ownership.
@@ -487,13 +487,12 @@ export class CustomerService {
                 strategy: NATIVE_AUTH_STRATEGY_NAME,
             },
         });
-        if (!user.verified) {
-            user = await this.userService.setVerificationToken(ctx, user);
-        }
-
         customer.user = user;
         await this.connection.getRepository(ctx, User).save(user, { reload: false });
         await this.connection.getRepository(ctx, Customer).save(customer, { reload: false });
+        if (!user.verified) {
+            user = (await this.userService.setVerificationTokenIfAllowed(ctx, user)) ?? user;
+        }
         await this.customerStoreEntryService.recordRegistration(ctx, customer.id, user.verified);
         if (!user.verified) {
             await this.eventBus.publish(new AccountRegistrationEvent(ctx, user));
@@ -518,8 +517,8 @@ export class CustomerService {
     async refreshVerificationToken(ctx: RequestContext, emailAddress: string): Promise<void> {
         const user = await this.userService.getUserByEmailAddress(ctx, emailAddress);
         if (user && !user.verified) {
-            const refreshed = await this.userService.setVerificationToken(ctx, user);
-            if (!refreshed.verified)
+            const refreshed = await this.userService.setVerificationTokenIfAllowed(ctx, user);
+            if (refreshed && !refreshed.verified)
                 await this.eventBus.publish(new AccountRegistrationEvent(ctx, refreshed));
         }
     }

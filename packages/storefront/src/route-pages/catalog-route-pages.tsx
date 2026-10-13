@@ -3,7 +3,6 @@ import { ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 
 import { catalogRouteState } from '../catalog-route-query';
-import { useDesktopLayout } from '../desktop-layout';
 import { offlineLoadError } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
 import { PageSkeleton } from '../route-loading';
@@ -130,7 +129,10 @@ export function ProductRoutePage() {
                 language={runtime.language}
                 onBack={runtime.goBack}
             >
-                <PageSkeleton label={isZh ? '正在加载商品详情' : 'Loading product details'} />
+                <PageSkeleton
+                    variant="detail"
+                    label={isZh ? '正在加载商品详情' : 'Loading product details'}
+                />
             </Subpage>
         );
     }
@@ -143,7 +145,15 @@ export function ProductRoutePage() {
             >
                 <EmptyState
                     icon={<ShoppingBag />}
-                    title={isZh ? '没有找到商品' : 'Product not found'}
+                    title={
+                        runtime.routeProductError
+                            ? isZh
+                                ? '商品暂时无法加载'
+                                : 'Product could not be loaded'
+                            : isZh
+                              ? '没有找到商品'
+                              : 'Product not found'
+                    }
                     detail={runtime.routeProductError}
                     action={
                         runtime.routeProductError ? (isZh ? '重试' : 'Retry') : isZh ? '去逛商品' : 'Browse'
@@ -204,8 +214,6 @@ export function ProductRoutePage() {
 export function SearchRoutePage() {
     usePageRouteCommit();
     const runtime = useRuntime();
-    const desktop = useDesktopLayout();
-    if (desktop) return <HomeRoutePage />;
     return (
         <SearchPageContext.Provider
             value={{

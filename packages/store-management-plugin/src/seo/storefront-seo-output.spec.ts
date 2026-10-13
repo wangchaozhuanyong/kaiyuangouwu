@@ -30,6 +30,29 @@ const facts = (host = 'store-a.test'): PublicSeoFacts => ({
 });
 
 describe('one public SEO policy', () => {
+    it('preserves service and support first-frame CSS precedence without leaving resources in the page', () => {
+        const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
+        const html = assemblePublicHtml(
+            '<html><head><link rel="stylesheet" href="/assets/index-test.css">' +
+                '<script type="module" src="/assets/test.js"></script></head><body><div id="root"></div></body></html>',
+            { scope: {}, config: {}, seo } as never,
+            '<style data-href="storefront-service-entries" data-precedence="commerce">.service-grid{display:grid}</style>' +
+                '<style data-href="storefront-business-services" data-precedence="services">.services{display:flex}</style>' +
+                '<style data-href="storefront-support" data-precedence="services">.support{display:grid}</style>' +
+                '<main>Public page</main>',
+            ['public-route-test.css'],
+        );
+        const dom = load(html);
+        expect(dom('#root style')).toHaveLength(0);
+        expect(dom('head style')).toHaveLength(3);
+        const commonIndex = html.indexOf('href="/assets/index-test.css"');
+        const routeIndex = html.indexOf('href="/assets/public-route-test.css"');
+        expect(html.indexOf('data-href="storefront-service-entries"')).toBeLessThan(commonIndex);
+        expect(html.indexOf('data-href="storefront-business-services"')).toBeGreaterThan(routeIndex);
+        expect(html.indexOf('data-href="storefront-support"')).toBeGreaterThan(routeIndex);
+        expect(dom('#root main').text()).toBe('Public page');
+        expect(dom('script[type="module"]')).toHaveLength(1);
+    });
     it('places the server-rendered home resource before common desktop CSS without duplicating it', () => {
         const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
         const html = assemblePublicHtml(

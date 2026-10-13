@@ -196,6 +196,62 @@ describe.each(['campaign', 'owned'] as const)('%s coupon source currency', kind 
             claimable: false,
         });
     });
+
+    it.each([
+        [3_053, '30.53', '31'],
+        [305, '3.05', '3'],
+        [3_050, '30.50', '31'],
+        [199_950, '1,999.50', '2,000'],
+    ])('keeps exact cents and marks the integer face for %i minor units', (amount, exact, approximate) => {
+        const card = cardFrom('MYR', 'MYR', 'MYR', 61_050, amount);
+        expect(card).toMatchObject({
+            value: exact,
+            unit: 'RM',
+            description: '满 RM610.50 可用',
+            approximateValue: { value: approximate, label: '约' },
+        });
+    });
+
+    it.each([
+        [5_000, '50'],
+        [50, '0.50'],
+        [1, '0.01'],
+    ])('does not approximate integers or subunit discounts: %i', (amount, exact) => {
+        const card = cardFrom('CNY', 'CNY', 'CNY', 100_000, amount);
+        expect(card.value).toBe(exact);
+        expect(card.approximateValue).toBeUndefined();
+        expect(card.description).toBe('满 ¥1,000 可用');
+    });
+
+    it('preserves four-place subunit USDT discounts and does not approximate an integer quote', () => {
+        configureMoneyDisplay({
+            displayCurrencyCode: 'USDT',
+            cnyPerUsdtRate: 7,
+            myrPerUsdtRate: 4,
+            usdtMarkupPercent: 0,
+        });
+        expect(cardFrom('CNY', 'CNY', 'USDT', 700, 50)).toMatchObject({ value: '0.0714', unit: '₮' });
+        expect(cardFrom('CNY', 'CNY', 'USDT', 700, 50).approximateValue).toBeUndefined();
+        expect(cardFrom('CNY', 'CNY', 'USDT', 1_400, 700)).toMatchObject({ value: '1.00', unit: '₮' });
+        expect(cardFrom('CNY', 'CNY', 'USDT', 1_400, 700).approximateValue).toBeUndefined();
+    });
+});
+
+it('labels approximate English faces without changing the source discount or threshold', () => {
+    const campaign = Object.freeze(
+        couponCampaign({
+            kind: 'ORDER_FIXED',
+            currencyCode: 'MYR',
+            minimumSpend: 61_050,
+            discountAmount: 3_053,
+        }),
+    );
+    expect(couponCardsFromCampaigns([campaign], 'en', 'MYR')[0]).toMatchObject({
+        value: '30.53',
+        description: 'Spend RM610.50',
+        approximateValue: { value: '31', label: '≈' },
+    });
+    expect([campaign.discountAmount, campaign.minimumSpend]).toEqual([3_053, 61_050]);
 });
 
 it('does not derive a discounted product price from unclaimable and unusable source records', () => {
@@ -628,7 +684,16 @@ describe('storefront coupons', () => {
         expect(couponScopeLabel('PRODUCT_PERCENTAGE', 'zh')).toBe('指定商品');
     });
 
-    it('keeps a refunded usage record renderable after the coupon returns to unused', () => {
+    it.each([
+        [1_000, '10'],
+        [3_050, '30.50'],
+    ])('keeps refunded history exact at %i minor units', (discountAmount, value) => {
+        configureMoneyDisplay({
+            displayCurrencyCode: 'USDT',
+            cnyPerUsdtRate: 7,
+            myrPerUsdtRate: 4,
+            usdtMarkupPercent: 0,
+        });
         const card = couponCardFromUsageRecord(
             {
                 id: 'allocation-1',
@@ -640,7 +705,7 @@ describe('storefront coupons', () => {
                 status: 'REFUNDED',
                 currencyCode: 'CNY',
                 minimumSpend: 10_000,
-                discountAmount: 1_000,
+                discountAmount,
                 discountRate: null,
                 savedAmount: 1_000,
                 usedAt: '2026-08-26T00:00:00.000Z',
@@ -651,6 +716,13 @@ describe('storefront coupons', () => {
             'zh',
         );
 
-        expect(card).toMatchObject({ title: '退款返券活动', value: '10', theme: 'gold', claimable: false });
+        expect(card).toMatchObject({
+            title: '退款返券活动',
+            value,
+            unit: '¥',
+            theme: 'gold',
+            claimable: false,
+        });
+        expect(card.approximateValue).toBeUndefined();
     });
 });

@@ -242,7 +242,7 @@ export class StockMovementService {
             for (const saleLocation of saleLocations) {
                 const sale = new Sale({
                     productVariant,
-                    quantity: lineRow.quantity * -1,
+                    quantity: -saleLocation.quantity,
                     orderLine,
                     stockLocation: saleLocation.location,
                 });
@@ -303,7 +303,7 @@ export class StockMovementService {
             for (const cancellationLocation of cancellationLocations) {
                 const cancellation = new Cancellation({
                     productVariant: orderLine.productVariant,
-                    quantity: lineInput.quantity,
+                    quantity: cancellationLocation.quantity,
                     orderLine,
                     stockLocation: cancellationLocation.location,
                 });
@@ -353,7 +353,7 @@ export class StockMovementService {
             for (const releaseLocation of releaseLocations) {
                 const release = new Release({
                     productVariant: orderLine.productVariant,
-                    quantity: lineInput.quantity,
+                    quantity: releaseLocation.quantity,
                     orderLine,
                     stockLocation: releaseLocation.location,
                 });

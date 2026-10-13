@@ -1,6 +1,6 @@
 // organize-imports-ignore -- Preserve ESLint type groups and CSS side-effect order.
-import type { RouteState } from '../storefront-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouterState } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApiError } from '../api';
@@ -20,6 +20,7 @@ import { invalidateStorefrontRealtimeQueries, refreshStorefrontAssociations } fr
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { preloadRouteMedia } from '../route-media-preload';
 import { storefrontErrorMessage } from '../storefront-errors';
+import { routeFromRouterLocation, routeHref, type RouteState } from '../storefront-router';
 import { writeStoredCurrency, writeStoredSettlementCurrency } from '../storefront-utils';
 import { ActiveCustomer, CreateAfterSalesRequestInput, Order, StorefrontCart } from '../types';
 
@@ -45,6 +46,8 @@ import { useStorefrontTraffic } from './useStorefrontTraffic';
 
 export function useStorefrontAppState() {
     const queryClient = useQueryClient();
+    const presentedLocation = useRouterState({ select: state => state.matches.at(-1) ?? state.location });
+    const presentedRoute = routeFromRouterLocation(presentedLocation.pathname, presentedLocation.search);
 
     const {
         market,
@@ -107,7 +110,7 @@ export function useStorefrontAppState() {
         error,
         publicLoadState,
         contentError,
-    } = useStorefrontBootstrap();
+    } = useStorefrontBootstrap(presentedRoute);
     const [checkoutOrder, setCheckoutOrder] = useState<Order | null>(null);
     const [cartLoading, setCartLoading] = useState(false);
     const [checkoutStarting, setCheckoutStarting] = useState(false);
@@ -145,7 +148,6 @@ export function useStorefrontAppState() {
     const {
         route,
         displayedRoute,
-        displayedRouterLocation,
         isNavigationPending,
         activeCollectionId,
         activeChildId,
@@ -318,7 +320,7 @@ export function useStorefrontAppState() {
     useStorefrontTraffic({
         api,
         channel: market.code,
-        location: displayedRouterLocation.pathname + displayedRouterLocation.searchStr,
+        location: routeHref(displayedRoute),
         customerId: customer?.id ?? null,
         enabled: storefrontContextResolved && !isNavigationPending,
     });
@@ -730,11 +732,9 @@ export function useStorefrontAppState() {
         [api, cartController, clearPrivateQueryCache, isZh, navigateAfterAuthentication, notify, route],
     );
 
-    const selectedProduct = route.id
-        ? ((routeProduct?.id === route.id ? routeProduct : null) ??
-          (productQuery.data === undefined ? products.find(product => product.id === route.id) : null) ??
-          null)
-        : null;
+    // A catalog summary is not a confirmed detail response (variants/prices may be
+    // incomplete). The exact product query owns loading, null, and failure states.
+    const selectedProduct = route.name === 'product' && routeProduct?.id === route.id ? routeProduct : null;
     const selectedOrder = route.id && routeOrder?.id === route.id ? routeOrder : null;
     const legalContent = contentBlocks.find(block => block.type === 'LEGAL');
     const supportContent = contentBlocks.find(block => block.type === 'SUPPORT');

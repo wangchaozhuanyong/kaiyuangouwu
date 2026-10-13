@@ -23,9 +23,15 @@ type MockLocation = {
 };
 type MockNavigationEvent = { toLocation: MockLocation; hrefChanged: boolean };
 const router = vi.hoisted(() => {
-    const state: { location: MockLocation; resolvedLocation: MockLocation; status: string } = {
+    const state: {
+        location: MockLocation;
+        resolvedLocation: MockLocation;
+        matches: MockLocation[];
+        status: string;
+    } = {
         location: { pathname: '/category', search: {}, searchStr: '' },
         resolvedLocation: { pathname: '/category', search: {}, searchStr: '' },
+        matches: [],
         status: 'idle',
     };
     return {
@@ -147,6 +153,7 @@ describe('storefront navigation state', () => {
         };
         router.state.resolvedLocation = router.state.location;
         router.state.status = 'idle';
+        router.state.matches = [];
         router.listeners.clear();
         router.subscribe.mockImplementation(
             (eventType: string, listener: (event: MockNavigationEvent) => void) => {
@@ -273,12 +280,46 @@ describe('storefront navigation state', () => {
         expect(value.minimumPrice).toBe('20');
     });
 
-    it('keeps the resolved page visible while the destination is loading', () => {
+    it('keeps the published page and its data identity while the destination is loading', () => {
+        router.state.matches = [router.state.resolvedLocation];
         router.state.status = 'pending';
         router.state.location = { pathname: '/product', search: { id: 'p1' }, searchStr: '?id=p1' };
         act(() => root.render(<Harness />));
-        expect(value.route.name).toBe('product');
+        expect(value.route.name).toBe('category');
         expect(value.displayedRoute.name).toBe('category');
+    });
+
+    it('adopts the pending target match before resolvedLocation catches up', () => {
+        router.state.status = 'pending';
+        router.state.location = { pathname: '/product', search: { id: 'b' }, searchStr: '?id=b' };
+        router.state.matches = [{ pathname: '/product', search: { id: 'a' }, searchStr: '?id=a' }];
+        act(() => root.render(<Harness />));
+        expect(value.route.id).toBe('a');
+        expect(value.displayedRoute.id).toBe('a');
+        router.state.matches = [router.state.location];
+        act(() => root.render(<Harness />));
+        expect(value.route.id).toBe('b');
+        expect(value.displayedRoute.id).toBe('b');
+        expect(router.state.resolvedLocation.pathname).toBe('/category');
+    });
+
+    it('keeps filter controls on the displayed match until target pending content commits', () => {
+        router.state.status = 'pending';
+        router.state.matches = [
+            { pathname: '/category', search: { collectionId: 'first', minPrice: '10' }, searchStr: '' },
+        ];
+        router.state.location = {
+            pathname: '/category',
+            search: { collectionId: 'next', minPrice: '20' },
+            searchStr: '',
+        };
+        act(() => root.render(<Harness />));
+        expect(value.activeCollectionId).toBe('first');
+        expect(value.minimumPrice).toBe('10');
+        router.state.matches = [router.state.location];
+        act(() => root.render(<Harness />));
+        expect(value.activeCollectionId).toBe('next');
+        expect(value.minimumPrice).toBe('20');
     });
 
     it('navigates immediately while warming product data and never navigates again on resolution', async () => {

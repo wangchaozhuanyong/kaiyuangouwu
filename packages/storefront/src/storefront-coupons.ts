@@ -16,6 +16,8 @@ export interface StorefrontCouponCard {
     value: string;
     unit: string;
     unitBefore: boolean;
+    /** An approximate face value only; value retains the exact amount for details. */
+    approximateValue?: { value: string; label: string };
     title: string;
     description: string;
     tag: string;
@@ -233,6 +235,7 @@ export function couponCardsFromCampaigns(
             value,
             unit: isFixed ? discountMoney.unit : isZh ? '折' : '% OFF',
             unitBefore: isFixed,
+            ...(isFixed ? approximateCouponValue(discountMoney, language) : {}),
             title: coupon.name,
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
@@ -272,6 +275,7 @@ export function couponCardFromCustomerCoupon(
         value: isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate, language),
         unit: isFixed ? discountMoney.unit : isZh ? '折' : '% OFF',
         unitBefore: isFixed,
+        ...(isFixed ? approximateCouponValue(discountMoney, language) : {}),
         title: coupon.campaignName,
         description: coupon.minimumSpend
             ? isZh
@@ -293,7 +297,7 @@ function displayMoneyParts(
     sourceCurrencyCode: string,
     displayCurrencyCode: string,
     language: StorefrontLanguage,
-): { value: string; unit: string } {
+): { value: string; unit: string; amount: number } {
     if (displayCurrencyCode === 'USDT') {
         const amount = convertMinorPriceToUsdt(value, sourceCurrencyCode);
         if (amount != null) {
@@ -303,10 +307,30 @@ function displayMoneyParts(
                     maximumFractionDigits: amount < 1 ? 4 : 2,
                 }).format(amount),
                 unit: '₮',
+                amount,
             };
         }
     }
-    return { value: formatMinorAmount(value, language), unit: currencySymbol(sourceCurrencyCode, language) };
+    return {
+        value: formatMinorAmount(value, language),
+        unit: currencySymbol(sourceCurrencyCode, language),
+        amount: value / 100,
+    };
+}
+
+function approximateCouponValue(
+    money: { amount: number },
+    language: StorefrontLanguage,
+): Pick<StorefrontCouponCard, 'approximateValue'> {
+    if (!Number.isFinite(money.amount) || money.amount < 1 || Number.isInteger(money.amount)) return {};
+    return {
+        approximateValue: {
+            value: new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+                maximumFractionDigits: 0,
+            }).format(Math.round(money.amount)),
+            label: language === 'zh' ? '约' : '≈',
+        },
+    };
 }
 
 export function couponCardFromUsageRecord(
@@ -423,6 +447,7 @@ function currencySymbol(currencyCode: string, language: StorefrontLanguage): str
 
 function formatMinorAmount(value: number, language: StorefrontLanguage): string {
     return new Intl.NumberFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+        minimumFractionDigits: value % 100 === 0 ? 0 : 2,
         maximumFractionDigits: 2,
     }).format(value / 100);
 }

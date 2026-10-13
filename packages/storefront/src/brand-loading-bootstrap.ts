@@ -161,21 +161,21 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
                 : brand.storefrontName
                   ? '正在加载'
                   : '正在连接';
-    if (brand.storefrontName) {
-        const name = document.createElement('strong');
-        name.className = 'brand-loading-name';
-        name.textContent = brand.storefrontName;
-        content.insertBefore(name, caption);
-        if (brand.secondaryName && brand.secondaryName !== brand.storefrontName) {
-            const subtitle = document.createElement('span');
-            subtitle.className = 'brand-loading-subtitle';
-            subtitle.textContent = brand.secondaryName;
-            content.insertBefore(subtitle, caption);
-        }
-    }
-    if (!brand.logoUrl) return;
+    const name = document.createElement('strong');
+    name.className = 'brand-loading-name';
+    name.textContent = brand.storefrontName;
+    content.insertBefore(name, caption);
+    const subtitle = document.createElement('span');
+    subtitle.className = 'brand-loading-subtitle';
+    subtitle.textContent =
+        brand.storefrontName && brand.secondaryName !== brand.storefrontName
+            ? (brand.secondaryName ?? '')
+            : '';
+    content.insertBefore(subtitle, caption);
     const mark = document.createElement('span');
     mark.className = 'route-transition-mark';
+    content.prepend(mark);
+    if (!brand.logoUrl) return;
     const image = document.createElement('img');
     image.alt = '';
     image.width = 160;
@@ -185,6 +185,16 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     image.fetchPriority = 'high';
     const firstSource = storefrontWebpUrl(brand.logoUrl, 'thumbnail');
     let originalSource = false;
+    const failCandidate = () => {
+        if (!ownsBoot()) return;
+        mark.classList.remove('is-logo-ready');
+        if (!originalSource && firstSource !== brand.logoUrl) {
+            originalSource = true;
+            image.src = brand.logoUrl;
+        } else {
+            image.remove();
+        }
+    };
     const reveal = () => {
         const source = image.getAttribute('src');
         const show = () => {
@@ -193,24 +203,15 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
         };
         if (typeof image.decode === 'function') {
             void image.decode().then(show, () => {
-                if (ownsBoot() && image.getAttribute('src') === source) mark.remove();
+                if (ownsBoot() && image.getAttribute('src') === source) failCandidate();
             });
         } else {
             show();
         }
     };
     image.onload = reveal;
-    image.onerror = () => {
-        if (!ownsBoot()) return;
-        if (!originalSource && firstSource !== brand.logoUrl) {
-            originalSource = true;
-            image.src = brand.logoUrl;
-        } else {
-            mark.remove();
-        }
-    };
+    image.onerror = failCandidate;
     mark.appendChild(image);
-    content.prepend(mark);
     image.src = firstSource;
     if (image.complete && image.naturalWidth > 0) reveal();
 }
