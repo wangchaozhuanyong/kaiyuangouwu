@@ -1,6 +1,8 @@
 import { Collection, Product, ProductVariant } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { StoreProfile } from '../entities/store-profile.entity';
+
 import { StorefrontMediaManifestService } from './storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './storefront-public-cache.service';
 vi.mock('@vendure/core', () => ({
@@ -13,6 +15,7 @@ vi.mock('@vendure/core', () => ({
     LanguageCode: { zh_Hans: 'zh_Hans' },
 }));
 vi.mock('@vendure/storefront-content-plugin', () => ({ StorefrontContentService: class {} }));
+vi.mock('../entities/store-profile.entity', () => ({ StoreProfile: class {} }));
 vi.mock('../promotion/storefront-promotion.service', () => ({ StorefrontPromotionService: class {} }));
 const ctx = { channelId: 'a', languageCode: 'en', currencyCode: 'MYR' } as any;
 function harness() {
@@ -42,8 +45,11 @@ function harness() {
     );
     const content = { findPublished: vi.fn((_ctx?: any) => Promise.resolve([] as any[])) };
     const promotion = { renderPublished: vi.fn(() => Promise.resolve('')) };
+    const profile = { findOne: vi.fn((_options?: unknown) => Promise.resolve(null as any)) };
     const connection = {
-        getRepository: vi.fn((_ctx, entity) => ({ createQueryBuilder: () => queries.get(entity) })),
+        getRepository: vi.fn((_ctx, entity) =>
+            entity === StoreProfile ? profile : { createQueryBuilder: () => queries.get(entity) },
+        ),
     };
     const service = new StorefrontMediaManifestService(
         cache,
@@ -51,9 +57,67 @@ function harness() {
         content as any,
         promotion as any,
     );
-    return { service, cache, queries, content, promotion, connection };
+    return { service, cache, queries, content, promotion, connection, profile };
 }
 describe('public media manifest', () => {
+    it('authorizes only the exact public branding variants bound to the current store', async () => {
+        const test = harness();
+        const logo = (id: string, mimeType = 'image/webp') => ({
+            id,
+            mimeType,
+            source: `source/${id}.svg`,
+            preview: `preview/${id}.webp`,
+            channels: [{ id: 'a' }],
+            tags: [],
+        });
+        test.profile.findOne.mockResolvedValue({
+            channelId: 'a',
+            logoAsset: logo('brand'),
+            logoOnLightAsset: logo('light'),
+            logoOnDarkAsset: logo('dark', 'image/svg+xml'),
+        });
+        for (const path of ['preview/brand.webp', 'preview/light.webp', 'source/dark.svg'])
+            expect(await test.service.isPublic(ctx, 'shop.example', path)).toBe(true);
+        for (const path of ['source/brand.svg', 'preview/dark.webp', 'preview/unbound.webp'])
+            expect(await test.service.isPublic(ctx, 'shop.example', path)).toBe(false);
+        expect(test.profile.findOne).toHaveBeenCalledOnce();
+        expect(test.profile.findOne.mock.calls[0][0]).toMatchObject({ where: { channelId: 'a' } });
+        expect((await test.service.get(ctx, 'shop.example')).uses).toContainEqual({
+            path: 'preview/brand.webp',
+            kind: 'thumbnail',
+        });
+    });
+
+    it.each([
+        'profile-channel',
+        'asset-channel',
+        'avatar',
+        'missing-owner',
+        'missing-tags',
+        'traversal',
+        'document',
+    ])('does not publish unsafe branding references: %s', async scenario => {
+        const test = harness();
+        const asset: any = {
+            id: 'brand',
+            mimeType: 'image/webp',
+            preview: 'preview/brand.webp',
+            source: 'source/private.svg',
+            channels: [{ id: scenario === 'asset-channel' ? 'b' : 'a' }],
+            tags: scenario === 'avatar' ? [{ value: 'customer-avatar' }] : [],
+        };
+        if (scenario === 'missing-owner') delete asset.channels;
+        if (scenario === 'missing-tags') delete asset.tags;
+        if (scenario === 'traversal') asset.preview = 'preview/../private.webp';
+        if (scenario === 'document') asset.mimeType = 'application/pdf';
+        test.profile.findOne.mockResolvedValue({
+            channelId: scenario === 'profile-channel' ? 'b' : 'a',
+            logoAsset: asset,
+        });
+        expect(await test.service.isPublic(ctx, 'shop.example', asset.preview)).toBe(false);
+        expect(await test.service.isPublic(ctx, 'shop.example', asset.source)).toBe(false);
+    });
+
     it('loads public content, promotion and three catalog path projections once per store snapshot, not per image', async () => {
         const test = harness();
         test.content.findPublished.mockResolvedValue([
@@ -81,7 +145,7 @@ describe('public media manifest', () => {
         ).toEqual(Array(5).fill(true));
         expect(test.content.findPublished).toHaveBeenCalledTimes(1);
         expect(test.promotion.renderPublished).toHaveBeenCalledTimes(1);
-        expect(test.connection.getRepository).toHaveBeenCalledTimes(3);
+        expect(test.connection.getRepository).toHaveBeenCalledTimes(4);
         expect((await test.service.get(ctx, 'shop.example')).uses).toContainEqual({
             path: 'preview/product.jpg',
             kind: 'card',
