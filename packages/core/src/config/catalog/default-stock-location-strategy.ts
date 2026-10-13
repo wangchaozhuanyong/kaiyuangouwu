@@ -1,6 +1,7 @@
 import { ID } from '@vendure/common/lib/shared-types';
 
 import { RequestContext } from '../../api/common/request-context';
+import { UserInputError } from '../../common/error/errors';
 import { Injector } from '../../common/injector';
 import { idsAreEqual } from '../../common/utils';
 import { TransactionalConnection } from '../../connection/transactional-connection';
@@ -8,6 +9,9 @@ import { OrderLine } from '../../entity/order-line/order-line.entity';
 import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 import { StockLocation } from '../../entity/stock-location/stock-location.entity';
 import { Allocation } from '../../entity/stock-movement/allocation.entity';
+import { Cancellation } from '../../entity/stock-movement/cancellation.entity';
+import { Release } from '../../entity/stock-movement/release.entity';
+import { Sale } from '../../entity/stock-movement/sale.entity';
 
 import { AvailableStock, LocationWithQuantity, StockLocationStrategy } from './stock-location-strategy';
 
@@ -37,7 +41,7 @@ export abstract class BaseStockLocationStrategy implements StockLocationStrategy
         orderLine: OrderLine,
         quantity: number,
     ): Promise<LocationWithQuantity[]> {
-        return this.getLocationsBasedOnAllocations(ctx, stockLocations, orderLine, quantity);
+        return this.getLocationsBasedOnAllocations(ctx, stockLocations, orderLine, quantity, 'cancellation');
     }
 
     async forRelease(
@@ -46,7 +50,7 @@ export abstract class BaseStockLocationStrategy implements StockLocationStrategy
         orderLine: OrderLine,
         quantity: number,
     ): Promise<LocationWithQuantity[]> {
-        return this.getLocationsBasedOnAllocations(ctx, stockLocations, orderLine, quantity);
+        return this.getLocationsBasedOnAllocations(ctx, stockLocations, orderLine, quantity, 'allocation');
     }
 
     async forSale(
@@ -55,7 +59,7 @@ export abstract class BaseStockLocationStrategy implements StockLocationStrategy
         orderLine: OrderLine,
         quantity: number,
     ): Promise<LocationWithQuantity[]> {
-        return this.getLocationsBasedOnAllocations(ctx, stockLocations, orderLine, quantity);
+        return this.getLocationsBasedOnAllocations(ctx, stockLocations, orderLine, quantity, 'allocation');
     }
 
     private async getLocationsBasedOnAllocations(
@@ -63,32 +67,44 @@ export abstract class BaseStockLocationStrategy implements StockLocationStrategy
         stockLocations: StockLocation[],
         orderLine: OrderLine,
         quantity: number,
+        source: 'allocation' | 'cancellation',
     ) {
-        const allocations = await this.connection.getRepository(ctx, Allocation).find({
-            where: {
-                orderLine: { id: orderLine.id },
-            },
-        });
-        let unallocated = quantity;
-        const quantityByLocationId = new Map<ID, number>();
-        for (const allocation of allocations) {
-            if (unallocated <= 0) {
-                break;
-            }
-            const qtyAtLocation = quantityByLocationId.get(allocation.stockLocationId);
-            const qtyToAdd = Math.min(allocation.quantity, unallocated);
-            if (qtyAtLocation != null) {
-                quantityByLocationId.set(allocation.stockLocationId, qtyAtLocation + qtyToAdd);
-            } else {
-                quantityByLocationId.set(allocation.stockLocationId, qtyToAdd);
-            }
-            unallocated -= qtyToAdd;
+        const options = {
+            where: { orderLine: { id: orderLine.id } },
+            order: { createdAt: 'ASC' as const, id: 'ASC' as const },
+        };
+        const [sales, originals, consumed] = await Promise.all([
+            this.connection.getRepository(ctx, Sale).find(options),
+            source === 'allocation'
+                ? this.connection.getRepository(ctx, Allocation).find(options)
+                : Promise.resolve([]),
+            source === 'allocation'
+                ? this.connection.getRepository(ctx, Release).find(options)
+                : this.connection.getRepository(ctx, Cancellation).find(options),
+        ]);
+        const balances = new Map<string, number>();
+        for (const movement of source === 'allocation' ? originals : sales) {
+            const key = String(movement.stockLocationId);
+            balances.set(key, (balances.get(key) ?? 0) + Math.abs(movement.quantity));
         }
-        return [...quantityByLocationId.entries()].map(([locationId, qty]) => ({
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            location: stockLocations.find(l => idsAreEqual(l.id, locationId))!,
-            quantity: qty,
-        }));
+        for (const movement of source === 'allocation' ? [...sales, ...consumed] : consumed) {
+            const key = String(movement.stockLocationId);
+            balances.set(key, (balances.get(key) ?? 0) - Math.abs(movement.quantity));
+        }
+        let remaining = quantity;
+        const result: LocationWithQuantity[] = [];
+        for (const [locationId, balance] of balances) {
+            if (remaining <= 0) break;
+            const location = stockLocations.find(item => idsAreEqual(item.id, locationId));
+            if (!location || balance <= 0) continue;
+            const allocated = Math.min(remaining, balance);
+            result.push({ location, quantity: allocated });
+            remaining -= allocated;
+        }
+        if (remaining > 0) {
+            throw new UserInputError('Stock movement quantity exceeds the remaining warehouse allocation');
+        }
+        return result;
     }
 }
 
@@ -104,7 +120,7 @@ export abstract class BaseStockLocationStrategy implements StockLocationStrategy
  */
 export class DefaultStockLocationStrategy extends BaseStockLocationStrategy {
     init(injector: Injector) {
-        super.init(injector);
+        return super.init(injector);
     }
 
     getAvailableStock(ctx: RequestContext, productVariantId: ID, stockLevels: StockLevel[]): AvailableStock {

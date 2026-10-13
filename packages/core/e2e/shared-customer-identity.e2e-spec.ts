@@ -23,10 +23,15 @@ import {
 } from '@vendure/core';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
+import { createRequire } from 'node:module';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { testConfig } from '../../../e2e-common/test-config';
+
+const { CustomerHistoryEntry } = createRequire(__filename)(
+    '@vendure/core/dist/entity/history-entry/customer-history-entry.entity',
+) as typeof import('../dist/entity/history-entry/customer-history-entry.entity');
 
 const config = mergeConfig(testConfig(), {
     apiOptions: { port: 37385 },
@@ -56,6 +61,17 @@ async function globalMember(identifier: string): Promise<Customer> {
         where: { emailAddress: identifier },
         relations: ['user', 'user.authenticationMethods', 'channels'],
     });
+}
+
+async function ageResetCooldown(customerId: string | number): Promise<void> {
+    await connection
+        .getRepository(admin, CustomerHistoryEntry)
+        .createQueryBuilder()
+        .update()
+        .set({ createdAt: new Date(Date.now() - 61_000) })
+        .where('customerId = :customerId', { customerId })
+        .andWhere('data LIKE :action', { action: '%"authTokenAction":"password-reset"%' })
+        .execute();
 }
 beforeAll(async () => {
     await server.init({ initialData, customerCount: 0 });
@@ -245,6 +261,9 @@ it('consumes a password reset token once under concurrent cross-store requests',
 });
 
 it('supports global password reset without recording unverified store entry and rejects admin tokens', async () => {
+    // The previous case consumed a token inside the same minute. Model an allowed
+    // later recovery attempt without sleeping or weakening the production cooldown.
+    await ageResetCooldown(member.id);
     await customers.requestPasswordReset(c, email);
     const current = await globalMember(email);
     expect(current.channels.map(channel => String(channel.id))).not.toContain(String(c.channelId));
@@ -269,6 +288,92 @@ it('supports global password reset without recording unverified store entry and 
         errorCode: 'PASSWORD_RESET_TOKEN_INVALID_ERROR',
     });
     await adminClient.asSuperAdmin();
+});
+
+it('keeps one durable reset claim and original link across concurrent service instances and store aliases', async () => {
+    const identifier = 'cooldown-concurrent@example.test';
+    await customers.registerCustomerAccount(a, { emailAddress: identifier, password });
+    const owner = await globalMember(identifier);
+    const secondUsers = Object.assign(Object.create(UserService.prototype), users) as UserService;
+    const results = await Promise.all(
+        Array.from({ length: 8 }, (_, index) =>
+            (index % 2 ? users : secondUsers).setPasswordResetToken(
+                index % 2 ? a : b,
+                index % 2 ? identifier.toUpperCase() : identifier,
+            ),
+        ),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const before = required(
+        (await globalMember(identifier)).user,
+        'cooldown owner user',
+    ).getNativeAuthenticationMethod().passwordResetToken;
+    expect(before).toBeTruthy();
+    await customers.requestPasswordReset(c, identifier);
+    expect(
+        required((await globalMember(identifier)).user, 'cooldown owner user').getNativeAuthenticationMethod()
+            .passwordResetToken,
+    ).toBe(before);
+    const claims = await connection
+        .getRepository(admin, CustomerHistoryEntry)
+        .createQueryBuilder('claim')
+        .where('claim.customerId = :customerId', { customerId: owner.id })
+        .andWhere('claim.data LIKE :action', { action: '%"authTokenAction":"password-reset"%' })
+        .getMany();
+    expect(claims).toHaveLength(1);
+    expect(claims[0].isPublic).toBe(false);
+});
+
+it('suppresses immediate verification refresh and re-registration without invalidating the initial link', async () => {
+    const identifier = 'cooldown-verification@example.test';
+    await customers.registerCustomerAccount(a, { emailAddress: identifier, password });
+    const owner = await globalMember(identifier);
+    const token = required(owner.user, 'verification owner user').getNativeAuthenticationMethod()
+        .verificationToken;
+    await Promise.all([
+        customers.refreshVerificationToken(a, identifier.toUpperCase()),
+        customers.registerCustomerAccount(b, { emailAddress: identifier, password: 'ignored-new-password' }),
+    ]);
+    expect(
+        required((await globalMember(identifier)).user, 'cooldown owner user').getNativeAuthenticationMethod()
+            .verificationToken,
+    ).toBe(token);
+    expect(
+        'id' in
+            (await customers.verifyCustomerEmailAddress(b, required(token, 'initial verification token'))),
+    ).toBe(true);
+});
+
+it('rolls back a failed token issuance with its durable budget claim before retrying', async () => {
+    const identifier = 'cooldown-rollback@example.test';
+    await customers.registerCustomerAccount(a, { emailAddress: identifier, password });
+    const owner = await globalMember(identifier);
+    const generator = (
+        users as unknown as {
+            verificationTokenGenerator: {
+                generateVerificationToken: (ctx: RequestContext) => Promise<string>;
+            };
+        }
+    ).verificationTokenGenerator;
+    const failure = vi
+        .spyOn(generator, 'generateVerificationToken')
+        .mockRejectedValueOnce(new Error('synthetic token issuance failure'));
+    try {
+        await expect(users.setPasswordResetToken(a, identifier)).rejects.toThrow(
+            'synthetic token issuance failure',
+        );
+    } finally {
+        failure.mockRestore();
+    }
+    const account = await users.setPasswordResetToken(b, identifier);
+    expect(account?.getNativeAuthenticationMethod().passwordResetToken).toBeTruthy();
+    const claims = await connection
+        .getRepository(admin, CustomerHistoryEntry)
+        .createQueryBuilder('claim')
+        .where('claim.customerId = :customerId', { customerId: owner.id })
+        .andWhere('claim.data LIKE :action', { action: '%"authTokenAction":"password-reset"%' })
+        .getMany();
+    expect(claims).toHaveLength(1);
 });
 
 it('serializes customer identity creation across stores without leaving orphan accounts or auth methods', async () => {
@@ -337,7 +442,10 @@ it('keeps customer group membership, concurrent changes and cached eligibility p
         customerIds: [member.id],
     });
     expect((await customers.getCustomerGroups(b, member.id)).map(group => group.id)).toEqual([groupB.id]);
-    expect(await condition.check(a, order, args, {} as any)).toBe(false);
+    // EventBus invalidates the promotion cache asynchronously after the transaction commits.
+    await vi.waitFor(async () => {
+        expect(await condition.check(a, order, args, {} as any)).toBe(false);
+    });
     await connection.getRepository(admin, CustomerGroup).update(groupB.id, { channelId: null });
     expect(await customers.getCustomerGroups(b, member.id)).toEqual([]);
 });

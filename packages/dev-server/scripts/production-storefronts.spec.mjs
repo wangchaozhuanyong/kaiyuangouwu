@@ -28,6 +28,18 @@ void test('production routes MOYAO through its dedicated Channel', async () => {
     assert.equal(moyao?.expectedChannelCode, 'moyao-ai');
 });
 
+void test('the default release and monitoring scope includes the activated Flash Cast storefront', async () => {
+    const config = validateProductionStorefronts(
+        JSON.parse(
+            await readFile(new URL('../../../deploy/production-storefronts.json', import.meta.url), 'utf8'),
+        ),
+    );
+    assert.deepEqual(
+        config.storefronts.find(store => store.origin === 'https://shop.flashcast.com.my'),
+        { origin: 'https://shop.flashcast.com.my', expectedChannelCode: 'flashcast-mall' },
+    );
+});
+
 void test('production storefront config rejects duplicate routes and Channels', () => {
     assert.throws(
         () =>

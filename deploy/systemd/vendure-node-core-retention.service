@@ -1,0 +1,20 @@
+[Unit]
+Description=Bound completed Vendure Node crash dumps while retaining the latest diagnostic
+ConditionPathIsDirectory=/var/lib/apport/coredump
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/node /usr/local/sbin/vendure-node-core-retention --apply
+TimeoutStartSec=2min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/apport/coredump

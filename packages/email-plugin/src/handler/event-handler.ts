@@ -1,12 +1,10 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { Type } from '@vendure/common/lib/shared-types';
-import { Injector, Logger } from '@vendure/core';
+import { Injector } from '@vendure/core';
 
 import { serializeAttachments } from '../attachment-utils';
-import { loggerCtx } from '../constants';
 import { EmailEventListener } from '../event-listener';
 import {
-    EmailAttachment,
     EmailTemplateConfig,
     EventWithAsyncData,
     EventWithContext,
@@ -385,7 +383,8 @@ export class EmailEventHandler<T extends string = string, Event extends EventWit
      */
     async handle(
         event: Event,
-        globals: { [key: string]: any } = {},
+        globals:
+            { [key: string]: any } | (() => { [key: string]: any } | Promise<{ [key: string]: any }>) = {},
         injector: Injector,
     ): Promise<IntermediateEmailDetails | undefined> {
         for (const filterFn of this.filterFns) {
@@ -394,19 +393,7 @@ export class EmailEventHandler<T extends string = string, Event extends EventWit
             }
         }
         if (this instanceof EmailEventHandlerWithAsyncData) {
-            try {
-                (event as EventWithAsyncData<Event, any>).data = await this._loadDataFn({
-                    event,
-                    injector,
-                });
-            } catch (err: unknown) {
-                if (err instanceof Error) {
-                    Logger.error(err.message, loggerCtx, err.stack);
-                } else {
-                    Logger.error(String(err), loggerCtx);
-                }
-                return;
-            }
+            (event as EventWithAsyncData<Event, any>).data = await this._loadDataFn({ event, injector });
         }
         if (!this.setRecipientFn) {
             throw new Error(
@@ -435,13 +422,10 @@ export class EmailEventHandler<T extends string = string, Event extends EventWit
             );
         }
         const recipient = this.setRecipientFn(event);
-        const templateVars = this.setTemplateVarsFn ? this.setTemplateVarsFn(event, globals) : {};
-        let attachmentsArray: EmailAttachment[] = [];
-        try {
-            attachmentsArray = (await this.setAttachmentsFn?.(event)) ?? [];
-        } catch (e: any) {
-            Logger.error(e, loggerCtx, e.stack);
-        }
+        // Resolve store branding only for events that passed the email filters.
+        const templateGlobals = typeof globals === 'function' ? await globals() : globals;
+        const templateVars = this.setTemplateVarsFn ? this.setTemplateVarsFn(event, templateGlobals) : {};
+        const attachmentsArray = (await this.setAttachmentsFn?.(event)) ?? [];
         const attachments = await serializeAttachments(attachmentsArray);
         const optionalAddressFields = (await this.setOptionalAddressFieldsFn?.(event)) ?? {};
         const metadata = this.setMetadataFn ? await this.setMetadataFn(event) : {};
@@ -451,7 +435,7 @@ export class EmailEventHandler<T extends string = string, Event extends EventWit
             type: this.type,
             recipient,
             from: this.from,
-            templateVars: { ...globals, ...templateVars },
+            templateVars: { ...templateGlobals, ...templateVars },
             subject,
             templateFile: configuration ? configuration.templateFile : 'body.hbs',
             attachments,

@@ -10,9 +10,19 @@ const hostReasons = {
     'mysql-unreachable': ['P0', '数据库无法连接'],
     'public-health-failed': ['P0', '店铺公共健康检查失败'],
     'image-generation-health-failed': ['P1', '人工智能后台任务健康检查失败'],
-    'backup-missing-or-stale': ['P1', '数据库备份缺失或超过三十六小时'],
-    'backup-checksum-invalid': ['P0', '备份完整性校验失败'],
-    'restore-drill-missing-or-stale': ['P1', '恢复验证证据缺失或超过九天'],
+    'backup-missing-or-stale': ['P1', '数据库备份缺失或超过配置的恢复点目标及告警宽限'],
+    'backup-checksum-invalid': ['P0', '数据库备份完整性校验失败'],
+    'file-backup-missing-or-stale': ['P1', '持久文件备份缺失或超过配置的恢复点目标及告警宽限'],
+    'file-backup-checksum-invalid': ['P0', '持久文件备份完整性校验失败'],
+    'restore-drill-missing-or-invalid': ['P1', '数据库恢复验证证据缺失或格式无效'],
+    'restore-drill-missing-or-stale': ['P1', '数据库恢复验证证据缺失或超过配置的有效期'],
+    'restore-drill-rto-failed': ['P1', '数据库恢复验证超过恢复时间目标或目标配置不一致'],
+    'restore-drill-offsite-unverified': ['P1', '数据库恢复验证缺少要求的异地备份来源证明'],
+    'file-restore-drill-missing-or-invalid': ['P1', '持久文件恢复验证证据缺失或格式无效'],
+    'file-restore-drill-missing-or-stale': ['P1', '持久文件恢复验证证据缺失或超过配置的有效期'],
+    'file-restore-drill-rto-failed': ['P1', '持久文件恢复验证超过恢复时间目标或目标配置不一致'],
+    'file-restore-drill-offsite-unverified': ['P1', '持久文件恢复验证缺少要求的异地备份来源证明'],
+    'file-restore-drill-full-restore-unverified': ['P1', '持久文件恢复验证缺少异地主机完整恢复证明'],
     'root-disk-high': ['P1', '服务器磁盘使用率达到百分之八十五或无法读取'],
 };
 export function hostSignals(failures) {
@@ -156,6 +166,7 @@ export async function deliverSignals(
 ) {
     const next = { ...state };
     let sent = 0;
+    let failed = 0;
     for (const signal of signals) {
         const old = next[signal.key] ?? { failures: 0, active: false, sentAt: 0, revision: null };
         const entry = { ...old, failures: signal.firing ? old.failures + 1 : 0 };
@@ -195,12 +206,23 @@ export async function deliverSignals(
                 entry.severity = signal.severity;
                 sent++;
             } catch {
+                failed++;
                 /* Keep active/sent state unchanged: the next run retries. No raw transport error. */
             }
         }
         next[signal.key] = entry;
     }
-    return { state: next, sent };
+    return { state: next, sent, failed };
+}
+/** Public readiness only: never expose credentials or the destination identifier. */
+export function notificationChannelStatus(config, botToken) {
+    const status = {
+        enabled: Boolean(config.enabled),
+        securityEventsEnabled: Boolean(config.notifySecurityEvents),
+        chatConfigured: typeof config.chatId === 'string' && config.chatId.trim().length > 0,
+        tokenConfigured: typeof botToken === 'string' && botToken.trim().length > 0,
+    };
+    return { ...status, ready: Object.values(status).every(Boolean) };
 }
 async function loadConfig() {
     let config = {
@@ -235,13 +257,11 @@ async function loadConfig() {
 }
 async function main() {
     const config = await loadConfig();
-    if (
-        !config.enabled ||
-        !config.notifySecurityEvents ||
-        !config.chatId ||
-        !process.env.TELEGRAM_BOT_TOKEN
-    ) {
-        process.stdout.write('中文安全监测通知：接收通道未启用或未配置，本次未发送\n');
+    const channel = notificationChannelStatus(config, process.env.TELEGRAM_BOT_TOKEN);
+    if (!channel.ready) {
+        process.stderr.write(`MONITOR_NOTIFICATION_CHANNEL_UNAVAILABLE ${JSON.stringify(channel)}\n`);
+        process.stderr.write('中文安全监测通知：接收通道不可用，本次未发送，告警验收未通过\n');
+        process.exitCode = 1;
         return;
     }
     const hostMode = process.argv.includes('--host');
@@ -309,7 +329,13 @@ async function main() {
     await mkdir(dirname(statePath), { recursive: true, mode: 0o700 });
     await writeFile(`${statePath}.next`, JSON.stringify(result.state), { mode: 0o600 });
     await rename(`${statePath}.next`, statePath);
-    process.stdout.write(`中文安全监测通知：已核验 ${signals.length} 项，成功发送 ${result.sent} 条\n`);
+    process.stdout.write(
+        `中文安全监测通知：已核验 ${signals.length} 项，成功发送 ${result.sent} 条，失败 ${result.failed} 条\n`,
+    );
+    if (result.failed) {
+        process.stderr.write('MONITOR_NOTIFICATION_DELIVERY_FAILED\n');
+        process.exitCode = 1;
+    }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
     main().catch(() => {

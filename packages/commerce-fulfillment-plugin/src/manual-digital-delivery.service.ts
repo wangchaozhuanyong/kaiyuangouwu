@@ -19,10 +19,11 @@ import {
 import { AdminNotificationRequestedEvent } from '@vendure/operations-dashboard-plugin';
 import { GovernanceService } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
-import { In, IsNull, LessThanOrEqual } from 'typeorm';
+import { In, IsNull, LessThan, LessThanOrEqual } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import { readSoldAutoCardsPermission } from './auto-card.constants';
+import { DeliveryRecoveryCursors, scanDeliveryRecoveryPage } from './delivery-recovery-scan';
 import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { DigitalProductService } from './digital-product.service';
 import { DigitalFileVersion, DigitalReceiptAccess } from './entities/digital-product.entity';
@@ -541,25 +542,54 @@ export class ManualDigitalDeliveryService {
         }
     }
 
-    async reconcilePending(): Promise<{ redispatched: number; completedFulfillments: number }> {
-        const deliveries = await this.connection.rawConnection.getRepository(ManualDigitalDelivery).find({
-            where: [
-                { state: In(['SENDING', 'EMAIL_FAILED']) },
-                { state: 'SENT', fulfillmentId: IsNull() },
-                { state: In(['WAITING_PROCESSING', 'DRAFT']), expectedAt: LessThanOrEqual(new Date()) },
-            ],
-            relations: { channel: true },
-            order: { createdAt: 'ASC' },
-            take: 200,
-        });
+    async reconcilePending(
+        cursors: DeliveryRecoveryCursors = {},
+    ): Promise<{ redispatched: number; completedFulfillments: number }> {
+        const repository = this.connection.rawConnection.getRepository(ManualDigitalDelivery);
+        const now = new Date();
+        const deliveries = (
+            await Promise.all([
+                scanDeliveryRecoveryPage(
+                    repository,
+                    (['SENDING', 'EMAIL_FAILED'] as const).flatMap(state => {
+                        const base = { state, attemptCount: LessThan(MAX_ATTEMPTS) };
+                        const cutoff = new Date(now.getTime() - (state === 'SENDING' ? 15 : 5) * 60_000);
+                        return [
+                            { ...base, lastDispatchedAt: IsNull() },
+                            { ...base, lastDispatchedAt: LessThanOrEqual(cutoff) },
+                        ];
+                    }),
+                    cursors,
+                    'email',
+                    67,
+                    { channel: true },
+                ),
+                scanDeliveryRecoveryPage(
+                    repository,
+                    [{ state: 'SENT', fulfillmentId: IsNull() }],
+                    cursors,
+                    'fulfillment',
+                    67,
+                    { channel: true },
+                ),
+                scanDeliveryRecoveryPage(
+                    repository,
+                    [{ state: In(['WAITING_PROCESSING', 'DRAFT']), expectedAt: LessThanOrEqual(now) }],
+                    cursors,
+                    'overdue',
+                    66,
+                    { channel: true },
+                ),
+            ])
+        ).flat();
         let redispatched = 0;
         let completedFulfillments = 0;
         for (const candidate of deliveries) {
-            const ctx = await this.requestContextService.create({
-                apiType: 'admin',
-                channelOrToken: candidate.channel,
-            });
             try {
+                const ctx = await this.requestContextService.create({
+                    apiType: 'admin',
+                    channelOrToken: candidate.channel,
+                });
                 await this.withLockedDelivery(ctx, candidate.id, async (txCtx, delivery) => {
                     if (['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
                         if (delivery.expectedAt <= new Date()) await this.publishOverdue(txCtx, delivery);
