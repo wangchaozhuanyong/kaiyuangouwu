@@ -3,6 +3,10 @@
 }
 
 @media (min-width: 1024px) {
+    .storefront-bottom-nav {
+        display: none;
+    }
+
     .responsive-home-header-placeholder {
         display: block;
         height: var(--desktop-header-height, 72px);

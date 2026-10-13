@@ -54,5 +54,11 @@ export type {
     StorefrontPageData,
 } from './shared/public-page-data';
 export * from './shared/public-seo';
+export {
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
+} from './shared/storefront-semantic-palette';
 export { StorefrontAccountSettingsService } from './storefront-account-settings';
 export { StorefrontVisualPresetService } from './storefront-visual-preset.service';
+export { isStorefrontVisualPresetId } from './visual-presets';
