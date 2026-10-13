@@ -189,24 +189,32 @@ def verify_policy(uri: str, days: int) -> object:
 
 
 def remote_checksum(directory: Path, name: str, version_id: str) -> bytes:
-    # Fetch only the small checksum, pinned to the version whose HEAD was
-    # verified. Never download or extract another multi-gigabyte archive.
+    # Read only the small current checksum and require the response to identify
+    # the exact HEAD-verified version. A replacement during this read fails closed.
+    # This uses the existing GetObject permission, not historical-version access.
+    if not isinstance(version_id, str) or not version_id or version_id == "null":
+        raise RetentionError("offsite-version-missing")
     fd, temporary_name = tempfile.mkstemp(prefix=".retention-checksum-", dir=directory)
     os.close(fd)
     temporary_path = Path(temporary_name)
     try:
-        subprocess.run(
+        response = subprocess.run(
             ["aws", "s3api", "get-object", "--bucket", OFFSITE_BUCKET,
-             "--key", OFFSITE_PREFIX + name, "--version-id", version_id,
+             "--key", OFFSITE_PREFIX + name,
              "--range", "bytes=0-8191", str(temporary_path), "--output", "json"],
             check=True, capture_output=True, timeout=30,
         )
+        if len(response.stdout) > 65536:
+            raise RetentionError("invalid-offsite-metadata")
+        metadata = json.loads(response.stdout)
+        if not isinstance(metadata, dict) or metadata.get("VersionId") != version_id:
+            raise RetentionError("offsite-checksum-version-changed")
         root_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         try:
             return checked_read(root_fd, temporary_path.name, limit=8191)
         finally:
             os.close(root_fd)
-    except (OSError, subprocess.SubprocessError) as error:
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as error:
         raise RetentionError("offsite-checksum-read-failed") from error
     finally:
         temporary_path.unlink(missing_ok=True)
