@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
     classifyProductionReleaseImpact,
@@ -24,6 +27,162 @@ function inspectPosterChange(targetSource, releaseScope = {}) {
         },
     });
 }
+
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const runtimeSource = readFileSync(join(root, 'deploy/deploy-production-from-s3.sh'), 'utf8');
+const posterGateStart = runtimeSource.indexOf('\nreferral_poster_change=false\n');
+const posterGateEnd = runtimeSource.indexOf('\nmapfile -t managed_storefront_changes', posterGateStart);
+assert.ok(posterGateStart >= 0 && posterGateEnd > posterGateStart);
+const posterGate = runtimeSource.slice(posterGateStart, posterGateEnd);
+
+function posterRuntimeFixture(t, targetSource, { baseSource = posterPresetsSource, changedPath } = {}) {
+    const output = join(root, '.local-validation/referral-runtime-scope');
+    mkdirSync(output, { recursive: true });
+    const directory = mkdtempSync(join(output, 'case-'));
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    const git = args => execFileSync('git', args, { cwd: directory, encoding: 'utf8' }).trim();
+    const write = (path, source) => {
+        const destination = join(directory, path);
+        mkdirSync(dirname(destination), { recursive: true });
+        writeFileSync(destination, source);
+    };
+    const commit = () => {
+        git(['add', '.']);
+        git([
+            '-c',
+            'core.hooksPath=/dev/null',
+            '-c',
+            'commit.gpgsign=false',
+            '-c',
+            'user.name=Fixture',
+            '-c',
+            'user.email=fixture@example.invalid',
+            'commit',
+            '--allow-empty',
+            '-qm',
+            'local fixture',
+        ]);
+        return git(['rev-parse', 'HEAD']);
+    };
+    git(['init', '-q']);
+    write(posterPresetsPath, baseSource);
+    if (changedPath) write(changedPath, 'old fixture\n');
+    const baseSha = commit();
+    write(posterPresetsPath, targetSource);
+    if (changedPath) write(changedPath, 'new fixture\n');
+    const targetSha = commit();
+    return {
+        gate(scope = 'none') {
+            return spawnSync(
+                'bash',
+                [
+                    '-c',
+                    `set -Eeuo pipefail\nfail() { printf '%s\\n' "$*" >&2; exit 1; }\n${posterGate}\nprintf 'POSTER_SCOPE_ACCEPTED\\n'`,
+                ],
+                {
+                    cwd: directory,
+                    encoding: 'utf8',
+                    env: {
+                        ...process.env,
+                        deployed_sha: baseSha,
+                        target_sha: targetSha,
+                        reviewed_referral_posters: scope,
+                    },
+                },
+            );
+        },
+        impact(scope = 'none') {
+            return inspectProductionReleaseImpact({
+                baseSha,
+                targetSha,
+                releaseScope: { referralPosters: scope },
+                git(command, args, options) {
+                    return execFileSync(command, args, { ...options, cwd: directory });
+                },
+            });
+        },
+    };
+}
+
+test('runtime shell accepts helper-only poster changes without evaluating historical source', t => {
+    const baseSource = posterPresetsSource.replace(
+        /\n\/\*\* Uploaded artwork owns[\s\S]*?(?=\nexport const referralPosterPresets = )/u,
+        '',
+    );
+    assert.notEqual(baseSource, posterPresetsSource);
+    const fixture = posterRuntimeFixture(
+        t,
+        `${posterPresetsSource}\nthrow new Error('historical source must never execute');\n`,
+        { baseSource },
+    );
+    const result = fixture.gate();
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /POSTER_SCOPE_ACCEPTED/u);
+    assert.equal(fixture.impact().dataRisk, 'runtime-only');
+    assert.notEqual(fixture.gate('primary').status, 0);
+    assert.throws(() => fixture.impact('primary'), /without a matching change/u);
+});
+
+test('runtime shell still requires reviewed scope for changed poster copy, presets and content identity', t => {
+    for (const [before, after] of [
+        ['精选商品与服务', 'New published copy'],
+        ["foregroundColor: '#152c49'", "foregroundColor: '#102030'"],
+        ['referral-poster-${id.toLowerCase()', 'new-poster-${id.toLowerCase()'],
+    ]) {
+        const source = posterPresetsSource.replace(before, after);
+        assert.notEqual(source, posterPresetsSource);
+        const fixture = posterRuntimeFixture(t, source);
+        const rejected = fixture.gate();
+        assert.notEqual(rejected.status, 0);
+        assert.match(rejected.stderr, /managed referral posters changed/u);
+        assert.throws(() => fixture.impact(), /reviewed release scope was not selected/u);
+        const accepted = fixture.gate('primary');
+        assert.equal(accepted.status, 0, accepted.stderr);
+        assert.equal(fixture.impact('primary').dataRisk, 'managed-content');
+    }
+});
+
+test('runtime shell preserves whole-path review for poster assets and the publisher', t => {
+    for (const changedPath of [
+        'packages/dev-server/assets/referral-posters/manifest.json',
+        'packages/dev-server/scripts/sync-referral-posters.mjs',
+    ]) {
+        const fixture = posterRuntimeFixture(t, posterPresetsSource, { changedPath });
+        assert.notEqual(fixture.gate().status, 0);
+        assert.throws(() => fixture.impact(), /reviewed release scope was not selected/u);
+        assert.equal(fixture.gate('both-stores').status, 0);
+        assert.equal(fixture.impact('both-stores').dataRisk, 'managed-content');
+    }
+});
+
+test('runtime shell and preflight reject imported, missing, duplicate or malformed poster manifests', t => {
+    for (const source of [
+        `import { data } from './other';\n${posterPresetsSource}`,
+        'export const otherData = [];',
+        `${posterPresetsSource}\nexport const referralPosterCopy = {\n} as const;\n`,
+        posterPresetsSource.replace(
+            'export const referralPosterPresets = [',
+            'export const otherPresets = [',
+        ),
+        posterPresetsSource.replace(
+            /(export const referralPosterPresets = \[[\s\S]*?)\n\] as const;/u,
+            '$1\n];',
+        ),
+    ]) {
+        const fixture = posterRuntimeFixture(t, source);
+        for (const scope of ['none', 'primary']) {
+            const result = fixture.gate(scope);
+            assert.notEqual(result.status, 0);
+            assert.match(result.stderr, /could not inspect the target referral poster manifest/u);
+            assert.throws(() => fixture.impact(scope), /Cannot isolate/u);
+        }
+    }
+    const invalidBase = posterRuntimeFixture(t, posterPresetsSource, {
+        baseSource: 'unrecognized old source',
+    });
+    assert.match(invalidBase.gate().stderr, /could not inspect the deployed referral poster manifest/u);
+    assert.throws(() => invalidBase.impact(), /Cannot isolate/u);
+});
 
 test('poster runtime helpers do not require or authorize publishing unchanged managed data', () => {
     const source = `${posterPresetsSource}\nexport type RuntimePosterFields = string;\n`;
