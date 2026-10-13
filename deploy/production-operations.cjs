@@ -798,6 +798,58 @@ function readCommand(command, arguments_) {
     }
 }
 
+/** Inspect the exact installed gate without pruning or forwarding settings and child stderr. */
+function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {}) {
+    const script = '/usr/local/sbin/vendure-file-backup-retention.py';
+    if (!exists(script)) return { status: 'unavailable', reason: 'retention-tool-unavailable' };
+    const options = { encoding: 'utf8', timeout: 300000, maxBuffer: 1024 * 1024 };
+    const runtime = run(
+        'python3',
+        [
+            '-c',
+            'import inspect,json,shutil,sys;print(json.dumps({"version":".".join(map(str,sys.version_info[:3])),"rmtreeDirFd":"dir_fd" in inspect.signature(shutil.rmtree).parameters}))',
+        ],
+        options,
+    );
+    const result = run('python3', [script, '--dry-run'], options);
+    try {
+        const python = JSON.parse(runtime.stdout);
+        const report = JSON.parse(result.stdout);
+        const allowedReasons = new Set([
+            'offsite-policy-unverified',
+            'offsite-or-local-verification-failed',
+            'local-checksum-mismatch',
+            'offsite-checksum-mismatch',
+            'offsite-read-failed',
+            'offsite-checksum-read-failed',
+            'offsite-metadata-mismatch',
+            'offsite-version-missing',
+            'protected-local-set-changed',
+            'local-file-changed-before-delete',
+            'unsafe-residual-entry',
+            'backup-lock-busy',
+            'retention-inspection-failed',
+        ]);
+        const blocked = Array.isArray(report.blocked) ? report.blocked : [];
+        return {
+            status: result.status === 0 && report.status === 'ok' ? 'ok' : 'blocked',
+            pythonVersion: /^\d+\.\d+\.\d+$/u.test(python.version) ? python.version : 'unknown',
+            safeRmtreeDirFd: python.rmtreeDirFd === true,
+            exitCode: Number.isInteger(result.status) ? result.status : null,
+            blockedCount: blocked.length,
+            reasons: [...new Set([report.reason, ...blocked.map(item => item.reason)].filter(Boolean))].map(
+                reason => (allowedReasons.has(reason) ? reason : 'unclassified-retention-blocker'),
+            ),
+            keptCount: Array.isArray(report.kept) ? report.kept.length : null,
+            residualCandidateCount: Array.isArray(report.residualCandidates)
+                ? report.residualCandidates.length
+                : null,
+        };
+    } catch {
+        return { status: 'unavailable', reason: 'retention-diagnostic-invalid' };
+    }
+}
+
 function backupMetadata() {
     try {
         return readdirSync(BACKUP_DIRECTORY)
@@ -1458,6 +1510,7 @@ function diagnose(request) {
         imageServices: inspectImageServices(),
         latestBackups: backupMetadata(),
         recoveryReadiness: inspectRecoveryReadiness(),
+        ...(request.operation === 'diagnose' ? { fileBackupRetention: inspectFileBackupRetention() } : {}),
     };
     try {
         const plan = inspectProductionReleases();
@@ -3015,6 +3068,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+    inspectFileBackupRetention,
     inspectIcloudRelay,
     inspectImageServices,
     applyAptListsCleanup,

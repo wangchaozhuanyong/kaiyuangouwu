@@ -31,6 +31,47 @@ const nodeCoreRetention = require('../../../deploy/systemd/vendure-node-core-ret
 const retention = require('../../../deploy/systemd/vendure-production-release-retention.cjs');
 const sourceSha = 'a'.repeat(40);
 
+void test('backup retention diagnosis only reads the installed gate and masks unknown reasons and stderr', () => {
+    const calls = [];
+    const secret = 'private-retention-fixture-never-forward';
+    const report = operations.inspectFileBackupRetention({
+        exists: () => true,
+        run(binary, args) {
+            calls.push([binary, ...args]);
+            return args[0] === '-c'
+                ? { status: 0, stdout: JSON.stringify({ version: '3.10.12', rmtreeDirFd: false }) }
+                : {
+                      status: 1,
+                      stderr: secret,
+                      stdout: JSON.stringify({
+                          status: 'blocked',
+                          blocked: [{ reason: 'offsite-policy-unverified' }, { reason: secret }],
+                          kept: ['one', 'two', 'three'],
+                          residualCandidates: [],
+                      }),
+                  };
+        },
+    });
+    assert.equal(report.status, 'blocked');
+    assert.equal(report.pythonVersion, '3.10.12');
+    assert.equal(report.safeRmtreeDirFd, false);
+    assert.equal(report.keptCount, 3);
+    assert.deepEqual(report.reasons, ['offsite-policy-unverified', 'unclassified-retention-blocker']);
+    assert.equal(JSON.stringify(report).includes(secret), false);
+    assert.deepEqual(calls[1], ['python3', '/usr/local/sbin/vendure-file-backup-retention.py', '--dry-run']);
+});
+
+void test('missing or malformed retention diagnostics never forward raw output', () => {
+    assert.equal(operations.inspectFileBackupRetention({ exists: () => false }).status, 'unavailable');
+    assert.equal(
+        operations.inspectFileBackupRetention({
+            exists: () => true,
+            run: () => ({ status: 1, stdout: 'not-json', stderr: 'private-fixture' }),
+        }).reason,
+        'retention-diagnostic-invalid',
+    );
+});
+
 void test('mailbox inspection pins the live revision and never forwards secrets or raw child errors', () => {
     const runtimeSha = 'b'.repeat(40);
     const request = operations.validateRequest({
