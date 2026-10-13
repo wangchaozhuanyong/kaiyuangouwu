@@ -2618,7 +2618,7 @@ export function InventoryStockOverview({
                                                                         <th
                                                                             scope="col"
                                                                             key={label}
-                                                                            className="px-3 pb-2"
+                                                                            className={`px-3 pb-2 ${label === '操作' ? 'text-right' : ''}`}
                                                                         >
                                                                             {label}
                                                                         </th>
