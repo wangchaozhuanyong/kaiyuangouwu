@@ -31,6 +31,7 @@ import '../../src/styles/desktop-commerce.css';
 import '../../src/styles/desktop-home.css';
 import '../../src/styles/desktop-pages.css';
 import '../../src/styles/locale-preferences.css';
+import '../../src/styles/modals-and-support.css';
 import '../../src/styles/subpage-content.css';
 import { CollectionSummary, StorefrontContentBlock, StorefrontContentSettings } from '../../src/types';
 import { useStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
