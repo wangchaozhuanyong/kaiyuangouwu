@@ -2,28 +2,35 @@
    Eligibility and mutations remain with each caller. */
 .desktop-coupon-ticket {
     --coupon-face: var(--coupon-rose-ink);
+    --coupon-surface: var(--coupon-rose-surface);
+    --coupon-muted: color-mix(in srgb, var(--muted) 84%, var(--text));
     min-width: 0;
     border: 1px solid var(--line-subtle);
     border-radius: var(--skin-card-radius);
-    background: var(--surface);
+    background: var(--coupon-surface);
     color: var(--text);
 }
 .desktop-coupon-ticket.coupon-face-gold {
     --coupon-face: var(--coupon-gold-ink);
+    --coupon-surface: var(--coupon-gold-surface);
 }
 .desktop-coupon-ticket.coupon-face-blue {
     --coupon-face: var(--coupon-blue-ink);
+    --coupon-surface: var(--coupon-blue-surface);
 }
 .desktop-coupon-ticket.coupon-face-emerald {
     --coupon-face: var(--coupon-emerald-ink);
+    --coupon-surface: var(--coupon-emerald-surface);
 }
 .desktop-coupon-ticket.is-selected {
-    border-color: var(--coupon-face);
-    box-shadow: inset 0 0 0 1px var(--coupon-face);
+    border-color: var(--focus);
+    box-shadow: inset 0 0 0 1px var(--focus);
 }
 .desktop-coupon-ticket.is-unavailable,
 .desktop-coupon-ticket.is-history {
     --coupon-face: var(--skin-coupon-inactive-ink, var(--muted));
+    --coupon-muted: var(--muted);
+    background: var(--skin-coupon-inactive-surface, var(--control-surface));
 }
 .desktop-coupon-main {
     display: grid;
@@ -42,8 +49,8 @@
     border-inline-end: 1px dashed var(--line-subtle);
     border-start-start-radius: var(--skin-card-radius);
     border-end-start-radius: var(--skin-card-radius);
-    background: color-mix(in srgb, var(--coupon-face) 10%, var(--surface));
-    color: var(--coupon-face);
+    background: transparent;
+    color: var(--coupon-muted);
     text-align: center;
 }
 .desktop-coupon-ticket:has(.desktop-coupon-meta) .desktop-coupon-value {
@@ -69,9 +76,8 @@
 .desktop-coupon-ticket:has(.desktop-coupon-meta) .desktop-coupon-value::after {
     display: none;
 }
-.desktop-coupon-ticket.is-history .desktop-coupon-value,
-.desktop-coupon-ticket.is-unavailable .desktop-coupon-value {
-    background: var(--skin-coupon-inactive-surface, var(--control-surface));
+.desktop-coupon-value .desktop-coupon-value-line {
+    color: var(--coupon-face);
 }
 .desktop-coupon-value-line {
     display: flex;
@@ -128,7 +134,7 @@
 }
 .desktop-coupon-threshold {
     justify-content: flex-start;
-    color: var(--coupon-face);
+    color: var(--coupon-muted);
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
     font-variant-numeric: tabular-nums;
@@ -138,7 +144,7 @@
     transform-origin: left center;
 }
 .desktop-coupon-scope {
-    color: var(--muted);
+    color: var(--coupon-muted);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     overflow-wrap: anywhere;
@@ -192,13 +198,13 @@
 }
 .desktop-coupon-ticket .desktop-coupon-action > .coupon-ticket-status {
     background: transparent;
-    color: var(--coupon-face);
+    color: var(--coupon-muted);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     font-weight: var(--font-weight-medium);
 }
 .desktop-coupon-ticket .desktop-coupon-action > .coupon-ticket-status:not(.is-used) {
-    color: var(--skin-coupon-pending-ink, var(--muted));
+    color: var(--skin-coupon-pending-ink, var(--coupon-muted));
 }
 .desktop-coupon-ticket .coupon-btn-text-wrap {
     white-space: normal;
@@ -214,7 +220,7 @@
 .desktop-coupon-meta {
     padding: 12px 14px;
     border-top: 1px dashed var(--line-subtle);
-    color: var(--muted);
+    color: var(--coupon-muted);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     overflow-wrap: anywhere;

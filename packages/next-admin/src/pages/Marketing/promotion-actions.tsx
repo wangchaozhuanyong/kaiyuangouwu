@@ -3,7 +3,12 @@ import { useState } from 'react';
 import { AdminInput, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import type { StoreCouponAppearanceTheme, StoreCouponRecord } from '../../graphql/marketing.graphql';
-import { couponAppearanceOptions, SensitiveAction, sensitiveCopy } from './promotion-model';
+import {
+    couponAppearanceOptions,
+    couponAppearancePalette,
+    SensitiveAction,
+    sensitiveCopy,
+} from './promotion-model';
 import { FormInput, Modal, ModalFooter } from './promotion-ui';
 
 export function CouponAppearanceDialog({
@@ -31,6 +36,7 @@ export function CouponAppearanceDialog({
                 <legend className="mb-2 text-xs font-bold text-slate-700">选择券面配色</legend>
                 {couponAppearanceOptions.map(option => {
                     const value = option.value === 'default' ? null : option.value;
+                    const palette = couponAppearancePalette(value, coupon.kind);
                     return (
                         <label
                             key={option.value}
@@ -44,11 +50,17 @@ export function CouponAppearanceDialog({
                                 onChange={() => setTheme(value)}
                                 className="h-4 w-4 accent-blue-600"
                             />
+                            <span className="min-w-0 flex-1">{option.label}</span>
                             <span
-                                className={`h-5 w-5 shrink-0 rounded ${option.swatchClass}`}
+                                className="inline-flex h-12 w-24 shrink-0 items-center justify-center gap-2 rounded-lg px-2"
+                                style={{ backgroundColor: palette.surface, color: palette.ink }}
                                 aria-hidden="true"
-                            />
-                            {option.label}
+                            >
+                                <strong className="text-xl font-bold tabular-nums">50</strong>
+                                <span className="border-l border-dashed border-current pl-2 text-[10px] font-medium">
+                                    优惠券
+                                </span>
+                            </span>
                         </label>
                     );
                 })}

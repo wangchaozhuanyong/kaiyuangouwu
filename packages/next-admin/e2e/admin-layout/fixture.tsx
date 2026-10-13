@@ -62,6 +62,7 @@ import { createAdminCache } from '../../src/runtime/admin-cache';
 import { ThemeProvider } from '../../src/theme/ThemeProvider';
 import type { CollectionFilterValue } from '../../src/utils/product-collection-assignment';
 import { adminRolloutFixtureData } from './admin-rollout-fixture-data';
+import { CouponAppearanceFixture } from './coupon-appearance-fixture';
 import { FieldLayoutFixture } from './field-layout-fixture';
 import { FixtureAuditTheme } from './fixture-audit-theme';
 import { FixtureSettingsConfirmation } from './fixture-confirmation';
@@ -118,6 +119,7 @@ const viewLabels: Record<string, string> = {
     product: '商品编辑',
     profit: '利润统计',
     couponReport: '优惠券经营报表',
+    couponAppearance: '优惠券配色',
     attribution: '渠道归因与投放回报',
     translations: '多语言翻译',
     jobs: '系统任务',
@@ -2049,6 +2051,7 @@ const modules: Record<string, React.ReactNode> = {
     product: <ProductEditor />,
     profit: <ProfitReportModule />,
     couponReport: <CouponReportFixture />,
+    couponAppearance: <CouponAppearanceFixture />,
     attribution: (
         <div className="p-4">
             <MarketingAttributionPanel currencyCode="MYR" />

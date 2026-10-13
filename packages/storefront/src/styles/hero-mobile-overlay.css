@@ -1,4 +1,4 @@
-/* Mobile photographs prefer 16:10; complete managed copy can still grow the scene. */
+/* The approved mobile overlay frame stays 293px tall, independent of managed copy. */
 @media (max-width: 1023px) {
     .hero.hero-image-overlay {
         min-height: 0;
@@ -18,8 +18,12 @@
         background: var(--hero-copy-background);
     }
 
-    .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='overlay'] {
-        aspect-ratio: 16 / 10;
+    .hero.hero-image-overlay div.hero-scene-wrapper[data-hero-artwork-layout='overlay'] {
+        position: relative;
+        height: 293px;
+        min-height: 293px;
+        max-height: 293px;
+        aspect-ratio: auto;
     }
 
     .hero.hero-image-overlay .hero-rich-media {
@@ -57,16 +61,18 @@
     .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='overlay'] .hero-rich-content {
         position: relative;
         inset: auto;
-        /* Reserve the right side for the artwork; long copy grows the scene vertically. */
+        /* Copy fits the fixed left column; the CTA stays outside its reading scroller. */
         width: calc(56% - 20px);
         max-width: 450px;
-        height: auto;
+        box-sizing: border-box;
+        height: 100%;
         min-height: 0;
-        max-height: none;
+        max-height: 100%;
         margin: 0 0 0 20px;
-        padding: 24px 0 calc(var(--hero-overlay-height, 0px) + 32px);
-        gap: 16px;
+        padding: 24px 0 20px;
+        gap: 12px;
         justify-content: flex-start;
+        overflow: hidden;
         background: transparent;
         color: var(--hero-image-copy-foreground, var(--text));
     }
@@ -78,6 +84,20 @@
         min-height: 0;
         flex: none;
         overflow: visible;
+    }
+
+    .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='overlay'] .hero-rich-copy-region {
+        flex: 0 1 auto;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        pointer-events: auto;
+        scrollbar-width: none;
+    }
+
+    .hero.hero-image-overlay
+        .hero-scene-wrapper[data-hero-artwork-layout='overlay']
+        .hero-rich-copy-region::-webkit-scrollbar {
+        display: none;
     }
 
     .hero.hero-image-overlay .hero-rich-copy-surface {
@@ -163,7 +183,7 @@
 
 @media (max-width: 389px) {
     .hero.hero-image-overlay .hero-scene-wrapper[data-hero-artwork-layout='overlay'] .hero-rich-content {
-        width: calc(56% - 16px);
+        width: min(calc(56% - 16px), calc(100% - 168px));
         margin-left: 16px;
     }
 }

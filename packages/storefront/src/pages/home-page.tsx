@@ -37,7 +37,10 @@ import {
     heroContentForViewport,
     heroImageForViewport,
 } from '../../../storefront-content-plugin/src/shared/hero-image';
-import { HeroScene } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import {
+    HeroScene,
+    resolveHeroArtworkLayout,
+} from '../../../storefront-content-plugin/src/shared/hero-scene';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -740,9 +743,14 @@ export function HomePage() {
                 : Math.ceil(
                       Math.max(
                           Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0,
-                          ...heightSurfaces.map(surface =>
-                              Math.max(surface.getBoundingClientRect().height, surface.scrollHeight),
-                          ),
+                          ...heightSurfaces.map(surface => {
+                              const frameHeight = surface.getBoundingClientRect().height;
+                              // Mobile overlay copy scrolls inside the fixed CSS frame.
+                              // Its overflow must never resize the carousel stage.
+                              return !desktop && surface.dataset.heroArtworkLayout === 'overlay'
+                                  ? frameHeight
+                                  : Math.max(frameHeight, surface.scrollHeight);
+                          }),
                       ),
                   );
             if (height <= 0 || height === heroStageHeightRef.current) return;
@@ -1246,7 +1254,13 @@ export function HomePage() {
                                                             inert={inactive || undefined}
                                                         >
                                                             <HeroScene
-                                                                copyScrollable={heroCopyScrollable}
+                                                                copyScrollable={
+                                                                    heroCopyScrollable ||
+                                                                    (!desktop &&
+                                                                        resolveHeroArtworkLayout(
+                                                                            slide.settings,
+                                                                        ) === 'overlay')
+                                                                }
                                                                 content={slide}
                                                                 mediaOverlay={
                                                                     heroCount > 0 ? (

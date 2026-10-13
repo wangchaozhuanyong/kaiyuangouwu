@@ -650,9 +650,14 @@
 }
 
 @media (max-width: 1023px) {
+    .hero-carousel,
     .quick-grid,
     .quick-grid.is-color-marketplace {
-        margin-inline: 8px;
+        margin-inline: var(--space-8);
+    }
+
+    .quick-grid,
+    .quick-grid.is-color-marketplace {
         padding-inline: 2px;
         column-gap: 2px;
         overflow-x: auto;

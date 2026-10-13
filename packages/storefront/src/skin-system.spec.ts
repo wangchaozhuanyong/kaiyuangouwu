@@ -7,6 +7,7 @@ import {
     resolveStorefrontSemanticPalette,
     resolveStorefrontSkinTreatment,
     semanticPaletteCssVariables,
+    STOREFRONT_COUPON_PALETTES,
     storefrontReferralCssVariables,
 } from '../../storefront-content-plugin/src/shared/storefront-semantic-palette';
 import { storefrontVisualPresets } from '../../storefront-content-plugin/src/visual-presets';
@@ -170,7 +171,7 @@ describe('storefront skin system', () => {
         }
     });
 
-    it('consumes fixed referral panel roles without page-local palette overrides', () => {
+    it('consumes shared referral roles without page-local palette overrides', () => {
         const css = postcss.parse(stylesheet('./styles/referral.css'));
         css.walkDecls(declaration => {
             expect(declaration.prop).not.toMatch(/^--/u);
@@ -179,7 +180,7 @@ describe('storefront skin system', () => {
     });
 
     it.each(['classic', 'neo-minimalist'] as const)(
-        'matches referral first-frame CSS and runtime shared roles in %s',
+        'matches referral and coupon first-frame CSS and runtime shared roles in %s',
         presetId => {
             const variables: Record<string, string> = {};
             const css = postcss.parse(stylesheet('./styles/visual-presets.css'));
@@ -188,12 +189,17 @@ describe('storefront skin system', () => {
                     rule.selector === 'html[data-storefront-preset]' ||
                     rule.selector === `html[data-storefront-preset='${presetId}']`
                 ) {
-                    rule.walkDecls(/^--referral-/, declaration => {
+                    rule.walkDecls(/^--(?:referral|coupon)-/, declaration => {
                         variables[declaration.prop] = declaration.value;
                     });
                 }
             });
-            expect(variables).toEqual(storefrontReferralCssVariables(presetId));
+            const expected = { ...storefrontReferralCssVariables(presetId) };
+            for (const [tone, colors] of Object.entries(STOREFRONT_COUPON_PALETTES[presetId])) {
+                expected[`--coupon-${tone}-ink`] = colors.ink;
+                expected[`--coupon-${tone}-surface`] = colors.surface;
+            }
+            expect(variables).toEqual(expected);
         },
     );
 
@@ -309,6 +315,9 @@ describe('storefront skin system', () => {
                             'styles/desktop-coupon-ticket.css|.desktop-coupon-value|inline':
                                 '1px dashed var(--line-subtle)',
                             'styles/desktop-coupon-ticket.css|.desktop-coupon-meta|top':
+                                '1px dashed var(--line-subtle)',
+                            // 2026-10-13: align the approved desktop rules column with the amount stub.
+                            'styles/coupon-center.css|.coupon-center-rules-title|inline':
                                 '1px dashed var(--line-subtle)',
                             'styles/coupon-center.css|.coupon-center-tabs|bottom':
                                 '1px solid var(--line-subtle)',
@@ -1174,7 +1183,11 @@ describe('storefront skin system', () => {
         expect(mobile).toContain('@media (max-width: 1023px)');
         expect(mobile).toMatch(/\.hero\.hero-image-overlay\s*\{[^}]*aspect-ratio:\s*auto;/);
         expect(mobile).toMatch(
-            /\.hero-scene-wrapper\[data-hero-artwork-layout='overlay'\]\s*\{[^}]*aspect-ratio:\s*16\s*\/\s*10;/,
+            new RegExp(
+                /div\.hero-scene-wrapper\[data-hero-artwork-layout='overlay'\]\s*\{[^}]*height:\s*293px;/
+                    .source +
+                    /[^}]*min-height:\s*293px;[^}]*max-height:\s*293px;[^}]*aspect-ratio:\s*auto;/.source,
+            ),
         );
         expect(mobile).not.toMatch(/min-height:\s*280px;/);
         expect(mobile).toMatch(/\.hero-carousel-stage[^}]*position:\s*relative;/);
@@ -1185,7 +1198,7 @@ describe('storefront skin system', () => {
             /data-hero-artwork-layout='overlay'[^}]*:is\(\.hero-rich-backdrop, \.safe-image-preview\)[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*object-fit:\s*cover;/,
         );
         expect(mobile).toMatch(
-            /\.hero-rich-content[^}]*position:\s*relative;[^}]*height:\s*auto;[^}]*background:\s*transparent;/,
+            /\.hero-rich-content[^}]*position:\s*relative;[^}]*height:\s*100%;[^}]*max-height:\s*100%;[^}]*background:\s*transparent;/,
         );
         expect(mobile).toMatch(
             /\.hero-rich-copy-region[^}]*width:\s*100%;[^}]*flex:\s*none;[^}]*overflow:\s*visible;/,
@@ -1198,10 +1211,11 @@ describe('storefront skin system', () => {
         expect(mobile).toMatch(
             /\.hero-overlay-controls[^}]*bottom:\s*12px;[^}]*left:\s*auto;[^}]*right:\s*12px;[^}]*transform:\s*none;/,
         );
-        // Complete copy grows the scene; it is neither a separate row nor an internal reading scroller.
-        expect(mobile).not.toMatch(
-            /grid-row:\s*[12]|60%|text-overflow:\s*ellipsis|overflow-[xy]:\s*auto|16\s*\/\s*9/,
+        // Full copy remains available inside the fixed frame instead of increasing its height.
+        expect(mobile).toMatch(
+            /data-hero-artwork-layout='overlay'\] \.hero-rich-copy-region\s*\{[^}]*flex:\s*0 1 auto;[^}]*overflow-y:\s*auto;[^}]*pointer-events:\s*auto;/,
         );
+        expect(mobile).not.toMatch(/grid-row:\s*[12]|60%|text-overflow:\s*ellipsis|16\s*\/\s*9/);
         expect(mobile).not.toMatch(/home-trust-bar|home-trust-item/);
         expect(mobile).not.toMatch(/#[0-9a-f]{3,8}\b|backdrop-filter|mobileImageUrl/i);
         const services = stylesheet('./styles/home-showcase.css');
@@ -1244,7 +1258,7 @@ describe('storefront skin system', () => {
         );
     });
 
-    it('lets mobile hero content grow around an accessible primary action without backdrop blur', () => {
+    it('keeps an accessible primary hero action without backdrop blur', () => {
         const source = stylesheet('../../storefront-content-plugin/src/shared/hero-scene.css');
         expect(source).toMatch(/\.hero-rich-content\s*\{[^}]*position:\s*relative;/);
         expect(source).toMatch(
