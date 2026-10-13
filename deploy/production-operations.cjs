@@ -802,7 +802,12 @@ function readCommand(command, arguments_) {
 function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {}) {
     const script = '/usr/local/sbin/vendure-file-backup-retention.py';
     if (!exists(script)) return { status: 'unavailable', reason: 'retention-tool-unavailable' };
-    const options = { encoding: 'utf8', timeout: 300000, maxBuffer: 1024 * 1024 };
+    const options = {
+        encoding: 'utf8',
+        timeout: 300000,
+        maxBuffer: 1024 * 1024,
+        env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' },
+    };
     const runtime = run(
         'python3',
         [
@@ -811,7 +816,82 @@ function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {
         ],
         options,
     );
-    const result = run('python3', [script, '--dry-run'], options);
+    const awsCategories = [
+        'AccessDenied',
+        'NoSuchKey',
+        'NoSuchVersion',
+        'NoSuchBucket',
+        'InvalidRange',
+        'InvalidObjectState',
+        'ExpiredToken',
+        'InvalidToken',
+        'InvalidAccessKeyId',
+        'SignatureDoesNotMatch',
+        'RequestTimeTooSkewed',
+        'RequestTimeout',
+        'SlowDown',
+        'ServiceUnavailable',
+        'InternalError',
+        'KMSAccessDeniedException',
+        'credentials-unavailable',
+        'endpoint-unavailable',
+        'tls-validation-failed',
+        'subprocess-timeout',
+        'command-unavailable',
+        'local-os-error',
+        'unclassified-aws-error',
+    ];
+    // Observe only the installed gate's checksum read. Re-raise every failure so
+    // the gate keeps its original result; never forward commands or raw stderr.
+    const observer = String.raw`
+import json,re,runpy,subprocess,sys
+allowed=set(${JSON.stringify(awsCategories)})
+failures={}
+original_run=subprocess.run
+def observe(command,*args,**kwargs):
+    tracked=isinstance(command,(list,tuple)) and list(command[:3])==["aws","s3api","get-object"]
+    try:
+        return original_run(command,*args,**kwargs)
+    except (subprocess.CalledProcessError,subprocess.TimeoutExpired,OSError) as error:
+        if tracked:
+            category="unclassified-aws-error"
+            if isinstance(error,subprocess.TimeoutExpired): category="subprocess-timeout"
+            elif isinstance(error,FileNotFoundError): category="command-unavailable"
+            elif isinstance(error,OSError): category="local-os-error"
+            else:
+                raw=error.stderr or ""
+                if isinstance(raw,bytes): raw=raw.decode("utf-8",errors="replace")
+                match=re.search(r"An error occurred \(([A-Za-z0-9.]+)\) when calling the GetObject operation",raw)
+                if match and match[1] in allowed: category=match[1]
+                elif "Unable to locate credentials" in raw: category="credentials-unavailable"
+                elif "Could not connect to the endpoint URL" in raw: category="endpoint-unavailable"
+                elif "SSL validation failed" in raw: category="tls-validation-failed"
+            failures[category]=failures.get(category,0)+1
+        raise
+subprocess.run=observe
+sys.argv=sys.argv[1:]
+try:
+    runpy.run_path(sys.argv[0],run_name="__main__")
+finally:
+    subprocess.run=original_run
+    print("VENDURE_RETENTION_AWS_DIAGNOSTIC="+json.dumps(failures),file=sys.stderr)
+`;
+    const result = run('python3', ['-c', observer, script, '--dry-run'], options);
+    let awsGetObjectFailureCounts = {};
+    try {
+        const marker = 'VENDURE_RETENTION_AWS_DIAGNOSTIC=';
+        const summary = String(result.stderr ?? '')
+            .split('\n')
+            .findLast(line => line.startsWith(marker));
+        const counts = JSON.parse(summary?.slice(marker.length));
+        awsGetObjectFailureCounts = Object.fromEntries(
+            awsCategories
+                .filter(category => Number.isSafeInteger(counts?.[category]) && counts[category] > 0)
+                .map(category => [category, counts[category]]),
+        );
+    } catch {
+        // Missing/malformed observer output is not evidence of an AWS failure.
+    }
     try {
         const python = JSON.parse(runtime.stdout);
         const report = JSON.parse(result.stdout);
@@ -840,13 +920,14 @@ function inspectFileBackupRetention({ exists = existsSync, run = spawnSync } = {
             reasons: [...new Set([report.reason, ...blocked.map(item => item.reason)].filter(Boolean))].map(
                 reason => (allowedReasons.has(reason) ? reason : 'unclassified-retention-blocker'),
             ),
-            keptCount: Array.isArray(report.kept) ? report.kept.length : null,
+            keptCount: Array.isArray(report.protected) ? report.protected.length : null,
+            awsGetObjectFailureCounts,
             residualCandidateCount: Array.isArray(report.residualCandidates)
                 ? report.residualCandidates.length
                 : null,
         };
     } catch {
-        return { status: 'unavailable', reason: 'retention-diagnostic-invalid' };
+        return { status: 'unavailable', reason: 'retention-diagnostic-invalid', awsGetObjectFailureCounts };
     }
 }
 
