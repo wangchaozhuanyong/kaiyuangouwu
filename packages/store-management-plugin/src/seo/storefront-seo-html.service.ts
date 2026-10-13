@@ -1,7 +1,11 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import {
+    isStorefrontVisualPresetId,
     renderPublicSeoHead,
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
     serializeStorefrontPageData,
+    storefrontSkinCssVariables,
     type StorefrontPageData,
 } from '@vendure/storefront-content-plugin';
 import { load } from 'cheerio';
@@ -40,6 +44,51 @@ export function assemblePublicHtml(
     const document = load(html);
     if (document('#root').length !== 1 || !document('script[type="module"][src]').length)
         throw new Error('Invalid storefront artifact shell');
+    const config = page.config as {
+        code?: string;
+        accessMode?: string;
+        brandBackgroundColor?: string | null;
+        brandPrimaryColor?: string | null;
+        brandAccentColor?: string | null;
+        brandHighlightColor?: string | null;
+    };
+    const presetId = page.visualPreset?.presetId;
+    // The confirmed public facts own the first frame, just as they own hydration.
+    // An absent/failed preset or a different Channel must leave the shell neutral.
+    if (
+        config.code &&
+        config.code === page.scope.channelCode &&
+        config.accessMode === 'LIVE' &&
+        isStorefrontVisualPresetId(presetId) &&
+        !page.failures?.includes('visualPreset')
+    ) {
+        const palette = resolveStorefrontSemanticPalette(presetId, {
+            backgroundColor: config.brandBackgroundColor,
+            primaryColor: config.brandPrimaryColor,
+            accentColor: config.brandAccentColor,
+            highlightColor: config.brandHighlightColor,
+        });
+        const colorScheme = presetId === 'neo-minimalist' ? 'dark' : 'light';
+        const variables = {
+            ...semanticPaletteCssVariables(palette),
+            ...storefrontSkinCssVariables(presetId, palette),
+            'color-scheme': colorScheme,
+        };
+        document('html')
+            .attr('data-storefront-preset', presetId)
+            .attr(
+                'style',
+                [
+                    document('html').attr('style'),
+                    ...Object.entries(variables).map(([name, value]) => `${name}:${value};`),
+                ]
+                    .filter(Boolean)
+                    .join(';'),
+            )
+            .removeAttr('data-storefront-theme-pending');
+        document('meta[name="theme-color"]').attr('content', palette.page);
+        document('meta[name="color-scheme"]').attr('content', colorScheme);
+    }
     for (const style of styles) {
         if (!/^[a-zA-Z0-9_-]+\.css$/u.test(style)) throw new Error('Invalid public stylesheet');
         document('head').append(`<link rel="stylesheet" href="/assets/${style}">`);

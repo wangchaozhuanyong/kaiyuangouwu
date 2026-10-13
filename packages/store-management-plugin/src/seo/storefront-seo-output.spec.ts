@@ -1,4 +1,9 @@
-import { renderPublicSeoHead } from '@vendure/storefront-content-plugin';
+import {
+    renderPublicSeoHead,
+    resolveStorefrontSemanticPalette,
+    semanticPaletteCssVariables,
+    storefrontSkinCssVariables,
+} from '@vendure/storefront-content-plugin';
 import { load } from 'cheerio';
 import { describe, expect, it } from 'vitest';
 
@@ -30,6 +35,73 @@ const facts = (host = 'store-a.test'): PublicSeoFacts => ({
 });
 
 describe('one public SEO policy', () => {
+    it.each(['classic', 'neo-minimalist'] as const)(
+        'renders the confirmed %s theme before scripts or a browser cache are available',
+        presetId => {
+            const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
+            const config = {
+                code: 'store-a',
+                accessMode: 'LIVE',
+                brandBackgroundColor: '#fafafa',
+                brandPrimaryColor: '#143d31',
+                brandAccentColor: '#76442e',
+                brandHighlightColor: '#e8c599',
+            };
+            const html = assemblePublicHtml(
+                '<html data-storefront-theme-pending><head><meta name="theme-color" content="#fff">' +
+                    '<meta name="color-scheme" content="light"><script src="/storefront/restore-theme.js"></script>' +
+                    '<script type="module" src="/assets/test.js"></script></head><body><div id="root"></div></body></html>',
+                { scope: { channelCode: 'store-a' }, config, visualPreset: { presetId }, seo } as never,
+                '<main>Confirmed public content</main>',
+            );
+            const dom = load(html);
+            const palette = resolveStorefrontSemanticPalette(presetId, {
+                backgroundColor: config.brandBackgroundColor,
+                primaryColor: config.brandPrimaryColor,
+                accentColor: config.brandAccentColor,
+                highlightColor: config.brandHighlightColor,
+            });
+            expect(dom('html').attr('data-storefront-preset')).toBe(presetId);
+            expect(dom('html').attr('data-storefront-theme-pending')).toBeUndefined();
+            for (const [name, value] of Object.entries({
+                ...semanticPaletteCssVariables(palette),
+                ...storefrontSkinCssVariables(presetId, palette),
+            })) {
+                expect(dom('html').attr('style')).toContain(`${name}:${value};`);
+            }
+            expect(dom('meta[name="theme-color"]').attr('content')).toBe(palette.page);
+            expect(dom('meta[name="color-scheme"]').attr('content')).toBe(
+                presetId === 'neo-minimalist' ? 'dark' : 'light',
+            );
+            expect(dom('script[src]')).toHaveLength(2);
+            expect(dom('#root main').text()).toBe('Confirmed public content');
+        },
+    );
+
+    it.each([
+        { config: { code: 'store-b', accessMode: 'LIVE' }, visualPreset: { presetId: 'classic' } },
+        { config: { code: 'store-a', accessMode: 'CLOSED' }, visualPreset: { presetId: 'classic' } },
+        { config: { code: 'store-a', accessMode: 'LIVE' } },
+        { config: { code: 'store-a', accessMode: 'LIVE' }, visualPreset: { presetId: 'unsupported' } },
+        {
+            config: { code: 'store-a', accessMode: 'LIVE' },
+            visualPreset: { presetId: 'classic' },
+            failures: ['visualPreset'],
+        },
+    ])('leaves unknown or unconfirmed theme facts neutral: %j', theme => {
+        const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
+        const html = assemblePublicHtml(
+            '<html data-storefront-theme-pending><head><script type="module" src="/assets/test.js"></script></head>' +
+                '<body><div id="root"></div></body></html>',
+            { scope: { channelCode: 'store-a' }, ...theme, seo } as never,
+            '<main>Public content</main>',
+        );
+        const dom = load(html);
+        expect(dom('html').attr('data-storefront-preset')).toBeUndefined();
+        expect(dom('html').attr('style')).toBeUndefined();
+        expect(dom('html').attr('data-storefront-theme-pending')).toBe('');
+    });
+
     it('preserves service and support first-frame CSS precedence without leaving resources in the page', () => {
         const seo = buildPublicSeoDocument({ kind: 'home' }, facts(), settings(), null, 1);
         const html = assemblePublicHtml(
