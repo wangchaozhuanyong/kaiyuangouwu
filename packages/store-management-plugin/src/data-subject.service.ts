@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
     Address,
@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto';
 import { In, LessThanOrEqual } from 'typeorm';
 
 import { DataRetentionService } from './data-retention.service';
+import { DataSubjectVerification, DataSubjectVerificationService } from './data-subject-verification.service';
 import { BeforeAccountAnonymizationEvent } from './data-subject.events';
 import { CustomerCoupon } from './entities/customer-coupon.entity';
 import { DataSubjectRequest, DataSubjectRequestStatus } from './entities/data-subject-request.entity';
@@ -59,6 +60,7 @@ export class DataSubjectService {
         private readonly dataRetention: DataRetentionService,
         private readonly eventBus: EventBus,
         private readonly userService: UserService,
+        @Optional() private readonly verification?: DataSubjectVerificationService,
     ) {}
 
     async myRequests(ctx: RequestContext): Promise<DataSubjectRequest[]> {
@@ -77,9 +79,13 @@ export class DataSubjectService {
         });
     }
 
-    async exportMine(ctx: RequestContext, password: string): Promise<DataSubjectExportPayload> {
+    async exportMine(
+        ctx: RequestContext,
+        password: string,
+        proof?: DataSubjectVerification,
+    ): Promise<DataSubjectExportPayload> {
         const customer = await this.activeCustomerOrThrow(ctx);
-        await this.verifyPassword(ctx, password);
+        await this.verifyAction(ctx, password, 'EXPORT', proof);
         const repository = this.connection.getRepository(ctx, DataSubjectRequest);
         const now = new Date();
         const request = await repository.save(
@@ -138,9 +144,13 @@ export class DataSubjectService {
         }
     }
 
-    async requestAccountClosure(ctx: RequestContext, password: string): Promise<DataSubjectRequest> {
+    async requestAccountClosure(
+        ctx: RequestContext,
+        password: string,
+        proof?: DataSubjectVerification,
+    ): Promise<DataSubjectRequest> {
         const customer = await this.activeCustomerOrThrow(ctx);
-        await this.verifyPassword(ctx, password);
+        await this.verifyAction(ctx, password, 'ACCOUNT_CLOSURE', proof);
         const repository = this.connection.getRepository(ctx, DataSubjectRequest);
         const subjectKeyHash = dataSubjectHash(customer.id);
         const existing = await repository.findOne({
@@ -1189,6 +1199,18 @@ export class DataSubjectService {
             .set({ customerId: null, decisionReason: '[removed by account closure]' })
             .where('customerId = :customerId', { customerId })
             .execute();
+    }
+
+    private async verifyAction(
+        ctx: RequestContext,
+        password: string,
+        action: 'EXPORT' | 'ACCOUNT_CLOSURE',
+        proof?: DataSubjectVerification,
+    ): Promise<void> {
+        if (proof) {
+            if (!this.verification) throw new UserInputError('身份确认暂不可用');
+            await this.verification.consume(ctx, action, proof);
+        } else await this.verifyPassword(ctx, password);
     }
 
     private async verifyPassword(ctx: RequestContext, password: string): Promise<void> {

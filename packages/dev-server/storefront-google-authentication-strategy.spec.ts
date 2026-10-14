@@ -226,3 +226,57 @@ describe('StorefrontGoogleAuthenticationStrategy', () => {
         expect(externalAuthenticationService.createCustomerAndUser).not.toHaveBeenCalled();
     });
 });
+
+describe('Google privacy action verification', () => {
+    it('checks a fresh nonce and the existing linked user without registering or enabling Google login', async () => {
+        const h = setup({ enabled: false });
+        h.externalAuthenticationService.findCustomerUser.mockResolvedValue({ id: 'user-1' });
+        const issuedAt = Date.now();
+        vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
+            getPayload: () => ({
+                sub: 'linked-google',
+                email_verified: true,
+                nonce: 'action-nonce',
+                iat: Math.floor(issuedAt / 1000),
+            }),
+        } as never);
+        await expect(
+            h.strategy.verifyCustomerAction({ ...ctx, activeUserId: 'user-1' } as never, {
+                credential: 'signed',
+                nonce: 'action-nonce',
+                issuedAt,
+            }),
+        ).resolves.toBe(true);
+        expect(h.externalAuthenticationService.createCustomerAndUser).not.toHaveBeenCalled();
+        expect(h.referrals.registerExternalCustomer).not.toHaveBeenCalled();
+    });
+    it.each(['wrong-user', 'wrong-nonce', 'old-token', 'future-token', 'unverified', 'no-sub'])(
+        'rejects invalid action attestation: %s',
+        async scenario => {
+            const h = setup();
+            const issuedAt = Date.now();
+            h.externalAuthenticationService.findCustomerUser.mockResolvedValue({
+                id: scenario === 'wrong-user' ? 'someone-else' : 'user-1',
+            });
+            const payload: any = {
+                sub: 'linked',
+                email_verified: scenario !== 'unverified',
+                nonce: scenario === 'wrong-nonce' ? 'login-nonce' : 'action-nonce',
+                iat: Math.floor(issuedAt / 1000),
+            };
+            if (scenario === 'old-token') payload.iat -= 3600;
+            if (scenario === 'future-token') payload.iat += 60;
+            if (scenario === 'no-sub') delete payload.sub;
+            vi.spyOn(OAuth2Client.prototype, 'verifyIdToken').mockResolvedValue({
+                getPayload: () => payload,
+            } as never);
+            await expect(
+                h.strategy.verifyCustomerAction({ ...ctx, activeUserId: 'user-1' } as never, {
+                    credential: 'signed',
+                    nonce: 'action-nonce',
+                    issuedAt,
+                }),
+            ).resolves.toBe(false);
+        },
+    );
+});

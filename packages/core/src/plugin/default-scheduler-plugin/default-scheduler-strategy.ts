@@ -35,7 +35,11 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
     private intervalRef: NodeJS.Timeout | undefined;
     private readonly tasks: Map<string, { task: ScheduledTask; isRegistered: boolean }> = new Map();
     private pluginOptions: DefaultSchedulerPluginOptions;
-    private runningTasks: ScheduledTask[] = [];
+    private readonly runningTasks = new Map<
+        string,
+        { controller: AbortController; stopHeartbeat: () => void }
+    >();
+    private lastLockTimestamp = 0;
     private staleTaskService: StaleTaskService;
 
     init(injector: Injector) {
@@ -50,22 +54,21 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
 
         if (runTriggerCheck) {
             this.intervalRef = setInterval(
-                () => this.checkForManuallyTriggeredTasks(),
+                () => void this.checkForManuallyTriggeredTasks(),
                 this.pluginOptions.manualTriggerCheckInterval as number,
             );
         }
     }
 
-    async destroy() {
+    destroy() {
         if (this.intervalRef) {
             clearInterval(this.intervalRef);
         }
-        for (const task of this.runningTasks) {
-            await this.connection.rawConnection
-                .getRepository(ScheduledTaskRecord)
-                .update({ taskId: task.id }, { lockedAt: null });
-            Logger.info(`Released lock for task "${task.id}"`);
+        for (const execution of this.runningTasks.values()) {
+            execution.controller.abort(new Error('Scheduler shutting down'));
         }
+        // An unfinished executor must not release a lock while it can still write.
+        // Keep renewing until it ends; dead processes recover through stale locks.
     }
 
     registerTask(task: ScheduledTask): void {
@@ -86,60 +89,97 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
     }
 
     private async runTask(task: ScheduledTask, options: { skipHoldCheck: boolean }): Promise<void> {
+        if (this.runningTasks.has(task.id)) return;
         await this.ensureTaskIsRegistered(task);
         await this.staleTaskService.cleanStaleLocksForTask(task);
-
-        const lockAcquired = await this.tryAcquireLock(task, {
-            skipHoldCheck: options.skipHoldCheck,
-        });
-        if (!lockAcquired) {
-            return;
-        }
-
-        Logger.verbose(`Executing scheduled task "${task.id}"`);
-        let timeoutTimer: NodeJS.Timeout | undefined;
+        const acquiredAt = await this.tryAcquireLock(task, { skipHoldCheck: options.skipHoldCheck });
+        if (!acquiredAt) return;
+        let ownedAt = acquiredAt;
+        const repository = this.connection.rawConnection.getRepository(ScheduledTaskRecord);
+        const controller = new AbortController();
+        const timeout = task.options.timeout ?? this.pluginOptions.defaultTimeout;
+        const timeoutMs = typeof timeout === 'number' ? timeout : ms(timeout as StringValue);
+        let stopped = false;
+        let heartbeatWork = Promise.resolve();
+        let failure: string | undefined;
+        let previousResult: Record<string, any> = {};
+        const heartbeat = setInterval(
+            () => {
+                heartbeatWork = heartbeatWork
+                    .then(async () => {
+                        if (stopped) return;
+                        const renewedAt = new Date(Math.max(Date.now(), ownedAt.getTime() + 1));
+                        const renewed = await repository.update(
+                            { taskId: task.id, lockedAt: ownedAt },
+                            { lockedAt: renewedAt },
+                        );
+                        if (!renewed.affected) throw new Error('Task execution ownership lost');
+                        ownedAt = renewedAt;
+                    })
+                    .catch(() => {
+                        failure ??= 'Task execution ownership lost';
+                        controller.abort(new Error(failure));
+                    });
+            },
+            Math.max(1, Math.min(10_000, Math.floor(timeoutMs / 3))),
+        );
+        heartbeat.unref?.();
+        const stopHeartbeat = () => {
+            stopped = true;
+            clearInterval(heartbeat);
+        };
+        this.runningTasks.set(task.id, { controller, stopHeartbeat });
+        const timeoutTimer = setTimeout(() => {
+            failure ??= 'Task timed out';
+            controller.abort(new Error(failure));
+            heartbeatWork = heartbeatWork
+                .then(async () => {
+                    if (stopped) return;
+                    await repository.update(
+                        { taskId: task.id, lockedAt: ownedAt },
+                        { lastResult: { ...previousResult, error: failure } as any },
+                    );
+                })
+                .catch(() => {
+                    controller.abort(new Error('Task status could not be recorded'));
+                });
+            Logger.warn(`Scheduled task ${task.id} timed out after ${timeoutMs}ms; retaining execution lock`);
+        }, timeoutMs);
         try {
-            this.runningTasks.push(task);
-            const timeout = task.options.timeout ?? (this.pluginOptions.defaultTimeout as number);
-            const timeoutMs = typeof timeout === 'number' ? timeout : ms(timeout as StringValue);
-
-            const timeoutPromise = new Promise((_, reject) => {
-                timeoutTimer = setTimeout(() => {
-                    Logger.warn(`Scheduled task ${task.id} timed out after ${timeoutMs}ms`);
-                    reject(new Error('Task timed out'));
-                }, timeoutMs);
-            });
-
-            const result = await Promise.race([task.execute(this.injector), timeoutPromise]);
-
-            await this.connection.rawConnection.getRepository(ScheduledTaskRecord).update(
-                { taskId: task.id },
+            // Timeout requests cancellation; it cannot terminate arbitrary JavaScript.
+            // Await the executor and renew its lock so another worker cannot overlap it.
+            const previous = await repository.findOne({ where: { taskId: task.id } });
+            if (previous?.lastResult && typeof previous.lastResult === 'object')
+                previousResult = previous.lastResult;
+            const result = await task.execute(this.injector, controller.signal);
+            stopHeartbeat();
+            await heartbeatWork;
+            if (controller.signal.aborted) failure ??= 'Task execution cancelled';
+            await repository.update(
+                { taskId: task.id, lockedAt: ownedAt },
                 {
                     lastExecutedAt: new Date(),
                     lockedAt: null,
-                    lastResult: result ?? '',
+                    lastResult: failure ? ({ ...previousResult, error: failure } as any) : (result ?? ''),
                 },
             );
-            Logger.verbose(`Scheduled task "${task.id}" completed successfully`);
         } catch (error) {
-            let errorMessage = 'Unknown error';
-            if (error instanceof Error) {
-                errorMessage = error.message;
-            }
-            Logger.error(`Scheduled task "${task.id}" failed with error: ${errorMessage}`);
-            await this.connection.rawConnection.getRepository(ScheduledTaskRecord).update(
-                { taskId: task.id },
+            stopHeartbeat();
+            await heartbeatWork;
+            const message = failure ?? (error instanceof Error ? error.message : 'Unknown error');
+            Logger.error(`Scheduled task "${task.id}" failed with error: ${message}`);
+            await repository.update(
+                { taskId: task.id, lockedAt: ownedAt },
                 {
                     lastExecutedAt: new Date(),
                     lockedAt: null,
-                    lastResult: { error: errorMessage } as any,
+                    lastResult: { ...previousResult, error: message } as any,
                 },
             );
         } finally {
-            if (timeoutTimer) {
-                clearTimeout(timeoutTimer);
-            }
-            this.runningTasks = this.runningTasks.filter(t => t !== task);
+            clearTimeout(timeoutTimer);
+            stopHeartbeat();
+            this.runningTasks.delete(task.id);
         }
     }
 
@@ -274,7 +314,9 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
     private async tryAcquireLock(
         task: ScheduledTask,
         options: { skipHoldCheck?: boolean } = {},
-    ): Promise<boolean> {
+    ): Promise<Date | undefined> {
+        const lockedAt = new Date(Math.max(Date.now(), this.lastLockTimestamp + 1));
+        this.lastLockTimestamp = lockedAt.getTime();
         const dbType = this.connection.rawConnection.options.type;
         const supportsPessimisticLocking = ['postgres', 'mysql', 'mariadb'].includes(dbType);
         const holdThreshold = options.skipHoldCheck
@@ -304,15 +346,13 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
 
                 if (!taskRecord) {
                     // Task is either already locked, disabled, or doesn't exist
-                    return false;
+                    return undefined;
                 }
 
                 // Now update the lock within the same transaction
-                await manager
-                    .getRepository(ScheduledTaskRecord)
-                    .update({ id: taskRecord.id }, { lockedAt: new Date() });
+                await manager.getRepository(ScheduledTaskRecord).update({ id: taskRecord.id }, { lockedAt });
 
-                return true;
+                return lockedAt;
             });
         } else {
             // For databases without pessimistic locking support (SQLite, SQL.js),
@@ -322,7 +362,7 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
                 .getRepository(ScheduledTaskRecord)
                 .createQueryBuilder('task')
                 .update()
-                .set({ lockedAt: new Date() })
+                .set({ lockedAt })
                 .where('taskId = :taskId', { taskId: task.id })
                 .andWhere('lockedAt IS NULL')
                 .andWhere('enabled = TRUE');
@@ -333,7 +373,7 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
             }
             const result = await qb.execute();
 
-            return !!result.affected;
+            return result.affected ? lockedAt : undefined;
         }
     }
 

@@ -11,6 +11,7 @@ type GoogleIdentityApi = {
         id: {
             initialize(options: {
                 client_id: string;
+                nonce?: string;
                 callback: (response: GoogleCredentialResponse) => void;
                 auto_select?: boolean;
                 cancel_on_tap_outside?: boolean;
@@ -85,11 +86,13 @@ function loadGoogleIdentityScript(): Promise<void> {
 
 export function GoogleAuthButton({
     clientId,
+    nonce,
     language,
     disabled,
     onCredential,
 }: {
     clientId: string;
+    nonce?: string;
     language: StorefrontLanguage;
     disabled?: boolean;
     onCredential: (credential: string) => Promise<void>;
@@ -116,6 +119,7 @@ export function GoogleAuthButton({
                 host.replaceChildren();
                 window.google.accounts.id.initialize({
                     client_id: clientId,
+                    ...(nonce ? { nonce } : {}),
                     auto_select: false,
                     cancel_on_tap_outside: true,
                     callback: response => {
@@ -170,7 +174,7 @@ export function GoogleAuthButton({
             active = false;
             host?.replaceChildren();
         };
-    }, [clientId, language, attempt]);
+    }, [clientId, nonce, language, attempt]);
 
     return (
         <div className={`google-auth-button${disabled ? ' google-auth-button-disabled' : ''}`}>

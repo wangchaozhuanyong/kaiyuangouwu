@@ -10,6 +10,7 @@ import {
     customerServiceFeedbackCommonSchema,
     customerServiceFeedbackShopSchema,
 } from './customer-service-feedback.schema';
+import { dataSubjectVerificationShopSchema } from './data-subject-verification.schema';
 import {
     storeNotificationAdminSchema,
     storeNotificationShopSchema,
@@ -1161,6 +1162,7 @@ export const adminApiExtensions = gql`
 `;
 
 export const shopApiExtensions = gql`
+    ${dataSubjectVerificationShopSchema}
     ${storeNotificationShopSchema}
     ${trafficShopSchema}
     ${commonTypes}
@@ -1336,8 +1338,6 @@ export const shopApiExtensions = gql`
         setCustomerAvatar(file: Upload!): Asset!
         restoreCustomerAvatar(retentionId: ID!): Asset!
         removeCustomerAvatar: Boolean!
-        exportMyPersonalData(password: String!): DataSubjectExportPayload!
-        requestMyAccountClosure(password: String!): DataSubjectRequest!
         cancelMyAccountClosure: DataSubjectRequest!
         recordStorefrontAnalyticsConsent(input: StorefrontAnalyticsConsentInput!): DataConsentRecord!
         setStorefrontPaymentCurrency(currencyCode: String!): Order!

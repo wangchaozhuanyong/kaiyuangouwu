@@ -2174,9 +2174,13 @@ describe('ShopApi storefront mutations', () => {
             };
         });
         expect(requests[0].query).toContain('myDataSubjectRequests');
-        expect(requests[1].query).toContain('exportMyPersonalData(password: $password)');
+        expect(requests[1].query).toContain(
+            'exportMyPersonalData(password: $password, verification: $verification)',
+        );
         expect(requests[1].variables).toEqual({ password: 'current-password' });
-        expect(requests[2].query).toContain('requestMyAccountClosure(password: $password)');
+        expect(requests[2].query).toContain(
+            'requestMyAccountClosure(password: $password, verification: $verification)',
+        );
         expect(requests[2].variables).toEqual({ password: 'current-password' });
         expect(requests[3].query).toContain('cancelMyAccountClosure');
     });

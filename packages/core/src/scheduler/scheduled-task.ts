@@ -29,6 +29,8 @@ export interface ScheduledTaskExecutionArgs<C extends Record<string, any> = Reco
      * The parameters for the scheduled task.
      */
     params: C;
+    /** Aborted on timeout or lost execution ownership; check before starting further work. */
+    signal?: AbortSignal;
 }
 
 /**
@@ -128,7 +130,8 @@ export class ScheduledTask<C extends Record<string, any> = Record<string, any>> 
         return this.config;
     }
 
-    async execute(injector: Injector) {
+    async execute(injector: Injector, signal?: AbortSignal) {
+        signal?.throwIfAborted();
         const requestContextService = injector.get(RequestContextService);
         const channelService = injector.get(ChannelService);
         const defaultChannel = await channelService.getDefaultChannel();
@@ -138,8 +141,10 @@ export class ScheduledTask<C extends Record<string, any> = Record<string, any>> 
             channelOrToken: defaultChannel,
         });
 
+        signal?.throwIfAborted();
         return this.config.execute({
             injector,
+            signal,
             scheduledContext,
             params: this.config.params ?? ({} as any),
         });
