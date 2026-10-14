@@ -135,8 +135,8 @@ export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest
                             if (event.target.value !== runtime.language) runtime.toggleLanguage();
                         }}
                     >
-                        <option value="zh">{isZh ? '中文' : 'Chinese'}</option>
-                        <option value="en">{isZh ? '英文' : 'English'}</option>
+                        <option value="zh">{isZh ? '中文' : 'ZH'}</option>
+                        <option value="en">{isZh ? '英文' : 'EN'}</option>
                     </select>
                     <button
                         className="auth-overlay-close"

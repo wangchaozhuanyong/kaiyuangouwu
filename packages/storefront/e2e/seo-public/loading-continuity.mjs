@@ -870,7 +870,7 @@ try {
                 await ready(page);
                 await mark(page, 'scope-changes');
                 for (const [language, label, save] of [
-                    ['zh', 'Chinese', 'Save preferences'],
+                    ['zh', 'ZH', 'Save preferences'],
                     ['en', '英文', '保存设置'],
                 ]) {
                     await page.locator('.locale-preferences-trigger:visible').first().click();

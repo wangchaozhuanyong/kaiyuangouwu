@@ -1594,8 +1594,8 @@ function AuthLayout({
                                             if (event.target.value !== language) onToggleLanguage();
                                         }}
                                     >
-                                        <option value="zh">{language === 'zh' ? '中文' : 'Chinese'}</option>
-                                        <option value="en">{language === 'zh' ? '英文' : 'English'}</option>
+                                        <option value="zh">{language === 'zh' ? '中文' : 'ZH'}</option>
+                                        <option value="en">{language === 'zh' ? '英文' : 'EN'}</option>
                                     </select>
                                     <ChevronDown aria-hidden="true" />
                                 </label>

@@ -102,8 +102,8 @@ export function LocalePreferencesSheet({
                     <div className="locale-preferences-language" role="radiogroup">
                         {(
                             [
-                                ['zh', isZh ? '中文' : 'Chinese'],
-                                ['en', isZh ? '英文' : 'English'],
+                                ['zh', isZh ? '中文' : 'ZH'],
+                                ['en', isZh ? '英文' : 'EN'],
                             ] as const
                         ).map(([value, label]) => (
                             <button
