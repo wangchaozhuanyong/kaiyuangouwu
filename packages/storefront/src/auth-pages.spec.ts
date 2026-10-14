@@ -75,8 +75,8 @@ describe('registerErrorMessage', () => {
     it('identifies an email address which is already registered', () => {
         const error = new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'The email address is not available');
 
-        expect(registerErrorMessage(error, 'zh')).toBe('该电子邮箱已注册，请直接登录或使用其他邮箱');
-        expect(registerErrorMessage(error, 'en')).toContain('already registered');
+        expect(registerErrorMessage(error, 'zh')).toBe('该邮箱已注册，请登录');
+        expect(registerErrorMessage(error, 'en')).toBe('This email is already registered. Please sign in.');
     });
 
     it('identifies password validation and registration service failures', () => {

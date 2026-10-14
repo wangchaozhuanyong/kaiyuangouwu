@@ -73,7 +73,10 @@ export class ReferralShopResolver {
                 snapshots,
             );
         }
-        return outcome.result;
+        // The custom union resolves errors by their typename and needs the same marker for Success.
+        return 'errorCode' in outcome.result
+            ? outcome.result
+            : { ...outcome.result, __typename: 'Success' as const };
     }
 
     @Transaction('manual')

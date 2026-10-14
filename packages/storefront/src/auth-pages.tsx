@@ -126,6 +126,8 @@ export function loginErrorMessage(error: unknown, language: StorefrontLanguage):
 
 export function registerErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
+    if (isRegisteredEmailConflict(error))
+        return isZh ? '该邮箱已注册，请登录' : 'This email is already registered. Please sign in.';
     return authRequestErrorMessage(
         error,
         language,
@@ -199,6 +201,10 @@ function formString(data: FormData, name: string): string {
 
 function isInvalidCredentials(error: unknown): boolean {
     return error instanceof ShopApiError && error.errorCode === 'INVALID_CREDENTIALS_ERROR';
+}
+
+function isRegisteredEmailConflict(error: unknown): boolean {
+    return error instanceof ShopApiError && error.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR';
 }
 
 function googleAuthErrorMessage(error: unknown, language: StorefrontLanguage): string {
@@ -331,6 +337,98 @@ function useAuthRequestScope(api: ShopApi, identity = '') {
     };
 }
 
+function useAuthVerificationResend(
+    api: ShopApi,
+    language: StorefrontLanguage,
+    requestScope: ReturnType<typeof useAuthRequestScope>,
+    setSubmitting: (submitting: boolean) => void,
+) {
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+    const [seconds, setSeconds] = useState(0);
+    useEffect(() => {
+        setMessage('');
+        setError('');
+        setSeconds(0);
+    }, [api]);
+    useEffect(() => {
+        if (seconds <= 0) return;
+        const timeout = window.setTimeout(() => setSeconds(value => value - 1), 1000);
+        return () => window.clearTimeout(timeout);
+    }, [seconds]);
+    const resend = async (emailAddress: string, emailIsCurrent = () => true) => {
+        if (seconds > 0) return;
+        const operation = requestScope.begin();
+        if (!operation) return;
+        setSubmitting(true);
+        setMessage('');
+        setError('');
+        try {
+            await api.refreshCustomerVerification(emailAddress, operation.signal);
+            if (!operation.isCurrent() || !emailIsCurrent()) return;
+            setMessage(
+                language === 'zh' ? '重新发送请求已提交' : 'Verification email resend request submitted',
+            );
+            setSeconds(60);
+        } catch (requestError) {
+            if (operation.isCurrent() && emailIsCurrent())
+                setError(authRequestErrorMessage(requestError, language));
+        } finally {
+            operation.finish();
+            if (operation.isCurrent()) setSubmitting(false);
+        }
+    };
+    return { message, error, seconds, setMessage, setError, setSeconds, resend };
+}
+
+function ExistingAccountVerificationAction({
+    language,
+    submitting,
+    recovery,
+}: {
+    language: StorefrontLanguage;
+    submitting: boolean;
+    recovery: ReturnType<typeof useAuthVerificationResend>;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <>
+            <button
+                className="auth-inline-link"
+                type="button"
+                disabled={submitting || recovery.seconds > 0}
+                onClick={event => {
+                    const form = event.currentTarget.form;
+                    if (!form) return;
+                    const emailAddress = formString(new FormData(form), 'emailAddress').trim();
+                    void recovery.resend(
+                        emailAddress,
+                        () => formString(new FormData(form), 'emailAddress').trim() === emailAddress,
+                    );
+                }}
+            >
+                {recovery.seconds > 0
+                    ? isZh
+                        ? `${recovery.seconds} 秒后可重新发送`
+                        : `Resend in ${recovery.seconds}s`
+                    : isZh
+                      ? '邮箱未验证？重新发送验证邮件'
+                      : 'Email not verified? Resend verification email'}
+            </button>
+            {recovery.message && (
+                <small className="auth-success-message" role="status">
+                    {recovery.message}
+                </small>
+            )}
+            {recovery.error && (
+                <small className="form-error" role="alert">
+                    {recovery.error}
+                </small>
+            )}
+        </>
+    );
+}
+
 export function LoginPage({
     returnTo,
     returnVariantId,
@@ -353,29 +451,35 @@ export function LoginPage({
     const inOverlay = useAuthSubmittingState(submitting);
     const [error, setError] = useState('');
     const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
+    const [existingAccount, setExistingAccount] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const requestScope = useAuthRequestScope(api);
+    const verificationRecovery = useAuthVerificationResend(api, language, requestScope, setSubmitting);
     useEffect(() => {
         setSubmitting(false);
         setError('');
         setAutoRegistrationEmail('');
+        setExistingAccount(false);
     }, [requestScope.owner]);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const operation = requestScope.begin();
         if (!operation) return;
-        const data = new FormData(event.currentTarget);
+        const form = event.currentTarget;
+        const data = new FormData(form);
         const emailAddress = formString(data, 'emailAddress').trim();
+        const emailIsCurrent = () => formString(new FormData(form), 'emailAddress').trim() === emailAddress;
         const password = formString(data, 'password');
         setSubmitting(true);
         setError('');
+        setExistingAccount(false);
         try {
             await api.login(emailAddress, password, rememberMe);
-            if (!operation.isCurrent()) return;
-            await onSuccess(operation.isCurrent);
+            if (!operation.isCurrent() || !emailIsCurrent()) return;
+            await onSuccess(() => operation.isCurrent() && emailIsCurrent());
         } catch (requestError) {
-            if (!operation.isCurrent()) return;
+            if (!operation.isCurrent() || !emailIsCurrent()) return;
             if (authSettings.emailAutoRegistrationEnabled && isInvalidCredentials(requestError)) {
                 if (!registrationConsentAccepted) {
                     setError(
@@ -393,10 +497,13 @@ export function LoginPage({
                         undefined,
                         operation.signal,
                     );
-                    if (!operation.isCurrent()) return;
+                    if (!operation.isCurrent() || !emailIsCurrent()) return;
                     setAutoRegistrationEmail(emailAddress);
                 } catch (registrationError) {
-                    if (operation.isCurrent()) setError(registerErrorMessage(registrationError, language));
+                    if (operation.isCurrent() && emailIsCurrent()) {
+                        setError(registerErrorMessage(registrationError, language));
+                        setExistingAccount(isRegisteredEmailConflict(registrationError));
+                    }
                 }
             } else {
                 setError(loginErrorMessage(requestError, language));
@@ -483,6 +590,12 @@ export function LoginPage({
                                 autoComplete="email"
                                 icon={<Mail />}
                                 showLabel={false}
+                                onChange={() => {
+                                    setError('');
+                                    setExistingAccount(false);
+                                    verificationRecovery.setMessage('');
+                                    verificationRecovery.setError('');
+                                }}
                             />
                             <Field
                                 name="password"
@@ -516,6 +629,13 @@ export function LoginPage({
                                 <small className="form-error" role="alert">
                                     {error}
                                 </small>
+                            )}
+                            {existingAccount && (
+                                <ExistingAccountVerificationAction
+                                    language={language}
+                                    submitting={submitting}
+                                    recovery={verificationRecovery}
+                                />
                             )}
                             {(authSettings.emailAutoRegistrationEnabled || googleAvailable) && (
                                 <RegistrationConsentControl
@@ -601,8 +721,7 @@ export function RegisterPage({
     const inOverlay = useAuthSubmittingState(submitting);
     const [registeredEmail, setRegisteredEmail] = useState('');
     const [error, setError] = useState('');
-    const [resendMessage, setResendMessage] = useState('');
-    const [resendSeconds, setResendSeconds] = useState(0);
+    const [existingAccount, setExistingAccount] = useState(false);
     const [referralEnabled, setReferralEnabled] = useState(false);
     const [inviteCode, setInviteCode] = useState('');
     const [inviteExpanded, setInviteExpanded] = useState(false);
@@ -611,6 +730,15 @@ export function RegisterPage({
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const quickRegistration = authSettings.emailQuickRegistrationEnabled;
     const requestScope = useAuthRequestScope(api, registeredEmail);
+    const verificationRecovery = useAuthVerificationResend(api, language, requestScope, setSubmitting);
+    const {
+        message: resendMessage,
+        error: resendError,
+        seconds: resendSeconds,
+        setMessage: setResendMessage,
+        setError: setResendError,
+        setSeconds: setResendSeconds,
+    } = verificationRecovery;
     const googleClientId = authSettings.googleEnabled ? authSettings.googleClientId : null;
     const googleAvailable = Boolean(googleClientId);
 
@@ -618,6 +746,7 @@ export function RegisterPage({
         setSubmitting(false);
         setRegisteredEmail('');
         setError('');
+        setExistingAccount(false);
         setResendMessage('');
         setResendSeconds(0);
     }, [api]);
@@ -643,19 +772,17 @@ export function RegisterPage({
         return () => controller.abort();
     }, [api]);
 
-    useEffect(() => {
-        if (resendSeconds <= 0) return;
-        const timeout = window.setTimeout(() => setResendSeconds(seconds => seconds - 1), 1000);
-        return () => window.clearTimeout(timeout);
-    }, [resendSeconds]);
-
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        setExistingAccount(false);
         if (!registrationConsentAccepted) {
             setError(isZh ? '请先同意使用条款并确认隐私政策' : 'Accept the terms and privacy policy first');
             return;
         }
-        const data = new FormData(event.currentTarget);
+        const form = event.currentTarget;
+        const data = new FormData(form);
+        const emailAddress = formString(data, 'emailAddress').trim();
+        const emailIsCurrent = () => formString(new FormData(form), 'emailAddress').trim() === emailAddress;
         let firstName: string | undefined;
         let lastName: string | undefined;
         if (!quickRegistration) {
@@ -673,14 +800,13 @@ export function RegisterPage({
         setSubmitting(true);
         setError('');
         try {
-            const emailAddress = formString(data, 'emailAddress').trim();
             const submittedInviteCode = referralEnabled
                 ? normalizeReferralCode(formString(data, 'inviteCode'))
                 : '';
             const inviteValid =
                 !submittedInviteCode ||
                 (await api.validateReferralInviteCode(submittedInviteCode, operation.signal));
-            if (!operation.isCurrent()) return;
+            if (!operation.isCurrent() || !emailIsCurrent()) return;
             if (!inviteValid) {
                 setInviteStatus('invalid');
                 setError(isZh ? '邀请码无效，请检查后重试' : 'This invitation code is invalid');
@@ -697,11 +823,14 @@ export function RegisterPage({
                 submittedInviteCode ? inviteSource : undefined,
                 operation.signal,
             );
-            if (!operation.isCurrent()) return;
+            if (!operation.isCurrent() || !emailIsCurrent()) return;
             setRegisteredEmail(emailAddress);
             setResendSeconds(60);
         } catch (requestError) {
-            if (operation.isCurrent()) setError(registerErrorMessage(requestError, language));
+            if (operation.isCurrent() && emailIsCurrent()) {
+                setError(registerErrorMessage(requestError, language));
+                setExistingAccount(isRegisteredEmailConflict(requestError));
+            }
         } finally {
             operation.finish();
             if (operation.isCurrent()) setSubmitting(false);
@@ -801,33 +930,6 @@ export function RegisterPage({
         </details>
     ) : null;
 
-    const resend = async () => {
-        if (resendSeconds > 0) return;
-        const operation = requestScope.begin();
-        if (!operation) return;
-        setSubmitting(true);
-        setError('');
-        setResendMessage('');
-        try {
-            await api.refreshCustomerVerification(registeredEmail, operation.signal);
-            if (!operation.isCurrent()) return;
-            setResendMessage(isZh ? '重新发送请求已提交' : 'Verification email resend request submitted');
-            setResendSeconds(60);
-        } catch (requestError) {
-            if (!operation.isCurrent()) return;
-            setError(
-                requestError instanceof Error
-                    ? authRequestErrorMessage(requestError, language)
-                    : isZh
-                      ? '发送失败'
-                      : 'Could not resend email',
-            );
-        } finally {
-            operation.finish();
-            if (operation.isCurrent()) setSubmitting(false);
-        }
-    };
-
     return (
         <AuthLayout
             title={isZh ? '注册' : 'Create account'}
@@ -857,6 +959,11 @@ export function RegisterPage({
                             {error}
                         </small>
                     )}
+                    {resendError && (
+                        <small className="form-error" role="alert">
+                            {resendError}
+                        </small>
+                    )}
                     <SubmitButton
                         type="button"
                         submitting={submitting}
@@ -871,7 +978,7 @@ export function RegisterPage({
                                   : 'Resend verification email'
                         }
                         busy={isZh ? '发送中' : 'Sending'}
-                        onClick={() => void resend()}
+                        onClick={() => void verificationRecovery.resend(registeredEmail)}
                     />
                     <button
                         className="auth-secondary-action"
@@ -880,6 +987,7 @@ export function RegisterPage({
                         onClick={() => {
                             setRegisteredEmail('');
                             setResendMessage('');
+                            setResendError('');
                             setError('');
                             setResendSeconds(0);
                         }}
@@ -926,6 +1034,12 @@ export function RegisterPage({
                                 autoComplete="email"
                                 icon={<Mail />}
                                 showLabel={false}
+                                onChange={() => {
+                                    setError('');
+                                    setExistingAccount(false);
+                                    setResendMessage('');
+                                    setResendError('');
+                                }}
                             />
                             <small className="auth-password-hint">
                                 {quickRegistration
@@ -941,6 +1055,23 @@ export function RegisterPage({
                                 <small className="form-error" role="alert">
                                     {error}
                                 </small>
+                            )}
+                            {existingAccount && (
+                                <ExistingAccountVerificationAction
+                                    language={language}
+                                    submitting={submitting}
+                                    recovery={verificationRecovery}
+                                />
+                            )}
+                            {existingAccount && (
+                                <button
+                                    className="auth-inline-link"
+                                    type="button"
+                                    disabled={inOverlay && submitting}
+                                    onClick={() => navigateTo({ name: 'forgot-password' })}
+                                >
+                                    {isZh ? '忘记密码？' : 'Forgot password?'}
+                                </button>
                             )}
                             <RegistrationConsentControl
                                 accepted={registrationConsentAccepted}

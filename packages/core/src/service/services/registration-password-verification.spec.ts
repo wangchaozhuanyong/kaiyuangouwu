@@ -361,6 +361,53 @@ describe('Shop registration password ownership', () => {
         ).toEqual({ success: true });
     });
 
+    it('keeps the built-in pending registration refresh and generic result by default', async () => {
+        const test = harness();
+        await test.seedPending('synthetic-legacy-password');
+        const refresh = vi.spyOn(test.users, 'setVerificationTokenIfAllowed');
+        await expect(
+            test.customers.registerCustomerAccount(test.ctx, {
+                emailAddress: 'owner@example.invalid',
+            }),
+        ).resolves.toEqual({ success: true });
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(test.publish).toHaveBeenCalledTimes(1);
+        expect(test.currentMethod().verificationToken).toBeTruthy();
+    });
+
+    it.each(['same-store pending', 'cross-store pending', 'verified'])(
+        'does not refresh an existing %s identity when the internal caller opts out',
+        async state => {
+            const test = harness();
+            await test.seedPending('synthetic-owner-password');
+            await test.users.setVerificationTokenIfAllowed(test.ctx, test.currentUser());
+            test.ageClaims();
+            if (state === 'verified') test.currentUser().verified = true;
+            const before = { ...test.currentMethod() };
+            const refresh = vi.spyOn(test.users, 'setVerificationTokenIfAllowed');
+            const saveProfile = vi.spyOn(test.customers, 'createOrUpdate');
+            const ctx = state.startsWith('cross-store')
+                ? ({ ...test.ctx, channelId: 2 } as RequestContext)
+                : test.ctx;
+            await expect(
+                test.customers.registerCustomerAccountWithOutcome(
+                    ctx,
+                    {
+                        emailAddress: 'owner@example.invalid',
+                        firstName: 'Untrusted overwrite',
+                        password: 'synthetic-untrusted-password',
+                    },
+                    { refreshExistingVerification: false },
+                ),
+            ).resolves.toEqual({ result: { success: true } });
+            expect(refresh).not.toHaveBeenCalled();
+            expect(saveProfile).not.toHaveBeenCalled();
+            expect(test.publish).not.toHaveBeenCalled();
+            expect(test.currentMethod().verificationToken).toBe(before.verificationToken);
+            expect(test.currentMethod().passwordHash).toBe(before.passwordHash);
+        },
+    );
+
     it('does not expose a created customer id for a losing unique-identity conflict', async () => {
         const test = harness();
         vi.spyOn(test.users, 'createCustomerUser').mockRejectedValue({

@@ -431,14 +431,22 @@ export class CustomerService {
         return (await this.registerCustomerAccountWithOutcome(ctx, input)).result;
     }
 
-    /** Only the transaction which creates the customer receives creation evidence. */
+    /**
+     * Only the transaction which creates the customer receives creation evidence.
+     * Internal callers may suppress existing-account verification refreshes; the built-in flow retains them.
+     */
     async registerCustomerAccountWithOutcome(
         ctx: RequestContext,
         input: RegisterCustomerInput,
+        options: { refreshExistingVerification?: boolean } = {},
     ): Promise<CustomerRegistrationOutcome> {
         try {
             return await this.connection.withTransaction(ctx, txCtx =>
-                this.registerCustomerAccountInTransaction(txCtx, input),
+                this.registerCustomerAccountInTransaction(
+                    txCtx,
+                    input,
+                    options.refreshExistingVerification ?? true,
+                ),
             );
         } catch (error) {
             // The entire losing registration was rolled back, including any provisional User/auth rows.
@@ -450,6 +458,7 @@ export class CustomerService {
     private async registerCustomerAccountInTransaction(
         ctx: RequestContext,
         input: RegisterCustomerInput,
+        refreshExistingVerification: boolean,
     ): Promise<CustomerRegistrationOutcome> {
         if (!this.configService.authOptions.requireVerification) {
             if (!input.password) {
@@ -463,6 +472,7 @@ export class CustomerService {
         );
         if (existingUser) {
             if (
+                refreshExistingVerification &&
                 !existingUser.verified &&
                 existingUser.authenticationMethods.some(m => m instanceof NativeAuthenticationMethod)
             ) {

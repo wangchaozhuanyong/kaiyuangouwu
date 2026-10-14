@@ -1334,6 +1334,12 @@ export const shopApiExtensions = gql`
     extend input StorefrontCartCommandInput {
         coupon: StorefrontCartCouponCommandInput
     }
+    union RegisterCustomerWithReferralResult =
+        | Success
+        | MissingPasswordError
+        | PasswordValidationError
+        | NativeAuthStrategyError
+        | EmailAddressConflictError
     extend type Mutation {
         setCustomerAvatar(file: Upload!): Asset!
         restoreCustomerAvatar(retentionId: ID!): Asset!
@@ -1351,7 +1357,7 @@ export const shopApiExtensions = gql`
             consent: StorefrontRegistrationConsentInput!
             inviteCode: String
             source: String
-        ): RegisterCustomerAccountResult!
+        ): RegisterCustomerWithReferralResult!
         useMyReferralBalance(
             amount: Money!
             paymentAttempt: StorefrontPaymentAttemptInput

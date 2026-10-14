@@ -12,6 +12,7 @@ import {
     Customer,
     CustomerRegistrationOutcome,
     CustomerService,
+    EmailAddressConflictError,
     EventBus,
     ID,
     isGraphQlErrorResult,
@@ -364,7 +365,7 @@ export class ReferralService implements OnApplicationBootstrap {
         return outcome.result;
     }
 
-    /** Internal creation evidence; only the public result is returned by the Shop resolver. */
+    /** Only a newly created account can bind referrals or record registration consent. */
     async registerCustomerWithReferralWithOutcome(
         ctx: RequestContext,
         input: RegisterCustomerInput,
@@ -380,18 +381,17 @@ export class ReferralService implements OnApplicationBootstrap {
         }
 
         const emailAddress = input.emailAddress.trim().toLowerCase();
-        const outcome = await this.customerService.registerCustomerAccountWithOutcome(ctx, {
-            ...input,
-            emailAddress,
-        });
+        const outcome = await this.customerService.registerCustomerAccountWithOutcome(
+            ctx,
+            { ...input, emailAddress },
+            { refreshExistingVerification: false },
+        );
         const { result } = outcome;
-        if (isGraphQlErrorResult(result)) {
-            if (result.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR') {
-                // Match Vendure's built-in registration resolver so this custom
-                // mutation cannot be used to enumerate existing accounts.
-                return { result: { success: true } };
-            }
-            return outcome;
+        if (isGraphQlErrorResult(result)) return outcome;
+        if ('success' in result && result.success && outcome.createdCustomerId == null) {
+            // This custom registration form explicitly reports an existing identity.
+            // The built-in Vendure registration mutation retains its original result contract.
+            return { result: new EmailAddressConflictError() };
         }
         if (outcome.createdCustomerId == null || !inviterAccount) return outcome;
 
