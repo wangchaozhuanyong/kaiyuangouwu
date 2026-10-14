@@ -864,6 +864,7 @@ export function useStorefrontAppState() {
         reviewSettingsStatus,
         reviewSettingsQuery,
         managedContentProducts,
+        managedContentProductsQuery,
         managedContentLoading: managedContentProductsQuery.isLoading || productsQuery.isLoading,
         managedContentResolved: managedContentProductsQuery.data !== undefined,
         heroAutoplayIntervalSeconds,

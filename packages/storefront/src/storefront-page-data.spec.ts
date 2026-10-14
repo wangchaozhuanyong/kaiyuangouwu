@@ -258,6 +258,13 @@ describe('public page fetch boundary', () => {
             client.clear();
             vi.stubGlobal('document', {
                 getElementById: (id: string) =>
+                    id === 'root'
+                        ? { dataset: { publicRendered: '1', publicAdopted: '1' } }
+                        : { textContent: JSON.stringify(page) },
+            });
+            expect(readInitialPublicPage()).toBeUndefined();
+            vi.stubGlobal('document', {
+                getElementById: (id: string) =>
                     id === 'root' ? { dataset: {} } : { textContent: JSON.stringify(page) },
             });
             expect(readInitialPublicPage()).toBeUndefined();

@@ -1,18 +1,22 @@
+import { type ReactNode } from 'react';
+
 export function ProductCardSkeleton({
     appearance = 'card',
     responsiveRow = false,
+    children,
 }: {
     appearance?: 'card' | 'plain' | 'mosaic' | 'gallery';
     responsiveRow?: boolean;
+    children?: ReactNode;
 }) {
     return (
         <div
             className={`product-card product-card-skeleton${appearance !== 'card' ? ` is-${appearance}` : ''}${responsiveRow ? ' is-responsive-row' : ''}`}
-            aria-hidden="true"
+            aria-hidden={children ? undefined : true}
         >
             <div className="product-card-detail-link">
-                <div className="product-card-media" />
-                <div className="product-card-content">
+                <div className="product-card-media">{children}</div>
+                <div className="product-card-content" aria-hidden={children ? true : undefined}>
                     <strong className="product-card-name">&nbsp;</strong>
                     {appearance === 'card' && <span className="product-card-subtitle">&nbsp;</span>}
                     {appearance !== 'mosaic' && appearance !== 'gallery' && (

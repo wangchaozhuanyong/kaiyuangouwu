@@ -2420,6 +2420,37 @@ describe('HomePage featured collection', () => {
         expect(pending).not.toContain('data-product-count="2"');
     });
 
+    it.each(['当前网络不可用', '精选读取失败'])(
+        'keeps unresolved selections in place with an accessible local retry: %s',
+        detail => {
+            const markup = renderHome({
+                configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION'],
+                contentBlocks: [
+                    {
+                        ...featuredCollectionBlock,
+                        settings: {
+                            displayCount: 7,
+                            selectedProductIds: ['one', 'two', 'three', 'four', 'five', 'six', 'seven'],
+                        },
+                    },
+                ],
+                managedContentProducts: [],
+                managedContentLoading: true,
+                managedContentResolved: false,
+                managedContentError: detail,
+                onManagedContentRetry: vi.fn(),
+            });
+            expect(markup).toContain('aria-busy="false"');
+            expect(markup).toContain('data-product-count="7"');
+            expect(markup).toContain('role="alert"');
+            expect(markup).toContain(detail);
+            expect(markup).toContain('精选商品暂时无法加载');
+            expect(markup).not.toContain('精选商品即将上架');
+            const errorCard = markup.split('class="product-card product-card-skeleton is-mosaic"')[1];
+            expect(errorCard.slice(0, errorCard.indexOf('role="alert"'))).not.toContain('aria-hidden="true"');
+        },
+    );
+
     it.each([0, 1, 5, 6, 7])(
         'keeps every configured collection product visible at both widths (%i items)',
         count => {

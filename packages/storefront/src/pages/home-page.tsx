@@ -356,6 +356,8 @@ export interface HomePageProps {
     managedContentProducts: Product[];
     managedContentLoading?: boolean;
     managedContentResolved?: boolean;
+    managedContentError?: string;
+    onManagedContentRetry?: () => void;
     /** Anonymous SSR emits both shortcut geometries for native media-query selection. */
     responsiveIntro?: boolean;
     heroAutoplayIntervalSeconds: number;
@@ -432,6 +434,8 @@ export function HomePage() {
         managedContentProducts,
         managedContentLoading = false,
         managedContentResolved = false,
+        managedContentError = '',
+        onManagedContentRetry,
         responsiveIntro = false,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
@@ -1560,6 +1564,8 @@ export function HomePage() {
                                     products={managedContentProductPool}
                                     loading={managedContentLoading}
                                     productsResolved={managedContentResolved}
+                                    error={managedContentError}
+                                    onRetry={onManagedContentRetry}
                                     language={language}
                                     locale={locale}
                                     market={market}
@@ -1822,6 +1828,8 @@ function ManagedContentSection({
     products,
     loading = false,
     productsResolved = false,
+    error = '',
+    onRetry,
     language,
     locale,
     market,
@@ -1831,6 +1839,8 @@ function ManagedContentSection({
     products: Product[];
     loading?: boolean;
     productsResolved?: boolean;
+    error?: string;
+    onRetry?: () => void;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -1885,6 +1895,8 @@ function ManagedContentSection({
                 block={block}
                 products={loading && !productsResolved ? [] : selectedProducts}
                 loading={loading}
+                error={error}
+                onRetry={onRetry}
                 market={market}
                 language={language}
                 locale={locale}
@@ -2157,6 +2169,8 @@ function FeaturedCollectionSection({
     block,
     products,
     loading = false,
+    error = '',
+    onRetry,
     language,
     locale,
     market,
@@ -2165,6 +2179,8 @@ function FeaturedCollectionSection({
     block: StorefrontContentBlock;
     products: Product[];
     loading?: boolean;
+    error?: string;
+    onRetry?: () => void;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -2215,10 +2231,26 @@ function FeaturedCollectionSection({
                 {loading && !featuredProduct ? (
                     <div
                         className="featured-collection-mosaic"
-                        aria-busy="true"
+                        aria-busy={!error}
                         data-product-count={placeholderCount}
                     >
-                        <ProductCardSkeleton appearance="mosaic" />
+                        <ProductCardSkeleton appearance="mosaic">
+                            {error ? (
+                                <div role="alert">
+                                    <EmptyState
+                                        icon={<WifiOff />}
+                                        title={
+                                            isZh
+                                                ? '精选商品暂时无法加载'
+                                                : 'Featured products are unavailable'
+                                        }
+                                        detail={error}
+                                        action={isZh ? '重试' : 'Try again'}
+                                        onAction={onRetry}
+                                    />
+                                </div>
+                            ) : null}
+                        </ProductCardSkeleton>
                         {placeholderCount > 1 && (
                             <div
                                 className="featured-collection-supporting-products"

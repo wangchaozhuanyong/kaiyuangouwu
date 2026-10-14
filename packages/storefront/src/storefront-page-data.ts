@@ -108,7 +108,8 @@ export function readInitialPublicPage(): PublicPageData | undefined {
         // The HTML already on screen owns its first client tree. Network/cache
         // snapshots still need freshness; this document must not become a blank
         // client mount because scripts arrived late or the device clock differs.
-        const renderedDocument = document.getElementById('root')?.dataset?.publicRendered === '1';
+        const root = document.getElementById('root');
+        const renderedDocument = root?.dataset?.publicRendered === '1' && root.dataset.publicAdopted !== '1';
         if (!hasPublicPageIdentity(value, window.location.host) || !isReusablePublicPageData(value)) return;
         if (!renderedDocument && !validatePublicPageData(value, window.location.host)) return;
         const request = currentPublicPageRequest();

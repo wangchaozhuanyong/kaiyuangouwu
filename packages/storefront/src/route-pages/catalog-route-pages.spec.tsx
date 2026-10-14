@@ -8,19 +8,89 @@ import { type ShopApi } from '../api';
 import { useStorefrontRouteData } from '../hooks/useStorefrontRouteData';
 import { enabledMarkets } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
+import { HomePageContext } from '../storefront-page-contexts';
 import { seedPublicPage, type PublicPageData } from '../storefront-page-data';
 import { StorefrontContext, type StorefrontContextValue } from '../StorefrontContext';
 import { type Product, type StorefrontLanguage } from '../types';
 
-import { ProductRoutePage } from './catalog-route-pages';
+import { HomeRoutePage, ProductRoutePage } from './catalog-route-pages';
+
+function HomeReadProbe() {
+    const value = HomePageContext.useValue();
+    return (
+        <div>
+            <output>{String(Boolean(value.managedContentLoading))}</output>
+            <span data-error>{value.managedContentError}</span>
+            <button onClick={value.onManagedContentRetry}>Retry selections</button>
+        </div>
+    );
+}
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
     lazyRouteComponent: (_load: unknown, name: string) =>
-        name === 'ProductDetailPage' ? () => <p>Confirmed product detail</p> : () => null,
+        name === 'ProductDetailPage'
+            ? () => <p>Confirmed product detail</p>
+            : name === 'HomePage'
+              ? HomeReadProbe
+              : () => null,
 }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+describe('home selection read boundaries', () => {
+    it.each([
+        { data: [] as Product[] | undefined, paused: true, failed: false, waiting: false },
+        { data: [] as Product[] | undefined, paused: false, failed: true, waiting: false },
+        { data: undefined, paused: true, failed: false, waiting: true },
+        { data: undefined, paused: false, failed: true, waiting: true },
+    ])(
+        'preserves confirmed empty data and retries only selections: $paused / $failed / $waiting',
+        ({ data, paused, failed, waiting }) => {
+            const client = new QueryClient();
+            const host = document.createElement('div');
+            document.body.append(host);
+            const root = createRoot(host);
+            const refetch = vi.fn().mockResolvedValue(undefined);
+            const refetchStorefront = vi.fn();
+            try {
+                const value = {
+                    language: 'zh',
+                    configQuery: {},
+                    contentQuery: { data: {} },
+                    productsQuery: { data: [] },
+                    managedContentLoading: false,
+                    managedContentProductsQuery: {
+                        data,
+                        isPaused: paused,
+                        isError: failed,
+                        error: failed ? new Error('Selection read failed') : null,
+                        refetch,
+                    },
+                    refetchStorefront,
+                } as unknown as StorefrontContextValue;
+                act(() =>
+                    root.render(
+                        <QueryClientProvider client={client}>
+                            <StorefrontContext.Provider value={value}>
+                                <HomeRoutePage />
+                            </StorefrontContext.Provider>
+                        </QueryClientProvider>,
+                    ),
+                );
+                expect(host.querySelector('output')?.textContent).toBe(String(waiting));
+                expect(Boolean(host.querySelector('[data-error]')?.textContent)).toBe(waiting);
+                act(() => host.querySelector('button')?.click());
+                expect(refetch).toHaveBeenCalledWith({ cancelRefetch: false });
+                expect(refetchStorefront).not.toHaveBeenCalled();
+            } finally {
+                act(() => root.unmount());
+                client.clear();
+                host.remove();
+            }
+        },
+    );
+});
 
 describe('product detail read states', () => {
     let mounted:
