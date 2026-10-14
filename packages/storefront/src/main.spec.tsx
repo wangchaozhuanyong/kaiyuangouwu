@@ -60,6 +60,16 @@ describe('storefront entry persistence boundary', () => {
         await vi.waitFor(() => expect(calls.render).toHaveBeenCalledOnce());
     });
 
+    it('hands startup route failures to the recovery boundary instead of leaving bootstrap pending', async () => {
+        vi.resetModules();
+        calls.readInitial.mockReturnValue(undefined);
+        document.body.innerHTML = '<div id="root"></div>';
+        calls.load.mockRejectedValueOnce(new Error('Route chunk unavailable'));
+        await import('./main');
+        await vi.waitFor(() => expect(calls.render).toHaveBeenCalledOnce());
+        expect(calls.hydrate).not.toHaveBeenCalled();
+    });
+
     it('hydrates the exact rendered snapshot without restoring a newer session tree', async () => {
         vi.resetModules();
         document.body.innerHTML = '<div id="root" data-public-rendered="1"><p>Published content</p></div>';

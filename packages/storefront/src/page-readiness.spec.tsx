@@ -133,6 +133,20 @@ describe('explicit route readiness', () => {
         expect(host.querySelector('[role=status]')?.className).toBe('visually-hidden');
         expect(host.querySelector('.page-readiness-progress')).toBeNull();
     });
+    it('hands the document loading surface to the real timeout and retry state', async () => {
+        const failed = vi.fn();
+        document.addEventListener('storefront:page-error', failed);
+        try {
+            render(true);
+            expect(failed).not.toHaveBeenCalled();
+            await advance(10_100);
+            expect(host.querySelector('[role=alert]')?.textContent).toContain('超时');
+            expect(failed).toHaveBeenCalledOnce();
+        } finally {
+            document.removeEventListener('storefront:page-error', failed);
+        }
+    });
+
     it('times out without hiding or disabling the existing page, and recovers on late data', async () => {
         render(true);
         host.querySelector('button')?.focus();

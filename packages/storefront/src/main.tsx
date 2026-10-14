@@ -87,7 +87,18 @@ async function mountStorefront() {
     }
 }
 
-void mountStorefront();
+function StartupFailure({ error }: { error: unknown }): never {
+    throw error;
+}
+
+void mountStorefront().catch(error => {
+    // A route chunk failure happens before hydration, outside React's normal boundary.
+    createRoot(appRootElement).render(
+        <StorefrontErrorBoundary>
+            <StartupFailure error={error} />
+        </StorefrontErrorBoundary>,
+    );
+});
 
 // CWV uses buffered performance entries, so diagnostics never join the critical rendering path.
 window.addEventListener(

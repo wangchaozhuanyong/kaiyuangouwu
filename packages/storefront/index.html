@@ -20,6 +20,15 @@
                 margin: 0;
                 background-color: var(--bg, #f1f5f9);
             }
+            #storefront-boot-loading {
+                visibility: hidden;
+            }
+            html[data-storefront-boot-pending] #storefront-boot-loading {
+                visibility: visible;
+            }
+            html[data-storefront-boot-pending] #root {
+                visibility: hidden;
+            }
         </style>
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="店铺" />
@@ -36,29 +45,29 @@
         <meta name="twitter:image" content="/storefront/neutral-social.png" />
         <meta name="twitter:image:alt" content="店铺商品与服务" />
         <title>在线商城</title>
+        <script src="/storefront/document-loading.js"></script>
         <script src="/storefront/restore-theme.js"></script>
         <script nomodule src="/legacy-browser-guard.js"></script>
     </head>
     <body>
-        <div id="root">
-            <main
-                id="storefront-boot-loading"
-                class="page-skeleton page-skeleton--route page-skeleton--viewport"
-                role="status"
-                aria-label="正在加载页面"
-                aria-busy="true"
-            >
-                <span class="brand-loading" aria-hidden="true">
-                    <span class="route-transition-mark"></span>
-                    <strong class="brand-loading-name"></strong>
-                    <span class="brand-loading-subtitle"></span>
-                    <span class="brand-loading-caption">
-                        <span class="brand-loading-label">正在连接</span>
-                        <span class="brand-loading-bar"><i></i></span>
-                    </span>
+        <main
+            id="storefront-boot-loading"
+            class="page-skeleton page-skeleton--route page-skeleton--viewport"
+            role="status"
+            aria-label="正在加载页面"
+            aria-busy="true"
+        >
+            <span class="brand-loading" aria-hidden="true">
+                <span class="route-transition-mark"></span>
+                <strong class="brand-loading-name"></strong>
+                <span class="brand-loading-subtitle"></span>
+                <span class="brand-loading-caption">
+                    <span class="brand-loading-label">正在连接</span>
+                    <span class="brand-loading-bar"><i></i></span>
                 </span>
-            </main>
-        </div>
+            </span>
+        </main>
+        <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>

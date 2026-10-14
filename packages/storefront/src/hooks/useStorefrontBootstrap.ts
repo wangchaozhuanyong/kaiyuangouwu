@@ -247,9 +247,17 @@ export function useStorefrontBootstrap(presentedRoute?: RouteState) {
     useLayoutEffect(() => {
         setStorefrontRecoveryBrand(
             recoveryOwner,
-            brandConfig ? { channelCode: storefrontCode, name: storefrontName, logoUrl } : null,
+            brandConfig
+                ? {
+                      channelCode: storefrontCode,
+                      name: storefrontName,
+                      logoUrl,
+                      secondaryName:
+                          language === 'zh' ? (brandConfig.customFields.storefrontNameEn ?? '') : '',
+                  }
+                : null,
         );
-    }, [recoveryOwner, brandConfig, storefrontCode, storefrontName, logoUrl]);
+    }, [recoveryOwner, brandConfig, storefrontCode, storefrontName, logoUrl, language]);
     useEffect(() => {
         if (initialPage && (configQuery.data || !initialBrandMatchesScope || storefrontUnavailable))
             setInitialPage(undefined);

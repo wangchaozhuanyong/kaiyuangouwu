@@ -335,3 +335,42 @@
         opacity: 1;
     }
 }
+
+/* The HTML and React phases share this single document loading presentation.
+   It is outside #root so SSR and hydration cannot remove it before interactivity. */
+#storefront-boot-loading {
+    align-content: center;
+    gap: var(--space-24);
+    position: fixed;
+    inset: 0;
+    z-index: var(--layer-readiness);
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity var(--experience-motion-standard) var(--experience-ease-standard),
+        visibility 0s var(--experience-motion-standard);
+}
+html[data-storefront-boot-pending] #storefront-boot-loading {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transition: none;
+}
+html[data-storefront-boot-pending] #root {
+    visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+    #storefront-boot-loading {
+        transition: none;
+    }
+}
+
+html[data-storefront-boot-error] #storefront-boot-loading .brand-loading-caption {
+    display: none;
+}
+#storefront-boot-loading > .page-readiness-error {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}

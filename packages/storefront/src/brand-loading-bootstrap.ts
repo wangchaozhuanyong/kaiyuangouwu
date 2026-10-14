@@ -117,10 +117,32 @@ export function initialLoadingBrandForSnapshot(
 
 let initialBrandGeneration = 0;
 
-/** React replaces this element on mount; late image work may only touch its original owner. */
+function ownsInitialLoadingStage(boot: HTMLElement): boolean {
+    const root = document.getElementById('root');
+    return Boolean(
+        boot.isConnected &&
+        document.getElementById('storefront-boot-loading') === boot &&
+        root &&
+        (root.contains(boot) ||
+            (root.parentElement === document.body &&
+                boot.parentElement === document.body &&
+                root.previousElementSibling === boot)),
+    );
+}
+
+/** The document owns this startup stage until React commits; late images cannot revive it. */
 export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
-    const generation = ++initialBrandGeneration;
     const boot = document.getElementById('storefront-boot-loading');
+    const brandKey = JSON.stringify([
+        brand.language,
+        brand.storefrontName,
+        brand.secondaryName ?? '',
+        brand.logoUrl,
+    ]);
+    // The retained document stage may receive the same confirmed brand at React
+    // adoption. Preserve its image node and pending decode instead of flashing it.
+    if (boot && ownsInitialLoadingStage(boot) && boot.dataset.loadingBrand === brandKey) return;
+    const generation = ++initialBrandGeneration;
     if (!boot) {
         // The early entry is async in <head> and may run before the body has been parsed.
         const root = document.getElementById('root');
@@ -140,12 +162,9 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     }
     const content = boot.querySelector('.brand-loading');
     if (!boot || !content) return;
-    const ownsBoot = () =>
-        generation === initialBrandGeneration &&
-        boot.isConnected &&
-        document.getElementById('storefront-boot-loading') === boot &&
-        document.getElementById('root')?.contains(boot) === true;
+    const ownsBoot = () => generation === initialBrandGeneration && ownsInitialLoadingStage(boot);
     if (!ownsBoot()) return;
+    boot.dataset.loadingBrand = brandKey;
     content
         .querySelectorAll('.brand-loading-name, .brand-loading-subtitle, .route-transition-mark')
         .forEach(element => element.remove());

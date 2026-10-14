@@ -304,6 +304,8 @@ function observeFrames() {
             pending: [...document.querySelectorAll('[data-page-pending]')]
                 .filter(node => box(node))
                 .map(node => node.dataset.pagePending),
+            bootPending: document.documentElement.hasAttribute('data-storefront-boot-pending'),
+            bootVisible: !!box(document.getElementById('storefront-boot-loading')),
             brand: !!box(document.querySelector('.page-readiness-initial .brand-loading')),
             brandName: [...document.querySelectorAll('.brand-loading-name')]
                 .filter(node => box(node))
@@ -883,8 +885,21 @@ try {
                         frame => frame.product === 'synthetic-a Synthetic product 1' && frame.content,
                     );
                     assert.ok(index >= 0, `${label}: public product never became available`);
+                    assert.ok(
+                        samples.slice(0, index).some(frame => frame.bootPending && frame.bootVisible),
+                        `${label}: waiting for interactivity never displayed document loading feedback`,
+                    );
                     assert.equal(
-                        samples.slice(index).some(frame => frame.brand || !frame.content || frame.missing),
+                        samples.at(-1).bootPending,
+                        false,
+                        `${label}: document loading did not finish`,
+                    );
+                    assert.equal(
+                        samples
+                            .slice(index)
+                            .some(
+                                frame => frame.bootPending || frame.brand || !frame.content || frame.missing,
+                            ),
                         false,
                         `${label}: SSR content was hidden or replaced with initial loading`,
                     );
