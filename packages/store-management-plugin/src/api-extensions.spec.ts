@@ -4,6 +4,36 @@ import { describe, expect, it } from 'vitest';
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 
 describe('store management API extensions', () => {
+    it('uses the custom registration union for explicit existing-email errors without extending the built-in union', () => {
+        const mutation = mutationExtension(shopApiExtensions);
+        const registration = mutation?.fields?.find(
+            field => field.name.value === 'registerCustomerWithReferral',
+        );
+        expect(registration?.type.kind).toBe(Kind.NON_NULL_TYPE);
+        expect(registration && namedType(registration.type)).toBe('RegisterCustomerWithReferralResult');
+        const result = shopApiExtensions.definitions.find(
+            value =>
+                value.kind === Kind.UNION_TYPE_DEFINITION &&
+                value.name.value === 'RegisterCustomerWithReferralResult',
+        );
+        if (result?.kind !== Kind.UNION_TYPE_DEFINITION)
+            throw new Error('Registration result union is missing');
+        expect(result.types?.map(type => type.name.value)).toEqual([
+            'Success',
+            'MissingPasswordError',
+            'PasswordValidationError',
+            'NativeAuthStrategyError',
+            'EmailAddressConflictError',
+        ]);
+        expect(
+            shopApiExtensions.definitions.some(
+                value =>
+                    (value.kind === Kind.UNION_TYPE_DEFINITION || value.kind === Kind.UNION_TYPE_EXTENSION) &&
+                    value.name.value === 'RegisterCustomerAccountResult',
+            ),
+        ).toBe(false);
+    });
+
     it('exposes artwork design while only requiring the actual headline copy', () => {
         for (const name of ['CreateReferralPosterTemplateInput', 'UpdateReferralPosterTemplateInput']) {
             const definition = adminApiExtensions.definitions.find(

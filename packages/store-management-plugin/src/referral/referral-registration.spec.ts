@@ -1,4 +1,4 @@
-import type { RequestContext } from '@vendure/core';
+import { EmailAddressConflictError, type RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ReferralShopResolver } from './referral.resolver';
@@ -35,25 +35,25 @@ function serviceHarness(outcome: object, withInviter = false) {
 }
 
 describe('native registration creation evidence', () => {
-    it.each(['same-store verified duplicate', 'another-store global identity', 'concurrent losing request'])(
-        'does not guess a customer or bind referrals for a %s',
-        async () => {
-            const outcome = { result: { success: true } };
-            const { service, getRepository, bindRelationship, customerService } = serviceHarness(
-                outcome,
-                true,
-            );
-            await expect(
-                service.registerCustomerWithReferralWithOutcome(ctx, input, 'ABC123'),
-            ).resolves.toEqual(outcome);
-            expect(customerService.registerCustomerAccountWithOutcome).toHaveBeenCalledWith(ctx, {
-                ...input,
-                emailAddress: 'fixture@example.invalid',
-            });
-            expect(getRepository).not.toHaveBeenCalled();
-            expect(bindRelationship).not.toHaveBeenCalled();
-        },
-    );
+    it.each([
+        'same-store verified duplicate',
+        'pending native account',
+        'another-store global identity',
+        'concurrent losing request',
+    ])('reports an existing %s without guessing a customer or binding referrals', async () => {
+        const outcome = { result: { success: true } };
+        const { service, getRepository, bindRelationship, customerService } = serviceHarness(outcome, true);
+        await expect(service.registerCustomerWithReferralWithOutcome(ctx, input, 'ABC123')).resolves.toEqual({
+            result: new EmailAddressConflictError(),
+        });
+        expect(customerService.registerCustomerAccountWithOutcome).toHaveBeenCalledWith(
+            ctx,
+            { ...input, emailAddress: 'fixture@example.invalid' },
+            { refreshExistingVerification: false },
+        );
+        expect(getRepository).not.toHaveBeenCalled();
+        expect(bindRelationship).not.toHaveBeenCalled();
+    });
 
     it('binds only the exact customer created by this transaction in the active store', async () => {
         const outcome = { result: { success: true }, createdCustomerId: 'created-customer' };
@@ -80,17 +80,43 @@ describe('native registration creation evidence', () => {
         await expect(service.registerCustomerWithReferral(ctx, input)).resolves.toEqual({ success: true });
     });
 
-    it('keeps identity conflicts generic and discards any creation evidence', async () => {
-        const { service } = serviceHarness({
+    it('preserves typed identity conflicts without converting them to success', async () => {
+        const outcome = {
             result: {
                 __typename: 'EmailAddressConflictError',
                 errorCode: 'EMAIL_ADDRESS_CONFLICT_ERROR',
                 message: 'Synthetic email identity conflict',
             },
-        });
-        await expect(service.registerCustomerWithReferralWithOutcome(ctx, input)).resolves.toEqual({
-            result: { success: true },
-        });
+        };
+        const { service, getRepository, bindRelationship } = serviceHarness(outcome, true);
+        await expect(service.registerCustomerWithReferralWithOutcome(ctx, input, 'ABC123')).resolves.toEqual(
+            outcome,
+        );
+        expect(getRepository).not.toHaveBeenCalled();
+        expect(bindRelationship).not.toHaveBeenCalled();
+    });
+
+    it('returns only the typed public result for an existing account', async () => {
+        const { service } = serviceHarness({ result: { success: true } });
+        await expect(service.registerCustomerWithReferral(ctx, input)).resolves.toEqual(
+            new EmailAddressConflictError(),
+        );
+    });
+
+    it('preserves password validation errors and does not bind a referral', async () => {
+        const outcome = {
+            result: {
+                __typename: 'PasswordValidationError',
+                errorCode: 'PASSWORD_VALIDATION_ERROR',
+                message: 'Synthetic invalid password',
+            },
+        };
+        const { service, getRepository, bindRelationship } = serviceHarness(outcome, true);
+        await expect(service.registerCustomerWithReferralWithOutcome(ctx, input, 'ABC123')).resolves.toEqual(
+            outcome,
+        );
+        expect(getRepository).not.toHaveBeenCalled();
+        expect(bindRelationship).not.toHaveBeenCalled();
     });
 });
 
@@ -108,16 +134,17 @@ describe('registration consent follows the actual creation outcome', () => {
         };
     }
 
-    it.each(['existing current-store account', 'existing account in another store', 'concurrent loser'])(
-        'preserves the safe no-op for %s without attempting consent writes',
-        async () => {
-            const { resolver, consents } = resolverHarness({ result: { success: true } });
-            await expect(resolver.registerCustomerWithReferral(ctx, input, consent)).resolves.toEqual({
-                success: true,
-            });
-            expect(consents.recordRegistrationForCustomer).not.toHaveBeenCalled();
-        },
-    );
+    it.each([
+        'existing current-store account',
+        'pending native account',
+        'existing account in another store',
+        'concurrent loser',
+    ])('returns the typed conflict for %s without attempting consent writes', async () => {
+        const result = new EmailAddressConflictError();
+        const { resolver, consents } = resolverHarness({ result });
+        await expect(resolver.registerCustomerWithReferral(ctx, input, consent)).resolves.toEqual(result);
+        expect(consents.recordRegistrationForCustomer).not.toHaveBeenCalled();
+    });
 
     it('records consent for the winning newly created customer and returns only the public result', async () => {
         const { resolver, consents } = resolverHarness({
@@ -125,6 +152,7 @@ describe('registration consent follows the actual creation outcome', () => {
             createdCustomerId: 'created-customer',
         });
         await expect(resolver.registerCustomerWithReferral(ctx, input, consent)).resolves.toEqual({
+            __typename: 'Success',
             success: true,
         });
         expect(consents.recordRegistrationForCustomer).toHaveBeenCalledTimes(1);

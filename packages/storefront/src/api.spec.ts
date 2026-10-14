@@ -1743,6 +1743,24 @@ describe('ShopApi storefront mutations', () => {
         });
     });
 
+    it('rejects an existing-email registration result without replaying the mutation', async () => {
+        const fetchMock = mockGraphQlResponse({
+            registerCustomerWithReferral: {
+                __typename: 'EmailAddressConflictError',
+                errorCode: 'EMAIL_ADDRESS_CONFLICT_ERROR',
+                message: 'Synthetic existing email',
+            },
+        });
+
+        await expect(
+            new ShopApi(market).registerCustomerAccount(
+                { emailAddress: 'local@example.invalid' },
+                { termsAccepted: true, privacyAcknowledged: true, locale: 'en' },
+            ),
+        ).rejects.toMatchObject({ name: 'ShopApiError', errorCode: 'EMAIL_ADDRESS_CONFLICT_ERROR' });
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+
     it('passes the email address when requesting a password reset', async () => {
         const fetchMock = mockGraphQlResponse({
             requestPasswordReset: { __typename: 'Success', success: true },
