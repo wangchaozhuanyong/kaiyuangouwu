@@ -68,15 +68,19 @@ async function mountStorefront() {
             </QueryClientProvider>
         </StrictMode>
     );
-    if (!embeddedPreview && initialPublicPage && appRootElement.dataset.publicRendered === '1') {
-        const location = router.state.location;
-        const route = routeFromRouterLocation(location.pathname, location.search);
+    const adoptingPublicHtml =
+        !embeddedPreview && initialPublicPage && appRootElement.dataset.publicRendered === '1';
+    if (adoptingPublicHtml) {
         // TanStack keeps the server's root boundary structure for a hydrated app.
         // Asset metadata is supplied by the HTML controller rather than a Start manifest.
         router.ssr = { manifest: undefined };
-        // Load the real router and its page before React adopts the existing HTML.
-        // There is one browser router, one cache and one tree for this document.
-        await Promise.all([preloadStorefrontRouteComponent(route.name), router.load()]);
+    }
+    // Even a client-only entry must have a route match before its first commit.
+    // Keep the existing HTML/initial placeholder while this same router loads.
+    const location = router.state.location;
+    const route = routeFromRouterLocation(location.pathname, location.search);
+    await Promise.all([preloadStorefrontRouteComponent(route.name), router.load()]);
+    if (adoptingPublicHtml) {
         hydrateRoot(appRootElement, interactiveApp);
     } else {
         createRoot(appRootElement).render(interactiveApp);

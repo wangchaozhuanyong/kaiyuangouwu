@@ -60,12 +60,7 @@ export function publicSeoQueryKey(market: string, language: string, request: Pub
     ] as const;
 }
 
-export function validatePublicPageData(
-    value: unknown,
-    host: string,
-    now = Date.now(),
-    allowClosed = false,
-): value is PublicPageData {
+function hasPublicPageIdentity(value: unknown, host: string, allowClosed = false): value is PublicPageData {
     const page = value as Partial<PublicPageData> | null;
     return Boolean(
         page &&
@@ -83,10 +78,23 @@ export function validatePublicPageData(
         page.config?.customFields &&
         Array.isArray(page.config?.availableCountries) &&
         typeof page.generatedAt === 'number' &&
-        now - page.generatedAt <= 30_000 &&
-        page.generatedAt - now <= 5_000 &&
+        Number.isFinite(page.generatedAt) &&
+        page.generatedAt > 0 &&
         Array.isArray(page.media) &&
         Array.isArray(page.failures),
+    );
+}
+
+export function validatePublicPageData(
+    value: unknown,
+    host: string,
+    now = Date.now(),
+    allowClosed = false,
+): value is PublicPageData {
+    return (
+        hasPublicPageIdentity(value, host, allowClosed) &&
+        now - value.generatedAt <= 30_000 &&
+        value.generatedAt - now <= 5_000
     );
 }
 
@@ -97,7 +105,13 @@ export function readInitialPublicPage(): PublicPageData | undefined {
         const value: unknown = JSON.parse(
             document.getElementById(STOREFRONT_PAGE_DATA_ELEMENT_ID)?.textContent ?? 'null',
         );
-        if (!validatePublicPageData(value, window.location.host) || !isReusablePublicPageData(value)) return;
+        // The HTML already on screen owns its first client tree. Network/cache
+        // snapshots still need freshness; this document must not become a blank
+        // client mount because scripts arrived late or the device clock differs.
+        const root = document.getElementById('root');
+        const renderedDocument = root?.dataset?.publicRendered === '1' && root.dataset.publicAdopted !== '1';
+        if (!hasPublicPageIdentity(value, window.location.host) || !isReusablePublicPageData(value)) return;
+        if (!renderedDocument && !validatePublicPageData(value, window.location.host)) return;
         const request = currentPublicPageRequest();
         if (
             value.requestKey
@@ -109,8 +123,10 @@ export function readInitialPublicPage(): PublicPageData | undefined {
         if (
             value.scope.languageCode !==
                 (publicLanguageFromUrl(window.location.pathname) ??
-                    languageCodeFor(readStoredLanguage(market))) ||
-            value.scope.currencyCode !== readStoredSettlementCurrency(market)
+                    (renderedDocument
+                        ? value.scope.languageCode
+                        : languageCodeFor(readStoredLanguage(market)))) ||
+            (!renderedDocument && value.scope.currencyCode !== readStoredSettlementCurrency(market))
         )
             return;
         pageGenerations.set(value, publicPageReadGeneration());
@@ -139,9 +155,13 @@ export function seedPublicPage(
         restrictStorefrontScopePersistence(client, { marketCode: market, languageCode: language });
     const set = (key: QueryKey, data: unknown) => {
         if (data === undefined) return;
+        // A slow device clock must not turn this document into a future-dated
+        // fresh cache entry. Preserve its presentation and revalidate via Query.
+        const now = Date.now();
+        const updatedAt = page.generatedAt - now > 5_000 ? now - PUBLIC_QUERY_STALE_TIME : page.generatedAt;
         const previous = client.getQueryState(key);
-        if (previous && previous.dataUpdatedAt > page.generatedAt) return;
-        client.setQueryData(key, data, { updatedAt: page.generatedAt });
+        if (previous && previous.dataUpdatedAt > updatedAt) return;
+        client.setQueryData(key, data, { updatedAt });
         markStorefrontPublicQuerySource(client, key, page.config.accessMode);
     };
     if (includeConfig) set([...storefrontQueryKeys.config(market, language), 'public'], page.config);
