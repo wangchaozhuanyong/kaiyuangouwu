@@ -454,6 +454,123 @@
     line-height: var(--type-helper-leading);
 }
 
+.auth-existing-account {
+    min-width: 0;
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    background: var(--soft);
+    color: var(--auth-ink);
+    text-align: left;
+}
+
+.auth-existing-account__heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.auth-existing-account__icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    color: var(--accent-ink);
+}
+
+.auth-existing-account__title {
+    min-width: 0;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
+}
+
+.auth-existing-account__description {
+    margin: 8px 0 0;
+    color: var(--auth-muted);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+
+.auth-existing-account__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 12px;
+}
+
+.auth-existing-account__primary,
+.auth-existing-account__secondary {
+    min-height: 44px;
+    max-width: 100%;
+    padding: 10px 16px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+}
+
+.auth-existing-account__primary {
+    background: var(--auth-accent);
+    color: var(--auth-button-foreground, var(--accent-foreground));
+}
+
+.auth-existing-account__primary:hover:not(:disabled) {
+    background: var(--auth-accent-hover);
+}
+
+.auth-existing-account__secondary {
+    background: transparent;
+    color: var(--accent-ink);
+}
+
+.auth-existing-account__secondary:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.auth-existing-account__help {
+    margin-top: 8px;
+    color: var(--auth-muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+
+.auth-existing-account__help > summary {
+    min-height: 44px;
+    padding-block: 12px;
+    cursor: pointer;
+}
+
+.auth-existing-account__help-content {
+    padding-top: 4px;
+}
+
+.auth-existing-account__help-content .auth-inline-link {
+    min-height: 44px;
+    margin: 0;
+    text-align: left;
+}
+
+.auth-existing-account__help-content :is(.form-error, .auth-success-message) {
+    margin: 8px 0 0;
+    text-align: left;
+}
+
+.auth-existing-account :is(button, summary):focus-visible {
+    outline: var(--experience-focus-width) solid var(--focus);
+    outline-offset: var(--experience-focus-offset);
+}
+
+.auth-existing-account button:disabled {
+    color: var(--accent-disabled-text);
+    cursor: not-allowed;
+}
+
+.auth-existing-account__primary:disabled {
+    background: var(--accent-disabled-bg);
+}
+
 .auth-page .wide-action {
     min-height: 52px;
     margin-top: 5px;
