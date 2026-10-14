@@ -28,7 +28,7 @@ describe('CacheService with DefaultCachePlugin (sql)', () => {
     const ttlProvider = new TestingCacheTtlProvider();
 
     let cacheService: CacheService;
-    const { server, adminClient } = createTestEnvironment(
+    const { server } = createTestEnvironment(
         mergeConfig(testConfig(), {
             plugins: [
                 DefaultCachePlugin.init({
@@ -45,7 +45,6 @@ describe('CacheService with DefaultCachePlugin (sql)', () => {
             productsCsvPath: path.join(__dirname, 'fixtures/e2e-products-minimal.csv'),
             customerCount: 1,
         });
-        await adminClient.asSuperAdmin();
         cacheService = server.app.get(CacheService);
     }, TEST_SETUP_TIMEOUT_MS);
 
