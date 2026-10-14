@@ -30,7 +30,11 @@ import { useImageTextContrast } from '../../storefront-content-plugin/src/shared
 
 import { ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
 import { AuthFormIntro, AuthOverlaySurface } from './auth-overlay-surface';
-import { AuthPresentationContext, type AuthPresentationRoute } from './auth-presentation';
+import {
+    AuthEmailDraftContext,
+    AuthPresentationContext,
+    type AuthPresentationRoute,
+} from './auth-presentation';
 import {
     ACCOUNT_PASSWORD_MAX_LENGTH,
     ACCOUNT_PASSWORD_MIN_LENGTH,
@@ -381,51 +385,115 @@ function useAuthVerificationResend(
     return { message, error, seconds, setMessage, setError, setSeconds, resend };
 }
 
-function ExistingAccountVerificationAction({
+function ExistingAccountNotice({
+    id,
     language,
     submitting,
     recovery,
+    onNavigate,
+    login = false,
 }: {
+    id: string;
     language: StorefrontLanguage;
     submitting: boolean;
     recovery: ReturnType<typeof useAuthVerificationResend>;
+    onNavigate: (route: AuthRoute, replace?: boolean) => void;
+    login?: boolean;
 }) {
     const isZh = language === 'zh';
+    const overlay = useContext(AuthPresentationContext);
+    const standaloneDraft = useContext(AuthEmailDraftContext);
+    const navigateFromForm = (form: HTMLFormElement | null, route: AuthRoute, replace = false) => {
+        if (form) {
+            (overlay ?? standaloneDraft)?.onEmailDraftChange?.(
+                formString(new FormData(form), 'emailAddress').trim(),
+            );
+        }
+        onNavigate(route, replace);
+    };
     return (
-        <>
-            <button
-                className="auth-inline-link"
-                type="button"
-                disabled={submitting || recovery.seconds > 0}
-                onClick={event => {
-                    const form = event.currentTarget.form;
-                    if (!form) return;
-                    const emailAddress = formString(new FormData(form), 'emailAddress').trim();
-                    void recovery.resend(
-                        emailAddress,
-                        () => formString(new FormData(form), 'emailAddress').trim() === emailAddress,
-                    );
-                }}
-            >
-                {recovery.seconds > 0
-                    ? isZh
-                        ? `${recovery.seconds} 秒后可重新发送`
-                        : `Resend in ${recovery.seconds}s`
-                    : isZh
-                      ? '邮箱未验证？重新发送验证邮件'
-                      : 'Email not verified? Resend verification email'}
-            </button>
-            {recovery.message && (
-                <small className="auth-success-message" role="status">
-                    {recovery.message}
-                </small>
-            )}
-            {recovery.error && (
-                <small className="form-error" role="alert">
-                    {recovery.error}
-                </small>
-            )}
-        </>
+        <section className={`auth-existing-account${login ? ' auth-existing-account--login' : ''}`}>
+            <div id={id} role="alert">
+                <div className="auth-existing-account__heading">
+                    <CircleAlert className="auth-existing-account__icon" aria-hidden="true" />
+                    <strong className="auth-existing-account__title">
+                        {login
+                            ? isZh
+                                ? '该邮箱已有账户，请核对密码'
+                                : 'This email has an account. Check your password.'
+                            : isZh
+                              ? '该邮箱已注册'
+                              : 'This email is already registered'}
+                    </strong>
+                </div>
+                <p className="auth-existing-account__description">
+                    {login
+                        ? isZh
+                            ? '忘记密码时，可通过邮箱找回。'
+                            : 'Forgot your password? Recover it using your email.'
+                        : isZh
+                          ? '你可以直接登录；忘记密码时可找回。'
+                          : 'Sign in to your account, or recover your password.'}
+                </p>
+            </div>
+            <div className="auth-existing-account__actions">
+                {!login && (
+                    <button
+                        className="auth-existing-account__primary"
+                        type="button"
+                        disabled={submitting}
+                        onClick={event => navigateFromForm(event.currentTarget.form, { name: 'login' }, true)}
+                    >
+                        {isZh ? '去登录' : 'Sign in'}
+                    </button>
+                )}
+                <button
+                    className="auth-existing-account__secondary"
+                    type="button"
+                    disabled={submitting}
+                    onClick={event => navigateFromForm(event.currentTarget.form, { name: 'forgot-password' })}
+                >
+                    {isZh ? '找回密码' : 'Recover password'}
+                </button>
+            </div>
+            <details className="auth-existing-account__help">
+                <summary>{isZh ? '还没有完成邮箱验证？' : 'Have not verified your email yet?'}</summary>
+                <div className="auth-existing-account__help-content">
+                    <button
+                        className="auth-inline-link"
+                        type="button"
+                        disabled={submitting || recovery.seconds > 0}
+                        onClick={event => {
+                            const form = event.currentTarget.form;
+                            if (!form) return;
+                            const emailAddress = formString(new FormData(form), 'emailAddress').trim();
+                            void recovery.resend(
+                                emailAddress,
+                                () => formString(new FormData(form), 'emailAddress').trim() === emailAddress,
+                            );
+                        }}
+                    >
+                        {recovery.seconds > 0
+                            ? isZh
+                                ? `${recovery.seconds} 秒后可重新发送`
+                                : `Resend in ${recovery.seconds}s`
+                            : isZh
+                              ? '重新发送验证邮件'
+                              : 'Resend verification email'}
+                    </button>
+                    {recovery.message && (
+                        <small className="auth-success-message" role="status">
+                            {recovery.message}
+                        </small>
+                    )}
+                    {recovery.error && (
+                        <small className="form-error" role="alert">
+                            {recovery.error}
+                        </small>
+                    )}
+                </div>
+            </details>
+        </section>
     );
 }
 
@@ -452,6 +520,7 @@ export function LoginPage({
     const [error, setError] = useState('');
     const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
     const [existingAccount, setExistingAccount] = useState(false);
+    const existingAccountNoticeId = useId();
     const [rememberMe, setRememberMe] = useState(true);
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const requestScope = useAuthRequestScope(api);
@@ -590,6 +659,7 @@ export function LoginPage({
                                 autoComplete="email"
                                 icon={<Mail />}
                                 showLabel={false}
+                                describedBy={existingAccount ? existingAccountNoticeId : undefined}
                                 onChange={() => {
                                     setError('');
                                     setExistingAccount(false);
@@ -597,12 +667,28 @@ export function LoginPage({
                                     verificationRecovery.setError('');
                                 }}
                             />
+                            {existingAccount && (
+                                <ExistingAccountNotice
+                                    id={existingAccountNoticeId}
+                                    language={language}
+                                    submitting={submitting}
+                                    recovery={verificationRecovery}
+                                    onNavigate={navigateTo}
+                                    login
+                                />
+                            )}
                             <Field
                                 name="password"
                                 label={isZh ? '密码' : 'Password'}
                                 type="password"
                                 autoComplete="current-password"
                                 icon={<LockKeyhole />}
+                                invalid={existingAccount}
+                                describedBy={existingAccount ? existingAccountNoticeId : undefined}
+                                onChange={() => {
+                                    setError('');
+                                    setExistingAccount(false);
+                                }}
                                 revealPassword
                                 language={language}
                                 showLabel={false}
@@ -616,26 +702,21 @@ export function LoginPage({
                                     />
                                     {isZh ? '记住我' : 'Remember me'}
                                 </label>
-                                <button
-                                    className="auth-inline-link"
-                                    type="button"
-                                    disabled={inOverlay && submitting}
-                                    onClick={() => navigateTo({ name: 'forgot-password' })}
-                                >
-                                    {isZh ? '忘记密码？' : 'Forgot password?'}
-                                </button>
+                                {!existingAccount && (
+                                    <button
+                                        className="auth-inline-link"
+                                        type="button"
+                                        disabled={inOverlay && submitting}
+                                        onClick={() => navigateTo({ name: 'forgot-password' })}
+                                    >
+                                        {isZh ? '忘记密码？' : 'Forgot password?'}
+                                    </button>
+                                )}
                             </div>
-                            {error && (
+                            {error && !existingAccount && (
                                 <small className="form-error" role="alert">
                                     {error}
                                 </small>
-                            )}
-                            {existingAccount && (
-                                <ExistingAccountVerificationAction
-                                    language={language}
-                                    submitting={submitting}
-                                    recovery={verificationRecovery}
-                                />
                             )}
                             {(authSettings.emailAutoRegistrationEnabled || googleAvailable) && (
                                 <RegistrationConsentControl
@@ -722,6 +803,7 @@ export function RegisterPage({
     const [registeredEmail, setRegisteredEmail] = useState('');
     const [error, setError] = useState('');
     const [existingAccount, setExistingAccount] = useState(false);
+    const existingAccountNoticeId = useId();
     const [referralEnabled, setReferralEnabled] = useState(false);
     const [inviteCode, setInviteCode] = useState('');
     const [inviteExpanded, setInviteExpanded] = useState(false);
@@ -774,6 +856,7 @@ export function RegisterPage({
 
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (existingAccount) return;
         setExistingAccount(false);
         if (!registrationConsentAccepted) {
             setError(isZh ? '请先同意使用条款并确认隐私政策' : 'Accept the terms and privacy policy first');
@@ -1034,6 +1117,8 @@ export function RegisterPage({
                                 autoComplete="email"
                                 icon={<Mail />}
                                 showLabel={false}
+                                invalid={existingAccount}
+                                describedBy={existingAccount ? existingAccountNoticeId : undefined}
                                 onChange={() => {
                                     setError('');
                                     setExistingAccount(false);
@@ -1041,37 +1126,30 @@ export function RegisterPage({
                                     setResendError('');
                                 }}
                             />
-                            <small className="auth-password-hint">
-                                {quickRegistration
-                                    ? isZh
-                                        ? '打开邮箱验证链接后设置密码，无需现在填写姓名'
-                                        : 'Set your password using the email verification link; no name is needed now'
-                                    : isZh
-                                      ? '打开邮箱验证链接后设置登录密码'
-                                      : 'Set your sign-in password using the email verification link'}
-                            </small>
-                            {invitationControl}
-                            {error && (
-                                <small className="form-error" role="alert">
-                                    {error}
-                                </small>
-                            )}
-                            {existingAccount && (
-                                <ExistingAccountVerificationAction
+                            {existingAccount ? (
+                                <ExistingAccountNotice
+                                    id={existingAccountNoticeId}
                                     language={language}
                                     submitting={submitting}
                                     recovery={verificationRecovery}
+                                    onNavigate={navigateTo}
                                 />
+                            ) : (
+                                <small className="auth-password-hint">
+                                    {quickRegistration
+                                        ? isZh
+                                            ? '打开邮箱验证链接后设置密码，无需现在填写姓名'
+                                            : 'Set your password using the email verification link; no name is needed now'
+                                        : isZh
+                                          ? '打开邮箱验证链接后设置登录密码'
+                                          : 'Set your sign-in password using the email verification link'}
+                                </small>
                             )}
-                            {existingAccount && (
-                                <button
-                                    className="auth-inline-link"
-                                    type="button"
-                                    disabled={inOverlay && submitting}
-                                    onClick={() => navigateTo({ name: 'forgot-password' })}
-                                >
-                                    {isZh ? '忘记密码？' : 'Forgot password?'}
-                                </button>
+                            {invitationControl}
+                            {error && !existingAccount && (
+                                <small className="form-error" role="alert">
+                                    {error}
+                                </small>
                             )}
                             <RegistrationConsentControl
                                 accepted={registrationConsentAccepted}
@@ -1082,6 +1160,7 @@ export function RegisterPage({
                             />
                             <SubmitButton
                                 submitting={submitting}
+                                disabled={existingAccount}
                                 idle={
                                     quickRegistration
                                         ? isZh
@@ -1123,16 +1202,18 @@ export function RegisterPage({
                             {isZh ? '暂未开启注册方式' : 'No registration method is enabled'}
                         </p>
                     ) : null}
-                    <p className="auth-switch">
-                        <span>{isZh ? '已有账户？' : 'Already have an account?'}</span>
-                        <button
-                            type="button"
-                            disabled={inOverlay && submitting}
-                            onClick={() => navigateTo({ name: 'login' }, true)}
-                        >
-                            {isZh ? '立即登录' : 'Sign in'}
-                        </button>
-                    </p>
+                    {!existingAccount && (
+                        <p className="auth-switch">
+                            <span>{isZh ? '已有账户？' : 'Already have an account?'}</span>
+                            <button
+                                type="button"
+                                disabled={inOverlay && submitting}
+                                onClick={() => navigateTo({ name: 'login' }, true)}
+                            >
+                                {isZh ? '立即登录' : 'Sign in'}
+                            </button>
+                        </p>
+                    )}
                     {!authSettings.emailPasswordEnabled && (
                         <AuthLegalNotice content={legalContent} onContentTarget={onContentTarget} />
                     )}
@@ -1958,6 +2039,8 @@ function Field({
     value,
     onChange,
     onBlur,
+    invalid,
+    describedBy,
 }: {
     name: string;
     label: string;
@@ -1975,11 +2058,14 @@ function Field({
     value?: string;
     onChange?: (value: string) => void;
     onBlur?: (value: string) => void;
+    invalid?: boolean;
+    describedBy?: string;
 }) {
     const inputId = useId();
     const overlay = useContext(AuthPresentationContext);
+    const emailDraft = useContext(AuthEmailDraftContext);
     const persistentLabel = overlay ? true : showLabel;
-    const sharedEmailDraft = name === 'emailAddress' && value === undefined ? overlay : null;
+    const sharedEmailDraft = name === 'emailAddress' && value === undefined ? (overlay ?? emailDraft) : null;
     const [passwordVisible, setPasswordVisible] = useState(false);
     const hasPasswordToggle = type === 'password' && revealPassword;
     const inputType = hasPasswordToggle && passwordVisible ? 'text' : type;
@@ -1997,6 +2083,8 @@ function Field({
             type={inputType}
             required={required}
             autoComplete={autoComplete}
+            aria-invalid={invalid || undefined}
+            aria-describedby={describedBy}
             minLength={minLength}
             maxLength={maxLength}
             placeholder={overlay ? undefined : label}

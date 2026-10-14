@@ -4,12 +4,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApiError, ShopApiTimeoutError } from './api';
-import { LoginPage, RegisterPage, VerifyAccountPage } from './auth-pages';
-import { AuthPresentationContext } from './auth-presentation';
+import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyAccountPage } from './auth-pages';
+import { AuthEmailDraftBoundary, AuthPresentationContext } from './auth-presentation';
 import { completeStorefrontAuthentication } from './checkout-authentication';
 import { type ActiveCustomer } from './types';
 
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
+const router = vi.hoisted(() => ({ navigate: vi.fn() }));
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => router.navigate }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 let host: HTMLDivElement;
@@ -120,11 +121,26 @@ describe('registration and verification ownership', () => {
             await settle(submit);
 
             expect(registerCustomerAccount).toHaveBeenCalledOnce();
-            expect(element('[role="alert"]').textContent).toBe(
-                language === 'zh'
-                    ? '该邮箱已注册，请登录'
-                    : 'This email is already registered. Please sign in.',
+            expect(element('.auth-existing-account__title').textContent).toBe(
+                mode === 'auto'
+                    ? language === 'zh'
+                        ? '该邮箱已有账户，请核对密码'
+                        : 'This email has an account. Check your password.'
+                    : language === 'zh'
+                      ? '该邮箱已注册'
+                      : 'This email is already registered',
             );
+            const notice = element<HTMLElement>('.auth-existing-account');
+            const emailField = element<HTMLInputElement>('input[name="emailAddress"]');
+            expect(emailField.getAttribute('aria-invalid')).toBe(mode === 'auto' ? null : 'true');
+            if (mode === 'auto')
+                expect(element('input[name="password"]').getAttribute('aria-invalid')).toBe('true');
+            expect(emailField.getAttribute('aria-describedby')).toBe(element('[role="alert"]').id);
+            expect(emailField.closest('.auth-field')?.nextElementSibling).toBe(notice);
+            expect(notice.querySelector('[role="alert"] button')).toBeNull();
+            expect(notice.querySelector('details')?.open).toBe(false);
+            expect(notice.querySelector('.auth-existing-account__primary') === null).toBe(mode === 'auto');
+            expect(host.querySelector('.auth-password-hint')).toBeNull();
             expect(host.querySelector('.auth-result')).toBeNull();
             expect(element<HTMLInputElement>('input[name="emailAddress"]').value).toBe(
                 'local@example.invalid',
@@ -132,18 +148,20 @@ describe('registration and verification ownership', () => {
             if (mode === 'register')
                 expect(element<HTMLInputElement>('input[name="fullName"]').value).toBe('Local Example');
             expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
-            expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
+            expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(mode !== 'auto');
             expect(onSuccess).not.toHaveBeenCalled();
             expect(navigate).not.toHaveBeenCalled();
             expect(api.refreshCustomerVerification).not.toHaveBeenCalled();
             const resend = Array.from(host.querySelectorAll('button')).find(
                 button =>
                     button.textContent ===
-                    (language === 'zh'
-                        ? '邮箱未验证？重新发送验证邮件'
-                        : 'Email not verified? Resend verification email'),
+                    (language === 'zh' ? '重新发送验证邮件' : 'Resend verification email'),
             );
             if (!resend) throw new Error('Missing explicit verification recovery action');
+            await settle(() =>
+                element<HTMLDetailsElement>('.auth-existing-account__help').setAttribute('open', ''),
+            );
+            expect(api.refreshCustomerVerification).not.toHaveBeenCalled();
             await settle(() => {
                 resend.click();
                 resend.click();
@@ -164,11 +182,173 @@ describe('registration and verification ownership', () => {
             expect(registerCustomerAccount).toHaveBeenCalledOnce();
             expect(onSuccess).not.toHaveBeenCalled();
             const reset = Array.from(host.querySelectorAll('button')).find(
-                button => button.textContent === (language === 'zh' ? '忘记密码？' : 'Forgot password?'),
+                button => button.textContent === (language === 'zh' ? '找回密码' : 'Recover password'),
             );
             if (!reset) throw new Error('Missing password recovery action');
             await settle(() => reset.click());
             expect(navigate).toHaveBeenLastCalledWith({ name: 'forgot-password' }, false);
+        },
+    );
+
+    it.each(['register', 'quick', 'auto'] as const)(
+        'restores the $mode form immediately when an existing email is edited',
+        async mode => {
+            const api = {
+                registerCustomerAccount: vi
+                    .fn()
+                    .mockRejectedValue(new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'Synthetic')),
+                referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+                login: vi.fn().mockRejectedValue(new ShopApiError('INVALID_CREDENTIALS_ERROR', 'Synthetic')),
+            };
+            const formProps = {
+                ...props,
+                api: api as never,
+                onContentTarget: vi.fn(),
+                onSuccess: vi.fn(),
+                authSettings: {
+                    emailPasswordEnabled: true,
+                    emailQuickRegistrationEnabled: mode === 'quick',
+                    emailAutoRegistrationEnabled: mode === 'auto',
+                    googleEnabled: false,
+                    googleClientId: null,
+                },
+            };
+            await settle(() =>
+                root.render(mode === 'auto' ? <LoginPage {...formProps} /> : <RegisterPage {...formProps} />),
+            );
+            const email = element<HTMLInputElement>('input[name="emailAddress"]');
+            email.value = 'local@example.invalid';
+            if (mode === 'register')
+                element<HTMLInputElement>('input[name="fullName"]').value = 'Local Example';
+            if (mode === 'auto')
+                element<HTMLInputElement>('input[name="password"]').value = 'local-synthetic-password';
+            act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+            await settle(submit);
+            expect(host.querySelector('.auth-existing-account')).not.toBeNull();
+            if (mode !== 'auto') {
+                await settle(submit);
+                expect(api.registerCustomerAccount).toHaveBeenCalledOnce();
+            }
+            await settle(() => {
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                    email,
+                    'new@example.invalid',
+                );
+                email.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            expect(host.querySelector('.auth-existing-account')).toBeNull();
+            expect(email.hasAttribute('aria-invalid')).toBe(false);
+            expect(email.hasAttribute('aria-describedby')).toBe(false);
+            expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
+            expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
+            if (mode === 'register')
+                expect(element<HTMLInputElement>('input[name="fullName"]').value).toBe('Local Example');
+            if (mode !== 'auto') expect(host.querySelector('.auth-password-hint')).not.toBeNull();
+        },
+    );
+
+    it('clears the automatic registration password warning after the password is edited', async () => {
+        const api = {
+            registerCustomerAccount: vi
+                .fn()
+                .mockRejectedValue(new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'Synthetic')),
+            login: vi.fn().mockRejectedValue(new ShopApiError('INVALID_CREDENTIALS_ERROR', 'Synthetic')),
+        };
+        await settle(() =>
+            root.render(
+                <LoginPage
+                    {...props}
+                    api={api as never}
+                    onContentTarget={vi.fn()}
+                    onSuccess={vi.fn()}
+                    authSettings={{
+                        emailPasswordEnabled: true,
+                        emailAutoRegistrationEnabled: true,
+                        emailQuickRegistrationEnabled: false,
+                        googleEnabled: false,
+                        googleClientId: null,
+                    }}
+                />,
+            ),
+        );
+        const password = element<HTMLInputElement>('input[name="password"]');
+        element<HTMLInputElement>('input[name="emailAddress"]').value = 'local@example.invalid';
+        password.value = 'local-synthetic-password';
+        act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+        await settle(submit);
+        expect(password.getAttribute('aria-invalid')).toBe('true');
+        await settle(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                password,
+                'changed-synthetic-password',
+            );
+            password.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        expect(password.hasAttribute('aria-invalid')).toBe(false);
+        expect(password.hasAttribute('aria-describedby')).toBe(false);
+        expect(host.querySelector('.auth-existing-account')).toBeNull();
+        expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
+    });
+
+    it.each(['login', 'forgot-password'] as const)(
+        'carries the standalone conflict email to %s without validating the registration form',
+        async destination => {
+            const api = {
+                registerCustomerAccount: vi
+                    .fn()
+                    .mockRejectedValue(new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'Synthetic')),
+                referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+            };
+            const formProps = {
+                ...props,
+                api: api as never,
+                onContentTarget: vi.fn(),
+                onSuccess: vi.fn(),
+                returnTo: 'purchase' as const,
+                returnVariantId: 'fixture-variant',
+                returnQuantity: 2,
+            };
+            const renderPage = (page: 'register' | 'login' | 'forgot-password') => {
+                root.render(
+                    <AuthEmailDraftBoundary active ownerKey="fixture-store">
+                        {page === 'register' ? (
+                            <RegisterPage {...formProps} />
+                        ) : page === 'login' ? (
+                            <LoginPage {...formProps} />
+                        ) : (
+                            <ForgotPasswordPage {...formProps} />
+                        )}
+                    </AuthEmailDraftBoundary>,
+                );
+            };
+            await settle(() => renderPage('register'));
+            completeRegistrationInput();
+            await settle(submit);
+            element<HTMLInputElement>('input[name="fullName"]').value = '';
+            act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+            const action = element<HTMLButtonElement>(
+                destination === 'login'
+                    ? '.auth-existing-account__primary'
+                    : '.auth-existing-account__secondary',
+            );
+            expect(action.type).toBe('button');
+            await settle(() => action.click());
+            expect(router.navigate).toHaveBeenCalledOnce();
+            expect(router.navigate.mock.calls[0][0]).toMatchObject({
+                to: destination === 'login' ? '/login' : '/forgot-password',
+                search: { returnTo: 'purchase', id: 'fixture-variant', quantity: 2 },
+            });
+            expect(JSON.stringify(router.navigate.mock.calls)).not.toContain('local@example.invalid');
+            expect(api.registerCustomerAccount).toHaveBeenCalledOnce();
+            await settle(() => renderPage(destination));
+            expect(element<HTMLInputElement>('input[name="emailAddress"]').value).toBe(
+                'local@example.invalid',
+            );
+            expect(host.querySelector('.auth-page-overlay')).toBeNull();
+            await settle(() => renderPage(destination === 'login' ? 'forgot-password' : 'login'));
+            expect(element<HTMLInputElement>('input[name="emailAddress"]').value).toBe(
+                'local@example.invalid',
+            );
         },
     );
 
@@ -286,7 +466,7 @@ describe('registration and verification ownership', () => {
             expect(email.value).toBe('changed@example.invalid');
             expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
             expect(formProps.onSuccess).not.toHaveBeenCalled();
-            expect(host.textContent).not.toContain('邮箱未验证？重新发送验证邮件');
+            expect(host.textContent).not.toContain('重新发送验证邮件');
         },
     );
 
@@ -334,7 +514,7 @@ describe('registration and verification ownership', () => {
         completeRegistrationInput();
         await settle(submit);
         const resend = Array.from(host.querySelectorAll('button')).find(
-            button => button.textContent === '邮箱未验证？重新发送验证邮件',
+            button => button.textContent === '重新发送验证邮件',
         );
         if (!resend) throw new Error('Missing verification recovery action');
         await settle(() => resend.click());

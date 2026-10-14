@@ -3,6 +3,7 @@ import { act, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthEmailDraftContext } from './auth-presentation';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontShell } from './StorefrontShell';
 
@@ -30,9 +31,17 @@ vi.mock('./components/common/desktop-account-navigation', () => ({
 vi.mock('@tanstack/react-router', () => ({
     Outlet: () => {
         const context = useContext(StorefrontContext);
+        const draft = useContext(AuthEmailDraftContext);
         return (
             <div>
                 PAGE_CONTENT <span data-testid="address-count">{context?.customer?.addresses?.length}</span>
+                <span data-testid="email-draft">{draft?.emailDraft ?? 'NO_DRAFT_SCOPE'}</span>
+                <button
+                    data-testid="set-email-draft"
+                    onClick={() => draft?.onEmailDraftChange?.('memory@example.invalid')}
+                >
+                    Set fixture draft
+                </button>
             </div>
         );
     },
@@ -91,6 +100,38 @@ describe('catalog rendering boundary', () => {
         };
         act(() => root.render(<StorefrontShell state={state as never} />));
     };
+    it('shares only the email across standalone auth routes and drops it when the flow is left', () => {
+        render({ displayedRoute: { name: 'register' } });
+        act(() => element.querySelector<HTMLButtonElement>('[data-testid="set-email-draft"]')?.click());
+        for (const name of ['login', 'forgot-password', 'register']) {
+            render({ displayedRoute: { name } });
+            expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe(
+                'memory@example.invalid',
+            );
+        }
+        render({ displayedRoute: { name: 'home' } });
+        expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe('NO_DRAFT_SCOPE');
+        render({ displayedRoute: { name: 'register' } });
+        expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe('');
+    });
+    it.each([
+        { label: 'storefront', context: { storefrontCode: 'other-store' } },
+        { label: 'market', context: { market: { code: 'OTHER', currencyCode: 'MYR' } } },
+        { label: 'currency', context: { market: { code: 'fixture-store', currencyCode: 'USD' } } },
+    ])('drops the standalone draft when its $label owner changes', ({ context }) => {
+        render({ displayedRoute: { name: 'register' } });
+        act(() => element.querySelector<HTMLButtonElement>('[data-testid="set-email-draft"]')?.click());
+        render({ displayedRoute: { name: 'login' }, storefrontContextValue: context });
+        expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe('');
+    });
+    it('clears the standalone draft on authentication without restoring it after logout', () => {
+        render({ displayedRoute: { name: 'register' } });
+        act(() => element.querySelector<HTMLButtonElement>('[data-testid="set-email-draft"]')?.click());
+        render({ displayedRoute: { name: 'login' }, customer: { id: 'fixture-customer' } });
+        expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe('NO_DRAFT_SCOPE');
+        render({ displayedRoute: { name: 'login' } });
+        expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe('');
+    });
     it('uses the centered initial state until configuration is resolved, including an immediate read failure', () => {
         render({
             pageDataPending: true,

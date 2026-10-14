@@ -2,6 +2,7 @@ import { lazyRouteComponent, Outlet } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { lazy, Suspense, useEffect, useState } from 'react';
 
+import { AuthEmailDraftBoundary } from './auth-presentation';
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import {
     DesktopAccountNavigation,
@@ -249,29 +250,44 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 ) : undefined
                             }
                         >
-                            <Suspense
-                                fallback={<PageSkeleton variant={skeletonVariant} language={language} root />}
+                            <AuthEmailDraftBoundary
+                                active={
+                                    !customer &&
+                                    ['login', 'register', 'forgot-password'].includes(displayedRoute.name)
+                                }
+                                ownerKey={JSON.stringify([
+                                    storefrontContextValue.storefrontCode,
+                                    storefrontContextValue.market.code,
+                                    storefrontContextValue.market.currencyCode,
+                                    customer?.id ?? null,
+                                ])}
                             >
-                                {protectedRoute && waitingForAccount ? (
-                                    accountFailed ? (
-                                        <div role="alert" className="empty-state">
-                                            <p>{customerLoadError}</p>
-                                            <button type="button" onClick={() => void retryAccount()}>
-                                                {isZh ? '重试' : 'Try again'}
-                                            </button>
-                                            <a href="/promo">
-                                                {isZh ? '返回介绍页' : 'Back to introduction'}
-                                            </a>
-                                        </div>
+                                <Suspense
+                                    fallback={
+                                        <PageSkeleton variant={skeletonVariant} language={language} root />
+                                    }
+                                >
+                                    {protectedRoute && waitingForAccount ? (
+                                        accountFailed ? (
+                                            <div role="alert" className="empty-state">
+                                                <p>{customerLoadError}</p>
+                                                <button type="button" onClick={() => void retryAccount()}>
+                                                    {isZh ? '重试' : 'Try again'}
+                                                </button>
+                                                <a href="/promo">
+                                                    {isZh ? '返回介绍页' : 'Back to introduction'}
+                                                </a>
+                                            </div>
+                                        ) : (
+                                            <PageSkeleton variant="account" language={language} root />
+                                        )
+                                    ) : protectedRoute && !customer ? (
+                                        <LoginRoutePage />
                                     ) : (
-                                        <PageSkeleton variant="account" language={language} root />
-                                    )
-                                ) : protectedRoute && !customer ? (
-                                    <LoginRoutePage />
-                                ) : (
-                                    <Outlet />
-                                )}
-                            </Suspense>
+                                        <Outlet />
+                                    )}
+                                </Suspense>
+                            </AuthEmailDraftBoundary>
                             {previewEmbedded &&
                                 previewScenario &&
                                 !['normal', 'dense', 'aftercare', 'catalog-scroll'].includes(
