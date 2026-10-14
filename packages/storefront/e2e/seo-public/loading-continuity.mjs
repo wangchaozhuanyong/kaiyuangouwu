@@ -148,6 +148,8 @@ if (dev) {
 }
 
 function transformPage(page, { url }) {
+    if (selected.has('quote-category'))
+        for (const product of page.products) product.customFields.pricingMode = 'QUOTE_ONLY';
     const isSupport =
         url.pathname.endsWith('/support') ||
         (url.searchParams.get('kind') === 'page' && url.searchParams.get('id') === 'support');
@@ -610,9 +612,10 @@ try {
                     }
                 });
             }
-    if (selected.has('default-category'))
+    if (selected.has('default-category') || selected.has('quote-category'))
         for (const width of widths) {
-            await runCase(`default-category-${width}`, width, async page => {
+            const caseName = selected.has('quote-category') ? 'quote-category' : 'default-category';
+            await runCase(`${caseName}-${width}`, width, async page => {
                 await page.route('**/_storefront/page-data?**', async route => {
                     const url = new URL(route.request().url());
                     if (url.searchParams.get('kind') !== 'catalog') return route.fallback();
@@ -625,6 +628,11 @@ try {
                 await page.goto(origin + '/en/category', { waitUntil: 'commit' });
                 await ready(page);
                 await expect(page).toHaveURL(/collectionId=synthetic-a-collection/u);
+                if (selected.has('quote-category')) {
+                    await expect(page.locator('.category-page .product-card-price').first()).toHaveText(
+                        /Request a quote/u,
+                    );
+                }
                 await page.waitForTimeout(500);
                 const frames = await page.evaluate(() => window.__continuity.samples);
                 const first = frames.findIndex(frame => frame.category);

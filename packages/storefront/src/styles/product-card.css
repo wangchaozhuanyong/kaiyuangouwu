@@ -176,6 +176,20 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* Quote labels reserve the numeric price's intrinsic baseline height, as the skeleton does. */
+.product-card-price.is-quote {
+    display: grid;
+}
+
+.product-card-price.is-quote > span {
+    grid-area: 1 / 1;
+    align-self: baseline;
+}
+
+.product-card-price-reserve {
+    visibility: hidden;
+}
+
 .product-card-price .price-lockup {
     font-size: var(--type-price-size);
     font-weight: var(--font-weight-bold);
