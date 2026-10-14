@@ -68,6 +68,19 @@ describe('storefront bootstrap boundaries', () => {
             ),
         );
     }
+    function documentLoading() {
+        document.body.insertAdjacentHTML(
+            'beforeend',
+            `<main id="storefront-boot-loading" aria-hidden="true">
+                <span class="brand-loading">
+                    <span class="brand-loading-caption"><span class="brand-loading-label"></span></span>
+                </span>
+            </main><div id="root"></div>`,
+        );
+        const boot = document.getElementById('storefront-boot-loading');
+        if (!boot) throw new Error('Document loading fixture is missing');
+        return boot;
+    }
     const nextConfig = (): StorefrontConfig => ({
         code: 'my-malaysia',
         defaultLanguageCode: 'en',
@@ -113,6 +126,8 @@ describe('storefront bootstrap boundaries', () => {
         act(() => root.unmount());
         client.clear();
         document.head.innerHTML = '';
+        document.getElementById('storefront-boot-loading')?.remove();
+        document.getElementById('root')?.remove();
         localStorage.clear();
         vi.restoreAllMocks();
     });
@@ -129,6 +144,30 @@ describe('storefront bootstrap boundaries', () => {
         expect(frames.length).toBeGreaterThan(0);
         expect(frames.every(([copy, query]) => copy === 'en' && query === 'en')).toBe(true);
         expect(queries.read.mock.lastCall?.[0].presentedHref).toBe('/en/product?id=p2');
+    });
+
+    it('updates the retained document brand for committed language and configuration changes without displaying it', () => {
+        const boot = documentLoading();
+        config = { ...nextConfig(), logoUrl: '/assets/current-logo.png' };
+        presentedRoute = { name: 'home', publicLanguage: 'zh' };
+        render();
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('测试店铺');
+        expect(boot.querySelector('.brand-loading-subtitle')?.textContent).toBe('Test store');
+        presentedRoute = { name: 'home', publicLanguage: 'en' };
+        render();
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('Test store');
+        expect(boot.querySelector('.brand-loading-subtitle')?.textContent).toBe('');
+        expect(boot.querySelector('.brand-loading-label')?.textContent).toBe('Loading');
+        config = {
+            ...config,
+            customFields: { storefrontNameZh: '已更新店铺', storefrontNameEn: 'Updated store' },
+            logoUrl: '/assets/updated-logo.png',
+        };
+        render();
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('Updated store');
+        expect(boot.querySelector('img')?.getAttribute('src')).toContain('updated-logo');
+        expect(boot.getAttribute('aria-hidden')).toBe('true');
+        expect(document.documentElement.hasAttribute('data-storefront-boot-pending')).toBe(false);
     });
 
     it('uses a confirmed fresh scoped brand on a private page without a second config read', () => {
@@ -291,6 +330,7 @@ describe('storefront bootstrap boundaries', () => {
     });
 
     it('clears branding immediately on a store switch and ignores an old store response that finishes later', async () => {
+        const boot = documentLoading();
         const first: StorefrontConfig = {
             ...nextConfig(),
             code: enabledMarkets[0].code,
@@ -329,6 +369,7 @@ describe('storefront bootstrap boundaries', () => {
         });
         render();
         expect(value.storefrontName).toBe('第一店');
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('第一店');
         let finishFirst!: (response: StorefrontConfig) => void;
         let oldRead!: Promise<StorefrontConfig>;
         await act(async () => {
@@ -349,6 +390,8 @@ describe('storefront bootstrap boundaries', () => {
         expect(value.storefrontCode).toBe('');
         expect(value.storefrontName).toBe('');
         expect(value.logoUrl).toBeNull();
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
+        expect(boot.querySelector('img')).toBeNull();
         await act(async () => {
             finishFirst({ ...first, logoUrl: '/assets/late-first-store.webp' });
             await oldRead;
@@ -356,6 +399,7 @@ describe('storefront bootstrap boundaries', () => {
         });
         expect(value.storefrontName).toBe('');
         expect(value.logoUrl).toBeNull();
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
         await act(async () => {
             finishSecond(second);
             await new Promise(done => setTimeout(done, 10));
@@ -363,6 +407,7 @@ describe('storefront bootstrap boundaries', () => {
         expect(value.storefrontCode).toBe(second.code);
         expect(value.storefrontName).toBe('第二店');
         expect(value.logoUrl).toBe('/assets/second-store.webp');
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('第二店');
     });
     it('closes an already-loaded store, discards its scoped catalog cache and resumes reads after fresh configuration recovery', async () => {
         config = { ...nextConfig(), accessMode: 'PREVIEW', logoUrl: '/assets/current-store.webp' };

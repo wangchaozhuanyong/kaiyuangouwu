@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode, useState } from 'react';
 
+import { applyInitialLoadingBrand } from './brand-loading-bootstrap';
 import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-image';
 
 interface StorefrontRecoveryScope {
@@ -12,6 +13,7 @@ interface StorefrontRecoveryBrand {
     channelCode: string;
     name: string;
     logoUrl: string | null;
+    secondaryName?: string;
 }
 
 interface RecoveryOwner {
@@ -19,6 +21,7 @@ interface RecoveryOwner {
     origin: string;
     scopeKey: string;
     channelCode: string;
+    languageCode: 'en' | 'zh_Hans';
 }
 
 // This is a single committed presentation record for a render crash in this document,
@@ -34,6 +37,12 @@ export function beginStorefrontRecoveryScope(scope: StorefrontRecoveryScope): Re
         !scope.currencyCode.trim() ||
         !scope.languageCode.trim()
     ) {
+        if (recovery && typeof document !== 'undefined')
+            applyInitialLoadingBrand({
+                language: document.documentElement.lang.startsWith('zh') ? 'zh_Hans' : 'en',
+                storefrontName: '',
+                logoUrl: '',
+            });
         recovery = null;
         return null;
     }
@@ -43,10 +52,23 @@ export function beginStorefrontRecoveryScope(scope: StorefrontRecoveryScope): Re
         recovery.owner.origin !== window.location.origin ||
         recovery.owner.scopeKey !== scopeKey
     ) {
+        const replacingCurrentDocumentOwner = recovery?.owner.document === document;
         recovery = {
-            owner: { document, origin: window.location.origin, scopeKey, channelCode: scope.channelCode },
+            owner: {
+                document,
+                origin: window.location.origin,
+                scopeKey,
+                channelCode: scope.channelCode,
+                languageCode: scope.languageCode === 'en' ? 'en' : 'zh_Hans',
+            },
             brand: null,
         };
+        if (replacingCurrentDocumentOwner)
+            applyInitialLoadingBrand({
+                language: recovery.owner.languageCode,
+                storefrontName: '',
+                logoUrl: '',
+            });
     }
     return recovery.owner;
 }
@@ -65,8 +87,15 @@ export function setStorefrontRecoveryBrand(
                   channelCode: brand.channelCode,
                   name: brand.name.trim(),
                   logoUrl: normalizeStorefrontAssetUrl(brand.logoUrl ?? '') || null,
+                  secondaryName: brand.secondaryName?.trim(),
               }
             : null;
+    applyInitialLoadingBrand({
+        language: owner.languageCode,
+        storefrontName: recovery.brand?.name ?? '',
+        secondaryName: recovery.brand?.secondaryName,
+        logoUrl: recovery.brand?.logoUrl ?? '',
+    });
 }
 
 function currentRecoveryBrand(): StorefrontRecoveryBrand | null {
@@ -116,6 +145,7 @@ export class StorefrontErrorBoundary extends Component<
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
         document.documentElement.removeAttribute('data-storefront-theme-pending');
+        document.dispatchEvent(new Event('storefront:page-error'));
         // Rendering failures must remain visible in production diagnostics.
         // eslint-disable-next-line no-console
         console.error('Storefront render failed', error, errorInfo);

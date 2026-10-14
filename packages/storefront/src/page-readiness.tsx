@@ -195,6 +195,10 @@ export function PageReadinessBoundary({
         };
     }, [waiting, cycle, requireInitialRouteCommit, initialRouteCommitted]);
 
+    useLayoutEffect(() => {
+        if (phase === 'error') document.dispatchEvent(new Event('storefront:page-error'));
+    }, [phase]);
+
     const retry = useCallback(() => {
         onRetry();
         setAttempt(value => value + 1);

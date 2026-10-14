@@ -3,6 +3,7 @@ import { act, useLayoutEffect, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { applyInitialLoadingBrand } from './brand-loading-bootstrap';
 import {
     beginStorefrontRecoveryScope,
     setStorefrontRecoveryBrand,
@@ -17,6 +18,20 @@ const brandA = { channelCode: 'store-a', name: '甲店', logoUrl: '/store-a.png'
 const brandB = { channelCode: 'store-b', name: '乙店', logoUrl: '/store-b.png' };
 let root: Root | undefined;
 let host: HTMLDivElement | undefined;
+
+function mountDocumentLoading() {
+    document.body.insertAdjacentHTML(
+        'beforeend',
+        `<main id="storefront-boot-loading" aria-hidden="true">
+            <span class="brand-loading">
+                <span class="brand-loading-caption"><span class="brand-loading-label"></span></span>
+            </span>
+        </main><div id="root"></div>`,
+    );
+    const boot = document.getElementById('storefront-boot-loading');
+    if (!boot) throw new Error('Document loading fixture is missing');
+    return boot;
+}
 
 function failedBoundary(language = 'zh-CN') {
     document.documentElement.lang = language;
@@ -45,10 +60,53 @@ afterEach(() => {
     root = undefined;
     host = undefined;
     beginStorefrontRecoveryScope({ channelCode: '', currencyCode: '', languageCode: '' });
+    document.getElementById('storefront-boot-loading')?.remove();
+    document.getElementById('root')?.remove();
     sessionStorage.clear();
 });
 
 describe('StorefrontErrorBoundary', () => {
+    it('preserves the confirmed parser logo through its first owner commit without showing hidden loading', () => {
+        const boot = mountDocumentLoading();
+        applyInitialLoadingBrand({
+            language: 'zh_Hans',
+            storefrontName: brandA.name,
+            logoUrl: brandA.logoUrl,
+            secondaryName: 'Store A',
+        });
+        const image = boot.querySelector('img');
+        const owner = beginStorefrontRecoveryScope(scopeA);
+        expect(boot.querySelector('img')).toBe(image);
+        setStorefrontRecoveryBrand(owner, { ...brandA, secondaryName: 'Store A' });
+        expect(boot.querySelector('img')).toBe(image);
+        expect(boot.querySelector('.brand-loading-subtitle')?.textContent).toBe('Store A');
+        expect(boot.getAttribute('aria-hidden')).toBe('true');
+        expect(document.documentElement.hasAttribute('data-storefront-boot-pending')).toBe(false);
+    });
+
+    it('keeps retained document branding scoped across language changes and rejects previous owners', () => {
+        const boot = mountDocumentLoading();
+        const original = beginStorefrontRecoveryScope(scopeA);
+        setStorefrontRecoveryBrand(original, brandA);
+        const english = beginStorefrontRecoveryScope({ ...scopeA, languageCode: 'en' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
+        expect(boot.querySelector('img')).toBeNull();
+        setStorefrontRecoveryBrand(original, brandA);
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
+        setStorefrontRecoveryBrand(english, { ...brandA, name: 'Store A' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('Store A');
+        expect(boot.querySelector('.brand-loading-label')?.textContent).toBe('Loading');
+        const next = beginStorefrontRecoveryScope(scopeB);
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
+        setStorefrontRecoveryBrand(next, brandB);
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('乙店');
+        setStorefrontRecoveryBrand(english, brandA);
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('乙店');
+        setStorefrontRecoveryBrand(next, null);
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
+        expect(boot.querySelector('img')).toBeNull();
+    });
+
     it('renders the storefront while no render error has occurred', () => {
         const boundary = new StorefrontErrorBoundary({ children: 'storefront' });
 

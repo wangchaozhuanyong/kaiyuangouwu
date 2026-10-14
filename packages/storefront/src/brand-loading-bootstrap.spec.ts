@@ -52,9 +52,14 @@ beforeEach(() => {
         writable: true,
         value: () => Promise.resolve(),
     });
-    const root = new DOMParser().parseFromString(indexHtml, 'text/html').getElementById('root');
-    if (!root) throw new Error('Initial storefront loader is missing');
-    document.body.replaceChildren(document.importNode(root, true));
+    const parsed = new DOMParser().parseFromString(indexHtml, 'text/html');
+    const root = parsed.getElementById('root');
+    const boot = parsed.getElementById('storefront-boot-loading');
+    if (!root || !boot) throw new Error('Initial storefront loader is missing');
+    document.body.replaceChildren(
+        ...(!root.contains(boot) ? [document.importNode(boot, true)] : []),
+        document.importNode(root, true),
+    );
 });
 afterEach(() => {
     vi.restoreAllMocks();
@@ -114,14 +119,43 @@ describe('parser-time storefront loading', () => {
 
     it('waits for the body when the early head script runs before the loader has been parsed', () => {
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
-        const root = document.getElementById('root');
-        if (!root) throw new Error('Initial storefront root is missing');
-        root.remove();
+        const initialNodes = Array.from(document.body.childNodes);
+        document.body.replaceChildren();
         applyInitialLoadingBrand({ ...brand, logoUrl: '' });
-        document.body.appendChild(root);
+        document.body.append(...initialNodes);
         expect(document.querySelector('.brand-loading-name')?.textContent).toBe('');
         document.dispatchEvent(new Event('DOMContentLoaded'));
         expect(document.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
+    });
+
+    it('brands the document stage beside an already rendered public root without changing its content', () => {
+        const root = document.getElementById('root');
+        const boot = document.getElementById('storefront-boot-loading');
+        if (!root || !boot) throw new Error('Initial storefront loader is missing');
+        root.before(boot);
+        root.dataset.publicRendered = '1';
+        root.innerHTML = '<p>Published content</p>';
+        applyInitialLoadingBrand({ ...brand, logoUrl: '' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
+        expect(root.innerHTML).toBe('<p>Published content</p>');
+    });
+
+    it('retains support for a client-only loader inside its root', () => {
+        const root = document.getElementById('root');
+        const boot = document.getElementById('storefront-boot-loading');
+        if (!root || !boot) throw new Error('Initial storefront loader is missing');
+        root.replaceChildren(boot);
+        applyInitialLoadingBrand({ ...brand, logoUrl: '' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
+    });
+
+    it('does not claim a similarly named loader outside the document startup position', () => {
+        const root = document.getElementById('root');
+        const boot = document.getElementById('storefront-boot-loading');
+        if (!root || !boot) throw new Error('Initial storefront loader is missing');
+        root.after(boot);
+        applyInitialLoadingBrand({ ...brand, logoUrl: '' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
     });
 
     it('reveals the real image only after decoding completes', async () => {
@@ -137,6 +171,27 @@ describe('parser-time storefront loading', () => {
         expect(document.querySelector('.is-logo-ready')).toBeNull();
         decoded();
         await Promise.resolve();
+        expect(document.querySelector('.is-logo-ready')).not.toBeNull();
+    });
+
+    it('retains the same logo and its in-flight decode when React confirms the early brand', async () => {
+        let decoded!: () => void;
+        const decode = vi
+            .spyOn(HTMLImageElement.prototype, 'decode')
+            .mockImplementation(() => new Promise<void>(resolve => (decoded = resolve)));
+        applyInitialLoadingBrand(brand);
+        const image = document.querySelector('img');
+        if (!image) throw new Error('Initial storefront image is missing');
+        Object.defineProperty(image, 'naturalWidth', { value: 160 });
+        image.dispatchEvent(new Event('load'));
+        applyInitialLoadingBrand({ ...brand });
+        expect(document.querySelector('img')).toBe(image);
+        expect(decode).toHaveBeenCalledOnce();
+        decoded();
+        await Promise.resolve();
+        expect(document.querySelector('.is-logo-ready')).not.toBeNull();
+        applyInitialLoadingBrand({ ...brand });
+        expect(document.querySelector('img')).toBe(image);
         expect(document.querySelector('.is-logo-ready')).not.toBeNull();
     });
 
@@ -156,6 +211,7 @@ describe('parser-time storefront loading', () => {
         app.textContent = 'React page';
         const root = document.getElementById('root');
         if (!root) throw new Error('Initial storefront root is missing');
+        document.getElementById('storefront-boot-loading')?.remove();
         root.replaceChildren(app);
         decoded();
         await Promise.resolve();
