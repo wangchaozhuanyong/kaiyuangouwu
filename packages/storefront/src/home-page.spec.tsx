@@ -2384,6 +2384,42 @@ describe('HomePage featured collection', () => {
         items: [],
     };
 
+    it('reserves the complete configured collection while only some selections are known', () => {
+        const products = Array.from({ length: 7 }, (_, index) => ({
+            ...featuredProduct,
+            id: `loading-${index}`,
+        }));
+        const contentBlocks = [
+            {
+                ...featuredCollectionBlock,
+                settings: { displayCount: 7, selectedProductIds: products.map(item => item.id) },
+            },
+        ];
+        const pending = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION'],
+            contentBlocks,
+            products: products.slice(0, 2),
+            managedContentProducts: [],
+            managedContentLoading: true,
+            managedContentResolved: false,
+        });
+        const ready = renderHome({
+            configuredBlockTypes: [...baseProps.configuredBlockTypes, 'FEATURED_COLLECTION'],
+            contentBlocks,
+            managedContentProducts: products,
+            managedContentResolved: true,
+        });
+        for (const markup of [pending, ready]) {
+            expect(markup).toContain('data-product-count="7"');
+            expect(markup).toContain(
+                'class="featured-collection-supporting-products" data-product-count="6"',
+            );
+        }
+        expect(pending.match(/product-card-skeleton is-mosaic/g)).toHaveLength(1);
+        expect(pending.match(/product-card-skeleton is-gallery/g)).toHaveLength(6);
+        expect(pending).not.toContain('data-product-count="2"');
+    });
+
     it.each([0, 1, 5, 6, 7])(
         'keeps every configured collection product visible at both widths (%i items)',
         count => {

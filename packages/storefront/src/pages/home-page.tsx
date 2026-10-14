@@ -1883,7 +1883,7 @@ function ManagedContentSection({
         return (
             <FeaturedCollectionSection
                 block={block}
-                products={selectedProducts}
+                products={loading && !productsResolved ? [] : selectedProducts}
                 loading={loading}
                 market={market}
                 language={language}
@@ -2173,6 +2173,12 @@ function FeaturedCollectionSection({
     const isZh = language === 'zh';
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
     const [featuredProduct, ...supportingProducts] = products;
+    const configuredProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
+    const placeholderCount = Math.min(
+        50,
+        Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)),
+        configuredProductIds.length || 50,
+    );
 
     return (
         <section
@@ -2210,26 +2216,19 @@ function FeaturedCollectionSection({
                     <div
                         className="featured-collection-mosaic"
                         aria-busy="true"
-                        data-product-count={Math.min(
-                            50,
-                            Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)),
-                        )}
+                        data-product-count={placeholderCount}
                     >
-                        <ProductCardSkeleton />
-                        <div className="featured-collection-supporting-products">
-                            {Array.from(
-                                {
-                                    length: Math.max(
-                                        0,
-                                        Math.min(50, contentNumberSetting(block.settings?.displayCount, 8)) -
-                                            1,
-                                    ),
-                                },
-                                (_, index) => (
-                                    <ProductCardSkeleton key={index} />
-                                ),
-                            )}
-                        </div>
+                        <ProductCardSkeleton appearance="mosaic" />
+                        {placeholderCount > 1 && (
+                            <div
+                                className="featured-collection-supporting-products"
+                                data-product-count={placeholderCount - 1}
+                            >
+                                {Array.from({ length: placeholderCount - 1 }, (_, index) => (
+                                    <ProductCardSkeleton key={index} appearance="gallery" />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 ) : featuredProduct ? (
                     <div
