@@ -307,6 +307,12 @@
     line-height: var(--line-height-body);
 }
 
+/* The real gallery card and its skeleton reserve a normal two-line name.
+   Longer merchant titles can still grow and wrap without being clipped. */
+.product-card.is-gallery .product-card-name {
+    min-height: 2lh;
+}
+
 .product-card.is-gallery .product-card-content > footer,
 .product-card.is-mosaic .product-card-content > footer {
     padding-top: 8px;

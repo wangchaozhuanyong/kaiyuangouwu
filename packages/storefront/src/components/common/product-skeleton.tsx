@@ -1,23 +1,29 @@
+import { type ReactNode } from 'react';
+
 export function ProductCardSkeleton({
     appearance = 'card',
     responsiveRow = false,
+    children,
 }: {
-    appearance?: 'card' | 'plain';
+    appearance?: 'card' | 'plain' | 'mosaic' | 'gallery';
     responsiveRow?: boolean;
+    children?: ReactNode;
 }) {
     return (
         <div
-            className={`product-card product-card-skeleton${appearance === 'plain' ? ' is-plain' : ''}${responsiveRow ? ' is-responsive-row' : ''}`}
-            aria-hidden="true"
+            className={`product-card product-card-skeleton${appearance !== 'card' ? ` is-${appearance}` : ''}${responsiveRow ? ' is-responsive-row' : ''}`}
+            aria-hidden={children ? undefined : true}
         >
             <div className="product-card-detail-link">
-                <div className="product-card-media" />
-                <div className="product-card-content">
+                <div className="product-card-media">{children}</div>
+                <div className="product-card-content" aria-hidden={children ? true : undefined}>
                     <strong className="product-card-name">&nbsp;</strong>
-                    {appearance !== 'plain' && <span className="product-card-subtitle">&nbsp;</span>}
-                    <div className="product-card-meta">
-                        <span className="product-card-delivery">&nbsp;</span>
-                    </div>
+                    {appearance === 'card' && <span className="product-card-subtitle">&nbsp;</span>}
+                    {appearance !== 'mosaic' && appearance !== 'gallery' && (
+                        <div className="product-card-meta">
+                            <span className="product-card-delivery">&nbsp;</span>
+                        </div>
+                    )}
                     <footer>
                         <div className="product-card-price">
                             <span className="price-lockup">
@@ -25,7 +31,9 @@ export function ProductCardSkeleton({
                                 <span className="price-integer">&nbsp;</span>
                             </span>
                         </div>
-                        <small className="product-card-stock">&nbsp;</small>
+                        {appearance !== 'mosaic' && appearance !== 'gallery' && (
+                            <small className="product-card-stock">&nbsp;</small>
+                        )}
                     </footer>
                 </div>
             </div>

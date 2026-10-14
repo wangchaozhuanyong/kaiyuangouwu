@@ -356,6 +356,8 @@ export interface HomePageProps {
     managedContentProducts: Product[];
     managedContentLoading?: boolean;
     managedContentResolved?: boolean;
+    managedContentError?: string;
+    onManagedContentRetry?: () => void;
     /** Anonymous SSR emits both shortcut geometries for native media-query selection. */
     responsiveIntro?: boolean;
     heroAutoplayIntervalSeconds: number;
@@ -432,6 +434,8 @@ export function HomePage() {
         managedContentProducts,
         managedContentLoading = false,
         managedContentResolved = false,
+        managedContentError = '',
+        onManagedContentRetry,
         responsiveIntro = false,
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
@@ -1560,6 +1564,8 @@ export function HomePage() {
                                     products={managedContentProductPool}
                                     loading={managedContentLoading}
                                     productsResolved={managedContentResolved}
+                                    error={managedContentError}
+                                    onRetry={onManagedContentRetry}
                                     language={language}
                                     locale={locale}
                                     market={market}
@@ -1822,6 +1828,8 @@ function ManagedContentSection({
     products,
     loading = false,
     productsResolved = false,
+    error = '',
+    onRetry,
     language,
     locale,
     market,
@@ -1831,6 +1839,8 @@ function ManagedContentSection({
     products: Product[];
     loading?: boolean;
     productsResolved?: boolean;
+    error?: string;
+    onRetry?: () => void;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -1883,8 +1893,10 @@ function ManagedContentSection({
         return (
             <FeaturedCollectionSection
                 block={block}
-                products={selectedProducts}
+                products={loading && !productsResolved ? [] : selectedProducts}
                 loading={loading}
+                error={error}
+                onRetry={onRetry}
                 market={market}
                 language={language}
                 locale={locale}
@@ -2157,6 +2169,8 @@ function FeaturedCollectionSection({
     block,
     products,
     loading = false,
+    error = '',
+    onRetry,
     language,
     locale,
     market,
@@ -2165,6 +2179,8 @@ function FeaturedCollectionSection({
     block: StorefrontContentBlock;
     products: Product[];
     loading?: boolean;
+    error?: string;
+    onRetry?: () => void;
     language: StorefrontLanguage;
     locale: string;
     market: MarketConfig;
@@ -2173,6 +2189,12 @@ function FeaturedCollectionSection({
     const isZh = language === 'zh';
     const blockHasTarget = block.targetType !== 'NONE' && Boolean(block.targetValue);
     const [featuredProduct, ...supportingProducts] = products;
+    const configuredProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
+    const placeholderCount = Math.min(
+        50,
+        Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)),
+        configuredProductIds.length || 50,
+    );
 
     return (
         <section
@@ -2209,27 +2231,36 @@ function FeaturedCollectionSection({
                 {loading && !featuredProduct ? (
                     <div
                         className="featured-collection-mosaic"
-                        aria-busy="true"
-                        data-product-count={Math.min(
-                            50,
-                            Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)),
-                        )}
+                        aria-busy={!error}
+                        data-product-count={placeholderCount}
                     >
-                        <ProductCardSkeleton />
-                        <div className="featured-collection-supporting-products">
-                            {Array.from(
-                                {
-                                    length: Math.max(
-                                        0,
-                                        Math.min(50, contentNumberSetting(block.settings?.displayCount, 8)) -
-                                            1,
-                                    ),
-                                },
-                                (_, index) => (
-                                    <ProductCardSkeleton key={index} />
-                                ),
-                            )}
-                        </div>
+                        <ProductCardSkeleton appearance="mosaic">
+                            {error ? (
+                                <div role="alert">
+                                    <EmptyState
+                                        icon={<WifiOff />}
+                                        title={
+                                            isZh
+                                                ? '精选商品暂时无法加载'
+                                                : 'Featured products are unavailable'
+                                        }
+                                        detail={error}
+                                        action={isZh ? '重试' : 'Try again'}
+                                        onAction={onRetry}
+                                    />
+                                </div>
+                            ) : null}
+                        </ProductCardSkeleton>
+                        {placeholderCount > 1 && (
+                            <div
+                                className="featured-collection-supporting-products"
+                                data-product-count={placeholderCount - 1}
+                            >
+                                {Array.from({ length: placeholderCount - 1 }, (_, index) => (
+                                    <ProductCardSkeleton key={index} appearance="gallery" />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 ) : featuredProduct ? (
                     <div

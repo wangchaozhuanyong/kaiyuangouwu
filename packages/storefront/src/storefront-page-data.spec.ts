@@ -7,7 +7,12 @@ import {
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
 
-import { persistPublicQueryCache, storefrontQueryKeys, watchStorefrontScopeAccess } from './query-client';
+import {
+    PUBLIC_QUERY_STALE_TIME,
+    persistPublicQueryCache,
+    storefrontQueryKeys,
+    watchStorefrontScopeAccess,
+} from './query-client';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { seedPublicPage, validatePublicPageData, type PublicPageData } from './storefront-page-data';
 
@@ -224,6 +229,73 @@ describe('public page fetch boundary', () => {
         vi.restoreAllMocks();
         vi.resetModules();
     });
+
+    it.each([-35_000, 35_000])(
+        'adopts this rendered document with clock offset %i without making its data fresh',
+        async offset => {
+            const now = Date.now();
+            vi.spyOn(Date, 'now').mockReturnValue(now);
+            const page = fixture(now + offset);
+            page.requestKey = publicPageRequestKey({ kind: 'home' });
+            vi.stubGlobal('window', {
+                location: { host: 'store.test', origin: 'https://store.test', pathname: '/en/', search: '' },
+            });
+            vi.stubGlobal('document', {
+                getElementById: (id: string) =>
+                    id === 'root'
+                        ? { dataset: { publicRendered: '1' } }
+                        : { textContent: JSON.stringify(page) },
+            });
+            const { readInitialPublicPage } = await import('./storefront-page-data');
+            expect(validatePublicPageData(page, 'store.test')).toBe(false);
+            expect(readInitialPublicPage()).toEqual(page);
+            const client = new QueryClient();
+            seedPublicPage(client, page);
+            expect(
+                client.getQueryState([...storefrontQueryKeys.config('store-a:MYR', 'en'), 'public'])
+                    ?.dataUpdatedAt,
+            ).toBe(offset > 0 ? now - PUBLIC_QUERY_STALE_TIME : page.generatedAt);
+            client.clear();
+            vi.stubGlobal('document', {
+                getElementById: (id: string) =>
+                    id === 'root'
+                        ? { dataset: { publicRendered: '1', publicAdopted: '1' } }
+                        : { textContent: JSON.stringify(page) },
+            });
+            expect(readInitialPublicPage()).toBeUndefined();
+            vi.stubGlobal('document', {
+                getElementById: (id: string) =>
+                    id === 'root' ? { dataset: {} } : { textContent: JSON.stringify(page) },
+            });
+            expect(readInitialPublicPage()).toBeUndefined();
+        },
+    );
+
+    it.each(['host', 'channel', 'language', 'request', 'private', 'closed'])(
+        'still rejects a rendered document with the wrong %s identity',
+        async mismatch => {
+            const page = fixture(Date.now() - 35_000);
+            page.requestKey = publicPageRequestKey({ kind: 'home' });
+            if (mismatch === 'host') page.scope.host = 'other.test';
+            if (mismatch === 'channel') page.config.code = 'other-store';
+            if (mismatch === 'language') page.scope.languageCode = 'zh_Hans';
+            if (mismatch === 'request')
+                page.requestKey = publicPageRequestKey({ kind: 'product', id: 'wrong' });
+            if (mismatch === 'private') page.scope.priceContext = 'customer' as 'public';
+            if (mismatch === 'closed') page.config.accessMode = 'CLOSED';
+            vi.stubGlobal('window', {
+                location: { host: 'store.test', origin: 'https://store.test', pathname: '/en/', search: '' },
+            });
+            vi.stubGlobal('document', {
+                getElementById: (id: string) =>
+                    id === 'root'
+                        ? { dataset: { publicRendered: '1' } }
+                        : { textContent: JSON.stringify(page) },
+            });
+            const { readInitialPublicPage } = await import('./storefront-page-data');
+            expect(readInitialPublicPage()).toBeUndefined();
+        },
+    );
 
     it('keeps srcdoc preview reads on the Shop API bridge when the document URL has no preview parameters', async () => {
         vi.stubGlobal('window', {

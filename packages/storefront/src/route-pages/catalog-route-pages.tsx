@@ -50,7 +50,21 @@ export function HomeRoutePage() {
                 collections: runtime.collections,
                 contentBlocks: runtime.contentBlocks,
                 managedContentProducts: runtime.managedContentProducts,
-                managedContentLoading: runtime.managedContentLoading,
+                managedContentLoading:
+                    runtime.managedContentLoading ||
+                    (runtime.managedContentProductsQuery?.data === undefined &&
+                        (runtime.managedContentProductsQuery?.isPaused ||
+                            runtime.managedContentProductsQuery?.isError)),
+                managedContentError:
+                    runtime.managedContentProductsQuery?.data === undefined
+                        ? runtime.managedContentProductsQuery?.isPaused
+                            ? offlineLoadError(language)
+                            : runtime.managedContentProductsQuery?.error
+                              ? storefrontErrorMessage(runtime.managedContentProductsQuery.error, language)
+                              : ''
+                        : '',
+                onManagedContentRetry: () =>
+                    void runtime.managedContentProductsQuery?.refetch({ cancelRefetch: false }),
                 managedContentResolved: runtime.managedContentResolved,
                 responsiveIntro: true,
                 initialRenderTime,
