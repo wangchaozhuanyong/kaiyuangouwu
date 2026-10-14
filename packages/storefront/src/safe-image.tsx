@@ -143,7 +143,7 @@ export function SafeImage(props: SafeImageProps) {
                     ? previous.source
                     : ''
             }
-            onReady={source =>
+            onPresented={source =>
                 setPrevious(current =>
                     current.identity === identity && current.source === source
                         ? current
@@ -197,9 +197,9 @@ function SafeImageSource({
     onImageReady,
     className,
     retainedSrc,
-    onReady,
+    onPresented,
     ...imageProps
-}: SafeImageProps & { retainedSrc: string; onReady: (source: string) => void }) {
+}: SafeImageProps & { retainedSrc: string; onPresented: (source: string) => void }) {
     const [currentSrc, setCurrentSrc] = useState(src);
     const [responsive, setResponsive] = useState(true);
     const [failed, setFailed] = useState(false);
@@ -275,6 +275,10 @@ function SafeImageSource({
     function reveal(image: HTMLImageElement, onDecoded?: () => void) {
         if (!image.complete || image.naturalWidth === 0) return;
         const candidate = imageCandidateIdentity(image);
+        // Native media can already be painted before decode() settles, including
+        // SSR images. Retain that actual candidate if the next render changes its
+        // source; presentation reuse must not mark the replacement decoded/ready.
+        if (!placeholder || inlinePreview) onPresented(image.currentSrc || image.src);
         void decodeImageElement(image)
             .then(() => {
                 if (
@@ -305,7 +309,7 @@ function SafeImageSource({
                 }
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
-                onReady(image.currentSrc || image.src);
+                onPresented(image.currentSrc || image.src);
                 onDecoded?.();
             })
             .catch(() => {
@@ -371,7 +375,7 @@ function SafeImageSource({
             ) {
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
-                onReady(image.currentSrc || image.src);
+                onPresented(image.currentSrc || image.src);
             }
             reveal(image);
         }

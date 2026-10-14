@@ -2,11 +2,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { acquireBodyScrollLock } from './scroll-lock';
 
-function createDocument() {
+function createDocument(stableGutter = false) {
+    const rootStyle = { overflow: 'auto' };
     return {
         documentElement: {
-            clientWidth: 980,
-            style: { overflow: 'auto' },
+            get clientWidth() {
+                return rootStyle.overflow === 'hidden' && !stableGutter ? 1000 : 980;
+            },
+            getBoundingClientRect() {
+                return { width: rootStyle.overflow === 'hidden' && !stableGutter ? 1000 : 980 };
+            },
+            style: rootStyle,
         },
         body: {
             style: { overflow: 'visible', paddingRight: '4px' },
@@ -51,5 +57,19 @@ describe('body scroll lock', () => {
         releaseSecond();
         releaseSecond();
         expect(fakeDocument.body.style.overflow).toBe('visible');
+    });
+
+    it('keeps the existing padding when a stable gutter retains the layout width', () => {
+        const fakeDocument = createDocument(true);
+        vi.stubGlobal('document', fakeDocument);
+        const release = acquireBodyScrollLock();
+        try {
+            expect(fakeDocument.documentElement.clientWidth).toBe(980);
+            expect(fakeDocument.body.style.paddingRight).toBe('4px');
+        } finally {
+            release();
+        }
+        expect(fakeDocument.body.style.paddingRight).toBe('4px');
+        expect(fakeDocument.documentElement.style.overflow).toBe('auto');
     });
 });
