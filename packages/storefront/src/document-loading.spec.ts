@@ -271,7 +271,7 @@ describe('document startup feedback without hiding available content', () => {
     it('ships a nonblocking startup script and no root-hiding CSS rule', () => {
         const html = readFileSync(join(__dirname, '../index.html'), 'utf8');
         const css = readFileSync(join(__dirname, './styles/skeletons.css'), 'utf8');
-        expect(html).toContain('<script defer src="/storefront/document-loading.js">');
+        expect(html).toMatch(/<script defer src="\/storefront\/document-loading\.js\?v=[^"]+">/u);
         expect(html.indexOf('<div id="root">')).toBeLessThan(html.indexOf('id="storefront-boot-loading"'));
         expect(html + css).not.toMatch(/boot-pending[^{}]*#root\s*\{[^}]*visibility:\s*hidden/u);
         expect(source).not.toMatch(/root\.inert\s*=\s*true/u);
