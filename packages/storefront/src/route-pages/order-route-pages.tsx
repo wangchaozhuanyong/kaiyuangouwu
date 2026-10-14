@@ -426,13 +426,15 @@ function AccountSecurityRouteContent({ runtime }: { runtime: ReturnType<typeof u
                             );
                             runtime.notify(isZh ? '头像已移除' : 'Profile photo removed');
                         }}
+                        onRequestVerification={action => runtime.api.requestDataSubjectVerification(action)}
                         onDataExport={
                             runtime.contentQuery?.data?.settings.personalDataExportEnabled === true
-                                ? password => runtime.api.exportPersonalData(password)
+                                ? (password, verification) =>
+                                      runtime.api.exportPersonalData(password, verification)
                                 : undefined
                         }
-                        onRequestAccountClosure={async password => {
-                            await runtime.api.requestAccountClosure(password);
+                        onRequestAccountClosure={async (password, verification) => {
+                            await runtime.api.requestAccountClosure(password, verification);
                             await queryClient.invalidateQueries({
                                 queryKey: [...customerScope, 'data-subject-requests'],
                                 exact: true,

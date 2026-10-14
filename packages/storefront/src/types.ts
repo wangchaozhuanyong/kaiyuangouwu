@@ -1382,3 +1382,16 @@ export interface CustomerServiceReviewRecord {
     orderCode: string | null;
     revision: number;
 }
+
+export interface DataSubjectVerificationChallenge {
+    mode: 'PASSWORD' | 'GOOGLE';
+    challengeId: string | null;
+    nonce: string | null;
+    clientId: string | null;
+    expiresAt: string | null;
+}
+export interface DataSubjectVerificationInput {
+    challengeId: string;
+    nonce: string;
+    credential: string;
+}

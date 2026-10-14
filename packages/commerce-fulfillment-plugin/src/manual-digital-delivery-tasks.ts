@@ -7,12 +7,12 @@ export const reconcileManualDigitalDeliveriesTask = new ScheduledTask({
     id: 'reconcile-manual-digital-deliveries',
     description: 'Retry failed manual-delivery email jobs and complete pending fulfillments',
     schedule: cron => cron.every(5).minutes(),
-    async execute({ injector }) {
+    async execute({ injector, signal }) {
         const previous = await injector
             .get(ConfigService)
             .schedulerOptions.schedulerStrategy.getTask('reconcile-manual-digital-deliveries');
         const scanCursors: DeliveryRecoveryCursors = { ...previous?.lastResult?.scanCursors };
-        const result = await injector.get(ManualDigitalDeliveryService).reconcilePending(scanCursors);
+        const result = await injector.get(ManualDigitalDeliveryService).reconcilePending(scanCursors, signal);
         return { ...result, scanCursors };
     },
 });

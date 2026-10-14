@@ -544,6 +544,7 @@ export class ManualDigitalDeliveryService {
 
     async reconcilePending(
         cursors: DeliveryRecoveryCursors = {},
+        signal?: AbortSignal,
     ): Promise<{ redispatched: number; completedFulfillments: number }> {
         const repository = this.connection.rawConnection.getRepository(ManualDigitalDelivery);
         const now = new Date();
@@ -585,12 +586,14 @@ export class ManualDigitalDeliveryService {
         let redispatched = 0;
         let completedFulfillments = 0;
         for (const candidate of deliveries) {
+            signal?.throwIfAborted();
             try {
                 const ctx = await this.requestContextService.create({
                     apiType: 'admin',
                     channelOrToken: candidate.channel,
                 });
                 await this.withLockedDelivery(ctx, candidate.id, async (txCtx, delivery) => {
+                    signal?.throwIfAborted();
                     if (['WAITING_PROCESSING', 'DRAFT'].includes(delivery.state)) {
                         if (delivery.expectedAt <= new Date()) await this.publishOverdue(txCtx, delivery);
                         return;

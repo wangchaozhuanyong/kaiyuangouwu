@@ -64,6 +64,7 @@ import { DATA_CONSENT_SERVICE_TOKEN, DataConsentService } from './data-consent.s
 import { DataRetentionAdminResolver } from './data-retention.resolver';
 import { DataRetentionService } from './data-retention.service';
 import { purgeDueDataRetentionTask } from './data-retention.tasks';
+import { DataSubjectVerificationService } from './data-subject-verification.service';
 import { DataSubjectAdminResolver, DataSubjectShopResolver } from './data-subject.resolver';
 import { DataSubjectService } from './data-subject.service';
 import { processDueAccountClosuresTask } from './data-subject.tasks';
@@ -391,6 +392,7 @@ import {
         DataConsentService,
         { provide: DATA_CONSENT_SERVICE_TOKEN, useExisting: DataConsentService },
         DataSubjectService,
+        DataSubjectVerificationService,
         DataRetentionService,
         CustomerOperationsService,
         CustomerServiceFeedbackService,

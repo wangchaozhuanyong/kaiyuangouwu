@@ -912,8 +912,8 @@ try {
                 await ready(page);
                 await mark(page, 'scope-changes');
                 for (const [language, label, save] of [
-                    ['zh', '简体中文', 'Save preferences'],
-                    ['en', 'English', '保存设置'],
+                    ['zh', 'ZH', 'Save preferences'],
+                    ['en', '英文', '保存设置'],
                 ]) {
                     await page.locator('.locale-preferences-trigger:visible').first().click();
                     await page.getByRole('radio', { name: label, exact: true }).click();
