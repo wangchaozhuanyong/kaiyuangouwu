@@ -251,6 +251,7 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
             return {
                 get: vi.fn().mockResolvedValue({ presetId: 'default' }),
                 find: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }),
+                sales: vi.fn().mockResolvedValue({}),
             };
         }),
     };
@@ -298,6 +299,107 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
         ctx: setup().ctx as never,
     };
 }
+
+describe('ranked home data in the public snapshot', () => {
+    async function homeHarness() {
+        const h = accessHarness();
+        const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
+        const catalog = { items: [{ id: 'ranked-low' }, { id: 'ranked-high' }], totalItems: 2 };
+        const find = vi.fn().mockResolvedValue(catalog);
+        const sales = vi.fn().mockResolvedValue({ 'ranked-low': 2, 'ranked-high': 20 });
+        const byId = vi.fn((_: unknown, id: string) => Promise.resolve(id === 'pinned' ? { id } : null));
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Expected the default public provider fixture');
+        h.modules.get.mockImplementation(token => {
+            if (token === PUBLIC_CATALOG_READER) return { find, sales } as never;
+            if (token === PUBLIC_PRODUCT_SUMMARY_READER)
+                return { list: vi.fn().mockResolvedValue({ items: [{ id: 'ordinary' }] }), byId } as never;
+            return original(token);
+        });
+        h.content.mockResolvedValue({
+            blocks: [
+                {
+                    type: 'BEST_SELLERS',
+                    settings: { displayCount: 3, pinnedProductIds: [' pinned ', 'missing'] },
+                },
+            ],
+            settings: { configuredBlockTypes: ['BEST_SELLERS'] },
+        });
+        return { ...h, catalog, find, sales, byId };
+    }
+    it('uses the existing scoped sales catalog and pinned summaries rather than ordinary home products', async () => {
+        const h = await homeHarness();
+        const page = await h.service.read(h.ctx, 'a.test');
+        expect(page.products).toEqual([{ id: 'ordinary' }]);
+        expect(page.bestSellers).toEqual({
+            catalog: h.catalog,
+            candidateCount: 16,
+            pinnedProducts: [{ id: 'pinned' }],
+            salesByProductId: { 'ranked-low': 2, 'ranked-high': 20 },
+        });
+        expect(h.find).toHaveBeenCalledWith(h.ctx, { sort: 'SALES', skip: 0, take: 16 });
+        expect(h.sales).toHaveBeenCalledWith(h.ctx, ['ranked-low', 'ranked-high']);
+        expect(h.byId).toHaveBeenCalledWith(h.ctx, 'pinned');
+        expect(page.failures).not.toContain('bestSellers');
+    });
+    it('leaves failed ranked data absent and records a local failure without failing the page', async () => {
+        const h = await homeHarness();
+        h.sales.mockRejectedValue(new Error('Sales unavailable'));
+        const page = await h.service.read(h.ctx, 'a.test');
+        expect(page.bestSellers).toBeUndefined();
+        expect(page.failures).toContain('bestSellers');
+        expect(page.products).toEqual([{ id: 'ordinary' }]);
+    });
+    it('does not issue ranked reads when that homepage section is configured off', async () => {
+        const h = await homeHarness();
+        h.content.mockResolvedValue({
+            blocks: [],
+            settings: { configuredBlockTypes: ['BEST_SELLERS'] },
+        });
+        const page = await h.service.read(h.ctx, 'a.test');
+        expect(page.bestSellers).toBeUndefined();
+        expect(h.sales).not.toHaveBeenCalled();
+        expect(h.find).not.toHaveBeenCalled();
+        expect(page.failures).not.toContain('bestSellers');
+    });
+    it('ends the optional ranked wait at the shared deadline without pretending it is an empty success', async () => {
+        const h = await homeHarness();
+        let complete: (value: Record<string, number>) => void = () => undefined;
+        h.sales.mockReturnValue(
+            new Promise<Record<string, number>>(resolve => {
+                complete = resolve;
+            }),
+        );
+        const page = await h.service.read(h.ctx, 'a.test');
+        expect(page.bestSellers).toBeUndefined();
+        expect(page.failures).toContain('bestSellers');
+        expect(page.products).toEqual([{ id: 'ordinary' }]);
+        complete({ 'ranked-low': 2, 'ranked-high': 20 });
+        await vi.waitFor(async () => {
+            expect(await h.cache.peek(h.ctx, 'home-best-sellers:a.test')).toMatchObject({
+                candidateCount: 16,
+            });
+        });
+        expect(page.bestSellers).toBeUndefined();
+    });
+    it('rejects closure during ranked assembly instead of returning late public data', async () => {
+        const h = await homeHarness();
+        let complete: (value: Record<string, number>) => void = () => undefined;
+        h.sales.mockReturnValue(
+            new Promise<Record<string, number>>(resolve => {
+                complete = resolve;
+            }),
+        );
+        const result = h.service.read(h.ctx, 'a.test').then(
+            () => null,
+            error => error,
+        );
+        await vi.waitFor(() => expect(h.sales).toHaveBeenCalledOnce());
+        h.state.mode = 'CLOSED';
+        complete({});
+        expect(await result).toBeInstanceOf(StorefrontClosedError);
+    });
+});
 
 describe('private-route public configuration bootstrap', () => {
     it('peeks only already warm config and retains its source age without catalog assembly', async () => {
@@ -736,6 +838,11 @@ describe('public page optional section budgets', () => {
                     if (token === StorefrontAccountSettingsService) return account;
                     if (token === StorefrontVisualPresetService)
                         return { get: vi.fn().mockResolvedValue({ presetId: 'default' }) };
+                    if (token === Symbol.for('vendure.public-catalog-reader'))
+                        return {
+                            find: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }),
+                            sales: vi.fn().mockResolvedValue({}),
+                        };
                     throw new Error(`Unexpected section token ${String(token)}`);
                 }),
             };
@@ -927,7 +1034,10 @@ it('shares timed-out optional source reads across different public page assembli
             if (token === PUBLIC_PRODUCT_SUMMARY_READER) return { list };
             if (token === StorefrontVisualPresetService) return { get: getVisual };
             if (token === PUBLIC_CATALOG_READER)
-                return { find: vi.fn(() => Promise.resolve({ items: [], totalItems: 0 })) };
+                return {
+                    find: vi.fn(() => Promise.resolve({ items: [], totalItems: 0 })),
+                    sales: vi.fn().mockResolvedValue({}),
+                };
             throw new Error('Unexpected public data provider');
         }),
     };

@@ -43,8 +43,8 @@ export const router = createRouter({
     stringifySearch: stringifyStorefrontSearch,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
-    // Keep the current route visible through ordinary chunk/data waits; show the
-    // bounded pending state if the destination still has not resolved.
+    // Keep the current route through short waits. A slow destination replaces only
+    // its Outlet body; the shared shell and its actions stay mounted.
     defaultPendingMs: 200,
     defaultPendingMinMs: 0,
     defaultPendingComponent: StorefrontPendingPage,
@@ -64,7 +64,7 @@ router.subscribe('onBeforeNavigate', event => {
 function StorefrontPendingPage() {
     const location = useRouterState({ select: s => s.matches.at(-1) ?? s.location });
     const variant = pageSkeletonVariantForPathname(location.pathname);
-    return <PageSkeleton variant={variant} root />;
+    return <PageSkeleton variant={variant} />;
 }
 
 declare module '@tanstack/react-router' {

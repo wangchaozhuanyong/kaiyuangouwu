@@ -286,20 +286,11 @@ img {
 }
 
 .safe-image {
-    /* Reveal only after the full-size candidate has decoded. */
+    /* Native pixels stay visible from SSR through hydration; decode only owns readiness. */
     position: relative;
     z-index: 1;
-    opacity: 0;
-    transition:
-        opacity 180ms ease,
-        transform 220ms ease;
-}
-
-/* Native images paint as they arrive, including the server-rendered first frame.
-   Replacement images keep their decoded preview until the new candidate is ready. */
-.safe-image-frame:not(.has-placeholder) .safe-image,
-.safe-image-frame.has-inline-preview .safe-image {
     opacity: 1;
+    transition: transform 220ms ease;
 }
 .safe-image-art-direction {
     display: contents;
@@ -325,7 +316,7 @@ img {
     background: var(--product-media-bg);
     background-size: contain;
     background-position: center;
-    transition: opacity 180ms ease;
+    background-repeat: no-repeat;
 }
 .safe-image-preview {
     position: absolute;
@@ -350,7 +341,7 @@ img {
     width: 100%;
     height: 100%;
 }
-.safe-image-frame.is-loaded > .safe-image-fallback {
+.safe-image-frame.is-presented > .safe-image-fallback {
     opacity: 0;
     pointer-events: none;
 }

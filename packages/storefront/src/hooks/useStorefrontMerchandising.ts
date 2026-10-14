@@ -235,10 +235,7 @@ export function useStorefrontMerchandising({
         ),
         recommendationsBlock,
         bestSellersLoading:
-            storefrontContextResolved &&
-            homeContentReady &&
-            showBestSellers &&
-            (!deferred.sales || bestSellers.loading),
+            storefrontContextResolved && homeContentReady && showBestSellers && bestSellers.loading,
         recommendationsLoading:
             storefrontContextResolved &&
             recommendationsReady &&

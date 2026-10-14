@@ -67,10 +67,19 @@ export function HeroScene({
     const subtitle = content.subtitle.trim();
     const body = content.body.trim();
     const ctaLabel = content.ctaLabel.trim();
+    const artworkLayout = resolveHeroArtworkLayout(content.settings);
     const [sampledTone, setSampledTone] = useState<{ imageUrl: typeof content.imageUrl; tone: ImageTone }>();
+    // Overlaid copy uses the published theme from the first HTML. Sampling a
+    // photograph after hydration must not repaint already-visible text.
     const adaptiveStyle = heroThemeStyle(
         content,
-        sampledTone?.imageUrl === content.imageUrl ? sampledTone?.tone : undefined,
+        artworkLayout === 'editorial'
+            ? sampledTone?.imageUrl === content.imageUrl
+                ? sampledTone?.tone
+                : undefined
+            : preset === 'bright'
+              ? 'light'
+              : 'dark',
     );
     const sampledSource = useRef('');
     const mediaRef = useRef<HTMLDivElement>(null);
@@ -79,6 +88,7 @@ export function HeroScene({
     const sampleRenderedImage = useCallback(
         (artworkElement: HTMLImageElement) => {
             if (
+                artworkLayout !== 'editorial' ||
                 !artworkElement.complete ||
                 !artworkElement.naturalWidth ||
                 artworkElement.getAttribute('aria-hidden') === 'true' ||
@@ -90,7 +100,7 @@ export function HeroScene({
             sampledSource.current = source;
             setSampledTone({ imageUrl: content.imageUrl, tone: sampleImageTone(artworkElement) });
         },
-        [content.imageUrl],
+        [content.imageUrl, artworkLayout],
     );
 
     useLayoutEffect(() => {
@@ -118,7 +128,7 @@ export function HeroScene({
                 ...(overlayHeight !== undefined ? { '--hero-overlay-height': `${overlayHeight}px` } : {}),
             }}
             data-copy-layout="overlay"
-            data-hero-artwork-layout={resolveHeroArtworkLayout(content.settings)}
+            data-hero-artwork-layout={artworkLayout}
         >
             <div
                 className="hero-rich-media"

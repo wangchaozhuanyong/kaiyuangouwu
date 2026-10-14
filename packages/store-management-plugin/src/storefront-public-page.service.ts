@@ -360,6 +360,17 @@ export class StorefrontPublicPageService {
             if (result.status === 'fulfilled') values[names[index]] = result.value;
             else failures.push(names[index]);
         });
+        if (home && values.content) {
+            try {
+                values.bestSellers = await publicSectionWithinBudget(
+                    section(`home-best-sellers:${host}`, 30_000, () =>
+                        this.loadHomeBestSellers(ctx, values.content),
+                    ),
+                );
+            } catch {
+                failures.push('bestSellers');
+            }
+        }
         const generatedAt = Date.now();
         const payload = { config, ...values, media: [], failures };
         return {
@@ -442,6 +453,50 @@ export class StorefrontPublicPageService {
                 'usdtRateAvailable',
                 'usdtPaymentConfigured',
             ]),
+        };
+    }
+
+    private async loadHomeBestSellers(ctx: RequestContext, content: unknown) {
+        const published = content as {
+            blocks?: Array<{ type?: string; settings?: Record<string, unknown> }>;
+            settings?: { configuredBlockTypes?: string[] };
+        };
+        const block = published.blocks?.find(item => item.type === 'BEST_SELLERS');
+        if (!block && published.settings?.configuredBlockTypes?.includes('BEST_SELLERS')) return;
+        const configuredCount = block?.settings?.displayCount;
+        const count = Math.min(
+            50,
+            Math.max(
+                1,
+                typeof configuredCount === 'number' && Number.isFinite(configuredCount) ? configuredCount : 4,
+            ),
+        );
+        const candidateCount = Math.min(48, Math.max(16, count));
+        const configuredPinned = block?.settings?.pinnedProductIds;
+        const pinnedIds = Array.isArray(configuredPinned)
+            ? configuredPinned.flatMap(id => (typeof id === 'string' && id.trim() ? [id.trim()] : []))
+            : [];
+        const catalogReader = this.moduleRef.get<PublicCatalogReader>(PUBLIC_CATALOG_READER, {
+            strict: false,
+        });
+        const productReader = this.moduleRef.get<PublicProductSummaryReader>(PUBLIC_PRODUCT_SUMMARY_READER, {
+            strict: false,
+        });
+        const [catalog, pinned] = await Promise.all([
+            catalogReader.find(ctx, { sort: 'SALES', skip: 0, take: candidateCount }),
+            Promise.all([...new Set(pinnedIds)].map(id => productReader.byId(ctx, id))),
+        ]);
+        const salesByProductId = await catalogReader.sales(
+            ctx,
+            catalog.items.map(item => item.id),
+        );
+        return {
+            catalog,
+            salesByProductId,
+            pinnedProducts: pinned.filter(
+                (product): product is NonNullable<typeof product> => product !== null,
+            ),
+            candidateCount,
         };
     }
 

@@ -154,6 +154,25 @@ describe('catalog rendering boundary', () => {
         expect(element.querySelector('.page-readiness-initial')).toBeNull();
         expect(element.querySelector('.page-readiness-stage')?.hasAttribute('hidden')).toBe(false);
     });
+    it('does not hide the confirmed shell when the first route reports navigation pending', () => {
+        render({ isNavigationPending: true });
+        expect(element.textContent).toContain('PAGE_CONTENT');
+        expect(element.querySelector('.page-readiness-initial')).toBeNull();
+        expect(element.querySelector('.page-readiness-stage')?.hasAttribute('hidden')).toBe(false);
+        expect(element.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
+    });
+    it('releases document startup when the definitive store-unavailable view commits', () => {
+        const owned = vi.fn();
+        document.addEventListener('storefront:app-owned', owned);
+        try {
+            render({ storefrontUnavailable: true });
+            expect(element.textContent).toContain('店铺暂未开放');
+            expect(owned).toHaveBeenCalledOnce();
+            expect(element.querySelector('button')?.disabled).toBe(false);
+        } finally {
+            document.removeEventListener('storefront:app-owned', owned);
+        }
+    });
     it('requests neither deferred module before readiness and idle, and hides update UI on sensitive routes', async () => {
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
         vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');

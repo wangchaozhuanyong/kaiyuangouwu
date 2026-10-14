@@ -5,14 +5,34 @@ export function imageCandidateIdentity(image: HTMLImageElement): string {
     return [image.currentSrc || image.src, image.src, image.srcset, image.sizes].join('\u0000');
 }
 
+/** Verify this node's pixels, including a direct source replaced before currentSrc updates. */
+export function isImageCandidateComplete(image: HTMLImageElement): boolean {
+    if (!image.complete || image.naturalWidth <= 0) return false;
+    if (!image.srcset && !image.closest('picture')?.querySelector('source')) {
+        return !image.currentSrc || image.currentSrc === image.src;
+    }
+    return true;
+}
+
 export function decodeImageElement(image: HTMLImageElement): Promise<void> {
     const identity = imageCandidateIdentity(image);
+    const requestIdentity = [image.src, image.srcset, image.sizes].join('\u0000');
+    const selectedCandidate = isImageCandidateComplete(image);
     const existing = decodes.get(image);
     if (existing?.identity === identity) return existing.promise;
-    const promise = (typeof image.decode === 'function' ? image.decode() : Promise.resolve()).then(() => {
-        if (imageCandidateIdentity(image) !== identity || !image.complete || image.naturalWidth === 0) {
+    let decoded: Promise<void>;
+    try {
+        decoded = typeof image.decode === 'function' ? image.decode() : Promise.resolve();
+    } catch (error) {
+        decoded = Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+    const promise = decoded.then(() => {
+        if (
+            [image.src, image.srcset, image.sizes].join('\u0000') !== requestIdentity ||
+            (selectedCandidate && imageCandidateIdentity(image) !== identity) ||
+            !isImageCandidateComplete(image)
+        )
             throw new Error('Image candidate is not ready');
-        }
     });
     decodes.set(image, { identity, promise });
     void promise.catch(() => {

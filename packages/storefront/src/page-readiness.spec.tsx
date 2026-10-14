@@ -36,6 +36,49 @@ describe('explicit route readiness', () => {
         vi.useRealTimers();
     });
     const retry = vi.fn();
+    it('hands startup to React after route commit even while a local coupon is still loading', () => {
+        const owned = vi.fn();
+        const ready = vi.fn();
+        document.addEventListener('storefront:app-owned', owned);
+        document.addEventListener('storefront:page-ready', ready);
+        function RouteWithSlowCoupon() {
+            usePageRouteCommit();
+            return (
+                <>
+                    <a href="/category">Browse</a>
+                    <PageSkeleton compact />
+                </>
+            );
+        }
+        try {
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        pending={false}
+                        online
+                        language="zh"
+                        onRetry={retry}
+                        onBack={retry}
+                        requireInitialRouteCommit
+                        initialScopeKey="store"
+                    >
+                        <RouteWithSlowCoupon />
+                    </PageReadinessBoundary>,
+                ),
+            );
+            expect(owned).toHaveBeenCalledOnce();
+            expect(ready).not.toHaveBeenCalled();
+            expect(host.querySelector('.page-readiness-initial')).toBeNull();
+            expect(host.querySelector('a')?.closest('[hidden], [inert]')).toBeNull();
+            expect(host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness')).toBe(
+                'preparing',
+            );
+        } finally {
+            document.removeEventListener('storefront:app-owned', owned);
+            document.removeEventListener('storefront:page-ready', ready);
+        }
+    });
+
     it('waits for the real public route commit before publishing ready or adopting the HTML', () => {
         host.id = 'root';
         host.dataset.publicRendered = '1';
@@ -183,19 +226,21 @@ describe('explicit route readiness', () => {
         render(false, 'module', false);
         expect(phase()).toBe('ready');
     });
-    it('retains content and shows compact branding only while product preparation is pending', async () => {
+    it('retains content and shows compact branding only for a navigation slower than 200 ms', async () => {
         render(false);
         expect(phase()).toBe('ready');
         render(false, 'product', false, true, false, true);
         expect(phase()).toBe('preparing');
         expect(host.querySelector('main')?.textContent).toContain('Target content');
         expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        await advance(200);
         await act(async () => {
             await vi.dynamicImportSettled();
         });
         expect(host.querySelectorAll('.page-readiness-navigation')).toHaveLength(1);
         expect(host.querySelector('.brand-loading--compact')).not.toBeNull();
-        expect(host.querySelector('[aria-label="正在打开商品"]')).not.toBeNull();
+        expect(host.querySelector('[aria-label="正在打开页面"]')).not.toBeNull();
         expect(host.querySelector('.page-readiness-progress')).toBeNull();
         render(false, 'product');
         expect(phase()).toBe('ready');
@@ -256,7 +301,7 @@ describe('store-scoped initial loading and recovery', () => {
         loading = true,
         compact = false,
         routeModule = false,
-        pending = false,
+        pending = loading && !compact && !routeModule,
         online = true,
         language = 'zh',
         initialError = false,
@@ -349,6 +394,24 @@ describe('store-scoped initial loading and recovery', () => {
         expect(host.querySelector('.brand-loading')).toBeNull();
         expect(host.textContent).toContain('Available content');
     });
+    it('continues an already-visible document brand without a blank 200ms handoff', () => {
+        const boot = document.createElement('main');
+        boot.id = 'storefront-boot-loading';
+        boot.dataset.presentation = 'initial';
+        document.body.append(boot);
+        host.id = 'root';
+        try {
+            render();
+            expect(initial()).not.toBeNull();
+            expect(host.querySelector('.brand-loading')).not.toBeNull();
+            expect(phase()).toBe('preparing');
+            render({ loading: false });
+            expect(initial()).toBeNull();
+            expect(stage()?.hidden).toBe(false);
+        } finally {
+            boot.remove();
+        }
+    });
 
     it('replaces the initial loader with one branded error and restarts only its current read', async () => {
         render();
@@ -397,6 +460,17 @@ describe('store-scoped initial loading and recovery', () => {
         await advance(10_100);
         expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
         expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
+    });
+
+    it('keeps a confirmed store shell usable even on the first uncached content read', async () => {
+        render({ pending: false });
+        expect(initial()).toBeNull();
+        expect(stage()?.hidden).toBe(false);
+        expect(host.querySelector('header button')?.closest('[hidden], [inert]')).toBeNull();
+        expect(host.querySelector('.route-static-skeleton')).not.toBeNull();
+        await advance(10_100);
+        expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
+        expect(host.querySelector('header button')?.closest('[hidden], [inert]')).toBeNull();
     });
 
     it('gives a new store a fresh initial deadline and cannot reuse the prior store brand', async () => {

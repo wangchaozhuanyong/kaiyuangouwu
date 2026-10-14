@@ -8,4 +8,5 @@ export interface PublicCatalogReader {
         ctx: RequestContext,
         input: PublicPageCatalogInput,
     ): Promise<{ items: PublicProductSummary[]; totalItems: number }>;
+    sales(ctx: RequestContext, productIds: string[]): Promise<Record<string, number>>;
 }

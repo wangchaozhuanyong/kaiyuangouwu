@@ -13,6 +13,63 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
+    it.each(['overlay', 'campaign'] as const)(
+        'keeps %s copy colors stable from SSR through native image load',
+        layout => {
+            vi.stubGlobal(
+                'ResizeObserver',
+                class {
+                    observe = vi.fn();
+                    disconnect = vi.fn();
+                },
+            );
+            const canvas = vi.spyOn(HTMLCanvasElement.prototype, 'getContext');
+            const content: HeroSceneData = {
+                title: 'Stable promotion',
+                subtitle: '',
+                body: 'Managed copy',
+                ctaLabel: '',
+                targetType: 'NONE',
+                imageUrl: '/first.jpg',
+                items: [],
+                settings: { heroArtworkLayout: layout },
+            };
+            const scene = () => (
+                <HeroScene
+                    content={content}
+                    image={<img src={content.imageUrl ?? ''} alt="Artwork" />}
+                    imageLabel="Open artwork"
+                />
+            );
+            expect(renderToString(scene())).toContain('--hero-image-copy-foreground:#ffffff');
+            const host = document.createElement('div');
+            const root = createRoot(host);
+            const color = () =>
+                (host.firstElementChild as HTMLElement).style.getPropertyValue(
+                    '--hero-image-copy-foreground',
+                );
+            try {
+                act(() => root.render(scene()));
+                expect(color()).toBe('#ffffff');
+                act(() => {
+                    host.querySelector('img')?.dispatchEvent(new Event('load'));
+                });
+                expect(color()).toBe('#ffffff');
+                content.imageUrl = '/second.jpg';
+                act(() => root.render(scene()));
+                expect(color()).toBe('#ffffff');
+                expect(canvas).not.toHaveBeenCalled();
+                content.settings = { heroArtworkLayout: layout, themePreset: 'bright' };
+                act(() => root.render(scene()));
+                expect(color()).toBe('#0f172a');
+                content.textColor = '#604823';
+                act(() => root.render(scene()));
+                expect(color()).toBe('#604823');
+            } finally {
+                act(() => root.unmount());
+            }
+        },
+    );
     it('leaves the server-rendered pager reservation to CSS before measuring its actual height', () => {
         const content: HeroSceneData = {
             title: 'Published store promotion',
@@ -141,14 +198,19 @@ describe('shared hero content layout', () => {
             image.dataset.height = '900';
             await load(image);
             expect(composition()).toBe(initialComposition);
-            expect(canvas).toHaveBeenCalledTimes(2);
+            expect(canvas).not.toHaveBeenCalled();
+            expect(
+                (host.firstElementChild as HTMLElement).style.getPropertyValue(
+                    '--hero-image-copy-foreground',
+                ),
+            ).toBe('#ffffff');
             await render(true, 1920, 800, false);
             expect(region.getAttribute('tabindex')).toBeNull();
             expect(region.getAttribute('role')).toBeNull();
             expect(region.querySelector('.hero-rich-copy-surface')?.firstElementChild?.className).toContain(
                 'hero-rich-pill',
             );
-            expect(canvas).toHaveBeenCalledTimes(2);
+            expect(canvas).not.toHaveBeenCalled();
         } finally {
             await act(async () => {
                 root.unmount();
@@ -235,7 +297,7 @@ describe('shared hero content layout', () => {
         }
     });
 
-    it('samples cached and newly loaded artwork without letting overlay icons or old images set copy colors', async () => {
+    it('keeps optional editorial sampling scoped to the current artwork rather than overlay icons or old images', async () => {
         vi.stubGlobal(
             'ResizeObserver',
             class {
@@ -276,6 +338,7 @@ describe('shared hero content layout', () => {
             targetType: 'NONE',
             imageUrl: '/cached-light.jpg',
             items: [],
+            settings: { heroArtworkLayout: 'editorial' },
         };
         const host = document.createElement('div');
         document.body.append(host);
@@ -322,7 +385,7 @@ describe('shared hero content layout', () => {
             expect(drawImage).toHaveBeenCalledTimes(2);
 
             content.textColor = '#604823';
-            content.settings = { secondaryTextColor: '#334155' };
+            content.settings = { heroArtworkLayout: 'editorial', secondaryTextColor: '#334155' };
             await render(true);
             expect(color()).toBe('#604823');
             expect(color('--hero-image-body-foreground')).toBe('#334155');
@@ -330,7 +393,7 @@ describe('shared hero content layout', () => {
 
             content.imageUrl = '/cross-origin.jpg';
             content.textColor = null;
-            content.settings = null;
+            content.settings = { heroArtworkLayout: 'editorial' };
             await expect(render(true)).resolves.toBeUndefined();
             expect(color()).toBe('#ffffff');
             expect(drawImage).toHaveBeenCalledTimes(3);

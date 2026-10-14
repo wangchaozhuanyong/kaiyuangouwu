@@ -9,7 +9,7 @@
 
     .responsive-home-header-placeholder {
         display: block;
-        height: var(--desktop-header-height, 72px);
+        min-height: var(--desktop-header-height, 72px);
     }
     :root {
         --app-width: 1440px;

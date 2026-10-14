@@ -18,6 +18,7 @@ import { storefrontNavigationCollections } from './api/catalog';
 import { SEND_CLIENT_CHANNEL_TOKEN } from './api/helpers';
 import { nextCatalogPageParam, validateCatalogPage } from './catalog-pagination';
 import { catalogInputFromRoute } from './catalog-route-query';
+import { buildBestSellerProducts } from './home-merchandising';
 import { languageCodeFor, marketForStorefrontConfig } from './i18n';
 import { asListProduct } from './product-summary';
 import {
@@ -41,6 +42,7 @@ import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeFromRouterLocation } from './storefront-router';
 import {
     contentStringArraySetting,
+    contentNumberSetting,
     readStoredLanguage,
     readStoredSettlementCurrency,
 } from './storefront-utils';
@@ -181,6 +183,48 @@ export function seedPublicPage(
         page.collections && storefrontNavigationCollections(page.collections),
     );
     set(storefrontQueryKeys.products(market, language, 12), page.products?.map(asListProduct));
+    if (page.request?.kind === 'home' && page.bestSellers) {
+        const best = page.bestSellers;
+        const candidates = best.catalog.items.map(asListProduct);
+        const pinned = best.pinnedProducts.map(asListProduct);
+        set(
+            storefrontQueryKeys.catalog(market, language, {
+                purpose: 'home-best-sellers',
+                sort: 'sales',
+                take: best.candidateCount,
+            }),
+            { ...best.catalog, items: candidates },
+        );
+        set(
+            [
+                ...storefrontQueryKeys.scope(market, language),
+                'home-best-seller-sales',
+                candidates.map(item => item.id),
+            ],
+            best.salesByProductId,
+        );
+        const block = page.content?.blocks.find(item => item.type === 'BEST_SELLERS');
+        const pinnedIds = contentStringArraySetting(block?.settings?.pinnedProductIds);
+        if (pinnedIds.length) set(storefrontQueryKeys.productsByIds(market, language, pinnedIds), pinned);
+        const count = Math.min(50, Math.max(1, contentNumberSetting(block?.settings?.displayCount, 4)));
+        const selected = buildBestSellerProducts({
+            pinnedProducts: pinned,
+            candidates: [...candidates, ...pinned],
+            salesByProductId: best.salesByProductId,
+            count,
+            seed: `${page.scope.channelCode}:${new Date(page.generatedAt).toISOString().slice(0, 10)}:best-sellers`,
+        });
+        set(['recommendation-order', JSON.stringify([market, language]), 'best-sellers'], selected);
+        if (selected.length)
+            set(
+                storefrontQueryKeys.productsByIds(
+                    market,
+                    language,
+                    selected.map(item => item.id),
+                ),
+                selected,
+            );
+    }
     const managedIds = Array.from(
         new Set(
             (page.content?.blocks ?? []).flatMap(block => [

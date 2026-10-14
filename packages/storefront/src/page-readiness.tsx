@@ -33,6 +33,12 @@ interface PageLoadingState {
 const PageLoadingContext = createContext<PageLoadingState | null>(null);
 const PageRouteCommitContext = createContext<(() => void) | null>(null);
 
+/** React owns the visible loading/error UI. Local reads may still be pending. */
+export function markStorefrontAppOwned(): void {
+    document.documentElement.setAttribute('data-storefront-app-owned', '');
+    document.dispatchEvent(new Event('storefront:app-owned'));
+}
+
 /** A real route commit completes adoption; a server ready attribute is not a client signal. */
 export function usePageRouteCommit(): void {
     const commit = useContext(PageRouteCommitContext);
@@ -134,13 +140,23 @@ export function PageReadinessBoundary({
         });
     }, []);
     const [displayedScope, setDisplayedScope] = useState<string>();
+    const [continueDocumentBrand] = useState(() => {
+        if (typeof document === 'undefined') return false;
+        const boot = document.getElementById('storefront-boot-loading');
+        const root = document.getElementById('root');
+        // Carry an already-visible empty-document presentation into React.
+        // This is presentation continuity, never a query readiness signal.
+        return (
+            root?.dataset.publicRendered !== '1' &&
+            boot?.dataset.presentation === 'initial' &&
+            boot.getAttribute('aria-hidden') !== 'true'
+        );
+    });
     const failedInitialRead =
         initialError && initialScopeKey !== undefined && displayedScope !== initialScopeKey;
     const waiting = pending || navigationPreparing || required.total > 0 || failedInitialRead;
     const initial =
-        initialScopeKey !== undefined &&
-        displayedScope !== initialScopeKey &&
-        (pending || required.page > 0 || failedInitialRead);
+        initialScopeKey !== undefined && displayedScope !== initialScopeKey && (pending || failedInitialRead);
     const [attempt, setAttempt] = useState(0);
     // A -> B -> A is a new read, even when the string scope/request values repeat.
     const cycle = useMemo(() => ({}), [initialScopeKey, requestKey, attempt]);
@@ -152,6 +168,13 @@ export function PageReadinessBoundary({
             ? 'error'
             : 'preparing'
         : 'ready';
+
+    useLayoutEffect(() => {
+        // A rendered public snapshot is adopted only by its real route commit.
+        // Once adopted, coupons, recommendations and other local reads cannot
+        // keep the document startup presentation alive.
+        if (!requireInitialRouteCommit || initialRouteCommitted) markStorefrontAppOwned();
+    }, [requireInitialRouteCommit, initialRouteCommitted]);
 
     useLayoutEffect(() => {
         // Child layout effects register before this check. A loading page must not be marked
@@ -212,9 +235,9 @@ export function PageReadinessBoundary({
         onBack,
         failure: !online ? 'offline' : failedInitialRead ? 'request' : 'timeout',
     };
-    const navigationLabel = language === 'zh' ? '正在打开商品' : 'Opening product';
+    const navigationLabel = language === 'zh' ? '正在打开页面' : 'Opening page';
     const loadingLabel = language === 'zh' ? '页面正在加载' : 'Page loading';
-    const showProgress = progressCycle === cycle;
+    const showProgress = progressCycle === cycle || (initial && continueDocumentBrand);
     const inlineLoadingRegions = required.page + required.local > 0;
     return (
         <ReadinessContext.Provider value={register}>
@@ -243,7 +266,7 @@ export function PageReadinessBoundary({
                                 )}
                             </main>
                         )}
-                        {!initial && phase === 'preparing' && (showProgress || navigationPreparing) && (
+                        {!initial && phase === 'preparing' && showProgress && (
                             <div
                                 className={
                                     navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'

@@ -336,8 +336,8 @@
     }
 }
 
-/* The HTML and React phases share this single document loading presentation.
-   It is outside #root so SSR and hydration cannot remove it before interactivity. */
+/* Empty documents get the brand stage. Existing HTML only gets compact startup
+   feedback: it remains visible while the client takes ownership. */
 #storefront-boot-loading {
     align-content: center;
     gap: var(--space-24);
@@ -347,22 +347,41 @@
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    transition:
-        opacity var(--experience-motion-standard) var(--experience-ease-standard),
-        visibility 0s var(--experience-motion-standard);
 }
+#root:empty + #storefront-boot-loading:not([aria-hidden='true']),
 html[data-storefront-boot-pending] #storefront-boot-loading {
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
-    transition: none;
 }
-html[data-storefront-boot-pending] #root {
-    visibility: hidden;
+#storefront-boot-loading[data-presentation='status'] {
+    inset: auto var(--space-16) calc(var(--bottom-navigation-height) + var(--safe-bottom) + var(--space-16));
+    width: fit-content;
+    max-width: calc(100% - var(--space-16) * 2);
+    min-height: 0;
+    margin-inline: auto;
+    padding: var(--space-16);
+    gap: var(--space-8);
+    border-radius: var(--skin-card-radius);
+    background: var(--surface-elevated);
+    color: var(--text);
+    box-shadow: var(--skin-hero-shadow);
+    pointer-events: none;
 }
-@media (prefers-reduced-motion: reduce) {
-    #storefront-boot-loading {
-        transition: none;
+#storefront-boot-loading[data-presentation='status'] .route-transition-mark,
+#storefront-boot-loading[data-presentation='status'] .brand-loading-name,
+#storefront-boot-loading[data-presentation='status'] .brand-loading-subtitle {
+    display: none;
+}
+#storefront-boot-loading[data-presentation='status'] .brand-loading {
+    padding: 0;
+}
+#storefront-boot-error button {
+    pointer-events: auto;
+}
+@media (min-width: 1024px) {
+    #storefront-boot-loading[data-presentation='status'] {
+        bottom: var(--space-24);
     }
 }
 

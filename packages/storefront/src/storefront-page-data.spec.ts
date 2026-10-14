@@ -6,6 +6,7 @@ import {
     serializeStorefrontPageData,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
+import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import {
     PUBLIC_QUERY_STALE_TIME,
@@ -45,6 +46,54 @@ function fixture(now = Date.now()): PublicPageData {
 }
 
 describe('public page hydration', () => {
+    it('seeds the ranked home inputs and exact visible order without presenting the bootstrap list as best sellers', () => {
+        const client = new QueryClient();
+        const page = syntheticPage('synthetic-a', 'en', 'home');
+        const products = page.products ?? [];
+        const [ordinary, low, high, pinned] = products;
+        if (!page.content || !ordinary || !low || !high || !pinned) throw new Error('Fixture is incomplete');
+        page.content.blocks.push({
+            ...page.content.blocks[0],
+            id: 'best',
+            type: 'BEST_SELLERS',
+            settings: { displayCount: 3, pinnedProductIds: [pinned.id] },
+        });
+        page.products = [ordinary];
+        page.bestSellers = {
+            catalog: { items: [low, high], totalItems: 2 },
+            pinnedProducts: [pinned],
+            salesByProductId: { [low.id]: 2, [high.id]: 20 },
+            candidateCount: 16,
+        };
+        seedPublicPage(client, page);
+        const market = 'synthetic-a:MYR';
+        const key = ['recommendation-order', JSON.stringify([market, 'en']), 'best-sellers'];
+        expect(client.getQueryData<Array<{ id: string }>>(key)?.map(item => item.id)).toEqual([
+            pinned.id,
+            high.id,
+            low.id,
+        ]);
+        expect(
+            client.getQueryData(
+                storefrontQueryKeys.catalog(market, 'en', {
+                    purpose: 'home-best-sellers',
+                    sort: 'sales',
+                    take: 16,
+                }),
+            ),
+        ).toMatchObject({ items: [{ id: low.id }, { id: high.id }], totalItems: 2 });
+        expect(
+            client.getQueryData([
+                ...storefrontQueryKeys.scope(market, 'en'),
+                'home-best-seller-sales',
+                [low.id, high.id],
+            ]),
+        ).toEqual({ [low.id]: 2, [high.id]: 20 });
+        expect(
+            client.getQueryData(storefrontQueryKeys.products('other-store:MYR', 'en', 12)),
+        ).toBeUndefined();
+        client.clear();
+    });
     it('stops persistence before a PREVIEW section is seeded while the old config still says LIVE', async () => {
         const client = new QueryClient();
         const unwatch = watchStorefrontScopeAccess(client, () => undefined);

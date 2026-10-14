@@ -21,6 +21,7 @@ import {
     IMAGE_REQUEST_TIMEOUT_MS,
     IMAGE_WAIT_EXPIRED_EVENT,
     imageCandidateIdentity,
+    isImageCandidateComplete,
 } from './image-readiness';
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
 import { StorefrontContext } from './StorefrontContext';
@@ -133,21 +134,28 @@ export function SafeImage(props: SafeImageProps) {
         props.retainedOwnerKey ?? '',
         JSON.stringify(props.mediaSources ?? []),
     ].join('\u0000');
-    const [previous, setPrevious] = useState({ identity: '', source: '', ownerKey: props.retainedOwnerKey });
+    const [previous, setPrevious] = useState<{
+        identity: string;
+        presentation?: ImagePresentation;
+        ownerKey?: string;
+    }>({ identity: '', ownerKey: props.retainedOwnerKey });
     return (
         <SafeImageSource
             key={identity}
             {...props}
-            retainedSrc={
+            retainedPresentation={
                 previous.ownerKey === props.retainedOwnerKey && previous.identity !== identity
-                    ? previous.source
-                    : ''
+                    ? previous.presentation
+                    : undefined
             }
-            onPresented={source =>
+            onPresented={presentation =>
                 setPrevious(current =>
-                    current.identity === identity && current.source === source
+                    current.identity === identity &&
+                    current.presentation?.source === presentation.source &&
+                    current.presentation?.backgroundSize === presentation.backgroundSize &&
+                    current.presentation?.backgroundPosition === presentation.backgroundPosition
                         ? current
-                        : { identity, source, ownerKey: props.retainedOwnerKey },
+                        : { identity, presentation, ownerKey: props.retainedOwnerKey },
                 )
             }
         />
@@ -156,7 +164,28 @@ export function SafeImage(props: SafeImageProps) {
 
 const decodedImageUrls = new Set<string>();
 // This is decode bookkeeping for actual image resources, never a server-data cache.
-const decodedAvatarPreviews = new Map<string, string>();
+type ImagePresentation = { source: string; backgroundSize: string; backgroundPosition: string };
+const decodedAvatarPreviews = new Map<string, ImagePresentation>();
+
+function imagePresentation(image: HTMLImageElement): ImagePresentation {
+    const style = getComputedStyle(image);
+    const fit = style.objectFit || 'contain';
+    const backgroundSize =
+        fit === 'fill'
+            ? '100% 100%'
+            : fit === 'none'
+              ? 'auto'
+              : fit === 'scale-down'
+                ? image.naturalWidth <= image.clientWidth && image.naturalHeight <= image.clientHeight
+                    ? 'auto'
+                    : 'contain'
+                : fit;
+    return {
+        source: image.currentSrc || image.src,
+        backgroundSize,
+        backgroundPosition: style.objectPosition || 'center',
+    };
+}
 
 export function isImageAlreadyDecoded(
     src?: string | null,
@@ -196,22 +225,26 @@ function SafeImageSource({
     onLoad,
     onImageReady,
     className,
-    retainedSrc,
+    retainedPresentation,
     onPresented,
     ...imageProps
-}: SafeImageProps & { retainedSrc: string; onPresented: (source: string) => void }) {
+}: SafeImageProps & {
+    retainedPresentation?: ImagePresentation;
+    onPresented: (presentation: ImagePresentation) => void;
+}) {
     const [currentSrc, setCurrentSrc] = useState(src);
     const [responsive, setResponsive] = useState(true);
     const [failed, setFailed] = useState(false);
     const [fallbackHeight, setFallbackHeight] = useState<number>();
     const [timedOut, setTimedOut] = useState(false);
+    const [nearViewport, setNearViewport] = useState(false);
     const publicPreviews = useContext(SafeImageMediaContext);
     const inlinePreview =
         imageProps.fetchPriority === 'high' ? publicPreviews.get(mediaPreviewKey(src, imageKind)) : undefined;
     const avatarKey = JSON.stringify([retainedOwnerKey, mediaPreviewKey(src, imageKind)]);
     const decodedAvatarPreview =
         loadingFallback && retainedOwnerKey ? decodedAvatarPreviews.get(avatarKey) : undefined;
-    const retainedPreview = retainedSrc || decodedAvatarPreview;
+    const retainedPreview = retainedPresentation || decodedAvatarPreview;
     const [previewReady, setPreviewReady] = useState(Boolean(inlinePreview));
     const previewRef = useRef<HTMLImageElement>(null);
     const sources = imageSources(currentSrc, responsive ? imageKind : undefined, imageProps.sizes);
@@ -221,24 +254,25 @@ function SafeImageSource({
         sources.sizes ?? '',
         JSON.stringify(mediaSources ?? []),
     ].join('\u0000');
-    // A decoded small srcset candidate does not make a larger candidate ready.
-    const initiallyDecoded =
-        !mediaSources?.length &&
-        !sources.srcSet &&
-        !imageProps.srcSet &&
-        isImageAlreadyDecoded(sources.src, currentSrc, sourceKey);
-    const [loadedCandidate, setLoadedCandidate] = useState(() =>
-        initiallyDecoded ? sourceKey + '\u0001cached' : '',
-    );
+    // A previous URL decode cannot prove that this DOM node's selected candidate is ready.
+    const [loadedCandidate, setLoadedCandidate] = useState('');
+    const [presentedCandidate, setPresentedCandidate] = useState('');
     const imageRef = useRef<HTMLImageElement>(null);
     const notifiedCandidate = useRef('');
     const active = useRef(true);
     const exceededBudget = useRef(false);
     const latestSourceKey = useRef(sourceKey);
     latestSourceKey.current = sourceKey;
-    const loaded = loadedCandidate.startsWith(sourceKey + '\u0001') && !failed;
+    const nodeCandidate = imageRef.current && imageCandidateIdentity(imageRef.current);
+    const candidateComplete = imageRef.current && isImageCandidateComplete(imageRef.current);
+    const loaded = Boolean(
+        candidateComplete && loadedCandidate === sourceKey + '\u0001' + nodeCandidate && !failed,
+    );
+    const presented = Boolean(
+        candidateComplete && presentedCandidate === sourceKey + '\u0001' + nodeCandidate && !failed,
+    );
     const placeholder =
-        retainedPreview ||
+        retainedPreview?.source ||
         inlinePreview ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
@@ -252,6 +286,7 @@ function SafeImageSource({
     function useFallback() {
         if (!active.current) return;
         setLoadedCandidate('');
+        setPresentedCandidate('');
         const selected = mediaSources?.find(source => window.matchMedia(source.media).matches);
         const recovery =
             selected && responsive
@@ -273,12 +308,14 @@ function SafeImageSource({
     }
 
     function reveal(image: HTMLImageElement, onDecoded?: () => void) {
-        if (!image.complete || image.naturalWidth === 0) return;
+        if (imageRef.current !== image || !isImageCandidateComplete(image)) return;
         const candidate = imageCandidateIdentity(image);
         // Native media can already be painted before decode() settles, including
         // SSR images. Retain that actual candidate if the next render changes its
         // source; presentation reuse must not mark the replacement decoded/ready.
-        if (!placeholder || inlinePreview) onPresented(image.currentSrc || image.src);
+        setPresentedCandidate(sourceKey + '\u0001' + candidate);
+        setTimedOut(false);
+        onPresented(imagePresentation(image));
         void decodeImageElement(image)
             .then(() => {
                 if (
@@ -297,7 +334,7 @@ function SafeImageSource({
                 markImageDecoded(candidate);
                 if (loadingFallback && retainedOwnerKey) {
                     decodedAvatarPreviews.delete(avatarKey);
-                    decodedAvatarPreviews.set(avatarKey, image.currentSrc || image.src);
+                    decodedAvatarPreviews.set(avatarKey, imagePresentation(image));
                     if (decodedAvatarPreviews.size > 128) {
                         const oldest = decodedAvatarPreviews.keys().next().value;
                         if (oldest !== undefined) decodedAvatarPreviews.delete(oldest);
@@ -309,7 +346,7 @@ function SafeImageSource({
                 }
                 setLoadedCandidate(sourceKey + '\u0001' + candidate);
                 setTimedOut(false);
-                onPresented(image.currentSrc || image.src);
+                onPresented(imagePresentation(image));
                 onDecoded?.();
             })
             .catch(() => {
@@ -355,28 +392,23 @@ function SafeImageSource({
         image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
         image?.addEventListener('load', clearRequestTimer);
         image?.addEventListener('error', clearRequestTimer);
-        // Start a local deadline when a lazy image enters view. Page readiness owns no image timers.
+        // Start fetching near-screen images before they scroll into view; geometry is unchanged.
         let observer: IntersectionObserver | undefined;
         if (image?.getAttribute('loading') !== 'lazy') boundRequest();
         else if (image && typeof IntersectionObserver !== 'undefined') {
-            observer = new IntersectionObserver(entries => {
-                if (entries.some(entry => entry.isIntersecting)) {
-                    boundRequest();
-                    observer?.disconnect();
-                }
-            });
+            observer = new IntersectionObserver(
+                entries => {
+                    if (entries.some(entry => entry.isIntersecting)) {
+                        setNearViewport(true);
+                        boundRequest();
+                        observer?.disconnect();
+                    }
+                },
+                { rootMargin: '400px 0px' },
+            );
             observer.observe(image);
         }
         if (image?.complete && image.naturalWidth > 0) {
-            const candidate = imageCandidateIdentity(image);
-            if (
-                isImageAlreadyDecoded(image.currentSrc || image.src) &&
-                !loadedCandidate.startsWith(sourceKey + '\u0001')
-            ) {
-                setLoadedCandidate(sourceKey + '\u0001' + candidate);
-                setTimedOut(false);
-                onPresented(image.currentSrc || image.src);
-            }
             reveal(image);
         }
         return () => {
@@ -401,6 +433,7 @@ function SafeImageSource({
     const frame = [
         'responsive-picture safe-image-frame',
         loaded && 'is-loaded',
+        presented && 'is-presented',
         imageProps.fetchPriority === 'high' && !exceededBudget.current && 'is-priority',
         placeholder && 'has-placeholder',
         inlinePreview && 'has-inline-preview',
@@ -419,6 +452,7 @@ function SafeImageSource({
                 <SafeImageElement mediaSources={responsive ? mediaSources : undefined} imageKind={imageKind}>
                     <img
                         {...imageProps}
+                        loading={nearViewport ? 'eager' : imageProps.loading}
                         ref={imageRef}
                         src={sources.src}
                         srcSet={sources.srcSet ?? imageProps.srcSet}
@@ -444,7 +478,11 @@ function SafeImageSource({
                 aria-hidden={failed ? undefined : true}
                 style={
                     !failed && retainedPreview
-                        ? { backgroundImage: `url(${JSON.stringify(retainedPreview)})` }
+                        ? {
+                              backgroundImage: `url(${JSON.stringify(retainedPreview.source)})`,
+                              backgroundSize: retainedPreview.backgroundSize,
+                              backgroundPosition: retainedPreview.backgroundPosition,
+                          }
                         : undefined
                 }
             >
