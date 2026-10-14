@@ -103,6 +103,13 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
         let heartbeatWork = Promise.resolve();
         let failure: string | undefined;
         let previousResult: Record<string, any> = {};
+        let previousResultLoaded = false;
+        const loadPreviousResult = async () => {
+            const previous = await repository.findOne({ where: { taskId: task.id } });
+            if (previous?.lastResult && typeof previous.lastResult === 'object')
+                previousResult = previous.lastResult;
+            previousResultLoaded = true;
+        };
         const heartbeat = setInterval(
             () => {
                 heartbeatWork = heartbeatWork
@@ -134,7 +141,7 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
             controller.abort(new Error(failure));
             heartbeatWork = heartbeatWork
                 .then(async () => {
-                    if (stopped) return;
+                    if (stopped || !previousResultLoaded) return;
                     await repository.update(
                         { taskId: task.id, lockedAt: ownedAt },
                         { lastResult: { ...previousResult, error: failure } as any },
@@ -148,9 +155,7 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
         try {
             // Timeout requests cancellation; it cannot terminate arbitrary JavaScript.
             // Await the executor and renew its lock so another worker cannot overlap it.
-            const previous = await repository.findOne({ where: { taskId: task.id } });
-            if (previous?.lastResult && typeof previous.lastResult === 'object')
-                previousResult = previous.lastResult;
+            await loadPreviousResult();
             const result = await task.execute(this.injector, controller.signal);
             stopHeartbeat();
             await heartbeatWork;
@@ -168,6 +173,9 @@ export class DefaultSchedulerStrategy implements SchedulerStrategy {
             await heartbeatWork;
             const message = failure ?? (error instanceof Error ? error.message : 'Unknown error');
             Logger.error(`Scheduled task "${task.id}" failed with error: ${message}`);
+            // A transient initial read must not turn an unknown checkpoint into an
+            // empty one. If recovery also fails, keep the existing database result.
+            if (!previousResultLoaded) await loadPreviousResult();
             await repository.update(
                 { taskId: task.id, lockedAt: ownedAt },
                 {

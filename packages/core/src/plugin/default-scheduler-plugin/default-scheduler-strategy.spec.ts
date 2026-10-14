@@ -55,6 +55,47 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 describe('scheduler execution ownership', () => {
+    it('preserves a stored checkpoint when the first result read fails', async () => {
+        const h = setup();
+        h.repository.findOne.mockRejectedValueOnce(new Error('Result read unavailable'));
+        const execute = vi.fn();
+        const task = { id: 'recovery', options: {}, execute } as unknown as ScheduledTask;
+        await h.strategy.executeTask(task)();
+        expect(execute).not.toHaveBeenCalled();
+        expect(h.row.lastResult).toMatchObject({
+            scanCursors: { email: 'checkpoint' },
+            error: 'Result read unavailable',
+        });
+        expect(h.row.lockedAt).toBeNull();
+    });
+    it('does not erase the checkpoint while an initial result read is stalled past timeout', async () => {
+        vi.useFakeTimers();
+        const h = setup();
+        let finishRead!: () => void;
+        h.repository.findOne.mockImplementationOnce(
+            () =>
+                new Promise(resolve => {
+                    finishRead = () => resolve({ ...h.row });
+                }),
+        );
+        const task = {
+            id: 'recovery',
+            options: { timeout: 60_000 },
+            execute: vi.fn().mockResolvedValue({}),
+        } as unknown as ScheduledTask;
+        const run = h.strategy.executeTask(task)();
+        await vi.advanceTimersByTimeAsync(61_000);
+        try {
+            expect(h.row.lastResult).toMatchObject({ scanCursors: { email: 'checkpoint' } });
+        } finally {
+            finishRead();
+            await run;
+        }
+        expect(h.row.lastResult).toMatchObject({
+            scanCursors: { email: 'checkpoint' },
+            error: 'Task timed out',
+        });
+    });
     it('retains and renews a timed-out executor until it actually ends, then records failure', async () => {
         vi.useFakeTimers();
         const h = setup();
