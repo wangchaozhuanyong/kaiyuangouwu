@@ -28,7 +28,7 @@ import {
 import { ContentText } from '../../storefront-content-plugin/src/shared/content-text';
 import { useImageTextContrast } from '../../storefront-content-plugin/src/shared/image-tone';
 
-import { ShopApi, ShopApiError } from './api';
+import { ShopApi, ShopApiError, ShopApiTimeoutError } from './api';
 import { AuthFormIntro, AuthOverlaySurface } from './auth-overlay-surface';
 import { AuthPresentationContext, type AuthPresentationRoute } from './auth-presentation';
 import {
@@ -126,7 +126,7 @@ export function loginErrorMessage(error: unknown, language: StorefrontLanguage):
 
 export function registerErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
-    return storefrontErrorMessage(
+    return authRequestErrorMessage(
         error,
         language,
         isZh ? '注册失败，请稍后重试' : 'Registration failed. Please try again later',
@@ -139,11 +139,20 @@ export function verificationRequiresPassword(error: unknown): boolean {
 
 export function verificationErrorMessage(error: unknown, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
-    return storefrontErrorMessage(
+    return authRequestErrorMessage(
         error,
         language,
         isZh ? '无法完成验证，请稍后重试' : 'Verification failed. Please try again later.',
     );
+}
+
+function authRequestErrorMessage(error: unknown, language: StorefrontLanguage, fallback?: string): string {
+    if (error instanceof ShopApiTimeoutError && error.resultUnknown) {
+        return language === 'zh'
+            ? '请求超时，提交结果暂未确认。请检查邮箱或尝试登录，勿重复提交。'
+            : 'The request timed out and its result is not confirmed. Check your email or try signing in; do not submit again.';
+    }
+    return storefrontErrorMessage(error, language, fallback);
 }
 
 interface AuthPageBaseProps {
@@ -168,7 +177,7 @@ interface AuthVisualProps {
 }
 
 interface AuthCompletionProps {
-    onSuccess: () => Promise<void>;
+    onSuccess: (isCurrent?: () => boolean) => Promise<void>;
 }
 
 interface AuthMethodsProps {
@@ -282,6 +291,46 @@ function useAuthSubmittingState(submitting: boolean) {
     return Boolean(overlay);
 }
 
+interface AuthRequestOperation {
+    signal: AbortSignal;
+    isCurrent: () => boolean;
+    finish: () => void;
+}
+
+/** Each form owns one request; an old scope may finish remotely but cannot update this presentation. */
+function useAuthRequestScope(api: ShopApi, identity = '') {
+    const ownerRef = useRef({ api, identity });
+    if (ownerRef.current.api !== api || ownerRef.current.identity !== identity)
+        ownerRef.current = { api, identity };
+    const owner = ownerRef.current;
+    const pending = useRef<{ owner: typeof owner; controller: AbortController } | null>(null);
+    useEffect(
+        () => () => {
+            if (pending.current?.owner === owner) {
+                pending.current.controller.abort();
+                pending.current = null;
+            }
+        },
+        [owner],
+    );
+    return {
+        owner,
+        begin(): AuthRequestOperation | null {
+            if (pending.current?.owner === owner) return null;
+            pending.current?.controller.abort();
+            const request = { owner, controller: new AbortController() };
+            pending.current = request;
+            return {
+                signal: request.controller.signal,
+                isCurrent: () => ownerRef.current === owner && !request.controller.signal.aborted,
+                finish: () => {
+                    if (pending.current === request) pending.current = null;
+                },
+            };
+        },
+    };
+}
+
 export function LoginPage({
     returnTo,
     returnVariantId,
@@ -306,8 +355,16 @@ export function LoginPage({
     const [autoRegistrationEmail, setAutoRegistrationEmail] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
+    const requestScope = useAuthRequestScope(api);
+    useEffect(() => {
+        setSubmitting(false);
+        setError('');
+        setAutoRegistrationEmail('');
+    }, [requestScope.owner]);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        const operation = requestScope.begin();
+        if (!operation) return;
         const data = new FormData(event.currentTarget);
         const emailAddress = formString(data, 'emailAddress').trim();
         const password = formString(data, 'password');
@@ -315,31 +372,38 @@ export function LoginPage({
         setError('');
         try {
             await api.login(emailAddress, password, rememberMe);
-            await onSuccess();
+            if (!operation.isCurrent()) return;
+            await onSuccess(operation.isCurrent);
         } catch (requestError) {
+            if (!operation.isCurrent()) return;
             if (authSettings.emailAutoRegistrationEnabled && isInvalidCredentials(requestError)) {
                 if (!registrationConsentAccepted) {
                     setError(
                         isZh
-                            ? '该邮箱尚未注册。如需自动创建账户，请先勾选同意条款与隐私政策。'
-                            : 'No account exists. Accept the terms and privacy policy to create one automatically.',
+                            ? '请核对邮箱和密码。如需自动创建账户，请先同意条款与隐私政策。'
+                            : 'Check your email and password. To create an account automatically, accept the terms and privacy policy first.',
                     );
                     return;
                 }
                 try {
                     await api.registerCustomerAccount(
-                        { emailAddress, password },
+                        { emailAddress },
                         registrationConsent(registrationConsentAccepted, language),
+                        undefined,
+                        undefined,
+                        operation.signal,
                     );
+                    if (!operation.isCurrent()) return;
                     setAutoRegistrationEmail(emailAddress);
                 } catch (registrationError) {
-                    setError(registerErrorMessage(registrationError, language));
+                    if (operation.isCurrent()) setError(registerErrorMessage(registrationError, language));
                 }
             } else {
                 setError(loginErrorMessage(requestError, language));
             }
         } finally {
-            setSubmitting(false);
+            operation.finish();
+            if (operation.isCurrent()) setSubmitting(false);
         }
     };
 
@@ -379,11 +443,13 @@ export function LoginPage({
             {autoRegistrationEmail ? (
                 <AuthResult
                     icon={<CircleCheck />}
-                    title={isZh ? '请检查邮箱或密码' : 'Check your email or password'}
+                    title={isZh ? '注册请求已提交' : 'Registration request submitted'}
                     detail={
                         isZh
-                            ? `如果 ${autoRegistrationEmail} 是新邮箱，验证邮件已发送；如果已有账户，请返回检查密码或重置密码。`
-                            : `If ${autoRegistrationEmail} is new, a verification email was sent. If it already has an account, go back to check or reset the password.`
+                            ? `需要验证 ${autoRegistrationEmail} 时，请检查收件箱或垃圾邮件，打开邮件链接并设置密码。若该邮箱已有账号，请直接登录或找回密码。`
+                            : `If ${autoRegistrationEmail} needs verification, check your inbox or spam folder, ` +
+                              'then open the email link and set a password. ' +
+                              'If you already have an account, sign in or reset your password.'
                     }
                 >
                     <button
@@ -544,14 +610,24 @@ export function RegisterPage({
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
     const quickRegistration = authSettings.emailQuickRegistrationEnabled;
+    const requestScope = useAuthRequestScope(api, registeredEmail);
     const googleClientId = authSettings.googleEnabled ? authSettings.googleClientId : null;
     const googleAvailable = Boolean(googleClientId);
+
+    useEffect(() => {
+        setSubmitting(false);
+        setRegisteredEmail('');
+        setError('');
+        setResendMessage('');
+        setResendSeconds(0);
+    }, [api]);
 
     useEffect(() => {
         const controller = new AbortController();
         void api
             .referralProgram(controller.signal)
             .then(program => {
+                if (controller.signal.aborted) return;
                 setReferralEnabled(isReferralClientFeatureEnabled(program));
                 const captured = attributionWithinWindow(
                     captureReferralAttribution(),
@@ -582,7 +658,6 @@ export function RegisterPage({
         const data = new FormData(event.currentTarget);
         let firstName: string | undefined;
         let lastName: string | undefined;
-        let password: string | undefined;
         if (!quickRegistration) {
             const fullName = formString(data, 'fullName').trim();
             const splitName = splitCustomerName(fullName, language);
@@ -592,17 +667,9 @@ export function RegisterPage({
                 setError(isZh ? '请输入完整姓名' : 'Enter your full name');
                 return;
             }
-            password = formString(data, 'password');
-            const passwordError = validateAccountPassword(
-                password,
-                formString(data, 'confirmPassword'),
-                language,
-            );
-            if (passwordError) {
-                setError(passwordError);
-                return;
-            }
         }
+        const operation = requestScope.begin();
+        if (!operation) return;
         setSubmitting(true);
         setError('');
         try {
@@ -610,7 +677,11 @@ export function RegisterPage({
             const submittedInviteCode = referralEnabled
                 ? normalizeReferralCode(formString(data, 'inviteCode'))
                 : '';
-            if (submittedInviteCode && !(await api.validateReferralInviteCode(submittedInviteCode))) {
+            const inviteValid =
+                !submittedInviteCode ||
+                (await api.validateReferralInviteCode(submittedInviteCode, operation.signal));
+            if (!operation.isCurrent()) return;
+            if (!inviteValid) {
                 setInviteStatus('invalid');
                 setError(isZh ? '邀请码无效，请检查后重试' : 'This invitation code is invalid');
                 return;
@@ -620,18 +691,20 @@ export function RegisterPage({
                     emailAddress,
                     ...(firstName ? { firstName } : {}),
                     ...(lastName ? { lastName } : {}),
-                    ...(password ? { password } : {}),
                 },
                 registrationConsent(registrationConsentAccepted, language),
                 submittedInviteCode || undefined,
                 submittedInviteCode ? inviteSource : undefined,
+                operation.signal,
             );
+            if (!operation.isCurrent()) return;
             setRegisteredEmail(emailAddress);
             setResendSeconds(60);
         } catch (requestError) {
-            setError(registerErrorMessage(requestError, language));
+            if (operation.isCurrent()) setError(registerErrorMessage(requestError, language));
         } finally {
-            setSubmitting(false);
+            operation.finish();
+            if (operation.isCurrent()) setSubmitting(false);
         }
     };
 
@@ -730,23 +803,28 @@ export function RegisterPage({
 
     const resend = async () => {
         if (resendSeconds > 0) return;
+        const operation = requestScope.begin();
+        if (!operation) return;
         setSubmitting(true);
         setError('');
         setResendMessage('');
         try {
-            await api.refreshCustomerVerification(registeredEmail);
-            setResendMessage(isZh ? '验证邮件已重新发送' : 'Verification email sent again');
+            await api.refreshCustomerVerification(registeredEmail, operation.signal);
+            if (!operation.isCurrent()) return;
+            setResendMessage(isZh ? '重新发送请求已提交' : 'Verification email resend request submitted');
             setResendSeconds(60);
         } catch (requestError) {
+            if (!operation.isCurrent()) return;
             setError(
                 requestError instanceof Error
-                    ? storefrontErrorMessage(requestError, language)
+                    ? authRequestErrorMessage(requestError, language)
                     : isZh
                       ? '发送失败'
                       : 'Could not resend email',
             );
         } finally {
-            setSubmitting(false);
+            operation.finish();
+            if (operation.isCurrent()) setSubmitting(false);
         }
     };
 
@@ -760,11 +838,13 @@ export function RegisterPage({
             {registeredEmail ? (
                 <AuthResult
                     icon={<CircleCheck />}
-                    title={isZh ? '请查收验证邮件' : 'Check your email'}
+                    title={isZh ? '注册请求已提交' : 'Registration request submitted'}
                     detail={
                         isZh
-                            ? `验证链接已发送至 ${registeredEmail}`
-                            : `We sent a verification link to ${registeredEmail}`
+                            ? `需要验证 ${registeredEmail} 时，请检查收件箱或垃圾邮件，打开邮件链接并设置密码。若该邮箱已有账号，请直接登录或找回密码。`
+                            : `If ${registeredEmail} needs verification, check your inbox or spam folder, ` +
+                              'then open the email link and set a password. ' +
+                              'If you already have an account, sign in or reset your password.'
                     }
                 >
                     {resendMessage && (
@@ -796,6 +876,7 @@ export function RegisterPage({
                     <button
                         className="auth-secondary-action"
                         type="button"
+                        disabled={submitting}
                         onClick={() => {
                             setRegisteredEmail('');
                             setResendMessage('');
@@ -811,6 +892,13 @@ export function RegisterPage({
                         onClick={() => navigateTo({ name: 'login' })}
                     >
                         {isZh ? '返回登录' : 'Back to sign in'}
+                    </button>
+                    <button
+                        className="auth-secondary-action"
+                        type="button"
+                        onClick={() => navigateTo({ name: 'forgot-password' })}
+                    >
+                        {isZh ? '找回密码' : 'Reset password'}
                     </button>
                 </AuthResult>
             ) : (
@@ -839,44 +927,15 @@ export function RegisterPage({
                                 icon={<Mail />}
                                 showLabel={false}
                             />
-                            {!quickRegistration ? (
-                                <>
-                                    <Field
-                                        name="password"
-                                        label={
-                                            isZh
-                                                ? `密码 · ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} 个字符`
-                                                : `Password · ${ACCOUNT_PASSWORD_MIN_LENGTH}–${ACCOUNT_PASSWORD_MAX_LENGTH} characters`
-                                        }
-                                        type="password"
-                                        autoComplete="new-password"
-                                        icon={<LockKeyhole />}
-                                        minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
-                                        maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
-                                        revealPassword
-                                        language={language}
-                                        showLabel={false}
-                                    />
-                                    <Field
-                                        name="confirmPassword"
-                                        label={isZh ? '确认密码' : 'Confirm password'}
-                                        type="password"
-                                        autoComplete="new-password"
-                                        icon={<LockKeyhole />}
-                                        minLength={ACCOUNT_PASSWORD_MIN_LENGTH}
-                                        maxLength={ACCOUNT_PASSWORD_MAX_LENGTH}
-                                        revealPassword
-                                        language={language}
-                                        showLabel={false}
-                                    />
-                                </>
-                            ) : (
-                                <small className="auth-password-hint">
-                                    {isZh
-                                        ? '验证邮箱后再设置密码，无需现在填写姓名'
-                                        : 'Set your password after verifying your email; no name is needed now'}
-                                </small>
-                            )}
+                            <small className="auth-password-hint">
+                                {quickRegistration
+                                    ? isZh
+                                        ? '打开邮箱验证链接后设置密码，无需现在填写姓名'
+                                        : 'Set your password using the email verification link; no name is needed now'
+                                    : isZh
+                                      ? '打开邮箱验证链接后设置登录密码'
+                                      : 'Set your sign-in password using the email verification link'}
+                            </small>
                             {invitationControl}
                             {error && (
                                 <small className="form-error" role="alert">
@@ -982,7 +1041,48 @@ export function VerifyAccountPage({
     const [resending, setResending] = useState(false);
     const [resendError, setResendError] = useState('');
     const [resendMessage, setResendMessage] = useState('');
-    const attempted = useRef(false);
+    const [resendSeconds, setResendSeconds] = useState(0);
+    const [verified, setVerified] = useState(false);
+    const [restoringSession, setRestoringSession] = useState(false);
+    const [sessionError, setSessionError] = useState('');
+    const requestScope = useAuthRequestScope(api, token ?? '');
+    const attempted = useRef<typeof requestScope.owner | null>(null);
+    const completionCallback = useRef(onSuccess);
+    completionCallback.current = onSuccess;
+
+    useEffect(() => {
+        if (resendSeconds <= 0) return;
+        const timeout = window.setTimeout(() => setResendSeconds(seconds => seconds - 1), 1000);
+        return () => window.clearTimeout(timeout);
+    }, [resendSeconds]);
+
+    const restoreSession = async (operation: AuthRequestOperation) => {
+        if (!operation.isCurrent()) return;
+        setRestoringSession(true);
+        setSessionError('');
+        try {
+            await completionCallback.current(operation.isCurrent);
+        } catch {
+            if (operation.isCurrent())
+                setSessionError(
+                    isZh
+                        ? '邮箱已验证，登录状态暂未恢复。请重试恢复或返回登录。'
+                        : 'Your email is verified, but the sign-in session could not be restored. Retry or return to sign in.',
+                );
+        } finally {
+            if (operation.isCurrent()) setRestoringSession(false);
+        }
+    };
+
+    const restoreVerifiedSession = async () => {
+        const operation = requestScope.begin();
+        if (!operation) return;
+        try {
+            await restoreSession(operation);
+        } finally {
+            operation.finish();
+        }
+    };
 
     const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -998,12 +1098,18 @@ export function VerifyAccountPage({
             setError(passwordError);
             return;
         }
+        const operation = requestScope.begin();
+        if (!operation) return;
         setSubmitting(true);
         setError('');
         try {
-            await api.verifyCustomerAccount(token, password);
-            await onSuccess();
+            await api.verifyCustomerAccount(token, password, operation.signal);
+            if (!operation.isCurrent()) return;
+            setVerified(true);
+            setRequiresPassword(false);
+            await restoreSession(operation);
         } catch (requestError) {
+            if (!operation.isCurrent()) return;
             if (
                 requestError instanceof ShopApiError &&
                 (requestError.errorCode === 'VERIFICATION_TOKEN_EXPIRED_ERROR' ||
@@ -1013,55 +1119,89 @@ export function VerifyAccountPage({
             }
             setError(verificationErrorMessage(requestError, language));
         } finally {
-            setSubmitting(false);
+            operation.finish();
+            if (operation.isCurrent()) setSubmitting(false);
         }
     };
 
     const resend = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        if (resendSeconds > 0) return;
         const data = new FormData(event.currentTarget);
+        const operation = requestScope.begin();
+        if (!operation) return;
         setResending(true);
         setResendError('');
         setResendMessage('');
         try {
-            await api.refreshCustomerVerification(formString(data, 'emailAddress').trim());
+            await api.refreshCustomerVerification(formString(data, 'emailAddress').trim(), operation.signal);
+            if (!operation.isCurrent()) return;
             setResendMessage(
                 isZh
-                    ? '如果该邮箱仍待验证，新的验证邮件将很快送达'
-                    : 'If this account still needs verification, a new email will arrive shortly.',
+                    ? '重新发送请求已提交；如该邮箱仍待验证，请检查收件箱和垃圾邮件。'
+                    : 'Verification email resend request submitted. If this account still needs verification, check your inbox and spam folder.',
             );
+            setResendSeconds(60);
         } catch (requestError) {
+            if (!operation.isCurrent()) return;
             setResendError(
                 requestError instanceof Error
-                    ? storefrontErrorMessage(requestError, language)
+                    ? authRequestErrorMessage(requestError, language)
                     : isZh
                       ? '无法重新发送验证邮件'
                       : 'Could not resend the verification email',
             );
         } finally {
-            setResending(false);
+            operation.finish();
+            if (operation.isCurrent()) setResending(false);
         }
     };
 
     useEffect(() => {
-        if (attempted.current) return;
-        attempted.current = true;
+        if (attempted.current === requestScope.owner) return;
+        const owner = requestScope.owner;
+        attempted.current = owner;
+        setError('');
+        setRequiresPassword(false);
+        setVerified(false);
+        setSessionError('');
+        setRestoringSession(false);
+        setResending(false);
+        setResendError('');
+        setResendMessage('');
+        setResendSeconds(0);
+        setSubmitting(false);
         if (!token) {
             setError(isZh ? '验证链接缺少令牌' : 'The verification link is missing its token');
             return;
         }
+        const operation = requestScope.begin();
+        if (!operation) return;
+        setSubmitting(true);
         void api
-            .verifyCustomerAccount(token)
-            .then(onSuccess)
+            .verifyCustomerAccount(token, undefined, operation.signal)
+            .then(async () => {
+                if (!operation.isCurrent()) return;
+                setVerified(true);
+                await restoreSession(operation);
+            })
             .catch(requestError => {
+                if (!operation.isCurrent()) return;
                 if (verificationRequiresPassword(requestError)) {
                     setRequiresPassword(true);
                     setError('');
                     return;
                 }
                 setError(verificationErrorMessage(requestError, language));
+            })
+            .finally(() => {
+                operation.finish();
+                if (operation.isCurrent()) setSubmitting(false);
             });
-    }, [api, language, onSuccess, token]);
+        return () => {
+            if (attempted.current === owner) attempted.current = null;
+        };
+    }, [requestScope.owner]);
 
     return (
         <AuthLayout
@@ -1069,32 +1209,78 @@ export function VerifyAccountPage({
             {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             <AuthResult
-                icon={requiresPassword ? <LockKeyhole /> : error ? <CircleAlert /> : <Fingerprint />}
+                icon={
+                    verified ? (
+                        <CircleCheck />
+                    ) : requiresPassword ? (
+                        <LockKeyhole />
+                    ) : error ? (
+                        <CircleAlert />
+                    ) : (
+                        <Fingerprint />
+                    )
+                }
                 title={
-                    requiresPassword
+                    verified
                         ? isZh
-                            ? '设置登录密码'
-                            : 'Set your sign-in password'
-                        : error
+                            ? '邮箱已验证'
+                            : 'Email verified'
+                        : requiresPassword
                           ? isZh
-                              ? '无法完成验证'
-                              : 'Verification failed'
-                          : isZh
-                            ? '正在验证'
-                            : 'Verifying your email'
+                              ? '设置登录密码'
+                              : 'Set your sign-in password'
+                          : error
+                            ? isZh
+                                ? '无法完成验证'
+                                : 'Verification failed'
+                            : isZh
+                              ? '正在验证'
+                              : 'Verifying your email'
                 }
                 detail={
-                    requiresPassword
-                        ? isZh
-                            ? '该账号由后台开户，验证邮箱后请设置首次登录密码'
-                            : 'This account was created by an administrator. Set your first password to finish verification.'
-                        : error ||
-                          (isZh
-                              ? '请稍候，完成后将自动登录'
-                              : 'Please wait. You will be signed in automatically.')
+                    verified
+                        ? restoringSession
+                            ? isZh
+                                ? '正在恢复登录状态，请稍候'
+                                : 'Restoring your sign-in session. Please wait.'
+                            : isZh
+                              ? '邮箱验证已完成，无需再次验证或重新发送邮件。'
+                              : 'Your email verification is complete. You do not need to verify or request another email.'
+                        : requiresPassword
+                          ? isZh
+                              ? '该账号尚未设置登录密码，请设置密码并完成邮箱验证。'
+                              : 'This account does not have a sign-in password yet. Set one to finish email verification.'
+                          : error ||
+                            (isZh
+                                ? '请稍候，完成后将自动登录'
+                                : 'Please wait. You will be signed in automatically.')
                 }
             >
-                {requiresPassword ? (
+                {verified ? (
+                    <>
+                        {sessionError && (
+                            <small className="form-error" role="alert">
+                                {sessionError}
+                            </small>
+                        )}
+                        {sessionError && (
+                            <SubmitButton
+                                type="button"
+                                submitting={restoringSession}
+                                idle={isZh ? '重试恢复登录' : 'Retry sign-in recovery'}
+                                busy={isZh ? '恢复中' : 'Restoring'}
+                                onClick={() => void restoreVerifiedSession()}
+                            />
+                        )}
+                        <button
+                            className="auth-secondary-action"
+                            type="button"
+                            onClick={() => navigateTo({ name: 'login' })}
+                        >
+                            {isZh ? '返回登录' : 'Back to sign in'}
+                        </button>
+                    </>
+                ) : requiresPassword ? (
                     <form className="auth-recovery-form" onSubmit={event => void submitPassword(event)}>
                         <Field
                             name="password"
@@ -1151,7 +1337,16 @@ export function VerifyAccountPage({
                             )}
                             <SubmitButton
                                 submitting={resending}
-                                idle={isZh ? '重新发送验证邮件' : 'Resend verification email'}
+                                disabled={resendSeconds > 0}
+                                idle={
+                                    resendSeconds > 0
+                                        ? isZh
+                                            ? `${resendSeconds} 秒后可重新发送`
+                                            : `Resend in ${resendSeconds}s`
+                                        : isZh
+                                          ? '重新发送验证邮件'
+                                          : 'Resend verification email'
+                                }
                                 busy={isZh ? '发送中' : 'Sending'}
                             />
                         </form>

@@ -39,8 +39,14 @@ export abstract class BaseDomainApi {
         this.ctx.clearAuthToken();
     }
 
-    protected authenticationRequest<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-        return this.ctx.authenticationRequest<T>(query, variables);
+    protected authenticationRequest<T>(
+        query: string,
+        variables: Record<string, unknown>,
+        signal?: AbortSignal,
+        timeoutMs?: number,
+        resultUnknownOnTimeout?: boolean,
+    ): Promise<T> {
+        return this.ctx.authenticationRequest<T>(query, variables, signal, timeoutMs, resultUnknownOnTimeout);
     }
 
     protected request<T>(

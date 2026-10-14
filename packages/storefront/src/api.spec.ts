@@ -40,6 +40,78 @@ function jsonRequestBody(init?: RequestInit): string {
     return init.body;
 }
 
+describe('registration mutation deadlines and cancellation', () => {
+    const actions = [
+        {
+            name: 'registration',
+            run: (api: ShopApi, signal?: AbortSignal) =>
+                api.registerCustomerAccount(
+                    { emailAddress: 'local@example.invalid', firstName: 'Local', lastName: 'Example' },
+                    { termsAccepted: true, privacyAcknowledged: true, locale: 'en' },
+                    undefined,
+                    undefined,
+                    signal,
+                ),
+        },
+        {
+            name: 'resend',
+            run: (api: ShopApi, signal?: AbortSignal) =>
+                api.refreshCustomerVerification('local@example.invalid', signal),
+        },
+        {
+            name: 'verification preflight',
+            run: (api: ShopApi, signal?: AbortSignal) =>
+                api.verifyCustomerAccount('synthetic-verification', undefined, signal),
+        },
+        {
+            name: 'password verification',
+            run: (api: ShopApi, signal?: AbortSignal) =>
+                api.verifyCustomerAccount('synthetic-verification', 'local-synthetic-password', signal),
+        },
+    ];
+
+    it.each(actions)('bounds $name to 20 seconds with an unknown result and no replay', async ({ run }) => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn(
+            (_url: string, init?: RequestInit) =>
+                new Promise<Response>((_resolve, reject) =>
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('Aborted', 'AbortError')),
+                    ),
+                ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const request = run(new ShopApi(market));
+        const rejection = expect(request).rejects.toMatchObject({
+            name: 'ShopApiTimeoutError',
+            resultUnknown: true,
+        });
+        await vi.dynamicImportSettled();
+        await vi.advanceTimersByTimeAsync(SHOP_API_QUERY_TIMEOUT_MS);
+        await rejection;
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(actions)('cancels $name when its form scope ends', async ({ run }) => {
+        const fetchMock = vi.fn(
+            (_url: string, init?: RequestInit) =>
+                new Promise<Response>((_resolve, reject) =>
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('Aborted', 'AbortError')),
+                    ),
+                ),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const controller = new AbortController();
+        const request = run(new ShopApi(market), controller.signal);
+        const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+        controller.abort();
+        await rejection;
+        expect(fetchMock).toHaveBeenCalledOnce();
+    });
+});
+
 describe('payment receipt order recovery', () => {
     it.each([false, true])('reads the original order in its original currency (fence=%s)', async fence => {
         const input = {

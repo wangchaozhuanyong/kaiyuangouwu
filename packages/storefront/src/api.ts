@@ -26,7 +26,6 @@ import type {
     ProductSearchPage,
     ProductSearchSort,
     ReferralProgram,
-    RegisterCustomerInput,
     StoreCommerceMode,
     StoreCustomerCoupon,
     StorefrontCart,
@@ -100,7 +99,7 @@ export class ShopApi {
             createAuthTokenCapture: () => this.authTokens.createCapture(),
             clearAuthToken: () => this.authTokens.clear(),
             request: (q, v, s, t, r, c) => this.request(q, v, s, t, r, false, c),
-            authenticationRequest: (q, v) => this.request(q, v, undefined, undefined, false, true),
+            authenticationRequest: (q, v, s, t, r) => this.request(q, v, s, t, r, true),
             assertCart: res => this.assertCart(res),
             assertCheckoutSession: res => this.assertCheckoutSession(res),
             assertOrder: res => this.assertOrder(res),
@@ -346,14 +345,11 @@ export class ShopApi {
         return (await this.createReferralsApi()).myReferralOverview(signal);
     }
 
-    async registerCustomerAccount(
-        input: RegisterCustomerInput,
-        consent: StorefrontRegistrationConsentInput,
-        inviteCode?: string,
-        source?: 'LINK' | 'POSTER' | 'CODE',
-    ): Promise<void> {
-        return (await this.createReferralsApi()).registerCustomerAccount(input, consent, inviteCode, source);
-    }
+    registerCustomerAccount: ReferralsApi['registerCustomerAccount'] = async (...args) => {
+        const signal = args[4];
+        signal?.throwIfAborted();
+        return (await this.createReferralsApi()).registerCustomerAccount(...args);
+    };
 
     useReferralBalance: ReferralsApi['useReferralBalance'] = async (...args) =>
         (await this.createReferralsApi()).useReferralBalance(...args);
@@ -417,12 +413,12 @@ export class ShopApi {
         return (await this.createReferralsApi()).recordAnalyticsConsent(input);
     }
 
-    async refreshCustomerVerification(emailAddress: string): Promise<void> {
-        return this.accountApi.refreshCustomerVerification(emailAddress);
+    async refreshCustomerVerification(emailAddress: string, signal?: AbortSignal): Promise<void> {
+        return this.accountApi.refreshCustomerVerification(emailAddress, signal);
     }
 
-    async verifyCustomerAccount(token: string, password?: string): Promise<void> {
-        await this.accountApi.verifyCustomerAccount(token, password);
+    async verifyCustomerAccount(token: string, password?: string, signal?: AbortSignal): Promise<void> {
+        await this.accountApi.verifyCustomerAccount(token, password, signal);
         this.publishCookieAuthenticationChange();
     }
 

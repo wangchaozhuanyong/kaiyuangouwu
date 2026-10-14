@@ -78,6 +78,24 @@ export class DataConsentService {
     ): Promise<void> {
         const customer = await this.existingCustomerForEmail(ctx, emailAddress);
         if (!customer) throw new UserInputError('注册已提交，但无法建立同意记录，请联系支持');
+        await this.recordRegistrationForCustomer(ctx, customer.id, source, snapshots);
+    }
+
+    /** Use the customer actually created by this transaction, never an email-based creation guess. */
+    async recordRegistrationForCustomer(
+        ctx: RequestContext,
+        customerId: ID,
+        source: 'REGISTRATION' | 'GOOGLE_REGISTRATION',
+        snapshots: { terms: PolicySnapshot; privacy: PolicySnapshot; locale: string },
+    ): Promise<void> {
+        const customer = await this.connection
+            .getRepository(ctx, Customer)
+            .createQueryBuilder('customer')
+            .innerJoin('customer.channels', 'registrationChannel')
+            .where('registrationChannel.id = :channelId', { channelId: ctx.channelId })
+            .andWhere('customer.id = :customerId', { customerId })
+            .getOne();
+        if (!customer) throw new UserInputError('注册已提交，但无法建立同意记录，请联系支持');
         const common = this.evidence(ctx, customer.id, snapshots.locale, source);
         await this.connection.getRepository(ctx, DataConsentRecord).save([
             new DataConsentRecord({

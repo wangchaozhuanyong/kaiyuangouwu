@@ -10,6 +10,7 @@ import {
     assertOrderSalesChannel,
     ConfigService,
     Customer,
+    CustomerRegistrationOutcome,
     CustomerService,
     EventBus,
     ID,
@@ -359,6 +360,17 @@ export class ReferralService implements OnApplicationBootstrap {
         inviteCode?: string | null,
         source = 'CODE',
     ) {
+        const outcome = await this.registerCustomerWithReferralWithOutcome(ctx, input, inviteCode, source);
+        return outcome.result;
+    }
+
+    /** Internal creation evidence; only the public result is returned by the Shop resolver. */
+    async registerCustomerWithReferralWithOutcome(
+        ctx: RequestContext,
+        input: RegisterCustomerInput,
+        inviteCode?: string | null,
+        source = 'CODE',
+    ): Promise<CustomerRegistrationOutcome> {
         const normalizedCode = normalizeInviteCode(inviteCode);
         const config = await this.getConfig(ctx);
         let inviterAccount: ReferralAccount | null = null;
@@ -368,39 +380,32 @@ export class ReferralService implements OnApplicationBootstrap {
         }
 
         const emailAddress = input.emailAddress.trim().toLowerCase();
-        const existedBefore = await this.connection
-            .getRepository(ctx, Customer)
-            .createQueryBuilder('customer')
-            .innerJoin('customer.channels', 'registrationChannel')
-            .where('registrationChannel.id = :channelId', { channelId: ctx.channelId })
-            .andWhere('LOWER(customer.emailAddress) = :emailAddress', { emailAddress })
-            .getOne();
-
-        const result = await this.customerService.registerCustomerAccount(ctx, {
+        const outcome = await this.customerService.registerCustomerAccountWithOutcome(ctx, {
             ...input,
             emailAddress,
         });
+        const { result } = outcome;
         if (isGraphQlErrorResult(result)) {
             if (result.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR') {
                 // Match Vendure's built-in registration resolver so this custom
                 // mutation cannot be used to enumerate existing accounts.
-                return { success: true };
+                return { result: { success: true } };
             }
-            return result;
+            return outcome;
         }
-        if (existedBefore || !inviterAccount) return { success: true };
+        if (outcome.createdCustomerId == null || !inviterAccount) return outcome;
 
         const invitee = await this.connection
             .getRepository(ctx, Customer)
             .createQueryBuilder('customer')
             .innerJoin('customer.channels', 'registrationChannel')
             .where('registrationChannel.id = :channelId', { channelId: ctx.channelId })
-            .andWhere('LOWER(customer.emailAddress) = :emailAddress', { emailAddress })
+            .andWhere('customer.id = :customerId', { customerId: outcome.createdCustomerId })
             .getOne();
         if (invitee) {
             await this.bindRelationship(ctx, inviterAccount, invitee, source);
         }
-        return { success: true };
+        return outcome;
     }
 
     /** Used only by a verified external strategy, never exposed as a post-login binding mutation. */

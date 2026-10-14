@@ -940,42 +940,46 @@ describe('platform governance real database and API boundaries', () => {
             filters: [],
         });
         const childVariantIds: string[] = [];
-        for (let index = 0; index < 100; index++) {
-            const product = await server.app.get(ProductService).create(a, {
-                translations: [
-                    {
-                        languageCode: LanguageCode.zh_Hans,
-                        name: `Synthetic product ${index}`,
-                        slug: `synthetic-product-${index}`,
-                        description: 'Synthetic local acceptance fixture content',
-                    },
-                    {
-                        languageCode: LanguageCode.en,
-                        name: `Synthetic product ${index}`,
-                        slug: `synthetic-product-${index}`,
-                        description: 'Synthetic local acceptance fixture content',
-                    },
-                ],
-            });
-            const [variant] = await server.app.get(ProductVariantService).create(a, [
-                {
-                    productId: product.id,
-                    sku: `SYNTHETIC-${index}`,
-                    price: 100,
-                    trackInventory: GlobalFlag.FALSE,
+        // The fixture is one setup transaction; keep all 100 real product/variant writes.
+        await connection.withTransaction(a, async tx => {
+            for (let index = 0; index < 100; index++) {
+                const product = await server.app.get(ProductService).create(tx, {
                     translations: [
-                        { languageCode: LanguageCode.zh_Hans, name: `Synthetic variant ${index}` },
-                        { languageCode: LanguageCode.en, name: `Synthetic variant ${index}` },
+                        {
+                            languageCode: LanguageCode.zh_Hans,
+                            name: `Synthetic product ${index}`,
+                            slug: `synthetic-product-${index}`,
+                            description: 'Synthetic local acceptance fixture content',
+                        },
+                        {
+                            languageCode: LanguageCode.en,
+                            name: `Synthetic product ${index}`,
+                            slug: `synthetic-product-${index}`,
+                            description: 'Synthetic local acceptance fixture content',
+                        },
                     ],
-                },
-            ]);
-            childVariantIds.push(String(variant.id));
-            await connection.rawConnection
-                .createQueryBuilder()
-                .relation(Collection, 'productVariants')
-                .of(child.id)
-                .add(variant.id);
-        }
+                });
+                const [variant] = await server.app.get(ProductVariantService).create(tx, [
+                    {
+                        productId: product.id,
+                        sku: `SYNTHETIC-${index}`,
+                        price: 100,
+                        trackInventory: GlobalFlag.FALSE,
+                        translations: [
+                            { languageCode: LanguageCode.zh_Hans, name: `Synthetic variant ${index}` },
+                            { languageCode: LanguageCode.en, name: `Synthetic variant ${index}` },
+                        ],
+                    },
+                ]);
+                childVariantIds.push(String(variant.id));
+                await connection
+                    .getRepository(tx, Collection)
+                    .createQueryBuilder()
+                    .relation(Collection, 'productVariants')
+                    .of(child.id)
+                    .add(variant.id);
+            }
+        });
         await connection.rawConnection
             .createQueryBuilder()
             .relation(Collection, 'productVariants')

@@ -172,7 +172,7 @@ describe('auth password visibility controls', () => {
         expect(markup).toMatch(/type="password"[^>]*name="password"/);
     });
 
-    it('renders independent password visibility buttons for registration and confirmation', () => {
+    it('collects name and email before setting a password through the verification link', () => {
         const markup = renderDesktop(createElement(RegisterPage, authPageProps));
 
         expect(markup).not.toContain('auth-register-ai-campaign-v2');
@@ -196,13 +196,12 @@ describe('auth password visibility controls', () => {
         expect(markup).not.toContain('auth-field-label-row');
         expect(markup).toMatch(/<label class="auth-floating-label"[^>]*>姓名<\/label>/);
         expect(markup).toContain('placeholder="姓名"');
-        expect(markup).toContain('密码 · 8–72 个字符');
-        expect(markup.match(/aria-label="显示密码"/g)).toHaveLength(2);
+        expect(markup).toContain('打开邮箱验证链接后设置登录密码');
+        expect(markup).not.toContain('aria-label="显示密码"');
         expect(markup).toMatch(/name="fullName"/);
         expect(markup).not.toMatch(/name="firstName"|name="lastName"/);
         expect(markup).not.toContain('验证码');
-        expect(markup).toMatch(/type="password"[^>]*name="password"/);
-        expect(markup).toMatch(/type="password"[^>]*name="confirmPassword"/);
+        expect(markup).not.toMatch(/name="password"|name="confirmPassword"/);
     });
 
     it('uses the same compact placeholder-only form hierarchy in English', () => {

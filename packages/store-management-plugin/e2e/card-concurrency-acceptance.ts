@@ -29,7 +29,9 @@ export function registerCardConcurrencyAcceptance(
         variantIds: string[];
     },
 ) {
-    it.skipIf(process.env.PLATFORM_GOVERNANCE_MYSQL !== '1')(
+    it.skipIf(
+        process.env.PLATFORM_GOVERNANCE_MYSQL !== '1' && process.env.PLATFORM_GOVERNANCE_CI_MYSQL !== '1',
+    )(
         'allocates the original A pool once across A/B competition and duplicate paid events, resumes shortage after restock, and retains cards after refund',
         async () => {
             const { server, connection, platform, a, b, variantIds } = state();

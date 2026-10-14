@@ -59,17 +59,21 @@ export class ReferralShopResolver {
         @Args('source') source?: string,
     ) {
         const snapshots = await this.consents.assertRegistrationConsent(ctx, consent);
-        const existing = await this.consents.existingCustomerForEmail(ctx, input.emailAddress);
-        const result = await this.referralService.registerCustomerWithReferral(
+        const outcome = await this.referralService.registerCustomerWithReferralWithOutcome(
             ctx,
             input,
             inviteCode,
             source,
         );
-        if (!existing && !('errorCode' in result)) {
-            await this.consents.recordRegistrationByEmail(ctx, input.emailAddress, 'REGISTRATION', snapshots);
+        if (outcome.createdCustomerId != null && !('errorCode' in outcome.result)) {
+            await this.consents.recordRegistrationForCustomer(
+                ctx,
+                outcome.createdCustomerId,
+                'REGISTRATION',
+                snapshots,
+            );
         }
-        return result;
+        return outcome.result;
     }
 
     @Transaction('manual')

@@ -3,22 +3,34 @@ import { act, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
-import { LoginRoutePage, RegisterRoutePage } from './auth-route-pages';
+import { LoginRoutePage, RegisterRoutePage, VerifyAccountRoutePage } from './auth-route-pages';
 
-const state: { runtime: Record<string, unknown> } = vi.hoisted(() => ({ runtime: {} }));
+const state: {
+    runtime: Record<string, unknown>;
+    complete?: (isCurrent?: () => boolean) => Promise<void>;
+} = vi.hoisted(() => ({ runtime: {} }));
 vi.mock('./shared', () => ({ useRouteRuntime: () => state.runtime, registerRoutePreload: () => undefined }));
 vi.mock('../desktop-layout', () => ({ useDesktopLayout: () => false }));
 vi.mock('../storefront-ui/page-shell', () => ({
     AuthPageBoundary: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock('../lazy-storefront-pages', () => {
-    const Form = ({ authVisualContent }: { authVisualContent?: { title: string } }) => (
-        <>
-            <input name="email" />
-            <input name="password" type="password" />
-            <span>{authVisualContent?.title}</span>
-        </>
-    );
+    const Form = ({
+        authVisualContent,
+        onSuccess,
+    }: {
+        authVisualContent?: { title: string };
+        onSuccess?: (isCurrent?: () => boolean) => Promise<void>;
+    }) => {
+        state.complete = onSuccess;
+        return (
+            <>
+                <input name="email" />
+                <input name="password" type="password" />
+                <span>{authVisualContent?.title}</span>
+            </>
+        );
+    };
     return {
         LazyLoginPage: Form,
         LazyRegisterPage: Form,
@@ -28,6 +40,28 @@ vi.mock('../lazy-storefront-pages', () => {
     };
 });
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+it('forwards verification ownership through the existing authentication completion guard', async () => {
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    const completeAuthentication = vi.fn().mockResolvedValue(undefined);
+    const isCurrent = () => false;
+    state.runtime = {
+        route: {},
+        contentBlocks: [],
+        contentQuery: { isPending: false },
+        completeAuthentication,
+    };
+    try {
+        act(() => root.render(<VerifyAccountRoutePage />));
+        await act(async () => {
+            await state.complete?.(isCurrent);
+        });
+        expect(completeAuthentication).toHaveBeenCalledWith(undefined, undefined, isCurrent);
+    } finally {
+        act(() => root.unmount());
+    }
+});
 
 it.each([
     ['AUTH_LOGIN', LoginRoutePage],
