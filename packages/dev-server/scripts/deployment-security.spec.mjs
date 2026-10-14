@@ -602,6 +602,10 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
 
     assert.match(config, /location \^~ \/digital-delivery\//u);
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_shop_api/u);
+    assert.match(
+        config,
+        /^limit_req_zone \$binary_remote_addr zone=vendure_realtime_connect:10m rate=5r\/s;$/mu,
+    );
     assert.match(config, /limit_req_zone \$binary_remote_addr zone=vendure_admin_api/u);
     assert.match(config, /limit_conn_zone \$binary_remote_addr zone=vendure_realtime_per_ip/u);
     assert.match(config, /^limit_conn_status 429;$/mu);
@@ -683,7 +687,8 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.equal(realtimeLocations.length, 1);
     for (const location of realtimeLocations) {
         assert.match(location.groups.body, /proxy_pass http:\/\/vendure_backend;/u);
-        assert.match(location.groups.body, /limit_req zone=vendure_shop_api burst=10 nodelay;/u);
+        assert.match(location.groups.body, /limit_req zone=vendure_realtime_connect burst=10 nodelay;/u);
+        assert.doesNotMatch(location.groups.body, /limit_req zone=vendure_(?:shop|admin)_api /u);
         assert.match(location.groups.body, /proxy_cache off;/u);
         assert.match(location.groups.body, /proxy_buffering off;/u);
         assert.match(location.groups.body, /proxy_read_timeout 1h;/u);
@@ -695,6 +700,15 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
             /access_log \/var\/log\/nginx\/moyao-storefront-realtime\.log vendure_realtime;/u,
         );
         assert.match(location.groups.body, /proxy_ignore_client_abort off;/u);
+    }
+    // Page data and catalog reads retain the original quota; isolating realtime
+    // must not remove or weaken ordinary API request protection.
+    for (const route of ['/shop-api', '/_storefront/page-data']) {
+        const start = config.indexOf(`location = ${route} {`);
+        assert.ok(start >= 0);
+        const body = config.slice(start, config.indexOf('\n    }', start));
+        assert.match(body, /limit_req zone=vendure_shop_api burst=40 nodelay;/u);
+        assert.doesNotMatch(body, /limit_req zone=vendure_realtime_connect /u);
     }
 });
 
