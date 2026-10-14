@@ -49,6 +49,8 @@ html {
     background: var(--bg);
     scrollbar-width: thin;
     scrollbar-color: var(--skin-divider) transparent;
+    /* Keep the centered shell in place as initial regions gain their real height. */
+    scrollbar-gutter: stable;
     overflow-x: clip;
 }
 
