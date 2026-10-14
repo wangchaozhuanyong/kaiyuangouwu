@@ -443,6 +443,16 @@ export function useStorefrontBootstrap(presentedRoute?: RouteState) {
     return {
         ...publicData,
         storefrontUnavailable,
+        // A config copied into its resolved query key is already confirmed.
+        // Waiting for another fetch leaves private-page icons neutral until a
+        // later refresh, even though the current Channel's brand is available.
+        storefrontBrandingReady:
+            storefrontUnavailable ||
+            Boolean(
+                storefrontContextResolved &&
+                configQuery.data?.code === market.code &&
+                !configQuery.isPlaceholderData,
+            ),
         storefrontAccessMode: configQuery.data?.accessMode,
         market,
         language,
