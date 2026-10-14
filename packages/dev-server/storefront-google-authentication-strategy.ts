@@ -151,6 +151,44 @@ export class StorefrontGoogleAuthenticationStrategy implements AuthenticationStr
         }
     }
 
+    async customerActionClientId(ctx: RequestContext): Promise<string | undefined> {
+        const settings = await readStorefrontAuthSettings(this.settingsStore, ctx);
+        // Existing accounts retain privacy rights without enabling new Google logins.
+        return settings.googleClientId || undefined;
+    }
+
+    async verifyCustomerAction(
+        ctx: RequestContext,
+        proof: { credential: string; nonce: string; issuedAt: number },
+    ): Promise<boolean> {
+        const clientId = await this.customerActionClientId(ctx);
+        if (!ctx.activeUserId || !clientId) return false;
+        try {
+            const ticket = await this.googleClient(clientId).verifyIdToken({
+                idToken: proof.credential,
+                audience: clientId,
+            });
+            const payload = ticket.getPayload() as ReturnType<typeof ticket.getPayload> & { nonce?: string };
+            if (
+                !payload?.sub ||
+                payload.email_verified !== true ||
+                payload.nonce !== proof.nonce ||
+                !payload.iat ||
+                payload.iat * 1000 < proof.issuedAt - 5000 ||
+                payload.iat * 1000 > Date.now() + 5000
+            )
+                return false;
+            const user = await this.externalAuthenticationService.findCustomerUser(
+                ctx,
+                this.name,
+                payload.sub,
+            );
+            return !!user && String(user.id) === String(ctx.activeUserId);
+        } catch {
+            return false;
+        }
+    }
+
     private googleClient(clientId: string): OAuth2Client {
         const existing = this.clients.get(clientId);
         if (existing) return existing;

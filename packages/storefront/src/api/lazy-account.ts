@@ -17,6 +17,7 @@ const lazyMethods: Record<LazyAccountMethod, true> = {
     restoreCustomerAvatar: true,
     removeCustomerAvatar: true,
     dataSubjectRequests: true,
+    requestDataSubjectVerification: true,
     exportPersonalData: true,
     requestAccountClosure: true,
     cancelAccountClosure: true,

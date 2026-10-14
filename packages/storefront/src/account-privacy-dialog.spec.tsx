@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, ReactNode } from 'react';
+import { act, ComponentProps, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
@@ -16,6 +16,10 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
+function required<T>(element: T | null | undefined): T {
+    if (!element) throw Error('Missing fixture element');
+    return element;
+}
 const exportData = vi.fn();
 const requestClosure = vi.fn();
 
@@ -33,7 +37,7 @@ beforeEach(() => {
     renderPage();
 });
 
-function renderPage(exportEnabled = true) {
+function renderPage(exportEnabled = true, props: Partial<ComponentProps<typeof AccountSecurityPage>> = {}) {
     act(() => {
         root.render(
             <AccountSecurityPage
@@ -53,6 +57,7 @@ function renderPage(exportEnabled = true) {
                 onDataExport={exportEnabled ? exportData : undefined}
                 onRequestAccountClosure={requestClosure}
                 onLogout={vi.fn()}
+                {...props}
             />,
         );
     });
@@ -62,7 +67,89 @@ afterEach(() => {
     act(() => root.unmount());
     host.remove();
     vi.restoreAllMocks();
+    delete window.google;
 });
+
+it.each(['export', 'closure'] as const)(
+    'requires a separate confirmation after Google identity for %s',
+    async action => {
+        let credentialCallback: ((response: { credential?: string }) => void) | undefined;
+        window.google = {
+            accounts: {
+                id: {
+                    initialize: options => {
+                        credentialCallback = options.callback;
+                    },
+                    renderButton: parent => {
+                        parent.append(document.createElement('button'));
+                    },
+                },
+            },
+        };
+        const challenge = {
+            mode: 'GOOGLE' as const,
+            challengeId: 'challenge-fixture',
+            nonce: 'nonce-fixture',
+            clientId: '123-test.apps.googleusercontent.com',
+            expiresAt: '2099-01-01T00:00:00Z',
+        };
+        const prepare = vi.fn().mockResolvedValue(challenge);
+        const callback = action === 'closure' ? requestClosure : exportData;
+        callback.mockRejectedValue(new Error('Fixture business read failure'));
+        renderPage(true, { onRequestVerification: prepare });
+        const trigger = required(
+            Array.from(host.querySelectorAll('button')).find(button =>
+                button.textContent?.includes(action === 'closure' ? '申请注销账户' : '导出我的个人数据'),
+            ),
+        );
+        await act(async () => {
+            trigger.click();
+            await Promise.resolve();
+        });
+        expect(prepare).toHaveBeenCalledWith(action === 'closure' ? 'ACCOUNT_CLOSURE' : 'EXPORT');
+        const dialog = required(document.querySelector<HTMLElement>('[role="dialog"]'));
+        const confirm = required(
+            dialog.querySelector<HTMLButtonElement>('.security-privacy-dialog-actions button:last-child'),
+        );
+        expect(dialog.querySelector('input[type="password"]')).toBeNull();
+        expect(confirm.disabled).toBe(true);
+        await act(async () => {
+            credentialCallback?.({ credential: 'fixture-signed-proof' });
+            await Promise.resolve();
+        });
+        expect(callback).not.toHaveBeenCalled();
+        expect(confirm.disabled).toBe(false);
+        await act(async () => {
+            confirm.click();
+            confirm.click();
+            await Promise.resolve();
+        });
+        expect(callback).toHaveBeenCalledExactlyOnceWith('', {
+            challengeId: challenge.challengeId,
+            nonce: challenge.nonce,
+            credential: 'fixture-signed-proof',
+        });
+        expect(confirm.disabled).toBe(true);
+        expect(dialog.querySelector('.security-privacy-dialog-error')).not.toBeNull();
+        const retry = required(
+            Array.from(dialog.querySelectorAll('button')).find(button =>
+                button.textContent?.includes('重新确认身份'),
+            ),
+        );
+        prepare.mockResolvedValue({
+            ...challenge,
+            challengeId: 'new-fixture-challenge',
+            nonce: 'new-fixture-nonce',
+        });
+        await act(async () => {
+            retry.click();
+            await Promise.resolve();
+        });
+        expect(prepare).toHaveBeenCalledTimes(2);
+        expect(confirm.disabled).toBe(true);
+        expect(callback).toHaveBeenCalledTimes(1);
+    },
+);
 
 function openDialog(label: string) {
     const trigger = Array.from(host.querySelectorAll('button')).find(button =>

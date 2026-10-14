@@ -37,12 +37,13 @@ describe('GoogleAuthButton', () => {
         const renderButton = vi.fn((parent: HTMLElement) => {
             parent.append(document.createElement('button'));
         });
+        const initialize = vi.fn(options => {
+            callback = options.callback;
+        });
         window.google = {
             accounts: {
                 id: {
-                    initialize: vi.fn(options => {
-                        callback = options.callback;
-                    }),
+                    initialize,
                     renderButton,
                 },
             },
@@ -54,12 +55,16 @@ describe('GoogleAuthButton', () => {
                 <GoogleAuthButton
                     clientId="123456789-test.apps.googleusercontent.com"
                     language="zh"
+                    nonce="one-time-action-nonce"
                     onCredential={onCredential}
                 />,
             );
             await Promise.resolve();
         });
 
+        expect(initialize).toHaveBeenCalledWith(
+            expect.objectContaining({ nonce: 'one-time-action-nonce', auto_select: false }),
+        );
         expect(renderButton).toHaveBeenCalledWith(
             expect.any(HTMLElement),
             expect.objectContaining({ locale: 'zh-CN', text: 'continue_with' }),

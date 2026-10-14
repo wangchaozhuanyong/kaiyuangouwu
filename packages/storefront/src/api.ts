@@ -17,7 +17,6 @@ import type {
     CustomerAddressUpdateInput,
     CustomerAvatarHistoryEntry,
     CustomerDeliveryEmail,
-    DataSubjectExportPayload,
     DataSubjectRequest,
     FraudRiskCase,
     MarketConfig,
@@ -227,13 +226,14 @@ export class ShopApi {
         return this.accountApi.dataSubjectRequests(signal);
     }
 
-    async exportPersonalData(password: string): Promise<DataSubjectExportPayload> {
-        return this.accountApi.exportPersonalData(password);
-    }
+    requestDataSubjectVerification: AccountApi['requestDataSubjectVerification'] = (...args) =>
+        this.accountApi.requestDataSubjectVerification(...args);
 
-    async requestAccountClosure(password: string): Promise<DataSubjectRequest> {
-        return this.accountApi.requestAccountClosure(password);
-    }
+    exportPersonalData: AccountApi['exportPersonalData'] = (...args) =>
+        this.accountApi.exportPersonalData(...args);
+
+    requestAccountClosure: AccountApi['requestAccountClosure'] = (...args) =>
+        this.accountApi.requestAccountClosure(...args);
 
     async cancelAccountClosure(): Promise<DataSubjectRequest> {
         return this.accountApi.cancelAccountClosure();

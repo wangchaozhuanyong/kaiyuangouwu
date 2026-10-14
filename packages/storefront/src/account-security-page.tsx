@@ -22,6 +22,7 @@ import { serviceMessageDisplay } from '../../common/src/display-localization';
 import './styles/account-security.css';
 
 import { CustomerAvatar } from './components/common/customer-avatar';
+import { GoogleAuthButton } from './google-auth-button';
 import { isInputMethodKey } from './input-method';
 import { Overlay } from './overlay-host';
 import { storefrontErrorMessage } from './storefront-errors';
@@ -31,6 +32,8 @@ import {
     ActiveCustomer,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    DataSubjectVerificationChallenge,
+    DataSubjectVerificationInput,
     FraudRiskCase,
     StoreCommerceMode,
     StorefrontLanguage,
@@ -71,6 +74,7 @@ export function AccountSecurityPage({
     loadError,
     onRetry,
     onDataExport,
+    onRequestVerification,
     onRequestAccountClosure,
     onCancelAccountClosure,
     onAppealFraudRiskCase,
@@ -89,8 +93,17 @@ export function AccountSecurityPage({
     fraudRiskLoading?: boolean;
     loadError?: string;
     onRetry?: () => void;
-    onDataExport?: (password: string) => Promise<DataSubjectExportPayload>;
-    onRequestAccountClosure?: (password: string) => Promise<void>;
+    onRequestVerification?: (
+        action: 'EXPORT' | 'ACCOUNT_CLOSURE',
+    ) => Promise<DataSubjectVerificationChallenge>;
+    onDataExport?: (
+        password: string,
+        verification?: DataSubjectVerificationInput,
+    ) => Promise<DataSubjectExportPayload>;
+    onRequestAccountClosure?: (
+        password: string,
+        verification?: DataSubjectVerificationInput,
+    ) => Promise<void>;
     onCancelAccountClosure?: () => Promise<void>;
     onAppealFraudRiskCase?: (id: string, reason: string) => Promise<void>;
     onLogout: () => void;
@@ -108,6 +121,32 @@ export function AccountSecurityPage({
     const [privacyDialog, setPrivacyDialog] = useState<'export' | 'closure' | null>(null);
     const privacyActionRef = useRef<'export' | 'closure' | null>(null);
     const [privacyPassword, setPrivacyPassword] = useState('');
+    const [privacyChallenge, setPrivacyChallenge] = useState<DataSubjectVerificationChallenge | null>(null);
+    const [privacyVerificationAttempt, setPrivacyVerificationAttempt] = useState(0);
+    const [privacyProof, setPrivacyProof] = useState<DataSubjectVerificationInput | undefined>();
+    const [privacyVerificationLoading, setPrivacyVerificationLoading] = useState(false);
+    useEffect(() => {
+        let active = true;
+        setPrivacyChallenge(null);
+        setPrivacyProof(undefined);
+        setPrivacyPassword('');
+        setPrivacyVerificationLoading(false);
+        if (!privacyDialog || !onRequestVerification) return;
+        setPrivacyVerificationLoading(true);
+        void onRequestVerification(privacyDialog === 'export' ? 'EXPORT' : 'ACCOUNT_CLOSURE')
+            .then(challenge => {
+                if (active) setPrivacyChallenge(challenge);
+            })
+            .catch(error => {
+                if (active) setPrivacyError(storefrontErrorMessage(error, language));
+            })
+            .finally(() => {
+                if (active) setPrivacyVerificationLoading(false);
+            });
+        return () => {
+            active = false;
+        };
+    }, [privacyDialog, customer?.id, privacyVerificationAttempt]);
     const [privacyError, setPrivacyError] = useState<string | null>(null);
     const [privacyNotice, setPrivacyNotice] = useState<string | null>(null);
     const [riskAppealId, setRiskAppealId] = useState<string | null>(null);
@@ -204,14 +243,23 @@ export function AccountSecurityPage({
     };
 
     const submitPrivacyAction = async () => {
-        if (privacyActionRef.current || !privacyDialog || !privacyPassword) return;
+        if (
+            privacyActionRef.current ||
+            !privacyDialog ||
+            privacyVerificationLoading ||
+            (onRequestVerification && !privacyChallenge) ||
+            (privacyChallenge?.mode === 'GOOGLE' ? !privacyProof : !privacyPassword)
+        )
+            return;
         privacyActionRef.current = privacyDialog;
         setPrivacyAction(privacyDialog);
         setPrivacyError(null);
         try {
             if (privacyDialog === 'export') {
                 if (!onDataExport) return;
-                const exported = await onDataExport(privacyPassword);
+                const exported = await (privacyProof
+                    ? onDataExport(privacyPassword, privacyProof)
+                    : onDataExport(privacyPassword));
                 downloadPersonalData(exported);
                 setPrivacyNotice(
                     isZh
@@ -220,7 +268,9 @@ export function AccountSecurityPage({
                 );
             } else {
                 if (!onRequestAccountClosure) return;
-                await onRequestAccountClosure(privacyPassword);
+                await (privacyProof
+                    ? onRequestAccountClosure(privacyPassword, privacyProof)
+                    : onRequestAccountClosure(privacyPassword));
                 setPrivacyNotice(
                     isZh
                         ? '注销申请已提交；7 天冷静期内可以撤销'
@@ -230,6 +280,7 @@ export function AccountSecurityPage({
             setPrivacyDialog(null);
             setPrivacyPassword('');
         } catch (error) {
+            setPrivacyProof(undefined);
             setPrivacyError(
                 error instanceof Error
                     ? storefrontErrorMessage(error, language)
@@ -710,8 +761,12 @@ export function AccountSecurityPage({
                         <p>
                             {privacyDialog === 'export'
                                 ? isZh
-                                    ? '为防止他人下载你的资料，请输入当前登录密码。导出文件仅在本次请求中生成，不会保存文件内容。'
-                                    : 'Enter your current password. The export is generated for this request and its file contents are not stored.'
+                                    ? privacyChallenge?.mode === 'GOOGLE'
+                                        ? '请使用绑定此账户的 Google 身份再次确认，然后点击下载。导出文件内容不会保存。'
+                                        : '为防止他人下载你的资料，请输入当前登录密码。导出文件仅在本次请求中生成，不会保存文件内容。'
+                                    : privacyChallenge?.mode === 'GOOGLE'
+                                      ? 'Confirm with the Google identity linked to this account, then download. Export file contents are not stored.'
+                                      : 'Enter your current password. The export is generated for this request and its file contents are not stored.'
                                 : isZh
                                   ? '提交后有 7 天冷静期。到期会先检查未完成订单、支付、风险复核、售后和提现；交易及争议记录会按法定义务继续保留。'
                                   : [
@@ -720,25 +775,68 @@ export function AccountSecurityPage({
                                         'legally required transaction and dispute records remain retained.',
                                     ].join(' ')}
                         </p>
-                        <label htmlFor="security-privacy-password">
-                            {isZh ? '当前账户密码' : 'Current account password'}
-                        </label>
-                        <input
-                            id="security-privacy-password"
-                            type="password"
-                            autoComplete="current-password"
-                            data-overlay-autofocus
-                            value={privacyPassword}
-                            disabled={privacyAction !== null}
-                            onChange={event => setPrivacyPassword(event.target.value)}
-                            onKeyDown={event => {
-                                if (event.key === 'Enter' && !isInputMethodKey(event.nativeEvent)) {
-                                    event.preventDefault();
-                                    void submitPrivacyAction();
-                                }
-                            }}
-                        />
-                        {privacyError && <p className="security-privacy-dialog-error">{privacyError}</p>}
+                        {privacyVerificationLoading ? (
+                            <p role="status">{isZh ? '正在准备身份确认…' : 'Preparing verification…'}</p>
+                        ) : privacyChallenge?.mode === 'GOOGLE' &&
+                          privacyChallenge.clientId &&
+                          privacyChallenge.nonce &&
+                          privacyChallenge.challengeId ? (
+                            <GoogleAuthButton
+                                clientId={privacyChallenge.clientId}
+                                nonce={privacyChallenge.nonce}
+                                language={language}
+                                disabled={privacyAction !== null}
+                                onCredential={credential => {
+                                    if (!privacyChallenge.challengeId || !privacyChallenge.nonce)
+                                        return Promise.resolve();
+                                    setPrivacyProof({
+                                        challengeId: privacyChallenge.challengeId,
+                                        nonce: privacyChallenge.nonce,
+                                        credential,
+                                    });
+                                    setPrivacyError(null);
+                                    return Promise.resolve();
+                                }}
+                            />
+                        ) : !onRequestVerification || privacyChallenge?.mode === 'PASSWORD' ? (
+                            <>
+                                <label htmlFor="security-privacy-password">
+                                    {isZh ? '当前账户密码' : 'Current account password'}
+                                </label>
+                                <input
+                                    id="security-privacy-password"
+                                    type="password"
+                                    autoComplete="current-password"
+                                    data-overlay-autofocus
+                                    value={privacyPassword}
+                                    disabled={privacyAction !== null}
+                                    onChange={event => setPrivacyPassword(event.target.value)}
+                                    onKeyDown={event => {
+                                        if (event.key === 'Enter' && !isInputMethodKey(event.nativeEvent)) {
+                                            event.preventDefault();
+                                            void submitPrivacyAction();
+                                        }
+                                    }}
+                                />
+                            </>
+                        ) : null}
+                        {privacyError && (
+                            <p className="security-privacy-dialog-error">
+                                {privacyError}
+                                {onRequestVerification && (
+                                    <button
+                                        type="button"
+                                        disabled={privacyAction !== null || privacyVerificationLoading}
+                                        onClick={() => {
+                                            setPrivacyError(null);
+                                            setPrivacyVerificationAttempt(value => value + 1);
+                                        }}
+                                    >
+                                        {isZh ? '重新确认身份' : 'Retry verification'}
+                                    </button>
+                                )}
+                            </p>
+                        )}
                         <div className="security-privacy-dialog-actions">
                             <button
                                 type="button"
@@ -751,7 +849,12 @@ export function AccountSecurityPage({
                             <button
                                 type="button"
                                 className={privacyDialog === 'closure' ? 'is-danger' : 'is-primary'}
-                                disabled={!privacyPassword || privacyAction !== null}
+                                disabled={
+                                    privacyAction !== null ||
+                                    privacyVerificationLoading ||
+                                    (onRequestVerification && !privacyChallenge) ||
+                                    (privacyChallenge?.mode === 'GOOGLE' ? !privacyProof : !privacyPassword)
+                                }
                                 onClick={() => void submitPrivacyAction()}
                             >
                                 {privacyAction ? <LoaderCircle aria-hidden="true" /> : null}

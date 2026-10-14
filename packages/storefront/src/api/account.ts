@@ -10,6 +10,8 @@ import type {
     CustomerOrderCounts,
     DataSubjectExportPayload,
     DataSubjectRequest,
+    DataSubjectVerificationChallenge,
+    DataSubjectVerificationInput,
     FraudRiskAppeal,
     FraudRiskCase,
     FulfillmentDeliveryEvidence,
@@ -213,11 +215,30 @@ export class AccountApi extends CustomerIdentityApi {
         return result.myDataSubjectRequests;
     }
 
-    async exportPersonalData(password: string): Promise<DataSubjectExportPayload> {
+    async requestDataSubjectVerification(
+        action: 'EXPORT' | 'ACCOUNT_CLOSURE',
+    ): Promise<DataSubjectVerificationChallenge> {
+        const result = await this.request<{
+            requestMyDataSubjectVerification: DataSubjectVerificationChallenge;
+        }>(
+            `
+            mutation RequestMyDataSubjectVerification($action: DataSubjectAction!) {
+                requestMyDataSubjectVerification(action: $action) { mode challengeId nonce clientId expiresAt }
+            }
+        `,
+            { action },
+        );
+        return result.requestMyDataSubjectVerification;
+    }
+
+    async exportPersonalData(
+        password: string,
+        verification?: DataSubjectVerificationInput,
+    ): Promise<DataSubjectExportPayload> {
         const result = await this.request<{ exportMyPersonalData: DataSubjectExportPayload }>(
             `
-                mutation ExportMyPersonalData($password: String!) {
-                    exportMyPersonalData(password: $password) {
+                mutation ExportMyPersonalData($password: String!, $verification: DataSubjectVerificationInput) {
+                    exportMyPersonalData(password: $password, verification: $verification) {
                         fileName
                         mimeType
                         content
@@ -229,22 +250,25 @@ export class AccountApi extends CustomerIdentityApi {
                     }
                 }
             `,
-            { password },
+            { password, ...(verification ? { verification } : {}) },
         );
         return result.exportMyPersonalData;
     }
 
-    async requestAccountClosure(password: string): Promise<DataSubjectRequest> {
+    async requestAccountClosure(
+        password: string,
+        verification?: DataSubjectVerificationInput,
+    ): Promise<DataSubjectRequest> {
         const result = await this.request<{ requestMyAccountClosure: DataSubjectRequest }>(
             `
-                mutation RequestMyAccountClosure($password: String!) {
-                    requestMyAccountClosure(password: $password) {
+                mutation RequestMyAccountClosure($password: String!, $verification: DataSubjectVerificationInput) {
+                    requestMyAccountClosure(password: $password, verification: $verification) {
                         id requestType status requestedAt dueAt nextAttemptAt attemptCount
                         blockersJson lastError resultDigest completedAt cancelledAt
                     }
                 }
             `,
-            { password },
+            { password, ...(verification ? { verification } : {}) },
         );
         return result.requestMyAccountClosure;
     }

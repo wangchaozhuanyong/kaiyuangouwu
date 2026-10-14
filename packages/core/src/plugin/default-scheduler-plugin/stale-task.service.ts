@@ -1,14 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import CronTime from 'cron-time-generator';
 import { Cron } from 'croner';
+import ms, { type StringValue } from 'ms';
 
 import { Instrument } from '../../common/instrument-decorator';
 import { Logger } from '../../config';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { ScheduledTask } from '../../scheduler';
 
-import { loggerCtx } from './constants';
+import { DEFAULT_SCHEDULER_PLUGIN_OPTIONS, DEFAULT_TIMEOUT, loggerCtx } from './constants';
 import { ScheduledTaskRecord } from './scheduled-task-record.entity';
+import { DefaultSchedulerPluginOptions } from './types';
 
 /**
  * @description
@@ -24,7 +26,10 @@ export class StaleTaskService {
     // Cache the interval for each taskId
     private taskIntervalMap = new Map<string, number>();
 
-    constructor(private connection: TransactionalConnection) {}
+    constructor(
+        private connection: TransactionalConnection,
+        @Optional() @Inject(DEFAULT_SCHEDULER_PLUGIN_OPTIONS) private options?: DefaultSchedulerPluginOptions,
+    ) {}
 
     /**
      * @description
@@ -37,7 +42,11 @@ export class StaleTaskService {
             if (!lockedTask) {
                 return;
             }
-            const intervalMs = this.getScheduleIntervalMs(task);
+            const timeout = task.options.timeout ?? this.options?.defaultTimeout ?? DEFAULT_TIMEOUT;
+            const timeoutMs = typeof timeout === 'number' ? timeout : ms(timeout as StringValue);
+            // A lease now has a heartbeat independent of the cron schedule. A dead
+            // daily/weekly worker must not block recovery until its next scheduled run.
+            const intervalMs = Math.max(timeoutMs, 30_000);
             if (this.isStale(lockedTask, now, intervalMs)) {
                 await this.clearStaleLock(lockedTask);
             }

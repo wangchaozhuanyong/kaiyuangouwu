@@ -847,7 +847,10 @@ export class AutoCardService {
         return delivery;
     }
 
-    async reconcilePending(cursors: DeliveryRecoveryCursors = {}): Promise<{
+    async reconcilePending(
+        cursors: DeliveryRecoveryCursors = {},
+        signal?: AbortSignal,
+    ): Promise<{
         allocated: number;
         redispatched: number;
         completedFulfillments: number;
@@ -890,6 +893,7 @@ export class AutoCardService {
         let redispatched = 0;
         let completedFulfillments = 0;
         for (const item of pending) {
+            signal?.throwIfAborted();
             try {
                 const ctx = await this.requestContextService.create({
                     apiType: 'admin',
@@ -897,6 +901,7 @@ export class AutoCardService {
                 });
                 await this.connection.withTransaction(ctx, async tx => {
                     let delivery = await this.lockDeliveryOrThrow(tx, item.id);
+                    signal?.throwIfAborted();
                     if (delivery.order.state === 'Cancelled') return;
                     if (delivery.state === 'SENT' && !delivery.fulfillmentId) {
                         await this.completeFulfillment(tx, delivery);
