@@ -118,7 +118,7 @@ try {
                     await page.goto(baseUrl + '/');
                     const preferences = page.locator('.mobile-page-header .locale-preferences-trigger');
                     await preferences.click();
-                    await page.getByRole('radio', { name: 'English', exact: true }).click();
+                    await page.getByRole('radio', { name: '英文', exact: true }).click();
                     await page.getByRole('button', { name: '保存设置', exact: true }).click();
                     await expect(preferences).toContainText('EN');
                 }

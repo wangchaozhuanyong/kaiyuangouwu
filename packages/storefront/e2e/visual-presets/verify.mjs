@@ -1519,11 +1519,11 @@ try {
                     await expect(preferences.locator('.locale-preferences-market')).toHaveCount(0);
                     await expect(preferences).not.toContainText(/当前店铺|Current storefront/);
                     await expect(preferences.getByRole('radiogroup')).toHaveCount(2);
-                    await preferences.getByRole('radio', { name: 'English', exact: true }).click();
+                    await preferences.getByRole('radio', { name: '英文', exact: true }).click();
                     await expect(
-                        preferences.getByRole('radio', { name: 'English', exact: true }),
+                        preferences.getByRole('radio', { name: '英文', exact: true }),
                     ).toHaveAttribute('aria-checked', 'true');
-                    await preferences.getByRole('radio', { name: '简体中文', exact: true }).click();
+                    await preferences.getByRole('radio', { name: '中文', exact: true }).click();
                     await expect(
                         preferences.getByRole('button', { name: '保存设置', exact: true }),
                     ).toBeEnabled();
