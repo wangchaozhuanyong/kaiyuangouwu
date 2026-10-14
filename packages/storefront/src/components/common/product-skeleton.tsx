@@ -81,16 +81,18 @@ export function ProductSkeletonItems({
     count,
     layout = 'rows',
     appearance,
+    responsiveRow = false,
     showDescription = true,
 }: {
     count: number;
     layout?: 'rows' | 'products' | 'compact';
     appearance?: 'card' | 'plain';
+    responsiveRow?: boolean;
     showDescription?: boolean;
 }) {
     return Array.from({ length: count }, (_, index) =>
         layout === 'products' ? (
-            <ProductCardSkeleton key={index} appearance={appearance} />
+            <ProductCardSkeleton key={index} appearance={appearance} responsiveRow={responsiveRow} />
         ) : (
             <ProductRowSkeleton
                 key={index}

@@ -321,7 +321,7 @@ function observeFrames() {
                 Object.entries({
                     page: '#storefront-content .page',
                     firstProduct:
-                        '.category-page .product-card-detail-link, .search-page .product-card-detail-link',
+                        '.category-page .category-product-list > :first-child, .search-page .product-card-detail-link',
                     searchInput: '.search-header input',
                     servicesHeader: '.business-services-heading',
                     servicesImage: '.business-services-hero-media img',
@@ -642,6 +642,12 @@ try {
                 assert.ok(
                     visible.every(frame => frame.categoryNavigation),
                     'Default category normalization replaced the existing category navigation',
+                );
+                const cards = visible.map(frame => frame.criticalGeometry.firstProduct).filter(Boolean);
+                assert.ok(cards.length > 0, 'The category must reserve an actual responsive card slot');
+                assert.ok(
+                    cards.every(rect => rect.every((value, index) => Math.abs(value - cards[0][index]) <= 2)),
+                    'The first responsive category card shifted or resized when its skeleton filled',
                 );
                 return { frameCount: visible.length, canonicalUrl: page.url() };
             });
