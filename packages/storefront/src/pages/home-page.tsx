@@ -41,6 +41,7 @@ import {
     HeroScene,
     resolveHeroArtworkLayout,
 } from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { CommercePageStyles } from '../commerce-styles';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
@@ -92,7 +93,6 @@ import {
     trimText,
 } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
-import homeStyles from '../styles/home-showcase.css?inline';
 import {
     CollectionSummary,
     MarketConfig,
@@ -1072,9 +1072,7 @@ export function HomePage() {
 
     return (
         <main className="page home-page" data-page-pending={loading ? 'query' : undefined}>
-            <style href="storefront-home-showcase" precedence="commerce">
-                {homeStyles}
-            </style>
+            <CommercePageStyles />
 
             <MobilePageHeader
                 title={storefrontName}

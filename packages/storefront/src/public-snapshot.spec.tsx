@@ -19,6 +19,15 @@ vi.mock('./styles/modals-and-support.css?inline', async () => {
     return { default: readFileSync(new URL('./styles/modals-and-support.css', import.meta.url), 'utf8') };
 });
 
+vi.mock('./styles/commerce-surfaces.css?inline', async () => {
+    const { readFileSync } = await import('node:fs');
+    const readStyles = (url: URL): string =>
+        readFileSync(url, 'utf8').replace(/@import\s+'([^']+)';/gu, (_match, relative: string) =>
+            readStyles(new URL(relative, url)),
+        );
+    return { default: readStyles(new URL('./styles/commerce-surfaces.css', import.meta.url)) };
+});
+
 function fixtureValue<T>(value: T | null | undefined): T {
     if (value == null) throw new Error('Expected the synthetic fixture value');
     return value;
@@ -30,6 +39,19 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    it.each(['home', 'catalog', 'product'] as const)(
+        '%s includes sorting and product-row styles before the first page markup',
+        async kind => {
+            const page = syntheticPage(fixtureStores[0], 'zh_Hans', kind);
+            const html = await renderPublicPage(page);
+            const style = fixtureValue(
+                html.match(/<style[^>]*data-href="storefront-home-showcase"[^>]*>([^]*?)<\/style>/u)?.[1],
+            );
+            expect(style).toContain('.sort-bar {');
+            expect(style).toContain('.product-row {');
+            expect(html.indexOf('.sort-bar {')).toBeLessThan(html.indexOf('<main'));
+        },
+    );
     it.each(fixtureLanguages)(
         '%s includes the desktop navigation and idle controls before scripts load',
         async languageCode => {

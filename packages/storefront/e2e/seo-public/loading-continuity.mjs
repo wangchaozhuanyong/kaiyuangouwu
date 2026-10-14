@@ -186,7 +186,7 @@ function transformPage(page, { url }) {
             : {
                   ...(isSearch
                       ? { term: url.searchParams.get('term') ?? '' }
-                      : { collectionId: url.searchParams.get('collectionId') ?? page.collections[0].id }),
+                      : { collectionId: url.searchParams.get('collectionId') ?? undefined }),
                   sort: 'RECOMMENDED',
                   inStockOnly: false,
                   skip: 0,
@@ -292,6 +292,7 @@ function observeFrames() {
             content: box(content),
             header: box(document.querySelector('.proto-desktop-header')),
             page: box(content?.querySelector('main,.page')),
+            structuralPending: box(content?.querySelector('.page-skeleton')),
             media: box(detail?.querySelector('.detail-gallery-shell') ?? content?.querySelector('img')),
             title: box(detail) ? (detail?.querySelector('h1')?.textContent?.trim() ?? null) : null,
             product: box(detail)
@@ -310,6 +311,11 @@ function observeFrames() {
                 .filter(node => box(node))
                 .map(node => node.textContent.trim()),
             category: !!box(document.querySelector('.category-page')),
+            categoryNavigation: box(
+                document.querySelector(
+                    innerWidth >= 1024 ? '.desktop-catalog-sidebar' : '.category-navigation-shell',
+                ),
+            ),
             desktopCategory: !!box(document.querySelector('.desktop-catalog-main')),
             criticalGeometry: Object.fromEntries(
                 Object.entries({
@@ -604,6 +610,42 @@ try {
                     }
                 });
             }
+    if (selected.has('default-category'))
+        for (const width of widths) {
+            await runCase(`default-category-${width}`, width, async page => {
+                await page.route('**/_storefront/page-data?**', async route => {
+                    const url = new URL(route.request().url());
+                    if (url.searchParams.get('kind') !== 'catalog') return route.fallback();
+                    const input = JSON.parse(url.searchParams.get('input') ?? '{}');
+                    if (!input.collectionId) return route.fallback();
+                    const response = await route.fetch();
+                    await new Promise(resolve => setTimeout(resolve, 650));
+                    await route.fulfill({ response }).catch(() => undefined);
+                });
+                await page.goto(origin + '/en/category', { waitUntil: 'commit' });
+                await ready(page);
+                await expect(page).toHaveURL(/collectionId=synthetic-a-collection/u);
+                await page.waitForTimeout(500);
+                const frames = await page.evaluate(() => window.__continuity.samples);
+                const first = frames.findIndex(frame => frame.category);
+                assert.ok(first >= 0, 'The server category frame must be visible');
+                const visible = frames.slice(first);
+                assert.equal(
+                    visible.some(frame => frame.brand),
+                    false,
+                    'Default category normalization replayed the brand',
+                );
+                assert.ok(
+                    visible.every(frame => frame.page || frame.structuralPending),
+                    'Default category normalization blanked the visible frame',
+                );
+                assert.ok(
+                    visible.every(frame => frame.categoryNavigation),
+                    'Default category normalization replaced the existing category navigation',
+                );
+                return { frameCount: visible.length, canonicalUrl: page.url() };
+            });
+        }
     if (selected.has('navigation'))
         for (const width of widths.filter(value => value === 390 || value === 1440))
             for (const delay of [180, 220]) {
@@ -1079,29 +1121,30 @@ try {
                     )
                     .toBeGreaterThan(100);
                 await page.waitForTimeout(150);
-                const target = await page.locator('.category-page .product-card-detail-link').evaluateAll(
-                    nodes =>
-                        nodes
-                            .find(node => {
-                                const box = node.getBoundingClientRect();
-                                return box.top > 80 && box.bottom < window.innerHeight - 60;
-                            })
-                            ?.getAttribute('href') ?? null,
-                );
-                assert.ok(target, 'A fully visible product link is required to avoid click auto-scrolling');
-                await mark(page, 'scroll-departure');
-                await page
+                const target = await page
                     .locator('.category-page .product-card-detail-link')
-                    .filter({ visible: true })
-                    .and(page.locator(`a[href="${target}"]`))
-                    .first()
-                    .click();
+                    .evaluateAll(nodes => {
+                        for (const node of nodes) {
+                            // The title is the actual click target. A tall card need not fit
+                            // completely in this short viewport to have a stable visible link.
+                            const box = node.querySelector('.product-card-name')?.getBoundingClientRect();
+                            if (!box || box.top <= 80 || box.bottom >= window.innerHeight - 60) continue;
+                            const x = box.x + box.width / 2;
+                            const y = box.y + box.height / 2;
+                            if (document.elementFromPoint(x, y)?.closest('a') !== node) continue;
+                            return { href: node.getAttribute('href'), x, y };
+                        }
+                        return null;
+                    });
+                assert.ok(target, 'A fully visible product title is required to avoid click auto-scrolling');
+                await mark(page, 'scroll-departure');
+                await page.mouse.click(target.x, target.y);
                 const departure = await page.evaluate(
                     href =>
                         window.__continuity.events.findLast(
                             event => event.type === 'click' && event.href === href,
                         ),
-                    target,
+                    target.href,
                 );
                 assert.ok(departure?.trusted);
                 assert.ok(departure.scrollY + (departure.categoryScrollTop ?? 0) > 100);

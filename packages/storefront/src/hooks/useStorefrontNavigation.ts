@@ -105,13 +105,27 @@ export function useStorefrontNavigation({
     useEffect(() => {
         if (resolvedTargetRoute === targetRoute) return;
         const options = routeNavigateOptions(resolvedTargetRoute);
-        void tanstackNavigate({
+        const location = router.state.location;
+        let active = true;
+        const replacement = {
             ...options,
             search: { ...routerLocation.search, ...options.search },
             replace: true,
             resetScroll: false,
-        } as never);
-    }, [resolvedTargetRoute, targetRoute, routerLocation.search, tanstackNavigate]);
+        };
+        // This only spells out the category already being shown. Warm the existing
+        // Router/Query entries before replacing its URL, so normalization cannot
+        // replace that frame with a second whole-page pending skeleton.
+        void router
+            .preloadRoute(replacement as never)
+            .then(() => {
+                if (active && router.state.location === location) void tanstackNavigate(replacement as never);
+            })
+            .catch(() => undefined);
+        return () => {
+            active = false;
+        };
+    }, [resolvedTargetRoute, targetRoute, routerLocation.search, router, tanstackNavigate]);
 
     const route = useMemo(
         () =>

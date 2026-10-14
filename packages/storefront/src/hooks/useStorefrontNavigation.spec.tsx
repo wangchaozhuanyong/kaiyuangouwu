@@ -189,7 +189,7 @@ describe('storefront navigation state', () => {
         );
         router.back.mockImplementation(actualBack);
         router.forward.mockImplementation(actualForward);
-        router.preloadRoute.mockClear();
+        router.preloadRoute.mockClear().mockResolvedValue(undefined);
         host = document.createElement('div');
         document.body.append(host);
         root = createRoot(host);
@@ -222,9 +222,12 @@ describe('storefront navigation state', () => {
 
     it.each([undefined, 'all'])(
         'replaces the missing category URL without adding a history entry (%s)',
-        collectionId => {
+        async collectionId => {
             router.state.location = { pathname: '/category', search: { collectionId }, searchStr: '' };
-            act(() => root.render(<Harness />));
+            await act(async () => {
+                root.render(<Harness />);
+                await Promise.resolve();
+            });
             expect(value.activeCollectionId).toBe('first');
             expect(router.navigate).toHaveBeenCalledOnce();
             expect(router.navigate).toHaveBeenLastCalledWith(
@@ -241,24 +244,33 @@ describe('storefront navigation state', () => {
         },
     );
 
-    it('waits for the navigation categories before choosing the first item', () => {
+    it('waits for the navigation categories before choosing the first item', async () => {
         availableCollections = [];
         router.state.location = { pathname: '/category', search: {}, searchStr: '' };
-        act(() => root.render(<Harness />));
+        await act(async () => {
+            root.render(<Harness />);
+            await Promise.resolve();
+        });
         expect(router.navigate).not.toHaveBeenCalled();
         availableCollections = collections;
-        act(() => root.render(<Harness />));
+        await act(async () => {
+            root.render(<Harness />);
+            await Promise.resolve();
+        });
         expect(value.activeCollectionId).toBe('first');
         expect(router.navigate).toHaveBeenCalledOnce();
     });
 
-    it('preserves the authentication overlay when normalizing the default category URL', () => {
+    it('preserves the authentication overlay when normalizing the default category URL', async () => {
         router.state.location = {
             pathname: '/category',
             search: { auth: 'login' },
             searchStr: '?auth=login',
         };
-        act(() => root.render(<Harness />));
+        await act(async () => {
+            root.render(<Harness />);
+            await Promise.resolve();
+        });
         expect(router.navigate).toHaveBeenLastCalledWith(
             expect.objectContaining({
                 replace: true,
@@ -266,6 +278,50 @@ describe('storefront navigation state', () => {
             }),
         );
         expect(value.authOverlay?.mode).toBe('login');
+    });
+
+    it('warms the canonical category before replacing its already visible route', async () => {
+        let finish!: () => void;
+        router.preloadRoute.mockImplementationOnce(() => new Promise<void>(resolve => (finish = resolve)));
+        router.state.location = { pathname: '/category', search: {}, searchStr: '' };
+        act(() => root.render(<Harness />));
+        expect(value.activeCollectionId).toBe('first');
+        expect(router.navigate).not.toHaveBeenCalled();
+        await act(async () => {
+            finish();
+            await Promise.resolve();
+        });
+        expect(router.preloadRoute).toHaveBeenCalledOnce();
+        expect(router.navigate).toHaveBeenCalledOnce();
+        expect(router.navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({ replace: true, resetScroll: false }),
+        );
+    });
+
+    it('does not let a late canonical category preload replace a later page', async () => {
+        let finish!: () => void;
+        router.preloadRoute.mockImplementationOnce(() => new Promise<void>(resolve => (finish = resolve)));
+        router.state.location = { pathname: '/category', search: {}, searchStr: '' };
+        act(() => root.render(<Harness />));
+        act(() => value.navigate({ name: 'services' }));
+        act(() => root.render(<Harness />));
+        await act(async () => {
+            finish();
+            await Promise.resolve();
+        });
+        expect(router.navigate).toHaveBeenCalledOnce();
+        expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/services' }));
+    });
+
+    it('keeps the visible category when its canonical intent preload fails', async () => {
+        router.preloadRoute.mockRejectedValueOnce(new Error('Synthetic preload failure'));
+        router.state.location = { pathname: '/category', search: {}, searchStr: '' };
+        await act(async () => {
+            root.render(<Harness />);
+            await Promise.resolve();
+        });
+        expect(value.activeCollectionId).toBe('first');
+        expect(router.navigate).not.toHaveBeenCalled();
     });
 
     it('resynchronizes filter state after a history navigation', () => {
