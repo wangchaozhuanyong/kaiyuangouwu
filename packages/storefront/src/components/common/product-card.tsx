@@ -36,6 +36,7 @@ export function ProductCard({
     responsiveRow?: boolean;
 }) {
     const isZh = language === 'zh';
+    const quoteOnly = product.customFields?.pricingMode === 'QUOTE_ONLY';
     const gallery = appearance === 'gallery' || appearance === 'mosaic';
     const variant = lowestPricedProductVariant(product);
     const availability = productListingAvailability(product.variants, language);
@@ -77,9 +78,18 @@ export function ProductCard({
                     )}
 
                     <footer>
-                        <div className="product-card-price">
-                            {product.customFields?.pricingMode === 'QUOTE_ONLY' ? (
-                                <span>{isZh ? '联系客服询价' : 'Request a quote'}</span>
+                        <div className={`product-card-price${quoteOnly ? ' is-quote' : ''}`}>
+                            {quoteOnly ? (
+                                <>
+                                    <span
+                                        className="price-lockup product-card-price-reserve"
+                                        aria-hidden="true"
+                                    >
+                                        <span className="price-symbol">&nbsp;</span>
+                                        <span className="price-integer">&nbsp;</span>
+                                    </span>
+                                    <span>{isZh ? '联系客服询价' : 'Request a quote'}</span>
+                                </>
                             ) : variant ? (
                                 <PriceDisplay
                                     value={variant.priceWithTax}
@@ -90,14 +100,13 @@ export function ProductCard({
                                 '--'
                             )}
                         </div>
-                        {product.customFields?.pricingMode !== 'QUOTE_ONLY' &&
-                            (!gallery || availability.soldOut) && (
-                                <small
-                                    className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}
-                                >
-                                    {stockLabel}
-                                </small>
-                            )}
+                        {!quoteOnly && (!gallery || availability.soldOut) && (
+                            <small
+                                className={`product-card-stock${availability.soldOut ? ' is-sold-out' : ''}`}
+                            >
+                                {stockLabel}
+                            </small>
+                        )}
                     </footer>
                 </div>
             </ProductDetailLink>
