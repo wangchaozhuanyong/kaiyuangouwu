@@ -29,6 +29,7 @@ import {
     ErrorResult,
     GraphQlResponse,
     SEND_CLIENT_CHANNEL_TOKEN,
+    SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiTimeoutError,
     createRequestSignal,
 } from './helpers';
@@ -738,7 +739,8 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
         this.assertNoError(result.authenticate);
     }
 
-    async refreshCustomerVerification(emailAddress: string): Promise<void> {
+    async refreshCustomerVerification(emailAddress: string, signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         const result = await this.request<{ refreshCustomerVerification: ErrorResult }>(
             `
                 mutation RefreshStorefrontCustomerVerification($emailAddress: String!) {
@@ -750,11 +752,15 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
                 }
             `,
             { emailAddress },
+            signal,
+            SHOP_API_QUERY_TIMEOUT_MS,
+            true,
         );
         this.assertNoError(result.refreshCustomerVerification);
     }
 
-    async verifyCustomerAccount(token: string, password?: string): Promise<void> {
+    async verifyCustomerAccount(token: string, password?: string, signal?: AbortSignal): Promise<void> {
+        signal?.throwIfAborted();
         const result = await this.authenticationRequest<{ verifyCustomerAccount: ErrorResult }>(
             `
                 mutation VerifyStorefrontCustomer($token: String!, $password: String) {
@@ -766,6 +772,9 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
                 }
             `,
             { token, ...(password === undefined ? {} : { password }) },
+            signal,
+            SHOP_API_QUERY_TIMEOUT_MS,
+            true,
         );
         this.assertNoError(result.verifyCustomerAccount);
     }

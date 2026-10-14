@@ -79,7 +79,7 @@ export function LoginRoutePage() {
                 authSettings={runtime.authSettings}
                 onToggleLanguage={runtime.toggleLanguage}
                 onBack={runtime.goBack}
-                onSuccess={runtime.completeAuthentication}
+                onSuccess={isCurrent => runtime.completeAuthentication(undefined, undefined, isCurrent)}
                 onContentTarget={runtime.openContentTarget}
             />
         </AuthRouteBoundary>
@@ -104,7 +104,7 @@ export function RegisterRoutePage() {
                 authSettings={runtime.authSettings}
                 onToggleLanguage={runtime.toggleLanguage}
                 onBack={runtime.goBack}
-                onSuccess={runtime.completeAuthentication}
+                onSuccess={isCurrent => runtime.completeAuthentication(undefined, undefined, isCurrent)}
                 onContentTarget={runtime.openContentTarget}
             />
         </AuthRouteBoundary>
@@ -125,7 +125,7 @@ export function VerifyAccountRoutePage() {
                 storefrontName={runtime.storefrontName}
                 token={runtime.route.token}
                 onBack={runtime.goBack}
-                onSuccess={runtime.completeAuthentication}
+                onSuccess={isCurrent => runtime.completeAuthentication(undefined, undefined, isCurrent)}
             />
         </AuthRouteBoundary>
     );
@@ -164,7 +164,7 @@ export function ResetPasswordRoutePage() {
                 storefrontName={runtime.storefrontName}
                 token={runtime.route.token}
                 onBack={runtime.goBack}
-                onSuccess={runtime.completeAuthentication}
+                onSuccess={isCurrent => runtime.completeAuthentication(undefined, undefined, isCurrent)}
             />
         </AuthRouteBoundary>
     );

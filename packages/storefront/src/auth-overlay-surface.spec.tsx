@@ -16,7 +16,7 @@ const settings: StorefrontAuthSettings = {
 describe('shared authentication loading surface', () => {
     it.each([
         { mode: 'login' as const, expected: 2, overrides: {} },
-        { mode: 'register' as const, expected: 4, overrides: {} },
+        { mode: 'register' as const, expected: 2, overrides: {} },
         { mode: 'register' as const, expected: 1, overrides: { emailQuickRegistrationEnabled: true } },
         { mode: 'login' as const, expected: 0, overrides: { emailPasswordEnabled: false } },
         { mode: 'forgot-password' as const, expected: 1, overrides: { emailPasswordEnabled: false } },

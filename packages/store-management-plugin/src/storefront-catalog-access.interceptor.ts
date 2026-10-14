@@ -1,5 +1,18 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { ForbiddenError, internal_getRequestContext, parseContext } from '@vendure/core';
+import {
+    ForbiddenError,
+    internal_getRequestContext,
+    parseContext,
+    SettingsStoreService,
+} from '@vendure/core';
+import { readStorefrontAuthSettings } from '@vendure/storefront-content-plugin';
+import { defer, mergeMap } from 'rxjs';
+
+const emailRegistrationMutations = new Set([
+    'registerCustomerWithReferral',
+    'verifyCustomerAccount',
+    'refreshCustomerVerification',
+]);
 
 // Anonymous pass-through is explicit. Resolver permissions and services still
 // enforce cart ownership and customer-data authorization after this global gate.
@@ -100,6 +113,8 @@ const publicMutations = new Set([
 
 @Injectable()
 export class StorefrontCatalogAccessInterceptor implements NestInterceptor {
+    constructor(private readonly settingsStore: SettingsStoreService) {}
+
     intercept(context: ExecutionContext, next: CallHandler) {
         const parsed = parseContext(context);
         if (!parsed.isGraphQL) return next.handle();
@@ -116,6 +131,17 @@ export class StorefrontCatalogAccessInterceptor implements NestInterceptor {
         // versioned terms and privacy evidence.
         if (parent === 'Mutation' && parsed.info.fieldName === 'registerCustomerAccount') {
             throw new ForbiddenError();
+        }
+        if (parent === 'Mutation' && emailRegistrationMutations.has(parsed.info.fieldName)) {
+            // Check before the resolver transaction consumes a token, saves an account or enqueues email.
+            // This also covers authenticated requests and direct API access to the verification flow.
+            ctx.setReplicationMode('master');
+            return defer(() => readStorefrontAuthSettings(this.settingsStore, ctx)).pipe(
+                mergeMap(settings => {
+                    if (!settings.emailPasswordEnabled) throw new ForbiddenError();
+                    return next.handle();
+                }),
+            );
         }
         if (ctx.activeUserId) return next.handle();
         const allowed = parent === 'Query' ? publicQueries : publicMutations;

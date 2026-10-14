@@ -287,20 +287,50 @@ export class UserService {
             .leftJoin('user.authenticationMethods', 'authenticationMethod')
             .addSelect('aums.passwordHash')
             .where('authenticationMethod.verificationToken = :verificationToken', { verificationToken });
-        const user = await this.scopeShopCustomerQuery(ctx, query).getOne();
+        let user = await this.scopeShopCustomerQuery(ctx, query).getOne();
         if (user) {
             const isTokenValid = await this.verificationTokenGenerator.verifyVerificationToken(
                 ctx,
                 verificationToken,
             );
             if (isTokenValid) {
-                const nativeAuthMethod = user.getNativeAuthenticationMethod();
+                const requireOwnedPassword =
+                    ctx.apiType === 'shop' && this.configService.authOptions.requireVerification;
+                let nativeAuthMethod = user.getNativeAuthenticationMethod();
+                if (requireOwnedPassword) {
+                    const currentUser = await this.lockActiveUser(ctx, user.id);
+                    if (!currentUser || currentUser.verified) return new VerificationTokenInvalidError();
+                    // This locking read sees the latest token/hash even under MySQL repeatable-read.
+                    const methodQuery = this.connection
+                        .getRepository(ctx, NativeAuthenticationMethod)
+                        .createQueryBuilder('verificationMethod')
+                        .addSelect('verificationMethod.passwordHash')
+                        .where(
+                            'verificationMethod.id = :methodId AND verificationMethod.verificationToken = :verificationToken',
+                            { methodId: nativeAuthMethod.id, verificationToken },
+                        );
+                    if (
+                        ['mysql', 'mariadb', 'postgres', 'aurora-mysql', 'aurora-postgres'].includes(
+                            this.connection.rawConnection.options.type,
+                        )
+                    ) {
+                        methodQuery.setLock('pessimistic_write');
+                    }
+                    const currentMethod = await methodQuery.getOne();
+                    if (!currentMethod) return new VerificationTokenInvalidError();
+                    nativeAuthMethod = currentMethod;
+                    const authenticationMethods = user.authenticationMethods;
+                    user = currentUser;
+                    user.authenticationMethods = authenticationMethods.map(method =>
+                        method.id === currentMethod.id ? currentMethod : method,
+                    );
+                }
                 if (!password) {
-                    if (!nativeAuthMethod.passwordHash) {
+                    if (requireOwnedPassword || !nativeAuthMethod.passwordHash) {
                         return new MissingPasswordError();
                     }
                 } else {
-                    if (!!nativeAuthMethod.passwordHash) {
+                    if (!requireOwnedPassword && !!nativeAuthMethod.passwordHash) {
                         return new PasswordAlreadySetError();
                     }
                     const passwordValidationResult = await this.validatePassword(ctx, password);

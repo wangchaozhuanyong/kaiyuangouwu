@@ -13,6 +13,7 @@ import { storefrontVisitorId } from '../referral-attribution';
 
 import { BaseDomainApi } from './base-domain-api';
 import { orderFields, referralWalletFields } from './fragments';
+import { SHOP_API_QUERY_TIMEOUT_MS } from './helpers';
 
 export class ReferralsApi extends BaseDomainApi {
     async recordAnalyticsConsent(input: {
@@ -250,7 +251,9 @@ export class ReferralsApi extends BaseDomainApi {
         consent: StorefrontRegistrationConsentInput,
         inviteCode?: string,
         source?: 'LINK' | 'POSTER' | 'CODE',
+        signal?: AbortSignal,
     ): Promise<void> {
+        signal?.throwIfAborted();
         const result = await this.request<{ registerCustomerWithReferral: ErrorResult }>(
             `
                 mutation RegisterStorefrontCustomer(
@@ -272,6 +275,9 @@ export class ReferralsApi extends BaseDomainApi {
                 }
             `,
             { input, consent, inviteCode: inviteCode || null, source: source ?? null },
+            signal,
+            SHOP_API_QUERY_TIMEOUT_MS,
+            true,
         );
         this.assertNoError(result.registerCustomerWithReferral);
     }

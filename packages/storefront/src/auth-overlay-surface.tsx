@@ -82,7 +82,7 @@ export function AuthOverlayLoading({
           : mode === 'register'
             ? settings.emailQuickRegistrationEnabled
                 ? 1
-                : 4
+                : 2
             : 2;
     return (
         <AuthOverlaySurface title={language === 'zh' ? '正在加载表单' : 'Loading form'} content={content}>

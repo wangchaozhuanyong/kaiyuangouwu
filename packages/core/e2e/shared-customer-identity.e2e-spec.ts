@@ -144,7 +144,7 @@ it('verifies and signs in from another store, sharing one profile and independen
         required(current.user, 'current member user').getNativeAuthenticationMethod().verificationToken,
         'verification token',
     );
-    const verified = await customers.verifyCustomerEmailAddress(b, token);
+    const verified = await customers.verifyCustomerEmailAddress(b, token, password);
     expect('id' in verified && verified.id).toBe(member.id);
     shopClient.setChannelToken('member-b');
     await shopClient.asUserWithCredentials(email, password);
@@ -340,7 +340,11 @@ it('suppresses immediate verification refresh and re-registration without invali
     ).toBe(token);
     expect(
         'id' in
-            (await customers.verifyCustomerEmailAddress(b, required(token, 'initial verification token'))),
+            (await customers.verifyCustomerEmailAddress(
+                b,
+                required(token, 'initial verification token'),
+                password,
+            )),
     ).toBe(true);
 });
 

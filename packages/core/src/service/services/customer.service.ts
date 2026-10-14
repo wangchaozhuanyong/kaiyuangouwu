@@ -75,6 +75,12 @@ import { CustomerStoreEntryService } from './customer-store-entry.service';
 import { HistoryService } from './history.service';
 import { UserService } from './user.service';
 
+/** Internal creation evidence. Public registration resolvers must return only `result`. */
+export interface CustomerRegistrationOutcome {
+    result: RegisterCustomerAccountResult | EmailAddressConflictError | PasswordValidationError;
+    createdCustomerId?: ID;
+}
+
 /**
  * @description
  * Contains methods relating to {@link Customer} entities.
@@ -422,13 +428,21 @@ export class CustomerService {
         ctx: RequestContext,
         input: RegisterCustomerInput,
     ): Promise<RegisterCustomerAccountResult | EmailAddressConflictError | PasswordValidationError> {
+        return (await this.registerCustomerAccountWithOutcome(ctx, input)).result;
+    }
+
+    /** Only the transaction which creates the customer receives creation evidence. */
+    async registerCustomerAccountWithOutcome(
+        ctx: RequestContext,
+        input: RegisterCustomerInput,
+    ): Promise<CustomerRegistrationOutcome> {
         try {
             return await this.connection.withTransaction(ctx, txCtx =>
                 this.registerCustomerAccountInTransaction(txCtx, input),
             );
         } catch (error) {
             // The entire losing registration was rolled back, including any provisional User/auth rows.
-            if (isCustomerIdentityConflict(error)) return { success: true };
+            if (isCustomerIdentityConflict(error)) return { result: { success: true } };
             throw error;
         }
     }
@@ -436,10 +450,10 @@ export class CustomerService {
     private async registerCustomerAccountInTransaction(
         ctx: RequestContext,
         input: RegisterCustomerInput,
-    ): Promise<RegisterCustomerAccountResult | EmailAddressConflictError | PasswordValidationError> {
+    ): Promise<CustomerRegistrationOutcome> {
         if (!this.configService.authOptions.requireVerification) {
             if (!input.password) {
-                return new MissingPasswordError();
+                return { result: new MissingPasswordError() };
             }
         }
         const existingUser = await this.userService.getUserByEmailAddress(
@@ -458,14 +472,16 @@ export class CustomerService {
             }
             // An email submitted on a public form is not proof of account ownership.
             // Do not edit profiles, attach another auth method, or establish store membership.
-            return { success: true };
+            return { result: { success: true } };
         }
         const createdUser = await this.userService.createCustomerUser(
             ctx,
             input.emailAddress,
-            input.password || undefined,
+            ctx.apiType === 'shop' && this.configService.authOptions.requireVerification
+                ? undefined
+                : input.password || undefined,
         );
-        if (isGraphQlErrorResult(createdUser)) return createdUser;
+        if (isGraphQlErrorResult(createdUser)) return { result: createdUser };
         let user = createdUser;
         const customFields = (input as any).customFields;
         const customer = await this.createOrUpdate(ctx, {
@@ -477,7 +493,7 @@ export class CustomerService {
             ...(customFields ? { customFields } : {}),
         });
         if (isGraphQlErrorResult(customer)) {
-            return customer;
+            return { result: customer };
         }
         await this.historyService.createHistoryEntryForCustomer({
             customerId: customer.id,
@@ -506,7 +522,7 @@ export class CustomerService {
                 },
             });
         }
-        return { success: true };
+        return { result: { success: true }, createdCustomerId: customer.id };
     }
 
     /**

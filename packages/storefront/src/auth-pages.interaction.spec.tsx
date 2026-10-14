@@ -132,10 +132,12 @@ describe('storefront authentication overlay presentation', () => {
         expect(requiredElement('.auth-form-heading p').textContent).toBe(
             'Create an account to explore products and services',
         );
-        for (const name of ['fullName', 'emailAddress', 'password', 'confirmPassword']) {
+        for (const name of ['fullName', 'emailAddress']) {
             const input = requiredElement<HTMLInputElement>(`input[name="${name}"]`);
             expect(input.labels?.[0]?.closest('.auth-field-label-row')).not.toBeNull();
         }
+        expect(host.querySelector('input[name="password"]')).toBeNull();
+        expect(host.querySelector('input[name="confirmPassword"]')).toBeNull();
         expect(requiredElement<HTMLInputElement>('input[name="emailAddress"]').value).toBe(
             'draft@example.invalid',
         );
@@ -265,7 +267,7 @@ describe('storefront configurable authentication methods', () => {
         act(() => back.click());
         expect(baseProps.onBack).toHaveBeenCalledOnce();
         const fields = host.querySelectorAll<HTMLInputElement>('.auth-input-shell input');
-        expect(fields).toHaveLength(5);
+        expect(fields).toHaveLength(3);
         for (const input of fields) expect(input.labels?.[0]?.textContent).toBeTruthy();
         expect(host.textContent).not.toContain('继续操作前，请阅读');
         const legalButtons = host.querySelectorAll<HTMLButtonElement>('.auth-legal-links button');
@@ -275,11 +277,8 @@ describe('storefront configurable authentication methods', () => {
         expect(requiredElement<HTMLInputElement>('input[type="checkbox"]').checked).toBe(false);
         requiredElement<HTMLInputElement>('input[name="fullName"]').value = '李测试';
         requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'layout@example.invalid';
-        requiredElement<HTMLInputElement>('input[name="password"]').value = 'qa-layout-only';
-        requiredElement<HTMLInputElement>('input[name="confirmPassword"]').value = 'qa-layout-only';
-        act(() => requiredElement<HTMLButtonElement>('.auth-password-toggle').click());
-        expect(requiredElement<HTMLInputElement>('input[name="password"]').type).toBe('text');
-        expect(requiredElement<HTMLInputElement>('input[name="confirmPassword"]').type).toBe('password');
+        expect(host.querySelector('input[name="password"]')).toBeNull();
+        expect(host.querySelector('input[name="confirmPassword"]')).toBeNull();
         await act(async () => {
             submit(requiredElement<HTMLFormElement>('form'));
             await Promise.resolve();
@@ -296,13 +295,16 @@ describe('storefront configurable authentication methods', () => {
                 emailAddress: 'layout@example.invalid',
                 firstName: '测试',
                 lastName: '李',
-                password: 'qa-layout-only',
             },
             { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
             undefined,
             undefined,
+            expect.any(AbortSignal),
         );
-        expect(host.textContent).toContain('请查收验证邮件');
+        expect(host.textContent).toContain('注册请求已提交');
+        expect(host.textContent).toContain('收件箱或垃圾邮件');
+        expect(host.textContent).toContain('若该邮箱已有账号，请直接登录或找回密码');
+        expect(host.textContent).not.toContain('已发送');
         expect(host.querySelector('.login-content .auth-form-back-button')).not.toBeNull();
     });
 
@@ -349,12 +351,17 @@ describe('storefront configurable authentication methods', () => {
         expect(registerCustomerAccount).toHaveBeenCalledWith(
             {
                 emailAddress: 'new@example.com',
-                password: 'secure-password',
             },
             { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
+            undefined,
+            undefined,
+            expect.any(AbortSignal),
         );
-        expect(host.textContent).toContain('如果 new@example.com 是新邮箱');
-        expect(host.textContent).toContain('如果已有账户');
+        expect(host.textContent).toContain('需要验证 new@example.com 时');
+        expect(host.textContent).toContain('若该邮箱已有账号');
+        expect(host.textContent).toContain('注册请求已提交');
+        expect(host.textContent).toContain('收件箱或垃圾邮件');
+        expect(host.textContent).not.toContain('已发送');
     });
 
     it('submits only the email address in quick registration mode', async () => {
@@ -393,8 +400,12 @@ describe('storefront configurable authentication methods', () => {
             { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },
             undefined,
             undefined,
+            expect.any(AbortSignal),
         );
-        expect(host.textContent).toContain('验证链接已发送至 quick@example.com');
+        expect(host.textContent).toContain('注册请求已提交');
+        expect(host.textContent).toContain('需要验证 quick@example.com 时，请检查收件箱或垃圾邮件');
+        expect(host.textContent).toContain('打开邮件链接并设置密码');
+        expect(host.textContent).not.toContain('已发送');
     });
     it('changes language without replacing the form and passes the remember-me choice', async () => {
         const api = { login: vi.fn().mockResolvedValue(undefined) };

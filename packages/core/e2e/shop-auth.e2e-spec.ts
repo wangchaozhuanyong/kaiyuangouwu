@@ -424,38 +424,19 @@ describe('Shop auth & accounts', () => {
         });
     });
 
-    describe('customer account creation with up-front password', () => {
+    describe('customer account creation with a password set after mailbox verification', () => {
         const password = 'password';
         const emailAddress = 'test2@test.com';
         let verificationToken: string;
 
-        it('registerCustomerAccount fails with invalid password', async () => {
-            const input: RegisterCustomerInput = {
-                firstName: 'Lu',
-                lastName: 'Tester',
-                phoneNumber: '443324',
-                emailAddress,
-                password: '12345678',
-            };
-            const { registerCustomerAccount } = await shopClient.query(registerAccountDocument, {
-                input,
-            });
-            successErrorGuard.assertErrorResult(registerCustomerAccount);
-            expect(registerCustomerAccount.errorCode).toBe(ErrorCode.PASSWORD_VALIDATION_ERROR);
-            expect(registerCustomerAccount.message).toBe('Password is invalid');
-            expect((registerCustomerAccount as PasswordValidationError).validationErrorMessage).toBe(
-                "Don't use 12345678!",
-            );
-        });
-
-        it('register a new account with password', async () => {
+        it('register ignores the up-front password and defers password validation to verification', async () => {
             const verificationTokenPromise = getVerificationTokenPromise();
             const input: RegisterCustomerInput = {
                 firstName: 'Lu',
                 lastName: 'Tester',
                 phoneNumber: '443324',
                 emailAddress,
-                password,
+                password: '12345678',
             };
             const { registerCustomerAccount } = await shopClient.query(registerAccountDocument, {
                 input,
@@ -485,24 +466,35 @@ describe('Shop auth & accounts', () => {
 
         it('login fails before verification', async () => {
             const result = await shopClient.asUserWithCredentials(emailAddress, password);
-            expect(result.errorCode).toBe(ErrorCode.NOT_VERIFIED_ERROR);
-            expect(result.message).toBe('Please verify this email address before logging in');
+            expect(result.errorCode).toBe(ErrorCode.INVALID_CREDENTIALS_ERROR);
         });
 
-        it('verification fails with password', async () => {
+        it('verification fails without the mailbox owner password', async () => {
             const { verifyCustomerAccount } = await shopClient.query(verifyEmailDocument, {
                 token: verificationToken,
-                password: 'new password',
             });
             currentUserErrorGuard.assertErrorResult(verifyCustomerAccount);
 
-            expect(verifyCustomerAccount.message).toBe('A password has already been set during registration');
-            expect(verifyCustomerAccount.errorCode).toBe(ErrorCode.PASSWORD_ALREADY_SET_ERROR);
+            expect(verifyCustomerAccount.message).toBe('A password must be provided.');
+            expect(verifyCustomerAccount.errorCode).toBe(ErrorCode.MISSING_PASSWORD_ERROR);
         });
 
-        it('verification succeeds with no password and correct token', async () => {
+        it('verification rejects an invalid final password without consuming the link', async () => {
             const { verifyCustomerAccount } = await shopClient.query(verifyEmailDocument, {
                 token: verificationToken,
+                password: '12345678',
+            });
+            currentUserErrorGuard.assertErrorResult(verifyCustomerAccount);
+            expect(verifyCustomerAccount.errorCode).toBe(ErrorCode.PASSWORD_VALIDATION_ERROR);
+            expect((verifyCustomerAccount as PasswordValidationError).validationErrorMessage).toBe(
+                "Don't use 12345678!",
+            );
+        });
+
+        it('verification succeeds with the final password and correct token', async () => {
+            const { verifyCustomerAccount } = await shopClient.query(verifyEmailDocument, {
+                token: verificationToken,
+                password,
             });
             currentUserErrorGuard.assertSuccess(verifyCustomerAccount);
 

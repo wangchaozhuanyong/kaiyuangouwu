@@ -13,7 +13,13 @@ export interface ShopApiContext {
     getAuthToken: () => string | null;
     createAuthTokenCapture: () => (response: Response) => void;
     clearAuthToken: () => void;
-    authenticationRequest: <T>(query: string, variables: Record<string, unknown>) => Promise<T>;
+    authenticationRequest: <T>(
+        query: string,
+        variables: Record<string, unknown>,
+        signal?: AbortSignal,
+        timeoutMs?: number,
+        resultUnknownOnTimeout?: boolean,
+    ) => Promise<T>;
     request: <T>(
         query: string,
         variables?: Record<string, unknown>,

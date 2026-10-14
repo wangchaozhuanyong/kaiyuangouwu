@@ -1,5 +1,5 @@
-import { of } from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { firstValueFrom, of } from 'rxjs';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const parsed = vi.hoisted(() => ({
     isGraphQL: true,
@@ -7,11 +7,21 @@ const parsed = vi.hoisted(() => ({
     res: { setHeader: vi.fn() },
     info: { parentType: { name: 'Query' }, fieldName: 'products' },
 }));
-const ctx = vi.hoisted(() => ({ apiType: 'shop', activeUserId: undefined as string | undefined }));
+const ctx = vi.hoisted(() => ({
+    apiType: 'shop',
+    channelId: 'store-one',
+    activeUserId: undefined as string | undefined,
+    setReplicationMode: vi.fn(),
+}));
+const readAuthSettings = vi.hoisted(() => vi.fn());
 vi.mock('@vendure/core', () => ({
     parseContext: () => parsed,
     internal_getRequestContext: () => ctx,
     ForbiddenError: class ForbiddenError extends Error {},
+    SettingsStoreService: class SettingsStoreService {},
+}));
+vi.mock('@vendure/storefront-content-plugin', () => ({
+    readStorefrontAuthSettings: readAuthSettings,
 }));
 
 import { StorefrontCatalogAccessInterceptor } from './storefront-catalog-access.interceptor';
@@ -22,9 +32,14 @@ function invoke(field: string, parent = 'Query', userId?: string, apiType = 'sho
     ctx.activeUserId = userId;
     ctx.apiType = apiType;
     const next = { handle: vi.fn(() => of('resolver-data')) };
-    const run = () => new StorefrontCatalogAccessInterceptor().intercept({} as never, next);
+    const run = () => new StorefrontCatalogAccessInterceptor({} as never).intercept({} as never, next);
     return { run, next };
 }
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    readAuthSettings.mockResolvedValue({ emailPasswordEnabled: true });
+});
 
 describe('public storefront browsing boundary', () => {
     it.each([
@@ -107,7 +122,11 @@ describe('public storefront browsing boundary', () => {
     ])('preserves public account bootstrap: %s', field => expect(invoke(field).run).not.toThrow());
     it.each(['login', 'registerCustomerWithReferral', 'requestPasswordReset', 'resetPassword'])(
         'preserves account mutation: %s',
-        field => expect(invoke(field, 'Mutation').run).not.toThrow(),
+        async field => {
+            const { run, next } = invoke(field, 'Mutation');
+            await expect(firstValueFrom(run())).resolves.toBe('resolver-data');
+            expect(next.handle).toHaveBeenCalledTimes(1);
+        },
     );
     it('blocks the unaudited built-in registration mutation', () => {
         expect(invoke('registerCustomerAccount', 'Mutation').run).toThrow();
@@ -165,5 +184,50 @@ describe('public storefront browsing boundary', () => {
         invoke('products', 'Query', 'customer-user').run();
         expect(parsed.res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
         expect(parsed.res.setHeader).toHaveBeenCalledWith('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    });
+});
+
+describe('store email registration policy', () => {
+    it.each(['registerCustomerWithReferral', 'verifyCustomerAccount', 'refreshCustomerVerification'])(
+        'blocks direct %s before any resolver action when email is disabled',
+        async field => {
+            readAuthSettings.mockResolvedValue({ emailPasswordEnabled: false });
+            for (const userId of [undefined, 'authenticated-customer']) {
+                const { run, next } = invoke(field, 'Mutation', userId);
+                await expect(firstValueFrom(run())).rejects.toThrow();
+                expect(next.handle).not.toHaveBeenCalled();
+            }
+            expect(readAuthSettings).toHaveBeenCalledWith(expect.anything(), ctx);
+            expect(ctx.setReplicationMode).toHaveBeenCalledWith('master');
+        },
+    );
+
+    it.each(['registerCustomerWithReferral', 'verifyCustomerAccount', 'refreshCustomerVerification'])(
+        'allows %s only after the active-store policy succeeds',
+        async field => {
+            const { run, next } = invoke(field, 'Mutation');
+            await expect(firstValueFrom(run())).resolves.toBe('resolver-data');
+            expect(readAuthSettings).toHaveBeenCalledTimes(1);
+            expect(next.handle).toHaveBeenCalledTimes(1);
+        },
+    );
+
+    it('fails closed when the current store settings cannot be read', async () => {
+        readAuthSettings.mockRejectedValue(new Error('Synthetic settings read failure'));
+        const { run, next } = invoke('verifyCustomerAccount', 'Mutation');
+        await expect(firstValueFrom(run())).rejects.toThrow('Synthetic settings read failure');
+        expect(next.handle).not.toHaveBeenCalled();
+    });
+
+    it('keeps Admin and Google authentication on their existing paths', async () => {
+        for (const [field, apiType] of [
+            ['verifyCustomerAccount', 'admin'],
+            ['authenticate', 'shop'],
+        ]) {
+            const { run, next } = invoke(field, 'Mutation', undefined, apiType);
+            await expect(firstValueFrom(run())).resolves.toBe('resolver-data');
+            expect(next.handle).toHaveBeenCalledTimes(1);
+        }
+        expect(readAuthSettings).not.toHaveBeenCalled();
     });
 });

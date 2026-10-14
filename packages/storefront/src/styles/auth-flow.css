@@ -1453,7 +1453,7 @@
     color: #99a4b5;
 }
 
-.auth-input-shell:has(.auth-field-icon) input {
+.login-content form .auth-input-shell:has(.auth-field-icon) input {
     padding-left: 44px;
 }
 

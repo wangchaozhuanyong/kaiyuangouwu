@@ -80,6 +80,7 @@ function createHarness() {
         }),
     };
     return {
+        customerQuery: query,
         consentRepository,
         contentRepository,
         service: new DataConsentService(
@@ -138,6 +139,40 @@ describe('DataConsentService', () => {
         expect(records.every(record => record.action === 'GRANTED')).toBe(true);
         expect(records[0].ipHash).toHaveLength(64);
         expect(records[0].ipHash).not.toContain('203.0.113.10');
+    });
+
+    it('binds new registration evidence to the exact winning customer in the current store', async () => {
+        const { service, customerQuery, consentRepository } = createHarness();
+        const snapshots = await service.assertRegistrationConsent(ctx, {
+            termsAccepted: true,
+            privacyAcknowledged: true,
+            locale: 'en',
+        });
+        await service.recordRegistrationForCustomer(ctx, 'customer-1', 'REGISTRATION', snapshots);
+        expect(customerQuery.where).toHaveBeenCalledWith('registrationChannel.id = :channelId', {
+            channelId: 'channel-1',
+        });
+        expect(customerQuery.andWhere).toHaveBeenCalledWith('customer.id = :customerId', {
+            customerId: 'customer-1',
+        });
+        const records = consentRepository.save.mock.calls[0][0] as DataConsentRecord[];
+        expect(records).toHaveLength(2);
+        expect(records.every(record => record.customerId === 'customer-1')).toBe(true);
+        expect(records.map(record => record.purpose)).toEqual(['TERMS', 'PRIVACY']);
+    });
+
+    it('rejects consent evidence when the created customer is outside the active store', async () => {
+        const { service, customerQuery, consentRepository } = createHarness();
+        const snapshots = await service.assertRegistrationConsent(ctx, {
+            termsAccepted: true,
+            privacyAcknowledged: true,
+            locale: 'en',
+        });
+        customerQuery.getOne.mockResolvedValue(null);
+        await expect(
+            service.recordRegistrationForCustomer(ctx, 'other-store-customer', 'REGISTRATION', snapshots),
+        ).rejects.toThrow('无法建立同意记录');
+        expect(consentRepository.save).not.toHaveBeenCalled();
     });
 
     it('records analytics withdrawal without creating an analytics identifier from network data', async () => {

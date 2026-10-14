@@ -158,6 +158,10 @@ const previewAuxiliaryQueries = {
         }
         myCustomerAvatar { id preview }
     }`,
+    StorefrontCustomerIdentity: `query StorefrontCustomerIdentity {
+        activeCustomer { id firstName lastName emailAddress phoneNumber }
+        myCustomerAvatar { id preview }
+    }`,
     StorefrontReviewSettings: `query StorefrontReviewSettings { storefrontReviewSettings { enabled } }`,
     ActiveStoreCommerceMode: `query ActiveStoreCommerceMode { activeStoreCommerceMode }`,
     StorefrontFlashSales: `query StorefrontFlashSales {
@@ -203,6 +207,7 @@ function previewAuxiliaryQueryData(
         case 'StorefrontCatalog':
             return { storefrontCatalog: { totalItems: 0, items: [] } };
         case 'StorefrontCustomer':
+        case 'StorefrontCustomerIdentity':
             return { activeCustomer: null, myCustomerAvatar: null };
         case 'StorefrontReviewSettings':
             return { storefrontReviewSettings: { enabled: false } };
@@ -689,7 +694,7 @@ describe('unified storefront Admin API to Shop API', () => {
         await prepareClientPreview(context);
         await context.addInitScript(
             ({ auth, channel }) => {
-                if (window !== window.top) return;
+                if (window !== window.top || location.protocol !== 'http:') return;
                 sessionStorage.setItem('local-test-admin-token', auth);
                 localStorage.setItem('vendure-active-channel-token', channel);
             },
@@ -940,7 +945,7 @@ describe('unified storefront Admin API to Shop API', () => {
                         await browserExpect(page.locator('.hero')).toHaveCount(index === 1 ? 1 : 0);
                         await browserExpect(page.locator('.homepage-modules')).not.toContainText('分享海报');
                         await page.locator('.locale-preferences-trigger:visible').click();
-                        await page.getByRole('radio', { name: 'English' }).click();
+                        await page.getByRole('radio', { name: '英文', exact: true }).click();
                         await page.getByRole('button', { name: '保存设置' }).click();
                         await browserExpect(page.locator('.quick-grid')).toContainText(
                             `Store ${index} link 7`,
@@ -984,8 +989,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 await page.close();
             }
         } finally {
-            await browser.close();
-            await vite.close();
+            await Promise.all([browser.close(), vite.close()]);
         }
     }, 60_000);
     it('renders configured auth visuals in the responsive login and registration layouts', async () => {
@@ -1185,8 +1189,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 await page.close();
             }
         } finally {
-            await browser.close();
-            await vite.close();
+            await Promise.all([browser.close(), vite.close()]);
         }
     }, 180_000);
     it('round-trips partial skin/layout updates, isolates channels and rejects stale editors', async () => {
@@ -1295,7 +1298,7 @@ describe('unified storefront Admin API to Shop API', () => {
                     for (const language of ['zh', 'en']) {
                         if (language === 'en') {
                             await page.locator('.locale-preferences-trigger:visible').click();
-                            await page.getByRole('radio', { name: 'English' }).click();
+                            await page.getByRole('radio', { name: '英文', exact: true }).click();
                             await page.getByRole('button', { name: '保存设置' }).click();
                         }
                         // Even legacy catalog settings use the sole responsive storefront.
@@ -1322,8 +1325,7 @@ describe('unified storefront Admin API to Shop API', () => {
                 await page.close();
             }
         } finally {
-            await browser.close();
-            await vite.close();
+            await Promise.all([browser.close(), vite.close()]);
         }
     }, 180_000);
     it('saves from the real admin panel, retains failed edits and ignores late responses after channel switching', async () => {
