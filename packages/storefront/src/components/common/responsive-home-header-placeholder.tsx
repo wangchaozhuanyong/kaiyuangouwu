@@ -1,6 +1,7 @@
 import { Search, ShoppingCart, UserRound } from 'lucide-react';
 
-import { type RouteName } from '../../storefront-router';
+import { isPublicStorefrontRoute } from '../../storefront-access';
+import { routeHref, type RouteName } from '../../storefront-router';
 import { BrandLogo } from '../../storefront-ui/brand-logo';
 import { type StorefrontContentBlock, type StorefrontLanguage } from '../../types';
 
@@ -51,28 +52,45 @@ export function ResponsiveHomeHeaderPlaceholder({
         item => item.routeName !== 'cart',
     );
     return (
-        <header className="responsive-home-header-placeholder proto-desktop-header" aria-hidden="true" inert>
+        <header className="responsive-home-header-placeholder proto-desktop-header">
             <div className="proto-header-inner">
                 <div className="proto-header-left">
-                    <span className="proto-brand">
+                    <a
+                        className="proto-brand"
+                        href={routeHref({ name: 'home', publicLanguage: language })}
+                        aria-label={name}
+                    >
                         <BrandLogo url={logoUrl} name={name} className="proto-brand-badge" />
                         <span className="proto-brand-text">{name}</span>
-                    </span>
-                    <nav className="proto-nav-links">
-                        {navigation.map(item => (
-                            <span
-                                key={item.key}
-                                className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
-                            >
-                                {item.label}
-                            </span>
-                        ))}
+                    </a>
+                    <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main navigation'}>
+                        {navigation.map(item =>
+                            isPublicStorefrontRoute(item.routeName) ? (
+                                <a
+                                    key={item.key}
+                                    href={routeHref({ name: item.routeName, publicLanguage: language })}
+                                    className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
+                                    aria-current={activeRoute === item.routeName ? 'page' : undefined}
+                                >
+                                    {item.label}
+                                </a>
+                            ) : (
+                                <span
+                                    key={item.key}
+                                    className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
+                                    aria-hidden="true"
+                                    inert
+                                >
+                                    {item.label}
+                                </span>
+                            ),
+                        )}
                     </nav>
                 </div>
                 <div className="proto-header-search">
                     <DesktopHeaderSearchPlaceholder language={language} />
                 </div>
-                <div className="proto-header-right">
+                <div className="proto-header-right" aria-hidden="true" inert>
                     <LocalePreferencesTrigger
                         className="proto-header-action"
                         language={language}

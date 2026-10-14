@@ -1,6 +1,6 @@
 import { lazyRouteComponent, Outlet } from '@tanstack/react-router';
 import { clsx } from 'clsx';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 
 import { AuthEmailDraftBoundary } from './auth-presentation';
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
@@ -12,7 +12,7 @@ import { DesktopHeader } from './components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from './desktop-layout';
 import { type useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { OverlayHost } from './overlay-host';
-import { PageReadinessBoundary } from './page-readiness';
+import { markStorefrontAppOwned, PageReadinessBoundary } from './page-readiness';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute, isPublicStorefrontRoute } from './storefront-access';
 import {
@@ -169,6 +169,10 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
         );
     }, [previewEmbedded, previewSession, renderedRouteName]);
 
+    useLayoutEffect(() => {
+        if (!previewEmbedded && state.storefrontUnavailable) markStorefrontAppOwned();
+    }, [previewEmbedded, state.storefrontUnavailable]);
+
     // A draft Channel rejects the public configuration request. End the loading shell as soon as
     // that definitive response arrives, without showing another store's cached brand or catalog.
     if (!previewEmbedded && state.storefrontUnavailable) {
@@ -204,8 +208,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         }
                         requestKey={readinessIdentity}
                         navigationKey={readinessIdentity}
-                        pending={Boolean(state.pageDataPending || state.isNavigationPending)}
-                        navigationPreparing={state.isPreparingProduct}
+                        pending={Boolean(state.pageDataPending)}
+                        navigationPreparing={Boolean(state.isNavigationPending || state.isPreparingProduct)}
                         online={online}
                         language={language}
                         onRetry={() => void state.retryPageLoad()}

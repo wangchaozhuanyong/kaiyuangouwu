@@ -312,13 +312,20 @@ export interface StorefrontPageData<
     config: Config;
     content?: Content;
     products?: Product[];
+    /** Actual ranked inputs for the public homepage, never the ordinary bootstrap list. */
+    bestSellers?: {
+        catalog: { items: Product[]; totalItems: number };
+        salesByProductId: Record<string, number>;
+        pinnedProducts: Product[];
+        candidateCount: number;
+    };
     flashSales?: unknown[];
     catalog?: { items: Product[]; totalItems: number };
     product?: Product | null;
     collections?: Collection[];
     visualPreset?: { presetId: string };
     media: MediaDescriptor[];
-    failures: Array<'content' | 'products' | 'collections' | 'visualPreset' | 'flashSales'>;
+    failures: Array<'content' | 'products' | 'collections' | 'visualPreset' | 'flashSales' | 'bestSellers'>;
 }
 
 export const STOREFRONT_PAGE_DATA_ELEMENT_ID = 'storefront-public-page-data';

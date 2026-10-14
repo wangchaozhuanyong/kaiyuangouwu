@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -31,6 +31,107 @@ function requiredImage(host: ParentNode): HTMLImageElement {
 }
 
 describe('SafeImage', () => {
+    it('keeps a completed SSR image presented during hydration while decode readiness is pending', async () => {
+        clearDecodedImageCache();
+        let finishDecode!: () => void;
+        const decode = vi.spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(
+            () =>
+                new Promise<void>(resolve => {
+                    finishDecode = resolve;
+                }),
+        );
+        const onImageReady = vi.fn();
+        const element = (
+            <SafeImage
+                src="/ssr-painted.webp"
+                placeholderSrc="/ssr-preview.webp"
+                alt="Cover"
+                width={640}
+                height={360}
+                onImageReady={onImageReady}
+            />
+        );
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(element);
+        const image = requiredImage(host);
+        Object.defineProperties(image, {
+            complete: { configurable: true, value: true },
+            naturalWidth: { configurable: true, value: 640 },
+            currentSrc: { configurable: true, value: image.src },
+        });
+        let root!: ReturnType<typeof hydrateRoot>;
+        try {
+            await act(async () => {
+                root = hydrateRoot(host, element);
+                await Promise.resolve();
+            });
+            expect(requiredImage(host)).toBe(image);
+            expect(host.querySelector('.safe-image-frame.is-presented')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(onImageReady).not.toHaveBeenCalled();
+            expect(isImageAlreadyDecoded(image.src)).toBe(false);
+            await act(async () => {
+                finishDecode();
+                await Promise.resolve();
+            });
+            expect(onImageReady).toHaveBeenCalledExactlyOnceWith(image);
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+        } finally {
+            act(() => root?.unmount());
+            decode.mockRestore();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('retains native placeholder-backed artwork with its actual crop before decode completes', () => {
+        const decode = vi
+            .spyOn(HTMLImageElement.prototype, 'decode')
+            .mockImplementation(() => new Promise<void>(() => undefined));
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const onImageReady = vi.fn();
+        try {
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/crop-old.webp"
+                        placeholderSrc="/crop-preview.webp"
+                        alt="Cover"
+                        style={{ objectFit: 'cover', objectPosition: 'right center' }}
+                        onImageReady={onImageReady}
+                    />,
+                ),
+            );
+            const image = requiredImage(host);
+            Object.defineProperties(image, {
+                complete: { configurable: true, value: true },
+                naturalWidth: { configurable: true, value: 640 },
+            });
+            act(() => {
+                image.dispatchEvent(new Event('load'));
+            });
+            act(() =>
+                root.render(
+                    <SafeImage
+                        src="/crop-new.webp"
+                        alt="Cover"
+                        style={{ objectFit: 'cover', objectPosition: 'right center' }}
+                        onImageReady={onImageReady}
+                    />,
+                ),
+            );
+            const fallback = host.querySelector<HTMLElement>('.safe-image-fallback');
+            expect(fallback?.style.backgroundImage).toContain('/crop-old.webp');
+            expect(fallback?.style.backgroundSize).toBe('cover');
+            expect(fallback?.style.backgroundPosition).toBe('right center');
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(onImageReady).not.toHaveBeenCalled();
+        } finally {
+            act(() => root.unmount());
+            decode.mockRestore();
+        }
+    });
+
     it('renders supplied bounded inline hints on priority media without a placeholder request', () => {
         const preview = 'data:image/png;base64,aW5saW5l';
         const media = [mediaDescriptor('/cover.png?v=one', 'hero', { inlinePreview: preview })];
@@ -391,13 +492,17 @@ describe('SafeImage', () => {
             vi.useRealTimers();
         }
     });
-    it('times visible lazy images locally and recovers a late load without a page-readiness event', async () => {
+    it('starts lazy images near the viewport with fixed geometry and recovers late loads locally', async () => {
         vi.useFakeTimers();
         let enter = () => undefined as void;
         vi.stubGlobal(
             'IntersectionObserver',
             class {
-                constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+                constructor(
+                    callback: (entries: Array<{ isIntersecting: boolean }>) => void,
+                    options: IntersectionObserverInit,
+                ) {
+                    expect(options.rootMargin).toBe('400px 0px');
                     enter = () => callback([{ isIntersecting: true }]);
                 }
                 observe() {
@@ -411,10 +516,18 @@ describe('SafeImage', () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         try {
-            act(() => root.render(<SafeImage src="/late-local.png" alt="Product" loading="lazy" />));
+            act(() =>
+                root.render(
+                    <SafeImage src="/late-local.png" alt="Product" loading="lazy" width={320} height={240} />,
+                ),
+            );
             await act(() => vi.advanceTimersByTimeAsync(60_000));
             expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
             act(() => enter());
+            expect(requiredImage(host).getAttribute('loading')).toBe('eager');
+            expect(requiredImage(host).getAttribute('width')).toBe('320');
+            expect(requiredImage(host).getAttribute('height')).toBe('240');
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
             await act(() => vi.advanceTimersByTimeAsync(15_000));
             expect(host.querySelector('[data-safe-image=timeout]')).not.toBeNull();
             expect(host.querySelector('[data-image-state=timeout]')).not.toBeNull();
@@ -557,7 +670,7 @@ describe('SafeImage', () => {
             decode.mockRestore();
         }
     });
-    it('reveals only after decoding and recovers from a later error', async () => {
+    it('confirms decoded readiness and recovers from a later native error', async () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         const onLoad = vi.fn();
@@ -695,7 +808,7 @@ describe('SafeImage', () => {
         expect(markup).toContain('storefront-icon-96');
     });
 
-    it('reuses session decoded status so new image elements mount ready without flash while unseen images wait', async () => {
+    it('checks a new node before reusing an already decoded resource', async () => {
         const host = document.createElement('div');
         const root = createRoot(host);
         try {
@@ -712,7 +825,18 @@ describe('SafeImage', () => {
             });
             expect(first.classList.contains('is-loaded')).toBe(true);
             act(() => root.render(<SafeImage key="new" src="/same.webp" alt="Two" />));
-            expect(host.querySelector('img')?.classList.contains('is-loaded')).toBe(true);
+            const remounted = requiredImage(host);
+            expect(remounted).not.toBe(first);
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            Object.defineProperties(remounted, {
+                complete: { configurable: true, value: true },
+                naturalWidth: { configurable: true, value: 320 },
+            });
+            await act(async () => {
+                remounted.dispatchEvent(new Event('load'));
+                await Promise.resolve();
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
         } finally {
             act(() => root.unmount());
         }
@@ -732,8 +856,9 @@ describe('SafeImage', () => {
             act(() => root.render(<SafeImage src="/old.webp" alt="Preview" />));
             const old = requiredImage(host);
             Object.defineProperties(old, { complete: { value: true }, naturalWidth: { value: 320 } });
-            act(() => {
+            await act(async () => {
                 old.dispatchEvent(new Event('load'));
+                await Promise.resolve();
             });
             act(() => root.render(<SafeImage src="/new.webp" alt="Preview" />));
             await act(async () => {

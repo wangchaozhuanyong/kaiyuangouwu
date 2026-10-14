@@ -21,13 +21,13 @@
                 background-color: var(--bg, #f1f5f9);
             }
             #storefront-boot-loading {
+                position: fixed;
+                inset: 0;
                 visibility: hidden;
             }
+            #root:empty + #storefront-boot-loading:not([aria-hidden='true']),
             html[data-storefront-boot-pending] #storefront-boot-loading {
                 visibility: visible;
-            }
-            html[data-storefront-boot-pending] #root {
-                visibility: hidden;
             }
         </style>
         <meta property="og:type" content="website" />
@@ -45,11 +45,12 @@
         <meta name="twitter:image" content="/storefront/neutral-social.png" />
         <meta name="twitter:image:alt" content="店铺商品与服务" />
         <title>在线商城</title>
-        <script src="/storefront/document-loading.js"></script>
+        <script defer src="/storefront/document-loading.js"></script>
         <script src="/storefront/restore-theme.js"></script>
         <script nomodule src="/legacy-browser-guard.js"></script>
     </head>
     <body>
+        <div id="root"></div>
         <main
             id="storefront-boot-loading"
             class="page-skeleton page-skeleton--route page-skeleton--viewport"
@@ -67,7 +68,6 @@
                 </span>
             </span>
         </main>
-        <div id="root"></div>
         <script type="module" src="/src/main.tsx"></script>
     </body>
 </html>

@@ -371,6 +371,38 @@ describe('anonymous shared public component server render', () => {
         expect(html).toContain('data-home-catalog="recommended"');
     });
 
+    it('renders actual ranked best sellers and images in the first HTML while older snapshots retain local fallback', async () => {
+        const page = syntheticPage(fixtureStores[0], 'en', 'home');
+        const content = fixtureValue(page.content);
+        const candidates = fixtureValue(page.products).slice(0, 3);
+        content.blocks.push({
+            ...content.blocks[0],
+            id: 'ready-best',
+            type: 'BEST_SELLERS',
+            title: 'Ready best sellers',
+            settings: { displayCount: 3 },
+            items: [],
+        });
+        fixtureValue(content.settings.configuredBlockTypes).push('BEST_SELLERS');
+        page.bestSellers = {
+            catalog: { items: candidates, totalItems: 3 },
+            pinnedProducts: [],
+            salesByProductId: Object.fromEntries(candidates.map((product, index) => [product.id, 3 - index])),
+            candidateCount: 16,
+        };
+        const html = await renderPublicPage(page);
+        for (const product of candidates) {
+            expect(html).toContain(product.name);
+            expect(html).toContain('alt="' + product.name + '"');
+        }
+        const region = html.split('data-home-catalog="sales"')[1]?.split('data-home-catalog=')[0] ?? '';
+        expect(region).not.toContain('product-card-skeleton');
+        expect(region).not.toContain('正在加载商品');
+        delete page.bestSellers;
+        const older = await renderPublicPage(page);
+        expect(older).toContain('product-card-skeleton');
+    });
+
     it('does not call unavailable managed selections an empty collection during the snapshot', async () => {
         const page = syntheticPage(fixtureStores[0], 'zh_Hans', 'home');
         const block = fixtureValue(page.content).blocks.find(

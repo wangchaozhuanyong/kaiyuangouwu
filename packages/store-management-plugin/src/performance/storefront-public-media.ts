@@ -57,7 +57,15 @@ export function publicHeroMobileImage(block: unknown, origin: string): string | 
 export function publicPageMedia(
     page: Pick<
         StorefrontPageData,
-        'scope' | 'config' | 'content' | 'products' | 'catalog' | 'product' | 'collections' | 'flashSales'
+        | 'scope'
+        | 'config'
+        | 'content'
+        | 'products'
+        | 'catalog'
+        | 'product'
+        | 'collections'
+        | 'flashSales'
+        | 'bestSellers'
     >,
 ): MediaDescriptor[] {
     const media = new Map<string, MediaDescriptor>();
@@ -128,6 +136,8 @@ export function publicPageMedia(
         }
     };
     for (const item of records(page.products)) product(item, false);
+    for (const item of records(record(record(page.bestSellers).catalog).items)) product(item, false);
+    for (const item of records(record(page.bestSellers).pinnedProducts)) product(item, false);
     for (const item of records(record(page.catalog).items)) product(item, false);
     if (page.product) product(record(page.product), true);
     for (const sale of records(page.flashSales)) {

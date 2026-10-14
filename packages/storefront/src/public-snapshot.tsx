@@ -16,6 +16,7 @@ import { catalogRouteState, resolveCategoryRoute } from './catalog-route-query';
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import { DesktopLayoutContext } from './desktop-layout';
 import { normalizeHeroAutoplayIntervalSeconds } from './hero-carousel';
+import { buildBestSellerProducts } from './home-merchandising';
 import { localeFor, marketForStorefrontConfig } from './i18n';
 import { OverlayHost } from './overlay-host';
 import { PageReadinessBoundary } from './page-readiness';
@@ -36,6 +37,7 @@ import { StorefrontPageFrame } from './storefront-page-frame';
 import { routeFromRouterLocation, routeHref, type RouteState } from './storefront-router';
 import { EmptyState, Subpage } from './storefront-ui/page-shell';
 import {
+    contentNumberSetting,
     contentStringArraySetting,
     DEFAULT_STOREFRONT_NAMES,
     normalizeStorefrontName,
@@ -86,6 +88,21 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
     );
     const contentBlocks = page.content?.blocks ?? [];
     const products = page.products?.map(asListProduct) ?? [];
+    const bestSellersBlock = contentBlocks.find(block => block.type === 'BEST_SELLERS');
+    const bestSellerProducts = page.bestSellers
+        ? buildBestSellerProducts({
+              candidates: [...page.bestSellers.catalog.items, ...page.bestSellers.pinnedProducts].map(
+                  asListProduct,
+              ),
+              pinnedProducts: page.bestSellers.pinnedProducts.map(asListProduct),
+              salesByProductId: page.bestSellers.salesByProductId,
+              count: Math.min(
+                  50,
+                  Math.max(1, contentNumberSetting(bestSellersBlock?.settings?.displayCount, 4)),
+              ),
+              seed: `${page.scope.channelCode}:${new Date(page.generatedAt).toISOString().slice(0, 10)}:best-sellers`,
+          })
+        : [];
     const collections = storefrontNavigationCollections(page.collections ?? []);
     const logoUrl = config.logoUrl ?? null;
     const currencies = config.currencyConfiguration;
@@ -325,10 +342,11 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
                     flashSales: (page.flashSales as StorefrontFlashSale[]) ?? [],
                     systemAnnouncements: page.content?.systemAnnouncements ?? [],
                     initialRenderTime: page.generatedAt,
-                    bestSellerProducts: [],
+                    bestSellerProducts,
                     bestSellersLoading:
-                        contentBlocks.some(block => block.type === 'BEST_SELLERS') ||
-                        !page.content?.settings?.configuredBlockTypes?.includes('BEST_SELLERS'),
+                        !page.bestSellers &&
+                        (contentBlocks.some(block => block.type === 'BEST_SELLERS') ||
+                            !page.content?.settings?.configuredBlockTypes?.includes('BEST_SELLERS')),
                     recommendationsLoading:
                         contentBlocks.some(block => block.type === 'RECOMMENDATIONS') ||
                         !page.content?.settings?.configuredBlockTypes?.includes('RECOMMENDATIONS'),

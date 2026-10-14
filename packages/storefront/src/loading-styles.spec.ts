@@ -10,9 +10,15 @@ describe('progressive loading styles', () => {
         expect(skeletonStyles).not.toContain('.skeleton-hero');
     });
 
-    it('keeps every image placeholder visible until the bitmap has decoded', () => {
-        expect(globalStyles).toContain('.safe-image-frame.is-loaded > .safe-image-fallback');
+    it('keeps native SSR images visible and removes fallback only after the node has pixels', () => {
+        expect(globalStyles).toMatch(/\.safe-image\s*\{[^}]*opacity:\s*1/u);
+        expect(globalStyles).toMatch(
+            /\.safe-image-frame\.is-presented > \.safe-image-fallback\s*\{[^}]*opacity:\s*0/u,
+        );
         expect(globalStyles).not.toContain('.safe-image-frame.is-priority > .safe-image-fallback');
-        expect(globalStyles).toMatch(/\.safe-image\s*\{[^}]*opacity:\s*0/u);
+        expect(globalStyles).not.toMatch(/\.safe-image\s*\{[^}]*opacity:\s*0/u);
+        expect(globalStyles).toMatch(
+            /\.safe-image-fallback\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*background-repeat:\s*no-repeat/u,
+        );
     });
 });
