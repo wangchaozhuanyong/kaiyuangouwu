@@ -18,7 +18,7 @@ export function acquireBodyScrollLock(): () => void {
     if (activeLocks === 0) {
         const documentElement = document.documentElement;
         const body = document.body;
-        const scrollbarWidth = Math.max(0, window.innerWidth - documentElement.clientWidth);
+        const originalLayoutWidth = documentElement.getBoundingClientRect().width;
 
         snapshot = {
             documentOverflow: documentElement.style.overflow,
@@ -26,15 +26,19 @@ export function acquireBodyScrollLock(): () => void {
             bodyPaddingRight: body.style.paddingRight,
         };
 
-        // Keep the content's visual width stable on browsers where
-        // scrollbar-gutter is unavailable or not applied to the root scroller.
+        documentElement.style.overflow = 'hidden';
+        body.style.overflow = 'hidden';
+
+        // Compensate only for width actually released by the lock. A stable
+        // root gutter already preserves it, so adding padding again would jump.
+        const scrollbarWidth = Math.max(
+            0,
+            documentElement.getBoundingClientRect().width - originalLayoutWidth,
+        );
         if (scrollbarWidth > 0) {
             const existingPadding = body.style.paddingRight || '0px';
             body.style.paddingRight = `calc(${existingPadding} + ${scrollbarWidth}px)`;
         }
-
-        documentElement.style.overflow = 'hidden';
-        body.style.overflow = 'hidden';
     }
 
     activeLocks += 1;

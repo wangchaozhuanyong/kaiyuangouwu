@@ -748,6 +748,45 @@ describe('SafeImage', () => {
         }
     });
 
+    it('retains a natively painted candidate while decode is pending and the responsive source changes', () => {
+        clearDecodedImageCache();
+        const decode = vi
+            .spyOn(HTMLImageElement.prototype, 'decode')
+            .mockImplementation(() => new Promise<void>(() => undefined));
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(<SafeImage src="/painted.webp" srcSet="/painted-small.webp 160w" alt="Cover" />),
+            );
+            const image = requiredImage(host);
+            const painted = new URL('/painted-small.webp', location.href).href;
+            Object.defineProperties(image, {
+                complete: { configurable: true, value: true },
+                naturalWidth: { configurable: true, value: 160 },
+                currentSrc: { configurable: true, value: painted },
+            });
+            act(() => {
+                image.dispatchEvent(new Event('load'));
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            expect(isImageAlreadyDecoded(painted)).toBe(false);
+
+            act(() =>
+                root.render(<SafeImage src="/painted.webp" srcSet="/painted-large.webp 960w" alt="Cover" />),
+            );
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+                painted,
+            );
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            expect(isImageAlreadyDecoded('/painted-large.webp')).toBe(false);
+        } finally {
+            act(() => root.unmount());
+            decode.mockRestore();
+            clearDecodedImageCache();
+        }
+    });
+
     it('retains the measured image height when all fallback candidates fail', () => {
         const host = document.createElement('div');
         const root = createRoot(host);

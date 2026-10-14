@@ -45,10 +45,6 @@
         scrollbar-width: auto;
     }
 
-    html {
-        scrollbar-gutter: auto;
-    }
-
     html::-webkit-scrollbar,
     body::-webkit-scrollbar {
         display: initial;
