@@ -108,7 +108,7 @@ describe('desktop header search', () => {
         expect(dialog?.textContent).toContain('保存设置');
 
         const buttons = Array.from(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? []);
-        const english = buttons.find(button => button.textContent?.trim() === 'English');
+        const english = buttons.find(button => button.textContent?.trim() === '英文');
         const myr = buttons.find(button => button.textContent?.trim() === 'MYR');
         const save = buttons.find(button => button.textContent?.trim() === '保存设置');
         if (!english || !myr || !save) throw new Error('Missing locale preference controls');
