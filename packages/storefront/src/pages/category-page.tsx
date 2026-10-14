@@ -744,6 +744,8 @@ export function CategoryPage() {
                     {categoryLoading ? (
                         <ListSkeleton
                             className="category-product-list desktop-product-grid"
+                            layout="products"
+                            responsiveRow
                             count={12}
                             label={isZh ? '正在加载商品' : 'Loading products'}
                         />

@@ -592,6 +592,7 @@ export function ListSkeleton({
     className,
     count = layout === 'products' ? 12 : 3,
     appearance,
+    responsiveRow = false,
     showDescription = true,
 }: {
     label?: string;
@@ -599,6 +600,7 @@ export function ListSkeleton({
     className?: string;
     count?: number;
     appearance?: 'card' | 'plain';
+    responsiveRow?: boolean;
     showDescription?: boolean;
 }) {
     return (
@@ -613,6 +615,7 @@ export function ListSkeleton({
                 count={count}
                 layout={layout}
                 appearance={appearance}
+                responsiveRow={responsiveRow}
                 showDescription={showDescription}
             />
         </div>
