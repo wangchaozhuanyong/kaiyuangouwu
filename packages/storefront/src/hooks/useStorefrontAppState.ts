@@ -57,6 +57,7 @@ export function useStorefrontAppState() {
         setDisplayCurrencyCode,
         storefrontContextResolved,
         storefrontUnavailable,
+        storefrontBrandingReady,
         storefrontAccessMode,
         favoriteProductIds: guestFavoriteProductIds,
         recentProductIds: guestRecentProductIds,
@@ -747,7 +748,7 @@ export function useStorefrontAppState() {
         storefrontName,
         logoUrl,
         brandingScopeKey: market.code,
-        brandingReady: storefrontUnavailable || Boolean(configQuery.data && configQuery.isFetchedAfterMount),
+        brandingReady: storefrontBrandingReady,
         publicSeo,
         seoAccessMode: storefrontUnavailable ? 'CLOSED' : configQuery.data?.accessMode,
     });

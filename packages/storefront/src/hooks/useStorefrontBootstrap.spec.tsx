@@ -22,6 +22,7 @@ import { Product, StorefrontConfig } from '../types';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
+import { useStorefrontMetadata } from './useStorefrontDocument';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const queries = vi.hoisted(() => ({ read: vi.fn() }));
@@ -37,12 +38,26 @@ describe('storefront bootstrap boundaries', () => {
     let brandFrames: Array<{ code: string; name: string; logo: string | null }>;
     let beforeCommit: (() => void) | undefined;
     let presentedRoute: RouteState | undefined;
+    let withIcons = false;
+    function IconBridge({ bootstrap }: { bootstrap: ReturnType<typeof useStorefrontBootstrap> }) {
+        useStorefrontMetadata({
+            isZh: true,
+            route: { name: 'referral' },
+            selectedProduct: null,
+            storefrontName: bootstrap.storefrontName,
+            storefrontDescription: '',
+            logoUrl: bootstrap.logoUrl,
+            brandingScopeKey: bootstrap.market.code,
+            brandingReady: Boolean(bootstrap.storefrontBrandingReady),
+        });
+        return null;
+    }
     const dataUpdatedAt = 123_000;
     function Harness() {
         value = useStorefrontBootstrap(presentedRoute);
         brandFrames.push({ code: value.storefrontCode, name: value.storefrontName, logo: value.logoUrl });
         beforeCommit?.();
-        return null;
+        return withIcons ? <IconBridge bootstrap={value} /> : null;
     }
     function render() {
         act(() =>
@@ -87,6 +102,7 @@ describe('storefront bootstrap boundaries', () => {
         brandFrames = [];
         beforeCommit = undefined;
         presentedRoute = undefined;
+        withIcons = false;
         queries.read.mockReset().mockImplementation(() => ({
             configQuery: { data: config, error: configError, dataUpdatedAt, refetch: vi.fn() },
             productsQuery: { data: listedProducts, refetch: vi.fn() },
@@ -96,6 +112,7 @@ describe('storefront bootstrap boundaries', () => {
     afterEach(() => {
         act(() => root.unmount());
         client.clear();
+        document.head.innerHTML = '';
         localStorage.clear();
         vi.restoreAllMocks();
     });
@@ -112,6 +129,57 @@ describe('storefront bootstrap boundaries', () => {
         expect(frames.length).toBeGreaterThan(0);
         expect(frames.every(([copy, query]) => copy === 'en' && query === 'en')).toBe(true);
         expect(queries.read.mock.lastCall?.[0].presentedHref).toBe('/en/product?id=p2');
+    });
+
+    it('uses a confirmed fresh scoped brand on a private page without a second config read', () => {
+        const current: StorefrontConfig = {
+            ...nextConfig(),
+            code: enabledMarkets[0].code,
+            defaultLanguageCode: enabledMarkets[0].defaultLanguageCode,
+            defaultCurrencyCode: enabledMarkets[0].currencyCode,
+            availableCountries: [{ code: enabledMarkets[0].countryCode, name: 'Current market' }],
+            logoUrl: '/confirmed-brand.png',
+            accessMode: 'LIVE',
+        };
+        const key = [
+            ...storefrontQueryKeys.config(
+                storefrontQueryKeys.market(marketForStorefrontConfig(current)),
+                'zh_Hans',
+            ),
+            'public',
+        ];
+        client.setQueryData(key, current);
+        const read = vi.fn(() => Promise.resolve(current));
+        queries.read.mockImplementation(function useFreshConfig(context: StorefrontQueryContext) {
+            return {
+                configQuery: useQuery({
+                    queryKey: [
+                        ...storefrontQueryKeys.config(storefrontQueryKeys.market(context.market), 'zh_Hans'),
+                        'public',
+                    ],
+                    staleTime: Infinity,
+                    queryFn: read,
+                }),
+                productsQuery: { data: [], refetch: vi.fn() },
+                collectionsQuery: { refetch: vi.fn() },
+            };
+        });
+        presentedRoute = { name: 'referral' };
+        withIcons = true;
+        render();
+        expect(value.storefrontContextResolved).toBe(true);
+        expect(value.configQuery.isFetchedAfterMount).toBe(false);
+        expect(read).not.toHaveBeenCalled();
+        expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+            '/confirmed-brand.png?storefront-icon=2',
+        );
+        act(() =>
+            value.setStorefrontContext({ market: { ...value.market, code: 'next-store' }, language: 'zh' }),
+        );
+        expect(value.storefrontBrandingReady).toBe(false);
+        expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toBe(
+            '/storefront/neutral-store.png?storefront-icon=2',
+        );
     });
 
     it('keeps public requests gated until a configuration has resolved', () => {
