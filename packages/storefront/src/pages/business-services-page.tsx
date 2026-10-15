@@ -130,7 +130,8 @@ export function BusinessServicesPage() {
                         src={heroImageUrl}
                         alt=""
                         imageKind="hero"
-                        loading={mobileOnlyImage ? 'lazy' : undefined}
+                        loading={mobileOnlyImage ? 'lazy' : 'eager'}
+                        fetchPriority={mobileOnlyImage ? undefined : 'high'}
                         width={desktopImage.imageAsset?.width ?? mobileImage.imageAsset?.width}
                         height={desktopImage.imageAsset?.height ?? mobileImage.imageAsset?.height}
                         mediaSources={

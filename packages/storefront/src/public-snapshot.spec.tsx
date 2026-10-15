@@ -83,7 +83,7 @@ describe('anonymous shared public component server render', () => {
         expect(html.match(/class="storefront-bottom-nav"/gu)).toHaveLength(1);
     });
 
-    it('releases per-request query GC timers even when a normalized category has no seeded result', async () => {
+    it('renders eleven real default-category products without bootstrap products and releases query GC timers', async () => {
         vi.useFakeTimers();
         try {
             const page = syntheticPage(fixtureStores[0], 'en', 'catalog');
@@ -94,13 +94,23 @@ describe('anonymous shared public component server render', () => {
             };
             page.requestKey = publicPageRequestKey(page.request);
             page.route = '/en/category';
+            if (!page.catalog || !page.products) throw new Error('Expected the catalog fixture');
+            page.catalog = { items: page.products.slice(0, 11), totalItems: 47 };
+            const firstProduct = page.catalog.items[0];
+            if (!firstProduct?.featuredAsset?.preview) throw new Error('Expected a product cover');
+            delete page.products;
             const timers = vi.getTimerCount();
             const html = await renderPublicPage(page);
             expect(html).toContain(
                 'class="page category-page responsive-category-page desktop-catalog-main"',
             );
             expect(html).toContain('aria-pressed="true"');
-            expect(html).toContain('list-skeleton category-product-list');
+            expect(html).not.toContain('product-card-skeleton');
+            expect(html.match(/<a\b[^>]*class="product-card-detail-link"/gu)).toHaveLength(11);
+            expect(html).toContain(`/en/product?id=${firstProduct.id}`);
+            expect(html).toContain(firstProduct.featuredAsset.preview);
+            expect(html).toContain(firstProduct.name);
+            expect(html).toContain('fetchPriority="high"');
             expect(vi.getTimerCount()).toBe(timers);
         } finally {
             vi.useRealTimers();

@@ -1,6 +1,12 @@
 // organize-imports-ignore
 import type { ShopApi } from './api';
-import type { CollectionSummary, Product, StorefrontConfig, StorefrontContentResponse } from './types';
+import type {
+    CollectionSummary,
+    Product,
+    StorefrontCatalogInput,
+    StorefrontConfig,
+    StorefrontContentResponse,
+} from './types';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
 import {
@@ -17,7 +23,6 @@ import {
 import { storefrontNavigationCollections } from './api/catalog';
 import { SEND_CLIENT_CHANNEL_TOKEN } from './api/helpers';
 import { nextCatalogPageParam, validateCatalogPage } from './catalog-pagination';
-import { catalogInputFromRoute } from './catalog-route-query';
 import { buildBestSellerProducts } from './home-merchandising';
 import { languageCodeFor, marketForStorefrontConfig } from './i18n';
 import { asListProduct } from './product-summary';
@@ -35,11 +40,11 @@ import {
     publicQueryMeta,
     markStorefrontPublicQuerySource,
     restrictStorefrontScopePersistence,
+    storefrontQueryClient,
     storefrontQueryKeys,
 } from './query-client';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
-import { routeFromRouterLocation } from './storefront-router';
 import {
     contentStringArraySetting,
     contentNumberSetting,
@@ -54,12 +59,38 @@ export type PublicPageData = StorefrontPageData<
     CollectionSummary
 >;
 
-export function publicSeoQueryKey(market: string, language: string, request: PublicPageRequest) {
+export function publicSeoQueryKey(
+    market: string,
+    language: string,
+    request: PublicPageRequest,
+    part: 'public-seo' | 'public-media' = 'public-seo',
+    collections?: CollectionSummary[],
+) {
     return [
         ...storefrontQueryKeys.scope(market, language),
-        'public-seo',
-        publicPageRequestKey(request),
+        part,
+        publicPageRequestKey(
+            part === 'public-media' && request.kind === 'catalog'
+                ? { ...request, input: catalogRequestInput(request, collections) }
+                : request,
+        ),
     ] as const;
+}
+
+function catalogRequestInput(
+    request: Extract<PublicPageRequest, { kind: 'catalog' }>,
+    collections?: CollectionSummary[],
+) {
+    const { collectionId, ...input } = request.input;
+    return {
+        ...input,
+        collectionId:
+            collectionId && collectionId !== 'all'
+                ? collectionId
+                : request.path === '/search'
+                  ? undefined
+                  : collections?.find(item => item.id && item.id !== 'all')?.id,
+    };
 }
 
 function hasPublicPageIdentity(value: unknown, host: string, allowClosed = false): value is PublicPageData {
@@ -147,6 +178,7 @@ export function seedPublicPage(
 ): void {
     const market = `${page.scope.channelCode}:${page.scope.currencyCode}`;
     const language = page.scope.languageCode;
+    const request = page.request;
     if (
         page.config.accessMode === 'CLOSED' ||
         isStorefrontScopeAccessDenied(client, { marketCode: market, languageCode: language }) ||
@@ -167,23 +199,17 @@ export function seedPublicPage(
         markStorefrontPublicQuerySource(client, key, page.config.accessMode);
     };
     if (includeConfig) set([...storefrontQueryKeys.config(market, language), 'public'], page.config);
-    if (page.request) set(publicSeoQueryKey(market, language, page.request), page.seo ?? null);
-    if (page.request?.kind === 'article')
+    if (request) set(publicSeoQueryKey(market, language, request), page.seo ?? null);
+    if (request?.kind === 'article')
         set(
-            [
-                ...storefrontQueryKeys.scope(market, language),
-                'public-content',
-                publicPageRequestKey(page.request),
-            ],
+            [...storefrontQueryKeys.scope(market, language), 'public-content', publicPageRequestKey(request)],
             page.publicContent ?? null,
         );
     set([...storefrontQueryKeys.content(market, language), 'public'], page.content);
-    set(
-        storefrontQueryKeys.collections(market, language),
-        page.collections && storefrontNavigationCollections(page.collections),
-    );
+    const collections = page.collections && storefrontNavigationCollections(page.collections);
+    set(storefrontQueryKeys.collections(market, language), collections);
     set(storefrontQueryKeys.products(market, language, 12), page.products?.map(asListProduct));
-    if (page.request?.kind === 'home' && page.bestSellers) {
+    if (request?.kind === 'home' && page.bestSellers) {
         const best = page.bestSellers;
         const candidates = best.catalog.items.map(asListProduct);
         const pinned = best.pinnedProducts.map(asListProduct);
@@ -244,21 +270,26 @@ export function seedPublicPage(
     if (managedIds.length && managedProducts.length === managedIds.length)
         set(storefrontQueryKeys.productsByIds(market, language, managedIds), managedProducts);
     set([...storefrontQueryKeys.scope(market, language), 'visual-preset'], page.visualPreset);
-    set([...storefrontQueryKeys.scope(market, language), 'public-media'], page.media);
+    set(
+        publicSeoQueryKey(market, language, request ?? { kind: 'home' }, 'public-media', collections),
+        page.media,
+    );
     set(storefrontQueryKeys.flashSales(market, language), page.flashSales);
     // An API query in progress owns its result commit and pagination; do not collapse its pages.
-    if (includeRoute && page.request?.kind === 'catalog' && page.catalog) {
-        const key = storefrontQueryKeys.catalog(market, language, { ...page.request.input });
-        const existing = client.getQueryData<{ pages: unknown[] }>(key);
-        if (client.getQueryState(key)?.fetchStatus !== 'fetching' && (existing?.pages.length ?? 0) <= 1) {
+    if (includeRoute && request?.kind === 'catalog' && page.catalog) {
+        // Reuse this seed's normalized collections; the public request was already validated.
+        const input = catalogRequestInput(request, collections);
+        const key = storefrontQueryKeys.catalog(market, language, input);
+        const existing = client.getQueryState<{ pages: unknown[] }>(key);
+        if (existing?.fetchStatus !== 'fetching' && (existing?.data?.pages.length ?? 0) <= 1) {
             set(key, {
                 pages: [{ ...page.catalog, items: page.catalog.items.map(asListProduct) }],
-                pageParams: [page.request.input.skip ?? 0],
+                pageParams: [input.skip ?? 0],
             });
         }
     }
-    if (includeRoute && page.request?.kind === 'product' && page.product !== undefined) {
-        const key = storefrontQueryKeys.product(market, language, page.request.id);
+    if (includeRoute && request?.kind === 'product' && page.product !== undefined) {
+        const key = storefrontQueryKeys.product(market, language, request.id);
         if (client.getQueryState(key)?.fetchStatus !== 'fetching') set(key, page.product);
     }
 }
@@ -379,6 +410,19 @@ export function setPublicPageNavigationScope(scope: typeof navigationScope) {
     navigationScope = scope;
 }
 
+/** Existing router waits use the same Query owner and leave error UI to its page. */
+export function publicPageRouteLoader({
+    location,
+    abortController,
+}: {
+    location: { publicHref: string };
+    abortController: AbortController;
+}) {
+    return prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
+        () => undefined,
+    );
+}
+
 /** Navigation starts code and data together; the route query adopts this exact response. */
 export async function prefetchPublicPage(
     client: QueryClient,
@@ -387,9 +431,10 @@ export async function prefetchPublicPage(
 ): Promise<void> {
     const scope = navigationScope;
     if (!scope) return;
+    const market = `${scope.channelCode}:${scope.currencyCode}`;
     if (
         isStorefrontScopeAccessDenied(client, {
-            marketCode: `${scope.channelCode}:${scope.currencyCode}`,
+            marketCode: market,
             languageCode: scope.languageCode,
         })
     )
@@ -402,28 +447,63 @@ export async function prefetchPublicPage(
     }
     if (!request) return;
     const language = publicLanguageFromUrl(href) ?? scope.languageCode;
+    const catalog = request.kind === 'catalog' ? request : undefined;
     // Opening the search input does not require an unfiltered catalog result.
-    if (request.kind === 'catalog' && request.path === '/search' && !request.input.term) return;
-    const market = `${scope.channelCode}:${scope.currencyCode}`;
-    const key =
-        request.kind === 'catalog'
-            ? storefrontQueryKeys.catalog(market, language, { ...request.input })
-            : request.kind === 'product'
-              ? storefrontQueryKeys.product(market, language, request.id)
-              : request.kind === 'home'
-                ? [...storefrontQueryKeys.content(market, language), 'public']
-                : publicSeoQueryKey(market, language, request);
-    const cached = client.getQueryState(key);
+    if (catalog?.path === '/search' && !catalog.input.term) return;
+    const collections = client.getQueryData<CollectionSummary[]>(
+        storefrontQueryKeys.collections(market, language),
+    );
+    const input = catalog && catalogRequestInput(catalog, collections);
+    const seoKey = publicSeoQueryKey(market, language, request);
+    const key = catalog
+        ? storefrontQueryKeys.catalog(market, language, input ?? {})
+        : request.kind === 'product'
+          ? storefrontQueryKeys.product(market, language, request.id)
+          : request.kind === 'home'
+            ? [...storefrontQueryKeys.content(market, language), 'public']
+            : seoKey;
+    let cached = client.getQueryState(key);
+    const mediaKey = publicSeoQueryKey(market, language, request, 'public-media', collections);
+    const readPage = async (readSignal = signal) => {
+        const page = await fetchPublicPage(
+            language,
+            scope.currencyCode,
+            readSignal,
+            request,
+            scope.channelCode,
+        );
+        if (navigationScope !== scope) throw new DOMException('Navigation scope changed', 'AbortError');
+        if (page) seedPublicPage(client, page);
+        cached = client.getQueryState(key);
+        return page;
+    };
+    if (cached?.data !== undefined && client.getQueryData(mediaKey) === undefined) {
+        await awaitPublicPage(
+            client.fetchQuery({
+                queryKey: mediaKey,
+                queryFn: async ({ signal: querySignal }) => {
+                    await readPage(querySignal);
+                    // Legacy endpoints have no hints; retain that empty capability
+                    // result with this route instead of rereading fresh business data.
+                    return client.getQueryData<PublicPageData['media']>(mediaKey) ?? [];
+                },
+                gcTime: PUBLIC_QUERY_GC_TIME,
+            }),
+            signal,
+        );
+        if (navigationScope !== scope) return;
+    }
     const queryOwned = Boolean(
         scope.api &&
         language === scope.languageCode &&
-        (request.kind === 'product' || request.kind === 'catalog'),
+        (request.kind === 'product' ||
+            (catalog && (input?.collectionId || catalog.path === '/search' || collections))),
     );
     if (
         cached?.data !== undefined &&
         !cached.isInvalidated &&
         Date.now() - cached.dataUpdatedAt < (queryOwned ? PUBLIC_QUERY_STALE_TIME : 30_000) &&
-        (queryOwned || client.getQueryData(publicSeoQueryKey(market, language, request)) !== undefined)
+        (queryOwned || client.getQueryData(seoKey) !== undefined)
     )
         return;
     const read = async () => {
@@ -431,11 +511,11 @@ export async function prefetchPublicPage(
         // Warm the same query that the destination observes. Required read failures
         // stay in Query rather than disappearing in a speculative loader catch.
         // A cancelled router wait must not cancel a query still used by another page.
-        if (scopeApi && language === scope.languageCode && request.kind === 'product') {
+        if (scopeApi && queryOwned && request.kind === 'product') {
             const productId = request.id;
             await awaitPublicPage(
                 client.fetchQuery({
-                    queryKey: storefrontQueryKeys.product(market, language, productId),
+                    queryKey: key,
                     queryFn: ({ signal: querySignal }) => scopeApi.product(productId, querySignal),
                     staleTime: PUBLIC_QUERY_STALE_TIME,
                     gcTime: PUBLIC_QUERY_GC_TIME,
@@ -445,24 +525,33 @@ export async function prefetchPublicPage(
             );
             return;
         }
-        if (scopeApi && language === scope.languageCode && request.kind === 'catalog') {
-            const url = new URL(href, window.location.origin);
-            const input = catalogInputFromRoute(
-                routeFromRouterLocation(url.pathname, Object.fromEntries(url.searchParams)),
-            );
+        if (scopeApi && queryOwned && catalog) {
+            const routeInput: StorefrontCatalogInput = {
+                ...input,
+                sort: input?.sort?.toLowerCase().replaceAll('_', '-') as StorefrontCatalogInput['sort'],
+                fulfillmentType:
+                    input?.fulfillmentType?.toLowerCase() as StorefrontCatalogInput['fulfillmentType'],
+            };
             await awaitPublicPage(
                 client.fetchInfiniteQuery({
                     queryKey: key,
                     queryFn: async ({ pageParam, signal: querySignal }) =>
                         validateCatalogPage(
-                            await scopeApi.catalog({ ...input, skip: pageParam, take: 12 }, querySignal),
+                            await scopeApi.catalog(
+                                {
+                                    ...routeInput,
+                                    skip: pageParam,
+                                    take: 12,
+                                },
+                                querySignal,
+                            ),
                             pageParam,
                             new Set<string>(),
                             language === 'zh_Hans'
                                 ? '暂时无法加载商品，请重试'
                                 : 'Could not load products. Please retry.',
                         ),
-                    initialPageParam: input.skip ?? 0,
+                    initialPageParam: routeInput.skip ?? 0,
                     getNextPageParam: nextCatalogPageParam,
                     staleTime: PUBLIC_QUERY_STALE_TIME,
                     gcTime: PUBLIC_QUERY_GC_TIME,
@@ -472,8 +561,7 @@ export async function prefetchPublicPage(
             );
             return;
         }
-        const page = await fetchPublicPage(language, scope.currencyCode, signal, request, scope.channelCode);
-        if (page && navigationScope === scope) seedPublicPage(client, page);
+        await readPage();
     };
     if (cached?.data !== undefined) {
         // Cached destinations render immediately, even when a background read is due.

@@ -11,11 +11,17 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { publicPageRequestKey } from '../../storefront-content-plugin/src/shared/public-page-data';
+import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
+import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
+
 import { useStorefrontNavigation } from './hooks/useStorefrontNavigation';
 import { PUBLIC_QUERY_STALE_TIME, storefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { router as productionRouter } from './router';
 import { setPublicPageNavigationScope } from './storefront-page-data';
 import { type Product } from './types';
+
+vi.hoisted(() => vi.stubEnv('VITE_CLIENT_CHANNEL_SWITCHING', 'false'));
 
 // Keep the real Router options, public product loader, Query cache and navigation hook.
 // The page body is small so every intermediate commit can be checked independently of styling.
@@ -23,9 +29,23 @@ vi.mock('./routeTree.gen', async () => {
     const { createRootRoute, createRoute } = await import('@tanstack/react-router');
     const { Route } = await import('./routes/product');
     const { Route: CategoryRoute } = await import('./routes/category');
+    const { Route: ServicesRoute } = await import('./routes/services');
+    const { Route: SupportRoute } = await import('./routes/support');
     const root = createRootRoute({ component: () => <NavigationHarness /> });
     return {
         routeTree: root.addChildren([
+            createRoute({
+                getParentRoute: () => root,
+                path: '/services',
+                loader: ServicesRoute.options.loader,
+                component: ContentBody,
+            }),
+            createRoute({
+                getParentRoute: () => root,
+                path: '/support',
+                loader: SupportRoute.options.loader,
+                component: ContentBody,
+            }),
             createRoute({
                 getParentRoute: () => root,
                 path: '/product',
@@ -53,6 +73,10 @@ vi.mock('./route-pages/category-route-page', () => ({
     CategoryRoutePage: () => null,
     preloadCategoryRoutePage: () => Promise.resolve(),
 }));
+vi.mock('./route-pages/content-route-pages', () => ({
+    ServicesRoutePage: () => null,
+    SupportRoutePage: () => null,
+}));
 vi.mock('./route-media-preload', () => ({ preloadRouteMedia: vi.fn() }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -74,6 +98,20 @@ function CategoryBody() {
         retry: false,
     });
     return <article data-category>{result.data ? 'Empty category' : 'Waiting for category'}</article>;
+}
+
+function ContentBody() {
+    const route = useRouterState({ select: state => state.matches.at(-1)?.pathname ?? '' });
+    const request = {
+        kind: 'page' as const,
+        id: route.includes('support') ? ('support' as const) : ('services' as const),
+    };
+    const media = storefrontQueryClient.getQueryData([
+        ...storefrontQueryKeys.scope('store-a:MYR', 'en'),
+        'public-media',
+        publicPageRequestKey(request),
+    ]);
+    return <article data-content>{media ? 'Backed artwork' : 'Unbacked artwork'}</article>;
 }
 
 function ProductBody() {
@@ -130,8 +168,10 @@ describe('real storefront router continuity', () => {
 
     beforeEach(() => {
         vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
         storefrontQueryClient.clear();
         storefrontQueryClient.setDefaultOptions({ queries: { retry: false } });
+        storefrontQueryClient.setQueryData(storefrontQueryKeys.collections('store-a:MYR', 'en'), []);
         readProduct.mockReset();
         readProduct.mockImplementation(id => Promise.resolve(product(id)));
         readCatalog.mockClear();
@@ -167,6 +207,7 @@ describe('real storefront router continuity', () => {
         setPublicPageNavigationScope(undefined);
         storefrontQueryClient.clear();
         vi.restoreAllMocks();
+        vi.unstubAllGlobals();
     });
 
     async function start() {
@@ -210,6 +251,48 @@ describe('real storefront router continuity', () => {
         expect(readCatalog).not.toHaveBeenCalled();
         expect(pendingNodes).toEqual([]);
     });
+
+    it.each(['services', 'support'] as const)(
+        'waits for first %s artwork before committing cached content',
+        async id => {
+            await start();
+            const response = deferred<Response>();
+            const fetch = vi.fn(() => response.promise);
+            vi.stubGlobal('fetch', fetch);
+            const page = syntheticPage('synthetic-a', 'en', 'home');
+            page.scope.host = window.location.host;
+            page.scope.channelCode = 'store-a';
+            page.config.code = 'store-a';
+            page.request = { kind: 'page', id };
+            page.requestKey = publicPageRequestKey(page.request);
+            page.media = [
+                mediaDescriptor(`/assets/preview/${id}.webp`, 'hero', {
+                    inlinePreview: 'data:image/webp;base64,AAAA',
+                }),
+            ];
+            storefrontQueryClient.setQueryData(
+                [...storefrontQueryKeys.content('store-a:MYR', 'en'), 'public'],
+                page.content,
+            );
+            let navigation: Promise<void> | undefined;
+            await act(async () => {
+                navigation = router.navigate({
+                    to: `/${id}`,
+                    search: { __storefrontLanguage: 'en' },
+                } as never);
+                await Promise.resolve();
+            });
+            expect(host.querySelector('article')?.textContent).toBe('a');
+            expect(host.querySelector('[data-content]')).toBeNull();
+            await act(async () => {
+                response.resolve(Response.json(page));
+                await navigation;
+            });
+            expect(fetch).toHaveBeenCalledOnce();
+            expect(host.querySelector('article')?.textContent).toBe('Backed artwork');
+            expect(host.querySelector('.brand-loading')).toBeNull();
+        },
+    );
 
     it('shows stale cached data while refreshing it in the background without replacing the shell', async () => {
         await start();

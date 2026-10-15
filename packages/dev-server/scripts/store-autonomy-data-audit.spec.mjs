@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
-import { collectStoreAutonomyAudit, sharedResourceIsolationChecks } from './store-autonomy-data-audit.mjs';
+import { RESET_TABLES } from './prelaunch-generated-data-reset.mjs';
+import {
+    collectStoreAutonomyAudit,
+    GENERATED_RECORD_AUDIT_TABLES,
+    sharedResourceIsolationChecks,
+} from './store-autonomy-data-audit.mjs';
+
+const { validateStoreAutonomyAuditPayload } = createRequire(import.meta.url)(
+    '../../../deploy/production-operations.cjs',
+);
 
 test('shared store-owned resources are release blockers while shared customer identity remains allowed', () => {
     const empty = { available: true, shared: [] };
@@ -72,7 +82,12 @@ test('classifies default membership separately without waiving unresolved owners
     );
 });
 
-async function createFixture({ legacyStructure = false, violations = false } = {}) {
+async function createFixture({
+    legacyStructure = false,
+    violations = false,
+    generatedRecords = false,
+    zeroOrders = false,
+} = {}) {
     const { default: initialize } = await import('sql.js');
     const SQL = await initialize();
     const database = new SQL.Database();
@@ -181,6 +196,33 @@ async function createFixture({ legacyStructure = false, violations = false } = {
             INSERT INTO store_usdt_manual_refund VALUES (1, 3, 3);
         `);
     }
+    if (generatedRecords) {
+        database.run(`
+            CREATE TABLE shipping_line (id INTEGER PRIMARY KEY, privatePayload TEXT);
+            INSERT INTO shipping_line VALUES (1, 'shipping-payload-must-not-leave-server');
+            CREATE TABLE customer_product_activity (id INTEGER PRIMARY KEY, customerId INTEGER);
+            INSERT INTO customer_product_activity VALUES (1, 999);
+            CREATE TABLE storefront_page_view (id INTEGER PRIMARY KEY, channelId INTEGER);
+            INSERT INTO storefront_page_view VALUES (1, NULL), (2, 999);
+            INSERT INTO storefront_cart VALUES (99, NULL);
+            CREATE TABLE job_record (id INTEGER PRIMARY KEY, state TEXT, isSettled INTEGER,
+                settledAt TEXT, data TEXT, error TEXT);
+            INSERT INTO job_record VALUES
+                (1, 'COMPLETED', 1, '2026-10-01', 'private-job-payload', 'private-error'),
+                (2, 'FAILED', 1, '2026-10-01', 'private-job-payload', 'private-error'),
+                (3, 'CANCELLED', 1, '2026-10-01', 'private-job-payload', 'private-error'),
+                (4, 'RUNNING', 0, NULL, 'private-job-payload', 'private-error'),
+                (5, 'PENDING', 0, NULL, 'private-job-payload', 'private-error'),
+                (6, 'RETRYING', 0, NULL, 'private-job-payload', 'private-error'),
+                (7, 'FAILED', 1, NULL, 'private-job-payload', 'private-error'),
+                (8, 'unknown-private-state', 1, '2026-10-01', 'private-job-payload', 'private-error'),
+                (9, 'COMPLETED', 0, '2026-10-01', 'private-job-payload', 'private-error');
+            ALTER TABLE catalog_import_job ADD COLUMN state TEXT;
+            INSERT INTO catalog_import_job VALUES
+                (1, 2, 'COMPLETED'), (2, 2, 'RUNNING'), (3, 2, 'unknown-import-state');
+        `);
+    }
+    if (zeroOrders) database.run('DELETE FROM order_channels_channel; DELETE FROM `order`;');
     const query = async (sql, parameters = []) => {
         assert.match(sql.trim(), /^(SELECT|PRAGMA)\b/u, 'Audit attempted a database write');
         const statement = database.prepare(sql);
@@ -293,5 +335,162 @@ test('strict production mode refuses legacy structure before aggregate business-
         assert.equal(aggregateQueries, 0);
     } finally {
         fixture.close();
+    }
+});
+
+test('fixed global count scope covers reset records and orphan order/activity tables without identity tables', () => {
+    assert.equal(GENERATED_RECORD_AUDIT_TABLES.length, 51);
+    assert.equal(new Set(GENERATED_RECORD_AUDIT_TABLES).size, 51);
+    for (const table of RESET_TABLES) assert.ok(GENERATED_RECORD_AUDIT_TABLES.includes(table), table);
+    for (const table of [
+        'order',
+        'order_line',
+        'shipping_line',
+        'surcharge',
+        'payment',
+        'refund',
+        'order_modification',
+        'fulfillment',
+        'fulfillment_line',
+        'customer_product_activity',
+    ])
+        assert.ok(GENERATED_RECORD_AUDIT_TABLES.includes(table), table);
+    for (const table of [
+        'user',
+        'customer',
+        'administrator',
+        'authentication_method',
+        'asset',
+        'product',
+        'stock_level',
+        'catalog_source_binding',
+        'catalog_import_job',
+    ])
+        assert.equal(GENERATED_RECORD_AUDIT_TABLES.includes(table), false, table);
+});
+
+test('global counts expose orphan generated rows even when there are no orders or channel memberships', async () => {
+    const fixture = await createFixture({ generatedRecords: true, zeroOrders: true });
+    try {
+        const report = await collectStoreAutonomyAudit(fixture.adapter, { auditKey: 'fixture-key' });
+        const counts = report.generatedRecordCounts;
+        assert.equal(report.defaultChannelSeparation.orders.total, 0);
+        assert.equal(counts.mode, 'global-counts-only-no-delete-permission');
+        assert.equal(counts.tables.order, 0);
+        assert.equal(counts.tables.shipping_line, 1);
+        assert.equal(counts.tables.customer_product_activity, 1);
+        assert.equal(counts.tables.storefront_page_view, 2);
+        assert.equal(counts.tables.storefront_cart, 2);
+        assert.equal(
+            Object.values(report.perChannelCounts).reduce(
+                (total, channel) => total + channel.storefront_page_view,
+                0,
+            ),
+            0,
+        );
+        assert.equal(counts.tables.order_line, null);
+        assert.equal(counts.status, 'DATA_MISSING');
+        assert.equal(counts.catalogImports.policy, 'PRESERVE_PRODUCT_PROVENANCE');
+        assert.equal(counts.catalogImports.total, 3);
+        assert.equal(counts.catalogImports.byState.COMPLETED, 1);
+        assert.equal(counts.catalogImports.byState.RUNNING, 1);
+        assert.equal(counts.catalogImports.byState.OTHER, 1);
+        const serialized = JSON.stringify(report);
+        assert.ok(Buffer.byteLength(serialized) < 60000);
+        assert.deepEqual(validateStoreAutonomyAuditPayload(serialized), report);
+        for (const value of [
+            'shipping-payload-must-not-leave-server',
+            'private-job-payload',
+            'private-error',
+            'unknown-private-state',
+            'unknown-import-state',
+            'customerId',
+            'orderId',
+            'password',
+            'credential',
+        ])
+            assert.equal(serialized.includes(value), false, value);
+    } finally {
+        fixture.close();
+    }
+});
+
+test('job summary preserves active, unknown and incompletely settled work outside safe terminal counts', async () => {
+    const fixture = await createFixture({ generatedRecords: true });
+    try {
+        const report = await collectStoreAutonomyAudit(fixture.adapter, { auditKey: 'fixture-key' });
+        assert.deepEqual(report.generatedRecordCounts.jobs, {
+            status: 'OK',
+            total: 9,
+            byState: {
+                CREATED: 0,
+                PENDING: 1,
+                RUNNING: 1,
+                COMPLETED: 2,
+                RETRYING: 1,
+                FAILED: 2,
+                CANCELLED: 1,
+                OTHER: 1,
+            },
+            safeTerminal: 3,
+            nonTerminalOrUnsettled: 6,
+            terminalStateUnsettled: 2,
+        });
+    } finally {
+        fixture.close();
+    }
+});
+
+test('missing generated tables or state columns report DATA_MISSING instead of invented zeroes', async () => {
+    const fixture = await createFixture();
+    try {
+        const report = await collectStoreAutonomyAudit(fixture.adapter, { auditKey: 'fixture-key' });
+        assert.equal(report.generatedRecordCounts.tables.job_record, null);
+        assert.deepEqual(report.generatedRecordCounts.jobs, {
+            status: 'DATA_MISSING',
+            total: null,
+            safeTerminal: null,
+            nonTerminalOrUnsettled: null,
+            terminalStateUnsettled: null,
+            byState: null,
+        });
+        assert.deepEqual(report.generatedRecordCounts.catalogImports, {
+            policy: 'PRESERVE_PRODUCT_PROVENANCE',
+            status: 'DATA_MISSING',
+            total: null,
+            byState: null,
+        });
+        assert.equal(report.verdict, 'GO');
+    } finally {
+        fixture.close();
+    }
+});
+
+test('missing or failed COUNT output fails closed rather than reporting a clean table', async () => {
+    for (const [output, failure] of [
+        [[{}], /Missing aggregate count/u],
+        [[{ value: null }], /Missing aggregate count/u],
+        [[{ value: '' }], /Unsafe aggregate count/u],
+        [[{ value: true }], /Unsafe aggregate count/u],
+        [[{ value: -1 }], /Unsafe aggregate count/u],
+        [null, /Synthetic count failure/u],
+    ]) {
+        const fixture = await createFixture({ generatedRecords: true });
+        const query = fixture.adapter.query;
+        fixture.adapter.query = async (...args) => {
+            if (args[0] === 'SELECT COUNT(*) AS value FROM `shipping_line`') {
+                if (output === null) throw new Error('Synthetic count failure');
+                return output;
+            }
+            return query(...args);
+        };
+        try {
+            await assert.rejects(
+                collectStoreAutonomyAudit(fixture.adapter, { auditKey: 'fixture-key' }),
+                failure,
+            );
+        } finally {
+            fixture.close();
+        }
     }
 });

@@ -1,6 +1,7 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { ForbiddenError, PUBLIC_PRODUCT_SUMMARY_READER } from '@vendure/core';
 import {
+    publicPageRequestKey,
     StorefrontAccountSettingsService,
     StorefrontVisualPresetService,
 } from '@vendure/storefront-content-plugin';
@@ -8,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
+import { PUBLIC_CATALOG_READER as PUBLIC_CATALOG_ROUTE_READER } from './public-catalog-reader';
 import { StorefrontActivationService, StorefrontClosedError } from './storefront-activation.service';
 import { parsePublicPageRequest, StorefrontPublicPageController } from './storefront-public-page.controller';
 import { publicSectionWithinBudget, StorefrontPublicPageService } from './storefront-public-page.service';
@@ -861,7 +863,9 @@ describe('authoritative public access modes', () => {
             token === PUBLIC_CATALOG_READER ? ({ find } as never) : modules(token),
         );
         h.config.mockRejectedValue(new Error('required config unavailable'));
-        const request = { kind: 'catalog', input: {} } as const;
+        // An explicit category starts in parallel; the default category must wait
+        // for the published navigation before it can own a catalog read.
+        const request = { kind: 'catalog', input: { collectionId: 'chosen-category' } } as const;
         const first = await Promise.allSettled(
             Array.from({ length: 4 }, () => h.service.read(h.ctx, 'a.test', request)),
         );
@@ -1093,6 +1097,117 @@ describe('public page optional section budgets', () => {
 });
 
 describe('public page media assembly', () => {
+    it('does not reuse a previous runtime snapshot with the old unscoped default catalog', async () => {
+        const h = accessHarness();
+        const request = { kind: 'catalog', input: {} } as const;
+        await h.cache.readThrough(h.ctx, `page:v2:a.test:${publicPageRequestKey(request)}`, 30_000, () =>
+            Promise.resolve({ config: { accessMode: 'LIVE' }, catalog: { items: [], totalItems: 47 } }),
+        );
+        vi.spyOn(
+            h.service as unknown as { loadCollections(): Promise<unknown[]> },
+            'loadCollections',
+        ).mockResolvedValue([{ id: 'actual-first', productVariantCount: 11 }]);
+        const find = vi.fn(() =>
+            Promise.resolve({ items: [{ id: 'actual-first-product' }], totalItems: 11 }),
+        );
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Missing module harness');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_CATALOG_ROUTE_READER ? { find } : original(token),
+        );
+        const page = await h.service.read(h.ctx, 'a.test', request);
+        expect(find).toHaveBeenCalledOnce();
+        expect(page.catalog).toEqual({ items: [{ id: 'actual-first-product' }], totalItems: 11 });
+    });
+    it('does not query an unscoped default catalog when required common data fails', async () => {
+        const h = accessHarness();
+        h.config.mockRejectedValue(new Error('required config unavailable'));
+        const find = vi.fn(() => Promise.resolve({ items: [], totalItems: 0 }));
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Missing module harness');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_CATALOG_ROUTE_READER ? { find } : original(token),
+        );
+        await expect(h.service.read(h.ctx, 'a.test', { kind: 'catalog', input: {} })).rejects.toThrow(
+            'required config unavailable',
+        );
+        expect(find).not.toHaveBeenCalled();
+    });
+    it.each(['first-store', 'second-store'])(
+        'queries the actual default category for %s without relabelling all-store results',
+        async channel => {
+            const h = accessHarness();
+            const ctx = {
+                ...(h.ctx as object),
+                channelId: channel,
+                channel: { ...setup().ctx.channel, id: channel, code: channel },
+            };
+            h.config.mockResolvedValue({ code: channel });
+            vi.spyOn(
+                h.service as unknown as { loadCollections(): Promise<unknown[]> },
+                'loadCollections',
+            ).mockResolvedValue([
+                { id: 'empty', productVariantCount: 0 },
+                { id: `${channel}-first`, productVariantCount: 11 },
+                { id: `${channel}-second`, productVariantCount: 36 },
+            ]);
+            const find = vi.fn((_ctx: unknown, input: { collectionId?: string }) =>
+                Promise.resolve({
+                    items: [{ id: input.collectionId ?? 'all-store-result' }],
+                    totalItems: input.collectionId ? 11 : 47,
+                }),
+            );
+            const original = h.modules.get.getMockImplementation();
+            if (!original) throw new Error('Missing module harness');
+            h.modules.get.mockImplementation(token =>
+                token === PUBLIC_CATALOG_ROUTE_READER ? { find } : original(token),
+            );
+            const page = await h.service.read(ctx as never, `${channel}.test`, {
+                kind: 'catalog',
+                input: { take: 12 },
+            });
+            expect(find).toHaveBeenCalledExactlyOnceWith(
+                ctx,
+                expect.objectContaining({ collectionId: `${channel}-first`, take: 12 }),
+            );
+            expect(page.catalog).toEqual({ items: [{ id: `${channel}-first` }], totalItems: 11 });
+            expect(page.request?.kind).toBe('catalog');
+            expect(page.requestKey).not.toContain('collectionId');
+            expect(page.route).toBe('/category');
+        },
+    );
+    it.each([
+        { path: '/category', collectionId: 'chosen-child', expected: 'chosen-child' },
+        { path: '/search', collectionId: undefined, expected: undefined },
+        { path: '/search', collectionId: 'all', expected: undefined },
+        { path: '/search', collectionId: 'chosen-search', expected: 'chosen-search' },
+    ] as const)('preserves explicit category/search scope $path $collectionId', async scenario => {
+        const h = accessHarness();
+        vi.spyOn(
+            h.service as unknown as { loadCollections(): Promise<unknown[]> },
+            'loadCollections',
+        ).mockResolvedValue([{ id: 'unselected-first', productVariantCount: 10 }]);
+        const find = vi.fn((_ctx: unknown, _input: { collectionId?: string; term?: string }) =>
+            Promise.resolve({ items: [], totalItems: 0 }),
+        );
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Missing module harness');
+        h.modules.get.mockImplementation(token =>
+            token === PUBLIC_CATALOG_ROUTE_READER ? { find } : original(token),
+        );
+        await h.service.read(h.ctx, 'a.test', {
+            kind: 'catalog',
+            path: scenario.path,
+            input: {
+                collectionId: scenario.collectionId,
+                term: scenario.path === '/search' ? 'query' : undefined,
+            },
+        });
+        expect(find).toHaveBeenCalledOnce();
+        expect(find.mock.calls[0][0]).toBe(h.ctx);
+        expect(find.mock.calls[0][1].collectionId).toBe(scenario.expected);
+        expect(find.mock.calls[0][1].term).toBe(scenario.path === '/search' ? 'query' : undefined);
+    });
     it.each(['catalog', 'product'] as const)(
         'projects %s route media only after route data joins the common page',
         async kind => {

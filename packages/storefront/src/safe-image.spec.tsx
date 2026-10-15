@@ -1,19 +1,27 @@
 // @vitest-environment jsdom
+import { QueryClient } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
+import { publicPageRequestKey } from '../../storefront-content-plugin/src/shared/public-page-data';
+import {
+    mediaDescriptor,
+    type MediaDescriptor,
+} from '../../storefront-content-plugin/src/shared/responsive-image';
+import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { CustomerAvatar } from './components/common/customer-avatar';
 import { IMAGE_WAIT_EXPIRED_EVENT } from './image-readiness';
+import { storefrontQueryKeys } from './query-client';
 import {
     clearDecodedImageCache,
     ImagePlaceholder,
     isImageAlreadyDecoded,
     SafeImageMediaProvider,
 } from './safe-image';
+import { seedPublicPage, type PublicPageData } from './storefront-page-data';
 import { ProductImagePlaceholder, ProductVariantImage, SafeImage } from './storefront-ui/product-display';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,6 +84,73 @@ function visibleFrameRect(top = 10, size = 180): DOMRect {
 }
 
 describe('SafeImage public presentation reuse', () => {
+    it('returns to services with its query-owned inline artwork after home replaces media and decoded pixels are evicted', async () => {
+        clearDecodedImageCache();
+        const client = new QueryClient();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const hero = '/assets/preview/services-return.webp';
+        const inline = 'data:image/webp;base64,AAAA';
+        const services: PublicPageData = syntheticPage('synthetic-a', 'en', 'home');
+        services.request = { kind: 'page', id: 'services' };
+        services.media = [mediaDescriptor(hero, 'hero', { inlinePreview: inline })];
+        const others = Array.from({ length: 129 }, (_, index) => `/assets/preview/eviction-${index}.webp`);
+        const home: PublicPageData = {
+            ...services,
+            generatedAt: services.generatedAt + 1,
+            request: { kind: 'home' },
+            media: [mediaDescriptor(hero, 'hero'), ...others.map(source => mediaDescriptor(source))],
+        };
+        const scope = storefrontQueryKeys.scope('synthetic-a:MYR', 'en');
+        const mediaFor = (page: PublicPageData) =>
+            client.getQueryData<MediaDescriptor[]>([
+                ...scope,
+                'public-media',
+                publicPageRequestKey(page.request ?? { kind: 'home' }),
+            ]) ??
+            client.getQueryData<MediaDescriptor[]>([...scope, 'public-media']) ??
+            [];
+        const render = (page: PublicPageData, sources = [hero]) => (
+            <SafeImageMediaProvider scope="synthetic-a" media={mediaFor(page)}>
+                {sources.map(source => (
+                    <SafeImage
+                        key={source}
+                        src={source}
+                        imageKind={source === hero ? 'hero' : undefined}
+                        alt="Artwork"
+                    />
+                ))}
+            </SafeImageMediaProvider>
+        );
+        try {
+            seedPublicPage(client, services);
+            act(() => root.render(render(services)));
+            await loadCandidate(requiredElement<HTMLImageElement>(host, 'img.safe-image'));
+            act(() => root.render(null));
+            seedPublicPage(client, home);
+            act(() => root.render(render(home, others)));
+            await act(async () => {
+                for (const image of host.querySelectorAll<HTMLImageElement>('img.safe-image')) {
+                    completeCandidate(image);
+                    image.dispatchEvent(new Event('load'));
+                }
+                await Promise.resolve();
+            });
+            expect(host.querySelectorAll('[data-safe-image=ready]')).toHaveLength(129);
+            act(() => root.render(null));
+            act(() => root.render(render(services)));
+            expect(host.querySelector('.safe-image-frame.has-inline-preview')).not.toBeNull();
+            expect(host.querySelector<HTMLImageElement>('img.safe-image-preview')?.getAttribute('src')).toBe(
+                inline,
+            );
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            client.clear();
+            clearDecodedImageCache();
+        }
+    });
     it('reuses public pixels with the current frame crop instead of the previous route crop', async () => {
         clearDecodedImageCache();
         const host = document.createElement('div');

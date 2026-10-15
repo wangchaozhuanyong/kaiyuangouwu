@@ -81,6 +81,73 @@ const REQUIRED_DOMAINS = [
     ['image', 'image_generation_job'],
 ];
 
+// Counts only, not a deletion allowlist. Keep this fixed list self-contained because
+// Production Operations transports this audited script without maintenance helpers.
+export const GENERATED_RECORD_AUDIT_TABLES = [
+    'customer_coupon',
+    'coupon_ledger_entry',
+    'coupon_order_allocation',
+    'referral_relationship',
+    'referral_reward',
+    'referral_balance_use',
+    'referral_ledger_entry',
+    'referral_wallet_usage',
+    'referral_withdrawal',
+    'storefront_cart',
+    'storefront_cart_line',
+    'storefront_cart_checkout',
+    'storefront_cart_checkout_line',
+    'storefront_cart_command_receipt',
+    'storefront_payment_attempt',
+    'storefront_page_view',
+    'storefront_daily_visitor',
+    'storefront_presence',
+    'storefront_presence_status',
+    'storefront_order_attribution',
+    'storefront_review',
+    'customer_service_review',
+    'customer_service_feedback',
+    'admin_incident_evidence',
+    'admin_incident_action',
+    'admin_notification_outbox',
+    'store_notification_read',
+    'history_entry',
+    'governance_report_snapshot',
+    'icloud_received_mail',
+    'icloud_query_audit_log',
+    'icloud_mail_outbox',
+    'image_generation_dispatch',
+    'image_generation_output',
+    'image_generation_cost_event',
+    'image_generation_job',
+    'image_prompt_optimization_attempt',
+    'image_prompt_optimization',
+    'image_usage_quota_event',
+    'image_usage_quota_bucket',
+    'job_record',
+    'order',
+    'order_line',
+    'shipping_line',
+    'surcharge',
+    'payment',
+    'refund',
+    'order_modification',
+    'fulfillment',
+    'fulfillment_line',
+    'customer_product_activity',
+];
+const JOB_STATES = ['CREATED', 'PENDING', 'RUNNING', 'COMPLETED', 'RETRYING', 'FAILED', 'CANCELLED'];
+const IMPORT_STATES = [
+    'RECEIVING',
+    'PREVIEW_READY',
+    'QUEUED',
+    'RUNNING',
+    'COMPLETED',
+    'COMPLETED_WITH_ERRORS',
+    'FAILED',
+    'ROLLED_BACK',
+];
+
 const CHECKS = [
     {
         key: 'duplicate-live-member-identities',
@@ -454,6 +521,97 @@ async function collectPerChannelCounts(adapter, schema, channels) {
     return result;
 }
 
+function requiredAggregate(row, field) {
+    if (!row || !Object.hasOwn(row, field) || row[field] == null) throw new Error('Missing aggregate count');
+    const value = row[field];
+    if (!(
+        typeof value === 'number' ||
+        typeof value === 'bigint' ||
+        (typeof value === 'string' && /^\d+$/u.test(value))
+    ))
+        throw new Error('Unsafe aggregate count');
+    return safeInteger(value);
+}
+
+async function collectFixedStateCounts(adapter, schema, table, states) {
+    if (!(await schema.columnExists(table, 'state')))
+        return { status: 'DATA_MISSING', total: null, byState: null };
+    const columns = states.map(
+        (_, index) => `COALESCE(SUM(CASE WHEN state = ? THEN 1 ELSE 0 END), 0) AS state${index}`,
+    );
+    const [row] = await adapter.query(
+        `SELECT COUNT(*) AS total, ${columns.join(', ')} FROM ${quoted(table)}`,
+        states,
+    );
+    const total = requiredAggregate(row, 'total');
+    const byState = Object.fromEntries(
+        states.map((state, index) => [state, requiredAggregate(row, `state${index}`)]),
+    );
+    const known = Object.values(byState).reduce((sum, value) => sum + value, 0);
+    if (known > total) throw new Error('Inconsistent aggregate counts');
+    byState.OTHER = total - known;
+    return { status: 'OK', total, byState };
+}
+
+async function collectGeneratedRecordCounts(adapter, schema) {
+    const tables = {};
+    for (const name of GENERATED_RECORD_AUDIT_TABLES) {
+        if (!(await schema.tableExists(name))) tables[name] = null;
+        else {
+            const [row] = await adapter.query(`SELECT COUNT(*) AS value FROM ${quoted(name)}`);
+            tables[name] = requiredAggregate(row, 'value');
+        }
+    }
+    let jobs = {
+        status: 'DATA_MISSING',
+        total: tables.job_record,
+        safeTerminal: null,
+        nonTerminalOrUnsettled: null,
+        terminalStateUnsettled: null,
+        byState: null,
+    };
+    if (await requirementsAvailable(schema, [['job_record', ['state', 'isSettled', 'settledAt']]])) {
+        const states = await collectFixedStateCounts(adapter, schema, 'job_record', JOB_STATES);
+        const terminal = "state IN ('COMPLETED', 'FAILED', 'CANCELLED')";
+        const [row] = await adapter.query(`SELECT
+            COALESCE(SUM(CASE WHEN ${terminal} AND isSettled = 1 AND settledAt IS NOT NULL
+                THEN 1 ELSE 0 END), 0) AS safeTerminal,
+            COALESCE(SUM(CASE WHEN ${terminal} AND
+                (isSettled <> 1 OR isSettled IS NULL OR settledAt IS NULL)
+                THEN 1 ELSE 0 END), 0) AS terminalStateUnsettled FROM ${quoted('job_record')}`);
+        const safeTerminal = requiredAggregate(row, 'safeTerminal');
+        const terminalStateUnsettled = requiredAggregate(row, 'terminalStateUnsettled');
+        if (
+            states.total !== tables.job_record ||
+            safeTerminal > states.total ||
+            safeTerminal + terminalStateUnsettled > states.total
+        )
+            throw new Error('Inconsistent job aggregate counts');
+        jobs = {
+            ...states,
+            safeTerminal,
+            nonTerminalOrUnsettled: states.total - safeTerminal,
+            terminalStateUnsettled,
+        };
+    }
+    const catalogImports = {
+        policy: 'PRESERVE_PRODUCT_PROVENANCE',
+        ...(await collectFixedStateCounts(adapter, schema, 'catalog_import_job', IMPORT_STATES)),
+    };
+    return {
+        mode: 'global-counts-only-no-delete-permission',
+        status:
+            Object.values(tables).some(value => value === null) ||
+            jobs.status !== 'OK' ||
+            catalogImports.status !== 'OK'
+                ? 'DATA_MISSING'
+                : 'COMPLETE',
+        tables,
+        jobs,
+        catalogImports,
+    };
+}
+
 async function collectDefaultChannelSeparation(adapter, schema, channels, targetChannelCode) {
     const defaultChannel = channels.find(channel => channel.code === '__default_channel__');
     const targetChannel = channels.find(channel => channel.code === targetChannelCode);
@@ -663,6 +821,7 @@ export async function collectStoreAutonomyAudit(adapter, options = {}) {
         checks,
         coverage,
         perChannelCounts: await collectPerChannelCounts(adapter, schema, channels),
+        generatedRecordCounts: await collectGeneratedRecordCounts(adapter, schema),
         defaultChannelSeparation: await collectDefaultChannelSeparation(
             adapter,
             schema,
