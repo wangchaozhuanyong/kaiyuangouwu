@@ -445,14 +445,14 @@ describe('unified channel-scoped digital inventory projection', () => {
         const sourceGuard = {
             assertEditable: vi.fn().mockRejectedValue(new Error('Managed source is read-only')),
         };
-        const service = new DigitalProductService(
-            scenario.connection as never,
-            {} as never,
-            {} as never,
+        const service: DigitalProductService = Reflect.construct(DigitalProductService, [
+            scenario.connection,
+            {},
+            {},
             new RequestContextCacheService(),
             undefined,
-            sourceGuard as never,
-        );
+            sourceGuard,
+        ]);
         vi.spyOn(service, 'lock').mockImplementation((_request, entity) =>
             Promise.resolve(
                 entity === ProductVariant
