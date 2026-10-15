@@ -1,0 +1,5 @@
+{
+  "scenario": "CI quality without built store plugin declaration",
+  "exitCode": 0,
+  "restored": true
+}

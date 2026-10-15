@@ -93,7 +93,7 @@ describe('DigitalDeliveryService', () => {
                 ),
             ),
         };
-        const sources = { historicalChannelId: vi.fn().mockResolvedValue('source-store') };
+        const sources: any = { historicalChannelId: vi.fn().mockResolvedValue('source-store') };
         const digital = { reservation: vi.fn().mockResolvedValue(reservation) };
         const service = new DigitalDeliveryService(
             f.connection as never,
@@ -101,7 +101,7 @@ describe('DigitalDeliveryService', () => {
             digital as never,
             files as never,
             undefined,
-            sources as never,
+            sources,
         );
         const [delivery] = await service.deliveriesForOrder(ctx, order.id);
         const token = delivery.downloadUrl?.split('/').at(-1);

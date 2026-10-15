@@ -1,0 +1,128 @@
+{
+  "headRevision": "fe751d36b8f1f069e9e782f79368ab36800a2c0e",
+  "runId": 38790333244,
+  "overall": "failure",
+  "reason": "Only repository quality lint and aggregate all-passed failed; all business, build, frontend, database and browser jobs succeeded",
+  "checks": [
+    {
+      "id": 116626915759,
+      "name": "all-passed",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 116616527249,
+      "name": "e2e (mariadb)",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 116616526834,
+      "name": "e2e (postgres)",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 116616526116,
+      "name": "e2e (sqljs)",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 116616524225,
+      "name": "e2e (mysql) (22.x)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116616523907,
+      "name": "affected unit tests (22.x)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613176265,
+      "name": "dashboard Storybook Windows Chrome gate",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 116613175734,
+      "name": "dependency audit",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 116613174014,
+      "name": "codegen / codegen",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173987,
+      "name": "dashboard e2e (3)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173934,
+      "name": "repository quality gates",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 116613173918,
+      "name": "dashboard e2e (4)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173880,
+      "name": "dashboard e2e (1)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173783,
+      "name": "dashboard e2e (2)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173770,
+      "name": "build affected packages",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173710,
+      "name": "frontend (next-admin)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173680,
+      "name": "frontend (storefront)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173652,
+      "name": "dashboard Storybook quality gate",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116613173597,
+      "name": "dashboard i18n sync",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 116612930162,
+      "name": "detect changes",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ]
+}

@@ -1,12 +1,29 @@
 {
   "feature": "catalog-continuous-sync-and-shared-supply",
   "authorizedOn": "2026-10-16",
-  "state": "local_validation_complete",
+  "state": "first_ci_complete_repair_ready_to_push",
   "branch": "codex/catalog-continuous-sync-20261015",
   "baseRevision": "3dfcf5ef84c2cb24113c105d36e56c77b5867f72",
-  "targetRevision": null,
-  "pullRequest": null,
-  "ciRuns": [],
+  "targetRevision": "fe751d36b8f1f069e9e782f79368ab36800a2c0e",
+  "pullRequest": "https://github.com/wangchaozhuanyong/kaiyuangouwu/pull/740",
+  "ciRuns": [
+    {
+      "id": 38790333244,
+      "url": "https://github.com/wangchaozhuanyong/kaiyuangouwu/actions/runs/38790333244",
+      "head": "fe751d36b8f1f069e9e782f79368ab36800a2c0e",
+      "state": "completed",
+      "dispatchCount": 1,
+      "qualityFailure": {
+        "file": "packages/commerce-fulfillment-plugin/src/digital-delivery.service.spec.ts",
+        "line": 104,
+        "reason": "Test mock assertion depends on availability of built workspace type declarations",
+        "localRepair": "14 file delivery tests and lint with / without built store declaration passed"
+      },
+      "conclusion": "failure",
+      "businessConclusion": "success",
+      "summary": "CI_FIRST_RUN_SUMMARY.json"
+    }
+  ],
   "productionRelease": null,
   "productionBefore": {
     "observedAt": "2026-10-15T16:40:45.358Z",
@@ -450,10 +467,11 @@
     },
     "nativeRemaining": "6 direct runs passed, 136 cases: cart 12, asset-server 36, CLI 46, GraphiQL 9, job queue 16, storefront cart 17",
     "platform": "Legacy governance 42 passed in previous native run; isolated category bulk and takeover timeout cases passed; physical mixed shipping and final 16 source scenarios passed with corrected scoped fixtures.",
-    "shippingCurrencyReadiness": "Invalid fixed-currency templates are excluded while valid templates remain; all invalid makes target pending; unified source resolver now enforces target grant and pending variants. Negative integration and recovery passed."
+    "shippingCurrencyReadiness": "Invalid fixed-currency templates are excluded while valid templates remain; all invalid makes target pending; unified source resolver now enforces target grant and pending variants. Negative integration and recovery passed.",
+    "remoteFirst": "All business, build, frontend, MySQL, browser, migration and PostgreSQL checks passed. The only quality failure is fixed locally with 14 file-delivery tests and two declaration-layout lint checks."
   },
   "activationBoundary": "Deploy capability only; rules stay off. No production categories, products, prices or inventory synchronized.",
-  "updatedAt": "2026-10-15T18:59:49.670Z",
+  "updatedAt": "2026-10-15T19:31:15.180Z",
   "localReceipts": [
     {
       "name": "cart-final",
@@ -503,5 +521,6 @@
       "signal": null,
       "log": "storefront-cart-plugin-final.log"
     }
-  ]
+  ],
+  "operatorGuide": "OPERATOR_GUIDE.md"
 }

@@ -2,7 +2,7 @@
   "project": "kaiyuangouwu / Vendure",
   "baseSha": "3dfcf5ef84c2cb24113c105d36e56c77b5867f72",
   "branch": "codex/catalog-continuous-sync-20261015",
-  "generatedAtUtc": "2026-10-15T18:58:14.775Z",
+  "generatedAtUtc": "2026-10-15T19:05:43.223Z",
   "worktree": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015",
   "committed": false,
   "pushed": false,
@@ -22,7 +22,7 @@
       "sha256": "23218c5676629a9bcc0448ededb271592401719e49613e655c3036f69265e04f"
     }
   ],
-  "sourceDigest": "f0f4e963bae4adc0ee643948761275d91cb305d8025096585d4ffe5e374a1c68",
+  "sourceDigest": "3bf7d6531c075176ac07a050da77a4fca889893e20b78974032efb224edeb4b7",
   "changedFiles": [
     {
       "path": "packages/catalog-management-plugin/src/api-extensions.ts",
@@ -106,7 +106,7 @@
     },
     {
       "path": "packages/commerce-fulfillment-plugin/src/digital-delivery.service.spec.ts",
-      "sha256": "5d8b3a4f2e749f1faed76430393771e04097f77ab91a1f66d92b4a1866a2b10d"
+      "sha256": "6f64074b9955c6ba5131d3c4c2864e2afd225e057781f7d18df9ebac5acafbe8"
     },
     {
       "path": "packages/commerce-fulfillment-plugin/src/digital-delivery.service.ts",
