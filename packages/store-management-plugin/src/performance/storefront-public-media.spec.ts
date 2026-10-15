@@ -2,6 +2,7 @@ import { mediaDescriptor } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+    preservePublicMediaPreviews,
     PUBLIC_MEDIA_USES,
     publicContentImageKinds,
     publicHeroMobileImage,
@@ -243,6 +244,25 @@ describe('public page media projection', () => {
 
 describe('bounded public inline image assembly', () => {
     const preview = `data:image/webp;base64,${'A'.repeat(960)}`;
+    it('inherits only matching canonical asset, version and purpose without importing old descriptors', () => {
+        const old = [
+            mediaDescriptor('https://shop.example/assets/preview/a.webp?v=1', 'hero', {
+                inlinePreview: preview,
+            }),
+            mediaDescriptor('/assets/preview/removed.webp', 'hero', { inlinePreview: preview }),
+        ];
+        const fresh = [
+            mediaDescriptor('/assets/preview/a.webp?v=1', 'hero'),
+            mediaDescriptor('/assets/preview/a.webp?v=2', 'hero'),
+            mediaDescriptor('/assets/preview/a.webp?v=1', 'card'),
+            mediaDescriptor('https://other.test/assets/preview/a.webp?v=1', 'hero'),
+        ];
+        const result = preservePublicMediaPreviews(fresh, old, 'shop.example');
+        expect(result).toHaveLength(fresh.length);
+        expect(result.map(item => Boolean(item.placeholder))).toEqual([true, false, false, false]);
+        expect(result.map(item => item.identity)).toEqual(fresh.map(item => item.identity));
+        expect(fresh.every(item => !item.placeholder)).toBe(true);
+    });
     it('authorizes same-store assets before storage, ignores foreign/private paths and preserves versions', async () => {
         const media = [
             mediaDescriptor('/assets/preview/allowed.webp?v=1', 'hero'),

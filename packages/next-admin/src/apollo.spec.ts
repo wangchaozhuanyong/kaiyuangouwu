@@ -10,6 +10,7 @@ import {
     prepareAuthSession,
     setInitialActiveChannel,
     switchActiveChannel,
+    uploadAdminFile,
     uploadAdminFiles,
 } from './apollo';
 import { GET_INVENTORY_OVERVIEW } from './graphql/catalog-admin.graphql';
@@ -236,6 +237,38 @@ describe('admin channel request routing', () => {
             uploadAdminFiles('mutation Upload { createAssets { id } }', [], () => ({})),
         ).rejects.toThrow('请先选择店铺');
         expect(request).not.toHaveBeenCalled();
+    });
+
+    describe.each(['single', 'multiple'] as const)('%s upload size feedback', kind => {
+        it.each(['graphql-limit', 'http-json', 'http-html'] as const)(
+            'explains %s rejections without retrying the upload',
+            async rejection => {
+                request.mockResolvedValue(
+                    rejection === 'graphql-limit'
+                        ? Response.json({
+                              errors: [{ message: 'File truncated as it exceeds the 1024 byte size limit.' }],
+                          })
+                        : rejection === 'http-json'
+                          ? Response.json({ errors: [{ message: 'Payload too large' }] }, { status: 413 })
+                          : new Response('<html>Request Entity Too Large</html>', { status: 413 }),
+                );
+                const file = new File(['synthetic oversized payload'], 'oversize.txt');
+                const operation =
+                    kind === 'single'
+                        ? uploadAdminFile(
+                              'mutation Upload($file: Upload!) { uploadDigitalDeliveryFile(file: $file) { id } }',
+                              file,
+                              { file: null },
+                          )
+                        : uploadAdminFiles('mutation Upload { createAssets { id } }', [file], files => ({
+                              input: files.map(file => ({ file })),
+                          }));
+                await expect(operation).rejects.toThrow(
+                    '上传文件超过后台允许的大小，请压缩文件或选择较小文件后重试',
+                );
+                expect(request).toHaveBeenCalledTimes(1);
+            },
+        );
     });
 
     it('uploads into an explicitly selected source library without changing the active store', async () => {

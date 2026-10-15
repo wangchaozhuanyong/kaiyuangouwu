@@ -7,6 +7,12 @@ import { clearTimeout, setTimeout } from 'node:timers';
 interface RevisionStrategy {
     getOrCreateVersion?(key: string): Promise<string>;
     rotateVersion?(key: string): Promise<string>;
+    compareAndSet?(
+        key: string,
+        expected: unknown,
+        value: unknown,
+        options: { ttl: number },
+    ): Promise<boolean>;
 }
 interface PublicEntry<T> {
     value: T;
@@ -162,7 +168,12 @@ export class StorefrontPublicCacheService {
         scopeKey: string,
         ttlMs: number,
         loader: () => Promise<T>,
-        options: { requireSharedRevision?: boolean; refresh?: boolean } = {},
+        options: {
+            requireSharedRevision?: boolean;
+            refresh?: boolean;
+            shouldCache?: (value: T, current?: T) => boolean | Promise<boolean>;
+            invalidateOnConflict?: (value: T) => boolean;
+        } = {},
     ): Promise<T> {
         if (ctx.activeUserId) throw new Error('Public cache requires an anonymous request context');
         const access = this.accessContext.getStore();
@@ -228,13 +239,54 @@ export class StorefrontPublicCacheService {
                     this.requestCache?.clear(ctx);
                     continue;
                 }
-                await this.bounded(
-                    this.cache.set(
-                        this.key(ctx, scopeKey, before),
-                        { value, revision: before, expiresAt: Date.now() + ttl } as any,
-                        { ttl },
-                    ),
-                );
+                const writeDeadline = Date.now() + CACHE_TIMEOUT_MS;
+                const current = options.shouldCache
+                    ? await this.bounded(
+                          this.cache.get<PublicEntry<any>>(this.key(ctx, scopeKey, before)),
+                          writeDeadline,
+                      )
+                    : undefined;
+                const currentValue =
+                    current?.revision === before && current.expiresAt > Date.now()
+                        ? (current.value as T)
+                        : undefined;
+                if ((await options.shouldCache?.(value, currentValue)) !== false) {
+                    const entry = { value, revision: before, expiresAt: Date.now() + ttl };
+                    if (options.shouldCache && this.strategy.compareAndSet) {
+                        const written =
+                            Date.now() < writeDeadline
+                                ? await this.bounded(
+                                      this.strategy.compareAndSet(
+                                          this.key(ctx, scopeKey, before),
+                                          current,
+                                          entry,
+                                          { ttl },
+                                      ),
+                                      writeDeadline,
+                                  )
+                                : undefined;
+                        if (written !== true && options.invalidateOnConflict?.(value))
+                            await this.invalidate(ctx.channelId);
+                        else if (written === false && Date.now() < writeDeadline) {
+                            const winner = await this.bounded(
+                                this.cache.get<PublicEntry<any>>(this.key(ctx, scopeKey, before)),
+                                writeDeadline,
+                            );
+                            if (winner?.revision === before && winner.expiresAt > Date.now())
+                                // The existing policy can merge authorized pixels into fresh content.
+                                // Never replace the response with an older complete cached document.
+                                await options.shouldCache(value, winner.value as T);
+                        }
+                    } else if (!options.shouldCache || !this.sharedVersions) {
+                        // Nonshared strategies use this instance's private random revision/key.
+                        await this.bounded(
+                            this.cache.set(this.key(ctx, scopeKey, before), entry as any, { ttl }),
+                        );
+                    } else if (options.invalidateOnConflict?.(value)) {
+                        // A shared backend lacking CAS cannot safely publish this replacement.
+                        await this.invalidate(ctx.channelId);
+                    }
+                }
                 if (before !== (await this.revision(ctx.channelId))) {
                     this.metrics.superseded++;
                     this.requestCache?.clear(ctx);

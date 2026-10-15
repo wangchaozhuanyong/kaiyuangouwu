@@ -319,6 +319,7 @@ describe('bounded public page preparation', () => {
         await h.run();
         expect(h.pages.read).toHaveBeenCalled();
         expect(h.pages.read.mock.calls.every(call => call[3]?.refresh === true)).toBe(true);
+        expect(h.pages.read.mock.calls.every(call => call[3]?.prepareMedia === true)).toBe(true);
         h.service.onApplicationShutdown();
     });
 

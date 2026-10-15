@@ -50,7 +50,12 @@ function harness() {
         urls: vi.fn((id: string) => Promise.resolve([`https://${id}.example/assets/preview/a.jpg`])),
         purge: vi.fn((urls: string[]) => Promise.resolve({ status: 'purged', count: urls.length })),
     };
-    const assets = { preparePublicDerivative: vi.fn(() => Promise.resolve(undefined)) };
+    const assets = {
+        preparePublicDerivative: vi.fn(() => Promise.resolve(undefined)),
+        readPublicInlinePreview: vi.fn((): Promise<string | undefined> =>
+            Promise.resolve('data:image/webp;base64,AAAA'),
+        ),
+    };
     const events = new Subject<any>();
     const service = new StorefrontMediaJobsService(
         queueService as never,
@@ -97,7 +102,11 @@ describe('finite media job queues', () => {
             expect(
                 await queue.process({ data: { channelId: 'a', host: 'shop.example', offset: 0 } }),
             ).toEqual({ prepared: 24, failed: 0 });
-            expect(test.assets.preparePublicDerivative).toHaveBeenCalledTimes(24);
+            expect(test.assets.readPublicInlinePreview).toHaveBeenCalledTimes(10);
+            expect(test.assets.preparePublicDerivative).toHaveBeenCalledTimes(14);
+            expect(test.assets.readPublicInlinePreview.mock.invocationCallOrder.at(-1)).toBeLessThan(
+                test.assets.preparePublicDerivative.mock.invocationCallOrder[0],
+            );
             expect(queue.add).toHaveBeenCalledWith(
                 { channelId: 'a', host: 'shop.example', offset: 24 },
                 { retries: 2 },
@@ -110,7 +119,8 @@ describe('finite media job queues', () => {
             expect(
                 await queue.process({ data: { channelId: 'a', host: 'shop.example', offset: 24 } }),
             ).toEqual({ prepared: 0 });
-            expect(test.assets.preparePublicDerivative).toHaveBeenCalledTimes(24);
+            expect(test.assets.preparePublicDerivative).toHaveBeenCalledTimes(14);
+            expect(test.assets.readPublicInlinePreview).toHaveBeenCalledTimes(10);
         } finally {
             test.service.onApplicationShutdown();
         }
@@ -127,6 +137,38 @@ describe('finite media job queues', () => {
             expect(test.delivery.purge).toHaveBeenCalledWith([
                 'https://retired-b.example/assets/preview/a.jpg',
             ]);
+        } finally {
+            test.service.onApplicationShutdown();
+        }
+    });
+    it('counts unavailable inline pixels as failed preparation and never reads paths outside the current manifest', async () => {
+        vi.stubEnv('STOREFRONT_MEDIA_PREGENERATE', 'true');
+        const test = harness();
+        test.assets.readPublicInlinePreview.mockResolvedValue(undefined);
+        await test.service.onApplicationBootstrap();
+        try {
+            const queue = test.queues.get('storefront-media-prepare');
+            if (!queue) throw new Error('Expected media preparation queue');
+            expect(
+                await queue.process({ data: { channelId: 'a', host: 'shop.example', offset: 0 } }),
+            ).toEqual({
+                prepared: 14,
+                failed: 10,
+            });
+            test.assets.readPublicInlinePreview.mockClear();
+            test.assets.preparePublicDerivative.mockClear();
+            test.manifests.get.mockResolvedValue({
+                paths: [],
+                uses: [{ path: 'preview/private.jpg', kind: 'card' }],
+            });
+            expect(
+                await queue.process({ data: { channelId: 'a', host: 'shop.example', offset: 0 } }),
+            ).toEqual({
+                prepared: 0,
+                failed: 0,
+            });
+            expect(test.assets.readPublicInlinePreview).not.toHaveBeenCalled();
+            expect(test.assets.preparePublicDerivative).not.toHaveBeenCalled();
         } finally {
             test.service.onApplicationShutdown();
         }

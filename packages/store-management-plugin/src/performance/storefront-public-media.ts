@@ -86,6 +86,29 @@ export function publicMediaAssetIdentity(media: MediaDescriptor, host: string) {
     }
 }
 
+/** Callers must supply only a guarded cache entry from the same public scope/revision. */
+export function preservePublicMediaPreviews(
+    media: readonly MediaDescriptor[],
+    previous: readonly MediaDescriptor[],
+    host: string,
+): MediaDescriptor[] {
+    const previews = new Map<string, string>();
+    for (const item of previous) {
+        const identity = publicMediaAssetIdentity(item, host);
+        const preview = item.placeholder?.inlineData;
+        if (identity && validInlineImagePreview(preview))
+            previews.set(JSON.stringify([identity.key, item.kind]), preview);
+    }
+    return boundedMediaPreviews(
+        media.map(item => {
+            if (validInlineImagePreview(item.placeholder?.inlineData)) return item;
+            const identity = publicMediaAssetIdentity(item, host);
+            const preview = identity && previews.get(JSON.stringify([identity.key, item.kind]));
+            return preview ? { ...item, placeholder: { inlineData: preview } } : item;
+        }),
+    );
+}
+
 /** One bounded page assembly; late storage work cannot mutate the returned snapshot. */
 export async function publicMediaWithPreviews(
     media: readonly MediaDescriptor[],

@@ -39,6 +39,199 @@ const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 afterEach(() => vi.useRealTimers());
 
 describe('public cache boundaries', () => {
+    it('reconciles a concurrent CAS winner without replacing fresh content or extending its TTL', async () => {
+        const h = harness();
+        const winner = { content: 'earlier-content', media: 'ready' };
+        const expiresAt = Date.now() + 10_000;
+        Object.assign(h.strategy, {
+            compareAndSet: vi.fn((key: string, _: unknown, entry: { revision: string }) => {
+                h.entries.set(key, { value: winner, revision: entry.revision, expiresAt });
+                return Promise.resolve(false);
+            }),
+        });
+        const guard = vi.fn().mockResolvedValue(undefined);
+        const reconcile = vi.fn((value: typeof winner, current?: typeof winner) => {
+            if (current?.media === 'ready') value.media = current.media;
+            return true;
+        });
+        const result = await h.service.runGuarded(guard, () =>
+            h.service.readThrough(
+                ctx,
+                'page',
+                30_000,
+                () => Promise.resolve({ content: 'new-content', media: 'partial' }),
+                { refresh: true, shouldCache: reconcile },
+            ),
+        );
+        expect(result).toEqual({ content: 'new-content', media: 'ready' });
+        expect(reconcile).toHaveBeenLastCalledWith(result, winner);
+        expect([...h.entries.values()]).toEqual([{ value: winner, revision: '1:2', expiresAt }]);
+        expect(h.cache.set).not.toHaveBeenCalled();
+        expect(guard).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['expired', 'other-revision'] as const)('never reconciles a %s CAS winner', async kind => {
+        const h = harness();
+        Object.assign(h.strategy, {
+            compareAndSet: vi.fn((key: string, _: unknown, entry: { revision: string }) => {
+                h.entries.set(key, {
+                    value: 'old-pixels',
+                    revision: kind === 'other-revision' ? 'foreign' : entry.revision,
+                    expiresAt: Date.now() + (kind === 'expired' ? -1 : 10_000),
+                });
+                return Promise.resolve(false);
+            }),
+        });
+        const reconcile = vi.fn().mockReturnValue(true);
+        expect(
+            await h.service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('new-content'), {
+                refresh: true,
+                shouldCache: reconcile,
+            }),
+        ).toBe('new-content');
+        expect(reconcile).toHaveBeenCalledOnce();
+        expect(h.cache.set).not.toHaveBeenCalled();
+    });
+
+    it('shares one 100ms deadline across the current read, CAS and conflicted winner read', async () => {
+        const h = harness();
+        let now = Date.now();
+        const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+        let canary: ReturnType<typeof setTimeout> | undefined;
+        try {
+            h.cache.get
+                .mockImplementationOnce(() => {
+                    now += 20;
+                    return Promise.resolve(undefined);
+                })
+                .mockImplementationOnce(() => new Promise(() => undefined));
+            Object.assign(h.strategy, {
+                compareAndSet: vi.fn(() => {
+                    now += 70;
+                    return Promise.resolve(false);
+                }),
+            });
+            const result = h.service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('new-content'), {
+                refresh: true,
+                shouldCache: () => true,
+            });
+            // Production bounds use node:timers. Advance the measured work explicitly;
+            // only the remaining 10ms may wait, never another full 100ms window.
+            expect(
+                await Promise.race([
+                    result.then(() => true),
+                    new Promise<boolean>(resolve => {
+                        canary = setTimeout(() => resolve(false), 50);
+                    }),
+                ]),
+            ).toBe(true);
+            expect(await result).toBe('new-content');
+            expect(h.cache.get).toHaveBeenCalledTimes(2);
+            expect(h.cache.set).not.toHaveBeenCalled();
+        } finally {
+            clock.mockRestore();
+            if (canary) clearTimeout(canary);
+        }
+    });
+
+    it('never falls back to SET after a conditional conflict or missing shared CAS capability', async () => {
+        const h = harness();
+        const compareAndSet = vi.fn().mockResolvedValue(false);
+        Object.assign(h.strategy, { compareAndSet });
+        expect(
+            await h.service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('partial'), {
+                shouldCache: () => true,
+            }),
+        ).toBe('partial');
+        expect(compareAndSet).toHaveBeenCalledOnce();
+        expect(h.cache.set).not.toHaveBeenCalled();
+        const unsupported = harness();
+        expect(
+            await unsupported.service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('uncached'), {
+                shouldCache: () => true,
+            }),
+        ).toBe('uncached');
+        expect(unsupported.cache.set).not.toHaveBeenCalled();
+        const local = new StorefrontPublicCacheService(
+            unsupported.cache as any,
+            { systemOptions: { cacheStrategy: {} } } as any,
+        );
+        expect(
+            await local.readThrough(ctx, 'page', 30_000, () => Promise.resolve('private-local-generation'), {
+                shouldCache: () => true,
+            }),
+        ).toBe('private-local-generation');
+        expect(unsupported.cache.set).toHaveBeenCalledOnce();
+    });
+    it('invalidates a conflicted denied generation instead of keeping its old pixels reachable', async () => {
+        const h = harness();
+        await h.service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('old-pixels'));
+        h.cache.set.mockClear();
+        let attempts = 0;
+        const compareAndSet = vi.fn((key: string, _: unknown, value: unknown) => {
+            if (++attempts === 1) return Promise.resolve(false);
+            h.entries.set(key, value);
+            return Promise.resolve(true);
+        });
+        Object.assign(h.strategy, { compareAndSet });
+        expect(
+            await h.service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('denied'), {
+                refresh: true,
+                shouldCache: () => true,
+                invalidateOnConflict: () => true,
+            }),
+        ).toBe('denied');
+        expect(compareAndSet).toHaveBeenCalledTimes(2);
+        expect(h.strategy.rotateVersion).toHaveBeenCalledOnce();
+        expect(h.cache.set).not.toHaveBeenCalled();
+        expect(await h.service.peek(ctx, 'page')).toBe('denied');
+    });
+    it('compares the current shared entry when a slower producer finishes after another process', async () => {
+        const h = harness();
+        const other = new StorefrontPublicCacheService(
+            h.cache as any,
+            { systemOptions: { cacheStrategy: h.strategy } } as any,
+        );
+        let finish!: (value: string) => void;
+        const load = vi.fn(() => new Promise<string>(resolve => (finish = resolve)));
+        const pending = h.service.readThrough(ctx, 'page', 30_000, load, {
+            refresh: true,
+            shouldCache: (value, current) => current !== 'healthy' || value === 'healthy',
+        });
+        await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
+        await other.readThrough(ctx, 'page', 30_000, () => Promise.resolve('healthy'), { refresh: true });
+        finish('partial');
+        expect(await pending).toBe('partial');
+        expect(await h.service.peek(ctx, 'page')).toBe('healthy');
+        expect(h.cache.set).toHaveBeenCalledOnce();
+    });
+    it('can decline a refresh write without extending the old TTL and still enforces the access guard', async () => {
+        const { service, entries, cache } = harness();
+        await service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('healthy'));
+        const before = [...entries.entries()];
+        const guard = vi.fn().mockResolvedValue(undefined);
+        const value = await service.runGuarded(guard, () =>
+            service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('deferred'), {
+                refresh: true,
+                shouldCache: () => false,
+            }),
+        );
+        expect(value).toBe('deferred');
+        expect([...entries.entries()]).toEqual(before);
+        expect(cache.set).toHaveBeenCalledOnce();
+        expect(guard).toHaveBeenCalled();
+        await expect(
+            service.runGuarded(
+                () => Promise.reject(new Error('closed')),
+                () =>
+                    service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('blocked'), {
+                        refresh: true,
+                        shouldCache: () => false,
+                    }),
+            ),
+        ).rejects.toThrow('closed');
+        expect(cache.set).toHaveBeenCalledOnce();
+    });
     it('does not return an old snapshot if publication changes while an access guard is awaiting', async () => {
         const { service } = harness();
         await service.readThrough(ctx, 'page', 30_000, () => Promise.resolve('old'));
