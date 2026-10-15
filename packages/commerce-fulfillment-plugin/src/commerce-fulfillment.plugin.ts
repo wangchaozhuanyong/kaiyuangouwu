@@ -35,6 +35,8 @@ import { manageAutoCardSecretsPermission, readSoldAutoCardsPermission } from './
 import { autoCardAdminResolvers, autoCardShopResolvers } from './auto-card.resolver';
 import { AutoCardService } from './auto-card.service';
 import { CartDeliveryCommandAdapter } from './cart-delivery-command.adapter';
+import { CatalogSyncShippingService } from './catalog-sync-shipping.service';
+import { CatalogSyncSupplyService } from './catalog-sync-supply.service';
 import { CheckoutResourcesService, reconcileCheckoutResourcesTask } from './checkout-resources.service';
 import { CommerceI18nService } from './commerce-i18n.service';
 import { CommerceModeAdminResolver, CommerceModeShopResolver } from './commerce-mode.resolver';
@@ -176,6 +178,8 @@ import './types';
     ],
     controllers: [DigitalDeliveryController, AfterSalesEvidenceController],
     providers: [
+        CatalogSyncSupplyService,
+        CatalogSyncShippingService,
         PublicProductSummaryService,
         { provide: PUBLIC_PRODUCT_SUMMARY_READER, useExisting: PublicProductSummaryService },
         DigitalReceiptService,

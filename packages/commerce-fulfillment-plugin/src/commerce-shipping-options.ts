@@ -1,8 +1,30 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { Order, ShippingCalculator, ShippingEligibilityChecker, ZoneService } from '@vendure/core';
-import { convertChannelAmount } from '@vendure/store-management-plugin/currency-conversion';
 
+import { quoteShippingAmounts } from './catalog-sync-shipping-money';
+import { CatalogSyncShippingService } from './catalog-sync-shipping.service';
 import { getOrderLineFulfillmentType } from './fulfillment-classification';
+let syncShipping: CatalogSyncShippingService | undefined;
+function inheritedArgs<T extends object>(
+    args: T,
+    operation?: { args: Array<{ name: string; value: string }> },
+): T {
+    if (!operation) return args;
+    const result = { ...args };
+    for (const item of operation.args) {
+        const key = item.name as keyof T;
+        if (!(key in result)) continue;
+        const initial = result[key];
+        result[key] = (
+            typeof initial === 'number'
+                ? Number(item.value)
+                : typeof initial === 'boolean'
+                  ? item.value === 'true'
+                  : item.value
+        ) as T[keyof T];
+    }
+    return result;
+}
 
 export function physicalOrderSubtotalWithTax(order: Pick<Order, 'lines'>): number {
     return order.lines
@@ -113,25 +135,35 @@ export const physicalSubtotalShippingCalculator = new ShippingCalculator({
             ],
         },
     },
-    calculate: (ctx, order, args) => {
-        const physicalSubtotalWithTax = physicalOrderSubtotalWithTax(order);
-        const sourceCurrency = (args.sourceCurrencyCode ||
-            args.currencyCode ||
-            ctx.channel.defaultCurrencyCode) as typeof ctx.currencyCode;
-        // Native eligible-shipping queries may retain the request/default currency.
-        // Quotes must match the persisted order subtotal they are compared against.
-        const orderCurrency = order.currencyCode ?? ctx.currencyCode;
-        const baseRate = convertChannelAmount(ctx, args.baseRate, sourceCurrency, orderCurrency);
-        const freeAbove = convertChannelAmount(ctx, args.freeAbove, sourceCurrency, orderCurrency);
-        if (baseRate == null || freeAbove == null) {
-            throw new Error('运费币种汇率配置无效');
+    init(injector) {
+        syncShipping = injector.get(CatalogSyncShippingService);
+    },
+    calculate: async (ctx, order, args, method) => {
+        const scope = await syncShipping?.scope(ctx, order, method);
+        if (syncShipping && !scope) return undefined;
+        if (scope) {
+            order = scope.order;
+            args = inheritedArgs(args, scope.sourceMethod?.calculator);
         }
+
+        const physicalSubtotalWithTax = physicalOrderSubtotalWithTax(order);
+        const amounts = quoteShippingAmounts(
+            ctx,
+            args,
+            order.currencyCode ?? ctx.currencyCode,
+            scope?.sourceMethod ? scope.ctx : undefined,
+        );
+        if (!amounts) throw new Error('运费币种汇率配置无效');
+        const { baseRate, freeAbove } = amounts;
         const freeShippingApplied = freeAbove > 0 && physicalSubtotalWithTax >= freeAbove;
         return {
             price: freeShippingApplied ? 0 : baseRate,
             taxRate: args.taxRate,
             priceIncludesTax: args.priceIncludesTax,
             metadata: {
+                ...(scope?.groupName
+                    ? { shippingGroupId: scope.groupId, shippingGroupName: scope.groupName }
+                    : {}),
                 physicalSubtotalWithTax,
                 physicalQuantity: physicalOrderQuantity(order),
                 freeShippingThreshold: freeAbove,
@@ -165,7 +197,15 @@ export const storeShippingZoneEligibilityChecker = new ShippingEligibilityChecke
     init(injector) {
         shippingZones = injector.get(ZoneService);
     },
-    check: async (ctx, order, args) => {
+    check: async (ctx, order, args, method) => {
+        const scope = await syncShipping?.scope(ctx, order, method);
+        if (syncShipping && !scope) return false;
+        if (scope) {
+            ctx = scope.ctx;
+            order = scope.order;
+            args = inheritedArgs(args, scope.sourceMethod?.checker);
+        }
+
         const countryCode = order.shippingAddress?.countryCode?.trim().toUpperCase();
         const zoneId = ctx.channel.defaultShippingZone?.id;
         if (!countryCode || !zoneId || physicalOrderQuantity(order) === 0) return false;
@@ -219,7 +259,15 @@ export const supportedDestinationEligibilityChecker = new ShippingEligibilityChe
             ],
         },
     },
-    check: (ctx, order, args) => {
+    check: async (ctx, order, args, method) => {
+        const scope = await syncShipping?.scope(ctx, order, method);
+        if (syncShipping && !scope) return false;
+        if (scope) {
+            ctx = scope.ctx;
+            order = scope.order;
+            args = inheritedArgs(args, scope.sourceMethod?.checker);
+        }
+
         if (physicalOrderQuantity(order) === 0) {
             return false;
         }

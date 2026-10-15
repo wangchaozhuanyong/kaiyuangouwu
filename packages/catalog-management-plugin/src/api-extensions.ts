@@ -1184,6 +1184,79 @@ export const adminApiExtensions = gql`
         variantId: ID!
         price: Int!
     }
+
+    input CatalogSyncRuleInput {
+        id: ID
+        version: Int
+        sourceChannelId: ID!
+        sourceCollectionId: ID!
+        targetChannelId: ID!
+        includeDescendants: Boolean!
+    }
+    type CatalogSyncRule {
+        id: ID!
+        sourceChannelId: ID!
+        sourceCollectionId: ID!
+        targetChannelId: ID!
+        includeDescendants: Boolean!
+        enabled: Boolean!
+        version: Int!
+        state: String!
+        cursor: Int!
+        lastSyncedAt: DateTime
+        error: String
+    }
+    type CatalogSyncPrice {
+        variantId: ID!
+        price: Int
+        currencyCode: String!
+    }
+    type CatalogSyncPreviewItem {
+        productId: ID!
+        name: String!
+        takeover: Boolean!
+        blockers: [String!]!
+        pendingReasons: [String!]!
+        prices: [CatalogSyncPrice!]!
+    }
+    type CatalogSyncPreview {
+        fingerprint: String!
+        productCount: Int!
+        categoryCount: Int!
+        takeoverCount: Int!
+        items: [CatalogSyncPreviewItem!]!
+        blockers: [String!]!
+    }
+    type CatalogSyncIssue {
+        kind: String!
+        sourceId: ID!
+        state: String!
+        error: String!
+    }
+    extend type ProductVariant {
+        catalogOperatingPrice: Money
+        catalogOperatingCurrency: CurrencyCode!
+    }
+    type CatalogSyncIssueList {
+        items: [CatalogSyncIssue!]!
+        totalItems: Int!
+    }
+    extend type Query {
+        catalogSyncRules: [CatalogSyncRule!]!
+        catalogSyncIssues(ruleId: ID!, skip: Int! = 0, take: Int! = 100): CatalogSyncIssueList!
+    }
+    extend type Mutation {
+        previewCatalogSyncRule(input: CatalogSyncRuleInput!): CatalogSyncPreview!
+        saveCatalogSyncRule(input: CatalogSyncRuleInput!): CatalogSyncRule!
+        enableCatalogSyncRule(
+            id: ID!
+            version: Int!
+            fingerprint: String!
+            acceptTakeover: Boolean!
+        ): CatalogSyncRule!
+        pauseCatalogSyncRule(id: ID!, version: Int!): CatalogSyncRule!
+        reconcileCatalogSyncRule(id: ID!): CatalogSyncRule!
+    }
     input PlatformCatalogTargetInput {
         channelId: ID!
         collectionId: ID

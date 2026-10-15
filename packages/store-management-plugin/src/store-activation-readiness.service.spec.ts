@@ -297,17 +297,17 @@ describe('shipping activation readiness', () => {
             ),
         ).toBe(false);
     });
-    it('rejects a private shipping amount without a supported source-to-store currency path', () => {
+    it('rejects a private shipping amount without a supported source-to-store currency path', async () => {
         const unsupported = physical('USD');
         expect(hasReadyShippingMethod(channel, [unsupported])).toBe(false);
-        expect(() =>
+        await expect(
             physicalSubtotalShippingCalculator.calculate(
                 { channel, currencyCode: channel.defaultCurrencyCode } as any,
                 { lines: [] } as any,
                 unsupported.calculator.args,
                 unsupported,
             ),
-        ).toThrow('运费币种汇率配置无效');
+        ).rejects.toThrow('运费币种汇率配置无效');
         expect(
             hasReadyShippingMethod({ ...channel, customFields: { cnyToMyrRate: 0.6 } }, [physical('USD')]),
         ).toBe(false);

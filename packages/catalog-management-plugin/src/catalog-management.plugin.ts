@@ -12,6 +12,10 @@ import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
 import { CatalogProfitService } from './catalog-profit.service';
 import { CatalogSupplierService } from './catalog-supplier.service';
+import { catalogSyncCollectionFilter } from './catalog-sync-collection-filter';
+import { CatalogSyncQueueService, reconcileCatalogSyncTask } from './catalog-sync-queue.service';
+import { CatalogOperatingPriceResolver, CatalogSyncResolver } from './catalog-sync.resolver';
+import { CatalogSyncService } from './catalog-sync.service';
 import { CatalogTemplateLibraryService } from './catalog-template-library.service';
 import { CatalogVariantMatrixService } from './catalog-variant-matrix.service';
 import {
@@ -74,6 +78,8 @@ import './types';
         PurchaseSupplierReturnLine,
     ],
     providers: [
+        CatalogSyncService,
+        CatalogSyncQueueService,
         PlatformCatalogService,
         CatalogTemplateLibraryService,
         CatalogChannelAssignmentsService,
@@ -90,8 +96,10 @@ import './types';
         CatalogVariantMatrixService,
         PurchaseOrderService,
     ],
-    exports: [InventoryControlService, CatalogOperationsService],
+    exports: [InventoryControlService, CatalogOperationsService, CatalogSyncService],
     configuration: config => {
+        config.catalogOptions.collectionFilters.push(catalogSyncCollectionFilter);
+        config.schedulerOptions.tasks.push(reconcileCatalogSyncTask);
         config.authOptions.customPermissions.push(
             manageCatalogImportPermission,
             manageCatalogOperationsPermission,
@@ -246,7 +254,12 @@ import './types';
     },
     adminApiExtensions: {
         schema: adminApiExtensions,
-        resolvers: [CatalogManagementAdminResolver, PlatformCatalogResolver],
+        resolvers: [
+            CatalogManagementAdminResolver,
+            PlatformCatalogResolver,
+            CatalogSyncResolver,
+            CatalogOperatingPriceResolver,
+        ],
     },
     compatibility: '^3.7.0',
 })

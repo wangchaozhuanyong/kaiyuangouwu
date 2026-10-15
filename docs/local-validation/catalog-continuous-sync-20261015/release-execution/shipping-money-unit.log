@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/commerce-fulfillment-plugin
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  01:42:11
+   Duration  9.35s (transform 477ms, setup 0ms, import 8.97s, tests 9ms, environment 0ms)

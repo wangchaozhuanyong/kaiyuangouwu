@@ -738,6 +738,15 @@ export const adminApiExtensions = gql`
     ${manualDeliveryAdminTypes}
     ${fulfillmentDeliveryTypes}
 
+    type AfterSalesReturnLocationOption {
+        id: ID!
+        name: String!
+    }
+    type AfterSalesReturnLocationGroup {
+        orderLineId: ID!
+        locations: [AfterSalesReturnLocationOption!]!
+    }
+
     extend type AfterSalesItem {
         returnStockLocation: StockLocation
     }
@@ -874,6 +883,7 @@ export const adminApiExtensions = gql`
         manualDigitalDeliveries(options: ManualDigitalDeliveryListOptions): ManualDigitalDeliveryList!
         manualDigitalDelivery(id: ID!): ManualDigitalDelivery
         physicalReturnReceipts(requestId: ID!): [PhysicalReturnReceipt!]!
+        afterSalesReturnLocations(requestId: ID!): [AfterSalesReturnLocationGroup!]!
         afterSalesRequests(options: AfterSalesRequestListOptions): AfterSalesRequestList!
         physicalFulfillmentTodoCount: Int!
         autoCardConfig(productVariantId: ID!): AutoCardConfig

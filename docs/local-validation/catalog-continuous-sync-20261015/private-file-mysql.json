@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "uploadService": true,
+  "buyerHttpStatus": 200,
+  "frozenOriginalContent": true,
+  "wrongHostStatus": 404,
+  "targetPrivateLibraryDenied": true
+}

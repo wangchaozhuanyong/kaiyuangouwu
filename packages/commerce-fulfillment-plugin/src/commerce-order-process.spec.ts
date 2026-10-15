@@ -445,6 +445,7 @@ describe('checkout price selection', () => {
         };
         const strategy = new StoreDefaultCurrencyPriceSelectionStrategy();
         const selectPrice = vi.fn(strategy.selectPrice.bind(strategy));
+        const supply = { managed: vi.fn().mockResolvedValue([]) };
         const services: Record<string, unknown> = {
             TransactionalConnection: {
                 getRepository: (_ctx: unknown, entity: { name: string }) =>
@@ -464,6 +465,7 @@ describe('checkout price selection', () => {
                 assertProductTypeAllowed: vi.fn(),
             },
             DigitalProductService: { config: vi.fn().mockResolvedValue(null) },
+            CatalogSyncSourceService: supply,
         };
         const run = async () => {
             await commerceOrderProcess.init?.({
@@ -474,8 +476,17 @@ describe('checkout price selection', () => {
                 order,
             } as any);
         };
-        return { ctx, order, prices, priceRepository, selectPrice, run };
+        return { ctx, order, prices, priceRepository, selectPrice, supply, run };
     }
+
+    it('requires a refreshed quote when a managed source changes the cart price', async () => {
+        const test = fixture(CurrencyCode.CNY, CurrencyCode.MYR);
+        test.supply.managed.mockResolvedValue([{}] as never);
+        Object.assign(test.order.lines[0], { listPrice: 5500 });
+        await expect(test.run()).resolves.toContain('来源售价已变化');
+        Object.assign(test.order.lines[0], { listPrice: 6000 });
+        await expect(test.run()).resolves.toBeUndefined();
+    });
 
     it.each([
         [CurrencyCode.CNY, CurrencyCode.MYR, 6000],

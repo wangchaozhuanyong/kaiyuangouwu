@@ -1,0 +1,12 @@
+{
+  "environment": "mysql",
+  "synthetic": true,
+  "tables": [
+    "catalog_sync_rule",
+    "catalog_sync_binding",
+    "catalog_supply_snapshot"
+  ],
+  "defaultEnabled": false,
+  "repeatedUpPreservedTables": true,
+  "productionReady": false
+}

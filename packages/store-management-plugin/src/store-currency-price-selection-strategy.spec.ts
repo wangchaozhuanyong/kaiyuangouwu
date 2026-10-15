@@ -5,11 +5,29 @@ import { describe, expect, it } from 'vitest';
 
 import {
     convertChannelAmount,
+    convertSyncedCatalogAmount,
     StoreDefaultCurrencyPriceSelectionStrategy,
 } from './store-currency-price-selection-strategy';
 
 describe('StoreDefaultCurrencyPriceSelectionStrategy', () => {
     const strategy = new StoreDefaultCurrencyPriceSelectionStrategy();
+
+    it('uses the target operating price before applying its existing buyer-currency conversion', () => {
+        const ctx = context(CurrencyCode.MYR, CurrencyCode.CNY, {
+            currencyRateMode: 'MANUAL',
+            currencyRateMarkupBps: 200,
+        });
+        const operating = convertChannelAmount(ctx, 10_000, CurrencyCode.CNY, CurrencyCode.MYR);
+        if (operating == null) throw new Error('Expected a configured source currency conversion');
+        expect(convertSyncedCatalogAmount(ctx, 10_000, CurrencyCode.CNY, CurrencyCode.CNY)).toBe(
+            convertChannelAmount(ctx, operating, CurrencyCode.MYR, CurrencyCode.CNY),
+        );
+        const missing = context(CurrencyCode.MYR, CurrencyCode.CNY, {
+            currencyRateMode: 'MANUAL',
+            cnyToMyrRate: 0,
+        });
+        expect(convertSyncedCatalogAmount(missing, 10_000, CurrencyCode.CNY, CurrencyCode.CNY)).toBeNull();
+    });
 
     it('returns the Channel default-currency source price unchanged', () => {
         const cny = price(1, CurrencyCode.CNY, 10_000);

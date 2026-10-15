@@ -1,0 +1,32 @@
+COMMAND: ['bunx', 'vitest', '--config', 'scripts/vitest.platform-governance.mts', '--run', 'packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts', '--testNamePattern', 'catalog continuous sync']
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts (45 tests | 1 failed | 30 skipped) 24772ms
+       × follows new variants and subcategories, renames, parent moves and source listing changes 20ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts > platform governance real database and API boundaries > catalog continuous sync > follows new variants and subcategories, renames, parent moves and source listing changes
+GraphQLError: error.product-variant-options-combination-already-exists
+ ❯ new I18nError packages/core/src/i18n/i18n-error.ts:25:8
+ ❯ new UserInputError packages/core/src/common/error/errors.ts:29:8
+ ❯ packages/core/src/service/services/product-variant.service.ts:1241:26
+ ❯ ProductVariantService.validateVariantOptionIds packages/core/src/service/services/product-variant.service.ts:1237:13
+ ❯ ProductVariantService.createSingle packages/core/src/service/services/product-variant.service.ts:546:8
+ ❯ ProductVariantService.create packages/core/src/service/services/product-variant.service.ts:510:23
+ ❯ packages/store-management-plugin/e2e/catalog-sync-acceptance.ts:754:36
+    752|         it('follows new variants and subcategories, renames, parent mo…
+    753|             const item = await makeProduct('category-evolution', false…
+    754|             const [addedVariant] = await f.server.app.get(ProductVaria…
+       |                                    ^
+    755|                 {
+    756|                     productId: item.id,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed | 30 skipped (45)
+   Start at  00:01:34
+   Duration  31.54s (transform 3.60s, setup 0ms, import 6.69s, tests 24.77s, environment 0ms)

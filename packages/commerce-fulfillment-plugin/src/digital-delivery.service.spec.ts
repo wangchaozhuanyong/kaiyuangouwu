@@ -65,10 +65,61 @@ function createService(order: any) {
         signingSecret: secret,
         linkTtlSeconds: 60,
     });
-    return { service: new DigitalDeliveryService(connection as any, tokens), repository };
+    return {
+        service: new DigitalDeliveryService(connection as any, tokens),
+        repository,
+        tokens,
+        connection,
+        directory,
+    };
 }
 
 describe('DigitalDeliveryService', () => {
+    it('keeps buyer-host authorization while reading only the licensed source file version after source changes', async () => {
+        const order = digitalOrder();
+        const f = createService(order);
+        const reservation = { fileVersionId: 'original-version', orderLineId: 'line-1', channelId };
+        f.repository.findOne.mockImplementation(({ where }: any) =>
+            Promise.resolve(where.orderLineId ? reservation : order),
+        );
+        const resource = {
+            path: path.join(f.directory, channelId, 'DIGITAL-001.txt'),
+            downloadName: 'original-source-file.txt',
+        };
+        const files = {
+            resource: vi.fn((sourceId: string, versionId: string) =>
+                Promise.resolve(
+                    sourceId === 'source-store' && versionId === 'original-version' ? resource : undefined,
+                ),
+            ),
+        };
+        const sources = { historicalChannelId: vi.fn().mockResolvedValue('source-store') };
+        const digital = { reservation: vi.fn().mockResolvedValue(reservation) };
+        const service = new DigitalDeliveryService(
+            f.connection as never,
+            f.tokens,
+            digital as never,
+            files as never,
+            undefined,
+            sources as never,
+        );
+        const [delivery] = await service.deliveriesForOrder(ctx, order.id);
+        const token = delivery.downloadUrl?.split('/').at(-1);
+        if (!token) throw new Error('Expected a licensed source-file delivery token');
+        expect(delivery.status).toBe('READY');
+        await expect(service.authorizeDownload(token, requestHost)).resolves.toMatchObject({
+            resource,
+            payload: { channelId, host: requestHost, fileVersionId: 'original-version' },
+        });
+        await expect(service.authorizeDownload(token, 'source-shop.test')).resolves.toBeUndefined();
+        expect(
+            files.resource.mock.calls.every(
+                ([sourceId, version]) => sourceId === 'source-store' && version === 'original-version',
+            ),
+        ).toBe(true);
+        order.salesChannelId = 'source-store';
+        await expect(service.authorizeDownload(token, requestHost)).resolves.toBeUndefined();
+    });
     it('checks file readiness for worker metadata without an HTTP host or a signed URL', async () => {
         const order = digitalOrder();
         const { service } = createService(order);

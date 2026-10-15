@@ -19,6 +19,7 @@ import {
     StockMovementService,
     TransactionalConnection,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardService } from './auto-card.service';
@@ -52,6 +53,7 @@ let manualDigitalDeliveryService: ManualDigitalDeliveryService;
 let digitalProducts: DigitalProductService;
 let checkoutResources: CheckoutResourcesService;
 let digitalFiles: DigitalFileService;
+let supplySources: CatalogSyncSourceService;
 
 export const commerceOrderProcess: OrderProcess<string> = {
     transitions: { Delivered: { to: ['Modifying'], mergeStrategy: 'merge' } },
@@ -70,6 +72,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
         digitalProducts = injector.get(DigitalProductService);
         checkoutResources = injector.get(CheckoutResourcesService);
         digitalFiles = injector.get(DigitalFileService);
+        supplySources = injector.get(CatalogSyncSourceService);
     },
 
     async onTransitionStart(fromState, toState, { ctx, order }) {
@@ -146,13 +149,19 @@ export const commerceOrderProcess: OrderProcess<string> = {
                         prices,
                     );
                 if (!price) return '本店售价未配置，请刷新购物车';
+                if (
+                    (await supplySources.managed(ctx, variant.productId)).length &&
+                    price.price !== line.listPrice
+                )
+                    return '来源售价已变化，请刷新购物车确认最新价格';
                 if (isFileDownloadOrderLine(line)) {
                     const reservation = await digitalProducts.reservation(ctx, line.id);
                     const config = await digitalProducts.config(ctx, variant.id);
                     const versionId = reservation?.fileVersionId ?? config?.fileVersionId;
+                    const supplyCtx = await supplySources.context(ctx, variant.id);
                     const resource = versionId
-                        ? await digitalFiles.resource(ctx.channelId, versionId)
-                        : digitalTokens.resourceForSku(String(ctx.channelId), variant.sku);
+                        ? await digitalFiles.resource(supplyCtx.channelId, versionId)
+                        : digitalTokens.resourceForSku(String(supplyCtx.channelId), variant.sku);
                     if (!resource) return '本店下载文件未配置，请联系店铺';
                 }
             }
@@ -198,6 +207,7 @@ export const commerceOrderProcess: OrderProcess<string> = {
                 ? await productPackagingService.rulesForVariantIds(
                       ctx,
                       physicalLines.map(line => line.productVariantId),
+                      order,
                   )
                 : [];
         if ((entersPayment || confirmsPayment) && stockManagedLines.length) {

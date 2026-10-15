@@ -1,0 +1,9 @@
+COMMAND: ['bunx', 'vitest', 'run', '--config', 'vitest.config.mts', 'migrations/add-catalog-continuous-sync.spec.ts']
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/dev-server
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  00:01:42
+   Duration  529ms (transform 79ms, setup 0ms, import 267ms, tests 36ms, environment 0ms)

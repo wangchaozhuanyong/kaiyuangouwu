@@ -12,9 +12,11 @@ import {
     Order,
     Refund,
     RequestContext,
+    StockLevel,
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 import { createHash, randomBytes } from 'node:crypto';
 import { FindOptionsWhere, In, LessThanOrEqual, Like } from 'typeorm';
 
@@ -67,7 +69,48 @@ export class AfterSalesService {
         private readonly translations: ContentTranslationService,
         private readonly inventoryControl: InventoryControlService,
         @Optional() private readonly evidence?: AfterSalesEvidenceService,
+        @Optional() private readonly sources?: CatalogSyncSourceService,
     ) {}
+
+    async returnLocationsForAdmin(ctx: RequestContext, requestId: ID) {
+        const request = await this.connection.getRepository(ctx, AfterSalesRequest).findOne({
+            where: { id: requestId, channelId: ctx.channelId },
+            relations: ['order', 'items', 'items.orderLine'],
+        });
+        if (!request) throw new UserInputError('售后工单不属于当前店铺');
+        assertOrderSalesChannel(ctx, request.order);
+        return Promise.all(
+            request.items
+                .filter(item => item.fulfillmentType === 'physical' && item.orderLineId != null)
+                .map(async item => {
+                    const source = item.orderLine
+                        ? ((await this.sources?.context(
+                              ctx,
+                              item.orderLine.productVariantId,
+                              item.orderLine.id,
+                              true,
+                          )) ?? ctx)
+                        : ctx;
+                    const stock = item.orderLine
+                        ? await this.connection.getRepository(ctx, StockLevel).find({
+                              where: {
+                                  productVariantId: item.orderLine.productVariantId,
+                                  stockLocation: { channels: { id: source.channelId } },
+                              },
+                              relations: ['stockLocation'],
+                              order: { stockLocationId: 'ASC' },
+                          })
+                        : [];
+                    return {
+                        orderLineId: item.orderLineId,
+                        locations: stock.map(level => ({
+                            id: level.stockLocationId,
+                            name: level.stockLocation.name,
+                        })),
+                    };
+                }),
+        );
+    }
 
     async findForCustomer(ctx: RequestContext): Promise<AfterSalesRequest[]> {
         const customer = await this.activeCustomerOrThrow(ctx);
@@ -639,6 +682,8 @@ export class AfterSalesService {
                 purchaseCostMicrounits: null;
             }
         >();
+        const inventoryContexts = new Map<string, RequestContext>();
+        const lineSources = new Map<string, string>();
         const plans: Array<{
             item: AfterSalesItem;
             acceptedQuantity: number;
@@ -683,7 +728,11 @@ export class AfterSalesService {
                 if (!variantId || !stockLocationId || !lotCode) {
                     throw new UserInputError(`商品 ${item.productName} 重新入库时必须选择仓库并填写批次号`);
                 }
+                const supplyCtx =
+                    (await this.sources?.context(ctx, variantId, item.orderLine?.id, true)) ?? ctx;
+                inventoryContexts.set(String(supplyCtx.channelId), supplyCtx);
                 const scope = `${String(variantId)}:${String(stockLocationId)}:${lotCode}`;
+                lineSources.set(scope, String(supplyCtx.channelId));
                 const existing = inventoryLines.get(scope);
                 if (existing) existing.quantity += quantityToRestock;
                 else if (quantityToRestock > 0) {
@@ -692,7 +741,7 @@ export class AfterSalesService {
                         stockLocationId,
                         lotCode,
                         quantity: quantityToRestock,
-                        currencyCode: request.currencyCode,
+                        currencyCode: supplyCtx.currencyCode,
                         purchaseCostMicrounits: null,
                     });
                 }
@@ -716,15 +765,26 @@ export class AfterSalesService {
                 lotCode,
             });
         }
-        const inventoryOperation = inventoryLines.size
-            ? await this.inventoryControl.receiveCustomerReturn(ctx, {
-                  idempotencyKey: inventoryIdempotencyKey(request.id, key),
-                  reason: note,
-                  reference: request.code,
-                  lines: [...inventoryLines.values()],
-              })
-            : null;
+        const operationIds = new Map<string, string>();
+        for (const [sourceId, supplyCtx] of inventoryContexts) {
+            const operation = await this.inventoryControl.receiveCustomerReturn(supplyCtx, {
+                idempotencyKey: inventoryIdempotencyKey(
+                    request.id,
+                    String(ctx.channelId) === sourceId ? key : `${key}:${sourceId}`,
+                ),
+                reason: note,
+                reference: String(ctx.channelId) === sourceId ? request.code : `SUPPLY-RETURN-${request.id}`,
+                lines: [...inventoryLines.entries()]
+                    .filter(([scope]) => lineSources.get(scope) === sourceId)
+                    .map(([, line]) => line),
+            });
+            operationIds.set(sourceId, String(operation.id));
+        }
         for (const plan of plans) {
+            const source = plan.item.orderLine
+                ? ((await this.sources?.historicalChannelId(ctx.channelId, plan.item.orderLine.id)) ??
+                  ctx.channelId)
+                : ctx.channelId;
             await this.connection.getRepository(ctx, AfterSalesItem).update(
                 { id: plan.item.id, requestId: request.id },
                 {
@@ -732,7 +792,7 @@ export class AfterSalesService {
                     rejectedReturnQuantity: plan.rejectedQuantity,
                     returnStockLocationId: plan.stockLocationId,
                     returnLotCode: plan.lotCode,
-                    inventoryOperationId: inventoryOperation ? String(inventoryOperation.id) : null,
+                    inventoryOperationId: operationIds.get(String(source)) ?? null,
                 },
             );
         }
@@ -998,6 +1058,7 @@ export class AfterSalesService {
         if (['sqlite', 'better-sqlite3', 'sqljs'].includes(databaseType)) {
             await orderLock
                 .update()
+                .where(`"id" IN (${owner.getQuery()})`)
                 .set({ updatedAt: () => 'updatedAt' })
                 .execute();
         } else {

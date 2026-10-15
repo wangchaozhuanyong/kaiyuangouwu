@@ -112,6 +112,7 @@ export { StoreCommerceSettingsService } from './store-commerce-settings.service.
 export {
     StoreDefaultCurrencyPriceSelectionStrategy,
     convertChannelAmount,
+    convertSyncedCatalogAmount,
 } from './store-currency-price-selection-strategy.js';
 export {
     StoreCurrencySettingsService,
@@ -173,6 +174,7 @@ export { StorefrontPromotionService } from './promotion/storefront-promotion.ser
 export { promotionAssetPaths } from './promotion/promotion-public-assets.js';
 
 export { CatalogGovernanceService } from './catalog-governance.service.js';
+export { CatalogSyncSourceService } from './catalog-sync-source.service.js';
 export { managePlatformCatalogPermission } from './constants.js';
 
 export { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';

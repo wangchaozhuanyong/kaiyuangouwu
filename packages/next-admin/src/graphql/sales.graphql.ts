@@ -1,5 +1,17 @@
 import { gql } from '@apollo/client';
 
+export const GET_AFTER_SALES_RETURN_LOCATIONS = gql`
+    query AfterSalesReturnLocations($requestId: ID!) {
+        afterSalesReturnLocations(requestId: $requestId) {
+            orderLineId
+            locations {
+                id
+                name
+            }
+        }
+    }
+`;
+
 export const ORDER_PROCESSING_FIELDS = gql`
     fragment NextAdminOrderProcessingFields on OrderProcessingSummary {
         orderId

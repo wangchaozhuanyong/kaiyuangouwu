@@ -19,6 +19,7 @@ export type CartOperation =
           prepareShipping: {
               shippingAddress: CustomerAddressInput;
               selectedShippingMethodId?: string;
+              selectedShippingMethodIds?: string[];
               preferredShippingCode?: string;
               defaultShippingCode?: string;
           };
@@ -30,6 +31,7 @@ export type CartOperation =
               | { currencyCode: string }
               | { shippingAddress: CustomerAddressInput }
               | { shippingMethodId: string }
+              | { shippingMethodIds: string[] }
               | { customer: Record<string, string> };
       }
     | {
@@ -60,6 +62,7 @@ export interface CartCommandResult {
     session: StorefrontCheckoutSession | null;
     shippingMethods?: ShippingMethod[] | null;
     selectedShippingMethodId?: string | null;
+    selectedShippingMethodIds?: string[] | null;
 }
 
 export type CartCheckoutIntent = 'beginCheckout' | 'buyNow' | 'preparePayment';

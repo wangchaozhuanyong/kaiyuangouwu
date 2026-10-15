@@ -17,6 +17,7 @@ import {
 
 import { AddPlatformCatalogGovernance1790913600000 } from './1790913600000-add-platform-catalog-governance';
 import { AddStorePaymentMethodState1790917200000 } from './1790917200000-add-store-payment-method-state';
+import { AddCatalogContinuousSync1792022400000 } from './1792022400000-add-catalog-continuous-sync';
 // @ts-ignore Project-owned JavaScript lab validates its container, transport and manifest before opening it.
 
 // Test only an owned synthetic MySQL container with no published ports or production credentials.
@@ -106,6 +107,8 @@ describe('platform governance MySQL schema rehearsal and row isolation', () => {
             await new AddStorePaymentMethodState1790917200000().up(runner);
             expect(await runner.hasTable('store_payment_method_state')).toBe(true);
             await migration.up(runner); // Resuming schema setup must retain all prior data.
+            await new AddCatalogContinuousSync1792022400000().up(runner);
+            await new AddCatalogContinuousSync1792022400000().up(runner);
             const metadata = await runner.getTable('catalog_distribution_batch');
             expect(metadata?.findColumnByName('items')?.type).toBe('longtext');
             const huge = JSON.stringify(

@@ -3137,6 +3137,7 @@ describe('cart command acknowledgement recovery', () => {
                         session: { order: { id: 'order-1' }, checkout: null },
                         shippingMethods: [{ id: 'method-old', priceWithTax: 720 }],
                         selectedShippingMethodId: 'method-old',
+                        selectedShippingMethodIds: ['method-old'],
                     },
                 }),
             )
@@ -3157,6 +3158,7 @@ describe('cart command acknowledgement recovery', () => {
         expect(result.session?.order?.totalWithTax).toBe(4000);
         expect(result.shippingMethods).toBeNull();
         expect(result.selectedShippingMethodId).toBeNull();
+        expect(result.selectedShippingMethodIds).toBeNull();
     });
 
     it.each(['OPEN', 'PAYMENT_PENDING'] as const)(

@@ -22,9 +22,9 @@ import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../compo
 import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { PageSizeSelect } from '../../components/PageSizeSelect';
-import { GET_STOCK_LOCATIONS } from '../../graphql/catalog-admin.graphql';
 import {
     GET_AFTER_SALES_REQUESTS,
+    GET_AFTER_SALES_RETURN_LOCATIONS,
     INSPECT_AFTER_SALES_RETURN,
     RECEIVE_AFTER_SALES_RETURN,
     TRANSITION_AFTER_SALES_REQUEST,
@@ -263,12 +263,26 @@ export function AfterSalesModule() {
     const [updateReplacement, { loading: updatingReplacement }] = useMutation<{
         updateAfterSalesReplacement: AfterSalesRequest;
     }>(UPDATE_AFTER_SALES_REPLACEMENT);
-    const { data: stockLocationData } = useQuery<{
-        stockLocations: { items: Array<{ id: string; name: string }> };
-    }>(GET_STOCK_LOCATIONS, { variables: { options: { take: 200 } } });
+    const returnLocations = useQuery<{
+        afterSalesReturnLocations: Array<{
+            orderLineId: string;
+            locations: Array<{ id: string; name: string }>;
+        }>;
+    }>(GET_AFTER_SALES_RETURN_LOCATIONS, {
+        variables: { requestId: selectedRequest?.id ?? '' },
+        skip: !selectedRequest,
+    });
+    const locationsFor = (item: AfterSalesRequest['items'][number]) =>
+        returnLocations.data?.afterSalesReturnLocations.find(group => group.orderLineId === item.orderLineId)
+            ?.locations ?? [];
     const workflowBusy =
         transitioning || receivingReturn || inspectingReturn || updatingReplacement || readingBack;
-    const workflowBlocked = workflowBusy || !!readbackError || !canUpdateOrder;
+    const workflowBlocked =
+        workflowBusy ||
+        !!readbackError ||
+        !canUpdateOrder ||
+        (selectedRequest?.returnStatus === 'RECEIVED' &&
+            (returnLocations.loading || !!returnLocations.error));
 
     const requests = data?.afterSalesRequests.items ?? EMPTY_REQUESTS;
     const totalItems = data?.afterSalesRequests.totalItems ?? 0;
@@ -315,10 +329,7 @@ export function AfterSalesModule() {
                     {
                         acceptedQuantity: item.acceptedReturnQuantity || item.quantity,
                         rejectedQuantity: item.rejectedReturnQuantity,
-                        stockLocationId:
-                            item.returnStockLocation?.id ??
-                            stockLocationData?.stockLocations.items[0]?.id ??
-                            '',
+                        stockLocationId: item.returnStockLocation?.id ?? '',
                         lotCode: item.returnLotCode ?? `RETURN-${request.code}-${item.sku}`.slice(0, 80),
                     },
                 ]),
@@ -444,7 +455,15 @@ export function AfterSalesModule() {
             setActionError('请填写质检说明');
             return;
         }
-        const items = selectedRequest.items.map(item => ({ item, draft: inspection[item.id] }));
+        const items = selectedRequest.items.map(item => ({
+            item,
+            draft: inspection[item.id]
+                ? {
+                      ...inspection[item.id],
+                      stockLocationId: inspection[item.id].stockLocationId || locationsFor(item)[0]?.id || '',
+                  }
+                : undefined,
+        }));
         const invalid = items.find(
             ({ item, draft }) =>
                 !draft ||
@@ -465,17 +484,20 @@ export function AfterSalesModule() {
                         id: selectedRequest.id,
                         note: workflowNote.trim(),
                         idempotencyKey: operationKey('return-inspected'),
-                        items: items.map(({ item, draft }) => ({
-                            itemId: item.id,
-                            acceptedQuantity: draft.acceptedQuantity,
-                            rejectedQuantity: draft.rejectedQuantity,
-                            ...(draft.acceptedQuantity > 0
-                                ? {
-                                      stockLocationId: draft.stockLocationId,
-                                      lotCode: draft.lotCode.trim(),
-                                  }
-                                : {}),
-                        })),
+                        items: items.map(({ item, draft }) => {
+                            if (!draft) throw new Error('质检草稿已变化，请重新核对');
+                            return {
+                                itemId: item.id,
+                                acceptedQuantity: draft.acceptedQuantity,
+                                rejectedQuantity: draft.rejectedQuantity,
+                                ...(draft.acceptedQuantity > 0
+                                    ? {
+                                          stockLocationId: draft.stockLocationId,
+                                          lotCode: draft.lotCode.trim(),
+                                      }
+                                    : {}),
+                            };
+                        }),
                     },
                 },
             });
@@ -1182,6 +1204,19 @@ export function AfterSalesModule() {
                                         )}
                                     {selectedRequest.returnStatus === 'RECEIVED' && (
                                         <div className="space-y-3 rounded-lg border border-violet-100 bg-white p-3">
+                                            {returnLocations.loading && !returnLocations.data && (
+                                                <p role="status">正在读取订单原货源的退货仓库…</p>
+                                            )}
+                                            {returnLocations.error && (
+                                                <p role="alert">
+                                                    退货仓库读取失败。
+                                                    <AdminButton
+                                                        onClick={() => void returnLocations.refetch()}
+                                                    >
+                                                        重试读取仓库
+                                                    </AdminButton>
+                                                </p>
+                                            )}
                                             {selectedRequest.items.map(item => {
                                                 const draft = inspection[item.id];
                                                 return (
@@ -1245,7 +1280,11 @@ export function AfterSalesModule() {
                                                                     label="入库仓库"
                                                                 >
                                                                     <AdminSelect
-                                                                        value={draft?.stockLocationId ?? ''}
+                                                                        value={
+                                                                            draft?.stockLocationId ||
+                                                                            locationsFor(item)[0]?.id ||
+                                                                            ''
+                                                                        }
                                                                         onChange={event =>
                                                                             setInspection(current => ({
                                                                                 ...current,
@@ -1259,10 +1298,7 @@ export function AfterSalesModule() {
                                                                         className="mt-1 w-full rounded-md border border-slate-300 p-2"
                                                                     >
                                                                         <option value="">请选择</option>
-                                                                        {(
-                                                                            stockLocationData?.stockLocations
-                                                                                .items ?? []
-                                                                        ).map(location => (
+                                                                        {locationsFor(item).map(location => (
                                                                             <option
                                                                                 key={location.id}
                                                                                 value={location.id}

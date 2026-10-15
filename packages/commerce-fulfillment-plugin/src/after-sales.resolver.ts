@@ -74,6 +74,12 @@ export class AfterSalesAdminResolver {
 
     @Query()
     @Allow(Permission.ReadOrder)
+    afterSalesReturnLocations(@Ctx() ctx: RequestContext, @Args('requestId') id: ID) {
+        return this.afterSalesService.returnLocationsForAdmin(ctx, id);
+    }
+
+    @Query()
+    @Allow(Permission.ReadOrder)
     physicalReturnReceipts(@Ctx() ctx: RequestContext, @Args('requestId') id: ID) {
         return this.returns.receipts(ctx, id);
     }

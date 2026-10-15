@@ -1,0 +1,419 @@
+{
+  "environment": "sqljs",
+  "synthetic": true,
+  "productCount": 10000,
+  "seedMs": 2448.9533329999995,
+  "previewMs": 11215.866708000001,
+  "initialSyncMs": 127025.434125,
+  "pages": [
+    {
+      "cursor": 0,
+      "elapsedMs": 0.1489579999979469
+    },
+    {
+      "cursor": 203,
+      "elapsedMs": 748.494541
+    },
+    {
+      "cursor": 303,
+      "elapsedMs": 1325.7530409999963
+    },
+    {
+      "cursor": 403,
+      "elapsedMs": 1906.2217079999973
+    },
+    {
+      "cursor": 503,
+      "elapsedMs": 2808.7729999999938
+    },
+    {
+      "cursor": 603,
+      "elapsedMs": 3624.6556249999994
+    },
+    {
+      "cursor": 703,
+      "elapsedMs": 4259.584082999994
+    },
+    {
+      "cursor": 803,
+      "elapsedMs": 4819.466874999998
+    },
+    {
+      "cursor": 903,
+      "elapsedMs": 5372.978665999995
+    },
+    {
+      "cursor": 1003,
+      "elapsedMs": 5935.453207999999
+    },
+    {
+      "cursor": 1103,
+      "elapsedMs": 6484.181082999996
+    },
+    {
+      "cursor": 1203,
+      "elapsedMs": 7722.385582999996
+    },
+    {
+      "cursor": 1303,
+      "elapsedMs": 8494.107040999996
+    },
+    {
+      "cursor": 1403,
+      "elapsedMs": 9136.429165999994
+    },
+    {
+      "cursor": 1503,
+      "elapsedMs": 9945.711082999995
+    },
+    {
+      "cursor": 1603,
+      "elapsedMs": 10562.128124999996
+    },
+    {
+      "cursor": 1703,
+      "elapsedMs": 11108.353582999996
+    },
+    {
+      "cursor": 1803,
+      "elapsedMs": 11887.571874999994
+    },
+    {
+      "cursor": 1903,
+      "elapsedMs": 12714.574666
+    },
+    {
+      "cursor": 2003,
+      "elapsedMs": 14035.055415999996
+    },
+    {
+      "cursor": 2103,
+      "elapsedMs": 15278.802165999994
+    },
+    {
+      "cursor": 2203,
+      "elapsedMs": 15767.310082999997
+    },
+    {
+      "cursor": 2303,
+      "elapsedMs": 16234.834790999994
+    },
+    {
+      "cursor": 2403,
+      "elapsedMs": 16662.045415999994
+    },
+    {
+      "cursor": 2503,
+      "elapsedMs": 17189.291249999995
+    },
+    {
+      "cursor": 2603,
+      "elapsedMs": 17756.634749999997
+    },
+    {
+      "cursor": 2703,
+      "elapsedMs": 18330.736124999996
+    },
+    {
+      "cursor": 2803,
+      "elapsedMs": 18897.623790999998
+    },
+    {
+      "cursor": 2903,
+      "elapsedMs": 19431.589
+    },
+    {
+      "cursor": 3003,
+      "elapsedMs": 20015.215375
+    },
+    {
+      "cursor": 3103,
+      "elapsedMs": 20892.273833
+    },
+    {
+      "cursor": 3203,
+      "elapsedMs": 21443.658707999995
+    },
+    {
+      "cursor": 3303,
+      "elapsedMs": 22043.067540999997
+    },
+    {
+      "cursor": 3403,
+      "elapsedMs": 23140.226916
+    },
+    {
+      "cursor": 3503,
+      "elapsedMs": 24873.584457999998
+    },
+    {
+      "cursor": 3603,
+      "elapsedMs": 26372.385458000004
+    },
+    {
+      "cursor": 3703,
+      "elapsedMs": 28863.582165999993
+    },
+    {
+      "cursor": 3803,
+      "elapsedMs": 32069.068874999997
+    },
+    {
+      "cursor": 3903,
+      "elapsedMs": 35269.189333
+    },
+    {
+      "cursor": 4003,
+      "elapsedMs": 39633.07966599999
+    },
+    {
+      "cursor": 4103,
+      "elapsedMs": 47864.915708
+    },
+    {
+      "cursor": 4203,
+      "elapsedMs": 50668.41304099999
+    },
+    {
+      "cursor": 4303,
+      "elapsedMs": 52037.026583
+    },
+    {
+      "cursor": 4403,
+      "elapsedMs": 53632.00899999999
+    },
+    {
+      "cursor": 4503,
+      "elapsedMs": 55187.968582999994
+    },
+    {
+      "cursor": 4603,
+      "elapsedMs": 56502.173375
+    },
+    {
+      "cursor": 4703,
+      "elapsedMs": 58093.642666
+    },
+    {
+      "cursor": 4803,
+      "elapsedMs": 59950.80704099999
+    },
+    {
+      "cursor": 4903,
+      "elapsedMs": 61598.193333
+    },
+    {
+      "cursor": 5003,
+      "elapsedMs": 63851.5095
+    },
+    {
+      "cursor": 5103,
+      "elapsedMs": 64646.05516599999
+    },
+    {
+      "cursor": 5203,
+      "elapsedMs": 65866.20575
+    },
+    {
+      "cursor": 5303,
+      "elapsedMs": 66982.75958299999
+    },
+    {
+      "cursor": 5403,
+      "elapsedMs": 67806.481375
+    },
+    {
+      "cursor": 5503,
+      "elapsedMs": 68624.09533299999
+    },
+    {
+      "cursor": 5603,
+      "elapsedMs": 70192.579083
+    },
+    {
+      "cursor": 5703,
+      "elapsedMs": 70812.671
+    },
+    {
+      "cursor": 5803,
+      "elapsedMs": 71414.094875
+    },
+    {
+      "cursor": 5903,
+      "elapsedMs": 72290.849583
+    },
+    {
+      "cursor": 6003,
+      "elapsedMs": 72796.480375
+    },
+    {
+      "cursor": 6103,
+      "elapsedMs": 75181.446958
+    },
+    {
+      "cursor": 6203,
+      "elapsedMs": 76142.146458
+    },
+    {
+      "cursor": 6303,
+      "elapsedMs": 77357.00224999999
+    },
+    {
+      "cursor": 6403,
+      "elapsedMs": 78193.53175
+    },
+    {
+      "cursor": 6503,
+      "elapsedMs": 78864.618208
+    },
+    {
+      "cursor": 6603,
+      "elapsedMs": 79476.40441599999
+    },
+    {
+      "cursor": 6703,
+      "elapsedMs": 80045.295166
+    },
+    {
+      "cursor": 6803,
+      "elapsedMs": 80535.111125
+    },
+    {
+      "cursor": 6903,
+      "elapsedMs": 81592.311708
+    },
+    {
+      "cursor": 7003,
+      "elapsedMs": 82349.753125
+    },
+    {
+      "cursor": 7103,
+      "elapsedMs": 84939.389291
+    },
+    {
+      "cursor": 7203,
+      "elapsedMs": 86043.662125
+    },
+    {
+      "cursor": 7303,
+      "elapsedMs": 86896.212458
+    },
+    {
+      "cursor": 7403,
+      "elapsedMs": 88426.355166
+    },
+    {
+      "cursor": 7503,
+      "elapsedMs": 89879.034833
+    },
+    {
+      "cursor": 7603,
+      "elapsedMs": 90994.261791
+    },
+    {
+      "cursor": 7703,
+      "elapsedMs": 92911.34354100001
+    },
+    {
+      "cursor": 7803,
+      "elapsedMs": 94575.01108299999
+    },
+    {
+      "cursor": 7903,
+      "elapsedMs": 95439.35158300001
+    },
+    {
+      "cursor": 8003,
+      "elapsedMs": 96298.684791
+    },
+    {
+      "cursor": 8103,
+      "elapsedMs": 97471.990583
+    },
+    {
+      "cursor": 8203,
+      "elapsedMs": 98428.24933299999
+    },
+    {
+      "cursor": 8303,
+      "elapsedMs": 99578.45070799999
+    },
+    {
+      "cursor": 8403,
+      "elapsedMs": 100497.384208
+    },
+    {
+      "cursor": 8503,
+      "elapsedMs": 102624.79620799999
+    },
+    {
+      "cursor": 8603,
+      "elapsedMs": 103929.10024999999
+    },
+    {
+      "cursor": 8703,
+      "elapsedMs": 105547.372916
+    },
+    {
+      "cursor": 8803,
+      "elapsedMs": 106748.991958
+    },
+    {
+      "cursor": 8903,
+      "elapsedMs": 107781.47016599998
+    },
+    {
+      "cursor": 9003,
+      "elapsedMs": 108740.775333
+    },
+    {
+      "cursor": 9103,
+      "elapsedMs": 109971.866083
+    },
+    {
+      "cursor": 9203,
+      "elapsedMs": 111315.273916
+    },
+    {
+      "cursor": 9303,
+      "elapsedMs": 112289.280875
+    },
+    {
+      "cursor": 9403,
+      "elapsedMs": 113498.263541
+    },
+    {
+      "cursor": 9503,
+      "elapsedMs": 114778.375875
+    },
+    {
+      "cursor": 9603,
+      "elapsedMs": 115804.316583
+    },
+    {
+      "cursor": 9703,
+      "elapsedMs": 117204.5655
+    },
+    {
+      "cursor": 9803,
+      "elapsedMs": 118474.43341599999
+    },
+    {
+      "cursor": 9903,
+      "elapsedMs": 120328.50345799999
+    },
+    {
+      "cursor": 10003,
+      "elapsedMs": 121520.07162500001
+    },
+    {
+      "cursor": 10103,
+      "elapsedMs": 122626.963208
+    },
+    {
+      "cursor": 0,
+      "elapsedMs": 127012.479291
+    }
+  ],
+  "scope": "real database and services; Worker transport latency measured separately"
+}

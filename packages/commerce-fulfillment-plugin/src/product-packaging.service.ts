@@ -1,8 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InventoryLot, planFefoAllocation } from '@vendure/catalog-management-plugin';
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
 import {
+    CatalogResourceOwnership,
+    Channel,
     EventBus,
     GlobalSettingsService,
     LanguageCode,
@@ -19,6 +21,7 @@ import {
     UserInputError,
     idsAreEqual,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 import { In } from 'typeorm';
 
 import { PackagingUnpackEvent } from './entities/packaging-unpack-event.entity';
@@ -55,6 +58,7 @@ export class ProductPackagingService {
         private readonly connection: TransactionalConnection,
         private readonly globalSettingsService: GlobalSettingsService,
         private readonly eventBus: EventBus,
+        @Optional() private readonly sources?: CatalogSyncSourceService,
     ) {}
 
     configForProduct(ctx: RequestContext, productId: ID): Promise<ProductPackagingRule | null> {
@@ -87,9 +91,15 @@ export class ProductPackagingService {
         const product = await this.connection.getEntityOrThrow(ctx, Product, input.productId, {
             relations: ['channels'],
         });
+        const maintained =
+            this.sources &&
+            (await this.connection.getRepository(ctx, CatalogResourceOwnership).exists({
+                where: { resourceType: 'Product', resourceId: product.id, ownerChannelId: ctx.channelId },
+            }));
         if (
-            product.channels.filter(channel => channel.code !== '__default_channel__').length !== 1 ||
-            !product.channels.some(channel => idsAreEqual(channel.id, ctx.channelId))
+            !maintained &&
+            (product.channels.filter(channel => channel.code !== '__default_channel__').length !== 1 ||
+                !product.channels.some(channel => idsAreEqual(channel.id, ctx.channelId)))
         ) {
             throw new UserInputError(
                 'Packaging can only be configured for a product assigned exclusively to the active channel.',
@@ -105,6 +115,7 @@ export class ProductPackagingService {
             throw new UserInputError('Both packaging variants must exist.');
         }
         if (
+            !maintained &&
             [unitVariant, packageVariant].some(
                 variant =>
                     variant.channels.filter(channel => channel.code !== '__default_channel__').length !== 1 ||
@@ -205,23 +216,45 @@ export class ProductPackagingService {
         if (!rule) {
             return [];
         }
-        return this.connection.getRepository(ctx, PackagingUnpackEvent).find({
+        const events = await this.connection.getRepository(ctx, PackagingUnpackEvent).find({
             where: { ruleId: rule.id, channelId: ctx.channelId },
             relations: ['stockLocation', 'order'],
             order: { createdAt: 'DESC', id: 'DESC' },
             take: Math.min(Math.max(take, 1), 100),
         });
+        for (const event of events)
+            if (event.order && String(event.order.salesChannelId) !== String(ctx.channelId)) {
+                event.order = null;
+                event.orderId = null;
+            }
+        return events;
     }
 
-    async rulesForVariantIds(ctx: RequestContext, variantIds: ID[]): Promise<ProductPackagingRule[]> {
+    async rulesForVariantIds(
+        ctx: RequestContext,
+        variantIds: ID[],
+        order?: Order,
+    ): Promise<ProductPackagingRule[]> {
         if (variantIds.length === 0) {
             return [];
         }
+        const scopes = new Map<string, { channelId: ID; ids: ID[] }>();
+        for (const id of variantIds) {
+            const line = order?.lines.find(item => String(item.productVariantId) === String(id));
+            const historical = Boolean(
+                order &&
+                !['AddingItems', 'ArrangingPayment', 'AwaitingManualPayment', 'Draft'].includes(order.state),
+            );
+            const source = (await this.sources?.context(ctx, id, line?.id, historical)) ?? ctx;
+            const group = scopes.get(String(source.channelId)) ?? { channelId: source.channelId, ids: [] };
+            group.ids.push(id);
+            scopes.set(String(source.channelId), group);
+        }
         return this.connection.getRepository(ctx, ProductPackagingRule).find({
-            where: [
-                { channelId: ctx.channelId, enabled: true, unitVariantId: In(variantIds) },
-                { channelId: ctx.channelId, enabled: true, packageVariantId: In(variantIds) },
-            ],
+            where: [...scopes.values()].flatMap(group => [
+                { channelId: group.channelId, enabled: true, unitVariantId: In(group.ids) },
+                { channelId: group.channelId, enabled: true, packageVariantId: In(group.ids) },
+            ]),
             relations: RULE_RELATIONS,
         });
     }
@@ -247,7 +280,7 @@ export class ProductPackagingService {
                 .where('stock.productVariantId IN (:...variantIds)', {
                     variantIds: [rule.unitVariantId, rule.packageVariantId],
                 })
-                .andWhere('channel.id = :channelId', { channelId: ctx.channelId })
+                .andWhere('channel.id = :channelId', { channelId: rule.channelId })
                 .getMany();
             const locationIds = [...new Set(rows.map(row => String(row.stockLocationId)))];
             const existingKeys = new Set(
@@ -279,8 +312,16 @@ export class ProductPackagingService {
         rules: ProductPackagingRule[],
         lockedStockLevels: StockLevel[],
     ): Promise<string | undefined> {
-        const settings = await this.globalSettingsService.getSettings(ctx);
+        const buyerCtx = ctx;
         for (const rule of rules.filter(item => item.autoUnpack)) {
+            ctx = buyerCtx;
+            if (!idsAreEqual(rule.channelId, buyerCtx.channelId)) {
+                const channel = await this.connection
+                    .getRepository(buyerCtx, Channel)
+                    .findOneByOrFail({ id: rule.channelId });
+                ctx = buyerCtx.copy({ channel, currencyCode: channel.defaultCurrencyCode });
+            }
+            const settings = await this.globalSettingsService.getSettings(ctx);
             const unitDemand = orderLines
                 .filter(line => idsAreEqual(line.productVariantId, rule.unitVariantId))
                 .reduce((total, line) => total + line.quantity, 0);

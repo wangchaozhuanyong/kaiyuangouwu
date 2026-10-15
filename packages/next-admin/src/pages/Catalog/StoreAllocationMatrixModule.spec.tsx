@@ -118,8 +118,11 @@ async function renderPlatform() {
         await act(async () => input.click());
     };
     const target = async () => {
-        const label = [...container.querySelectorAll('label')].find(l =>
-            l.textContent?.includes('销售店 · USD'),
+        const label = [...container.querySelectorAll('label')].find(
+            l =>
+                !l.closest('[hidden]') &&
+                l.querySelector('input[type="checkbox"]') &&
+                l.textContent?.includes('销售店 · USD'),
         );
         await act(async () => (label!.querySelector('input') as HTMLInputElement).click());
     };

@@ -1,0 +1,33 @@
+COMMAND: ['bunx', 'vitest', '--config', 'scripts/vitest.platform-governance.mts', '--run', 'packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts', '--testNamePattern', 'saves disabled rules|processes all pages|follows new variants']
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts (45 tests | 1 failed | 42 skipped) 17339ms
+       × follows new variants and subcategories, renames, parent moves and source listing changes 131ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts > platform governance real database and API boundaries > catalog continuous sync > follows new variants and subcategories, renames, parent moves and source listing changes
+QueryFailedError: NOT NULL constraint failed: product_variant.sku
+ ❯ SqljsQueryRunner.query node_modules/typeorm/src/driver/sqljs/SqljsQueryRunner.ts:177:18
+ ❯ InsertQueryBuilder.execute node_modules/src/query-builder/InsertQueryBuilder.ts:164:32
+ ❯ SubjectExecutor.executeInsertOperations node_modules/src/persistence/SubjectExecutor.ts:435:41
+ ❯ SubjectExecutor.execute node_modules/src/persistence/SubjectExecutor.ts:137:8
+ ❯ EntityPersistExecutor.execute node_modules/src/persistence/EntityPersistExecutor.ts:182:20
+ ❯ ProductVariantService.updateSingle packages/core/src/service/services/product-variant.service.ts:696:31
+ ❯ ProductVariantService.update packages/core/src/service/services/product-variant.service.ts:534:12
+ ❯ packages/store-management-plugin/e2e/catalog-sync-acceptance.ts:778:13
+    776|                 f.server.app.get(ProductService).addOptionGroupToProdu…
+    777|             );
+    778|             await f.server.app
+       |             ^
+    779|                 .get(ProductVariantService)
+    780|                 .update(a, [{ id: item.variantId, optionIds: [options[…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 42 skipped (45)
+   Start at  00:06:23
+   Duration  28.98s (transform 4.57s, setup 0ms, import 11.46s, tests 17.34s, environment 0ms)

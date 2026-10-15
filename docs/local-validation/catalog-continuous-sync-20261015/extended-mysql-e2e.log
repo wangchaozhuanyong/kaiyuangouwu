@@ -1,0 +1,32 @@
+COMMAND: ['bunx', 'vitest', '--config', 'scripts/vitest.platform-governance.mts', '--run', 'packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts', '--testNamePattern', 'catalog continuous sync']
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts (45 tests | 45 skipped) 16703ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts > platform governance real database and API boundaries
+AssertionError: expected NaN to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ NaN
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts:241:77
+    239|                 for (const name of tables) expect(await runner.hasTabl…
+    240|                 const rules = await runner.getTable('catalog_sync_rule…
+    241|                 expect(Number(rules?.findColumnByName('enabled')?.defa…
+       |                                                                             ^
+    242|                 expect(rules?.findColumnByName('runGeneration')).toBeD…
+    243|                 await writeFile(
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  45 skipped (45)
+   Start at  00:01:34
+   Duration  23.50s (transform 3.64s, setup 0ms, import 6.69s, tests 16.70s, environment 0ms)

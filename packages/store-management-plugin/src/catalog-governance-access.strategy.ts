@@ -114,6 +114,30 @@ export class CatalogGovernanceAccessStrategy extends DefaultEntityAccessControlS
                 catalogSalesChannel: ctx.channelId,
                 catalogDefaultCode: DEFAULT_CHANNEL_CODE,
             });
+            if (ctx.apiType === 'shop') {
+                const col = (alias: string, name: string) => `${alias}.${qb.escape(name)}`;
+                qb.andWhere(
+                    `(
+                    NOT EXISTS (SELECT 1 FROM catalog_sync_binding syncManaged
+                        WHERE ${col('syncManaged', 'targetChannelId')} = :catalogSalesChannel
+                        AND ${col('syncManaged', 'targetId')} = ${productId}
+                        AND syncManaged.kind = 'PRODUCT' AND syncManaged.state <> 'REMOVED')
+                    OR EXISTS (SELECT 1 FROM catalog_sync_binding syncBinding
+                        JOIN catalog_sync_rule syncRule ON syncRule.id = ${col('syncBinding', 'ruleId')}
+                        JOIN catalog_resource_ownership syncOwner ON ${col('syncOwner', 'resourceId')} = ${productId}
+                            AND ${col('syncOwner', 'resourceType')} = 'Product'
+                            AND ${col('syncOwner', 'ownerChannelId')} = ${col('syncRule', 'sourceChannelId')}
+                        WHERE ${col('syncBinding', 'targetChannelId')} = :catalogSalesChannel
+                        AND ${col('syncBinding', 'targetId')} = ${productId}
+                        AND syncBinding.kind = 'PRODUCT' AND syncBinding.state = 'ACTIVE' AND syncRule.enabled = :syncEnabled
+                        AND NOT EXISTS (SELECT 1 FROM product_sales_authorization sourceOffer
+                            WHERE ${col('sourceOffer', 'productId')} = ${productId}
+                            AND ${col('sourceOffer', 'channelId')} = ${col('syncRule', 'sourceChannelId')}
+                            AND sourceOffer.state <> 'ACTIVE'))
+                )`,
+                    { syncEnabled: true },
+                );
+            }
         }
     }
     private legacyProductScope(qb: SelectQueryBuilder<any>, productId: string) {

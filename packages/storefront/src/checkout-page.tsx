@@ -159,6 +159,8 @@ export function CheckoutPage({
     useEffect(() => setSubmitting(false), [api, customer?.id, cart?.id, confirmedOrder?.id]);
     const [formError, setFormError] = useState<string | null>(null);
     const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
+    const [selectedShippingIds, setSelectedShippingIds] = useState<string[]>([]);
+    const selectedShippingIdsRef = useRef<string[]>([]);
     const [selectedShippingId, setSelectedShippingId] = useState('');
     const [preparedShippingKey, setPreparedShippingKey] = useState('');
     const [shippingError, setShippingError] = useState<string | null>(null);
@@ -168,6 +170,13 @@ export function CheckoutPage({
     const shippingSelectionRef = useRef('');
     const shippingCallbacksRef = useRef({ onCartChange });
     shippingCallbacksRef.current = { onCartChange };
+    useEffect(() => {
+        selectedShippingIdsRef.current = [];
+        setSelectedShippingIds([]);
+        shippingSelectionRef.current = '';
+        setSelectedShippingId('');
+        setPreparedShippingKey('');
+    }, [api, customer?.id, cart?.id, confirmedOrder?.id]);
     const [customerPrepared, setCustomerPrepared] = useState(Boolean(customer || order?.customer));
     const [shippingUpdating, setShippingUpdating] = useState(false);
     const [couponOpen, setCouponOpen] = useState(false);
@@ -244,6 +253,10 @@ export function CheckoutPage({
         setShippingPickerOpen(false);
         if (!requiresShipping || !customer?.id || !confirmedOrder?.id || !addressComplete) {
             setShippingMethods([]);
+            selectedShippingIdsRef.current = [];
+            setSelectedShippingIds([]);
+            shippingSelectionRef.current = '';
+            setSelectedShippingId('');
             setPreparedShippingKey('');
             setShippingUpdating(false);
             return;
@@ -251,7 +264,11 @@ export function CheckoutPage({
         setShippingUpdating(true);
         const addressChanged = lastShippingAddressRef.current !== shippingAddressKey;
         lastShippingAddressRef.current = shippingAddressKey;
-        if (addressChanged) shippingSelectionRef.current = '';
+        if (addressChanged) {
+            shippingSelectionRef.current = '';
+            selectedShippingIdsRef.current = [];
+            setSelectedShippingIds([]);
+        }
         const preferredShippingCode =
             selectedAddressId || addressChanged ? undefined : existingShippingCodeRef.current;
         // Serialize order writes so a slower response for an old address cannot win.
@@ -262,6 +279,9 @@ export function CheckoutPage({
                     const preparation = await api.prepareShipping({
                         shippingAddress: JSON.parse(shippingAddressKey) as CustomerAddressInput,
                         selectedShippingMethodId: shippingSelectionRef.current || undefined,
+                        ...(selectedShippingIdsRef.current.length > 1
+                            ? { selectedShippingMethodIds: selectedShippingIdsRef.current }
+                            : {}),
                         preferredShippingCode,
                         defaultShippingCode,
                     });
@@ -281,6 +301,11 @@ export function CheckoutPage({
                     shippingSelectionRef.current = selectedShippingMethodId;
                     setShippingMethods(methods);
                     setSelectedShippingId(selectedShippingMethodId);
+                    const ids = preparation.selectedShippingMethodIds?.length
+                        ? preparation.selectedShippingMethodIds
+                        : [selectedShippingMethodId];
+                    selectedShippingIdsRef.current = ids;
+                    setSelectedShippingIds(ids);
                     setPreparedShippingKey(shippingKey);
                     shippingCallbacksRef.current.onCartChange(preparation.cart);
                 } catch (requestError) {
@@ -399,17 +424,39 @@ export function CheckoutPage({
     };
 
     const selectShippingMethod = async (shippingMethodId: string) => {
+        const changed = shippingMethods.find(method => method.id === shippingMethodId);
+        if (shippingUpdating || !shippingReady || !changed) return;
         if (
-            shippingUpdating ||
-            !shippingReady ||
-            !shippingMethods.some(method => method.id === shippingMethodId)
-        )
-            return;
-        if (shippingMethodId === selectedShippingId) {
+            selectedShippingIdsRef.current.includes(shippingMethodId) ||
+            shippingMethodId === selectedShippingId
+        ) {
             setShippingPickerOpen(false);
             return;
         }
         const previousShippingId = selectedShippingId;
+        const previousIds = selectedShippingIdsRef.current;
+        const groupId = changed.metadata?.shippingGroupId ?? 'default';
+        const groups = [
+            ...new Set(shippingMethods.map(method => method.metadata?.shippingGroupId ?? 'default')),
+        ];
+        const nextIds = groups
+            .map(group =>
+                group === groupId
+                    ? shippingMethodId
+                    : (previousIds.find(id =>
+                          shippingMethods.some(
+                              method =>
+                                  method.id === id &&
+                                  (method.metadata?.shippingGroupId ?? 'default') === group,
+                          ),
+                      ) ??
+                      shippingMethods.find(
+                          method => (method.metadata?.shippingGroupId ?? 'default') === group,
+                      )?.id),
+            )
+            .filter((id): id is string => id != null);
+        selectedShippingIdsRef.current = nextIds;
+        setSelectedShippingIds(nextIds);
         // 0ms 乐观响应：立即切换选中态与高亮
         setSelectedShippingId(shippingMethodId);
         shippingSelectionRef.current = shippingMethodId;
@@ -419,13 +466,17 @@ export function CheckoutPage({
         shippingQueueRef.current = shippingQueueRef.current.then(async () => {
             try {
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
-                const latestCart = await api.setShippingMethodWithCart(shippingMethodId);
+                const latestCart = await api.setShippingMethodWithCart(
+                    nextIds.length > 1 ? nextIds : shippingMethodId,
+                );
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
                 shippingCallbacksRef.current.onCartChange(latestCart);
                 setShippingPickerOpen(false);
             } catch (requestError) {
                 if (!shippingMountedRef.current || currentShippingKeyRef.current !== requestKey) return;
                 setSelectedShippingId(previousShippingId);
+                selectedShippingIdsRef.current = previousIds;
+                setSelectedShippingIds(previousIds);
                 shippingSelectionRef.current = previousShippingId;
                 setPreparedShippingKey('');
                 setShippingError(
@@ -904,8 +955,18 @@ export function CheckoutPage({
                                               ? '计算失败，点击重试'
                                               : 'Quote failed. Retry'
                                           : shippingReady
-                                            ? shippingMethods.find(method => method.id === selectedShippingId)
-                                                  ?.name
+                                            ? shippingMethods
+                                                  .filter(method =>
+                                                      selectedShippingIds.length
+                                                          ? selectedShippingIds.includes(method.id)
+                                                          : method.id === selectedShippingId,
+                                                  )
+                                                  .map(method =>
+                                                      method.metadata?.shippingGroupName
+                                                          ? `${method.metadata.shippingGroupName} · ${method.name}`
+                                                          : method.name,
+                                                  )
+                                                  .join(' + ')
                                             : missingAddressLabel}
                                     {(shippingMethods.length > 1 || shippingError) && <ChevronRight />}
                                 </small>
@@ -1071,14 +1132,23 @@ export function CheckoutPage({
                                     <label key={method.id}>
                                         <input
                                             type="radio"
-                                            name="shippingMethod"
+                                            name={`shippingMethod-${method.metadata?.shippingGroupId ?? 'default'}`}
                                             value={method.id}
-                                            checked={selectedShippingId === method.id}
+                                            checked={
+                                                selectedShippingIds.length
+                                                    ? selectedShippingIds.includes(method.id)
+                                                    : selectedShippingId === method.id
+                                            }
                                             onChange={() => void selectShippingMethod(method.id)}
                                         />
                                         <span>
                                             <strong className="flex items-center gap-1.5">
-                                                <span>{method.name}</span>
+                                                <span>
+                                                    {method.metadata?.shippingGroupName
+                                                        ? `${method.metadata.shippingGroupName} · `
+                                                        : ''}
+                                                    {method.name}
+                                                </span>
                                                 {isFree && (
                                                     <span className="shipping-method-badge is-free">
                                                         {isZh ? '免运费' : 'Free'}

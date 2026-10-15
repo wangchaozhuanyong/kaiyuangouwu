@@ -839,6 +839,8 @@ export interface ShippingMethod {
     description: string;
     priceWithTax: number;
     metadata?: {
+        shippingGroupId?: string;
+        shippingGroupName?: string;
         physicalSubtotalWithTax?: number;
         physicalQuantity?: number;
         freeShippingThreshold?: number;

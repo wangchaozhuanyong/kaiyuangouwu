@@ -81,7 +81,7 @@ interface ProductVariantItem {
     id: string;
     name: string;
     sku: string;
-    price: number;
+    price: number | null;
     currencyCode: string;
     stockLevel?: string;
     stockOnHand?: number;
@@ -505,11 +505,13 @@ export function CatalogModule() {
             displayProducts.map(product => {
                 const operations = operationsByProduct.get(product.id);
                 const variants = product.variants || [];
-                const pricedVariants = variants.filter(v => typeof v.price === 'number' && !isNaN(v.price));
-                const minPriceVariant = pricedVariants.reduce<ProductVariantItem | null>(
-                    (lowest, current) => (!lowest || current.price < lowest.price ? current : lowest),
-                    null,
+                const pricedVariants = variants.filter(
+                    (v): v is ProductVariantItem & { price: number } =>
+                        typeof v.price === 'number' && !isNaN(v.price),
                 );
+                const minPriceVariant = pricedVariants.reduce<
+                    (ProductVariantItem & { price: number }) | null
+                >((lowest, current) => (!lowest || current.price < lowest.price ? current : lowest), null);
                 const totalStock = variants.reduce((acc, v) => acc + (v.stockOnHand || 0), 0);
                 const fulfillmentType: FulfillmentType =
                     product.customFields?.fulfillmentType === 'physical' ? 'physical' : 'digital';

@@ -1,4 +1,10 @@
 export { CatalogManagementPlugin } from './catalog-management.plugin.js';
+export { CatalogSyncService } from './catalog-sync.service.js';
+export type {
+    CatalogSyncDeliveryAdapter,
+    CatalogSyncDeliveryInspection,
+    CatalogSyncInput,
+} from './catalog-sync.service.js';
 export {
     manageCatalogExportPermission,
     manageCatalogImportPermission,

@@ -773,6 +773,7 @@ export class CartCheckoutApi extends BaseDomainApi {
     async prepareShipping(input: {
         shippingAddress: CustomerAddressInput;
         selectedShippingMethodId?: string;
+        selectedShippingMethodIds?: string[];
         preferredShippingCode?: string;
         defaultShippingCode?: string;
     }): Promise<{
@@ -780,6 +781,7 @@ export class CartCheckoutApi extends BaseDomainApi {
         order: Order;
         shippingMethods: ShippingMethod[];
         selectedShippingMethodId: string | null;
+        selectedShippingMethodIds?: string[] | null;
     }> {
         if (this.controller) {
             const controller = this.controller;
@@ -869,22 +871,16 @@ export class CartCheckoutApi extends BaseDomainApi {
                     order,
                     shippingMethods: preparedMethods,
                     selectedShippingMethodId,
+                    ...(acknowledged.selectedShippingMethodIds?.length
+                        ? { selectedShippingMethodIds: acknowledged.selectedShippingMethodIds }
+                        : {}),
                 };
             } finally {
                 deadline.dispose();
             }
         }
-        await this.setShippingAddress(input.shippingAddress);
-        const fallbackMethods = await this.eligibleShippingMethods();
-        const selected = selectShippingMethod(fallbackMethods, input);
-        if (selected) await this.setShippingMethod(selected.id);
-        const cart = await this.readCart();
-        return {
-            cart,
-            order: requiredCartOrder(cart),
-            shippingMethods: fallbackMethods,
-            selectedShippingMethodId: selected?.id ?? null,
-        };
+        const { prepareLegacyShipping } = await import('./cart-shipping-selection');
+        return prepareLegacyShipping(this, input);
     }
 
     async eligibleShippingMethods(): Promise<ShippingMethod[]> {
@@ -896,9 +892,11 @@ export class CartCheckoutApi extends BaseDomainApi {
         return result.eligibleShippingMethods;
     }
 
-    async setShippingMethod(id: string): Promise<Order> {
+    async setShippingMethod(id: string | string[]): Promise<Order> {
         if (this.controller) {
-            const acknowledged = await this.controller.execute({ order: { shippingMethodId: id } });
+            const acknowledged = await this.controller.execute({
+                order: Array.isArray(id) ? { shippingMethodIds: id } : { shippingMethodId: id },
+            });
             return requiredOrder(acknowledged);
         }
         const result = await this.request<{ setOrderShippingMethod: Order & ErrorResult }>(
@@ -910,13 +908,18 @@ export class CartCheckoutApi extends BaseDomainApi {
                     }
                 }
             `,
-            { id: [id] },
+            { id: Array.isArray(id) ? id : [id] },
         );
         return this.assertOrder(result.setOrderShippingMethod);
     }
 
-    async setShippingMethodWithCart(id: string): Promise<StorefrontCart> {
-        if (this.controller) return (await this.controller.execute({ order: { shippingMethodId: id } })).cart;
+    async setShippingMethodWithCart(id: string | string[]): Promise<StorefrontCart> {
+        if (this.controller)
+            return (
+                await this.controller.execute({
+                    order: Array.isArray(id) ? { shippingMethodIds: id } : { shippingMethodId: id },
+                })
+            ).cart;
         await this.setShippingMethod(id);
         return this.readCart();
     }
@@ -1095,7 +1098,7 @@ const commandResultFields = `commandId status appliedRevision errorCode message
     cart { id revision }
     session { order { id } checkout { id cartRevision state completedAt } }
     shippingMethods { id code name description priceWithTax metadata }
-    selectedShippingMethodId`;
+    selectedShippingMethodId selectedShippingMethodIds`;
 
 function terminalReceipt(receipt: CommandReceipt): CartTerminalReceipt {
     if (receipt.status === 'NOT_FOUND') throw new Error('The command does not have a terminal receipt.');
@@ -1128,28 +1131,6 @@ function requiredOrder(result: CartCommandResult): Order {
     if (!result.cart.checkoutOrder) throw new Error('No active checkout order.');
     return result.cart.checkoutOrder;
 }
-function requiredCartOrder(cart: StorefrontCart): Order {
-    if (!cart.checkoutOrder) throw new Error('No active checkout order.');
-    return cart.checkoutOrder;
-}
-
-function selectShippingMethod(
-    methods: ShippingMethod[],
-    input: {
-        selectedShippingMethodId?: string;
-        preferredShippingCode?: string;
-        defaultShippingCode?: string;
-    },
-): ShippingMethod | undefined {
-    return (
-        methods.find(method => method.id === input.selectedShippingMethodId) ??
-        methods.find(method => method.code === input.preferredShippingCode) ??
-        methods.find(method => method.code === input.defaultShippingCode) ??
-        methods.find(method => method.priceWithTax === 0) ??
-        [...methods].sort((left, right) => left.priceWithTax - right.priceWithTax)[0]
-    );
-}
-
 function hydrateCommandResult(result: CommandReceipt, cart: StorefrontCart): CartCommandResult {
     const sameRevision = result.cart.revision === cart.revision;
     const checkout = result.session?.checkout;
@@ -1163,6 +1144,7 @@ function hydrateCommandResult(result: CommandReceipt, cart: StorefrontCart): Car
         cart,
         shippingMethods: sameRevision ? result.shippingMethods : null,
         selectedShippingMethodId: sameRevision ? result.selectedShippingMethodId : null,
+        selectedShippingMethodIds: sameRevision ? result.selectedShippingMethodIds : null,
         session:
             result.session &&
             cart.checkoutOrder &&

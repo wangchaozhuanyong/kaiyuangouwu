@@ -5,6 +5,7 @@ import {
     CATALOG_RESOURCE_TYPES,
     CatalogResourceOwnership,
     CatalogResourceType,
+    CatalogSyncBinding,
     ForbiddenError,
     Permission,
     Product,
@@ -32,6 +33,16 @@ export class CatalogGovernanceService {
 
     async assertOwned(ctx: RequestContext, resourceType: CatalogResourceType, id: ID) {
         if (!CATALOG_RESOURCE_TYPES.includes(resourceType)) throw new UserInputError('资源类型无效');
+        if (
+            resourceType === 'Collection' &&
+            (await this.connection.getRepository(ctx, CatalogSyncBinding).exists({
+                where: {
+                    kind: 'COLLECTION',
+                    targetId: id,
+                },
+            }))
+        )
+            throw new UserInputError('此分类由来源店铺管理，请在平台调整同步关系');
         let owner = await this.connection.getRepository(ctx, CatalogResourceOwnership).findOne({
             where: { resourceType, resourceId: id },
         });

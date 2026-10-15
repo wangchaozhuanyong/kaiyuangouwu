@@ -476,6 +476,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             selectedCode?: string;
             manual?: boolean;
             mode?: 'checkout' | 'purchase';
+            selections?: string[];
         } = {},
     ) {
         const order = orderFor('PHYSICAL');
@@ -509,7 +510,8 @@ describe('CheckoutPage automatic delivery and drawer', () => {
                 cart: cartFor(order),
                 order,
                 shippingMethods: quoteMethods,
-                selectedShippingMethodId: selected?.id ?? null,
+                selectedShippingMethodId: options.selections?.[0] ?? selected?.id ?? null,
+                ...(options.selections ? { selectedShippingMethodIds: options.selections } : {}),
             });
         });
         const api = {
@@ -558,6 +560,45 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         return match;
     }
     const trigger = () => element<HTMLButtonElement>('.shipping-method-trigger');
+    it('selects one method for each source package and preserves the other source when switching', async () => {
+        const { api } = mount({
+            selections: ['a-standard', 'b-standard'],
+            methods: [
+                {
+                    id: 'a-standard',
+                    code: 'a-standard',
+                    name: 'A 标准',
+                    description: '',
+                    priceWithTax: 600,
+                    metadata: { shippingGroupId: 'a', shippingGroupName: '包裹 1' },
+                },
+                {
+                    id: 'a-economy',
+                    code: 'a-economy',
+                    name: 'A 经济',
+                    description: '',
+                    priceWithTax: 400,
+                    metadata: { shippingGroupId: 'a', shippingGroupName: '包裹 1' },
+                },
+                {
+                    id: 'b-standard',
+                    code: 'b-standard',
+                    name: 'B 标准',
+                    description: '',
+                    priceWithTax: 300,
+                    metadata: { shippingGroupId: 'b', shippingGroupName: '包裹 2' },
+                },
+            ],
+        });
+        await flush();
+        await flush(() => trigger().click());
+        expect(document.querySelectorAll('input[type="radio"]:checked')).toHaveLength(2);
+        expect(element<HTMLInputElement>('input[value="a-standard"]').name).not.toBe(
+            element<HTMLInputElement>('input[value="b-standard"]').name,
+        );
+        await flush(() => element<HTMLInputElement>('input[value="a-economy"]').click());
+        expect(api.setShippingMethodWithCart).toHaveBeenLastCalledWith(['a-economy', 'b-standard']);
+    });
     const submitButton = () => element<HTMLButtonElement>('.submit-order-bar > button');
 
     it('uses the configured standard delivery even when a cheaper option is listed first, without submitting', async () => {

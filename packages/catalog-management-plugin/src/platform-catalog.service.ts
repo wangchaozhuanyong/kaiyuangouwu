@@ -4,6 +4,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import {
     Asset,
     CatalogResourceOwnership,
+    CatalogSyncBinding,
     Channel,
     ChannelService,
     Collection,
@@ -356,7 +357,21 @@ export class PlatformCatalogService {
                   relations: ['variant'],
               })
             : [];
+        const managed = await this.connection.getRepository(ctx, CatalogSyncBinding).find({
+            where: {
+                kind: 'PRODUCT',
+                targetId: product.id,
+                targetChannelId: ctx.channelId,
+                state: In(['PENDING', 'ACTIVE', 'ERROR']),
+            },
+        });
+        const source = managed.length
+            ? await this.connection.getRepository(ctx, Channel).findOneBy({ id: managed[0].sourceChannelId })
+            : null;
         return {
+            managedBy: source
+                ? (source.customFields as { storefrontNameZh?: string }).storefrontNameZh || source.code
+                : null,
             productId: String(product.id),
             ownerChannelId: String(owner.ownerChannelId),
             state: grant?.state ?? 'ACTIVE',
@@ -380,6 +395,17 @@ export class PlatformCatalogService {
             prices: Array<{ variantId: ID; price: number }>;
         },
     ) {
+        if (
+            await this.connection.getRepository(ctx, CatalogSyncBinding).exists({
+                where: {
+                    kind: 'PRODUCT',
+                    targetId: input.productId,
+                    targetChannelId: ctx.channelId,
+                    state: In(['PENDING', 'ACTIVE', 'ERROR']),
+                },
+            })
+        )
+            throw new UserInputError('此商品由来源店铺统一管理，请在平台调整同步关系');
         await this.lock(this.connection.getRepository(ctx, Product).createQueryBuilder('product'))
             .where('product.id = :productId', { productId: input.productId })
             .getOneOrFail();

@@ -1,0 +1,53 @@
+{
+  "sqljs": {
+    "existingAndRecoveryCasesPassed": 14,
+    "categoryEvolutionWithRequiredSetupPassed": 3,
+    "uniqueBusinessCasesCovered": 15,
+    "evidence": [
+      "extended-sqljs-e2e-retry.log",
+      "category-evolution-sqljs-final.log"
+    ]
+  },
+  "mysql": {
+    "existingAndRecoveryCasesPassed": 14,
+    "categoryEvolutionWithRequiredSetupPassed": 3,
+    "uniqueBusinessCasesCovered": 15,
+    "evidence": [
+      "extended-mysql-e2e-retry.log",
+      "category-evolution-mysql-final.log"
+    ]
+  },
+  "note": "Initial snapshots retained; continuation and exact release stage are recorded separately. Grouped checks are not represented as a single all-green run.",
+  "remainingAcceptance": [
+    "browser file chooser upload",
+    "production capacity and actual category activation",
+    "real payment and external email excluded"
+  ],
+  "continuation": {
+    "date": "2026-10-16",
+    "baseSha": "3dfcf5ef84c2cb24113c105d36e56c77b5867f72",
+    "coreMySQL": {
+      "firstPass": 1858,
+      "isolatedRecheck": 207,
+      "totalCovered": 2065
+    },
+    "dashboardBrowser": {
+      "passed": 317,
+      "skipped": 4,
+      "storybookShardsPassed": 4
+    },
+    "fileHTTP": "SQL.js and MySQL passed",
+    "purchaseBatchUnpack": "SQL.js and MySQL passed",
+    "sigkill": "native-format lease holder killed; real Worker recovered after 60 second expiry",
+    "nativeScheduler": {
+      "passed": true,
+      "elapsedMs": 128185
+    },
+    "scale": {
+      "products": 10000,
+      "previewMs": 11215.866708000001,
+      "initialSyncMs": 127025.434125
+    },
+    "ledger": "release-execution/RELEASE_LEDGER.json"
+  }
+}

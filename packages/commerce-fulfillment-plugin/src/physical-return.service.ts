@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InventoryLot, InventoryLotMovement } from '@vendure/catalog-management-plugin';
 import {
     ID,
@@ -13,6 +13,7 @@ import {
     UserInputError,
     assertOrderSalesChannel,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 
 import { DigitalProductService } from './digital-product.service';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
@@ -34,6 +35,7 @@ export class PhysicalReturnService {
         private readonly connection: TransactionalConnection,
         private readonly locks: DigitalProductService,
         private readonly stock: StockMovementService,
+        @Optional() private readonly sources?: CatalogSyncSourceService,
     ) {}
 
     async receipts(ctx: RequestContext, requestId: ID) {
@@ -109,6 +111,7 @@ export class PhysicalReturnService {
         );
         if (!item) throw new UserInputError('所选商品不属于该实物退货工单');
         const line = await this.connection.getEntityOrThrow(ctx, OrderLine, input.orderLineId);
+        const supplyCtx = (await this.sources?.context(ctx, line.productVariantId, line.id, true)) ?? ctx;
         await this.connection.getEntityOrThrow(ctx, ProductVariant, line.productVariantId, {
             channelId: ctx.channelId,
         });
@@ -118,9 +121,9 @@ export class PhysicalReturnService {
         });
         if (
             !level ||
-            !level.stockLocation.channels.some(channel => String(channel.id) === String(ctx.channelId))
+            !level.stockLocation.channels.some(channel => String(channel.id) === String(supplyCtx.channelId))
         )
-            throw new UserInputError('验收仓库不属于当前店铺');
+            throw new UserInputError('验收仓库不属于订单原货源');
         level = await this.locks.lock(ctx, StockLevel, level.id);
         if (!level) throw new UserInputError('验收仓库库存已变化，请重新核对');
         const sales = await this.connection
@@ -180,7 +183,7 @@ export class PhysicalReturnService {
                         lotCode: `RETURN-${String(receipt.id)}`,
                         quantityOnHand: input.quantity,
                         state: 'ACTIVE',
-                        currencyCode: ctx.currencyCode,
+                        currencyCode: supplyCtx.currencyCode,
                         manufacturedAt: null,
                         expiresAt: null,
                         purchaseCostMicrounits: null,
@@ -199,7 +202,7 @@ export class PhysicalReturnService {
                         lotCode: `LEGACY-${String(receipt.id)}`,
                         quantityOnHand: level.stockOnHand,
                         state: 'ACTIVE',
-                        currencyCode: ctx.currencyCode,
+                        currencyCode: supplyCtx.currencyCode,
                         manufacturedAt: null,
                         expiresAt: null,
                         purchaseCostMicrounits: null,
@@ -212,13 +215,13 @@ export class PhysicalReturnService {
                     lotCode: `RETURN-${String(receipt.id)}`,
                     quantityOnHand: input.quantity,
                     state: input.quality === 'EXPIRED' ? 'EXPIRED' : 'VOID',
-                    currencyCode: ctx.currencyCode,
+                    currencyCode: supplyCtx.currencyCode,
                     manufacturedAt: null,
                     expiresAt: input.quality === 'EXPIRED' ? new Date() : null,
                     purchaseCostMicrounits: null,
                 }),
             );
-            await this.stock.adjustProductVariantStock(ctx, line.productVariantId, [
+            await this.stock.adjustProductVariantStock(supplyCtx, line.productVariantId, [
                 { stockLocationId: input.stockLocationId, stockOnHand: level.stockOnHand + input.quantity },
             ]);
         }
