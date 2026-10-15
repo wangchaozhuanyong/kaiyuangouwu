@@ -4,15 +4,24 @@ import { SUPER_ADMIN_USER_PASSWORD } from '@vendure/common/lib/shared-constants'
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     Channel,
+    ChannelService,
+    ConfigService,
+    CurrencyCode,
+    Customer,
     DefaultLogger,
     LogLevel,
     mergeConfig,
     Order,
+    PaymentMethod,
     PaymentMethodHandler,
+    PaymentMethodService,
     RequestContextService,
+    StockLocationService,
     TransactionalConnection,
+    User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -22,6 +31,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
+import { createOperatingStoreFixture } from '../../../e2e-common/operating-store-fixture';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { StoreUsdtWallet } from '../../store-management-plugin/src/entities/store-usdt-wallet.entity';
 import { StoreDefaultCurrencyPriceSelectionStrategy } from '../../store-management-plugin/src/store-currency-price-selection-strategy';
@@ -81,6 +91,7 @@ const { server, adminClient, shopClient } = createTestEnvironment(
         },
         plugins: [
             OperationsDashboardPlugin,
+            StoreDomainPlugin,
             CatalogManagementPlugin,
             StorefrontCartPlugin,
             ContentTranslationPlugin.init({
@@ -221,8 +232,7 @@ async function createVariant(kind: 'physical' | 'digital') {
                     productId: product.id,
                     sku: `MIXED-${kind}`,
                     price: 10_000,
-                    stockOnHand: 12,
-                    trackInventory: 'TRUE',
+                    ...(kind === 'physical' ? { stockOnHand: 12, trackInventory: 'TRUE' } : {}),
                     optionIds: [],
                     translations: [{ languageCode: 'zh_Hans', name: `混合验收 ${kind}` }],
                 },
@@ -230,6 +240,27 @@ async function createVariant(kind: 'physical' | 'digital') {
         },
     );
     expect(result.createProductVariants[0].customFields.fulfillmentType).toBe(kind);
+    if (kind === 'digital') {
+        const digital = await adminClient.query(
+            gql`
+                mutation ($input: UpdateDigitalVariantConfigInput!) {
+                    updateDigitalVariantConfig(input: $input) {
+                        availableQuantity
+                    }
+                }
+            `,
+            {
+                input: {
+                    productVariantId: result.createProductVariants[0].id,
+                    deliveryMode: 'manual_service',
+                    stockPolicy: 'limited',
+                    availableQuantity: 12,
+                    expectedAvailableQuantity: 0,
+                },
+            },
+        );
+        expect(digital.updateDigitalVariantConfig.availableQuantity).toBe(12);
+    }
     if (kind === 'physical') physicalProductId = product.id;
     return result.createProductVariants[0].id as string;
 }
@@ -243,12 +274,49 @@ beforeAll(async () => {
             collections: [],
             shippingMethods: [],
             countries: [...initialData.countries, { name: 'Malaysia', code: 'MY', zone: 'Asia' }],
-            paymentMethods: [
-                { name: paymentHandler.code, handler: { code: paymentHandler.code, arguments: [] } },
-            ],
+            // The current platform boundary requires an authenticated fixture below.
+            paymentMethods: [],
         },
         customerCount: 1,
     });
+    // Cached SQLjs seeds predate the explicitly registered StoreDomain entity.
+    await server.app.get(TransactionalConnection).rawConnection.synchronize();
+    const store = await createOperatingStoreFixture(server.app, {
+        code: 'mixed-checkout-operating-store',
+        currencyCode: CurrencyCode.MYR,
+        defaultLanguageCode: LanguageCode.zh_Hans,
+        commerceMode: 'HYBRID',
+    });
+    const connection = server.app.get(TransactionalConnection);
+    const user = await connection.rawConnection.getRepository(User).findOneOrFail({
+        where: { identifier: server.app.get(ConfigService).authOptions.superadminCredentials.identifier },
+        relations: ['roles', 'roles.channels'],
+    });
+    const ctx = await server.app.get(RequestContextService).create({
+        apiType: 'admin',
+        channelOrToken: store,
+        user,
+    });
+    const customer = await connection.rawConnection.getRepository(Customer).findOneOrFail({ where: {} });
+    await server.app.get(ChannelService).assignToChannels(ctx, Customer, customer.id, [store.id]);
+    await server.app.get(StockLocationService).create(ctx, { name: 'Mixed checkout fixture warehouse' });
+    let fixtureMethod = (await connection.rawConnection.getRepository(PaymentMethod).find()).find(
+        method => method.code === paymentHandler.code && method.handler.code === paymentHandler.code,
+    );
+    // The SQLjs seed is cached independently of this suite's local handler.
+    // Create the synthetic method explicitly rather than depending on an old seed.
+    fixtureMethod ??= await server.app
+        .get(PaymentMethodService)
+        .create(ctx.copy({ channel: await server.app.get(ChannelService).getDefaultChannel(ctx) }), {
+            code: paymentHandler.code,
+            enabled: true,
+            handler: { code: paymentHandler.code, arguments: [] },
+            translations: [{ languageCode: LanguageCode.zh_Hans, name: '隔离混合订单验收' }],
+        });
+    await server.app.get(ChannelService).assignToChannels(ctx, PaymentMethod, fixtureMethod.id, [store.id]);
+    await server.app.get(PaymentMethodService).setStorePaymentOptionEnabled(ctx, fixtureMethod.id, true);
+    adminClient.setChannelToken(store.token);
+    shopClient.setChannelToken(store.token);
     await adminClient.asSuperAdmin();
     const { activeChannel, customers } = await adminClient.query(gql`
         query {
@@ -371,6 +439,7 @@ beforeAll(async () => {
     );
     campaignId = campaign.createStoreCouponCampaign.id;
     await shopClient.asUserWithCredentials(customers.items[0].emailAddress, 'test');
+    shopClient.setChannelToken(channelToken);
     const claimed = await shopClient.query(
         gql`mutation($id: ID!) {
         claimStorefrontCoupon(campaignId: $id) { ${couponFields} }

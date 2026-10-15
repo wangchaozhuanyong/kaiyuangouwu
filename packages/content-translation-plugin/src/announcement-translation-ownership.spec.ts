@@ -5,7 +5,16 @@ import { ContentTranslationBackfillService } from './content-translation-backfil
 import { TranslationContentAdapter } from './translation-content-adapter';
 
 const channelSchema = new EntitySchema({ name: 'Channel', columns: { id: { type: String, primary: true } } });
-const schema = new EntitySchema({
+const schema = new EntitySchema<{
+    id: number;
+    ownerChannelId: string | null;
+    targetMode: string;
+    titleZh: string;
+    titleEn: string;
+    contentZh: string;
+    contentEn: string;
+    channels: Array<{ id: string }>;
+}>({
     name: 'SystemAnnouncement',
     columns: {
         id: { type: Number, primary: true },

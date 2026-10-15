@@ -173,7 +173,7 @@ describe('referral today metrics queries', () => {
     });
 
     it('keeps first-purchase conversion data when rewards are temporarily disabled', async () => {
-        const relationship = { firstPaidOrderAt: null };
+        const relationship: { firstPaidOrderAt: Date | null } = { firstPaidOrderAt: null };
         const saveRelationship = vi.fn().mockResolvedValue(relationship);
         const connection = {
             getRepository: vi.fn((_ctx, entity) => {

@@ -65,6 +65,7 @@ import { DigitalReceiptShopResolver } from './digital-receipt.resolver';
 import { digitalReceiptShopSchema } from './digital-receipt.schema';
 import { DigitalReceiptService } from './digital-receipt.service';
 import { AfterSalesEvent } from './entities/after-sales-event.entity';
+import { AfterSalesEvidence } from './entities/after-sales-evidence.entity';
 import { AfterSalesItem } from './entities/after-sales-item.entity';
 import { AfterSalesRequest } from './entities/after-sales-request.entity';
 import { AutoCardConfig } from './entities/auto-card-config.entity';
@@ -157,6 +158,7 @@ import './types';
         AfterSalesRequest,
         AfterSalesItem,
         AfterSalesEvent,
+        AfterSalesEvidence,
         AutoCardConfig,
         AutoCardSupplyGrant,
         AutoCardSupplySnapshot,

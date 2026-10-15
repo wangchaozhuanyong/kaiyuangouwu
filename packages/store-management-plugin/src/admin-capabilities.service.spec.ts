@@ -10,7 +10,7 @@ import { AdminCapabilitiesResolver } from './admin-capabilities.resolver';
 import { adminCapabilitiesSchema } from './admin-capabilities.schema';
 import { AdminCapabilitiesService } from './admin-capabilities.service';
 
-vi.mock('@vendure/common/lib/admin-capabilities', () => import('../../common/src/admin-capabilities'));
+vi.mock('@vendure/common/lib/admin-capabilities', () => import('../../common/src/admin-capabilities.js'));
 
 function fixture(
     permissions: string[] = [Permission.SuperAdmin],

@@ -4,13 +4,23 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 import { DataSubjectVerificationService } from './data-subject-verification.service';
 
+interface ProofHistory {
+    id: number;
+    createdAt: Date;
+    updatedAt: Date;
+    type: string;
+    isPublic: boolean;
+    data: Record<string, unknown>;
+    customer: { id: string };
+}
+
 const schemas = [
     new EntitySchema({
         name: 'ProofUser',
         columns: { id: { type: String, primary: true }, deletedAt: { type: Date, nullable: true } },
     }),
     new EntitySchema({ name: 'ProofCustomer', columns: { id: { type: String, primary: true } } }),
-    new EntitySchema({
+    new EntitySchema<ProofHistory>({
         name: 'ProofHistory',
         columns: {
             id: { type: Number, primary: true, generated: true },

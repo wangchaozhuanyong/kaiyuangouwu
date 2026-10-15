@@ -596,7 +596,7 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             await seo.publish(context(1, code, true), { ...identity, expectedVersion: 1 });
         }
         await data
-            .getRepository(ProductTranslation)
+            .getRepository<ProductTranslation & { baseId: number }>(ProductTranslation)
             .update({ baseId: 1101, languageCode: LanguageCode.en }, { description: '' });
         const excluded = new Set([
             ...exclusions.map(

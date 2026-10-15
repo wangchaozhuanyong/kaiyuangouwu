@@ -4,13 +4,16 @@ import {
     Channel,
     ChannelService,
     ConfigService,
+    CurrencyCode,
     Customer,
+    LanguageCode,
     mergeConfig,
     Order,
     RequestContextService,
     TransactionalConnection,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { StorefrontCatalogPlugin } from '@vendure/storefront-catalog-plugin';
 import { createTestEnvironment } from '@vendure/testing';
@@ -21,17 +24,18 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
+import { createOperatingStoreFixture } from '../../../e2e-common/operating-store-fixture';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
 import { AssetServerPlugin } from '../../asset-server-plugin/src/plugin';
 import { CommerceFulfillmentPlugin } from '../../commerce-fulfillment-plugin/src/commerce-fulfillment.plugin';
 import { StorefrontReviewPlugin } from '../../storefront-review-plugin/src/storefront-review.plugin';
-import { StoreProfile } from '../src/entities/store-profile.entity';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 const config = mergeConfig(testConfig(), {
     authOptions: { requireVerification: false },
     plugins: [
         OperationsDashboardPlugin,
+        StoreDomainPlugin,
         AssetServerPlugin.init({
             route: 'assets',
             assetUploadDir: path.resolve(
@@ -138,65 +142,23 @@ describe('storefront review account and channel isolation', () => {
         await server.app.get(TransactionalConnection).rawConnection.synchronize();
         await adminClient.asSuperAdmin();
 
-        const channel = (
-            await adminClient.query(gql`
-                query ReviewIsolationChannel {
-                    activeChannel {
-                        token
-                    }
-                }
-            `)
-        ).activeChannel;
-        primaryToken = channel.token;
-        const zones = await adminClient.query(gql`
-            query ReviewIsolationZones {
-                zones {
-                    items {
-                        id
-                    }
-                }
-            }
-        `);
-        const zoneId =
-            zones.zones.items[0]?.id ??
-            (
-                await adminClient.query(gql`
-                    mutation ReviewIsolationCreateZone {
-                        createZone(input: { name: "Review isolation zone" }) {
-                            id
-                        }
-                    }
-                `)
-            ).createZone.id;
-        expect(zoneId).toBeTruthy();
-        secondaryToken = `review-isolation-${randomUUID().slice(0, 12)}`;
-        const secondary = await adminClient.query(
-            gql`
-                mutation ReviewIsolationCreateChannel($input: CreateChannelInput!) {
-                    createChannel(input: $input) {
-                        ... on Channel {
-                            id
-                            token
-                        }
-                        ... on ErrorResult {
-                            message
-                        }
-                    }
-                }
-            `,
-            {
-                input: {
-                    code: secondaryToken,
-                    token: secondaryToken,
-                    defaultLanguageCode: 'en',
-                    currencyCode: 'USD',
-                    pricesIncludeTax: false,
-                    defaultTaxZoneId: zoneId,
-                    defaultShippingZoneId: zoneId,
-                },
-            },
-        );
-        expect(secondary.createChannel.id, secondary.createChannel.message).toBeTruthy();
+        const primary = await createOperatingStoreFixture(server.app, {
+            code: `review-primary-${randomUUID().slice(0, 12)}`,
+            currencyCode: CurrencyCode.USD,
+            defaultLanguageCode: LanguageCode.en,
+            commerceMode: 'DIGITAL_ONLY',
+        });
+        const secondary = await createOperatingStoreFixture(server.app, {
+            code: `review-secondary-${randomUUID().slice(0, 12)}`,
+            currencyCode: CurrencyCode.USD,
+            defaultLanguageCode: LanguageCode.en,
+            commerceMode: 'DIGITAL_ONLY',
+        });
+        primaryToken = primary.token;
+        secondaryToken = secondary.token;
+        adminClient.setChannelToken(primaryToken);
+        shopClient.setChannelToken(primaryToken);
+        await adminClient.asSuperAdmin();
 
         customerEmail = `review-${randomUUID()}@example.test`;
         const created = await adminClient.query(
@@ -227,19 +189,8 @@ describe('storefront review account and channel isolation', () => {
         const rawCustomer = await rawConnection.getRepository(Customer).findOneByOrFail({
             emailAddress: customerEmail,
         });
-        const secondaryId = decodeId(secondary.createChannel.id);
+        const secondaryId = secondary.id;
         expect(await rawConnection.getRepository(Channel).findOneBy({ id: secondaryId })).toBeTruthy();
-        await server.app
-            .get(TransactionalConnection)
-            .getRepository(ctx, StoreProfile)
-            .save(
-                new StoreProfile({
-                    channelId: secondaryId,
-                    status: 'ACTIVE',
-                    descriptionZh: '',
-                    descriptionEn: '',
-                }),
-            );
         await server.app.get(ChannelService).assignToChannels(ctx, Customer, rawCustomer.id, [secondaryId]);
 
         const slug = `review-isolation-${randomUUID()}`;
@@ -254,6 +205,7 @@ describe('storefront review account and channel isolation', () => {
             {
                 input: {
                     enabled: true,
+                    customFields: { fulfillmentType: 'digital' },
                     translations: [
                         {
                             languageCode: 'en',
@@ -286,8 +238,6 @@ describe('storefront review account and channel isolation', () => {
                         productId,
                         sku: `REVIEW-${randomUUID().slice(0, 10)}`,
                         price: 2_000,
-                        stockOnHand: 2,
-                        trackInventory: 'TRUE',
                         optionIds: [],
                         translations: [
                             { languageCode: 'en', name: 'Review isolation fixture' },
@@ -298,7 +248,27 @@ describe('storefront review account and channel isolation', () => {
             },
         );
         variantId = variants.createProductVariants[0].id;
+        const digital = await adminClient.query(
+            gql`
+                mutation ReviewIsolationDigitalQuantity($input: UpdateDigitalVariantConfigInput!) {
+                    updateDigitalVariantConfig(input: $input) {
+                        availableQuantity
+                    }
+                }
+            `,
+            {
+                input: {
+                    productVariantId: variantId,
+                    deliveryMode: 'manual_service',
+                    stockPolicy: 'limited',
+                    availableQuantity: 2,
+                    expectedAvailableQuantity: 0,
+                },
+            },
+        );
+        expect(digital.updateDigitalVariantConfig.availableQuantity).toBe(2);
         await shopClient.asUserWithCredentials(customerEmail, 'ReviewIsolationPass123!');
+        shopClient.setChannelToken(primaryToken);
         const added = await shopClient.query(
             gql`
                 mutation ReviewIsolationAddItem($variantId: ID!) {
@@ -375,6 +345,7 @@ describe('storefront review account and channel isolation', () => {
             shopClient.setAuthToken('');
             shopClient.setRequestHeader('Authorization', null);
             await shopClient.asUserWithCredentials(customerEmail, 'ReviewIsolationPass123!');
+            shopClient.setChannelToken(secondaryToken);
             expect((await shopClient.query(MY_REVIEWS)).myStorefrontReviews).toEqual([]);
             expect((await shopClient.query(MY_REVIEWS)).myStorefrontReviewCandidates).toEqual([]);
             expect(
@@ -427,6 +398,7 @@ describe('storefront review account and channel isolation', () => {
         shopClient.setRequestHeader('Authorization', null);
         expect((await shopClient.query(settings)).storefrontReviewSettings.enabled).toBe(true);
         await shopClient.asUserWithCredentials(customerEmail, 'ReviewIsolationPass123!');
+        shopClient.setChannelToken(primaryToken);
         const eventAbort = new AbortController();
         const eventTimeout = setTimeout(() => eventAbort.abort(), 10_000);
         const eventResponse = await fetch(
@@ -528,6 +500,7 @@ describe('storefront review account and channel isolation', () => {
             .get(ChannelService)
             .assignToChannels(ctx, Customer, browserCustomer.id, [secondaryChannel.id]);
         await shopClient.asUserWithCredentials(browserCustomerEmail, 'ReviewIsolationPass123!');
+        shopClient.setChannelToken(primaryToken);
         const added = await shopClient.query(
             gql`
                 mutation ReviewIsolationBrowserOrder($variantId: ID!) {
