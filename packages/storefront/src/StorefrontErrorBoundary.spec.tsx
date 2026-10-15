@@ -66,6 +66,37 @@ afterEach(() => {
 });
 
 describe('StorefrontErrorBoundary', () => {
+    it('contains an optional feature failure without declaring the whole page failed', () => {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        const mountedRoot = root;
+        const pageError = vi.fn();
+        const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        document.addEventListener('storefront:page-error', pageError);
+        function BrokenFeature(): never {
+            throw new Error('Optional resource unavailable');
+        }
+        try {
+            act(() =>
+                mountedRoot.render(
+                    <>
+                        <main>Existing content</main>
+                        <StorefrontErrorBoundary fallback={<button>Retry this feature</button>}>
+                            <BrokenFeature />
+                        </StorefrontErrorBoundary>
+                    </>,
+                ),
+            );
+            expect(host.querySelector('main')?.textContent).toBe('Existing content');
+            expect(host.querySelector('button')?.textContent).toBe('Retry this feature');
+            expect(host.querySelector('.fatal-error-page')).toBeNull();
+            expect(pageError).not.toHaveBeenCalled();
+            expect(diagnostic).toHaveBeenCalled();
+        } finally {
+            document.removeEventListener('storefront:page-error', pageError);
+        }
+    });
     it('preserves the confirmed parser logo through its first owner commit without showing hidden loading', () => {
         const boot = mountDocumentLoading();
         applyInitialLoadingBrand({

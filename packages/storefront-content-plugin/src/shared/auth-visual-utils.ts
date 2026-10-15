@@ -1,4 +1,15 @@
 /** Small data helpers shared with the eager storefront; visual UI stays deferred. */
+export function primaryAuthVisualContent<T extends { type?: string; enabled?: boolean }>(
+    blocks: readonly T[],
+    variant: 'login' | 'register',
+): T | undefined {
+    return blocks.find(
+        block =>
+            block.enabled !== false &&
+            block.type === (variant === 'register' ? 'AUTH_REGISTER' : 'AUTH_LOGIN'),
+    );
+}
+
 export function configuredColor(value: unknown): string | undefined {
     return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim() : undefined;
 }

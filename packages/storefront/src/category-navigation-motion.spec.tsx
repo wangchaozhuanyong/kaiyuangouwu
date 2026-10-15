@@ -145,6 +145,46 @@ describe('category clicks move the actual navigation rail', () => {
         vi.unstubAllGlobals();
     });
 
+    it.each(['zh', 'en'] as const)(
+        'communicates current price direction and the next action in the existing control: %s',
+        language => {
+            props.language = language;
+            props.sortMode = 'recommended';
+            render();
+            const price = host.querySelectorAll<HTMLButtonElement>('.sort-bar-five button')[3];
+            expect(price.getAttribute('aria-pressed')).toBe('false');
+            expect(price.getAttribute('aria-label')).toBe(
+                language === 'zh' ? '价格排序，点击按从低到高排列' : 'Sort by price. Click for low to high',
+            );
+            expect(price.querySelector('svg')?.classList.contains('lucide-arrow-up-down')).toBe(true);
+            act(() => price.click());
+            expect(props.onSortChange).toHaveBeenLastCalledWith('price-asc');
+            props.sortMode = 'price-asc';
+            render();
+            expect(host.querySelectorAll('.sort-bar-five button')[3]).toBe(price);
+            expect(price.getAttribute('aria-label')).toBe(
+                language === 'zh'
+                    ? '价格从低到高，点击改为从高到低'
+                    : 'Price: low to high. Click for high to low',
+            );
+            expect(price.getAttribute('aria-pressed')).toBe('true');
+            expect(price.querySelector('svg')?.classList.contains('lucide-chevron-up')).toBe(true);
+            act(() => price.click());
+            expect(props.onSortChange).toHaveBeenLastCalledWith('price-desc');
+            props.sortMode = 'price-desc';
+            render();
+            expect(price.getAttribute('aria-label')).toBe(
+                language === 'zh'
+                    ? '价格从高到低，点击改为从低到高'
+                    : 'Price: high to low. Click for low to high',
+            );
+            expect(price.querySelector('svg')?.classList.contains('lucide-chevron-down')).toBe(true);
+            expect(price.textContent?.trim()).toBe(language === 'zh' ? '价格' : 'Price');
+            act(() => price.click());
+            expect(props.onSortChange).toHaveBeenLastCalledWith('price-asc');
+        },
+    );
+
     it('positions the initial route instantly, then makes a click visibly progress before reaching the target', () => {
         frame();
         expect(rail.scrollLeft).toBe(56);

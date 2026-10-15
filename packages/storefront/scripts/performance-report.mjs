@@ -4,7 +4,18 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const threshold = { LCP: 2500, INP: 200, CLS: 0.1 };
-const metricNames = ['LCP', 'INP', 'CLS', 'TTFB', 'FCP'];
+const metricNames = [
+    'LCP',
+    'INP',
+    'CLS',
+    'TTFB',
+    'FCP',
+    'NAV_RENDER',
+    'NAV_READY',
+    'NAV_ERROR',
+    'IMAGE_PRESENT',
+    'IMAGE_ERROR',
+];
 const phaseNames = ['ttfb', 'resourceLoadDelay', 'resourceLoadDuration', 'elementRenderDelay'];
 const effectiveTypes = ['4g', '3g', '2g', 'slow-2g'];
 const minimumSamples = 20;
@@ -55,7 +66,16 @@ export function performanceReport(log) {
                 region: ['CN', 'MY', 'OTHER'].includes(sample.region) ? sample.region : 'UNKNOWN',
                 device: ['mobile', 'desktop'].includes(sample.device) ? sample.device : 'unknown',
                 network: effectiveTypes.includes(sample.network) ? sample.network : 'unknown',
-                pageType: ['home', 'catalog', 'search', 'product', 'other'].includes(sample.pageType)
+                pageType: [
+                    'home',
+                    'catalog',
+                    'search',
+                    'product',
+                    'services',
+                    'support',
+                    'auth',
+                    'other',
+                ].includes(sample.pageType)
                     ? sample.pageType
                     : 'unknown',
                 metric,
@@ -108,7 +128,7 @@ export function performanceReport(log) {
             metric,
             samples: metrics.length,
             p75,
-            unit: metric === 'CLS' ? 'score' : 'ms',
+            unit: metric === 'CLS' ? 'score' : metric.endsWith('_ERROR') ? 'count' : 'ms',
             networkEvidence: network === 'unknown' ? 'UNAVAILABLE' : 'NAVIGATOR_EFFECTIVE_TYPE',
             physicalNetwork: 'NOT_VERIFIED',
             targetNetworkAcceptance: 'NOT_VERIFIED',
@@ -134,7 +154,11 @@ export function performanceReport(log) {
             'Never combine revisions/stores/regions/devices/effective-network grades/pages. ' +
             'Fewer than 20 unique metric samples, unknown region or unknown network cannot PASS. ' +
             'Synthetic measurements require a separate report. LCP phase p75 values are diagnostic only: ' +
-            'their individual sample counts may differ, and their sum is not total LCP p75.',
+            'their individual sample counts may differ, and their sum is not total LCP p75. ' +
+            'NAV metrics measure committed SPA routes only; IMAGE_PRESENT is the slowest observed visible ' +
+            'pending-to-painted frame per route, not full network time or a white-frame detector. ' +
+            'Already painted images and hidden/offscreen waits are not measured zeros. ' +
+            'Experience metrics have no pass threshold.',
     };
 }
 

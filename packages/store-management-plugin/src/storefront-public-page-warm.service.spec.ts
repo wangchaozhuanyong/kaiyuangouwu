@@ -66,6 +66,7 @@ function harness(isWorker = false) {
         getAccessMode: vi.fn().mockResolvedValue('LIVE'),
         peek: vi.fn().mockResolvedValue(undefined),
         read: vi.fn().mockResolvedValue({}),
+        prepareBootMedia: vi.fn().mockResolvedValue(undefined),
     };
     const service = new StorefrontPublicPageWarmService(
         jobs as never,
@@ -291,5 +292,23 @@ describe('bounded public page preparation', () => {
         h.pages.peek.mockResolvedValue({ version: 'current', generatedAt: Date.now() });
         await h.run();
         expect(h.pages.read).not.toHaveBeenCalled();
+        expect(h.pages.prepareBootMedia).toHaveBeenCalledTimes(2);
+    });
+    it('prepares boot hints for an observed non-default currency even when its homepage is already cached', async () => {
+        const h = harness();
+        h.ctx.channel.availableCurrencyCodes.push('CNY');
+        await h.service.onApplicationBootstrap();
+        h.records.set('storefront-public-hot-routes:v2:a:r1', [
+            { ...route('currency'), currencyCode: 'CNY', request: { kind: 'home' } },
+        ]);
+        h.pages.peek.mockResolvedValue({ generatedAt: Date.now(), collections: [] });
+        await h.run();
+        expect(h.pages.read).not.toHaveBeenCalled();
+        expect(
+            h.pages.prepareBootMedia.mock.calls.some(
+                call => call[0].currencyCode === 'CNY' && call[1] === 'a.test',
+            ),
+        ).toBe(true);
+        h.service.onApplicationShutdown();
     });
 });

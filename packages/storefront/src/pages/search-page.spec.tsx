@@ -117,6 +117,36 @@ describe('search result and product-detail cache separation', () => {
             await new Promise(resolve => setTimeout(resolve, 0));
         });
     }
+    it.each(['zh', 'en'] as const)('names the current and next price direction accessibly: %s', language => {
+        renderDiscovery({ initialQuery: 'coffee', language });
+        const price = required(container.querySelectorAll<HTMLButtonElement>('.search-sort button')[2]);
+        expect(price.getAttribute('aria-pressed')).toBe('false');
+        expect(price.getAttribute('aria-label')).toBe(
+            language === 'zh' ? '价格排序，点击按从低到高排列' : 'Sort by price. Click for low to high',
+        );
+        act(() => price.click());
+        expect(price.getAttribute('aria-label')).toBe(
+            language === 'zh'
+                ? '价格从低到高，点击改为从高到低'
+                : 'Price: low to high. Click for high to low',
+        );
+        expect(price.getAttribute('aria-pressed')).toBe('true');
+        expect(price.querySelector('[aria-hidden="true"]')?.textContent).toContain('↑');
+        expect(navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({ search: expect.objectContaining({ sort: 'price-asc' }) }),
+        );
+        act(() => price.click());
+        expect(price.getAttribute('aria-label')).toBe(
+            language === 'zh'
+                ? '价格从高到低，点击改为从低到高'
+                : 'Price: high to low. Click for low to high',
+        );
+        expect(price.querySelector('[aria-hidden="true"]')?.textContent).toContain('↓');
+        expect(navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({ search: expect.objectContaining({ sort: 'price-desc' }) }),
+        );
+    });
+
     it('renders managed category thumbnails through the shared decoded-image component', () => {
         renderDiscovery({
             collections: [

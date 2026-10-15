@@ -259,6 +259,8 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
                 ? await this.pages.read(ctx, base.host, homeRequest, { refresh: true })
                 : cachedHome;
             if (refreshHome) warmed++;
+            if ((await this.registryKey(ctx)) !== key) return { warmed };
+            await this.pages.prepareBootMedia(ctx, base.host);
             const homeRoute = { ...base, request: homeRequest };
             preparedHomes.add(identity(homeRoute));
             defaults.push(homeRoute, { ...base, request: { kind: 'catalog', input: {} } });
@@ -291,9 +293,11 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
                 continue;
             }
             const cached = await this.pages.peek(ctx, route.host, route.request);
-            if (cached && Date.now() - cached.generatedAt < REFRESH_AFTER) continue;
-            await this.pages.read(ctx, route.host, route.request, { refresh: true });
-            warmed++;
+            if (!cached || Date.now() - cached.generatedAt >= REFRESH_AFTER) {
+                await this.pages.read(ctx, route.host, route.request, { refresh: true });
+                warmed++;
+            }
+            if (route.request.kind === 'home') await this.pages.prepareBootMedia(ctx, route.host);
         }
         return { warmed };
     }

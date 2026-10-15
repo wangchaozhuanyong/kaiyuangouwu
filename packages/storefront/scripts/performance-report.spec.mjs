@@ -17,6 +17,28 @@ const sample = (index, fields = {}, metric = {}) => ({
 });
 const report = samples => performanceReport(samples.map(value => JSON.stringify(value)).join('\n'));
 
+test('experience metrics remain measured diagnostics without invented CWV pass thresholds', () => {
+    for (const [name, unit] of [
+        ['NAV_RENDER', 'ms'],
+        ['NAV_READY', 'ms'],
+        ['IMAGE_PRESENT', 'ms'],
+        ['NAV_ERROR', 'count'],
+        ['IMAGE_ERROR', 'count'],
+    ]) {
+        const result = report(
+            Array.from({ length: 20 }, (_, index) =>
+                sample(index, { pageType: 'services' }, { name, value: 10 }),
+            ),
+        );
+        assert.equal(result.groups[0].status, 'MEASURED');
+        assert.equal(result.groups[0].pageType, 'services');
+        assert.equal(result.groups[0].unit, unit);
+    }
+    const insufficient = report([sample(1, { pageType: 'auth' }, { name: 'NAV_READY', value: 10 })]);
+    assert.equal(insufficient.groups[0].status, 'INSUFFICIENT_SAMPLES');
+    assert.match(insufficient.note, /not full network time or a white-frame detector/u);
+});
+
 test('a repeated sample updates its metric and phases without inflating the sample count', () => {
     const result = report([
         sample(1, {}, { value: 1000, phases: { ttfb: 100, resourceLoadDelay: 200 } }),

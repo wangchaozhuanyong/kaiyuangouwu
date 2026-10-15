@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 import { assertDisplayLocalization } from '../../../scripts/audit-display-localization.mjs';
 
+import { initialResourceCosts } from './initial-resource-budget.mjs';
+
 assertDisplayLocalization();
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +29,18 @@ const styleBytes = (await stat(path.join(distRoot, 'assets', styleAsset))).size;
 const entryBudgetBytes = 380 * 1024;
 const styleBudgetBytes = 380 * 1024;
 const routeStyleBudgetBytes = 32 * 1024;
+// Regression ceilings include the actual initial vendor, bootstrap and selected
+// lazy-route dependency closure, rather than just the entry file. Rounded up
+// from the 2026-10-15 audited candidate; the entry/CSS ceilings remain independent.
+const initialJsBudgetKiB = { startup: 717, home: 973, catalog: 933, product: 946, services: 962, login: 775 };
+const initialCssBudgetKiB = {
+    startup: 375,
+    home: 375,
+    catalog: 381,
+    product: 415,
+    services: 390,
+    login: 388,
+};
 const routeStylePrefixes = [
     'account-catalog-surfaces-',
     'account-security-page-',
@@ -75,8 +89,26 @@ if (largestRouteStyle.bytes > routeStyleBudgetBytes) {
     );
 }
 
+const initialCosts = await initialResourceCosts(distRoot, indexHtml);
+for (const [page, cost] of Object.entries(initialCosts)) {
+    if (cost.jsBytes > initialJsBudgetKiB[page] * 1024)
+        throw new Error(
+            `storefront ${page} initial JS closure exceeds ${initialJsBudgetKiB[page]} KiB: ${cost.jsBytes} B`,
+        );
+    if (cost.cssBytes > initialCssBudgetKiB[page] * 1024)
+        throw new Error(
+            `storefront ${page} initial CSS closure exceeds ${initialCssBudgetKiB[page]} KiB: ${cost.cssBytes} B`,
+        );
+}
+
 console.log(
     `Verified storefront performance budgets: entry ${Math.ceil(entryBytes / 1024)} KiB; ` +
         `critical CSS ${Math.ceil(styleBytes / 1024)} KiB; ` +
         `largest lazy route CSS ${Math.ceil(largestRouteStyle.bytes / 1024)} KiB`,
+);
+console.log(
+    'Verified initial route resource closures: ' +
+        Object.entries(initialCosts)
+            .map(([page, cost]) => `${page} JS ${cost.jsBytes} B / CSS ${cost.cssBytes} B`)
+            .join('; '),
 );

@@ -25,6 +25,7 @@ import { StorefrontPageFrame } from './storefront-page-frame';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
 import { StorefrontContext } from './StorefrontContext';
+import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { type ActiveCustomer } from './types';
 
 const StorefrontUpdatePrompt = lazy(() =>
@@ -56,28 +57,54 @@ const PREVIEW_CUSTOMER: ActiveCustomer = {
     orders: { items: [], totalItems: 0 },
 };
 
-export function StorefrontShell({ state }: StorefrontShellProps) {
-    useEffect(() => {
-        let active = true;
-        let dispose: () => void = () => undefined;
-        // Native CSS positioning remains the fallback while this small enhancement loads.
-        void import('./fixed-bottom-viewport')
-            .then(({ trackFixedBottomViewport, trackFixedBottomBars }) => {
+/** One mount owner for non-rendering browser enhancements. */
+export function mountStorefrontEnhancements(
+    load: () => Promise<{ trackStorefrontEnhancements: () => () => void }> = () =>
+        import('./storefront-enhancements'),
+) {
+    let active = true;
+    let initialized = false;
+    let loading = false;
+    let reconnectQueued = false;
+    let dispose: () => void = () => undefined;
+    // Native CSS positioning remains the fallback while this small enhancement loads.
+    const start = () => {
+        if (!active || initialized || navigator.onLine === false) return;
+        if (loading) {
+            reconnectQueued = true;
+            return;
+        }
+        loading = true;
+        reconnectQueued = false;
+        void load()
+            .then(({ trackStorefrontEnhancements }) => {
                 if (active) {
-                    const disposeViewport = trackFixedBottomViewport();
-                    const disposeBars = trackFixedBottomBars();
-                    dispose = () => {
-                        disposeBars();
-                        disposeViewport();
-                    };
+                    dispose = trackStorefrontEnhancements();
+                    initialized = true;
                 }
             })
-            .catch(() => undefined);
-        return () => {
-            active = false;
-            dispose();
-        };
-    }, []);
+            .catch(() => undefined)
+            .finally(() => {
+                loading = false;
+                // Consume a reconnect missed by this pending request once.
+                // A failed retry cannot schedule itself without another event.
+                if (reconnectQueued) {
+                    reconnectQueued = false;
+                    start();
+                }
+            });
+    };
+    window.addEventListener('online', start);
+    start();
+    return () => {
+        active = false;
+        window.removeEventListener('online', start);
+        dispose();
+    };
+}
+
+export function StorefrontShell({ state }: StorefrontShellProps) {
+    useEffect(() => mountStorefrontEnhancements(), []);
     const desktop = useDesktopViewport();
     // Preview identity belongs to this iframe document, not a changing route query string.
     const [previewParameters] = useState(storefrontPreviewParameters);
@@ -230,6 +257,15 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             displayCurrencyCode={storefrontContextValue.displayCurrencyCode}
                             navigationBlock={navigationBlock}
                             publicMedia={storefrontContextValue.publicMedia}
+                            publicMediaScope={
+                                storefrontContextValue.storefrontContextResolved
+                                    ? JSON.stringify([
+                                          storefrontContextValue.market.code,
+                                          storefrontContextValue.market.currencyCode,
+                                          language,
+                                      ])
+                                    : undefined
+                            }
                             accountLayout={Boolean(customer && isDesktopAccountRoute(displayedRoute.name))}
                             header={
                                 desktop && showNavigation ? (
@@ -244,13 +280,15 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 !previewEmbedded &&
                                 deferredUiReady &&
                                 shouldShowStorefrontUpdatePrompt(renderedRouteName) ? (
-                                    <Suspense fallback={null}>
-                                        <StorefrontUpdatePrompt
-                                            language={language}
-                                            route={renderedRouteName}
-                                            initialAssetReferences={initialStorefrontAssetReferences}
-                                        />
-                                    </Suspense>
+                                    <StorefrontErrorBoundary fallback={null}>
+                                        <Suspense fallback={null}>
+                                            <StorefrontUpdatePrompt
+                                                language={language}
+                                                route={renderedRouteName}
+                                                initialAssetReferences={initialStorefrontAssetReferences}
+                                            />
+                                        </Suspense>
+                                    </StorefrontErrorBoundary>
                                 ) : undefined
                             }
                         >
@@ -372,12 +410,14 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         </OverlayHost>
 
                         {deferredUiReady && (
-                            <Suspense fallback={null}>
-                                <StorefrontTrafficPreference
-                                    api={storefrontContextValue.api}
-                                    language={language}
-                                />
-                            </Suspense>
+                            <StorefrontErrorBoundary fallback={null}>
+                                <Suspense fallback={null}>
+                                    <StorefrontTrafficPreference
+                                        api={storefrontContextValue.api}
+                                        language={language}
+                                    />
+                                </Suspense>
+                            </StorefrontErrorBoundary>
                         )}
                     </PageReadinessBoundary>
                 </OverlayHost>

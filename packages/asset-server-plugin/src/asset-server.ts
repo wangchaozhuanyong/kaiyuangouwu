@@ -46,18 +46,7 @@ export class AssetServer {
     /** Worker-only preparation. Callers must authorize source paths with the store's public manifest. */
     async preparePublicDerivative(identifier: string, presetName: string, quality: number): Promise<void> {
         if (!this.processContext.isWorker) throw new Error('Image preparation must run in the worker');
-        let decoded: string;
-        try {
-            decoded = decodeURIComponent(identifier);
-        } catch {
-            throw new Error('Invalid public media path');
-        }
-        if (
-            !/^(?:preview|source)\//u.test(decoded) ||
-            decoded.split(/[\\/]/u).includes('..') ||
-            decoded.includes('\\')
-        )
-            throw new Error('Invalid public media path');
+        this.assertPublicMediaPath(identifier);
         const preset = this.presets.find(candidate => candidate.name === presetName);
         if (!preset || !presetName.startsWith('storefront-') || ![75, 82, 90].includes(quality))
             throw new Error('Image preparation preset is not allowed');
@@ -72,6 +61,51 @@ export class AssetServer {
             fpy: undefined,
         };
         await this.transformedBuffer(identifier, parameters, true);
+    }
+
+    /** Callers must authorize this namespace-relative path with the store's public manifest first. */
+    async readPublicInlinePreview(identifier: string): Promise<string | undefined> {
+        this.assertPublicMediaPath(identifier);
+        try {
+            // Internal fixed transforms share the existing queue and persisted derivative cache.
+            // No public preset or extra preview request is exposed to the browser.
+            for (const size of [24, 16]) {
+                const image = await this.transformedBuffer(
+                    identifier,
+                    {
+                        preset: undefined,
+                        width: size,
+                        height: size,
+                        mode: 'resize',
+                        quality: size,
+                        format: 'webp',
+                        fpx: undefined,
+                        fpy: undefined,
+                    },
+                    true,
+                );
+                const preview = `data:image/webp;base64,${image.toString('base64')}`;
+                if (preview.length <= 1024) return preview;
+            }
+        } catch {
+            // A preview is optional: missing or busy media must not make public content unavailable.
+        }
+        return undefined;
+    }
+
+    private assertPublicMediaPath(identifier: string): void {
+        let decoded: string;
+        try {
+            decoded = decodeURIComponent(identifier);
+        } catch {
+            throw new Error('Invalid public media path');
+        }
+        if (
+            !/^(?:preview|source)\//u.test(decoded) ||
+            decoded.split('/').some(segment => !segment || segment === '.' || segment === '..') ||
+            /[\\?#\u0000-\u001f\u007f]/u.test(decoded)
+        )
+            throw new Error('Invalid public media path');
     }
 
     /** @internal */

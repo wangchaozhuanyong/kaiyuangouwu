@@ -4,13 +4,20 @@ import { resolveQueryLoadState } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
-import { FlashSalePage, RecommendationPage } from '../storefront-ui/content-ui';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
-import { Product } from '../types';
 
-import '../commerce-styles';
-import '../styles/account-catalog-surfaces.css';
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
+
+// Commerce-only content and its original stylesheet order belong to these two
+// destinations. Services/support do not need to parse the home/product CSS.
+export const FlashSaleRoutePage = lazyRouteComponent(
+    () => import('./commerce-content-route-pages'),
+    'FlashSaleRoutePage',
+);
+export const RecommendationsRoutePage = lazyRouteComponent(
+    () => import('./commerce-content-route-pages'),
+    'RecommendationsRoutePage',
+);
 
 const ReviewCenterPage = lazyRouteComponent(() => import('../review-pages'), 'ReviewCenterPage');
 const SupportPage = lazyRouteComponent(() => import('../pages/support-page'), 'SupportPage');
@@ -119,37 +126,6 @@ export function MailQueryRoutePage() {
             onBack={runtime.goBack}
             onNavigate={runtime.navigate}
             onNotify={runtime.notify}
-        />
-    );
-}
-
-export function FlashSaleRoutePage() {
-    const runtime = useRuntime();
-    return (
-        <FlashSalePage
-            sales={runtime.activeFlashSales}
-            language={runtime.language}
-            locale={runtime.locale}
-            onBack={runtime.goBack}
-            onProduct={(productId: string, variantId?: string) =>
-                runtime.navigate({ name: 'product', id: productId, variantId })
-            }
-        />
-    );
-}
-
-export function RecommendationsRoutePage() {
-    const runtime = useRuntime();
-    return (
-        <RecommendationPage
-            products={runtime.recommendationProducts}
-            loading={runtime.recommendationsLoading}
-            block={runtime.recommendationsBlock}
-            market={runtime.market}
-            locale={runtime.locale}
-            language={runtime.language}
-            onBack={runtime.goBack}
-            onProduct={(product: Product) => runtime.navigate({ name: 'product', id: product.id })}
         />
     );
 }

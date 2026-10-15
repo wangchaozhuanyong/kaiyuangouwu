@@ -341,6 +341,9 @@ export interface StorefrontBootData<Config = unknown> {
     config: Config;
     visualPreset?: { presetId: string };
     visualUpdatedAt?: number;
+    /** Optional, already-prepared public artwork hints; never authentication or account data. */
+    media?: MediaDescriptor[];
+    mediaUpdatedAt?: number;
 }
 
 export function validateStorefrontBootData(

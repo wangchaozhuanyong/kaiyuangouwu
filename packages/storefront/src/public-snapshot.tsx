@@ -452,6 +452,11 @@ function SnapshotShell({ page }: { page: PublicPageData }) {
                             displayCurrencyCode={page.scope.currencyCode}
                             navigationBlock={navigationBlock}
                             publicMedia={page.media}
+                            publicMediaScope={JSON.stringify([
+                                page.scope.channelCode,
+                                page.scope.currencyCode,
+                                language,
+                            ])}
                         >
                             <Suspense
                                 fallback={

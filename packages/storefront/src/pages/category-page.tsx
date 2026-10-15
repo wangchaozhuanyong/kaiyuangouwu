@@ -25,6 +25,7 @@ import { ProductCard } from '../components/common/product-card';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
+import { priceSortActionLabel } from '../price-sort-label';
 import { productAvailability } from '../product-availability';
 import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { CategoryPageContext } from '../storefront-page-contexts';
@@ -718,11 +719,19 @@ export function CategoryPage() {
                             type="button"
                             className={sortMode.startsWith('price') ? 'is-active' : undefined}
                             aria-pressed={sortMode.startsWith('price')}
+                            aria-label={priceSortActionLabel(sortMode, isZh)}
                             onClick={() =>
                                 onSortChange(sortMode === 'price-asc' ? 'price-desc' : 'price-asc')
                             }
                         >
-                            {isZh ? '价格' : 'Price'} <ArrowUpDown aria-hidden="true" />
+                            {isZh ? '价格' : 'Price'}{' '}
+                            {sortMode === 'price-asc' ? (
+                                <ChevronUp aria-hidden="true" />
+                            ) : sortMode === 'price-desc' ? (
+                                <ChevronDown aria-hidden="true" />
+                            ) : (
+                                <ArrowUpDown aria-hidden="true" />
+                            )}
                         </button>
                         <button
                             type="button"

@@ -39,6 +39,7 @@ export class StorefrontLcpPreloadController {
         let layout: { primaryCollectionId: string } | undefined;
         let ctx = request.ctx;
         let bootOnly = false;
+        let authRoute: 'login' | 'register' | 'forgot-password' | undefined;
         const original = req.headers?.['x-storefront-original-uri'];
         if (original != null) {
             if (!trustedPublicPageHeaders(req) || typeof original !== 'string') {
@@ -49,6 +50,14 @@ export class StorefrontLcpPreloadController {
                 const parsed = publicPageRequestFromUrl(original);
                 if (!parsed) {
                     bootOnly = true;
+                    const pathname = new URL(original, 'https://storefront.invalid').pathname;
+                    if (
+                        pathname === '/login' ||
+                        pathname === '/register' ||
+                        pathname === '/forgot-password'
+                    ) {
+                        authRoute = pathname.slice(1) as typeof authRoute;
+                    }
                 } else route = parsed;
                 if (parsed?.kind === 'catalog' && parsed.path === '/category') {
                     // Child selection belongs to the data key; the original parent controls the mobile sidebar.
@@ -71,7 +80,9 @@ export class StorefrontLcpPreloadController {
         }
         // Origin/access failures are handled by the authoritative boundary, never by the URL parser.
         if (bootOnly) {
-            const boot = await this.preloadService.renderBoot(ctx, request.host);
+            const boot = authRoute
+                ? await this.preloadService.renderBoot(ctx, request.host, authRoute)
+                : await this.preloadService.renderBoot(ctx, request.host);
             if (boot) res.status(200).type('text/html').send(boot);
             else res.status(204).send();
             return;

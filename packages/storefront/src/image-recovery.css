@@ -1,0 +1,31 @@
+.safe-image-retry {
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    z-index: 2;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 16px);
+    min-width: 44px;
+    min-height: 44px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    cursor: pointer;
+}
+.safe-image-retry[hidden] {
+    display: none;
+}
+.safe-image-retry:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+.safe-image-retry:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}

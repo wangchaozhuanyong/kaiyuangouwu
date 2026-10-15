@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ShopApiError } from '../api';
 import { subscribeAuthSessionChanges } from '../auth-session-sync';
-import { clearStudioCache } from '../pages/ai-image-studio-cache';
+import { clearStudioCache } from '../pages/ai-image-studio-cache-state';
 import { resolveCurrentCheckoutOrder } from '../payment-readiness';
 import { cartLineCanSelect } from '../product-availability';
 import { publicRefreshScheduler } from '../public-refresh-scheduler';
@@ -18,7 +18,7 @@ import {
 } from '../query-client';
 import { invalidateStorefrontRealtimeQueries, refreshStorefrontAssociations } from '../realtime-updates';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { preloadRouteMedia } from '../route-media-preload';
+import { prepareRouteMedia } from '../route-media-intent';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { routeFromRouterLocation, routeHref, type RouteState } from '../storefront-router';
 import { writeStoredCurrency, writeStoredSettlementCurrency } from '../storefront-utils';
@@ -34,6 +34,7 @@ export type ToastPayload =
       };
 
 import { useCustomerProductActivity } from './useCustomerProductActivity';
+import { useOnlineStatus } from './useOnlineStatus';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 import { useStorefrontCoupons } from './useStorefrontCoupons';
@@ -118,7 +119,7 @@ export function useStorefrontAppState() {
     const [cartError, setCartError] = useState<string | null>(null);
     const [addingVariantId, setAddingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<ToastPayload | null>(null);
-    const [online, setOnline] = useState(navigator.onLine);
+    const online = useOnlineStatus();
 
     const toastTimer = useRef<number | null>(null);
     const checkoutStartingRef = useRef(false);
@@ -195,7 +196,7 @@ export function useStorefrontAppState() {
 
     // React DOM deduplicates resource hints. Calling this during render lets a restored public
     // query cache announce the LCP candidate before the route component commits its image node.
-    preloadRouteMedia(route, contentBlocks, products);
+    prepareRouteMedia(route, contentBlocks, products);
 
     const {
         cartQueryKey,
@@ -277,7 +278,9 @@ export function useStorefrontAppState() {
     }, [cartState.confirmed, queryClient, market.code, market.currencyCode, vendureLanguageCode]);
 
     useEffect(() => {
-        if (!storefrontContextResolved) return;
+        // Hydration adopts the server's connected snapshot before synchronizing
+        // browser state. Do not download the optional stream while actually offline.
+        if (!storefrontContextResolved || !online || navigator.onLine === false) return;
         const controller = new AbortController();
         const scheduler = publicRefreshScheduler(
             () => {
@@ -293,17 +296,23 @@ export function useStorefrontAppState() {
                 });
             },
         );
-        void api.watchRealtime(
-            event => {
-                void invalidateStorefrontRealtimeQueries(queryClient, event, {
-                    marketCode: storefrontQueryKeys.market(market),
-                    languageCode: vendureLanguageCode,
-                    customerId: customer?.id,
-                });
-            },
-            controller.signal,
-            connected => scheduler.connection(connected),
-        );
+        void api
+            .watchRealtime(
+                event => {
+                    void invalidateStorefrontRealtimeQueries(queryClient, event, {
+                        marketCode: storefrontQueryKeys.market(market),
+                        languageCode: vendureLanguageCode,
+                        customerId: customer?.id,
+                    });
+                },
+                controller.signal,
+                connected => scheduler.connection(connected),
+            )
+            .catch(() => {
+                // Loading the optional stream module can fail before its own
+                // reconnect loop starts. Keep the existing query fallback owner.
+                if (!controller.signal.aborted) scheduler.connection(false);
+            });
         return () => {
             scheduler.dispose();
             controller.abort();
@@ -313,6 +322,7 @@ export function useStorefrontAppState() {
         customerAuthenticated,
         customer?.id,
         market,
+        online,
         queryClient,
         storefrontContextResolved,
         vendureLanguageCode,
@@ -467,16 +477,6 @@ export function useStorefrontAppState() {
         if (toastTimer.current) window.clearTimeout(toastTimer.current);
         const duration = typeof payload === 'object' && payload.type === 'error' ? 3600 : 2400;
         toastTimer.current = window.setTimeout(() => setToast(null), duration);
-    }, []);
-
-    useEffect(() => {
-        const setConnected = () => setOnline(navigator.onLine);
-        window.addEventListener('online', setConnected);
-        window.addEventListener('offline', setConnected);
-        return () => {
-            window.removeEventListener('online', setConnected);
-            window.removeEventListener('offline', setConnected);
-        };
     }, []);
 
     useEffect(() => {

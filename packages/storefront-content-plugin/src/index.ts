@@ -17,12 +17,20 @@ export type { StorefrontContentBlockType, StorefrontContentTargetType } from './
 export { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 export { StorefrontContentItem } from './entities/storefront-content-item.entity';
 export { sourceImageReplacements } from './image-replacement-policy';
+export { primaryAuthVisualContent, primaryStorefrontMedia } from './shared/primary-media';
+export type {
+    PrimaryStorefrontMediaCandidate,
+    PrimaryStorefrontMediaInput,
+    PrimaryStorefrontMediaRoute,
+} from './shared/primary-media';
 export {
     STOREFRONT_IMAGE_SIZES,
+    boundedMediaPreviews,
     mediaDescriptor,
     normalizeStorefrontAssetUrl,
     responsiveImageSources,
     storefrontWebpUrl,
+    validInlineImagePreview,
 } from './shared/responsive-image';
 export type { MediaDescriptor, ResponsiveImageSources, StorefrontImageKind } from './shared/responsive-image';
 export { storefrontIcon } from './shared/storefront-icons';

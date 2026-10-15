@@ -48,12 +48,14 @@ describe('navigation image hints', () => {
     });
 
     it.each([767, 768, 1024])(
-        'leaves responsive home artwork priority to the rendered image at %s px',
+        'preloads only the home artwork selected by the native picture at %s px',
         width => {
             vi.stubGlobal(
                 'matchMedia',
                 vi.fn((query: string) => ({
-                    matches: query === '(max-width: 767px)' ? width <= 767 : width >= 1024,
+                    matches: query.startsWith('(max-width:')
+                        ? width <= Number(query.match(/\d+/)?.[0])
+                        : width >= Number(query.match(/\d+/)?.[0]),
                 })),
             );
             preloadRouteMedia(
@@ -67,11 +69,23 @@ describe('navigation image hints', () => {
                 [],
                 width >= 1024,
             );
-            expect(preload).not.toHaveBeenCalled();
+            expect(preload).toHaveBeenCalledTimes(1);
+            const host = document.createElement('div');
+            host.innerHTML = renderToStaticMarkup(
+                <SafeImage
+                    src="/assets/preview/desktop.jpg"
+                    imageKind="hero"
+                    alt=""
+                    mediaSources={[{ media: '(max-width: 767px)', src: '/assets/preview/phone.jpg' }]}
+                />,
+            );
+            const expected = width <= 767 ? host.querySelector('source') : host.querySelector('img');
+            const [, options] = vi.mocked(preload).mock.calls[0];
+            expect(options?.imageSrcSet).toBe(expected?.getAttribute('srcset'));
         },
     );
 
-    it('does not speculate about disabled, empty or later home slides before responsive rendering', () => {
+    it('preloads the first enabled home slide without loading disabled, empty or later artwork', () => {
         preloadRouteMedia(
             { name: 'home' },
             [
@@ -82,6 +96,32 @@ describe('navigation image hints', () => {
             ],
             [],
         );
+        expect(preload).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(preload).mock.calls[0][0]).toContain('/first.jpg?');
+    });
+
+    it('uses the published shared services banner without requesting an ignored phone override', () => {
+        preloadRouteMedia(
+            { name: 'services' },
+            [
+                {
+                    ...block('CLIENT_PLUGINS', '/assets/preview/services.jpg'),
+                    code: 'storefront-client-plugins',
+                    settings: {
+                        businessServicesHeroLayout: 'shared-banner',
+                        mobileImageUrl: '/assets/preview/ignored.jpg',
+                    },
+                },
+            ],
+            [],
+            false,
+        );
+        expect(preload).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(preload).mock.calls[0][0]).toContain('/services.jpg?');
+    });
+
+    it('does not promote support artwork hidden by the phone layout', () => {
+        preloadRouteMedia({ name: 'support' }, [block('SUPPORT', '/assets/preview/help.jpg')], [], false);
         expect(preload).not.toHaveBeenCalled();
     });
 

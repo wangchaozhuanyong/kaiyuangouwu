@@ -51,9 +51,21 @@ describe('shared catalog filter draft', () => {
     });
     it('validates inverted bounds and updates both price limits atomically', () => {
         expect(button('应用筛选').disabled).toBe(true);
+        const minimum = document.querySelector('[aria-label="最低价"]') as HTMLInputElement;
+        const maximum = document.querySelector('[aria-label="最高价"]') as HTMLInputElement;
+        const error = document.querySelector('[role="alert"]');
+        expect(minimum.getAttribute('aria-invalid')).toBe('true');
+        expect(maximum.getAttribute('aria-invalid')).toBe('true');
+        expect(document.getElementById(minimum.getAttribute('aria-describedby') ?? '')).toBe(error);
+        expect(maximum.getAttribute('aria-describedby')).toBe(error?.id);
         act(() => button('100-300').click());
         expect((document.querySelector('[aria-label="最低价"]') as HTMLInputElement).value).toBe('100');
         expect((document.querySelector('[aria-label="最高价"]') as HTMLInputElement).value).toBe('300');
+        expect(minimum.hasAttribute('aria-invalid')).toBe(false);
+        expect(maximum.hasAttribute('aria-invalid')).toBe(false);
+        expect(minimum.hasAttribute('aria-describedby')).toBe(false);
+        expect(maximum.hasAttribute('aria-describedby')).toBe(false);
+        expect(document.querySelector('[role="alert"]')).toBeNull();
         act(() => button('应用筛选').click());
         expect(apply).toHaveBeenCalledWith({
             fulfillment: 'digital',
@@ -62,6 +74,39 @@ describe('shared catalog filter draft', () => {
             maxPrice: '300',
         });
     });
+    it.each([
+        { minPrice: '-1', maxPrice: '100', invalid: '最低价', valid: '最高价' },
+        { minPrice: '0', maxPrice: '-1', invalid: '最高价', valid: '最低价' },
+        { minPrice: 'invalid', maxPrice: '100', invalid: '最低价', valid: '最高价' },
+    ])(
+        'associates only the invalid field: $minPrice / $maxPrice',
+        ({ minPrice, maxPrice, invalid, valid }) => {
+            act(() =>
+                root.render(
+                    <CatalogFilterSheet
+                        language="zh"
+                        currencyCode="MYR"
+                        value={{ fulfillment: 'all', inStockOnly: false, minPrice, maxPrice }}
+                        resultCount={null}
+                        onChange={vi.fn()}
+                        onApply={apply}
+                        onClose={close}
+                    />,
+                ),
+            );
+            const field = document.querySelector(`[aria-label="${invalid}"]`);
+            const other = document.querySelector(`[aria-label="${valid}"]`);
+            const error = document.querySelector('[role="alert"]');
+            expect(field?.getAttribute('aria-invalid')).toBe('true');
+            expect(document.getElementById(field?.getAttribute('aria-describedby') ?? '')).toBe(error);
+            expect(other?.hasAttribute('aria-invalid')).toBe(false);
+            expect(other?.hasAttribute('aria-describedby')).toBe(false);
+            expect(button('应用筛选').disabled).toBe(true);
+            act(() => button('应用筛选').click());
+            expect(apply).not.toHaveBeenCalled();
+        },
+    );
+
     it('resets every draft field together without applying until confirmed', () => {
         act(() => button('重置').click());
         expect(apply).not.toHaveBeenCalled();

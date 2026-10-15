@@ -16,6 +16,8 @@ import {
 import { routeFromLocation, routeHref, type RouteState } from '../storefront-router';
 import { MarketConfig, ProductSearchPage, StorefrontCatalogInput, StorefrontLanguage } from '../types';
 
+import { useOnlineStatus } from './useOnlineStatus';
+
 interface CategoryPaginationOptions {
     api: Pick<ShopApi, 'catalog'>;
     market: MarketConfig;
@@ -48,9 +50,7 @@ export function useCategoryPagination({
     const resultsRef = useRef<HTMLElement>(null);
     const sentinelRef = useRef<HTMLDivElement>(null);
     const requestRef = useRef<{ scope: string } | null>(null);
-    const [online, setOnline] = useState(
-        () => typeof navigator === 'undefined' || navigator.onLine !== false,
-    );
+    const online = useOnlineStatus();
     const [visible, setVisible] = useState(
         () => typeof document === 'undefined' || document.visibilityState !== 'hidden',
     );
@@ -62,14 +62,9 @@ export function useCategoryPagination({
     }, []);
 
     useEffect(() => {
-        const updateConnection = () => setOnline(navigator.onLine);
         const updateVisibility = () => setVisible(document.visibilityState !== 'hidden');
-        window.addEventListener('online', updateConnection);
-        window.addEventListener('offline', updateConnection);
         document.addEventListener('visibilitychange', updateVisibility);
         return () => {
-            window.removeEventListener('online', updateConnection);
-            window.removeEventListener('offline', updateConnection);
             document.removeEventListener('visibilitychange', updateVisibility);
         };
     }, []);

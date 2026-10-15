@@ -341,7 +341,7 @@ img {
     width: 100%;
     height: 100%;
 }
-.safe-image-frame.is-presented > .safe-image-fallback {
+.safe-image-frame.is-painted > .safe-image-fallback {
     opacity: 0;
     pointer-events: none;
 }

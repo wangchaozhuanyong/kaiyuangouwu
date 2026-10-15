@@ -2193,6 +2193,55 @@ function FeaturedCollectionSection({
         Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)),
         configuredProductIds.length || 50,
     );
+    const mosaicRef = useRef<HTMLDivElement>(null);
+
+    useLayoutEffect(() => {
+        const mosaic = mosaicRef.current;
+        const supporting = mosaic?.querySelector<HTMLDivElement>('.featured-collection-supporting-products');
+        if (!mosaic || !supporting || typeof ResizeObserver === 'undefined') return;
+        const details = [...supporting.querySelectorAll<HTMLElement>('.product-card-content')];
+        let fallbackWidth: number | undefined;
+        const alignMedia = () => {
+            const width = mosaic.getBoundingClientRect().width;
+            if (width === fallbackWidth) return;
+            fallbackWidth = undefined;
+            const layout = getComputedStyle(mosaic);
+            const grid = getComputedStyle(supporting);
+            const columns = grid.gridTemplateColumns.split(' ').length;
+            if (window.matchMedia(phoneHeroQuery).matches || Math.ceil(details.length / columns) !== 2) {
+                mosaic.style.removeProperty('grid-template-columns');
+                return;
+            }
+            // Both images stay square. Include the first row's actual text and spacing
+            // when dividing the available width, so the two image envelopes align.
+            const detailHeight = Math.max(
+                ...details.slice(0, columns).map(item => item.getBoundingClientRect().height),
+            );
+            const mediaWidth =
+                width - parseFloat(layout.columnGap) - (columns - 1) * parseFloat(grid.columnGap);
+            const leadWidth =
+                (2 * mediaWidth + columns * (detailHeight + parseFloat(grid.rowGap))) / (columns + 2);
+            // Extremely long copy may make square-media alignment impossible.
+            // Keep the normal responsive columns until the available width changes.
+            if (!Number.isFinite(leadWidth) || leadWidth <= 0 || leadWidth >= mediaWidth) {
+                fallbackWidth = width;
+                mosaic.style.removeProperty('grid-template-columns');
+                return;
+            }
+            const leading = mosaic.firstElementChild;
+            if (leading && Math.abs(leading.getBoundingClientRect().width - leadWidth) > 0.1) {
+                mosaic.style.gridTemplateColumns = `minmax(0, ${leadWidth}px) minmax(0, 1fr)`;
+            }
+        };
+        alignMedia();
+        const observer = new ResizeObserver(alignMedia);
+        observer.observe(mosaic);
+        details.forEach(item => observer.observe(item));
+        return () => {
+            observer.disconnect();
+            mosaic.style.removeProperty('grid-template-columns');
+        };
+    }, [products, placeholderCount, loading]);
 
     return (
         <section
@@ -2228,6 +2277,7 @@ function FeaturedCollectionSection({
                 </div>
                 {loading && !featuredProduct ? (
                     <div
+                        ref={mosaicRef}
                         className="featured-collection-mosaic"
                         aria-busy={!error}
                         data-product-count={placeholderCount}
@@ -2262,6 +2312,7 @@ function FeaturedCollectionSection({
                     </div>
                 ) : featuredProduct ? (
                     <div
+                        ref={mosaicRef}
                         className="featured-collection-mosaic"
                         data-product-count={products.length}
                         aria-label={block.title}

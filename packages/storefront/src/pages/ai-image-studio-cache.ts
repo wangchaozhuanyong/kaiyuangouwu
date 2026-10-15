@@ -9,6 +9,10 @@ import type {
     MarketConfig,
 } from '../types';
 
+import { studioCacheState } from './ai-image-studio-cache-state';
+
+export { clearStudioCache } from './ai-image-studio-cache-state';
+
 export interface ImageStudioDraft {
     prompt: string;
     originalPrompt: string;
@@ -44,9 +48,7 @@ const defaultDraft = (): ImageStudioDraft => ({
     quantity: 1,
 });
 
-const studioCache = new Map<string, ImageStudioCacheEntry>();
-const activePreloads = new Map<string, Promise<void>>();
-let cacheGeneration = 0;
+const { entries: studioCache, activePreloads } = studioCacheState;
 
 export function getStudioCacheKey(marketCode: string, customerId?: string | null): string {
     return `${marketCode}:${customerId ?? 'guest'}`;
@@ -101,12 +103,6 @@ export function updateStudioDraftCache(
     Object.assign(existing.draft, draftUpdate);
 }
 
-export function clearStudioCache(): void {
-    cacheGeneration += 1;
-    studioCache.clear();
-    activePreloads.clear();
-}
-
 export async function preloadImageStudioData(
     api: ShopApi,
     customer: ActiveCustomer | null,
@@ -119,12 +115,12 @@ export async function preloadImageStudioData(
     }
     const activePreload = activePreloads.get(key);
     if (activePreload) return activePreload;
-    const generation = cacheGeneration;
+    const generation = studioCacheState.generation;
 
     const preload = (async () => {
         try {
             const studioConfig = await api.imageStudioConfig();
-            if (generation !== cacheGeneration) return;
+            if (generation !== studioCacheState.generation) return;
             if (!customer) {
                 setStudioCachedData(market.code, null, {
                     config: studioConfig,
@@ -143,7 +139,7 @@ export async function preloadImageStudioData(
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
             ]);
-            if (generation !== cacheGeneration) return;
+            if (generation !== studioCacheState.generation) return;
             const walletVal = wallet.status === 'fulfilled' ? wallet.value : undefined;
             const promptQuotaVal = loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null;
             const modelQuotasVal = loadedModelQuotas.status === 'fulfilled' ? loadedModelQuotas.value : [];

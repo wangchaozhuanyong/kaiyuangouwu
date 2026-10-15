@@ -1,5 +1,9 @@
 import { ForbiddenError } from '@vendure/core';
-import { mediaDescriptor, STOREFRONT_IMAGE_SIZES } from '@vendure/storefront-content-plugin';
+import {
+    mediaDescriptor,
+    primaryStorefrontMedia,
+    STOREFRONT_IMAGE_SIZES,
+} from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StorefrontClosedError } from './storefront-activation.service';
@@ -14,11 +18,13 @@ vi.mock('@vendure/storefront-content-plugin', async () => {
     const responsiveImage = await import('../../storefront-content-plugin/src/shared/responsive-image.js');
     const icons = await import('../../storefront-content-plugin/src/shared/storefront-icons.js');
     const pageData = await import('../../storefront-content-plugin/src/shared/public-page-data.js');
+    const primaryMedia = await import('../../storefront-content-plugin/src/shared/primary-media.js');
     const { storefrontContentPermission } = await import('../../storefront-content-plugin/src/constants.js');
     return {
         ...responsiveImage,
         ...icons,
         ...pageData,
+        ...primaryMedia,
         storefrontContentPermission,
         StorefrontContentService: class StorefrontContentService {},
         StorefrontAuthSettingsService: class StorefrontAuthSettingsService {},
@@ -40,6 +46,116 @@ function responseMock() {
 }
 
 describe('storefront LCP preload', () => {
+    it.each(['services', 'support'] as const)(
+        'preloads the published %s hero rather than unrelated home artwork',
+        async route => {
+            const home = '/assets/preview/home.webp';
+            const service = '/assets/preview/services.webp';
+            const support = '/assets/preview/support.webp';
+            const phone = '/assets/preview/phone.webp';
+            const page = {
+                config: { accessMode: 'LIVE' },
+                content: {
+                    blocks: [
+                        { type: 'HERO', imageUrl: home },
+                        {
+                            type: 'CLIENT_PLUGINS',
+                            code: 'storefront-client-plugins',
+                            imageUrl: service,
+                            settings: { mobileImageUrl: phone },
+                        },
+                        { type: 'SUPPORT', imageUrl: support },
+                    ],
+                },
+                media: [home, service, support, phone].map(source => mediaDescriptor(source, 'hero')),
+            };
+            const serviceInstance = new StorefrontLcpPreloadService(
+                { peek: vi.fn().mockResolvedValue(page) } as never,
+                {} as never,
+            );
+            const links = (
+                await serviceInstance.render({} as never, 'shop.example', { kind: 'page', id: route })
+            )
+                .split('\n')
+                .filter(line => line.includes('rel="preload"'));
+            expect(links.join('\n')).not.toContain(home);
+            if (route === 'services') {
+                expect(links).toHaveLength(2);
+                expect(links.find(line => line.includes('phone.webp'))).toContain('(max-width: 1023px)');
+                expect(links.find(line => line.includes('services.webp'))).toContain('(min-width: 1024px)');
+            } else {
+                expect(links).toHaveLength(1);
+                expect(links[0]).toContain('support.webp');
+                expect(links[0]).toContain('media="(min-width: 1024px)"');
+            }
+        },
+    );
+    it('keeps auth body out of boot and preloads only worker-prepared desktop metadata', async () => {
+        const image = '/assets/preview/login.webp?v=3';
+        const candidate = primaryStorefrontMedia({
+            route: 'login',
+            blocks: [{ type: 'AUTH_LOGIN', imageUrl: image }],
+        })[0];
+        const boot = {
+            schemaVersion: 1,
+            config: { accessMode: 'LIVE' },
+            scope: { host: 'shop.example' },
+            media: [mediaDescriptor(candidate.source, candidate.kind, { sizes: candidate.sizes })],
+        };
+        const page = {
+            config: { accessMode: 'LIVE' },
+            content: {
+                blocks: [{ type: 'AUTH_LOGIN', imageUrl: image, title: 'public-body-must-stay-out-of-boot' }],
+            },
+            media: [mediaDescriptor(image, 'detail')],
+        };
+        const pages = {
+            peekBoot: vi.fn().mockResolvedValue(boot),
+            peek: vi.fn().mockResolvedValue(page),
+            read: vi.fn(),
+        };
+        const service = new StorefrontLcpPreloadService(pages as never, {} as never);
+        const fragment = await service.renderBoot({} as never, 'shop.example', 'login');
+        expect(fragment).toContain('media="(min-width: 1024px)"');
+        expect(fragment).toContain('preset=storefront-detail-');
+        expect(fragment).not.toContain('public-body-must-stay-out-of-boot');
+        expect(fragment).not.toContain('storefront-public-page-data');
+        expect(pages.read).not.toHaveBeenCalled();
+        expect(pages.peekBoot).toHaveBeenCalledWith({}, 'shop.example', 'login');
+        expect(pages.peek).not.toHaveBeenCalled();
+        pages.peekBoot.mockResolvedValueOnce({ ...boot, media: [] });
+        expect(await service.renderBoot({} as never, 'shop.example', 'login')).not.toContain('rel="preload"');
+        pages.peek.mockClear();
+        await service.renderBoot({} as never, 'shop.example');
+        expect(pages.peek).not.toHaveBeenCalled();
+    });
+    it.each(['login', 'register', 'forgot-password'] as const)(
+        'passes only the trusted %s route to boot hints',
+        async route => {
+            const ctx = {
+                channel: { availableCurrencyCodes: ['MYR'] },
+                languageCode: 'en',
+                currencyCode: 'MYR',
+                copy: vi.fn(),
+            };
+            ctx.copy.mockReturnValue(ctx);
+            const renderBoot = vi.fn().mockResolvedValue('<script>boot</script>');
+            const render = vi.fn();
+            const controller = new StorefrontLcpPreloadController(
+                { resolveRequest: vi.fn().mockResolvedValue({ ctx, host: 'shop.example' }) } as never,
+                { renderBoot, render } as never,
+            );
+            await controller.preload(
+                {
+                    socket: { remoteAddress: '127.0.0.1' },
+                    headers: { 'x-storefront-original-uri': `/${route}?token=discarded` },
+                } as never,
+                responseMock() as never,
+            );
+            expect(renderBoot).toHaveBeenCalledWith(ctx, 'shop.example', route);
+            expect(render).not.toHaveBeenCalled();
+        },
+    );
     it('renders only anonymous configuration on private routes and leaves authority errors visible', async () => {
         const ctx = {
             channel: { availableCurrencyCodes: ['MYR'] },

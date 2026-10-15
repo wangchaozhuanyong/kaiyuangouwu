@@ -20,19 +20,29 @@ import type {
 import {
     canonicalPublicPageRequest,
     isReusablePublicPageData,
+    mediaDescriptor,
+    primaryStorefrontMedia,
     publicPageRequestKey,
     publicPageRouteHref,
     StorefrontAccountSettingsService,
     StorefrontAuthSettingsService,
     StorefrontContentService,
     StorefrontVisualPresetService,
+    type MediaDescriptor,
+    type PrimaryStorefrontMediaRoute,
+    type PublicNavigationCollection,
     type StorefrontContentBlock,
 } from '@vendure/storefront-content-plugin';
 import { createHash } from 'node:crypto';
 import { clearTimeout, setTimeout } from 'node:timers';
 
+import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
-import { publicPageMedia } from './performance/storefront-public-media';
+import {
+    publicMediaAssetIdentity,
+    publicMediaWithPreviews,
+    publicPageMedia,
+} from './performance/storefront-public-media';
 import { StorePromotionCampaignService } from './promotion/store-promotion-campaign.service';
 import { PUBLIC_CATALOG_READER, type PublicCatalogReader } from './public-catalog-reader';
 import { StoreCurrencySettingsService } from './store-currency-settings.service';
@@ -46,6 +56,9 @@ import { StorefrontRegionShopResolver } from './storefront-region.resolver';
 import { SystemAnnouncementService } from './system-announcement.service';
 
 const PAGE_TTL = 30_000;
+const BOOT_MEDIA_TTL = 60_000;
+type AuthMediaRoute = 'login' | 'register' | 'forgot-password';
+type PreparedBootMedia = Partial<Record<'login' | 'register', MediaDescriptor>>;
 class PublicPageAccessChangedError extends Error {}
 const publicFields = <T extends object, K extends keyof T>(value: T, keys: readonly K[]) =>
     Object.fromEntries(keys.map(key => [key, value[key]])) as Pick<T, K>;
@@ -147,16 +160,23 @@ export class StorefrontPublicPageService {
     }
 
     /** SSI may use warm configuration for private routes without assembling public catalog data. */
-    async peekBoot(ctx: RequestContext, host: string): Promise<StorefrontBootData | undefined> {
+    async peekBoot(
+        ctx: RequestContext,
+        host: string,
+        authRoute?: AuthMediaRoute,
+    ): Promise<StorefrontBootData | undefined> {
         if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop') return;
         if ((await this.getAccessMode(ctx)) !== 'LIVE') return;
         try {
             return await this.cache.runGuarded(
                 () => this.assertMode(ctx, 'LIVE'),
                 async () => {
-                    const [config, visual] = await Promise.all([
+                    const [config, visual, preparedMedia] = await Promise.all([
                         this.cache.peekEntry<Record<string, unknown>>(ctx, `config:${host}`),
                         this.cache.peekEntry<{ presetId: string }>(ctx, `visual-preset:${host}`),
+                        authRoute
+                            ? this.cache.peekEntry<PreparedBootMedia>(ctx, `boot-media:${host}`)
+                            : undefined,
                     ]);
                     if (
                         !config ||
@@ -165,6 +185,10 @@ export class StorefrontPublicPageService {
                         config.revision !== (await this.cache.revision(ctx.channelId))
                     )
                         return;
+                    const media =
+                        preparedMedia?.revision === config.revision && authRoute
+                            ? preparedMedia.value?.[authRoute === 'register' ? 'register' : 'login']
+                            : undefined;
                     return {
                         schemaVersion: 1,
                         generatedAt: Date.now(),
@@ -180,6 +204,9 @@ export class StorefrontPublicPageService {
                         ...(visual
                             ? { visualPreset: visual.value, visualUpdatedAt: visual.expiresAt - 60_000 }
                             : {}),
+                        ...(media && preparedMedia
+                            ? { media: [media], mediaUpdatedAt: preparedMedia.expiresAt - BOOT_MEDIA_TTL }
+                            : {}),
                     };
                 },
             );
@@ -187,6 +214,60 @@ export class StorefrontPublicPageService {
             if (error instanceof PublicPageAccessChangedError) return;
             throw error;
         }
+    }
+
+    /** Called by the existing worker only, using content already warmed under the same revision. */
+    async prepareBootMedia(ctx: RequestContext, host: string): Promise<void> {
+        if (
+            ctx.activeUserId ||
+            ctx.session ||
+            ctx.apiType !== 'shop' ||
+            (await this.getAccessMode(ctx)) !== 'LIVE'
+        )
+            return;
+        const providers = this.previewProviders();
+        if (!providers) return;
+        await this.cache.runGuarded(
+            () => this.assertMode(ctx, 'LIVE'),
+            async () => {
+                const previous = await this.cache.peek<PreparedBootMedia>(ctx, `boot-media:${host}`);
+                await this.cache.readThrough(
+                    ctx,
+                    `boot-media:${host}`,
+                    BOOT_MEDIA_TTL,
+                    async () => {
+                        const content = await this.cache.peekEntry<{ blocks?: StorefrontContentBlock[] }>(
+                            ctx,
+                            `content:${host}`,
+                        );
+                        if (!content || content.revision !== (await this.cache.revision(ctx.channelId)))
+                            return undefined;
+                        const routes = ['login', 'register'] as const;
+                        const entries = routes.flatMap(route =>
+                            primaryStorefrontMedia({ route, blocks: content.value.blocks }).map(
+                                candidate => ({
+                                    route,
+                                    descriptor: mediaDescriptor(candidate.source, candidate.kind, {
+                                        sizes: candidate.sizes,
+                                    }),
+                                }),
+                            ),
+                        );
+                        const media = await publicMediaWithPreviews(
+                            entries.map(entry => entry.descriptor),
+                            host,
+                            path => providers.manifest.isPublic(ctx, host, path),
+                            path => providers.reader.readPublicInlinePreview(path),
+                        );
+                        return Object.fromEntries(entries.map((entry, index) => [entry.route, media[index]]));
+                    },
+                    {
+                        requireSharedRevision: true,
+                        refresh: !previous || Object.values(previous).some(item => !item?.placeholder),
+                    },
+                );
+            },
+        );
     }
 
     read(
@@ -251,20 +332,10 @@ export class StorefrontPublicPageService {
                     request,
                     requestKey: publicPageRequestKey(request),
                 };
-                const content = combined.content as { blocks?: Array<{ type?: string }> } | undefined;
-                const navigationContent = content
-                    ? {
-                          ...content,
-                          blocks: content.blocks?.filter(block =>
-                              ['NAVIGATION', 'CORE_CATEGORIES', 'QUICK_LINKS'].includes(block.type ?? ''),
-                          ),
-                      }
-                    : undefined;
+                const media = await this.publicMedia(ctx, host, combined);
                 const page = {
                     ...combined,
-                    media: publicPageMedia(
-                        request.kind === 'home' ? combined : { ...combined, content: navigationContent },
-                    ),
+                    media,
                 };
                 return {
                     ...page,
@@ -305,6 +376,99 @@ export class StorefrontPublicPageService {
             }
         }
         throw new ServiceUnavailableException('Public access changed; retry the read');
+    }
+
+    private async publicMedia(ctx: RequestContext, host: string, page: StorefrontPageData) {
+        const media = publicPageMedia(page);
+        if (!media.length) return media;
+        const providers = this.previewProviders();
+        if (!providers) return media;
+        const { reader, manifest } = providers;
+        const request = page.request;
+        const route: PrimaryStorefrontMediaRoute | undefined =
+            request?.kind === 'page'
+                ? request.id === 'services' || request.id === 'support'
+                    ? request.id
+                    : undefined
+                : request?.kind === 'home' || request?.kind === 'catalog' || request?.kind === 'product'
+                  ? request.kind
+                  : undefined;
+        const first = route
+            ? primaryStorefrontMedia({
+                  route,
+                  blocks: (page.content as { blocks?: StorefrontContentBlock[] } | undefined)?.blocks,
+                  product: page.product as Parameters<typeof primaryStorefrontMedia>[0]['product'],
+                  catalogItems: page.catalog?.items as Parameters<
+                      typeof primaryStorefrontMedia
+                  >[0]['catalogItems'],
+                  collections: page.collections as PublicNavigationCollection[] | undefined,
+                  catalogPath: request?.kind === 'catalog' ? request.path : undefined,
+              })
+            : [];
+        const priority = new Set(
+            first.map(
+                candidate =>
+                    publicMediaAssetIdentity(mediaDescriptor(candidate.source, candidate.kind), host)?.key,
+            ),
+        );
+        const content = page.content as { blocks?: StorefrontContentBlock[] } | undefined;
+        const visible = publicPageMedia({
+            ...page,
+            content: {
+                blocks: content?.blocks?.filter(block => {
+                    if (['NAVIGATION', 'CORE_CATEGORIES', 'QUICK_LINKS'].includes(block.type)) return true;
+                    if (route === 'home')
+                        return !['AUTH_LOGIN', 'AUTH_REGISTER', 'SUPPORT', 'CLIENT_PLUGINS'].includes(
+                            block.type,
+                        );
+                    return (
+                        block.type ===
+                        (route === 'services' ? 'CLIENT_PLUGINS' : route === 'support' ? 'SUPPORT' : '')
+                    );
+                }),
+            },
+            products: route === 'home' ? page.products : undefined,
+            bestSellers: route === 'home' ? page.bestSellers : undefined,
+            flashSales: route === 'home' ? page.flashSales : undefined,
+            catalog: route === 'catalog' ? page.catalog : undefined,
+            product: route === 'product' ? page.product : undefined,
+        });
+        const eligible = new Set(visible.map(item => publicMediaAssetIdentity(item, host)?.key));
+        const selected = media.filter(item => eligible.has(publicMediaAssetIdentity(item, host)?.key));
+        const ordered = [
+            ...selected.filter(item => priority.has(publicMediaAssetIdentity(item, host)?.key)),
+            ...selected.filter(item => !priority.has(publicMediaAssetIdentity(item, host)?.key)),
+        ];
+        const populated = await publicMediaWithPreviews(
+            ordered,
+            host,
+            path => manifest.isPublic(ctx, host, path),
+            path => reader.readPublicInlinePreview(path),
+        );
+        return [
+            ...populated,
+            ...media.filter(item => !eligible.has(publicMediaAssetIdentity(item, host)?.key)),
+        ];
+    }
+
+    private previewProviders() {
+        // A page descriptor never grants asset access: verify the manifest before local storage reads.
+        try {
+            const reader = this.moduleRef.get<{
+                readPublicInlinePreview(path: string): Promise<string | undefined>;
+            }>('STOREFRONT_PUBLIC_IMAGE_PREVIEW', { strict: false });
+            const manifest = this.moduleRef.get<StorefrontMediaManifestService>(
+                StorefrontMediaManifestService,
+                { strict: false },
+            );
+            if (
+                typeof reader?.readPublicInlinePreview === 'function' &&
+                typeof manifest?.isPublic === 'function'
+            )
+                return { reader, manifest };
+        } catch {
+            /* Optional image metadata never changes public page availability. */
+        }
     }
 
     private async assemble(

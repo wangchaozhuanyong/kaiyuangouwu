@@ -32,6 +32,7 @@ import { languageCodeFor } from '../i18n';
 import { isInputMethodKey } from '../input-method';
 import { storefrontInitialQueryError } from '../loading-state';
 import { usePageReadiness } from '../page-readiness';
+import { priceSortActionLabel } from '../price-sort-label';
 import {
     STOREFRONT_CATALOG_PAGE_SIZE,
     PUBLIC_QUERY_GC_TIME,
@@ -656,6 +657,11 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                     key={sort}
                                     className={active ? 'is-active' : undefined}
                                     aria-pressed={active}
+                                    aria-label={
+                                        sort === 'price-asc'
+                                            ? priceSortActionLabel(filters.sort, isZh)
+                                            : undefined
+                                    }
                                     onClick={() =>
                                         updateFilters({
                                             ...filters,

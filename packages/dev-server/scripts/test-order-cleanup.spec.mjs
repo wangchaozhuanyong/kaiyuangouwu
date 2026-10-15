@@ -15,6 +15,7 @@ import {
     publicCleanupPreview,
     restoreCleanup,
     sealBackup,
+    stockPreservationFingerprint,
 } from './test-order-cleanup.mjs';
 
 async function fixture(extra = []) {
@@ -133,6 +134,113 @@ async function prepared(context) {
     const { envelope, backupHash } = sealBackup(snapshot, context.freeze, plan, key);
     return { snapshot, plan, key, envelope, backupHash };
 }
+
+describe('historical reset with preserved product inventory', () => {
+    it('removes current order dependencies and restores the complete graph without changing stock', async () => {
+        const context = await fixture([
+            'DELETE FROM catalog_inventory_lot_movement',
+            'CREATE TABLE admin_notification_outbox(id INTEGER PRIMARY KEY, sourceType TEXT, sourceId TEXT, payload TEXT)',
+            'CREATE TABLE admin_incident_evidence(id INTEGER PRIMARY KEY, notificationId INTEGER REFERENCES admin_notification_outbox(id))',
+            'CREATE TABLE order_line_reference(id INTEGER PRIMARY KEY, orderLineId INTEGER REFERENCES order_line(id))',
+            'CREATE TABLE storefront_review(id INTEGER PRIMARY KEY, orderId INTEGER REFERENCES "order"(id))',
+            "INSERT INTO admin_notification_outbox VALUES(80,'Order','1','{}')",
+            'INSERT INTO admin_incident_evidence VALUES(81,80)',
+            'INSERT INTO order_line_reference VALUES(82,10)',
+            'INSERT INTO storefront_review VALUES(83,1)',
+        ]);
+        try {
+            context.freeze.trackingByVariant = {};
+            context.freeze.inventoryDisposition = 'preserve-current-stock';
+            const snapshot = await collectCleanupSnapshot(context.runner, context.freeze);
+            context.freeze.stockBaselineHash = stockPreservationFingerprint(snapshot);
+            const { plan, key, envelope, backupHash } = await prepared(context);
+            assert.equal(publicCleanupPreview(plan).canApply, true, JSON.stringify(plan.blockers));
+            const before = await context.runner.query('SELECT * FROM stock_level');
+            const receipt = await applyCleanup(context.runner, envelope, backupHash, plan.planHash, key);
+            assert.deepEqual(await context.runner.query('SELECT * FROM stock_level'), before);
+            for (const table of [
+                'order',
+                'admin_incident_evidence',
+                'order_line_reference',
+                'storefront_review',
+            ])
+                assert.equal(
+                    (
+                        await context.runner.query(
+                            `SELECT COUNT(*) AS n FROM ${table === 'order' ? '"order"' : table}`,
+                        )
+                    )[0].n,
+                    0,
+                );
+            assert.equal((await context.runner.query('SELECT COUNT(*) AS n FROM customer'))[0].n, 1);
+            await restoreCleanup(
+                context.runner,
+                envelope,
+                backupHash,
+                plan.planHash,
+                key,
+                receipt,
+                receipt.receiptHash,
+            );
+            for (const table of [
+                'order',
+                'admin_incident_evidence',
+                'order_line_reference',
+                'storefront_review',
+            ])
+                assert.equal(
+                    (
+                        await context.runner.query(
+                            `SELECT COUNT(*) AS n FROM ${table === 'order' ? '"order"' : table}`,
+                        )
+                    )[0].n,
+                    1,
+                );
+        } finally {
+            await context.close();
+        }
+    });
+    it('requires an exact inventory baseline even when keeping stock', async () => {
+        const c = await fixture(['DELETE FROM catalog_inventory_lot_movement']);
+        try {
+            c.freeze.inventoryDisposition = 'preserve-current-stock';
+            c.freeze.stockBaselineHash = '0'.repeat(64);
+            const { plan } = await prepared(c);
+            assert.ok(plan.blockers.some(b => b.code === 'STOCK_PRESERVATION_BASELINE_CHANGED'));
+        } finally {
+            await c.close();
+        }
+    });
+    it('blocks a surviving order allocation rather than stranding reserved inventory', async () => {
+        const c = await fixture([
+            'DELETE FROM catalog_inventory_lot_movement',
+            'DELETE FROM stock_movement WHERE id=34',
+        ]);
+        try {
+            c.freeze.inventoryDisposition = 'preserve-current-stock';
+            c.freeze.stockBaselineHash = stockPreservationFingerprint(
+                await collectCleanupSnapshot(c.runner, c.freeze),
+            );
+            const { plan } = await prepared(c);
+            assert.ok(plan.blockers.some(b => b.code === 'OUTSTANDING_ORDER_ALLOCATION'));
+        } finally {
+            await c.close();
+        }
+    });
+    it('does not silently erase order-bound lot accounting in preservation mode', async () => {
+        const c = await fixture();
+        try {
+            c.freeze.inventoryDisposition = 'preserve-current-stock';
+            c.freeze.stockBaselineHash = stockPreservationFingerprint(
+                await collectCleanupSnapshot(c.runner, c.freeze),
+            );
+            const { plan } = await prepared(c);
+            assert.ok(plan.blockers.some(b => b.code === 'LOT_PRESERVATION_REQUIRES_REVIEW'));
+        } finally {
+            await c.close();
+        }
+    });
+});
 
 describe('frozen test-order cleanup transaction', () => {
     it('previews net stock including prior cancellations; preserves customer/store/configuration and claim baseline', async () => {

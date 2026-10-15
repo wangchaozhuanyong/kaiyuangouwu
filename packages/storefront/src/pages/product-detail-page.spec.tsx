@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
 import type { MarketConfig, Product, StorefrontCouponCampaign } from '../types';
 
-import { ProductDetailPage } from './product-detail-page';
+import { ProductDetailPage, type ProductDetailPageProps } from './product-detail-page';
 
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock('@tanstack/react-router', async importOriginal => ({
@@ -84,6 +84,152 @@ describe('desktop product purchase controls', () => {
         host.remove();
         navigate.mockClear();
         viewport.desktop = true;
+    });
+
+    function renderSelection(overrides: Partial<ProductDetailPageProps> = {}) {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        const onAdd = vi.fn();
+        const variants = product.variants.map(item => ({ ...item, saleableStockLevel: 10 }));
+        let value: ProductDetailPageProps = {
+            api: {} as never,
+            product: { ...product, variants },
+            products: [],
+            cartQuantity: 0,
+            market,
+            locale: market.locale,
+            language: 'zh',
+            storefrontName: 'Store',
+            logoUrl: null,
+            reviewEnabled: false,
+            flashSaleItems: [],
+            couponCampaigns: [],
+            customerCoupons: [],
+            addingVariantId: null,
+            favorite: false,
+            onAdd,
+            onBuyNow: vi.fn(),
+            onFavorite: vi.fn(),
+            onNotify: vi.fn(),
+            ...overrides,
+        };
+        const render = (next: Partial<ProductDetailPageProps> = {}) => {
+            value = { ...value, ...next };
+            act(() =>
+                root.render(
+                    <ProductDetailPageContext.Provider value={value}>
+                        <ProductDetailPage />
+                    </ProductDetailPageContext.Provider>,
+                ),
+            );
+        };
+        render();
+        const selectSecond = () =>
+            act(() => host.querySelectorAll<HTMLButtonElement>('.detail-variant-choice')[1].click());
+        const increase = () =>
+            act(() => host.querySelector<HTMLButtonElement>('[aria-label="增加数量"]')?.click());
+        const selectParameters = () =>
+            act(() => {
+                [...host.querySelectorAll<HTMLButtonElement>('.detail-content-tabs button')]
+                    .find(item => item.textContent === '商品参数')
+                    ?.click();
+            });
+        const add = () =>
+            act(() => host.querySelectorAll<HTMLButtonElement>('.detail-action-bar > button')[2].click());
+        return { render, onAdd, variants, selectSecond, increase, selectParameters, add };
+    }
+
+    it('preserves selection and information state through same-product price and stock updates', () => {
+        const controls = renderSelection();
+        controls.selectSecond();
+        controls.increase();
+        controls.increase();
+        controls.selectParameters();
+        const refreshed = {
+            ...product,
+            variants: controls.variants.map(item => ({
+                ...item,
+                priceWithTax: item.id === 'sold-out' ? 1000 : 3000,
+                saleableStockLevel: 6,
+            })),
+        };
+        controls.render({ product: refreshed });
+        expect(host.querySelector('.detail-variant-choice[aria-pressed="true"]')?.textContent).toContain(
+            '缺货规格',
+        );
+        expect(host.querySelector('.detail-quantity output')?.textContent).toBe('3');
+        expect(host.querySelector('.product-detail-body')?.getAttribute('data-active-section')).toBe(
+            'params',
+        );
+        controls.add();
+        expect(controls.onAdd).toHaveBeenCalledWith(refreshed.variants[1], 3);
+        controls.render({
+            product: {
+                ...refreshed,
+                variants: refreshed.variants.map(item => ({ ...item, saleableStockLevel: 2 })),
+            },
+        });
+        expect(host.querySelector('.detail-quantity output')?.textContent).toBe('2');
+        expect(host.querySelector('.detail-variant-choice[aria-pressed="true"]')?.textContent).toContain(
+            '缺货规格',
+        );
+        expect(host.querySelector('.product-detail-body')?.getAttribute('data-active-section')).toBe(
+            'params',
+        );
+        controls.add();
+        expect(controls.onAdd).toHaveBeenLastCalledWith(
+            expect.objectContaining({ id: 'sold-out', saleableStockLevel: 2 }),
+            2,
+        );
+    });
+
+    it('reinitializes for a changed product or explicit URL option and quantity', () => {
+        const controls = renderSelection();
+        controls.selectSecond();
+        controls.increase();
+        controls.selectParameters();
+        controls.render({ initialVariantId: 'available', initialQuantity: 4 });
+        expect(host.querySelector('.detail-variant-choice[aria-pressed="true"]')?.textContent).toContain(
+            '可购买规格',
+        );
+        expect(host.querySelector('.detail-quantity output')?.textContent).toBe('4');
+        expect(host.querySelector('.product-detail-body')?.getAttribute('data-active-section')).toBe(
+            'description',
+        );
+        controls.selectParameters();
+        controls.render({
+            product: { ...product, id: 'different-product', variants: controls.variants },
+            initialVariantId: undefined,
+            initialQuantity: 1,
+        });
+        expect(host.querySelector('.detail-quantity output')?.textContent).toBe('1');
+        expect(host.querySelector('.product-detail-body')?.getAttribute('data-active-section')).toBe(
+            'description',
+        );
+    });
+
+    it('drops a removed option without carrying its quantity into the fallback', () => {
+        const controls = renderSelection();
+        controls.selectSecond();
+        controls.increase();
+        controls.selectParameters();
+        controls.render({ product: { ...product, variants: [controls.variants[0]] } });
+        expect(host.querySelector('.detail-variant-choice[aria-pressed="true"]')?.textContent).toContain(
+            '可购买规格',
+        );
+        expect(host.querySelector('.detail-quantity output')?.textContent).toBe('1');
+        expect(host.querySelector('.product-detail-body')?.getAttribute('data-active-section')).toBe(
+            'params',
+        );
+        controls.add();
+        expect(controls.onAdd).toHaveBeenCalledWith(controls.variants[0], 1);
+        controls.render({ product: { ...product, variants: [] } });
+        controls.add();
+        expect(controls.onAdd).toHaveBeenCalledTimes(1);
+        expect(host.querySelectorAll<HTMLButtonElement>('.detail-action-bar > button')[2].disabled).toBe(
+            true,
+        );
     });
 
     it('retains the gallery, summary, quantity and purchase controls when the viewport is adopted', () => {

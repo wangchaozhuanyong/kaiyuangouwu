@@ -5,10 +5,37 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthEmailDraftContext } from './auth-presentation';
 import { StorefrontContext } from './StorefrontContext';
-import { StorefrontShell } from './StorefrontShell';
+import { mountStorefrontEnhancements, StorefrontShell } from './StorefrontShell';
 
 const viewport = vi.hoisted(() => ({ desktop: false }));
 const deferredModules = vi.hoisted(() => ({ updates: 0, privacy: 0 }));
+const enhancements = vi.hoisted(() => ({
+    start: vi.fn(),
+    dispose: vi.fn(),
+    didStart: undefined as (() => void) | undefined,
+}));
+vi.mock('./router', () => ({
+    router: {
+        subscribe: () => () => undefined,
+        history: { subscribe: () => () => undefined },
+        state: { location: { href: '/' } },
+    },
+}));
+vi.mock('./storefront-enhancements', async importOriginal => {
+    const actual = await importOriginal<typeof import('./storefront-enhancements')>();
+    return {
+        trackStorefrontEnhancements: () => {
+            const dispose = actual.trackStorefrontEnhancements();
+            enhancements.start();
+            enhancements.didStart?.();
+            return () => {
+                enhancements.dispose();
+                dispose();
+            };
+        },
+    };
+});
+
 vi.mock('./StorefrontUpdatePrompt', () => {
     deferredModules.updates++;
     return { StorefrontUpdatePrompt: () => <div>DEFERRED_UPDATE</div> };
@@ -64,7 +91,13 @@ vi.mock('./route-loading', () => ({
 describe('catalog rendering boundary', () => {
     let element: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
+    let enhancementsStarted: Promise<void>;
     beforeEach(() => {
+        enhancements.start.mockClear();
+        enhancements.dispose.mockClear();
+        enhancementsStarted = new Promise(resolve => {
+            enhancements.didStart = resolve;
+        });
         window.history.replaceState(null, '', '/');
         viewport.desktop = false;
         element = document.createElement('div');
@@ -72,6 +105,7 @@ describe('catalog rendering boundary', () => {
     });
     afterEach(() => {
         act(() => root.unmount());
+        enhancements.didStart = undefined;
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
     });
@@ -100,6 +134,31 @@ describe('catalog rendering boundary', () => {
         };
         act(() => root.render(<StorefrontShell state={state as never} />));
     };
+    it('starts deferred browser enhancements after reconnect and retains installed features through later disconnects', async () => {
+        let online = false;
+        vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => online);
+        render({ online: false });
+        expect(enhancements.start).not.toHaveBeenCalled();
+        await act(async () => {
+            online = true;
+            window.dispatchEvent(new Event('online'));
+            // Observe this mount's completed real initializer, rather than a
+            // global import drain that can precede an async mock's continuation.
+            await enhancementsStarted;
+        });
+        expect(enhancements.start).toHaveBeenCalledOnce();
+        act(() => {
+            online = false;
+            window.dispatchEvent(new Event('offline'));
+            online = true;
+            window.dispatchEvent(new Event('online'));
+        });
+        expect(enhancements.start).toHaveBeenCalledOnce();
+        expect(enhancements.dispose).not.toHaveBeenCalled();
+        act(() => root.render(null));
+        expect(enhancements.dispose).toHaveBeenCalledOnce();
+    });
+
     it('shares only the email across standalone auth routes and drops it when the flow is left', () => {
         render({ displayedRoute: { name: 'register' } });
         act(() => element.querySelector<HTMLButtonElement>('[data-testid="set-email-draft"]')?.click());
@@ -395,4 +454,100 @@ describe('catalog rendering boundary', () => {
         });
         expect(navigate).toHaveBeenCalledWith({ name: 'account', id: undefined, tab: undefined }, true);
     });
+});
+
+describe('deferred enhancement recovery ownership', () => {
+    type EnhancementModule = { trackStorefrontEnhancements: () => () => void };
+    function pendingLoad() {
+        let resolve!: (module: EnhancementModule) => void;
+        let reject!: (error: unknown) => void;
+        const promise = new Promise<EnhancementModule>((accept, fail) => {
+            resolve = accept;
+            reject = fail;
+        });
+        return { promise, resolve, reject };
+    }
+    async function settle() {
+        for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+    }
+    let online: boolean;
+    let dispose: (() => void) | undefined;
+    beforeEach(() => {
+        online = true;
+        vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => online);
+    });
+    afterEach(() => {
+        dispose?.();
+        dispose = undefined;
+        vi.restoreAllMocks();
+    });
+    function reconnect() {
+        online = false;
+        window.dispatchEvent(new Event('offline'));
+        online = true;
+        window.dispatchEvent(new Event('online'));
+    }
+
+    it('consumes one reconnect received during a failed load and installs only once', async () => {
+        const first = pendingLoad();
+        const second = pendingLoad();
+        const uninstall = vi.fn();
+        const install = vi.fn(() => uninstall);
+        const load = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        dispose = mountStorefrontEnhancements(load);
+        reconnect();
+        first.reject(new TypeError('Old offline request failed after reconnect'));
+        await settle();
+        expect(load).toHaveBeenCalledTimes(2);
+        second.resolve({ trackStorefrontEnhancements: install });
+        await settle();
+        reconnect();
+        expect(load).toHaveBeenCalledTimes(2);
+        expect(install).toHaveBeenCalledOnce();
+        dispose();
+        dispose = undefined;
+        expect(uninstall).toHaveBeenCalledOnce();
+    });
+
+    it('does not automatically loop after the one reconnect retry also fails', async () => {
+        const first = pendingLoad();
+        const second = pendingLoad();
+        const load = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        dispose = mountStorefrontEnhancements(load);
+        reconnect();
+        first.reject(new TypeError('First failed load'));
+        await settle();
+        expect(load).toHaveBeenCalledTimes(2);
+        second.reject(new TypeError('Retry failed'));
+        await settle();
+        expect(load).toHaveBeenCalledTimes(2);
+    });
+
+    it('waits for an explicit reconnect after a failure with no queued recovery intent', async () => {
+        const first = pendingLoad();
+        const load = vi.fn().mockReturnValue(first.promise);
+        dispose = mountStorefrontEnhancements(load);
+        first.reject(new TypeError('No network transition'));
+        await settle();
+        expect(load).toHaveBeenCalledOnce();
+    });
+
+    it.each(['resolve', 'reject'] as const)(
+        'ignores a late %s after its mount owner is removed',
+        async result => {
+            const first = pendingLoad();
+            const install = vi.fn(() => vi.fn());
+            const load = vi.fn().mockReturnValue(first.promise);
+            dispose = mountStorefrontEnhancements(load);
+            reconnect();
+            dispose();
+            dispose = undefined;
+            if (result === 'resolve') first.resolve({ trackStorefrontEnhancements: install });
+            else first.reject(new TypeError('Owner already removed'));
+            await settle();
+            reconnect();
+            expect(load).toHaveBeenCalledOnce();
+            expect(install).not.toHaveBeenCalled();
+        },
+    );
 });
