@@ -81,6 +81,44 @@ describe('public inline media previews', () => {
         expect(sourceReads()).toBe(1);
     });
 
+    it('serves an already prepared inline preview while an unrelated worker conversion is blocked', async () => {
+        const { server, storage, files } = await harness(true);
+        const preview = await server.readPublicInlinePreview('preview/landscape.png');
+        expect(preview).toBeTypeOf('string');
+        const original = files.get('preview/landscape.png');
+        const read = storage.readFileToBuffer.getMockImplementation();
+        if (!original || !read) throw new Error('Missing image storage fixture');
+        files.set('preview/busy.png', original);
+        let release: (() => void) | undefined;
+        let started: (() => void) | undefined;
+        const blocked = new Promise<void>(resolve => {
+            started = resolve;
+        });
+        storage.readFileToBuffer.mockImplementation(async key => {
+            if (key === 'preview/busy.png') {
+                started?.();
+                await new Promise<void>(resolve => {
+                    release = resolve;
+                });
+            }
+            return read(key);
+        });
+        const conversion = server.preparePublicDerivative('preview/busy.png', 'storefront-hero-fit-480', 90);
+        await blocked;
+        let received: string | undefined;
+        const cached = server.readPublicInlinePreview('preview/landscape.png').then(value => {
+            received = value;
+        });
+        try {
+            await vi.waitFor(() => expect(received).toBe(preview), { timeout: 200 });
+            expect(storage.writeFileFromBuffer).toHaveBeenCalledOnce();
+        } finally {
+            release?.();
+            await conversion;
+            await cached;
+        }
+    });
+
     it('rejects private, absolute, malformed and traversal paths before reading any storage', async () => {
         const { server, storage } = await harness();
         for (const identifier of [

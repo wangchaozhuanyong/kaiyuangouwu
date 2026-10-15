@@ -229,12 +229,16 @@ export class AssetServer {
         };
     }
 
-    private transformedBuffer(
+    private async transformedBuffer(
         identifier: string,
         parameters: ImageTransformParameters,
         persist: boolean,
     ): Promise<Buffer> {
         const key = this.getFileNameFromParameters(identifier, parameters);
+        // Reading prepared pixels does not consume conversion capacity. In particular,
+        // an inline preview must not expire behind unrelated, expensive cold transforms.
+        if (persist && (await this.assetStorageStrategy.fileExists(key)))
+            return this.assetStorageStrategy.readFileToBuffer(key);
         // cache=false retains its no-write behavior and cannot join a writer's request.
         return this.transforms.run(`${persist ? 'persist' : 'transient'}:${key}`, async () => {
             if (persist && (await this.assetStorageStrategy.fileExists(key)))

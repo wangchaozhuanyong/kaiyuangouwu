@@ -57,6 +57,7 @@ type Scenario = {
     child?: boolean;
     empty?: boolean;
     hidden?: boolean;
+    implicit?: boolean;
 };
 
 const scenarios: Scenario[] = [
@@ -65,7 +66,7 @@ const scenarios: Scenario[] = [
         href: '/zh/category?collectionId=2&childId=42&sort=price-desc&fulfillment=digital&inStockOnly=true&minPrice=20&maxPrice=200&page=2',
         child: true,
     },
-    { name: 'the implicit first category', href: '/zh/category' },
+    { name: 'the implicit first category', href: '/zh/category', implicit: true },
     { name: 'a confirmed empty result', href: '/zh/category?collectionId=2&sort=price-asc', empty: true },
     {
         name: 'a delayed document with expired public data',
@@ -122,8 +123,9 @@ function fixture(scenario: Scenario): PublicPageData {
             collection.id = scenario.child ? '42' : '2';
         }),
     );
-    page.catalog.items = scenario.empty ? [] : page.products.slice(0, 12);
+    page.catalog.items = scenario.empty ? [] : page.products.slice(0, scenario.implicit ? 11 : 12);
     page.catalog.totalItems = scenario.empty ? 0 : 36;
+    if (scenario.implicit) delete page.products;
     return page;
 }
 
@@ -197,8 +199,16 @@ it.each(scenarios)('preserves the actual server DOM while hydrating $name', asyn
     if (!element) throw new Error('Missing hydration root fixture');
     const initialMain = element.querySelector('main');
     const initialStatus = element.querySelector('.category-pagination-status');
-    const initialProductLink = element.querySelector('.product-card-detail-link');
+    const initialProductLink = element.querySelector('a.product-card-detail-link');
     expect(initialMain).not.toBeNull();
+    if (!scenario.empty) {
+        expect(initialProductLink).not.toBeNull();
+        expect(element.querySelectorAll('.category-product-list a.product-card-detail-link')).toHaveLength(
+            page.catalog?.items.length ?? 0,
+        );
+        expect(element.querySelector('.category-product-list .product-card-skeleton')).toBeNull();
+        expect(initialProductLink?.querySelector('img.safe-image')).not.toBeNull();
+    }
     await act(async () => {
         root = hydrateRoot(
             element,
@@ -221,7 +231,7 @@ it.each(scenarios)('preserves the actual server DOM while hydrating $name', asyn
     expect(element.querySelector('main')).toBe(initialMain);
     if (initialStatus) expect(element.querySelector('.category-pagination-status')).toBe(initialStatus);
     if (initialProductLink)
-        expect(element.querySelector('.product-card-detail-link')).toBe(initialProductLink);
+        expect(element.querySelector('a.product-card-detail-link')).toBe(initialProductLink);
     if (scenario.updateImmediately) {
         // Query batches post-commit observer notifications onto a timer. Let that
         // separate render commit before checking the freshly returned content.
@@ -243,7 +253,7 @@ it.each(scenarios)('preserves the actual server DOM while hydrating $name', asyn
         expect(initialStatus?.textContent).not.toContain('网络已断开，连接后继续');
         expect(element.querySelector('main')).toBe(initialMain);
         expect(element.querySelector('.category-pagination-status')).toBe(initialStatus);
-        expect(element.querySelector('.product-card-detail-link')).toBe(initialProductLink);
+        expect(element.querySelector('a.product-card-detail-link')).toBe(initialProductLink);
         expect(errors).toEqual([]);
     }
 });

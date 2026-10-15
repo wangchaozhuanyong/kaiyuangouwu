@@ -220,6 +220,43 @@ describe('bounded public page preparation', () => {
         h.service.onApplicationShutdown();
     });
 
+    it('warms published services and support artwork before their first visit in both languages', async () => {
+        const h = harness();
+        await h.service.onApplicationBootstrap();
+        h.pages.read.mockResolvedValue({
+            content: {
+                blocks: [
+                    {
+                        type: 'CLIENT_PLUGINS',
+                        code: 'storefront-client-plugins',
+                        imageUrl: '/assets/preview/services.webp',
+                        settings: { businessServicesHeroLayout: 'shared-banner' },
+                    },
+                    { type: 'SUPPORT', imageUrl: '/assets/preview/support.webp' },
+                ],
+            },
+        });
+        await h.run();
+        const contentReads = h.pages.read.mock.calls.filter(call => call[2].kind === 'page');
+        // Recency can reorder the two language batches; their exact coverage stays fixed.
+        expect(contentReads.map(call => `${call[0].languageCode}:${call[2].id}`).sort()).toEqual([
+            'en:services',
+            'en:support',
+            'zh_Hans:services',
+            'zh_Hans:support',
+        ]);
+        const retained = h.records.get('storefront-public-hot-routes:v2:a:r1') as PublicHotRoute[];
+        expect(retained).toHaveLength(8);
+        expect(retained.every(item => item.primary)).toBe(true);
+        h.pages.read.mockClear().mockResolvedValue({
+            content: { blocks: [{ type: 'SUPPORT', imageUrl: null }] },
+        });
+        h.records.delete('storefront-public-hot-routes:v2:a:r1');
+        await h.run();
+        expect(h.pages.read.mock.calls.some(call => call[2].kind === 'page')).toBe(false);
+        h.service.onApplicationShutdown();
+    });
+
     it('reserves the homepage, default catalog and published primary categories within twenty routes', async () => {
         const h = harness();
         await h.service.onApplicationBootstrap();

@@ -30,6 +30,8 @@ import { contentStringArraySetting } from '../storefront-utils';
 
 import { type StorefrontQueryContext } from './storefront-query-context';
 
+const publicCacheOptions = { staleTime: PUBLIC_QUERY_STALE_TIME, gcTime: PUBLIC_QUERY_GC_TIME };
+
 export function useStorefrontPublicData({
     api,
     market,
@@ -40,6 +42,7 @@ export function useStorefrontPublicData({
 }: StorefrontQueryContext & { presentedHref?: string }) {
     const text = uiCopy[language];
     const queryClient = useQueryClient();
+    const marketCode = storefrontQueryKeys.market(market);
     const request = currentPublicPageRequest(presentedHref);
     const publicRoute = (() => {
         if (typeof window === 'undefined') return true;
@@ -52,23 +55,12 @@ export function useStorefrontPublicData({
         }
     })();
     const initialSeoPage = readInitialPublicPage();
-    const publicMediaQuery = useQuery<MediaDescriptor[]>({
-        queryKey: [
-            ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
-            'public-media',
-        ],
-        queryFn: skipToken,
-        enabled: false,
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
-    });
     // Observe metadata delivered by the same public read; this observer never starts a request.
     const publicSeoQuery = useQuery<PublicSeoDocument | null>({
-        queryKey: publicSeoQueryKey(storefrontQueryKeys.market(market), vendureLanguageCode, request),
+        queryKey: publicSeoQueryKey(marketCode, vendureLanguageCode, request),
         queryFn: skipToken,
         enabled: false,
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
+        ...publicCacheOptions,
         initialData:
             initialSeoPage?.scope.channelCode === market.code &&
             initialSeoPage.scope.currencyCode === market.currencyCode &&
@@ -109,6 +101,7 @@ export function useStorefrontPublicData({
         return page[name] as T;
     }
     const aggregatePart = {
+        ...publicCacheOptions,
         refetchOnMount: true as const,
         refetchOnWindowFocus: false as const,
         refetchOnReconnect: false as const,
@@ -116,7 +109,6 @@ export function useStorefrontPublicData({
     };
     async function refreshMissingPublicSections(page: PublicPageData | undefined, signal: AbortSignal) {
         if (SEND_CLIENT_CHANNEL_TOKEN || !storefrontContextResolved || signal.aborted) return;
-        const marketCode = storefrontQueryKeys.market(market);
         const missing: Array<[QueryKey, unknown, (querySignal: AbortSignal) => Promise<unknown>]> = [
             [
                 [...storefrontQueryKeys.content(marketCode, vendureLanguageCode), 'public'],
@@ -164,7 +156,7 @@ export function useStorefrontPublicData({
         await Promise.allSettled(reads);
     }
     const productsQuery = useQuery({
-        queryKey: storefrontQueryKeys.products(storefrontQueryKeys.market(market), vendureLanguageCode, 12),
+        queryKey: storefrontQueryKeys.products(marketCode, vendureLanguageCode, 12),
         queryFn: ({ signal }) =>
             request.kind === 'home'
                 ? publicSection('products', () => api.products(12, signal), signal)
@@ -173,8 +165,6 @@ export function useStorefrontPublicData({
         enabled:
             storefrontContextResolved &&
             ((publicRoute && request.kind === 'home') || readyLocation === locationKey),
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
         ...aggregatePart,
         meta: {
             ...publicQueryMeta(),
@@ -183,19 +173,29 @@ export function useStorefrontPublicData({
     });
 
     const collectionsQuery = useQuery({
-        queryKey: storefrontQueryKeys.collections(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryKey: storefrontQueryKeys.collections(marketCode, vendureLanguageCode),
         queryFn: ({ signal }) => publicSection('collections', () => api.collections(signal), signal),
         enabled: storefrontContextResolved,
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
         ...aggregatePart,
     });
 
+    const publicMediaQuery = useQuery<MediaDescriptor[]>({
+        queryKey: publicRoute
+            ? publicSeoQueryKey(
+                  marketCode,
+                  vendureLanguageCode,
+                  request,
+                  'public-media',
+                  collectionsQuery.data,
+              )
+            : [...storefrontQueryKeys.scope(marketCode, vendureLanguageCode), 'public-media'],
+        queryFn: skipToken,
+        enabled: false,
+        ...publicCacheOptions,
+    });
+
     const configQuery = useQuery({
-        queryKey: [
-            ...storefrontQueryKeys.config(storefrontQueryKeys.market(market), vendureLanguageCode),
-            'public',
-        ],
+        queryKey: [...storefrontQueryKeys.config(marketCode, vendureLanguageCode), 'public'],
         queryFn: async ({ signal }) => {
             if (!publicRoute) return api.storefrontConfig(signal);
             const page = await fetchPublicPage(
@@ -216,39 +216,33 @@ export function useStorefrontPublicData({
         },
         // The bootstrap copies the just-received config to the resolved market key.
         // Avoid immediately repeating the same request when the server owns Channel routing.
+        ...publicCacheOptions,
         staleTime: SEND_CLIENT_CHANNEL_TOKEN ? 0 : 30_000,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
-        gcTime: PUBLIC_QUERY_GC_TIME,
     });
 
     const contentQuery = useQuery({
-        queryKey: [
-            ...storefrontQueryKeys.content(storefrontQueryKeys.market(market), vendureLanguageCode),
-            'public',
-        ],
+        queryKey: [...storefrontQueryKeys.content(marketCode, vendureLanguageCode), 'public'],
         queryFn: ({ signal }) => publicSection('content', () => api.storefrontContent(signal), signal),
         enabled: storefrontContextResolved,
-        staleTime: 30_000,
-        gcTime: PUBLIC_QUERY_GC_TIME,
         ...aggregatePart,
+        staleTime: 30_000,
     });
 
     const flashSalesQuery = useQuery({
-        queryKey: storefrontQueryKeys.flashSales(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryKey: storefrontQueryKeys.flashSales(marketCode, vendureLanguageCode),
         queryFn: ({ signal }) => publicSection('flashSales', () => api.activeFlashSales(signal), signal),
         enabled: storefrontContextResolved,
-        staleTime: 30_000,
-        gcTime: PUBLIC_QUERY_GC_TIME,
         ...aggregatePart,
+        staleTime: 30_000,
     });
 
     const reviewSettingsQuery = useQuery({
-        queryKey: storefrontQueryKeys.reviewSettings(storefrontQueryKeys.market(market), vendureLanguageCode),
+        queryKey: storefrontQueryKeys.reviewSettings(marketCode, vendureLanguageCode),
         queryFn: ({ signal }) => api.reviewSettings(signal),
         enabled: storefrontContextResolved,
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
+        ...publicCacheOptions,
         meta: publicQueryMeta(),
     });
     const reviewSettingsStatus =
@@ -261,11 +255,10 @@ export function useStorefrontPublicData({
               : 'loading';
 
     const commerceModeQuery = useQuery({
-        queryKey: storefrontQueryKeys.commerceMode(storefrontQueryKeys.market(market)),
+        queryKey: storefrontQueryKeys.commerceMode(marketCode),
         queryFn: ({ signal }) => api.activeStoreCommerceMode(signal),
         enabled: storefrontContextResolved,
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
+        ...publicCacheOptions,
         meta: publicQueryMeta(),
     });
 
@@ -292,14 +285,10 @@ export function useStorefrontPublicData({
 
     // Check original campaign/SKU eligibility without downloading the public page again.
     const flashSaleReferencesQuery = useQuery({
-        queryKey: [
-            ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
-            'flash-sale-associations',
-        ],
+        queryKey: [...storefrontQueryKeys.scope(marketCode, vendureLanguageCode), 'flash-sale-associations'],
         queryFn: ({ signal }) => api.activeFlashSales(signal),
         enabled: storefrontContextResolved && publishedFlashSales.some(sale => sale.items.length > 0),
-        staleTime: PUBLIC_QUERY_STALE_TIME,
-        gcTime: PUBLIC_QUERY_GC_TIME,
+        ...publicCacheOptions,
         meta: publicQueryMeta(),
     });
     const activeFlashSales = flashSaleReferencesQuery.data ?? publishedFlashSales;

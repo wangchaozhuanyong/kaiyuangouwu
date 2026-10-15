@@ -234,7 +234,7 @@ jobs:
                   fi
                   python3 - <<'PY'
                   import base64
-                  import gzip
+                  import lzma
                   import json
                   import os
                   from pathlib import Path
@@ -242,7 +242,7 @@ jobs:
 
                   def encode_files(files):
                       contents = json.dumps(files, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
-                      return base64.b64encode(gzip.compress(contents, mtime=0)).decode('ascii')
+                      return base64.b64encode(lzma.compress(contents, format=lzma.FORMAT_XZ, preset=6)).decode('ascii')
 
                   selected_files = []
                   def transport(path, target):
@@ -360,13 +360,13 @@ jobs:
                   expected_paths = [entry['path'] for entry in selected_files]
                   assert len(expected_paths) == len(set(expected_paths)), 'Duplicate production control destination'
                   unpack = '\n'.join([
-                      'import json, os, pathlib, sys',
+                      'import json, lzma, os, pathlib, sys',
                       'root = pathlib.Path(sys.argv[1])',
                       'assert root.is_absolute() and root.is_dir() and not root.is_symlink()',
                       'assert root.resolve() == root and root.stat().st_mode & 0o077 == 0',
                       'expected = json.loads(sys.argv[2])',
                       'assert isinstance(expected, list) and len(expected) == len(set(expected))',
-                      'entries = json.load(sys.stdin)',
+                      'entries = json.loads(lzma.decompress(sys.stdin.buffer.read(), format=lzma.FORMAT_XZ))',
                       'assert isinstance(entries, list) and len(entries) == len(expected)',
                       'prepared = {}',
                       'for entry in entries:',
@@ -387,7 +387,7 @@ jobs:
                   encoded = encode_files(selected_files)
                   expected_argument = shlex.quote(json.dumps(expected_paths, separators=(',', ':')))
                   lines.insert(bundle_index,
-                      f"printf '%s' '{encoded}' | base64 -d | gzip -d | python3 -c {shlex.quote(unpack)} \"$operations_dir\" {expected_argument}"
+                      f"printf '%s' '{encoded}' | base64 -d | python3 -c {shlex.quote(unpack)} \"$operations_dir\" {expected_argument}"
                   )
                   lines.append(
                       f'env OPS_OPERATION={operation} OPS_EXPECTED_PLAN_SHA256={expected_plan} OPS_SOURCE_SHA={source_sha} OPS_EXPECTED_CHANNEL_CODES={expected_channels} OPS_EXPECTED_RUNTIME_SHA={expected_runtime} OPS_PRODUCT_ID={product_id} OPS_NOTIFICATION_PUBLIC_KEY={notification_public_key} /usr/bin/node "$operations_dir/production-operations.cjs"'

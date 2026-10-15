@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     canonicalPublicPageRequest,
+    effectivePublicCatalogInput,
     publicLanguageFromUrl,
     publicLocalizedHref,
     publicPageDataSearchParams,
@@ -12,6 +13,52 @@ import {
 } from './public-page-data';
 
 describe('canonical public route requests', () => {
+    it('resolves only default category inputs to the first visible collection without changing request identity', () => {
+        const collections = [
+            { id: 'hidden', productVariantCount: 0 },
+            { id: 'all' },
+            { id: 'first', productVariantCount: 0, featuredAsset: { preview: '/configured.webp' } },
+            { id: 'second', productVariantCount: 10 },
+        ];
+        const request = {
+            kind: 'catalog' as const,
+            input: { skip: 12, take: 12, sort: 'PRICE_DESC' as const },
+        };
+        const identity = publicPageRequestKey(request);
+        expect(effectivePublicCatalogInput(request, collections)).toEqual({
+            collectionId: 'first',
+            sort: 'PRICE_DESC',
+            inStockOnly: false,
+            skip: 12,
+            take: 12,
+        });
+        expect(publicPageRequestKey(request)).toBe(identity);
+        expect(request.input).not.toHaveProperty('collectionId');
+        expect(
+            effectivePublicCatalogInput(
+                { ...request, input: { ...request.input, collectionId: 'all' } },
+                collections,
+            ),
+        ).toHaveProperty('collectionId', 'first');
+        expect(
+            effectivePublicCatalogInput(
+                { ...request, input: { ...request.input, collectionId: 'child' } },
+                collections,
+            ),
+        ).toHaveProperty('collectionId', 'child');
+        expect(effectivePublicCatalogInput({ ...request, path: '/search' }, collections)).not.toHaveProperty(
+            'collectionId',
+        );
+        expect(
+            effectivePublicCatalogInput(
+                { ...request, path: '/search', input: { collectionId: 'all' } },
+                collections,
+            ),
+        ).not.toHaveProperty('collectionId');
+        expect(
+            effectivePublicCatalogInput(request, [{ id: 'hidden', productVariantCount: 0 }]),
+        ).not.toHaveProperty('collectionId');
+    });
     it('keeps language authority and entity identity in public URLs while leaving private routes alone', () => {
         expect(publicLanguageFromUrl('/zh/product?id=p-1')).toBe('zh_Hans');
         expect(publicLanguageFromUrl('/en/guides/product-help')).toBe('en');

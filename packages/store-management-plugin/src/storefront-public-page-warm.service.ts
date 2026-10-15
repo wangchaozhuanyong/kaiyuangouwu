@@ -13,8 +13,10 @@ import {
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import {
     canonicalPublicPageRequest,
+    primaryStorefrontMedia,
     publicPageRequestKey,
     storefrontNavigationCollections,
+    type PrimaryStorefrontMediaInput,
     type PublicNavigationCollection,
     type PublicPageRequest,
 } from '@vendure/storefront-content-plugin';
@@ -264,6 +266,14 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             const homeRoute = { ...base, request: homeRequest };
             preparedHomes.add(identity(homeRoute));
             defaults.push(homeRoute, { ...base, request: { kind: 'catalog', input: {} } });
+            // Published content-page artwork needs the same worker-owned first-visit
+            // preparation as the homepage, without relying on a visitor to warm it.
+            const blocks = (home.content as { blocks?: PrimaryStorefrontMediaInput['blocks'] } | undefined)
+                ?.blocks;
+            for (const id of ['services', 'support'] as const) {
+                if (primaryStorefrontMedia({ route: id, blocks }).length)
+                    defaults.push({ ...base, request: { kind: 'page', id } });
+            }
             for (const collection of storefrontNavigationCollections(
                 (home.collections ?? []) as PublicNavigationCollection[],
             ).slice(0, 4)) {

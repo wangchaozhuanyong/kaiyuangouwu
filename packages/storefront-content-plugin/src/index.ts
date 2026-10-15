@@ -44,6 +44,7 @@ export {
     STOREFRONT_BOOT_DATA_ELEMENT_ID,
     STOREFRONT_PAGE_DATA_ELEMENT_ID,
     canonicalPublicPageRequest,
+    effectivePublicCatalogInput,
     isReusablePublicPageData,
     publicPageDataSearchParams,
     publicPageRequestFromUrl,

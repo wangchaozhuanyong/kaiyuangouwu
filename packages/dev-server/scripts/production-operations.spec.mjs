@@ -21,7 +21,6 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { gzipSync } from 'node:zlib';
 
 const require = createRequire(import.meta.url);
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -428,9 +427,9 @@ void test('release workflow ships the fixed live preflight inputs and migration 
     assert.match(workflow, /deploy\/usdt-migration-guard\.cjs/u);
     assert.match(workflow, /packages\/dev-server\/migrations\/index\.ts/u);
     assert.match(workflow, /ref: \$\{\{ inputs\.source_sha \|\| github\.sha \}\}/u);
-    assert.match(workflow, /gzip\.compress\(contents, mtime=0\)/u);
+    assert.match(workflow, /lzma\.compress\(contents, format=lzma\.FORMAT_XZ, preset=6\)/u);
     assert.match(workflow, /Path\(path\)\.read_bytes\(\)\.decode\('utf-8'\)/u);
-    assert.match(workflow, /\| base64 -d \| gzip -d \| python3 -c/u);
+    assert.match(workflow, /\| base64 -d \| python3 -c/u);
     assert.match(workflow, /len\(payload\.encode\('utf-8'\)\) <= 80_000/u);
     assert.match(
         workflow,
@@ -518,10 +517,18 @@ void test('release workflow ships the fixed live preflight inputs and migration 
         ],
         [...commonFiles, 'deploy/systemd/vendure-backup-s3-guard.py'],
     ];
-    const encodedBytes = bundles.map(
-        files =>
-            gzipSync(
-                JSON.stringify(
+    const compression = spawnSync(
+        'python3',
+        [
+            '-c',
+            `import base64, json, lzma, sys
+print(json.dumps([len(base64.b64encode(lzma.compress(
+    json.dumps(files, ensure_ascii=False, separators=(',', ':')).encode('utf-8'),
+    format=lzma.FORMAT_XZ, preset=6))) for files in json.load(sys.stdin)]))`,
+        ],
+        {
+            input: JSON.stringify(
+                bundles.map(files =>
                     files.map(file => ({
                         path: file.startsWith('deploy/')
                             ? file.slice('deploy/'.length)
@@ -529,9 +536,12 @@ void test('release workflow ships the fixed live preflight inputs and migration 
                         content: readFileSync(path.join(repositoryRoot, file), 'utf8'),
                     })),
                 ),
-                { mtime: 0, level: 9 },
-            ).toString('base64').length,
+            ),
+            encoding: 'utf8',
+        },
     );
+    assert.equal(compression.status, 0, compression.stderr);
+    const encodedBytes = JSON.parse(compression.stdout);
     assert.ok(
         Math.max(...encodedBytes) < 78_000,
         `Largest compressed production operation bundle uses ${Math.max(...encodedBytes)} bytes`,
@@ -557,7 +567,7 @@ void test('every existing production operation fits both unchanged transport bud
         'python3',
         [
             '-c',
-            `import base64, gzip, json, os, re, shlex, subprocess, sys, tempfile, textwrap
+            `import base64, json, lzma, os, re, shlex, subprocess, sys, tempfile, textwrap
 from pathlib import Path
 request = json.load(sys.stdin)
 generator = compile(textwrap.dedent(request['generator']), '<existing-transport>', 'exec')
@@ -572,7 +582,7 @@ for operation in request['operations']:
     command = json.loads(payload)['commands'][0]
     encoded = re.findall(r"printf '%s' '([A-Za-z0-9+/=]+)'", command)
     assert len(encoded) == 1, 'Production controls must share one compressed package'
-    entries = json.loads(gzip.decompress(base64.b64decode(encoded[0])))
+    entries = json.loads(lzma.decompress(base64.b64decode(encoded[0]), format=lzma.FORMAT_XZ))
     assert entries == scope['selected_files'], 'Compressed controls differ from selected dependencies'
     with tempfile.TemporaryDirectory(prefix='unpack-', dir=os.environ['RUNNER_TEMP']) as directory:
         root = Path(directory)
@@ -587,7 +597,7 @@ for operation in request['operations']:
             source = entry['path'].removeprefix('repository/') if entry['path'].startswith('repository/') else 'deploy/' + entry['path']
             assert (root / entry['path']).read_bytes() == Path(source).read_bytes(), 'Unpacked control bytes differ'
         repeated = subprocess.run([sys.executable, '-c', scope['unpack'], str(root), json.dumps(scope['expected_paths'])],
-                                  input=json.dumps(entries), text=True, capture_output=True)
+                                  input=lzma.compress(json.dumps(entries).encode('utf-8'), format=lzma.FORMAT_XZ, preset=6), capture_output=True)
         assert repeated.returncode != 0, 'Decoder must not overwrite an existing control'
     if not budgets:
         bad_cases = [
@@ -599,9 +609,16 @@ for operation in request['operations']:
         for bad_entries, expected in bad_cases:
             with tempfile.TemporaryDirectory(prefix='refuse-', dir=os.environ['RUNNER_TEMP']) as directory:
                 rejected = subprocess.run([sys.executable, '-c', scope['unpack'], directory, json.dumps(expected)],
-                                          input=json.dumps(bad_entries), text=True, capture_output=True)
+                                          input=lzma.compress(json.dumps(bad_entries).encode('utf-8'), format=lzma.FORMAT_XZ, preset=6), capture_output=True)
                 assert rejected.returncode != 0, 'Unsafe, unknown or repeated destination must be rejected'
                 assert not list(Path(directory).iterdir()), 'Decoder wrote before validating all paths'
+        malformed = [b'not-an-xz-stream', base64.b64decode(encoded[0])[:-1]]
+        for bad_payload in malformed:
+            with tempfile.TemporaryDirectory(prefix='malformed-', dir=os.environ['RUNNER_TEMP']) as directory:
+                rejected = subprocess.run([sys.executable, '-c', scope['unpack'], directory, json.dumps(scope['expected_paths'])],
+                                          input=bad_payload, capture_output=True)
+                assert rejected.returncode != 0, 'Malformed or truncated compressed content must be rejected'
+                assert not list(Path(directory).iterdir()), 'Decoder wrote before validating compressed content'
     budgets.append({
         'operation': operation, 'payloadBytes': len(payload),
         'encodedSourceBytes': sum(map(len, encoded)),

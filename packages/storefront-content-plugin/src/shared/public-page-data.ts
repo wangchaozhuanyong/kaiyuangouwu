@@ -286,6 +286,24 @@ export function storefrontNavigationCollections<T extends PublicNavigationCollec
         .filter(item => visible(item) || item.children.length > 0);
 }
 
+/** The category view defaults to its first visible collection; search keeps its all-collection scope. */
+export function effectivePublicCatalogInput(
+    request: Extract<PublicPageRequest, { kind: 'catalog' }>,
+    collections: readonly PublicNavigationCollection[],
+): PublicPageCatalogInput {
+    const normalized = canonicalPublicPageRequest(request);
+    if (normalized.kind !== 'catalog') throw new Error('Expected a public catalog request');
+    const input = { ...normalized.input };
+    if (input.collectionId && input.collectionId !== 'all') return input;
+    delete input.collectionId;
+    if (normalized.path === '/search') return input;
+    const first = storefrontNavigationCollections([...collections]).find(
+        item => item.id && item.id !== 'all',
+    );
+    if (first?.id) input.collectionId = first.id;
+    return input;
+}
+
 /** Public data only. Neither sessions nor Channel tokens belong in this contract. */
 export interface StorefrontPageData<
     Config = unknown,

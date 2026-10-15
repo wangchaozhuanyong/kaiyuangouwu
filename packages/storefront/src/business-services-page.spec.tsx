@@ -462,6 +462,12 @@ describe('business services page', () => {
         expect(phone.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
             '/assets/desktop-wide.webp',
         );
+        expect(phone.querySelector('.business-services-hero-media img')?.getAttribute('loading')).toBe(
+            'eager',
+        );
+        expect(phone.querySelector('.business-services-hero-media img')?.getAttribute('fetchpriority')).toBe(
+            'high',
+        );
         expect(phone.querySelector('picture source')?.getAttribute('media')).toBe('(max-width: 1023px)');
         expect(phone.querySelector('picture source')?.getAttribute('srcset')).toContain(
             '/assets/phone-square.webp',
@@ -476,6 +482,12 @@ describe('business services page', () => {
         expect(desktop.querySelector('.business-services-hero-media img')?.getAttribute('src')).toContain(
             '/assets/desktop-wide.webp',
         );
+        expect(desktop.querySelector('.business-services-hero-media img')?.getAttribute('loading')).toBe(
+            'eager',
+        );
+        expect(
+            desktop.querySelector('.business-services-hero-media img')?.getAttribute('fetchpriority'),
+        ).toBe('high');
         expect(
             Number(
                 desktop
@@ -561,6 +573,7 @@ describe('business services page', () => {
         const desktopFallback = host.querySelector('.business-services-desktop-empty-hero');
         expect(mobileHero?.querySelector('img')?.getAttribute('src')).toContain('/assets/phone-only.webp');
         expect(mobileHero?.querySelector('img')?.getAttribute('loading')).toBe('lazy');
+        expect(mobileHero?.querySelector('img')?.getAttribute('fetchpriority')).not.toBe('high');
         expect(desktopFallback?.getAttribute('data-services-hero-layout')).toBe('stacked');
         expect(desktopFallback?.querySelector('img')).toBeNull();
         expect(desktopFallback?.querySelector('.business-services-architecture')).not.toBeNull();
