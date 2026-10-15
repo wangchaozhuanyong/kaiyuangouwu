@@ -1,4 +1,4 @@
-import { Channel, RequestContextService, ScheduledTask, TransactionalConnection } from '@vendure/core';
+import { Channel, ScheduledTask, TransactionalConnection } from '@vendure/core';
 
 import { ContentTranslationBackfillService } from './content-translation-backfill.service.js';
 import { ContentTranslationRetryService } from './content-translation-retry.service.js';
@@ -18,7 +18,7 @@ export const enqueueHistoricalContentTranslations = new ScheduledTask({
     description: '每分钟分批登记历史缺译内容，不在 API 启动时访问翻译服务',
     schedule: '* * * * *',
     timeout: '1m',
-    execute: async ({ injector }) => {
+    execute: async ({ injector, scheduledContext }) => {
         const execution = injector.get(TranslationExecutionService);
         const state = await execution.state();
         if (state.scanComplete) return { complete: true };
@@ -31,12 +31,9 @@ export const enqueueHistoricalContentTranslations = new ScheduledTask({
                 .update(state.provider, { scanComplete: true });
             return { complete: true };
         }
-        const ctx = await injector
-            .get(RequestContextService)
-            .create({ apiType: 'admin', channelOrToken: channel });
         const page = await injector
             .get(ContentTranslationBackfillService)
-            .backfill(ctx, null, 100, state.scanOffset);
+            .backfill(scheduledContext, null, 100, state.scanOffset, channel);
         await connection.rawConnection.getRepository(TranslationProviderState).update(state.provider, {
             scanOffset: page.hasMore ? page.nextOffset : 0,
             scanChannelIndex: page.hasMore ? state.scanChannelIndex : state.scanChannelIndex + 1,

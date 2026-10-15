@@ -1,0 +1,39 @@
+diff --git a/dist/commonjs/index.d.ts b/dist/commonjs/index.d.ts
+--- a/dist/commonjs/index.d.ts
++++ b/dist/commonjs/index.d.ts
+@@ -9,4 +9,5 @@
+     maxRewrites?: number;
+ };
+ export declare function expand(str: string, options?: BraceExpansionOptions): string[];
++export default expand;
+ //# sourceMappingURL=index.d.ts.mapdiff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+--- a/dist/commonjs/index.js
++++ b/dist/commonjs/index.js
+@@ -330,4 +330,11 @@
+     }
+     return acc;
+ }
++// Preserve the callable CommonJS export required by minimatch <=9.
++module.exports = expand;
++module.exports.expand = expand;
++module.exports.EXPANSION_MAX = exports.EXPANSION_MAX;
++module.exports.EXPANSION_MAX_LENGTH = exports.EXPANSION_MAX_LENGTH;
++module.exports.EXPANSION_MAX_DEPTH = exports.EXPANSION_MAX_DEPTH;
++module.exports.EXPANSION_MAX_REWRITES = exports.EXPANSION_MAX_REWRITES;
+ //# sourceMappingURL=index.js.mapdiff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+--- a/dist/esm/index.d.ts
++++ b/dist/esm/index.d.ts
+@@ -9,4 +9,5 @@
+     maxRewrites?: number;
+ };
+ export declare function expand(str: string, options?: BraceExpansionOptions): string[];
++export default expand;
+ //# sourceMappingURL=index.d.ts.mapdiff --git a/dist/esm/index.js b/dist/esm/index.js
+--- a/dist/esm/index.js
++++ b/dist/esm/index.js
+@@ -326,4 +326,5 @@
+     }
+     return acc;
+ }
++export default expand;
+ //# sourceMappingURL=index.js.map

@@ -585,15 +585,36 @@ export function sharedResourceIsolationChecks(snapshot) {
             };
         }
         const value = association.shared.length;
+        const channels = new Map(
+            (snapshot.channels ?? []).map(channel => [String(channel.id), channel.code]),
+        );
+        const classification = {
+            defaultAndSingleStore: 0,
+            multipleOperatingStores: 0,
+            unknownChannels: 0,
+        };
+        for (const item of association.shared) {
+            const ids = [...new Set(item.channelIds.map(String))];
+            if (ids.some(id => !channels.has(id))) {
+                classification.unknownChannels++;
+                continue;
+            }
+            const operating = ids.filter(id => channels.get(id) !== '__default_channel__');
+            if (operating.length > 1) classification.multipleOperatingStores++;
+            else if (operating.length === 1 && ids.length > operating.length)
+                classification.defaultAndSingleStore++;
+            else classification.unknownChannels++;
+        }
         return {
             key: `shared-${key}`,
             severity: 'P1',
             status: value === 0 ? 'PASS' : 'FAIL',
             count: value,
+            classification,
             detail:
                 value === 0
-                    ? 'No resource is shared across operating Channels'
-                    : 'Store-owned resources must be cloned instead of shared across Channels',
+                    ? 'No multi-Channel resource associations'
+                    : 'Raw multi-Channel associations require maintenance ownership and sales authorization review; they do not by themselves prove cross-store access',
         };
     });
 }

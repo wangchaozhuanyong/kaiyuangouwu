@@ -669,7 +669,11 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.doesNotMatch(storefrontServer, /@storefront_promotion_entry/u);
     assert.match(
         storefrontServer,
-        /location \/ \{[\s\S]*?try_files \$uri \$uri\/ @storefront_legacy_redirect;/u,
+        /location \/ \{[\s\S]*?try_files \$uri \$uri\/ \$storefront_legacy_fallback;/u,
+    );
+    assert.match(
+        config,
+        /map \$request_uri \$storefront_legacy_fallback \{\s+default @storefront_unknown_route_redirect;/u,
     );
     const legacyRedirect = storefrontServer.match(
         /location @storefront_legacy_redirect \{(?<body>[\s\S]*?)\n    \}/u,
@@ -679,6 +683,15 @@ void test('production Nginx routes protected downloads and hardens both APIs', a
     assert.match(legacyRedirect, /proxy_set_header Cookie "";/u);
     assert.match(legacyRedirect, /proxy_set_header Authorization "";/u);
     assert.match(legacyRedirect, /error_page 404 =200 \/index\.html;/u);
+    const unknownRoute = storefrontServer.match(
+        /location @storefront_unknown_route_redirect \{(?<body>[\s\S]*?)\n    \}/u,
+    )?.groups?.body;
+    assert.ok(unknownRoute);
+    assert.match(unknownRoute, /rewrite \^ \/storefront\/redirect break;/u);
+    assert.match(unknownRoute, /proxy_set_header Cookie "";/u);
+    assert.match(unknownRoute, /proxy_set_header Authorization "";/u);
+    assert.match(unknownRoute, /error_page 404 \/index\.html;/u);
+    assert.doesNotMatch(unknownRoute, /error_page 404 =200/u);
     const realtimeLocations = [
         ...config.matchAll(
             /location ~ \^\/storefront-realtime\/\(events\|mail-events\)\$ \{(?<body>[\s\S]*?)\n    \}/gu,

@@ -6,6 +6,27 @@ import path from 'node:path';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
+void test('preserves brace-expansion CommonJS compatibility and the new rewrite bound export', async () => {
+    const commonjs = require('brace-expansion');
+    const esm = await import('brace-expansion');
+    assert.equal(typeof commonjs, 'function');
+    assert.equal(typeof esm.default, 'function');
+    for (const name of [
+        'EXPANSION_MAX',
+        'EXPANSION_MAX_LENGTH',
+        'EXPANSION_MAX_DEPTH',
+        'EXPANSION_MAX_REWRITES',
+    ]) {
+        assert.equal(typeof commonjs[name], 'number', name);
+        assert.equal(commonjs[name], esm[name], name);
+    }
+    assert.deepEqual(commonjs('file.{js,ts}'), ['file.js', 'file.ts']);
+    assert.deepEqual(esm.default('file.{js,ts}'), ['file.js', 'file.ts']);
+    const minimatch = require('minimatch');
+    const matches = typeof minimatch === 'function' ? minimatch : minimatch.minimatch;
+    assert.equal(matches('file.ts', 'file.{js,ts}'), true);
+});
+
 const {
     inspectRuntimeSecurityDependencies,
     verifyRuntimeSecurityDependencies,

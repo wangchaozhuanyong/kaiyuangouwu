@@ -8,7 +8,9 @@
         "build": "tsc --project tsconfig.build.json",
         "check-types": "tsc --project tsconfig.json --noEmit",
         "pretest": "bun run --cwd ../catalog-management-plugin build && bun run --cwd ../store-management-plugin build",
-        "test": "vitest run"
+        "test": "vitest run",
+        "test:mixed-checkout-e2e": "cross-env DB=sqljs PACKAGE=commerce-fulfillment-plugin vitest --config ../../e2e-common/vitest.storefront.config.mts --run e2e/mixed-checkout.e2e-spec.ts",
+        "test:mixed-checkout-nonpayment-e2e": "cross-env DB=sqljs PACKAGE=commerce-fulfillment-plugin vitest --config ../../e2e-common/vitest.storefront.config.mts --run e2e/mixed-checkout.e2e-spec.ts --testNamePattern=\"^(?!.*(?:connects the desktop and mobile checkout forms|quotes the final MYR and CNY amounts)).*\""
     },
     "dependencies": {
         "@nestjs/common": "^11.0.12",

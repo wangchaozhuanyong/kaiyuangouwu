@@ -23,7 +23,9 @@
         "check-types": "tsc --project tsconfig.json --noEmit",
         "test": "vitest run",
         "test:referral-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/referral-rebate.e2e-spec.ts",
-        "test:coupon-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/coupon-lifecycle.e2e-spec.ts"
+        "test:coupon-e2e": "cross-env PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.config.mts --run e2e/coupon-lifecycle.e2e-spec.ts",
+        "test:review-isolation-e2e": "cross-env DB=sqljs PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.storefront.config.mts --run e2e/storefront-review-isolation.e2e-spec.ts",
+        "test:review-isolation-api-e2e": "cross-env DB=sqljs PACKAGE=store-management-plugin vitest --config ../../e2e-common/vitest.storefront.config.mts --run e2e/storefront-review-isolation.e2e-spec.ts --testNamePattern=\"^(?!.*submits through the production review component).*\""
     },
     "dependencies": {
         "@nestjs/common": "^11.0.12",
@@ -38,7 +40,7 @@
         "@vendure/storefront-content-plugin": "0.1.0",
         "cheerio": "1.0.0",
         "graphql-tag": "^2.12.6",
-        "markdown-it": "14.3.0",
+        "markdown-it": "14.3.1",
         "reflect-metadata": "^0.2.2",
         "typeorm": "^0.3.21"
     },

@@ -16,13 +16,17 @@ import {
     ProductService,
     ProductVariantService,
     Refund,
+    RefundLine,
     RequestContext,
     RequestContextService,
-    Role,
+    StockLocationService,
+    StockMovementService,
     TransactionalConnection,
     User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
+import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import { GovernanceService } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment, SimpleGraphQLClient } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -34,6 +38,7 @@ import sharp from 'sharp';
 import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
+import { createOperatingStoreFixture } from '../../../e2e-common/operating-store-fixture';
 import { testConfig } from '../../../e2e-common/test-config';
 import { AddCouponAppearanceTheme1790208000000 } from '../../dev-server/migrations/1790208000000-add-coupon-appearance-theme';
 import { AddReviewAnonymous1790208060000 } from '../../dev-server/migrations/1790208060000-add-review-anonymous';
@@ -56,6 +61,7 @@ import { AutoCardCipherService } from '../src/auto-card-cipher.service';
 import { CommerceFulfillmentPlugin } from '../src/commerce-fulfillment.plugin';
 import { DigitalDeliveryTokenService } from '../src/digital-delivery-token.service';
 import { DigitalDeliveryService } from '../src/digital-delivery.service';
+import { DigitalProductService } from '../src/digital-product.service';
 import { AfterSalesEvent } from '../src/entities/after-sales-event.entity';
 import { AfterSalesEvidence } from '../src/entities/after-sales-evidence.entity';
 import { AfterSalesRequest } from '../src/entities/after-sales-request.entity';
@@ -66,6 +72,7 @@ import { ManualDigitalDeliveryEvent } from '../src/entities/manual-digital-deliv
 import { ManualDigitalDelivery } from '../src/entities/manual-digital-delivery.entity';
 import { FulfillmentDeliveryService } from '../src/fulfillment-delivery.service';
 import { ManualDigitalDeliveryService } from '../src/manual-digital-delivery.service';
+import { OrderConfirmationTokenService } from '../src/order-confirmation-token.service';
 import { OrderOperationsService } from '../src/order-operations.service';
 
 const config = mergeConfig(testConfig(), {
@@ -94,6 +101,7 @@ const config = mergeConfig(testConfig(), {
     },
     plugins: [
         OperationsDashboardPlugin,
+        StoreDomainPlugin,
         CatalogManagementPlugin,
         StorefrontCartPlugin,
         ContentTranslationPlugin.init({
@@ -129,6 +137,7 @@ let connection: TransactionalConnection;
 let own: RequestContext;
 let foreign: RequestContext;
 let platform: RequestContext;
+let storeAdmin: RequestContext;
 let order: Order;
 let line: OrderLine;
 let downloads: DigitalDeliveryService;
@@ -142,12 +151,31 @@ function required<T>(value: T | null | undefined, label: string): T {
 
 const entityIdStrategy = required(config.entityOptions.entityIdStrategy, 'entity ID strategy');
 
+async function recordSyntheticPayment(orderId: Order['id'], state: 'Authorized' | 'Settled') {
+    const fundedOrder = required(
+        await server.app.get(OrderService).findOne(storeAdmin, orderId),
+        'synthetic funded order',
+    );
+    const payment = await connection.getRepository(storeAdmin, Payment).save(
+        new Payment({
+            order: fundedOrder,
+            state,
+            amount: fundedOrder.totalWithTax,
+            method: 'synthetic-no-charge',
+            metadata: {},
+        }),
+    );
+    await server.app.get(StockMovementService).createAllocationsForOrder(storeAdmin, fundedOrder);
+    return payment;
+}
+
 beforeAll(async () => {
     await server.init({
-        initialData: { ...initialData, defaultLanguage: LanguageCode.zh_Hans },
+        initialData: { ...initialData, defaultLanguage: LanguageCode.zh_Hans, shippingMethods: [] },
         customerCount: 1,
     });
     connection = server.app.get(TransactionalConnection);
+    await connection.rawConnection.synchronize();
     const contexts = server.app.get(RequestContextService);
     const credentials = required(config.authOptions.superadminCredentials, 'superadmin credentials');
     const admin = await connection.rawConnection.getRepository(User).findOneOrFail({
@@ -158,19 +186,23 @@ beforeAll(async () => {
     const customer = await connection
         .getRepository(platform, Customer)
         .findOneOrFail({ where: {}, relations: ['user', 'user.roles', 'user.roles.channels'] });
-    const channel = await server.app.get(ChannelService).create(platform, {
-        code: 'consumer-foreign',
-        token: 'consumer-foreign',
+    const store = await createOperatingStoreFixture(server.app, {
+        code: 'consumer-own',
         defaultLanguageCode: LanguageCode.zh_Hans,
         currencyCode: CurrencyCode.GBP,
-        pricesIncludeTax: true,
-        defaultTaxZoneId: required(platform.channel.defaultTaxZone?.id, 'default tax zone ID'),
-        defaultShippingZoneId: required(platform.channel.defaultShippingZone?.id, 'default shipping zone ID'),
+        commerceMode: 'HYBRID',
+    });
+    const channel = await createOperatingStoreFixture(server.app, {
+        code: 'consumer-foreign',
+        defaultLanguageCode: LanguageCode.zh_Hans,
+        currencyCode: CurrencyCode.GBP,
+        commerceMode: 'HYBRID',
     });
     expect('id' in channel).toBe(true);
     own = await contexts.create({
         apiType: 'shop',
         user: customer.user,
+        channelOrToken: store,
         req: { headers: { host: 'synthetic-shop.test' } } as any,
     });
     foreign = await contexts.create({
@@ -180,15 +212,11 @@ beforeAll(async () => {
     });
     await server.app
         .get(ChannelService)
-        .assignToChannels(platform, Customer, customer.id, [foreign.channelId]);
-    // Direct ChannelService creation does not provision administrator role assignments.
-    await connection
-        .getRepository(platform, Role)
-        .createQueryBuilder()
-        .relation(Role, 'channels')
-        .of(admin.roles[0].id)
-        .add(foreign.channelId);
-    const product = await server.app.get(ProductService).create(platform, {
+        .assignToChannels(platform, Customer, customer.id, [store.id, foreign.channelId]);
+    storeAdmin = await contexts.create({ apiType: 'admin', channelOrToken: store, user: admin });
+    await server.app.get(StockLocationService).create(storeAdmin, { name: 'Scope fixture warehouse' });
+    const product = await server.app.get(ProductService).create(storeAdmin, {
+        customFields: { fulfillmentType: 'physical' },
         translations: [
             {
                 languageCode: LanguageCode.zh_Hans,
@@ -198,12 +226,13 @@ beforeAll(async () => {
             },
         ],
     });
-    const [variant] = await server.app.get(ProductVariantService).create(platform, [
+    const [variant] = await server.app.get(ProductVariantService).create(storeAdmin, [
         {
             productId: product.id,
             sku: 'SYNTHETIC-SCOPE',
             price: 1000,
             stockOnHand: 10,
+            customFields: { fulfillmentType: 'physical' },
             translations: [{ languageCode: LanguageCode.zh_Hans, name: '本地测试规格' }],
         },
     ]);
@@ -261,7 +290,7 @@ afterAll(async () => {
 
 it('rejects an unpaid physical order in shared fulfillment creation and shipping regardless of line order', async () => {
     const fixtureOrderIds: Array<Order['id']> = [];
-    const isolatedCtx = platform;
+    const isolatedCtx = storeAdmin;
     const orders = server.app.get(OrderService);
     const fulfillmentService = server.app.get(FulfillmentService);
     const items: Array<{ orderId: Order['id']; lineId: OrderLine['id'] }> = [];
@@ -280,6 +309,7 @@ it('rejects an unpaid physical order in shared fulfillment creation and shipping
             .update(fixtureOrder.id, { active: false, state, orderPlacedAt: new Date() });
         items.push({ orderId: fixtureOrder.id, lineId: fixtureLine.id });
         fixtureOrderIds.push(fixtureOrder.id);
+        if (state === 'PaymentSettled') await recordSyntheticPayment(fixtureOrder.id, 'Settled');
     }
     expect(new Set(fixtureOrderIds).size).toBe(2);
     const handler = {
@@ -304,6 +334,7 @@ it('rejects an unpaid physical order in shared fulfillment creation and shipping
     await connection
         .getRepository(isolatedCtx, Order)
         .update(items[1].orderId, { state: 'PaymentAuthorized' });
+    await recordSyntheticPayment(items[1].orderId, 'Authorized');
     const fulfillment = await connection.withTransaction(isolatedCtx, ctx =>
         orders.createFulfillment(ctx, {
             lines: items.map(item => ({ orderLineId: item.lineId, quantity: 1 })),
@@ -334,7 +365,9 @@ it('rejects an unpaid physical order in shared fulfillment creation and shipping
     expect('fulfillment' in shipped).toBe(true);
     // Close only these synthetic fixtures so the later shared-fixture todo-count assertion
     // stays independent; this bypass is confined to test setup/cleanup, never production.
-    await connection.getRepository(platform, Order).update(fixtureOrderIds, { state: 'Cancelled' });
+    await connection
+        .getRepository(storeAdmin, Order)
+        .update(fixtureOrderIds.map(String), { state: 'Cancelled' });
 });
 
 it('ships a physical order, requires delivery evidence and lets only its customer confirm once', async () => {
@@ -355,7 +388,8 @@ it('ships a physical order, requires delivery evidence and lets only its custome
         state: 'PaymentSettled',
         orderPlacedAt: new Date(),
     });
-    const fulfillment = await orders.createFulfillment(platform, {
+    await recordSyntheticPayment(physicalOrder.id, 'Settled');
+    const fulfillment = await orders.createFulfillment(storeAdmin, {
         lines: [{ orderLineId: physicalLine.id, quantity: 1 }],
         handler: {
             code: 'manual-fulfillment',
@@ -367,7 +401,7 @@ it('ships a physical order, requires delivery evidence and lets only its custome
     });
     expect('errorCode' in fulfillment).toBe(false);
     if ('errorCode' in fulfillment) throw new Error(fulfillment.message);
-    const shipped = await fulfillmentService.transitionToState(platform, fulfillment.id, 'Shipped');
+    const shipped = await fulfillmentService.transitionToState(storeAdmin, fulfillment.id, 'Shipped');
     expect('fulfillment' in shipped).toBe(true);
     const record = await delivery.findForFulfillment(own, fulfillment.id);
     expect(record).toMatchObject({
@@ -375,9 +409,14 @@ it('ships a physical order, requires delivery evidence and lets only its custome
         carrier: 'Synthetic carrier',
         trackingCode: 'SYNTHETIC-TRACK-1',
     });
-    const directDelivery = await fulfillmentService.transitionToState(platform, fulfillment.id, 'Delivered');
+    const directDelivery = await fulfillmentService.transitionToState(
+        storeAdmin,
+        fulfillment.id,
+        'Delivered',
+    );
     expect('transitionError' in directDelivery).toBe(true);
     const client = new SimpleGraphQLClient(config, 'http://127.0.0.1:37387/shop-api');
+    client.setChannelToken(own.channel.token);
     const customer = await connection.getRepository(own, Customer).findOneOrFail({
         where: { id: physicalOrder.customerId },
     });
@@ -535,10 +574,11 @@ it('uses SQL sale ownership for review candidates and refuses same-member foreig
     const productId = required(review.productId, 'review product ID');
     const beforeApproval = await reviews.findApprovedForProduct(own, productId);
     expect(beforeApproval.items).toEqual([]);
-    await connection.withTransaction(platform, ctx =>
+    await connection.withTransaction(storeAdmin, ctx =>
         reviews.moderate(ctx, { id: review.id, state: 'APPROVED', response: 'Local review approved' }),
     );
     const publicClient = new SimpleGraphQLClient(config, 'http://127.0.0.1:37387/shop-api');
+    publicClient.setChannelToken(own.channel.token);
     const publicQuery = gql`
         query ($productId: ID!) {
             storefrontProductReviews(productId: $productId) {
@@ -556,6 +596,7 @@ it('uses SQL sale ownership for review candidates and refuses same-member foreig
         { anonymous: true, customerName: '匿名用户', merchantResponse: 'Local review approved' },
     ]);
     const englishClient = new SimpleGraphQLClient(config, 'http://127.0.0.1:37387/shop-api?languageCode=en');
+    englishClient.setChannelToken(own.channel.token);
     const englishResult = await englishClient.query(publicQuery, variables);
     expect(englishResult.storefrontProductReviews.items).toEqual([
         { anonymous: true, customerName: 'Anonymous customer', merchantResponse: null },
@@ -590,6 +631,8 @@ it('persists notification read state across two real sessions without reading an
     const url = 'http://127.0.0.1:37387/shop-api';
     const first = new SimpleGraphQLClient(config, url);
     const second = new SimpleGraphQLClient(config, url);
+    first.setChannelToken(own.channel.token);
+    second.setChannelToken(own.channel.token);
     const customer = await connection
         .getRepository(own, Customer)
         .findOneOrFail({ where: { id: order.customerId } });
@@ -614,8 +657,8 @@ it('persists notification read state across two real sessions without reading an
     expect((await first.query(mark, variables)).markMyStoreNotificationsRead).toEqual(marked);
     expect((await second.query(read, variables)).myStoreNotificationReadKeys).toEqual(marked);
     second.setChannelToken(foreign.channel.token);
-    await expect(second.query(read, variables)).rejects.toThrow('not currently authorized');
-    await expect(second.query(mark, variables)).rejects.toThrow('not currently authorized');
+    expect((await second.query(read, variables)).myStoreNotificationReadKeys).toEqual([]);
+    expect((await second.query(mark, variables)).markMyStoreNotificationsRead).toEqual([]);
     expect(
         (
             await first.query(mark, {
@@ -632,7 +675,7 @@ it('accepts authenticated multipart evidence over HTTP and serves only the signe
     const base = 'http://127.0.0.1:37387';
     const login = await fetch(`${base}/shop-api`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'vendure-token': own.channel.token },
         body: JSON.stringify({
             query: 'mutation($username: String!, $password: String!) { login(username: $username, password: $password) { __typename } }',
             variables: { username: customer.emailAddress, password: 'test' },
@@ -657,13 +700,17 @@ it('accepts authenticated multipart evidence over HTTP and serves only the signe
     };
     const anonymous = await fetch(`${base}/shop-api`, {
         method: 'POST',
-        headers: { 'Apollo-Require-Preflight': 'true' },
+        headers: { 'Apollo-Require-Preflight': 'true', 'vendure-token': own.channel.token },
         body: form(),
     });
     expect((await anonymous.json()).errors?.length).toBeGreaterThan(0);
     const result = await fetch(`${base}/shop-api`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Apollo-Require-Preflight': 'true' },
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Apollo-Require-Preflight': 'true',
+            'vendure-token': own.channel.token,
+        },
         body: form(),
     });
     const payload = await result.json();
@@ -680,7 +727,11 @@ it('accepts authenticated multipart evidence over HTTP and serves only the signe
     expect((await fetch(`${preview}x`)).status).toBe(404);
     const removed = await fetch(`${base}/shop-api`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'vendure-token': own.channel.token,
+        },
         body: JSON.stringify({
             query: 'mutation($id: ID!) { removeMyAfterSalesEvidenceDraft(id: $id) }',
             variables: { id: image.id },
@@ -934,6 +985,20 @@ it('retains newly appended delivery and after-sales events when an older parent 
 });
 
 it('rechecks persisted full refunds before publishing, retrying and preparing queued manual delivery', async () => {
+    await connection.getRepository(own, OrderLine).update(line.id, {
+        customFields: { fulfillmentTypeSnapshot: 'digital', digitalDeliveryModeSnapshot: 'manual_service' },
+    });
+    // This shared historical fixture uses a stocked variant with a digital line snapshot.
+    // Preserve its warehouse allocation when the failed-refund branch completes fulfillment.
+    await server.app
+        .get(StockMovementService)
+        .createAllocationsForOrder(
+            storeAdmin,
+            required(
+                await server.app.get(OrderService).findOne(storeAdmin, order.id),
+                'shared fixture order',
+            ),
+        );
     const deliveries = connection.getRepository(own, ManualDigitalDelivery);
     const delivery = await deliveries.findOneOrFail({ where: { orderLineId: line.id } });
     const payment = await connection
@@ -952,6 +1017,9 @@ it('rechecks persisted full refunds before publishing, retrying and preparing qu
             metadata: {},
         }),
     );
+    await connection
+        .getRepository(own, RefundLine)
+        .save(new RefundLine({ refund, orderLine: line, quantity: line.quantity }));
     const eventBus = { publish: vi.fn().mockResolvedValue(undefined) };
     const service = new ManualDigitalDeliveryService(
         connection,
@@ -959,13 +1027,16 @@ it('rechecks persisted full refunds before publishing, retrying and preparing qu
         eventBus as any,
         server.app.get(OrderService),
         server.app.get(RequestContextService),
+        server.app.get(DigitalProductService),
+        server.app.get(OrderConfirmationTokenService),
+        server.app.get(GovernanceService),
     );
     const input = { id: delivery.id, packages: [{ note: 'Synthetic package' }] };
-    await expect(service.publish(own, input)).rejects.toThrow('全额退款');
+    await expect(service.publish(own, input)).rejects.toThrow('正在退款');
     await deliveries.update(delivery.id, { state: 'EMAIL_FAILED' });
-    await expect(service.retry(own, delivery.id)).rejects.toThrow('全额退款');
+    await expect(service.retry(own, delivery.id)).rejects.toThrow('正在退款');
     await deliveries.update(delivery.id, { state: 'SENDING' });
-    await expect(service.queuedEmailPayload(own, delivery.id)).rejects.toThrow('全额退款');
+    await expect(service.queuedEmailPayload(own, delivery.id)).rejects.toThrow('当前领取资格已暂停或撤销');
     expect(eventBus.publish).not.toHaveBeenCalled();
     expect((await deliveries.findOneOrFail({ where: { id: delivery.id } })).encryptedPackages).toBeNull();
     // A failed refund releases the payment entitlement, including partially delivered mixed orders.

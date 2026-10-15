@@ -1,11 +1,23 @@
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
-import { Collection, Product, RequestContext } from '@vendure/core';
+import {
+    Channel,
+    ChannelService,
+    Collection,
+    LanguageCode,
+    Product,
+    RequestContext,
+    RequestContextService,
+    TransactionalConnection,
+} from '@vendure/core';
 import { EntityMetadata } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ContentTranslationBackfillService } from './content-translation-backfill.service.js';
+import { enqueueHistoricalContentTranslations } from './content-translation.tasks.js';
+import { TranslationProviderState } from './entities/translation-provider-state.entity.js';
 import { NativeContentTranslationService } from './native-content-translation.service.js';
 import { TranslationContentAdapter } from './translation-content-adapter.js';
+import { TranslationExecutionService } from './translation-execution.service.js';
 
 function collectionFixture(includeVisible: boolean, disappearAfterCount = false) {
     const metadata = {
@@ -55,11 +67,68 @@ describe('combined historical translation backfill progress', () => {
             service.backfill(
                 { channelId: 'channel-1', channel: { code: 'store' } } as RequestContext,
                 'Collection',
+                100,
+                0,
+                new Channel({ id: 'platform', code: DEFAULT_CHANNEL_CODE }),
             ),
         ).rejects.toThrow('批量补译请切换到平台管理中心');
         expect(repository.count).not.toHaveBeenCalled();
         expect(repository.find).not.toHaveBeenCalled();
         expect(enqueue).not.toHaveBeenCalled();
+    });
+
+    it('executes a scheduled store page through the platform guard and advances its cursor', async () => {
+        const { service, repository } = collectionFixture(true);
+        const platform = new Channel({ id: 'platform', code: DEFAULT_CHANNEL_CODE });
+        const store = new Channel({ id: 'store-2', code: 'store-2' });
+        const scheduledContext = new RequestContext({
+            apiType: 'admin',
+            channel: platform,
+            languageCode: LanguageCode.zh_Hans,
+            isAuthorized: true,
+            authorizedAsOwnerOnly: false,
+        });
+        const update = vi.fn().mockResolvedValue({ affected: 1 });
+        const services = new Map<unknown, unknown>([
+            [RequestContextService, { create: vi.fn().mockResolvedValue(scheduledContext) }],
+            [ChannelService, { getDefaultChannel: vi.fn().mockResolvedValue(platform) }],
+            [ContentTranslationBackfillService, service],
+            [
+                TranslationExecutionService,
+                {
+                    state: vi
+                        .fn()
+                        .mockResolvedValue({ provider: 'local', scanChannelIndex: 0, scanOffset: 0 }),
+                },
+            ],
+            [
+                TransactionalConnection,
+                {
+                    rawConnection: {
+                        getRepository: (target: unknown) => {
+                            if (target === Channel) return { find: vi.fn().mockResolvedValue([store]) };
+                            if (target === TranslationProviderState) return { update };
+                            throw new Error('Unexpected scheduler repository');
+                        },
+                    },
+                },
+            ],
+        ]);
+        await expect(
+            enqueueHistoricalContentTranslations.execute({
+                get: (token: unknown) => services.get(token),
+            } as never),
+        ).resolves.toMatchObject({ scanned: 1, queued: 0, channelId: 'store-2' });
+        expect(repository.count).toHaveBeenCalledWith({
+            where: { isRoot: false, channels: { id: 'store-2' } },
+        });
+        expect(repository.find).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { isRoot: false, channels: { id: 'store-2' } },
+            }),
+        );
+        expect(update).toHaveBeenCalledWith('local', { scanOffset: 0, scanChannelIndex: 1 });
+        expect(scheduledContext.channelId).toBe('platform');
     });
     it('terminates when this channel has only an internal root collection', async () => {
         const { service, repository, enqueue } = collectionFixture(false);

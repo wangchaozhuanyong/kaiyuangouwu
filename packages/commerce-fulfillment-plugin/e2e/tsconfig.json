@@ -1,6 +1,12 @@
 {
     "extends": "./tsconfig.order-closure.json",
+    "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "Bundler"
+    },
     "include": [
+        "./sales-boundaries.e2e-spec.ts",
+        "./mixed-checkout.e2e-spec.ts",
         "./order-processing-closure.e2e-spec.ts",
         "./offline-payment.e2e-spec.ts",
         "./digital-order-closure.e2e-spec.ts",

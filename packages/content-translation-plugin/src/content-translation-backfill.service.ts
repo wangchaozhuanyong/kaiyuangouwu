@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
-import { RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { Channel, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
 import { EntityMetadata, ObjectLiteral } from 'typeorm';
 
 import { ContentTranslationService } from './content-translation.service.js';
@@ -28,12 +28,16 @@ export class ContentTranslationBackfillService {
         entityType?: string | null,
         limit = 100,
         offset = 0,
+        targetChannel?: Channel,
     ): Promise<NativeContentBackfillResult> {
         if (ctx.channel?.code !== DEFAULT_CHANNEL_CODE)
             throw new UserInputError('批量补译请切换到平台管理中心');
         if (!Number.isInteger(limit) || limit < 1 || limit > 500 || !Number.isInteger(offset) || offset < 0) {
             throw new UserInputError('补译每页须为 1 至 500 条，偏移量须为非负整数');
         }
+        // Scheduled scans keep the platform context for admission, then scope one store.
+        // The Admin mutation exposes no targetChannel argument.
+        const scanCtx = targetChannel ? ctx.copy({ channel: targetChannel }) : ctx;
         const entries = Object.entries(customerFacingContentRegistry).flatMap(([name, definition]) => {
             const metadata = this.connection.rawConnection.entityMetadatas.find(item => item.name === name);
             return metadata && (!entityType || name === entityType) ? [{ name, definition, metadata }] : [];
@@ -41,11 +45,11 @@ export class ContentTranslationBackfillService {
         if (entityType && !entries.length) throw new UserInputError('此内容类型未启用或不支持补译');
         const counts = await Promise.all(
             entries.map(({ metadata }) =>
-                this.connection.getRepository(ctx, metadata.target).count({
+                this.connection.getRepository(scanCtx, metadata.target).count({
                     where:
                         metadata.name === 'SystemAnnouncement'
                             ? {}
-                            : this.adapter.scopeWhere(metadata, ctx.channelId),
+                            : this.adapter.scopeWhere(metadata, scanCtx.channelId),
                 }),
             ),
         );
@@ -71,17 +75,17 @@ export class ContentTranslationBackfillService {
             const { name, metadata, definition } = entries[i];
             const take = limit - result.scanned;
             if (definition.storage === 'VENDURE_TRANSLATIONS') {
-                const page = await this.native.backfill(ctx, name, take, skip);
+                const page = await this.native.backfill(scanCtx, name, take, skip);
                 for (const key of ['scanned', 'processed', 'queued', 'skipped', 'failed'] as const)
                     result[key] += page[key];
                 result.errors.push(...page.errors);
                 result.skippedRecords.push(...page.skippedRecords);
             } else {
-                const rows = await this.connection.getRepository(ctx, metadata.target).find({
+                const rows = await this.connection.getRepository(scanCtx, metadata.target).find({
                     where:
                         metadata.name === 'SystemAnnouncement'
                             ? {}
-                            : this.adapter.scopeWhere(metadata, ctx.channelId),
+                            : this.adapter.scopeWhere(metadata, scanCtx.channelId),
                     order: { id: 'ASC' },
                     take,
                     skip,
@@ -89,7 +93,7 @@ export class ContentTranslationBackfillService {
                 for (const row of rows) {
                     result.scanned++;
                     try {
-                        const status = await this.connection.withTransaction(ctx, tx =>
+                        const status = await this.connection.withTransaction(scanCtx, tx =>
                             this.enqueueCustom(tx, metadata, row),
                         );
                         result[status]++;

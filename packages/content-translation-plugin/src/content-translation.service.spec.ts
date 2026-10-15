@@ -8,6 +8,7 @@ import {
 } from './content-translation.service.js';
 import { ContentTranslationState } from './entities/content-translation-state.entity.js';
 import { TranslationContentAdapter } from './translation-content-adapter.js';
+import { ResolvedContentTranslationOptions } from './types.js';
 
 describe('translation audit database pagination', () => {
     // A disposable SQL database verifies actual filter grouping and LIKE escaping.
@@ -37,7 +38,7 @@ describe('translation audit database pagination', () => {
         name: 'Channel',
         columns: { id: { type: String, primary: true } },
     });
-    const productSchema = new EntitySchema({
+    const productSchema = new EntitySchema<{ id: string; channels: Array<{ id: string }> }>({
         name: 'Product',
         columns: { id: { type: String, primary: true } },
         relations: {
@@ -191,7 +192,19 @@ describe('translation audit database pagination', () => {
 });
 
 describe('translation audit actionable entity visibility', () => {
-    const stateSchema = new EntitySchema({
+    const stateSchema = new EntitySchema<{
+        id: number;
+        channelId: string | null;
+        entityType: string;
+        entityId: string;
+        fieldPath: string;
+        status: string;
+        origin: string;
+        locked: boolean;
+        revision: number;
+        error: string | null;
+        updatedAt: Date;
+    }>({
         name: 'VisibilityAuditState',
         columns: {
             id: { type: Number, primary: true, generated: true },
@@ -214,7 +227,11 @@ describe('translation audit actionable entity visibility', () => {
     const channelRelations = {
         channels: { type: 'many-to-many' as const, target: 'Channel', joinTable: true },
     };
-    const productSchema = new EntitySchema({
+    const productSchema = new EntitySchema<{
+        id: number;
+        deletedAt: Date | null;
+        channels: Array<{ id: number }>;
+    }>({
         name: 'Product',
         columns: {
             id: { type: Number, primary: true },
@@ -222,7 +239,7 @@ describe('translation audit actionable entity visibility', () => {
         },
         relations: channelRelations,
     });
-    const shippingSchema = new EntitySchema({
+    const shippingSchema = new EntitySchema<{ id: number; channels: Array<{ id: number }> }>({
         name: 'ShippingMethod',
         columns: { id: { type: Number, primary: true } },
         relations: channelRelations,
@@ -235,14 +252,22 @@ describe('translation audit actionable entity visibility', () => {
             deletedAt: { type: Date, nullable: true },
         },
     });
-    const itemSchema = new EntitySchema({
+    const itemSchema = new EntitySchema<{
+        id: number;
+        blockId: number;
+        block: { id: number; channelId: number; deletedAt: Date | null };
+    }>({
         name: 'StorefrontContentItem',
         columns: { id: { type: Number, primary: true }, blockId: { type: Number } },
         relations: {
             block: { type: 'many-to-one', target: 'StorefrontContentBlock', joinColumn: { name: 'blockId' } },
         },
     });
-    const collectionSchema = new EntitySchema({
+    const collectionSchema = new EntitySchema<{
+        id: number;
+        isRoot: boolean;
+        channels: Array<{ id: number }>;
+    }>({
         name: 'Collection',
         columns: { id: { type: Number, primary: true }, isRoot: { type: Boolean } },
         relations: channelRelations,
@@ -273,7 +298,12 @@ describe('translation audit actionable entity visibility', () => {
         columns: {},
         discriminatorValue: 'Province',
     });
-    const announcementSchema = new EntitySchema({
+    const announcementSchema = new EntitySchema<{
+        id: number;
+        ownerChannelId: number | null;
+        targetMode: string;
+        channels: Array<{ id: number }>;
+    }>({
         name: 'SystemAnnouncement',
         columns: {
             id: { type: Number, primary: true },
@@ -298,7 +328,7 @@ describe('translation audit actionable entity visibility', () => {
     const database = new DataSource({ type: 'sqljs', entities, synchronize: true });
     const ctx = { channelId: '1', channel: { code: 'merchant-one' } } as any;
     const platform = { channelId: '1', channel: { code: '__default_channel__' } } as any;
-    const translationOptions = {
+    const translationOptions: ResolvedContentTranslationOptions = {
         provider: { name: 'test', isConfigured: () => true, translate: vi.fn() },
         glossary: {},
         sourceLanguageCode: 'zh_Hans',
@@ -475,15 +505,19 @@ describe('translation audit actionable entity visibility', () => {
             const queries: Array<[string, unknown[]]> = [];
             const many = vi
                 .spyOn(SelectQueryBuilder.prototype, 'getManyAndCount')
-                .mockImplementation(function () {
+                .mockImplementation(function (this: SelectQueryBuilder<ContentTranslationState>) {
                     queries.push(this.getQueryAndParameters());
                     return Promise.resolve([[], 0] as [never[], number]);
                 });
-            const raw = vi.spyOn(SelectQueryBuilder.prototype, 'getRawMany').mockImplementation(function () {
+            const raw = vi.spyOn(SelectQueryBuilder.prototype, 'getRawMany').mockImplementation(function (
+                this: SelectQueryBuilder<ContentTranslationState>,
+            ) {
                 queries.push(this.getQueryAndParameters());
                 return Promise.resolve([]);
             });
-            const count = vi.spyOn(SelectQueryBuilder.prototype, 'getCount').mockImplementation(function () {
+            const count = vi.spyOn(SelectQueryBuilder.prototype, 'getCount').mockImplementation(function (
+                this: SelectQueryBuilder<ContentTranslationState>,
+            ) {
                 queries.push(this.getQueryAndParameters());
                 return Promise.resolve(0);
             });

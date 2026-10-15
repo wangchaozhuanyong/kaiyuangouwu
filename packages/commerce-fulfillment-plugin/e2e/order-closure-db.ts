@@ -3,7 +3,7 @@ import { Connection, createConnection } from 'mysql2/promise';
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { MysqlConnectionOptions } from 'typeorm/driver/mysql/MysqlConnectionOptions';
+import { MysqlConnectionOptions } from 'typeorm/driver/mysql/MysqlConnectionOptions.js';
 
 /** Never use the shared testing initializer, which drops deterministic database names. */
 class IsolatedMysqlInitializer implements TestDbInitializer<MysqlConnectionOptions> {

@@ -39,6 +39,39 @@ test('shared store-owned resources are release blockers while shared customer id
     );
 });
 
+test('classifies default membership separately without waiving unresolved ownership blockers', () => {
+    const snapshot = {
+        channels: [
+            { id: '1', code: '__default_channel__' },
+            { id: '2', code: 'store-a' },
+            { id: '3', code: 'store-b' },
+        ],
+        associations: {
+            assets: {
+                available: true,
+                shared: [
+                    { entityId: 1, channelIds: ['1', '2'] },
+                    { entityId: 2, channelIds: ['1', '2', '3'] },
+                    { entityId: 3, channelIds: ['2', 'missing-channel'] },
+                ],
+            },
+        },
+    };
+    const check = sharedResourceIsolationChecks(snapshot).find(item => item.key === 'shared-assets');
+    assert.equal(check.count, 3);
+    assert.equal(check.status, 'FAIL');
+    assert.deepEqual(check.classification, {
+        defaultAndSingleStore: 1,
+        multipleOperatingStores: 1,
+        unknownChannels: 1,
+    });
+    delete snapshot.channels;
+    assert.deepEqual(
+        sharedResourceIsolationChecks(snapshot).find(item => item.key === 'shared-assets').classification,
+        { defaultAndSingleStore: 0, multipleOperatingStores: 0, unknownChannels: 3 },
+    );
+});
+
 async function createFixture({ legacyStructure = false, violations = false } = {}) {
     const { default: initialize } = await import('sql.js');
     const SQL = await initialize();
