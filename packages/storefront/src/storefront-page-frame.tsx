@@ -27,6 +27,7 @@ export function StorefrontPageFrame({
     accountNavigation,
     deferred,
     publicMedia,
+    publicMediaScope,
     children,
 }: {
     routeName: RouteName;
@@ -44,6 +45,7 @@ export function StorefrontPageFrame({
     accountNavigation?: ReactNode;
     deferred?: ReactNode;
     publicMedia?: readonly MediaDescriptor[];
+    publicMediaScope?: string;
     children: ReactNode;
 }) {
     const isZh = language === 'zh';
@@ -60,7 +62,7 @@ export function StorefrontPageFrame({
     ].includes(routeName);
     return (
         <ImageLanguageContext.Provider value={language}>
-            <SafeImageMediaProvider media={publicMedia}>
+            <SafeImageMediaProvider media={publicMedia} scope={publicMediaScope}>
                 <div
                     data-route={routeName}
                     data-page-family={desktopPageFamily(routeName)}

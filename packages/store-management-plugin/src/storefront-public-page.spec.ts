@@ -6,6 +6,7 @@ import {
 } from '@vendure/storefront-content-plugin';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import { StorefrontActivationService, StorefrontClosedError } from './storefront-activation.service';
 import { parsePublicPageRequest, StorefrontPublicPageController } from './storefront-public-page.controller';
@@ -300,6 +301,103 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
     };
 }
 
+describe('public page inline artwork', () => {
+    it('reserves the bounded preview slots for the current page before navigation or unrelated content', async () => {
+        const h = accessHarness();
+        h.content.mockResolvedValue({
+            blocks: [
+                ...Array.from({ length: 12 }, (_, index) => ({
+                    type: 'HERO',
+                    imageUrl: `/assets/preview/home-${index}.webp`,
+                })),
+                {
+                    type: 'NAVIGATION',
+                    items: Array.from({ length: 12 }, (_, index) => ({
+                        imageUrl: `/assets/preview/nav-${index}.webp`,
+                    })),
+                },
+                {
+                    type: 'CLIENT_PLUGINS',
+                    code: 'storefront-client-plugins',
+                    imageUrl: '/assets/preview/services.webp',
+                    settings: { mobileImageUrl: '/assets/preview/services-phone.webp' },
+                },
+            ],
+        });
+        const read = vi.fn().mockResolvedValue('data:image/webp;base64,AAAA');
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Expected the module harness implementation');
+        h.modules.get.mockImplementation(token => {
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read } as never;
+            if (token === StorefrontMediaManifestService)
+                return { isPublic: vi.fn().mockResolvedValue(true) } as never;
+            return original(token);
+        });
+        const page = await h.service.read(h.ctx, 'a.test', { kind: 'page', id: 'services' });
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(read.mock.calls.slice(0, 2).map(call => call[0])).toEqual([
+            'preview/services.webp',
+            'preview/services-phone.webp',
+        ]);
+        expect(read.mock.calls.every(call => !call[0].includes('home-'))).toBe(true);
+        expect(
+            page.media.filter(item => item.identity.includes('services')).every(item => item.placeholder),
+        ).toBe(true);
+        expect(page.media.some(item => item.identity.includes('home-11'))).toBe(true);
+    });
+    it('keeps published services, support and auth media on non-home pages and reuses the page cache', async () => {
+        const h = accessHarness();
+        const preview = 'data:image/webp;base64,AAAA';
+        h.content.mockResolvedValue({
+            blocks: [
+                { type: 'HERO', imageUrl: '/assets/preview/home.webp' },
+                {
+                    type: 'CLIENT_PLUGINS',
+                    code: 'storefront-client-plugins',
+                    imageUrl: '/assets/preview/services.webp',
+                    settings: { mobileImageUrl: '/assets/preview/services-phone.webp' },
+                },
+                { type: 'SUPPORT', imageUrl: '/assets/preview/support.webp' },
+                { type: 'AUTH_LOGIN', imageUrl: '/assets/preview/login.webp' },
+            ],
+        });
+        const authorize = vi.fn().mockResolvedValue(true);
+        const read = vi.fn().mockResolvedValue(preview);
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Expected the module harness implementation');
+        h.modules.get.mockImplementation(token => {
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read } as never;
+            if (token === StorefrontMediaManifestService) return { isPublic: authorize } as never;
+            return original(token);
+        });
+        const page = await h.service.read(h.ctx, 'a.test', { kind: 'page', id: 'services' });
+        expect(page.media.map(item => item.identity)).toEqual(
+            expect.arrayContaining([
+                '/assets/preview/services.webp',
+                '/assets/preview/services-phone.webp',
+                '/assets/preview/support.webp',
+                '/assets/preview/login.webp',
+            ]),
+        );
+        expect(read.mock.calls[0][0]).toBe('preview/services.webp');
+        expect(
+            page.media
+                .filter(item => item.identity.includes('services'))
+                .every(item => item.placeholder?.inlineData === preview),
+        ).toBe(true);
+        expect(
+            page.media.filter(item => !item.identity.includes('services')).every(item => !item.placeholder),
+        ).toBe(true);
+        const reads = read.mock.calls.length;
+        const cached = await h.service.read(h.ctx, 'a.test', { kind: 'page', id: 'services' });
+        expect(cached.version).toBe(page.version);
+        expect(read).toHaveBeenCalledTimes(reads);
+        expect(authorize).not.toHaveBeenCalledWith(h.ctx, 'a.test', 'preview/login.webp');
+    });
+});
+
 describe('ranked home data in the public snapshot', () => {
     async function homeHarness() {
         const h = accessHarness();
@@ -402,6 +500,92 @@ describe('ranked home data in the public snapshot', () => {
 });
 
 describe('private-route public configuration bootstrap', () => {
+    async function preparedMediaHarness() {
+        const h = accessHarness();
+        h.content.mockResolvedValue({
+            blocks: [
+                {
+                    type: 'AUTH_LOGIN',
+                    imageUrl: '/assets/preview/login.webp?v=2',
+                    title: 'auth body excluded',
+                },
+                { type: 'AUTH_REGISTER', imageUrl: '/assets/preview/register.webp?v=3' },
+            ],
+        });
+        const read = vi.fn().mockResolvedValue('data:image/webp;base64,AAAA');
+        const authorize = vi.fn().mockResolvedValue(true);
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Expected the module harness implementation');
+        h.modules.get.mockImplementation(token => {
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read } as never;
+            if (token === StorefrontMediaManifestService) return { isPublic: authorize } as never;
+            return original(token);
+        });
+        await h.service.read(h.ctx, 'a.test');
+        return { ...h, read, authorize };
+    }
+    it('prepares published auth hints in the worker cache and peeks only the requested artwork', async () => {
+        const h = await preparedMediaHarness();
+        expect(h.read).not.toHaveBeenCalled();
+        expect((await h.service.peekBoot(h.ctx, 'a.test', 'login'))?.media).toBeUndefined();
+        expect(h.read).not.toHaveBeenCalled();
+        await h.service.prepareBootMedia(h.ctx, 'a.test');
+        expect(h.read).toHaveBeenCalledTimes(2);
+        expect(h.authorize).toHaveBeenCalledWith(h.ctx, 'a.test', 'preview/login.webp');
+        const login = await h.service.peekBoot(h.ctx, 'a.test', 'login');
+        expect(login?.media).toHaveLength(1);
+        expect(login?.media?.[0]).toMatchObject({
+            kind: 'detail',
+            version: '2',
+            placeholder: { inlineData: 'data:image/webp;base64,AAAA' },
+        });
+        expect(login?.media?.[0].identity).toContain('preset=storefront-original-preview');
+        if (!login) throw new Error('Expected the prepared login metadata');
+        expect(login?.mediaUpdatedAt).toBeLessThanOrEqual(login.generatedAt);
+        expect(JSON.stringify(login)).not.toMatch(/auth body excluded|"content"|"products"|"customer"/);
+        const register = await h.service.peekBoot(h.ctx, 'a.test', 'register');
+        expect(register?.media?.[0].identity).toContain('register.webp');
+        expect((await h.service.peekBoot(h.ctx, 'a.test', 'forgot-password'))?.media).toEqual(login?.media);
+        expect((await h.service.peekBoot(h.ctx, 'a.test'))?.media).toBeUndefined();
+        await h.service.prepareBootMedia(h.ctx, 'a.test');
+        expect(h.read).toHaveBeenCalledTimes(2);
+        expect(
+            await h.service.peekBoot(
+                { ...(h.ctx as object), currencyCode: 'CNY' } as never,
+                'a.test',
+                'login',
+            ),
+        ).toBeUndefined();
+    });
+    it('withdraws prepared auth metadata on content invalidation and never transforms from SSI peeks', async () => {
+        const h = await preparedMediaHarness();
+        await h.service.prepareBootMedia(h.ctx, 'a.test');
+        await h.cache.invalidate('a');
+        expect(await h.service.peekBoot(h.ctx, 'a.test', 'login')).toBeUndefined();
+        h.content.mockResolvedValue({ blocks: [] });
+        await h.service.read(h.ctx, 'a.test');
+        expect((await h.service.peekBoot(h.ctx, 'a.test', 'login'))?.media).toBeUndefined();
+        expect(h.read).toHaveBeenCalledTimes(2);
+    });
+    it('rejects closure during worker preparation instead of publishing late auth previews', async () => {
+        const h = await preparedMediaHarness();
+        let release!: (value: string) => void;
+        h.read.mockReturnValue(
+            new Promise<string>(resolve => {
+                release = resolve;
+            }),
+        );
+        const prepared = h.service.prepareBootMedia(h.ctx, 'a.test').then(
+            () => undefined,
+            error => error,
+        );
+        await vi.waitFor(() => expect(h.read).toHaveBeenCalled());
+        h.state.mode = 'CLOSED';
+        release('data:image/webp;base64,AAAA');
+        expect(await prepared).toBeInstanceOf(StorefrontClosedError);
+        expect(await h.service.peekBoot(h.ctx, 'a.test', 'login')).toBeUndefined();
+    });
     it('peeks only already warm config and retains its source age without catalog assembly', async () => {
         const h = accessHarness();
         const ctx = h.ctx as Parameters<typeof h.service.peekBoot>[0];

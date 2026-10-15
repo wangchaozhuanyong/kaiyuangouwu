@@ -1,10 +1,11 @@
 import { mediaDescriptor } from '@vendure/storefront-content-plugin';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
     PUBLIC_MEDIA_USES,
     publicContentImageKinds,
     publicHeroMobileImage,
+    publicMediaWithPreviews,
     publicPageMedia,
 } from './storefront-public-media';
 
@@ -190,6 +191,42 @@ describe('public page media projection', () => {
             '/assets/preview/desktop.webp',
         ]);
     });
+    it('includes only phone bindings consumed by services and device-poster layouts', () => {
+        const blocks = [
+            {
+                type: 'CLIENT_PLUGINS',
+                imageUrl: '/assets/preview/service.webp',
+                settings: { mobileImageUrl: '/assets/preview/service-phone.webp' },
+            },
+            {
+                type: 'CLIENT_PLUGINS',
+                settings: {
+                    mobileImageUrl: '/assets/preview/ignored.webp',
+                    businessServicesHeroLayout: 'shared-banner',
+                },
+            },
+            {
+                type: 'CATEGORY_AD',
+                settings: {
+                    mobileImageUrl: '/assets/preview/category-phone.webp',
+                    categoryArtworkLayout: 'device-poster',
+                },
+            },
+            {
+                type: 'CATEGORY_AD',
+                settings: {
+                    mobileImageUrl: '/assets/preview/ignored-poster.webp',
+                    categoryArtworkLayout: 'scene-poster',
+                },
+            },
+        ];
+        const media = publicPageMedia(page({ content: { blocks } }));
+        expect(sources(media, 'hero')).toEqual([
+            '/assets/preview/service.webp',
+            '/assets/preview/service-phone.webp',
+            '/assets/preview/category-phone.webp',
+        ]);
+    });
     it.each([
         ['HERO', false, '/assets/preview/phone.webp'],
         ['SUPPORT', true, '/assets/preview/phone.webp'],
@@ -201,5 +238,95 @@ describe('public page media projection', () => {
         const block = { type, enabled, settings: { mobileImageUrl } };
         expect(publicHeroMobileImage(block, 'https://shop.example')).toBeUndefined();
         expect(publicPageMedia(page({ content: { blocks: [block] } }))).toEqual([]);
+    });
+});
+
+describe('bounded public inline image assembly', () => {
+    const preview = `data:image/webp;base64,${'A'.repeat(960)}`;
+    it('authorizes same-store assets before storage, ignores foreign/private paths and preserves versions', async () => {
+        const media = [
+            mediaDescriptor('/assets/preview/allowed.webp?v=1', 'hero'),
+            mediaDescriptor('/assets/preview/allowed.webp?v=2', 'card'),
+            mediaDescriptor('/assets/preview/denied.webp', 'hero'),
+            mediaDescriptor('https://other.test/assets/preview/foreign.webp', 'hero'),
+            mediaDescriptor('/assets/cache/private.webp', 'hero'),
+            mediaDescriptor('https://user:secret@shop.example/assets/preview/credentials.webp', 'hero'),
+        ];
+        const authorize = vi.fn((path: string) => Promise.resolve(!path.includes('denied')));
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(media, 'shop.example', authorize, read);
+        expect(authorize.mock.calls.map(call => call[0])).toEqual([
+            'preview/allowed.webp',
+            'preview/allowed.webp',
+            'preview/denied.webp',
+        ]);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(result.filter(item => item.placeholder)).toHaveLength(2);
+        expect(result.map(item => item.version)).toEqual(['1', '2', null, null, null, null]);
+        expect(media.every(item => !item.placeholder)).toBe(true);
+    });
+    it('limits a page to eight distinct identities, two concurrent reads and the existing wire budget', async () => {
+        let active = 0;
+        let peak = 0;
+        const read = vi.fn(async () => {
+            peak = Math.max(peak, ++active);
+            await new Promise(resolve => setTimeout(resolve, 1));
+            active--;
+            return preview;
+        });
+        const media = Array.from({ length: 12 }, (_, index) =>
+            mediaDescriptor(`/assets/preview/${index}.webp`, 'hero'),
+        );
+        media.splice(1, 0, mediaDescriptor('/assets/preview/0.webp', 'card'));
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(peak).toBe(2);
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+        expect(result[result.length - 1]?.placeholder).toBeUndefined();
+    });
+    it('ends waiting at the deadline and never mutates the page when storage completes late', async () => {
+        let complete!: (value: string) => void;
+        const read = vi.fn(
+            () =>
+                new Promise<string>(resolve => {
+                    complete = resolve;
+                }),
+        );
+        const media = [mediaDescriptor('/assets/preview/slow.webp', 'hero')];
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+            20,
+        );
+        expect(result[0].placeholder).toBeUndefined();
+        complete(preview);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(result[0].placeholder).toBeUndefined();
+        expect(media[0].placeholder).toBeUndefined();
+    });
+    it('skips invalid or failed previews while keeping the page usable', async () => {
+        const result = await publicMediaWithPreviews(
+            [
+                mediaDescriptor('/assets/preview/a.webp', 'hero'),
+                mediaDescriptor('/assets/preview/b.webp', 'hero'),
+            ],
+            'shop.example',
+            () => Promise.resolve(true),
+            vi
+                .fn()
+                .mockRejectedValueOnce(new Error('missing'))
+                .mockResolvedValueOnce(`${preview}${'A'.repeat(1024)}`),
+        );
+        expect(result.every(item => !item.placeholder)).toBe(true);
     });
 });

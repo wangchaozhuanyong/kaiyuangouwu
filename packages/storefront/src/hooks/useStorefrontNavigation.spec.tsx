@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BottomNavigation } from '../components/common/bottom-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { preloadRouteMedia } from '../route-media-preload';
+import { prepareRouteMedia } from '../route-media-intent';
 import { registerStorefrontNavigationHistory } from '../storefront-navigation-history';
 import { normalizeRouteSearch, routeHref } from '../storefront-router';
 import { SubHeader } from '../storefront-ui/page-shell';
@@ -52,7 +52,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('../route-component-preload', () => ({
     preloadStorefrontRouteComponent: vi.fn(() => Promise.resolve()),
 }));
-vi.mock('../route-media-preload', () => ({ preloadRouteMedia: vi.fn() }));
+vi.mock('../route-media-intent', () => ({ prepareRouteMedia: vi.fn() }));
 
 const routerInstance = {
     ...router,
@@ -138,7 +138,7 @@ describe('storefront navigation state', () => {
             });
         });
         vi.mocked(preloadStorefrontRouteComponent).mockClear();
-        vi.mocked(preloadRouteMedia).mockClear();
+        vi.mocked(prepareRouteMedia).mockClear();
         router.navigate.mockReset();
         router.navigate.mockImplementation(({ to, search = {} }) => {
             router.state.location = { pathname: to, search, searchStr: '' };
@@ -551,7 +551,7 @@ describe('storefront navigation state', () => {
                 link.dispatchEvent(new Event('pointerover', { bubbles: true }));
             });
             expect(preloadStorefrontRouteComponent).toHaveBeenLastCalledWith('services');
-            expect(preloadRouteMedia).toHaveBeenLastCalledWith(
+            expect(prepareRouteMedia).toHaveBeenLastCalledWith(
                 expect.objectContaining({ name: 'services' }),
                 [],
                 [],

@@ -2,7 +2,18 @@ import type { Request } from 'express';
 
 import { trustedPublicPageHeaders } from './storefront-public-request';
 
-const metricNames = ['LCP', 'INP', 'CLS', 'TTFB', 'FCP'] as const;
+const metricNames = [
+    'LCP',
+    'INP',
+    'CLS',
+    'TTFB',
+    'FCP',
+    'NAV_RENDER',
+    'NAV_READY',
+    'NAV_ERROR',
+    'IMAGE_PRESENT',
+    'IMAGE_ERROR',
+] as const;
 const phaseNames = ['ttfb', 'resourceLoadDelay', 'resourceLoadDuration', 'elementRenderDelay'] as const;
 type MetricName = (typeof metricNames)[number];
 type PhaseName = (typeof phaseNames)[number];
@@ -48,7 +59,16 @@ export function parsePublicPerformanceBatch(value: unknown): PublicPerformanceBa
     return {
         sampleId: raw.sampleId,
         revision: raw.revision,
-        pageType: choice(raw.pageType, ['home', 'catalog', 'search', 'product', 'other']),
+        pageType: choice(raw.pageType, [
+            'home',
+            'catalog',
+            'search',
+            'product',
+            'services',
+            'support',
+            'auth',
+            'other',
+        ]),
         device: choice(raw.device, ['mobile', 'desktop']),
         network: choice(raw.network, ['4g', '3g', '2g', 'slow-2g', 'unknown']),
         metrics: raw.metrics.map(metricValue => {

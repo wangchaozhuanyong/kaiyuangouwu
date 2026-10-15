@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import { Sheet } from '../../storefront-ui/page-shell';
 import { type CollectionSummary, type FulfillmentType, type StorefrontLanguage } from '../../types';
 
@@ -47,13 +49,20 @@ export function CatalogFilterSheet({
     const setDraftStock = (inStockOnly: boolean) => onChange({ ...value, inStockOnly });
     const setDraftMinimumPrice = (minPrice: string) => onChange({ ...value, minPrice });
     const setDraftMaximumPrice = (maxPrice: string) => onChange({ ...value, maxPrice });
-    const invalidPrice =
-        [draftMinimumPrice, draftMaximumPrice].some(
-            price => price !== '' && (!Number.isFinite(Number(price)) || Number(price) < 0),
-        ) ||
-        (draftMinimumPrice !== '' &&
-            draftMaximumPrice !== '' &&
-            Number(draftMinimumPrice) > Number(draftMaximumPrice));
+    const priceErrorId = useId();
+    const invalidMinimum =
+        draftMinimumPrice !== '' &&
+        (!Number.isFinite(Number(draftMinimumPrice)) || Number(draftMinimumPrice) < 0);
+    const invalidMaximum =
+        draftMaximumPrice !== '' &&
+        (!Number.isFinite(Number(draftMaximumPrice)) || Number(draftMaximumPrice) < 0);
+    const invertedRange =
+        !invalidMinimum &&
+        !invalidMaximum &&
+        draftMinimumPrice !== '' &&
+        draftMaximumPrice !== '' &&
+        Number(draftMinimumPrice) > Number(draftMaximumPrice);
+    const invalidPrice = invalidMinimum || invalidMaximum || invertedRange;
     return (
         <Sheet title={isZh ? '筛选' : 'Filter'} language={language} onClose={onClose} className={className}>
             <div className="filter-sheet-content">
@@ -92,6 +101,8 @@ export function CatalogFilterSheet({
                                 min="0"
                                 placeholder={isZh ? '最低价' : 'Min'}
                                 aria-label={isZh ? '最低价' : 'Minimum price'}
+                                aria-invalid={invalidMinimum || invertedRange || undefined}
+                                aria-describedby={invalidMinimum || invertedRange ? priceErrorId : undefined}
                                 value={draftMinimumPrice}
                                 onChange={event => setDraftMinimumPrice(event.target.value)}
                             />
@@ -105,6 +116,8 @@ export function CatalogFilterSheet({
                                 min="0"
                                 placeholder={isZh ? '最高价' : 'Max'}
                                 aria-label={isZh ? '最高价' : 'Maximum price'}
+                                aria-invalid={invalidMaximum || invertedRange || undefined}
+                                aria-describedby={invalidMaximum || invertedRange ? priceErrorId : undefined}
                                 value={draftMaximumPrice}
                                 onChange={event => setDraftMaximumPrice(event.target.value)}
                             />
@@ -174,7 +187,7 @@ export function CatalogFilterSheet({
                     </div>
                 </fieldset>
                 {invalidPrice && (
-                    <p className="inline-error" role="alert">
+                    <p id={priceErrorId} className="inline-error" role="alert">
                         {isZh
                             ? '请输入有效价格，最高价不能低于最低价'
                             : 'Enter valid prices; the maximum must be at least the minimum.'}

@@ -56,6 +56,10 @@ const derived = new Set([
     'storefront_cart_checkout',
     'storefront_cart_checkout_line',
     'admin_notification_outbox',
+    'admin_incident_evidence',
+    'admin_incident_action',
+    'order_line_reference',
+    'storefront_review',
     'store_notification_read',
 ]);
 const retained = new Set([
@@ -184,6 +188,14 @@ function utcTimestamp(value) {
 function tracked(freeze, variantId) {
     const map = freeze.trackingByVariant ?? {};
     return typeof map[valueKey(variantId)] === 'boolean' ? map[valueKey(variantId)] : undefined;
+}
+
+/** Bind a historical-record reset to the exact existing inventory, without undoing physical shipments. */
+export function stockPreservationFingerprint(snapshot) {
+    return hash({
+        stockLevels: snapshot.rows.stock_level ?? [],
+        lots: snapshot.rows.catalog_inventory_lot ?? [],
+    });
 }
 
 /** Pure preview. Full rows stay private and are encrypted before any persistent backup. */
@@ -471,6 +483,14 @@ export function buildCleanupPlan(snapshot, freeze) {
                 'Core movement quantities may duplicate full line quantity across warehouses; a verified allocation map is required',
             );
     }
+    const preserveStock = freeze.inventoryDisposition === 'preserve-current-stock';
+    if (preserveStock && freeze.stockBaselineHash !== stockPreservationFingerprint(snapshot))
+        addBlock(
+            'STOCK_PRESERVATION_BASELINE_CHANGED',
+            'stock_level',
+            '',
+            'The explicitly preserved inventory baseline changed',
+        );
     for (const group of groups.values()) {
         const level = (rows.stock_level ?? []).find(
             row =>
@@ -478,6 +498,23 @@ export function buildCleanupPlan(snapshot, freeze) {
                 valueKey(row.stockLocationId) === valueKey(group.locationId),
         );
         const policy = tracked(freeze, group.variantId);
+        if (preserveStock) {
+            if (!level)
+                addBlock(
+                    'STOCK_BASELINE_MISSING',
+                    'stock_level',
+                    '',
+                    'Inventory preservation requires an existing stock level',
+                );
+            if (group.allocatedNet !== 0)
+                addBlock(
+                    'OUTSTANDING_ORDER_ALLOCATION',
+                    'stock_level',
+                    level?.id,
+                    'Preserving current stock must not strand an order allocation',
+                );
+            continue;
+        }
         if (policy === undefined)
             addBlock(
                 'TRACKING_HISTORY_UNCONFIRMED',
@@ -512,6 +549,13 @@ export function buildCleanupPlan(snapshot, freeze) {
         }
     }
     const lotMoves = chosen('catalog_inventory_lot_movement');
+    if (preserveStock && lotMoves.length)
+        addBlock(
+            'LOT_PRESERVATION_REQUIRES_REVIEW',
+            'catalog_inventory_lot_movement',
+            '',
+            'Order-bound lot movements require a separately verified preservation policy',
+        );
     for (const lotId of new Set(lotMoves.map(row => valueKey(row.lotId)))) {
         const lot = (rows.catalog_inventory_lot ?? []).find(row => valueKey(row.id) === lotId);
         const net = lotMoves

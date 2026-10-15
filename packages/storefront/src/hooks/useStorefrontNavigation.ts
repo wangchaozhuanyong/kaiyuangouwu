@@ -16,7 +16,7 @@ import {
 } from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { preloadRouteMedia } from '../route-media-preload';
+import { prepareRouteMedia } from '../route-media-intent';
 import { goBackInStorefront, returnToStorefrontRoute } from '../storefront-navigation-history';
 import {
     routeFromHash,
@@ -54,7 +54,7 @@ export function useStorefrontNavigation({
     useEffect(() => {
         const prepare = (next: RouteState) => {
             void preloadStorefrontRouteComponent(next.name);
-            preloadRouteMedia(next, mediaContext.current.contentBlocks, mediaContext.current.products);
+            prepareRouteMedia(next, mediaContext.current.contentBlocks, mediaContext.current.products);
         };
         const unsubscribe = router.subscribe('onBeforeNavigate', event => {
             navigationIntent.current++;

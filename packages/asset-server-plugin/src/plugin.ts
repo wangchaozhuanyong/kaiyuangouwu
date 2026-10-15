@@ -191,8 +191,9 @@ import { AssetServerOptions, ImageTransformPreset } from './types';
     providers: [
         { provide: ASSET_SERVER_PLUGIN_INIT_OPTIONS, useFactory: () => AssetServerPlugin.options },
         AssetServer,
+        { provide: 'STOREFRONT_PUBLIC_IMAGE_PREVIEW', useExisting: AssetServer },
     ],
-    exports: [AssetServer],
+    exports: [AssetServer, 'STOREFRONT_PUBLIC_IMAGE_PREVIEW'],
     compatibility: '^3.0.0',
 })
 export class AssetServerPlugin implements NestModule, OnApplicationBootstrap, OnApplicationShutdown {

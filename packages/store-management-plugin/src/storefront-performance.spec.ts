@@ -89,6 +89,31 @@ describe('anonymous bounded performance samples', () => {
         ).toBe('UNKNOWN');
     });
 
+    it('accepts only finite anonymous experience categories without expanding the batch or payload contract', () => {
+        for (const pageType of ['services', 'support', 'auth']) {
+            const input = {
+                ...batch(),
+                pageType,
+                metrics: ['NAV_RENDER', 'NAV_READY', 'NAV_ERROR', 'IMAGE_PRESENT', 'IMAGE_ERROR'].map(
+                    name => ({ name, value: 20 }),
+                ),
+            };
+            expect(parsePublicPerformanceBatch(input)).toEqual(input);
+        }
+        for (const field of ['url', 'selector', 'customerId', 'form']) {
+            expect(() => parsePublicPerformanceBatch({ ...batch(), [field]: 'private' })).toThrow();
+        }
+        expect(() =>
+            parsePublicPerformanceBatch({ ...batch(), metrics: [{ name: 'NAV_UNKNOWN', value: 1 }] }),
+        ).toThrow();
+        expect(() =>
+            parsePublicPerformanceBatch({
+                ...batch(),
+                metrics: Array(6).fill({ name: 'IMAGE_PRESENT', value: 1 }),
+            }),
+        ).toThrow();
+    });
+
     it('logs only the sanitized sample, public store code and verified region after host verification', async () => {
         const log = vi.spyOn(Logger, 'info').mockImplementation(() => undefined);
         const access = {

@@ -11,6 +11,7 @@ import {
     setStudioCachedData,
     updateStudioDraftCache,
 } from './ai-image-studio-cache';
+import { clearStudioCache as clearSessionStudioCache } from './ai-image-studio-cache-state';
 
 describe('ai-image-studio-cache', () => {
     beforeEach(() => {
@@ -127,6 +128,13 @@ describe('ai-image-studio-cache', () => {
         expect(getStudioCachedData('MY', 'customer-123')).not.toBeNull();
 
         clearStudioCache();
+        expect(getStudioCachedData('MY', 'customer-123')).toBeNull();
+    });
+
+    it('shares the same synchronous clear API with the lightweight session owner', () => {
+        expect(clearSessionStudioCache).toBe(clearStudioCache);
+        setStudioCachedData('MY', 'customer-123', { config: mockConfig });
+        clearSessionStudioCache();
         expect(getStudioCachedData('MY', 'customer-123')).toBeNull();
     });
 

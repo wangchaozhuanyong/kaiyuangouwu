@@ -1,7 +1,7 @@
 import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
-import { type ComponentType, useCallback, useContext, useEffect } from 'react';
+import { type ComponentType, useCallback, useContext, useEffect, useRef } from 'react';
 
-import { preloadImageStudioData } from '../pages/ai-image-studio-cache';
+import { prepareImageStudioData } from '../pages/ai-image-studio-preload';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
 import { type RouteState } from '../storefront-router';
 import { StorefrontContext } from '../StorefrontContext';
@@ -98,20 +98,31 @@ function AssistanceArtwork({ source }: Readonly<{ source: string }>) {
 function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
     const isZh = language === 'zh';
     const storefront = useContext(StorefrontContext);
+    const warmupOwner = useRef({});
 
     const handleWarmup = useCallback(() => {
         void preloadStorefrontRouteComponent('image-studio');
         if (storefront?.api && storefront.market) {
-            void preloadImageStudioData(storefront.api, storefront.customer, storefront.market);
+            const owner = warmupOwner.current;
+            prepareImageStudioData(
+                storefront.api,
+                storefront.customer,
+                storefront.market,
+                () => warmupOwner.current === owner,
+            );
         }
     }, [storefront]);
 
     useEffect(() => {
+        warmupOwner.current = {};
         if (!storefront) return;
         const timer = setTimeout(() => {
             handleWarmup();
         }, 300);
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+            warmupOwner.current = {};
+        };
     }, [handleWarmup, storefront]);
 
     return (

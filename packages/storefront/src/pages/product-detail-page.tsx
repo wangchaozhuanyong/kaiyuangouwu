@@ -11,7 +11,7 @@ import {
     Truck,
     X,
 } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { ShopApi } from '../api';
@@ -144,11 +144,24 @@ export function ProductDetailPage() {
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const [favoritePending, setFavoritePending] = useState(false);
 
+    const selectionInputs = useRef({ productId: product.id, initialVariantId, initialQuantity });
     useEffect(() => {
-        setVariantId(initialVariant?.id ?? '');
-        setQuantity(initialQuantity);
-        setActiveSection('description');
-    }, [initialQuantity, initialVariant?.id, product.id]);
+        const previous = selectionInputs.current;
+        selectionInputs.current = { productId: product.id, initialVariantId, initialQuantity };
+        if (
+            previous.productId !== product.id ||
+            previous.initialVariantId !== initialVariantId ||
+            previous.initialQuantity !== initialQuantity
+        ) {
+            setVariantId(initialVariant?.id ?? '');
+            setQuantity(initialQuantity);
+            setActiveSection('description');
+        } else if (!product.variants.some(item => item.id === variantId)) {
+            // A refresh can remove an option; do not carry its quantity to a different one.
+            setVariantId(initialVariant?.id ?? '');
+            setQuantity(1);
+        }
+    }, [initialQuantity, initialVariantId, initialVariant?.id, product.id, product.variants, variantId]);
     useEffect(() => {
         if (!reviewEnabled && activeSection === 'reviews') setActiveSection('description');
     }, [activeSection, reviewEnabled]);

@@ -8,6 +8,7 @@ import { StorefrontPublicCacheService } from './storefront-public-cache.service'
 vi.mock('@vendure/core', () => ({
     CacheService: class {},
     ConfigService: class {},
+    RequestContextCacheService: class {},
     TransactionalConnection: class {},
     Product: class {},
     ProductVariant: class {},
@@ -262,7 +263,52 @@ describe('public media manifest', () => {
         expect(await test.service.isPublic(ctx, 'shop.example', 'preview/a-phone.webp')).toBe(false);
         expect(await test.service.isPublic(ctx, 'shop.example', 'preview/desktop.webp')).toBe(false);
     });
-    it('never grants access from non-HERO settings, another host, a cache or source traversal', async () => {
+    it('authorizes published phone bindings for the services and device-poster layouts only', async () => {
+        const test = harness();
+        const blocks = [
+            {
+                type: 'CLIENT_PLUGINS',
+                items: [],
+                settings: { mobileImageUrl: '/assets/preview/service-phone.webp' },
+            },
+            {
+                type: 'CLIENT_PLUGINS',
+                items: [],
+                settings: {
+                    mobileImageUrl: '/assets/preview/ignored-banner.webp',
+                    businessServicesHeroLayout: 'shared-banner',
+                },
+            },
+            {
+                type: 'CATEGORY_AD',
+                items: [],
+                settings: {
+                    mobileImageUrl: '/assets/preview/category-phone.webp',
+                    categoryArtworkLayout: 'device-poster',
+                },
+            },
+            {
+                type: 'CATEGORY_AD',
+                items: [],
+                settings: {
+                    mobileImageUrl: '/assets/preview/ignored-scene.webp',
+                    categoryArtworkLayout: 'scene-poster',
+                },
+            },
+        ];
+        test.content.findPublished.mockImplementation((request: any) =>
+            Promise.resolve(request.channelId === 'a' ? blocks : []),
+        );
+        for (const path of ['preview/service-phone.webp', 'preview/category-phone.webp']) {
+            expect(await test.service.isPublic(ctx, 'shop.example', path)).toBe(true);
+            expect(await test.service.isPublic({ ...ctx, channelId: 'b' }, 'other.example', path)).toBe(
+                false,
+            );
+        }
+        for (const path of ['preview/ignored-banner.webp', 'preview/ignored-scene.webp'])
+            expect(await test.service.isPublic(ctx, 'shop.example', path)).toBe(false);
+    });
+    it('never grants access from unused phone settings, another host, a cache or source traversal', async () => {
         const test = harness();
         test.content.findPublished.mockResolvedValue([
             {

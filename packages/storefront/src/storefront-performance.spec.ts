@@ -31,5 +31,8 @@ describe('anonymous performance records', () => {
         expect(performancePageType('/category')).toBe('catalog');
         expect(performancePageType('/en/category?token=private#item')).toBe('catalog');
         expect(performancePageType('/zh/order-detail?id=private')).toBe('other');
+        expect(performancePageType('/zh/services?token=private')).toBe('services');
+        expect(performancePageType('/en/support')).toBe('support');
+        expect(performancePageType('/en/reset-password?token=private')).toBe('auth');
     });
 });

@@ -1,11 +1,13 @@
 import { createLink, Link } from '@tanstack/react-router';
-import { ShoppingCart, UserRound } from 'lucide-react';
+import { Search, ShoppingCart, UserRound } from 'lucide-react';
 import { type AnchorHTMLAttributes, forwardRef, lazy, Suspense, useState } from 'react';
 
 import { authOverlayForNavigation } from '../../auth-overlay-navigation';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { routeFromHash, routeSearch } from '../../storefront-router';
 import { BrandLogo } from '../../storefront-ui/brand-logo';
 import { useStorefront } from '../../StorefrontContext';
+import { StorefrontErrorBoundary } from '../../StorefrontErrorBoundary';
 import { StorefrontContentBlock } from '../../types';
 
 import { resolveBottomNavigationItems } from './bottom-navigation';
@@ -13,7 +15,13 @@ import { CountBadge, countBadgeLabel } from './count-badge';
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from './locale-preferences';
 import { DesktopHeaderSearchPlaceholder } from './responsive-home-header-placeholder';
 
-const DesktopSearch = lazy(() => import('./desktop-search'));
+let searchLoaded = false;
+const DesktopSearch = lazy(() =>
+    import('./desktop-search').then(module => {
+        searchLoaded = true;
+        return module;
+    }),
+);
 
 // The router's destination can be active while the previous page is still visible.
 const DesktopNavigationLink = createLink(
@@ -83,6 +91,7 @@ export function DesktopHeader({
 }) {
     const context = useStorefront();
     const isZh = context.language === 'zh';
+    const online = useOnlineStatus();
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const navigationItems = resolveBottomNavigationItems(navigationBlock, context.language).filter(
         item => item.routeName !== 'cart',
@@ -126,9 +135,33 @@ export function DesktopHeader({
                 </div>
 
                 <div className="proto-header-search">
-                    <Suspense fallback={<DesktopHeaderSearchPlaceholder language={context.language} />}>
-                        <DesktopSearch />
-                    </Suspense>
+                    <StorefrontErrorBoundary
+                        fallback={reload => (
+                            <button
+                                type="button"
+                                className="proto-search-form proto-search-route-trigger"
+                                aria-label={
+                                    isZh
+                                        ? '搜索暂不可用，重新加载页面后重试'
+                                        : 'Search unavailable. Reload the page to retry'
+                                }
+                                onClick={reload}
+                            >
+                                <Search className="proto-search-icon" aria-hidden="true" />
+                                <span className="proto-search-route-label">
+                                    {isZh ? '搜索暂不可用 · 刷新重试' : 'Search unavailable · Reload'}
+                                </span>
+                            </button>
+                        )}
+                    >
+                        <Suspense fallback={<DesktopHeaderSearchPlaceholder language={context.language} />}>
+                            {online || searchLoaded ? (
+                                <DesktopSearch />
+                            ) : (
+                                <DesktopHeaderSearchPlaceholder language={context.language} />
+                            )}
+                        </Suspense>
+                    </StorefrontErrorBoundary>
                 </div>
 
                 <div className="proto-header-right">

@@ -127,6 +127,8 @@ function RecoveryLogo({ source }: { source: string }) {
 
 interface StorefrontErrorBoundaryProps {
     children: ReactNode;
+    /** Optional features keep their failure inside the owning region. */
+    fallback?: ReactNode | ((reload: () => void) => ReactNode);
 }
 
 interface StorefrontErrorBoundaryState {
@@ -144,8 +146,10 @@ export class StorefrontErrorBoundary extends Component<
     }
 
     componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-        document.documentElement.removeAttribute('data-storefront-theme-pending');
-        document.dispatchEvent(new Event('storefront:page-error'));
+        if (this.props.fallback === undefined) {
+            document.documentElement.removeAttribute('data-storefront-theme-pending');
+            document.dispatchEvent(new Event('storefront:page-error'));
+        }
         // Rendering failures must remain visible in production diagnostics.
         // eslint-disable-next-line no-console
         console.error('Storefront render failed', error, errorInfo);
@@ -153,6 +157,10 @@ export class StorefrontErrorBoundary extends Component<
 
     render() {
         if (!this.state.failed) return this.props.children;
+        if (this.props.fallback !== undefined)
+            return typeof this.props.fallback === 'function'
+                ? this.props.fallback(() => window.location.reload())
+                : this.props.fallback;
 
         const isZh = document.documentElement.lang.toLowerCase().startsWith('zh');
         const brand = currentRecoveryBrand();

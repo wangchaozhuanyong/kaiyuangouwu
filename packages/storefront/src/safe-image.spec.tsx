@@ -30,7 +30,1093 @@ function requiredImage(host: ParentNode): HTMLImageElement {
     return image;
 }
 
+function requiredElement<T extends Element>(host: ParentNode, selector: string): T {
+    const element = host.querySelector<T>(selector);
+    expect(element).not.toBeNull();
+    if (!element) throw new Error(`Expected an element matching ${selector}`);
+    return element;
+}
+
+function completeCandidate(image: HTMLImageElement, candidate = image.src): void {
+    Object.defineProperties(image, {
+        complete: { configurable: true, value: true },
+        naturalWidth: { configurable: true, value: 640 },
+        naturalHeight: { configurable: true, value: 360 },
+        currentSrc: { configurable: true, value: new URL(candidate, location.href).href },
+    });
+}
+
+async function loadCandidate(image: HTMLImageElement, candidate = image.src): Promise<void> {
+    completeCandidate(image, candidate);
+    await act(async () => {
+        image.dispatchEvent(new Event('load'));
+        await Promise.resolve();
+    });
+}
+
+async function failCandidate(image: HTMLImageElement): Promise<void> {
+    await act(async () => {
+        image.dispatchEvent(new Event('error'));
+        await vi.dynamicImportSettled();
+    });
+}
+
+function visibleFrameRect(top = 10, size = 180): DOMRect {
+    return {
+        x: 10,
+        y: top,
+        left: 10,
+        top,
+        right: 330,
+        bottom: top + size,
+        width: 320,
+        height: size,
+        toJSON: () => ({}),
+    };
+}
+
+describe('SafeImage public presentation reuse', () => {
+    it('reuses public pixels with the current frame crop instead of the previous route crop', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/public-shared-crop.webp';
+        const render = (objectFit: 'cover' | 'contain', objectPosition: string) => (
+            <SafeImageMediaProvider scope="moyao" media={[mediaDescriptor(src, 'hero')]}>
+                <SafeImage
+                    src={src}
+                    imageKind="hero"
+                    alt="Shared banner"
+                    style={{ objectFit, objectPosition }}
+                />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render('cover', 'right center')));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(null));
+            act(() => root.render(render('contain', 'left bottom')));
+            const backing = host.querySelector<HTMLElement>('.safe-image-fallback');
+            expect(backing?.style.backgroundImage).toContain(src);
+            expect(backing?.style.backgroundSize).toBe('contain');
+            expect(backing?.style.backgroundPosition).toBe('left bottom');
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps the old crop for a source replacement while fitting inline previews to their own current frame', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const original = '/public-original-crop.webp';
+        const next = '/public-next-crop.webp';
+        const render = (src: string, objectFit: 'cover' | 'contain', objectPosition: string) => (
+            <SafeImageMediaProvider
+                scope="moyao"
+                media={[
+                    mediaDescriptor(original, 'hero'),
+                    mediaDescriptor(next, 'hero', { inlinePreview: 'data:image/webp;base64,cHJldmlldw==' }),
+                ]}
+            >
+                <SafeImage src={src} imageKind="hero" alt="Banner" style={{ objectFit, objectPosition }} />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render(original, 'cover', 'right center')));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(render(next, 'contain', 'left bottom')));
+            const backing = host.querySelector<HTMLElement>('.safe-image-fallback');
+            expect(backing?.style.backgroundImage).toContain(original);
+            expect(backing?.style.backgroundSize).toBe('cover');
+            expect(backing?.style.backgroundPosition).toBe('right center');
+            act(() => root.render(null));
+            act(() => root.render(render(next, 'cover', 'left bottom')));
+            const preview = host.querySelector<HTMLImageElement>('img.safe-image-preview');
+            expect(preview?.style.objectFit).toBe('cover');
+            expect(preview?.style.objectPosition).toBe('left bottom');
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
+    it('updates cached backing artwork when native art direction changes before the next image load', async () => {
+        clearDecodedImageCache();
+        let mobileViewport = false;
+        const changes = new Set<() => void>();
+        vi.stubGlobal(
+            'matchMedia',
+            vi.fn(() => ({
+                get matches() {
+                    return mobileViewport;
+                },
+                addEventListener: (_: string, callback: () => void) => changes.add(callback),
+                removeEventListener: (_: string, callback: () => void) => changes.delete(callback),
+            })),
+        );
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const desktop = '/crop-resize-desktop.webp';
+        const mobile = '/crop-resize-mobile.webp';
+        const render = () => (
+            <SafeImageMediaProvider
+                scope="moyao"
+                media={[mediaDescriptor(desktop, 'hero'), mediaDescriptor(mobile, 'hero')]}
+            >
+                <SafeImage
+                    src={desktop}
+                    imageKind="hero"
+                    alt="Responsive banner"
+                    mediaSources={[{ media: '(max-width: 767px)', src: mobile }]}
+                />
+            </SafeImageMediaProvider>
+        );
+        try {
+            for (const viewport of [false, true]) {
+                mobileViewport = viewport;
+                act(() => root.render(render()));
+                await loadCandidate(requiredImage(host), viewport ? mobile : desktop);
+                act(() => root.render(null));
+            }
+            mobileViewport = false;
+            act(() => root.render(render()));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+                desktop,
+            );
+            act(() => {
+                mobileViewport = true;
+                changes.forEach(change => change());
+            });
+            const background = host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage;
+            expect(background).toContain(mobile);
+            expect(background).not.toContain(desktop);
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.unstubAllGlobals();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps an admitted replacement backing after load until paint without marking a pending decode ready', async () => {
+        clearDecodedImageCache();
+        const frames = new Map<number, FrameRequestCallback>();
+        let nextFrame = 0;
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+            frames.set(++nextFrame, callback);
+            return nextFrame;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (frame: number) => frames.delete(frame));
+        const advanceFrame = () => {
+            const callbacks = [...frames.values()];
+            frames.clear();
+            act(() => callbacks.forEach(callback => callback(16)));
+        };
+        let finishDecode!: () => void;
+        const decode = vi
+            .spyOn(HTMLImageElement.prototype, 'decode')
+            .mockResolvedValueOnce(undefined)
+            .mockImplementation(() => new Promise<void>(resolve => (finishDecode = resolve)));
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const render = (src: string, scope = 'moyao') => (
+            <SafeImageMediaProvider scope={scope}>
+                <SafeImage
+                    src={src}
+                    alt="Replacement"
+                    style={{ objectFit: 'cover', objectPosition: 'right center' }}
+                />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render('/admitted-original.webp')));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(render('/admitted-next.webp')));
+            await loadCandidate(requiredImage(host));
+            const backing = host.querySelector<HTMLElement>('.safe-image-fallback');
+            expect(backing?.style.backgroundImage).toContain('/admitted-original.webp');
+            expect(backing?.style.backgroundSize).toBe('cover');
+            expect(backing?.style.backgroundPosition).toBe('right center');
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            advanceFrame();
+            expect(backing?.style.backgroundImage).toContain('/admitted-original.webp');
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            advanceFrame();
+            expect(host.querySelector('.safe-image-frame.is-painted')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            await act(async () => {
+                finishDecode();
+                await Promise.resolve();
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            act(() => root.render(render('/admitted-third.webp', 'other-store')));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+        } finally {
+            act(() => root.unmount());
+            decode.mockRestore();
+            vi.unstubAllGlobals();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps a painted candidate painted across a breakpoint whose artwork URL is unchanged', async () => {
+        clearDecodedImageCache();
+        let mobileViewport = false;
+        const changes = new Set<() => void>();
+        vi.stubGlobal(
+            'matchMedia',
+            vi.fn(() => ({
+                get matches() {
+                    return mobileViewport;
+                },
+                addEventListener: (_: string, callback: () => void) => changes.add(callback),
+                removeEventListener: (_: string, callback: () => void) => changes.delete(callback),
+            })),
+        );
+        const frames = new Map<number, FrameRequestCallback>();
+        let nextFrame = 0;
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+            frames.set(++nextFrame, callback);
+            return nextFrame;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (frame: number) => frames.delete(frame));
+        const advanceFrame = () => {
+            const callbacks = [...frames.values()];
+            frames.clear();
+            act(() => callbacks.forEach(callback => callback(16)));
+        };
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/same-breakpoint-artwork.webp';
+        const onImageReady = vi.fn();
+        try {
+            act(() =>
+                root.render(
+                    <SafeImageMediaProvider scope="moyao" media={[mediaDescriptor(src, 'hero')]}>
+                        <SafeImage
+                            src={src}
+                            imageKind="hero"
+                            alt="Shared artwork"
+                            onImageReady={onImageReady}
+                            mediaSources={[{ media: '(max-width: 767px)', src }]}
+                        />
+                    </SafeImageMediaProvider>,
+                ),
+            );
+            await loadCandidate(requiredImage(host));
+            advanceFrame();
+            advanceFrame();
+            expect(host.querySelector('.safe-image-frame.is-painted')).not.toBeNull();
+            act(() => {
+                mobileViewport = true;
+                changes.forEach(change => change());
+            });
+            expect(host.querySelector('.safe-image-frame.is-painted')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => root.unmount());
+            vi.unstubAllGlobals();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps a decoded public image behind a genuinely remounted node without marking that node ready', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/public-remount.webp?v=one';
+        const media = [mediaDescriptor(src, 'hero')];
+        const onImageReady = vi.fn();
+        let finishDecode!: () => void;
+        const decode = vi.spyOn(HTMLImageElement.prototype, 'decode').mockResolvedValueOnce(undefined);
+        const render = () => (
+            <SafeImageMediaProvider scope="moyao" media={media}>
+                <SafeImage src={src} imageKind="hero" alt="Public banner" onImageReady={onImageReady} />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render()));
+            const first = requiredImage(host);
+            await loadCandidate(first);
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+            act(() => root.render(null));
+            expect(host.querySelector('img')).toBeNull();
+
+            decode.mockImplementation(() => new Promise<void>(resolve => (finishDecode = resolve)));
+            act(() => root.render(render()));
+            const next = requiredImage(host);
+            expect(next).not.toBe(first);
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+                src,
+            );
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            await loadCandidate(next);
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+            await act(async () => {
+                finishDecode();
+                await Promise.resolve();
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            expect(onImageReady).toHaveBeenLastCalledWith(next);
+            expect(onImageReady).toHaveBeenCalledTimes(2);
+        } finally {
+            act(() => root.unmount());
+            decode.mockRestore();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('isolates public reuse by confirmed scope, content version and current public membership', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/public-isolation.webp?v=one';
+        const known = mediaDescriptor(src, 'hero');
+        const render = (scope: string | undefined, source = src, media = [known]) => (
+            <SafeImageMediaProvider scope={scope} media={media}>
+                <SafeImage src={source} imageKind="hero" alt="Public banner" />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render('moyao')));
+            await loadCandidate(requiredImage(host));
+            for (const element of [
+                render('other-store'),
+                render(undefined),
+                render('moyao', '/public-isolation.webp?v=two', [
+                    mediaDescriptor('/public-isolation.webp?v=two', 'hero'),
+                ]),
+                render('moyao', src, []),
+                render('moyao', src, [{ ...known, version: 'stale-version' }]),
+            ]) {
+                act(() => root.render(null));
+                act(() => root.render(element));
+                expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe(
+                    '',
+                );
+                expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            }
+
+            const undisclosed = '/public-not-in-the-current-manifest.webp';
+            act(() => root.render(null));
+            act(() => root.render(render('moyao', undisclosed, [])));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(null));
+            act(() => root.render(render('moyao', undisclosed, [mediaDescriptor(undisclosed, 'hero')])));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps native mobile and desktop artwork separate, including a viewport change before load', async () => {
+        clearDecodedImageCache();
+        let mobileViewport = false;
+        vi.stubGlobal(
+            'matchMedia',
+            vi.fn(() => ({ matches: mobileViewport })),
+        );
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const desktop = '/public-art-desktop.webp?v=one';
+        const mobile = '/public-art-mobile.webp?v=one';
+        const media = [mediaDescriptor(desktop, 'hero'), mediaDescriptor(mobile, 'hero')];
+        const render = () => (
+            <SafeImageMediaProvider scope="moyao" media={media}>
+                <SafeImage
+                    src={desktop}
+                    imageKind="hero"
+                    alt="Responsive banner"
+                    mediaSources={[{ media: '(max-width: 767px)', src: mobile }]}
+                />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render()));
+            mobileViewport = true;
+            await loadCandidate(requiredImage(host), mobile);
+            act(() => root.render(null));
+
+            mobileViewport = false;
+            act(() => root.render(render()));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            await loadCandidate(requiredImage(host), desktop);
+            act(() => root.render(null));
+
+            mobileViewport = true;
+            act(() => root.render(render()));
+            const mobileBackground =
+                host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage;
+            expect(mobileBackground).toContain(mobile);
+            expect(mobileBackground).not.toContain(desktop);
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            act(() => root.render(null));
+
+            mobileViewport = false;
+            act(() => root.render(render()));
+            const desktopBackground =
+                host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage;
+            expect(desktopBackground).toContain(desktop);
+            expect(desktopBackground).not.toContain(mobile);
+        } finally {
+            act(() => root.unmount());
+            vi.unstubAllGlobals();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('uses inline native art-direction previews without extra HTTP preview candidates', () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const desktop = '/inline-art-desktop.webp';
+        const mobile = '/inline-art-mobile.webp';
+        const desktopPreview = 'data:image/webp;base64,ZGVza3RvcA==';
+        const mobilePreview = 'data:image/webp;base64,bW9iaWxl';
+        try {
+            act(() =>
+                root.render(
+                    <SafeImageMediaProvider
+                        scope="moyao"
+                        media={[
+                            mediaDescriptor(desktop, 'hero', { inlinePreview: desktopPreview }),
+                            mediaDescriptor(mobile, 'hero', { inlinePreview: mobilePreview }),
+                        ]}
+                    >
+                        <SafeImage
+                            src={desktop}
+                            imageKind="hero"
+                            alt="Inline artwork"
+                            fetchPriority="auto"
+                            mediaSources={[{ media: '(max-width: 767px)', src: mobile }]}
+                        />
+                    </SafeImageMediaProvider>,
+                ),
+            );
+            const preview = host.querySelector<HTMLImageElement>('img.safe-image-preview');
+            expect(preview?.getAttribute('src')).toBe(desktopPreview);
+            expect(preview?.closest('picture')?.querySelector('source')?.getAttribute('media')).toBe(
+                '(max-width: 767px)',
+            );
+            expect(preview?.closest('picture')?.querySelector('source')?.getAttribute('srcset')).toBe(
+                mobilePreview,
+            );
+            const networkCandidates = Array.from(host.querySelectorAll('img, source'))
+                .flatMap(node => [node.getAttribute('src'), node.getAttribute('srcset')])
+                .filter((source): source is string => Boolean(source && !source.startsWith('data:')));
+            expect(networkCandidates.sort()).toEqual([desktop, mobile].sort());
+            expect(host.querySelector('.safe-image-frame.has-inline-preview')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
+    it('does not share a failed decode or a decode completed after its source was replaced', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const failed = '/public-decode-failed.webp';
+        const old = '/public-decode-replaced.webp';
+        const next = '/public-decode-next.webp';
+        const media = [failed, old, next].map(source => mediaDescriptor(source, 'hero'));
+        const render = (source: string) => (
+            <SafeImageMediaProvider scope="moyao" media={media}>
+                <SafeImage src={source} imageKind="hero" alt="Public banner" />
+            </SafeImageMediaProvider>
+        );
+        let finishDecode!: () => void;
+        const decode = vi
+            .spyOn(HTMLImageElement.prototype, 'decode')
+            .mockRejectedValue(new Error('decode failed'));
+        try {
+            act(() => root.render(render(failed)));
+            await loadCandidate(requiredImage(host));
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            expect(isImageAlreadyDecoded(new URL(failed, location.href).href)).toBe(false);
+            act(() => root.render(null));
+            act(() => root.render(render(failed)));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+
+            decode.mockImplementation(() => new Promise<void>(resolve => (finishDecode = resolve)));
+            act(() => root.render(render(old)));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(render(next)));
+            await act(async () => {
+                finishDecode();
+                await Promise.resolve();
+            });
+            expect(isImageAlreadyDecoded(new URL(old, location.href).href)).toBe(false);
+            for (const source of [old, next]) {
+                act(() => root.render(null));
+                act(() => root.render(render(source)));
+                expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe(
+                    '',
+                );
+                expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            }
+        } finally {
+            act(() => root.unmount());
+            decode.mockRestore();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('bounds shared presentations at 128 entries and clears both presentations and decode bookkeeping', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const sources = Array.from({ length: 129 }, (_, index) => `/public-bounded-${index}.webp`);
+        const media = sources.map(source => mediaDescriptor(source));
+        const render = (selected = sources) => (
+            <SafeImageMediaProvider scope="moyao" media={media}>
+                {selected.map(source => (
+                    <SafeImage key={source} src={source} alt="Public image" />
+                ))}
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render()));
+            await act(async () => {
+                for (const image of host.querySelectorAll<HTMLImageElement>('img.safe-image')) {
+                    completeCandidate(image);
+                    image.dispatchEvent(new Event('load'));
+                }
+                await Promise.resolve();
+            });
+            expect(host.querySelectorAll('[data-safe-image=ready]')).toHaveLength(129);
+            act(() => root.render(null));
+            act(() => root.render(render([sources[0]])));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            for (const source of [sources[1], sources[128]]) {
+                act(() => root.render(null));
+                act(() => root.render(render([source])));
+                expect(
+                    host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage,
+                ).toContain(source);
+            }
+            expect(isImageAlreadyDecoded(new URL(sources[128], location.href).href)).toBe(true);
+            clearDecodedImageCache();
+            act(() => root.render(null));
+            act(() => root.render(render([sources[128]])));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            expect(isImageAlreadyDecoded(new URL(sources[128], location.href).href)).toBe(false);
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps backing artwork through a paint opportunity while decode readiness remains immediate', async () => {
+        clearDecodedImageCache();
+        let nextFrame = 0;
+        const frames = new Map<number, FrameRequestCallback>();
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+            frames.set(++nextFrame, callback);
+            return nextFrame;
+        });
+        vi.stubGlobal('cancelAnimationFrame', (frame: number) => frames.delete(frame));
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/public-handoff.webp';
+        const onImageReady = vi.fn();
+        const advanceFrame = () => {
+            const callbacks = [...frames.values()];
+            frames.clear();
+            act(() => callbacks.forEach(callback => callback(16)));
+        };
+        try {
+            act(() =>
+                root.render(
+                    <SafeImageMediaProvider
+                        scope="moyao"
+                        media={[
+                            mediaDescriptor(src, 'hero', {
+                                inlinePreview: 'data:image/webp;base64,cHJldmlldw==',
+                            }),
+                        ]}
+                    >
+                        <SafeImage src={src} imageKind="hero" alt="Handoff" onImageReady={onImageReady} />
+                    </SafeImageMediaProvider>,
+                ),
+            );
+            await loadCandidate(requiredImage(host));
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            expect(host.querySelector('.safe-image-frame.is-presented')).not.toBeNull();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            advanceFrame();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            const backing = host.querySelector<HTMLElement>(
+                '.safe-image-frame:not(.is-painted) .safe-image-fallback',
+            );
+            expect(backing).not.toBeNull();
+            expect(backing?.style.backgroundImage).toContain(src);
+            advanceFrame();
+            expect(host.querySelector('.safe-image-frame.is-painted')).not.toBeNull();
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => root.unmount());
+            vi.unstubAllGlobals();
+            clearDecodedImageCache();
+        }
+    });
+});
+
 describe('SafeImage', () => {
+    it('retries only its failed native node, preserves the frame and waits for a real decode again', async () => {
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockReturnValue(visibleFrameRect());
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const onImageReady = vi.fn();
+        const parentClick = vi.fn();
+        let finishDecode!: () => void;
+        const decode = vi.spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(
+            () =>
+                new Promise<void>(resolve => {
+                    finishDecode = resolve;
+                }),
+        );
+        try {
+            act(() =>
+                root.render(
+                    <div onClick={parentClick}>
+                        <SafeImage
+                            src="/retry-native.jpg"
+                            alt="商品主图"
+                            width={640}
+                            height={360}
+                            onImageReady={onImageReady}
+                        />
+                    </div>,
+                ),
+            );
+            const first = requiredImage(host);
+            vi.spyOn(first, 'getBoundingClientRect').mockReturnValue({ height: 360 } as DOMRect);
+            await failCandidate(first);
+            const frame = requiredElement<HTMLElement>(host, '.safe-image-frame');
+            const retry = requiredElement<HTMLButtonElement>(host, '.safe-image-retry');
+            expect(frame.style.minHeight).toBe('360px');
+            expect(retry.type).toBe('button');
+            expect(retry.tabIndex).toBe(0);
+            expect(retry.getAttribute('aria-label')).toContain('商品主图');
+            retry.focus();
+            act(() => {
+                retry.click();
+                retry.click();
+            });
+            expect(parentClick).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(frame);
+            const replacement = requiredImage(host);
+            expect(replacement).not.toBe(first);
+            expect(replacement.getAttribute('src')).toBe('/retry-native.jpg');
+            expect(replacement.width).toBe(640);
+            expect(replacement.height).toBe(360);
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            completeCandidate(replacement);
+            act(() => {
+                replacement.dispatchEvent(new Event('load'));
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            expect(onImageReady).not.toHaveBeenCalled();
+            await act(async () => {
+                finishDecode();
+                await Promise.resolve();
+            });
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            expect(onImageReady).toHaveBeenCalledExactlyOnceWith(replacement);
+        } finally {
+            act(() => root.unmount());
+            host.remove();
+            decode.mockRestore();
+            rect.mockRestore();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('bounds repeated manual clicks with a cooldown, then allows later local recovery without a permanent lockout', async () => {
+        vi.useFakeTimers();
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockReturnValue(visibleFrameRect());
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const render = (className = '') => (
+            <SafeImage src="/retry-bounded.jpg" alt="Image" className={className} />
+        );
+        try {
+            act(() => root.render(render()));
+            for (let attempt = 0; attempt < 4; attempt += 1) {
+                await failCandidate(requiredImage(host));
+                expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+                const retry = host.querySelector<HTMLButtonElement>('.safe-image-retry');
+                expect(retry).not.toBeNull();
+                if (!retry) throw new Error('Expected the failed image retry control');
+                expect(retry.disabled).toBe(attempt > 0);
+                if (attempt > 0) {
+                    act(() => retry.click());
+                    expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+                    act(() => {
+                        vi.advanceTimersByTime(1_000);
+                    });
+                }
+                act(() => retry.click());
+                expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            }
+            await failCandidate(requiredImage(host));
+            act(() => root.render(render('unchanged-source')));
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            expect(requiredElement<HTMLButtonElement>(host, '.safe-image-retry').disabled).toBe(true);
+            act(() => {
+                vi.advanceTimersByTime(1_000);
+            });
+            expect(requiredElement<HTMLButtonElement>(host, '.safe-image-retry').disabled).toBe(false);
+        } finally {
+            act(() => root.unmount());
+            rect.mockRestore();
+            vi.useRealTimers();
+        }
+    });
+
+    it.each(['link', 'button', 'thumbnail', 'icon'] as const)(
+        'does not nest another control inside %s media and reconnects the failed image only once',
+        async kind => {
+            const rect = vi
+                .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+                .mockReturnValue(visibleFrameRect());
+            const host = document.createElement('div');
+            const root = createRoot(host);
+            const image = (
+                <SafeImage
+                    src="/retry-interactive.jpg"
+                    alt="Image"
+                    imageKind={kind === 'thumbnail' || kind === 'icon' ? kind : undefined}
+                />
+            );
+            const view =
+                kind === 'link' ? (
+                    <a href="/product/1">{image}</a>
+                ) : kind === 'button' ? (
+                    <button type="button">{image}</button>
+                ) : (
+                    image
+                );
+            const fail = async () => {
+                // Compact responsive media first uses its existing bounded recovery candidate.
+                for (let index = 0; index < 3 && host.querySelector('img.safe-image'); index += 1)
+                    await failCandidate(requiredImage(host));
+            };
+            try {
+                act(() => root.render(view));
+                await fail();
+                expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+                const retry = requiredElement<HTMLButtonElement>(host, '.safe-image-retry');
+                expect(retry.hidden).toBe(false);
+                expect(retry.closest('a')).toBeNull();
+                expect(retry.parentElement?.closest('button')).toBeNull();
+                act(() => {
+                    window.dispatchEvent(new Event('online'));
+                });
+                expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+                expect(requiredImage(host).getAttribute('src')).not.toContain('retry=');
+                await fail();
+                expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+                act(() => {
+                    window.dispatchEvent(new Event('online'));
+                });
+                expect(host.querySelector('img.safe-image')).toBeNull();
+                expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            } finally {
+                act(() => root.unmount());
+                rect.mockRestore();
+            }
+        },
+    );
+
+    it('resets recovery allowance for a new owner without replaying the previous owner online listener', async () => {
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockReturnValue(visibleFrameRect());
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const render = (owner: string, scope = 'store-one') => (
+            <SafeImageMediaProvider scope={scope}>
+                <SafeImage src="/owner-retry.jpg" retainedOwnerKey={owner} alt="Avatar" />
+            </SafeImageMediaProvider>
+        );
+        const fail = () => failCandidate(requiredImage(host));
+        try {
+            act(() => root.render(render('customer-one')));
+            await fail();
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            await fail();
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            act(() => root.render(render('customer-two')));
+            const second = requiredImage(host);
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(requiredImage(host)).toBe(second);
+            await fail();
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(requiredImage(host)).not.toBe(second);
+            act(() => root.render(render('customer-two', 'store-two')));
+            await fail();
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            rect.mockRestore();
+            clearDecodedImageCache();
+        }
+    });
+
+    it('keeps a linked image retry inside its dialog, preserves the link action and removes the portal on unmount', async () => {
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockReturnValue(visibleFrameRect());
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const navigate = vi.fn();
+        try {
+            act(() =>
+                root.render(
+                    <div role="dialog" aria-modal="true" aria-label="商品预览">
+                        <a
+                            href="/product/one"
+                            onClick={event => {
+                                event.preventDefault();
+                                navigate();
+                            }}
+                        >
+                            <SafeImage src="/dialog-retry.jpg" alt="预览图片" />
+                        </a>
+                    </div>,
+                ),
+            );
+            await failCandidate(requiredImage(host));
+            const retry = requiredElement<HTMLButtonElement>(host, '.safe-image-retry');
+            const link = requiredElement<HTMLAnchorElement>(host, 'a');
+            expect(retry.parentElement?.getAttribute('role')).toBe('dialog');
+            expect(link.contains(retry)).toBe(false);
+            expect(retry.style.position).not.toBe('fixed');
+            expect(retry.style.left).not.toBe('');
+            retry.focus();
+            act(() => retry.click());
+            expect(navigate).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(link);
+            expect(link.getAttribute('href')).toBe('/product/one');
+            act(() => link.click());
+            expect(navigate).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => root.unmount());
+            expect(host.querySelector('.safe-image-retry')).toBeNull();
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+                window.dispatchEvent(new Event('scroll'));
+            });
+            host.remove();
+            rect.mockRestore();
+        }
+    });
+
+    it('does not reconnect offscreen or hidden failures and hides the local control as the frame leaves view', async () => {
+        let top = 900;
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockImplementation(() => visibleFrameRect(top));
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const render = (hidden = false) => (
+            <div aria-hidden={hidden || undefined}>
+                <SafeImage src="/visible-reconnect.jpg" alt="Image" />
+            </div>
+        );
+        try {
+            act(() => root.render(render()));
+            await failCandidate(requiredImage(host));
+            expect(requiredElement<HTMLButtonElement>(host, '.safe-image-retry').hidden).toBe(true);
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            top = 10;
+            act(() => {
+                window.dispatchEvent(new Event('resize'));
+            });
+            expect(requiredElement<HTMLButtonElement>(host, '.safe-image-retry').hidden).toBe(false);
+            top = -200;
+            act(() => {
+                window.dispatchEvent(new Event('scroll'));
+            });
+            expect(requiredElement<HTMLButtonElement>(host, '.safe-image-retry').hidden).toBe(true);
+            top = 10;
+            act(() => root.render(render(true)));
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            act(() => root.render(render()));
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            rect.mockRestore();
+        }
+    });
+
+    it('keeps a tiny decorative frame free of an overlapping manual control', async () => {
+        const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+            ...visibleFrameRect(),
+            right: 42,
+            bottom: 42,
+            width: 32,
+            height: 32,
+        });
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<SafeImage src="/tiny-retry.jpg" alt="小图标" />));
+            await failCandidate(requiredImage(host));
+            expect(requiredElement<HTMLButtonElement>(host, '.safe-image-retry').hidden).toBe(true);
+            act(() => {
+                window.dispatchEvent(new Event('online'));
+            });
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            rect.mockRestore();
+        }
+    });
+
+    it.each([true, 'true'] as const)(
+        'does not add a recovery control to aria-hidden=%s artwork',
+        async hidden => {
+            const rect = vi
+                .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+                .mockReturnValue(visibleFrameRect());
+            const host = document.createElement('div');
+            const root = createRoot(host);
+            try {
+                act(() => root.render(<SafeImage src="/hidden-artwork.jpg" alt="" aria-hidden={hidden} />));
+                await failCandidate(requiredImage(host));
+                expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+                expect(host.querySelector('.safe-image-retry')).toBeNull();
+            } finally {
+                act(() => root.unmount());
+                rect.mockRestore();
+            }
+        },
+    );
+
+    it.each(['mount', 'hydrate'] as const)(
+        'recovers an already completed zero-pixel failure during %s without waiting for another error event',
+        async mode => {
+            clearDecodedImageCache();
+            const complete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+            const decode = vi.spyOn(HTMLImageElement.prototype, 'decode');
+            const host = document.createElement('div');
+            const onImageReady = vi.fn();
+            const element = (
+                <SafeImage
+                    src="/completed-before-listeners.webp"
+                    alt="Failed banner"
+                    onImageReady={onImageReady}
+                />
+            );
+            if (mode === 'hydrate') host.innerHTML = renderToStaticMarkup(element);
+            let root!: ReturnType<typeof createRoot>;
+            try {
+                await act(async () => {
+                    if (mode === 'hydrate') root = hydrateRoot(host, element);
+                    else {
+                        root = createRoot(host);
+                        root.render(element);
+                    }
+                    await Promise.resolve();
+                });
+                expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+                expect(host.querySelector('[data-image-state=error]')).not.toBeNull();
+                expect(host.querySelector('[data-safe-image=loading]')).toBeNull();
+                expect(host.querySelector('[data-safe-image=timeout]')).toBeNull();
+                expect(onImageReady).not.toHaveBeenCalled();
+                expect(decode).not.toHaveBeenCalled();
+            } finally {
+                act(() => root?.unmount());
+                complete.mockRestore();
+                decode.mockRestore();
+                clearDecodedImageCache();
+            }
+        },
+    );
+
+    it('retries the bounded recovery candidate when a responsive image failed before hydration attached listeners', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const onImageReady = vi.fn();
+        const element = (
+            <SafeImage
+                src="/assets/preview/prehydration-failed.webp"
+                imageKind="hero"
+                alt="Banner"
+                onImageReady={onImageReady}
+            />
+        );
+        host.innerHTML = renderToStaticMarkup(element);
+        const image = requiredImage(host);
+        Object.defineProperties(image, {
+            complete: { configurable: true, get: () => Boolean(image.srcset) },
+            currentSrc: {
+                configurable: true,
+                get: () =>
+                    image.srcset
+                        ? new URL(image.srcset.split(',')[0].trim().split(' ')[0], location.href).href
+                        : image.src,
+            },
+        });
+        let root!: ReturnType<typeof hydrateRoot>;
+        try {
+            await act(async () => {
+                root = hydrateRoot(host, element);
+                await Promise.resolve();
+            });
+            expect(requiredImage(host)).toBe(image);
+            expect(image.getAttribute('srcset')).toBeNull();
+            expect(image.getAttribute('src')).toContain('preset=storefront-hero-fit-960&format=webp&q=90');
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            expect(onImageReady).not.toHaveBeenCalled();
+            await loadCandidate(image);
+            expect(onImageReady).toHaveBeenCalledExactlyOnceWith(image);
+            expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+        } finally {
+            act(() => root?.unmount());
+            clearDecodedImageCache();
+        }
+    });
+
     it('keeps a completed SSR image presented during hydration while decode readiness is pending', async () => {
         clearDecodedImageCache();
         let finishDecode!: () => void;
@@ -132,7 +1218,7 @@ describe('SafeImage', () => {
         }
     });
 
-    it('renders supplied bounded inline hints on priority media without a placeholder request', () => {
+    it('renders supplied bounded inline hints independently of request priority without another request', () => {
         const preview = 'data:image/png;base64,aW5saW5l';
         const media = [mediaDescriptor('/cover.png?v=one', 'hero', { inlinePreview: preview })];
         const render = (
@@ -151,7 +1237,7 @@ describe('SafeImage', () => {
         expect(render()).not.toContain('storefront-placeholder');
         expect(render('/cover.png?v=two')).not.toContain('has-placeholder');
         expect(render('/cover.png?v=one', 'card')).not.toContain('has-placeholder');
-        expect(render('/cover.png?v=one', 'hero', 'auto')).not.toContain('has-placeholder');
+        expect(render('/cover.png?v=one', 'hero', 'auto')).toContain('has-inline-preview');
         const stale = renderToStaticMarkup(
             <SafeImageMediaProvider media={[{ ...media[0], version: 'other' }]}>
                 <SafeImage src="/cover.png?v=one" imageKind="hero" alt="Cover" fetchPriority="high" />
@@ -959,6 +2045,41 @@ describe('SafeImage', () => {
             expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
         } finally {
             act(() => root.unmount());
+        }
+    });
+});
+
+describe('optional image recovery resource', () => {
+    it('keeps the real image error and surrounding actions when the recovery module cannot load', async () => {
+        vi.resetModules();
+        vi.doMock('./image-recovery', () => {
+            throw new Error('Recovery chunk unavailable');
+        });
+        const { SafeImage: IsolatedSafeImage } = await import('./safe-image');
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const navigate = vi.fn();
+        try {
+            act(() =>
+                root.render(
+                    <div>
+                        <IsolatedSafeImage src="/optional-recovery-failure.jpg" alt="商品主图" />
+                        <button type="button" onClick={navigate}>
+                            继续浏览
+                        </button>
+                    </div>,
+                ),
+            );
+            await failCandidate(requiredImage(host));
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            expect(host.querySelector('[data-image-state=error]')).not.toBeNull();
+            expect(host.querySelector('.safe-image-retry')).toBeNull();
+            act(() => requiredElement<HTMLButtonElement>(host, 'button').click());
+            expect(navigate).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => root.unmount());
+            vi.doUnmock('./image-recovery');
+            vi.resetModules();
         }
     });
 });

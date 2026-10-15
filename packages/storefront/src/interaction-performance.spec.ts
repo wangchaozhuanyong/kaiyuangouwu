@@ -97,7 +97,14 @@ describe('shared interaction performance contract', () => {
         for (const page of categoryPages) {
             expect(page).toContain('../styles/account-catalog-surfaces.css');
         }
-        expect(routeStyles.content).toContain('../styles/account-catalog-surfaces.css');
+        expect(routeStyles.content).not.toContain("import '../commerce-styles'");
+        expect(routeStyles.content).not.toContain("import '../styles/account-catalog-surfaces.css'");
+        const commerceContent = readFileSync(
+            path.join(__dirname, 'route-pages/commerce-content-route-pages.tsx'),
+            'utf8',
+        );
+        expect(commerceContent).toContain("import '../commerce-styles'");
+        expect(commerceContent).toContain("import '../styles/account-catalog-surfaces.css'");
     });
 
     it('loads embedded preview state styles in the iframe instead of relying on the parent document', () => {

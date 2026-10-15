@@ -34,7 +34,7 @@ export function shouldShowStorefrontUpdatePrompt(route: RouteName): boolean {
     return !deferredUpdateRoutes.has(route);
 }
 
-/** The lazy components are not rendered (and therefore not imported) until readiness followed by idle. */
+/** Optional UI starts only after readiness and an online idle period; mounted UI stays available. */
 export function useDeferredStorefrontUi(enabled: boolean, ownerKey: string): boolean {
     const [ready, setReady] = useState(false);
     useEffect(() => {
@@ -46,30 +46,41 @@ export function useDeferredStorefrontUi(enabled: boolean, ownerKey: string): boo
             Boolean(document.querySelector('[data-page-readiness="ready"]'));
         let idle: number | undefined;
         let fallback: number | undefined;
+        let taskVersion = 0;
         const cancelIdle = () => {
+            taskVersion++;
             if (idle !== undefined) window.cancelIdleCallback(idle);
             if (fallback !== undefined) window.clearTimeout(fallback);
             idle = undefined;
             fallback = undefined;
         };
-        const finish = () => {
+        const finish = (version: number) => {
+            if (version !== taskVersion) return;
             idle = undefined;
             fallback = undefined;
-            if (!disposed && !suspended && document.visibilityState !== 'hidden') setReady(true);
+            if (
+                !disposed &&
+                !suspended &&
+                navigator.onLine !== false &&
+                document.visibilityState !== 'hidden'
+            )
+                setReady(true);
         };
         const schedule = () => {
             if (
                 disposed ||
                 suspended ||
                 !pageReady ||
+                navigator.onLine === false ||
                 document.visibilityState === 'hidden' ||
                 idle !== undefined ||
                 fallback !== undefined
             )
                 return;
+            const version = taskVersion;
             if (typeof window.requestIdleCallback === 'function')
-                idle = window.requestIdleCallback(finish, { timeout: 1500 });
-            else fallback = window.setTimeout(finish, 250);
+                idle = window.requestIdleCallback(() => finish(version), { timeout: 1500 });
+            else fallback = window.setTimeout(() => finish(version), 250);
         };
         const onReady = () => {
             pageReady = true;
@@ -77,6 +88,10 @@ export function useDeferredStorefrontUi(enabled: boolean, ownerKey: string): boo
         };
         const onVisibility = () => {
             if (document.visibilityState === 'hidden') cancelIdle();
+            else schedule();
+        };
+        const onConnection = () => {
+            if (navigator.onLine === false) cancelIdle();
             else schedule();
         };
         const onPageHide = () => {
@@ -95,12 +110,16 @@ export function useDeferredStorefrontUi(enabled: boolean, ownerKey: string): boo
             window.removeEventListener('load', onReady);
             window.removeEventListener('pagehide', onPageHide);
             window.removeEventListener('pageshow', onPageShow);
+            window.removeEventListener('online', onConnection);
+            window.removeEventListener('offline', onConnection);
             document.removeEventListener('visibilitychange', onVisibility);
         };
         document.addEventListener('storefront:page-ready', onReady);
         window.addEventListener('load', onReady);
         window.addEventListener('pagehide', onPageHide);
         window.addEventListener('pageshow', onPageShow);
+        window.addEventListener('online', onConnection);
+        window.addEventListener('offline', onConnection);
         document.addEventListener('visibilitychange', onVisibility);
         schedule();
         return dispose;

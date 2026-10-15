@@ -13,7 +13,7 @@ describe('progressive loading styles', () => {
     it('keeps native SSR images visible and removes fallback only after the node has pixels', () => {
         expect(globalStyles).toMatch(/\.safe-image\s*\{[^}]*opacity:\s*1/u);
         expect(globalStyles).toMatch(
-            /\.safe-image-frame\.is-presented > \.safe-image-fallback\s*\{[^}]*opacity:\s*0/u,
+            /\.safe-image-frame\.is-painted > \.safe-image-fallback\s*\{[^}]*opacity:\s*0/u,
         );
         expect(globalStyles).not.toContain('.safe-image-frame.is-priority > .safe-image-fallback');
         expect(globalStyles).not.toMatch(/\.safe-image\s*\{[^}]*opacity:\s*0/u);

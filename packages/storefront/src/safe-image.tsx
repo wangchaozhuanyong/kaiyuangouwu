@@ -1,8 +1,11 @@
 import { ImageOff, Package } from 'lucide-react';
 import {
     createContext,
+    CSSProperties,
     ImgHTMLAttributes,
+    lazy,
     ReactNode,
+    Suspense,
     useContext,
     useLayoutEffect,
     useMemo,
@@ -21,6 +24,7 @@ import {
     IMAGE_REQUEST_TIMEOUT_MS,
     IMAGE_WAIT_EXPIRED_EVENT,
     imageCandidateIdentity,
+    isFirstViewportElement,
     isImageCandidateComplete,
 } from './image-readiness';
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
@@ -30,35 +34,41 @@ import { StorefrontLanguage } from './types';
 /** Image accessibility uses the same language in anonymous HTML and the interactive frame. */
 export const ImageLanguageContext = createContext<StorefrontLanguage | null>(null);
 
-const SafeImageMediaContext = createContext<ReadonlyMap<string, string>>(new Map());
+const SafeImageMediaContext = createContext<{
+    previews: ReadonlyMap<string, string>;
+    sources: ReadonlySet<string>;
+    scope?: string;
+}>({ previews: new Map(), sources: new Set() });
 const mediaPreviewKey = (source: string, kind?: StorefrontImageKind) =>
     `${imageSources(source).identity}\u0000${kind ?? ''}`;
 
 /** Consume only the current page's query-owned public hints; this provider adds no DOM. */
 export function SafeImageMediaProvider({
     media = [],
+    scope,
     children,
 }: {
     media?: readonly MediaDescriptor[];
+    scope?: string;
     children: ReactNode;
 }) {
-    const previews = useMemo(
-        () =>
-            new Map(
-                boundedMediaPreviews(media).flatMap(descriptor =>
-                    descriptor.placeholder && imageSources(descriptor.identity).version === descriptor.version
-                        ? [
-                              [
-                                  mediaPreviewKey(descriptor.identity, descriptor.kind),
-                                  descriptor.placeholder.inlineData,
-                              ] as const,
-                          ]
+    const value = useMemo(() => {
+        const descriptors = boundedMediaPreviews(media).filter(
+            descriptor => imageSources(descriptor.identity).version === descriptor.version,
+        );
+        return {
+            scope,
+            sources: new Set(descriptors.map(item => mediaPreviewKey(item.identity, item.kind))),
+            previews: new Map(
+                descriptors.flatMap(item =>
+                    item.placeholder
+                        ? [[mediaPreviewKey(item.identity, item.kind), item.placeholder.inlineData] as const]
                         : [],
                 ),
             ),
-        [media],
-    );
-    return <SafeImageMediaContext.Provider value={previews}>{children}</SafeImageMediaContext.Provider>;
+        };
+    }, [media, scope]);
+    return <SafeImageMediaContext.Provider value={value}>{children}</SafeImageMediaContext.Provider>;
 }
 
 export function ImagePlaceholder({
@@ -124,6 +134,8 @@ export type SafeImageProps = {
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
 
 export function SafeImage(props: SafeImageProps) {
+    const { scope } = useContext(SafeImageMediaContext);
+    const ownerKey = JSON.stringify([scope, props.retainedOwnerKey]);
     const identity = [
         props.src,
         props.fallbackSrc ?? '',
@@ -132,19 +144,20 @@ export function SafeImage(props: SafeImageProps) {
         props.srcSet ?? '',
         props.sizes ?? '',
         props.retainedOwnerKey ?? '',
+        scope ?? '',
         JSON.stringify(props.mediaSources ?? []),
     ].join('\u0000');
     const [previous, setPrevious] = useState<{
         identity: string;
         presentation?: ImagePresentation;
         ownerKey?: string;
-    }>({ identity: '', ownerKey: props.retainedOwnerKey });
+    }>({ identity: '', ownerKey });
     return (
         <SafeImageSource
             key={identity}
             {...props}
             retainedPresentation={
-                previous.ownerKey === props.retainedOwnerKey && previous.identity !== identity
+                previous.ownerKey === ownerKey && previous.identity !== identity
                     ? previous.presentation
                     : undefined
             }
@@ -155,7 +168,7 @@ export function SafeImage(props: SafeImageProps) {
                     current.presentation?.backgroundSize === presentation.backgroundSize &&
                     current.presentation?.backgroundPosition === presentation.backgroundPosition
                         ? current
-                        : { identity, presentation, ownerKey: props.retainedOwnerKey },
+                        : { identity, presentation, ownerKey },
                 )
             }
         />
@@ -165,9 +178,20 @@ export function SafeImage(props: SafeImageProps) {
 const decodedImageUrls = new Set<string>();
 // This is decode bookkeeping for actual image resources, never a server-data cache.
 type ImagePresentation = { source: string; backgroundSize: string; backgroundPosition: string };
-const decodedAvatarPreviews = new Map<string, ImagePresentation>();
+const decodedImagePreviews = new Map<string, ImagePresentation>();
+const ImageRecovery = lazy(() => import('./image-recovery').catch(() => ({ default: () => <></> })));
 
-function imagePresentation(image: HTMLImageElement): ImagePresentation {
+function rememberImagePresentation(key: string | undefined, presentation: ImagePresentation) {
+    if (!key) return;
+    decodedImagePreviews.delete(key);
+    decodedImagePreviews.set(key, presentation);
+    if (decodedImagePreviews.size > 128) {
+        const oldest = decodedImagePreviews.keys().next().value;
+        if (oldest !== undefined) decodedImagePreviews.delete(oldest);
+    }
+}
+
+function imageFrameCrop(image: HTMLImageElement) {
     const style = getComputedStyle(image);
     const fit = style.objectFit || 'contain';
     const backgroundSize =
@@ -181,10 +205,15 @@ function imagePresentation(image: HTMLImageElement): ImagePresentation {
                     : 'contain'
                 : fit;
     return {
-        source: image.currentSrc || image.src,
         backgroundSize,
         backgroundPosition: style.objectPosition || 'center',
+        objectFit: fit as CSSProperties['objectFit'],
     };
+}
+
+function imagePresentation(image: HTMLImageElement): ImagePresentation {
+    const { backgroundSize, backgroundPosition } = imageFrameCrop(image);
+    return { source: image.currentSrc || image.src, backgroundSize, backgroundPosition };
 }
 
 export function isImageAlreadyDecoded(
@@ -205,7 +234,7 @@ export function markImageDecoded(url?: string | null): void {
 
 export function clearDecodedImageCache(): void {
     decodedImageUrls.clear();
-    decodedAvatarPreviews.clear();
+    decodedImagePreviews.clear();
 }
 
 function SafeImageSource({
@@ -238,14 +267,42 @@ function SafeImageSource({
     const [fallbackHeight, setFallbackHeight] = useState<number>();
     const [timedOut, setTimedOut] = useState(false);
     const [nearViewport, setNearViewport] = useState(false);
-    const publicPreviews = useContext(SafeImageMediaContext);
-    const inlinePreview =
-        imageProps.fetchPriority === 'high' ? publicPreviews.get(mediaPreviewKey(src, imageKind)) : undefined;
-    const avatarKey = JSON.stringify([retainedOwnerKey, mediaPreviewKey(src, imageKind)]);
-    const decodedAvatarPreview =
-        loadingFallback && retainedOwnerKey ? decodedAvatarPreviews.get(avatarKey) : undefined;
-    const retainedPreview = retainedPresentation || decodedAvatarPreview;
-    const [previewReady, setPreviewReady] = useState(Boolean(inlinePreview));
+    const [requestAttempt, setRequestAttempt] = useState(0);
+    const retryState = useRef({ onlineRetried: false, nextManualAt: 0 });
+    const frameRef = useRef<HTMLSpanElement>(null);
+    const publicMedia = useContext(SafeImageMediaContext);
+    // Parent admission already checked the owner; keep this handoff until this node paints.
+    const replacementPresentation = useRef(retainedPresentation).current;
+    const inlinePreview = publicMedia.previews.get(mediaPreviewKey(src, imageKind));
+    const inlineMediaSources = mediaSources?.flatMap(source => {
+        const preview = publicMedia.previews.get(mediaPreviewKey(source.src, imageKind));
+        return preview ? [{ media: source.media, src: preview }] : [];
+    });
+    const hasInlinePreview = Boolean(inlinePreview || inlineMediaSources?.length);
+    const currentArtworkKey = () =>
+        mediaPreviewKey(
+            mediaSources?.find(
+                source => typeof window !== 'undefined' && window.matchMedia?.(source.media).matches,
+            )?.src ?? src,
+            imageKind,
+        );
+    const artworkKey = currentArtworkKey();
+    // Reuse published resources only in the confirmed public scope, or for an explicit private owner.
+    // This extends decoded-resource bookkeeping; it stores no response data or pixel copies.
+    const presentationCacheKey = () => {
+        const key = currentArtworkKey();
+        return retainedOwnerKey
+            ? JSON.stringify(['owner', publicMedia.scope, retainedOwnerKey, key])
+            : publicMedia.scope && publicMedia.sources.has(key)
+              ? JSON.stringify(['public', publicMedia.scope, key, imageProps.srcSet ?? ''])
+              : undefined;
+    };
+    const presentationKey = presentationCacheKey();
+    const retainedPreview =
+        replacementPresentation || (presentationKey ? decodedImagePreviews.get(presentationKey) : undefined);
+    const [previewReady, setPreviewReady] = useState(hasInlinePreview);
+    const [frameCrop, setFrameCrop] = useState<ReturnType<typeof imageFrameCrop>>();
+    const [, setArtworkRevision] = useState(0);
     const previewRef = useRef<HTMLImageElement>(null);
     const sources = imageSources(currentSrc, responsive ? imageKind : undefined, imageProps.sizes);
     const sourceKey = [
@@ -257,9 +314,12 @@ function SafeImageSource({
     // A previous URL decode cannot prove that this DOM node's selected candidate is ready.
     const [loadedCandidate, setLoadedCandidate] = useState('');
     const [presentedCandidate, setPresentedCandidate] = useState('');
+    const [paintedCandidate, setPaintedCandidate] = useState('');
+    const handoffFrames = useRef<number[]>([]);
     const imageRef = useRef<HTMLImageElement>(null);
     const notifiedCandidate = useRef('');
     const active = useRef(true);
+    const retrying = useRef(false);
     const exceededBudget = useRef(false);
     const latestSourceKey = useRef(sourceKey);
     latestSourceKey.current = sourceKey;
@@ -271,12 +331,62 @@ function SafeImageSource({
     const presented = Boolean(
         candidateComplete && presentedCandidate === sourceKey + '\u0001' + nodeCandidate && !failed,
     );
+    const painted = presented && paintedCandidate === sourceKey + '\u0001' + nodeCandidate;
     const placeholder =
         retainedPreview?.source ||
         inlinePreview ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
             : placeholderSrc);
+    const hasPreview = Boolean(placeholder || inlineMediaSources?.length);
+
+    function retryImage() {
+        if (!active.current || !failed || retrying.current) return;
+        retrying.current = true;
+        setCurrentSrc(src);
+        setResponsive(true);
+        setFailed(false);
+        setTimedOut(false);
+        setLoadedCandidate('');
+        setPresentedCandidate('');
+        setPaintedCandidate('');
+        notifiedCandidate.current = '';
+        exceededBudget.current = false;
+        setRequestAttempt(current => current + 1);
+    }
+
+    useLayoutEffect(() => {
+        const image = imageRef.current;
+        if (!image || !hasPreview) return;
+        const measure = () => {
+            const next = imageFrameCrop(image);
+            setFrameCrop(current =>
+                current?.backgroundSize === next.backgroundSize &&
+                current.backgroundPosition === next.backgroundPosition &&
+                current.objectFit === next.objectFit
+                    ? current
+                    : next,
+            );
+        };
+        measure();
+        // Cached pixels belong to an artwork, while the current frame owns its crop.
+        const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : undefined;
+        observer?.observe(image);
+        const queries = mediaSources?.map(source => window.matchMedia?.(source.media)).filter(Boolean) ?? [];
+        let selectedArtwork = currentArtworkKey();
+        const change = () => {
+            measure();
+            const nextArtwork = currentArtworkKey();
+            if (nextArtwork !== selectedArtwork) setPaintedCandidate('');
+            selectedArtwork = nextArtwork;
+            setArtworkRevision(current => current + 1);
+        };
+        queries.forEach(query => query?.addEventListener?.('change', change));
+        return () => {
+            observer?.disconnect();
+            queries.forEach(query => query?.removeEventListener?.('change', change));
+        };
+    }, [sourceKey, className, imageProps.style, hasPreview]);
 
     useLayoutEffect(() => {
         const preview = previewRef.current;
@@ -285,8 +395,10 @@ function SafeImageSource({
 
     function useFallback() {
         if (!active.current) return;
+        retrying.current = false;
         setLoadedCandidate('');
         setPresentedCandidate('');
+        setPaintedCandidate('');
         const selected = mediaSources?.find(source => window.matchMedia(source.media).matches);
         const recovery =
             selected && responsive
@@ -316,6 +428,27 @@ function SafeImageSource({
         setPresentedCandidate(sourceKey + '\u0001' + candidate);
         setTimedOut(false);
         onPresented(imagePresentation(image));
+        // load does not prove the compositor has painted a newly mounted node.
+        // Keep the backing through a rendering opportunity, independently of decode readiness.
+        handoffFrames.current.forEach(frameId => window.cancelAnimationFrame(frameId));
+        handoffFrames.current = [];
+        if (typeof window.requestAnimationFrame === 'function') {
+            handoffFrames.current.push(
+                window.requestAnimationFrame(() => {
+                    handoffFrames.current.push(
+                        window.requestAnimationFrame(() => {
+                            if (
+                                active.current &&
+                                imageRef.current === image &&
+                                latestSourceKey.current === sourceKey &&
+                                imageCandidateIdentity(image) === candidate
+                            )
+                                setPaintedCandidate(sourceKey + '\u0001' + candidate);
+                        }),
+                    );
+                }),
+            );
+        } else setPaintedCandidate(sourceKey + '\u0001' + candidate);
         void decodeImageElement(image)
             .then(() => {
                 if (
@@ -332,14 +465,7 @@ function SafeImageSource({
                     markImageDecoded(sourceKey);
                 }
                 markImageDecoded(candidate);
-                if (loadingFallback && retainedOwnerKey) {
-                    decodedAvatarPreviews.delete(avatarKey);
-                    decodedAvatarPreviews.set(avatarKey, imagePresentation(image));
-                    if (decodedAvatarPreviews.size > 128) {
-                        const oldest = decodedAvatarPreviews.keys().next().value;
-                        if (oldest !== undefined) decodedAvatarPreviews.delete(oldest);
-                    }
-                }
+                rememberImagePresentation(presentationCacheKey(), imagePresentation(image));
                 if (notifiedCandidate.current !== candidate) {
                     notifiedCandidate.current = candidate;
                     onImageReady?.(image);
@@ -362,7 +488,17 @@ function SafeImageSource({
 
     useLayoutEffect(() => {
         active.current = true;
+        retrying.current = false;
         const image = imageRef.current;
+        if (
+            image &&
+            imageProps.fetchPriority !== 'low' &&
+            (imageKind === 'hero' || imageKind === 'detail') &&
+            isFirstViewportElement(image, image.closest('.storefront-app') ?? document.body)
+        ) {
+            image.fetchPriority = 'high';
+            setNearViewport(true);
+        }
         let requestTimer: number | undefined;
         let cancelTimer: number | undefined;
         const clearRequestTimer = () => {
@@ -408,18 +544,21 @@ function SafeImageSource({
             );
             observer.observe(image);
         }
-        if (image?.complete && image.naturalWidth > 0) {
-            reveal(image);
+        if (image?.complete) {
+            if (image.naturalWidth > 0) reveal(image);
+            else useFallback();
         }
         return () => {
             active.current = false;
+            handoffFrames.current.forEach(frameId => window.cancelAnimationFrame(frameId));
+            handoffFrames.current = [];
             clearRequestTimer();
             observer?.disconnect();
             image?.removeEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
             image?.removeEventListener('load', clearRequestTimer);
             image?.removeEventListener('error', clearRequestTimer);
         };
-    }, [sourceKey]);
+    }, [sourceKey, requestAttempt]);
 
     const state = failed
         ? timedOut
@@ -434,15 +573,17 @@ function SafeImageSource({
         'responsive-picture safe-image-frame',
         loaded && 'is-loaded',
         presented && 'is-presented',
+        painted && 'is-painted',
         imageProps.fetchPriority === 'high' && !exceededBudget.current && 'is-priority',
-        placeholder && 'has-placeholder',
-        inlinePreview && 'has-inline-preview',
+        hasPreview && 'has-placeholder',
+        hasInlinePreview && 'has-inline-preview',
         frameClassName,
     ]
         .filter(Boolean)
         .join(' ');
     return (
         <span
+            ref={frameRef}
             className={frame}
             data-safe-image={state}
             data-safe-image-recovered={failed && errorFallback != null ? 'true' : undefined}
@@ -479,33 +620,52 @@ function SafeImageSource({
                 style={
                     !failed && retainedPreview
                         ? {
-                              backgroundImage: `url(${JSON.stringify(retainedPreview.source)})`,
-                              backgroundSize: retainedPreview.backgroundSize,
-                              backgroundPosition: retainedPreview.backgroundPosition,
+                              backgroundImage: [retainedPreview.source, publicMedia.previews.get(artworkKey)]
+                                  .filter(Boolean)
+                                  .map(source => `url(${JSON.stringify(source)})`)
+                                  .join(', '),
+                              backgroundSize: (replacementPresentation ?? frameCrop ?? retainedPreview)
+                                  .backgroundSize,
+                              backgroundPosition: (replacementPresentation ?? frameCrop ?? retainedPreview)
+                                  .backgroundPosition,
                           }
                         : undefined
                 }
             >
-                {!failed && loadingFallback && !placeholder ? (
+                {!failed && loadingFallback && !hasPreview ? (
                     loadingFallback
-                ) : !failed && placeholder && !retainedPreview ? (
+                ) : !failed && hasPreview && !retainedPreview ? (
                     <>
                         {!previewReady && (
                             <span className="safe-image-preview-loading" aria-hidden="true">
                                 <span className="page-loading-spinner" />
                             </span>
                         )}
-                        <img
-                            ref={previewRef}
-                            className={`safe-image-preview${previewReady ? ' is-ready' : ''}`}
-                            src={placeholder}
-                            alt=""
-                            aria-hidden="true"
-                            loading={imageProps.loading === 'lazy' ? 'lazy' : 'eager'}
-                            decoding="async"
-                            fetchPriority="auto"
-                            onLoad={() => setPreviewReady(true)}
-                        />
+                        <SafeImageElement mediaSources={inlineMediaSources}>
+                            <img
+                                ref={previewRef}
+                                className={`safe-image-preview${previewReady ? ' is-ready' : ''}`}
+                                style={
+                                    frameCrop && {
+                                        objectFit: frameCrop.objectFit,
+                                        objectPosition: frameCrop.backgroundPosition,
+                                    }
+                                }
+                                src={placeholder}
+                                alt=""
+                                aria-hidden="true"
+                                loading={
+                                    hasInlinePreview
+                                        ? 'eager'
+                                        : imageProps.loading === 'lazy'
+                                          ? 'lazy'
+                                          : 'eager'
+                                }
+                                decoding="async"
+                                fetchPriority="auto"
+                                onLoad={() => setPreviewReady(true)}
+                            />
+                        </SafeImageElement>
                     </>
                 ) : failed && errorFallback != null ? (
                     errorFallback
@@ -515,7 +675,7 @@ function SafeImageSource({
                         <span className="product-image-placeholder-label">{fallbackLabel}</span>
                     </span>
                 ) : (
-                    (!placeholder || failed) &&
+                    (!hasPreview || failed) &&
                     showFallbackIcon && (
                         <ImagePlaceholder
                             state={timedOut ? 'timeout' : failed ? 'error' : 'loading'}
@@ -526,6 +686,17 @@ function SafeImageSource({
                     )
                 )}
             </span>
+            {failed && imageProps['aria-hidden'] !== true && imageProps['aria-hidden'] !== 'true' && (
+                <Suspense fallback={null}>
+                    <ImageRecovery
+                        frame={frameRef.current}
+                        state={retryState.current}
+                        alt={alt}
+                        language={language}
+                        onRetry={retryImage}
+                    />
+                </Suspense>
+            )}
         </span>
     );
 }

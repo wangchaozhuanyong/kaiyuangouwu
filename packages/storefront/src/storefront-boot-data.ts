@@ -74,6 +74,17 @@ export function seedStorefrontBoot(client: QueryClient, boot: InitialStorefrontB
         boot.configUpdatedAt,
     );
     if (
+        Array.isArray(boot.media) &&
+        typeof boot.mediaUpdatedAt === 'number' &&
+        Date.now() - boot.mediaUpdatedAt <= 60_000 &&
+        boot.mediaUpdatedAt <= Date.now() + 5_000
+    )
+        seed(
+            [...storefrontQueryKeys.scope(marketCode, languageCode), 'public-media'],
+            boot.media,
+            boot.mediaUpdatedAt,
+        );
+    if (
         boot.visualPreset &&
         typeof boot.visualUpdatedAt === 'number' &&
         Date.now() - boot.visualUpdatedAt <= 60_000 &&
