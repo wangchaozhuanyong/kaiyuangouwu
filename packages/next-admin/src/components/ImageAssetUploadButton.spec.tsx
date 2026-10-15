@@ -34,7 +34,7 @@ async function chooseFiles(files: File[]) {
 
 function renderButton(
     onUploaded = vi.fn(),
-    options: { multiple?: boolean; canCreate?: boolean; channelToken?: string } = {},
+    options: { multiple?: boolean; canCreate?: boolean; channelToken?: string; tags?: string[] } = {},
 ) {
     const canCreate = options.canCreate ?? true;
     act(() => {
@@ -48,6 +48,7 @@ function renderButton(
                 <ImageAssetUploadButton
                     multiple={options.multiple}
                     channelToken={options.channelToken}
+                    tags={options.tags}
                     onUploaded={onUploaded}
                 />
             </AdminPermissionsContext.Provider>,
@@ -57,6 +58,16 @@ function renderButton(
 }
 
 describe('ImageAssetUploadButton', () => {
+    it('preserves the upload tag and persists the picker category for future searches', async () => {
+        upload.mockResolvedValue({ createAssets: [] });
+        renderButton(vi.fn(), { tags: [' 素材分类:商品图 ', '素材分类:商品图', '后台上传'] });
+        await chooseFiles([new File(['image'], 'new.jpg', { type: 'image/jpeg' })]);
+        const variables = upload.mock.calls[0][2]([null]);
+        expect(variables).toEqual({
+            input: [{ file: null, tags: ['后台上传', '素材分类:商品图'] }],
+        });
+    });
+
     it('uploads a valid image into the requested asset library and returns the created asset', async () => {
         const created = {
             __typename: 'Asset',

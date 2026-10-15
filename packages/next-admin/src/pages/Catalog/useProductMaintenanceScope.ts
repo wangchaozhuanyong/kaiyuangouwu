@@ -29,5 +29,12 @@ export function useProductMaintenanceScope(editor: ProductEditorFormState) {
     const canWriteProduct =
         !sourceReadOnly &&
         canUseCapability(editor.isCreateMode ? '/catalog/products/new' : '/catalog/products', 'write');
-    return { offerRequired, managedOffer, managedBy, sourceReadOnly, canWriteProduct };
+    const storedType = editor.productData?.product?.customFields?.fulfillmentType;
+    const legacyTypeMismatch = Boolean(
+        !editor.isCreateMode &&
+        storedType &&
+        editor.fixedFulfillmentType &&
+        storedType !== editor.fixedFulfillmentType,
+    );
+    return { offerRequired, managedOffer, managedBy, sourceReadOnly, canWriteProduct, legacyTypeMismatch };
 }

@@ -10,7 +10,9 @@ import { AdminCapabilitiesContext } from '../../hooks/use-admin-capabilities';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { hasAnyAdminPermission } from '../../utils/admin-permissions';
 import type { ProductEditorTab } from './product-editor-types';
+import { ProductAutoCardSetupPanel } from './ProductAutoCardSetupPanel';
 import { ProductEditor } from './ProductEditor';
+import { useProductEditor } from './ProductEditorContext';
 import type { ProductEditorFormState } from './useProductEditorForm';
 import { useProductEditorSave } from './useProductEditorSave';
 
@@ -26,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     channelToken: 'fixture-channel-a',
     initialTab: 'BASIC' as ProductEditorTab,
     managedBy: null as string | null,
+    inlineCardSetup: false,
 }));
 vi.mock('@apollo/client/react', () => ({
     useMutation: (document: DocumentNode) => {
@@ -55,7 +58,25 @@ vi.mock('../../hooks/use-admin-query', () => ({
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('../../extensions/extension-hosts', () => ({ NextAdminPageBlocks: () => null }));
 vi.mock('./CatalogOperationsBlocks', () => ({ ProductPackagingBlock: () => null }));
-vi.mock('./DigitalProductWorkspace', () => ({ DigitalProductWorkspace: () => <p>数字交付信息</p> }));
+vi.mock('./DigitalProductWorkspace', () => ({
+    DigitalProductWorkspace: () => {
+        const editor = useProductEditor();
+        return (
+            <div>
+                <p>数字交付信息</p>
+                {mocks.inlineCardSetup && (
+                    <ProductAutoCardSetupPanel
+                        variants={editor.variants}
+                        productSaving={editor.saving}
+                        productIsDirty={editor.isDirty}
+                        onSaveProduct={editor.handleSaveAndContinue}
+                        onRefreshProduct={editor.refetchProduct}
+                    />
+                )}
+            </div>
+        );
+    },
+}));
 vi.mock('./PhysicalProductWorkspace', () => ({ PhysicalProductWorkspace: () => <p>实物库存信息</p> }));
 vi.mock('./ProductFacetsCollectionsTab', () => ({ ProductFacetsCollectionsTab: () => null }));
 vi.mock('./ProductCategorySummary', () => ({ ProductCategorySummary: () => null }));
@@ -65,13 +86,14 @@ vi.mock('./ProductAiImageDialog', () => ({ ProductAiImageDialog: () => <div role
 vi.mock('./useProductEditorForm', () => ({
     useProductEditorForm: () => {
         if (!mocks.saveInput || !mocks.editor) throw new Error('Missing product fixture');
-        const { handleSave } = useProductEditorSave(mocks.saveInput);
+        const { handleSave, handleSaveAndContinue } = useProductEditorSave(mocks.saveInput);
         const [activeTab, setActiveTab] = useState(mocks.initialTab);
         const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
         mocks.save = handleSave;
         return {
             ...mocks.editor,
             handleSave,
+            handleSaveAndContinue,
             activeTab,
             setActiveTab,
             isAssetPickerOpen,
@@ -201,6 +223,7 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
     mocks.managedBy = null;
+    mocks.inlineCardSetup = false;
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     mocks.mutations.clear();
     mocks.query.mockReset();
@@ -321,9 +344,9 @@ it.each([
             }
         });
         expect(mocks.editor?.handleDeleteVariant).not.toHaveBeenCalled();
-        await act(async () => button('01商品信息与规格价格').click());
-        await act(async () => button('02交付售后与更多设置').click());
-        expect(button('02交付售后与更多设置').getAttribute('aria-selected')).toBe('true');
+        await act(async () => button('01商品信息与销售设置').click());
+        await act(async () => button('02售后与更多设置').click());
+        expect(button('02售后与更多设置').getAttribute('aria-selected')).toBe('true');
         const price = host.querySelector<HTMLInputElement>('[aria-label="批量售价"]');
         expect(price?.matches(':disabled')).toBe(true);
         await act(async () => {
@@ -470,10 +493,10 @@ it('cancels a pending availability confirmation when the product becomes read-on
 });
 
 it.each([
-    ['VARIANTS', '01商品信息与规格价格'],
-    ['FACETS_COLLECTIONS', '01商品信息与规格价格'],
-    ['MORE', '02交付售后与更多设置'],
-    ['DELIVERY', '02交付售后与更多设置'],
+    ['VARIANTS', '01商品信息与销售设置'],
+    ['FACETS_COLLECTIONS', '01商品信息与销售设置'],
+    ['MORE', '02售后与更多设置'],
+    ['DELIVERY', '02售后与更多设置'],
 ] as const)('opens legacy %s in the merged mounted panel', async (legacy, label) => {
     mocks.initialTab = legacy;
     await render(snapshot('STORE', true), ['ReadProduct', 'UpdateProduct']);
@@ -491,8 +514,8 @@ it('retains the description reading mode and independent specification draft acr
     await act(async () => button('阅读').click());
     const description = host.querySelector('[aria-label="商品描述"]');
     const pricing = host.querySelector('[aria-label="规格 1 售价"]');
-    await act(async () => button('02交付售后与更多设置').click());
-    await act(async () => button('01商品信息与规格价格').click());
+    await act(async () => button('02售后与更多设置').click());
+    await act(async () => button('01商品信息与销售设置').click());
     expect(host.querySelector('[aria-label="商品描述"]')).toBe(description);
     expect(host.querySelector('[aria-label="规格 1 售价"]')).toBe(pricing);
     expect(button('阅读').getAttribute('aria-pressed')).toBe('true');
@@ -509,5 +532,45 @@ it('keeps a source-managed product readable while disabling target-store mainten
     expect(host.textContent).toContain('由 来源店铺A 统一管理');
     expect(host.textContent).not.toContain('保存商品');
     expect(host.querySelector('fieldset[disabled]')).not.toBeNull();
+    expectNoWrites();
+});
+
+it('applies source-maintenance read protection to the unified sale fields and the save-and-continue card action', async () => {
+    mocks.managedBy = '来源店铺A';
+    mocks.inlineCardSetup = true;
+    if (!mocks.editor) throw new Error('Missing editor');
+    mocks.editor.channelData = {
+        activeChannel: { id: 'store-a', code: 'store-a' },
+    } as ProductEditorFormState['channelData'];
+    mocks.editor.effectiveFulfillmentType = 'digital';
+    mocks.editor.fixedFulfillmentType = 'digital';
+    mocks.editor.variants = mocks.editor.variants.map(variant => ({
+        ...variant,
+        digitalDeliveryMode: 'auto_card',
+    }));
+    await render(snapshot('STORE', true), ['ReadProduct', 'UpdateProduct', 'CreateAsset']);
+    expect(
+        [...host.querySelectorAll('button')].some(control => control.textContent?.trim() === '保存商品'),
+    ).toBe(false);
+    const continuation = button('先保存商品修改');
+    expect(continuation.matches(':disabled')).toBe(true);
+    const price = host.querySelector<HTMLInputElement>('[aria-label="规格 1 售价"]')!;
+    expect(price.matches(':disabled')).toBe(true);
+    const cost = host.querySelector<HTMLInputElement>('[aria-label="规格 1 成本"]');
+    expect(cost?.matches(':disabled')).toBe(true);
+    await act(async () => continuation.click());
+    expectNoWrites();
+});
+
+it('preserves the legacy fulfillment mismatch save block after maintenance eligibility is shared', async () => {
+    if (!mocks.editor?.productData?.product) throw new Error('Missing editor');
+    mocks.editor.fixedFulfillmentType = 'digital';
+    mocks.editor.productData = {
+        product: { ...mocks.editor.productData.product, customFields: { fulfillmentType: 'physical' } },
+    };
+    await render(snapshot('STORE', true), ['ReadProduct', 'UpdateProduct']);
+    expect(host.textContent).toContain('此历史商品的存储类型与当前店铺模式不符');
+    expect(button('保存商品').disabled).toBe(true);
+    await act(async () => button('保存商品').click());
     expectNoWrites();
 });

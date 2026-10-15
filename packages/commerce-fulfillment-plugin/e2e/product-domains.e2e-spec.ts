@@ -3,6 +3,7 @@ import {
     CatalogOperationsService,
     InventoryLot,
 } from '@vendure/catalog-management-plugin';
+import { normalizeString } from '@vendure/common/lib/normalize-string';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     Channel,
@@ -31,12 +32,16 @@ import {
     RequestContextService,
     Role,
     ShippingMethod,
+    ShippingMethodService,
     StockLevel,
+    StockLocation,
     StockLocationService,
     StockMovement,
     StockMovementService,
     TransactionalConnection,
     User,
+    defaultShippingCalculator,
+    defaultShippingEligibilityChecker,
     isGraphQlErrorResult,
     manualFulfillmentHandler,
     mergeConfig,
@@ -48,10 +53,10 @@ import { createTestEnvironment, testConfig } from '@vendure/testing';
 import { gql } from 'graphql-tag';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { DataSource, Table } from 'typeorm';
+import { DataSource, In, Table } from 'typeorm';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -59,6 +64,8 @@ import { singleStageRefundablePaymentMethod } from '../../core/e2e/fixtures/test
 import { AddDigitalProductDomains1791086400000 } from '../../dev-server/migrations/1791086400000-add-digital-product-domains';
 import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
 import { StoreManagementPlugin } from '../../store-management-plugin/src/store-management.plugin';
+import { runDigitalInventoryMigrationBatch } from '../scripts/digital-inventory-migration-batch.mjs';
+import { generateDigitalInventoryMigrationReview } from '../scripts/digital-inventory-review.mjs';
 import { AutoCardService } from '../src/auto-card.service';
 import { CheckoutResourcesService } from '../src/checkout-resources.service';
 import { CommerceFulfillmentPlugin } from '../src/commerce-fulfillment.plugin';
@@ -75,6 +82,7 @@ import { AutoCardPoolItem } from '../src/entities/auto-card-pool-item.entity';
 import {
     CheckoutResourceHold,
     DigitalOrderReservation,
+    DigitalQuotaMovement,
     DigitalVariantConfig,
 } from '../src/entities/digital-product.entity';
 import { ManualDigitalDelivery } from '../src/entities/manual-digital-delivery.entity';
@@ -85,7 +93,10 @@ import { PhysicalReturnService } from '../src/physical-return.service';
 import { ProductPackagingService } from '../src/product-packaging.service';
 
 import { closureDatabase } from './order-closure-db';
-const output = path.resolve(__dirname, '../../../tmp/digital-product-domains-20261004');
+const output = path.resolve(
+    __dirname,
+    '../../../artifacts/product-unified-sales-20261016/native-product-domains',
+);
 mkdirSync(output, { recursive: true });
 const mysql = process.env.DB === 'mysql';
 const database = closureDatabase(path.join(output, 'database', randomUUID()));
@@ -150,6 +161,7 @@ beforeAll(async () => {
             ...initialData,
             defaultLanguage: LanguageCode.zh_Hans,
             paymentMethods: [],
+            shippingMethods: [],
         },
         customerCount: 0,
     });
@@ -160,6 +172,28 @@ beforeAll(async () => {
         relations: ['roles', 'roles.channels'],
     });
     const root = await contexts.create({ apiType: 'admin', user: admin });
+    // Match the normal initial-data seed through its required native transaction on MySQL.
+    for (const method of initialData.shippingMethods) {
+        await connection.withTransaction(root, tx =>
+            server.app.get(ShippingMethodService).create(tx, {
+                fulfillmentHandler: manualFulfillmentHandler.code,
+                checker: {
+                    code: defaultShippingEligibilityChecker.code,
+                    arguments: [{ name: 'orderMinimum', value: '0' }],
+                },
+                calculator: {
+                    code: defaultShippingCalculator.code,
+                    arguments: [
+                        { name: 'rate', value: method.price.toString() },
+                        { name: 'taxRate', value: method.taxRate ? method.taxRate.toString() : '0' },
+                        { name: 'includesTax', value: 'auto' },
+                    ],
+                },
+                code: normalizeString(method.name, '-'),
+                translations: [{ languageCode: LanguageCode.zh_Hans, name: method.name, description: '' }],
+            }),
+        );
+    }
     const created = await server.app.get(ChannelService).create(root, {
         code: 'independent-domains',
         token: 'independent-domains',
@@ -900,6 +934,230 @@ it('refunds each digital delivery mode through the real refund operation without
         ).toBe(0);
     }
 });
+it('generates a native read-only legacy inventory review without migrating or claiming stock', async () => {
+    const ready = await syntheticDigital('manual_service');
+    const unresolved = await syntheticDigital('manual_service');
+    const active = await syntheticDigital('manual_service');
+    for (const variant of [ready, unresolved]) {
+        const configuration = requireFixture(await products.config(ctx, variant.id));
+        await connection
+            .getRepository(ctx, DigitalVariantConfig)
+            .update(configuration.id, { migrationState: 'PREPARED' });
+        await connection.getRepository(ctx, ProductVariant).update(variant.id, {
+            customFields: { digitalDeliveryMode: 'manual_service', digitalStockPolicy: 'limited' },
+        });
+    }
+    const warehouse = (await server.app.get(CatalogOperationsService).stockLocations(ctx))[0];
+    const existing = await connection
+        .getRepository(ctx, StockLevel)
+        .findOne({ where: { productVariantId: ready.id, stockLocationId: warehouse.id } });
+    await connection.getRepository(ctx, StockLevel).save(
+        new StockLevel({
+            ...existing,
+            productVariantId: ready.id,
+            stockLocationId: warehouse.id,
+            stockOnHand: 7,
+            stockAllocated: 0,
+        }),
+    );
+    const defaultChannel = await connection
+        .getRepository(ctx, Channel)
+        .findOneOrFail({ where: { code: '__default_channel__' } });
+    const unownedWarehouse = await connection.getRepository(ctx, StockLocation).save(
+        new StockLocation({
+            name: 'Isolated unowned legacy warehouse',
+            description: 'Synthetic old data',
+            channels: [defaultChannel],
+        }),
+    );
+    await connection.getRepository(ctx, StockLevel).save(
+        new StockLevel({
+            productVariantId: unresolved.id,
+            stockLocationId: unownedWarehouse.id,
+            stockOnHand: 100,
+            stockAllocated: 0,
+        }),
+    );
+    const variantIds = [ready.id, unresolved.id, active.id];
+    const snapshot = async () => ({
+        configurations: await connection
+            .getRepository(ctx, DigitalVariantConfig)
+            .find({ where: { productVariantId: In(variantIds) }, order: { id: 'ASC' } }),
+        stocks: await connection
+            .getRepository(ctx, StockLevel)
+            .find({ where: { productVariantId: In(variantIds) }, order: { id: 'ASC' } }),
+        reservations: await connection.getRepository(ctx, DigitalOrderReservation).count(),
+        movements: await connection.getRepository(ctx, DigitalQuotaMovement).count(),
+    });
+    const before = await snapshot();
+    const encodeId = (id: ID) => requireFixture(config.entityOptions?.entityIdStrategy).encodeId(id);
+    const report = await generateDigitalInventoryMigrationReview({
+        channelId: encodeId(ctx.channelId),
+        productIds: [ready.productId, unresolved.productId, active.productId].map(encodeId),
+        request: (query, variables) => adminClient.query(gql(query), variables),
+    });
+    expect(report.status, JSON.stringify(report)).toBe('COMPLETE');
+    expect(report.records.map(record => record.status)).toEqual([
+        'READY_FOR_MIGRATION',
+        'NEEDS_REVIEW',
+        'ACTIVE',
+    ]);
+    expect(report.records[0]).toMatchObject({ availableQuantity: 7, reservedQuantity: 0 });
+    expect(report.records[1].conflicts).toContain('旧库存或未完成订单缺少店铺归属，请先核对，不能自动迁移');
+    expect(await snapshot()).toEqual(before);
+    writeFileSync(
+        path.join(output, 'native-history-review.json'),
+        JSON.stringify(
+            {
+                source: mysql
+                    ? 'ISOLATED_MYSQL_NATIVE_GRAPHQL_FIXTURE'
+                    : 'ISOLATED_SQLJS_NATIVE_GRAPHQL_FIXTURE',
+                productionScanPerformed: false,
+                readOnlySnapshotUnchanged: true,
+                ...report,
+            },
+            null,
+            2,
+        ) + '\n',
+    );
+});
+
+it('runs an explicit native inventory batch preserving legacy holds and skipping unresolved ownership', async () => {
+    const ready = await syntheticDigital('manual_service');
+    const unresolved = await syntheticDigital('manual_service');
+    // Construct an old, already-placed local order without executing payment or new-stock reservation.
+    const legacyOrder = await preparedPurchase(ready, 2);
+    await connection.getRepository(ctx, Order).update(legacyOrder.id, {
+        state: 'PaymentSettled',
+        active: false,
+        orderPlacedAt: new Date(),
+        salesChannelId: ctx.channelId,
+    });
+    for (const variant of [ready, unresolved]) {
+        const legacyConfiguration = requireFixture(await products.config(ctx, variant.id));
+        await connection
+            .getRepository(ctx, DigitalVariantConfig)
+            .update(legacyConfiguration.id, { migrationState: 'PREPARED' });
+        await connection.getRepository(ctx, ProductVariant).update(variant.id, {
+            customFields: { digitalDeliveryMode: 'manual_service', digitalStockPolicy: 'limited' },
+        });
+    }
+    const warehouse = (await server.app.get(CatalogOperationsService).stockLocations(ctx))[0];
+    const existing = await connection
+        .getRepository(ctx, StockLevel)
+        .findOne({ where: { productVariantId: ready.id, stockLocationId: warehouse.id } });
+    await connection.getRepository(ctx, StockLevel).save(
+        new StockLevel({
+            ...existing,
+            productVariantId: ready.id,
+            stockLocationId: warehouse.id,
+            stockOnHand: 9,
+            stockAllocated: 2,
+        }),
+    );
+    const defaultChannel = await connection
+        .getRepository(ctx, Channel)
+        .findOneOrFail({ where: { code: '__default_channel__' } });
+    const unownedWarehouse = await connection.getRepository(ctx, StockLocation).save(
+        new StockLocation({
+            name: 'Unresolved batch legacy warehouse',
+            description: 'Synthetic old data',
+            channels: [defaultChannel],
+        }),
+    );
+    await connection.getRepository(ctx, StockLevel).save(
+        new StockLevel({
+            productVariantId: unresolved.id,
+            stockLocationId: unownedWarehouse.id,
+            stockOnHand: 100,
+            stockAllocated: 0,
+        }),
+    );
+    const ids = [ready.id, unresolved.id];
+    const snapshot = async () => ({
+        configurations: await connection
+            .getRepository(ctx, DigitalVariantConfig)
+            .find({ where: { productVariantId: In(ids) }, order: { id: 'ASC' } }),
+        stocks: await connection
+            .getRepository(ctx, StockLevel)
+            .find({ where: { productVariantId: In(ids) }, order: { id: 'ASC' } }),
+        movements: await connection
+            .getRepository(ctx, DigitalQuotaMovement)
+            .find({ where: { productVariantId: In(ids) }, order: { id: 'ASC' } }),
+        reservations: await connection
+            .getRepository(ctx, DigitalOrderReservation)
+            .find({ order: { id: 'ASC' } }),
+    });
+    const before = await snapshot();
+    const encodeId = (id: ID) => requireFixture(config.entityOptions?.entityIdStrategy).encodeId(id);
+    const input = {
+        channelId: encodeId(ctx.channelId),
+        productIds: [ready.productId, unresolved.productId].map(encodeId),
+        request: (query: string, variables: Record<string, string | number>) =>
+            adminClient.query(gql(query), variables),
+    };
+    const dryRun = await runDigitalInventoryMigrationBatch(input);
+    expect(dryRun.mode).toBe('DRY_RUN');
+    expect(dryRun.records.map(record => record.status)).toEqual(['READY_FOR_MIGRATION', 'NEEDS_REVIEW']);
+    expect(await snapshot()).toEqual(before);
+    const executed = await runDigitalInventoryMigrationBatch({ ...input, execute: true });
+    expect(executed.status, JSON.stringify(executed)).toBe('COMPLETE');
+    expect(executed.records.map(record => record.status)).toEqual(['MIGRATED', 'NEEDS_REVIEW']);
+    expect(executed.records[0]).toMatchObject({
+        availableQuantity: 7,
+        reservedQuantity: 2,
+        verified: true,
+        observedInventory: { availableQuantity: 7, reservedQuantity: 2, consumedQuantity: 0 },
+    });
+    const configuration = requireFixture(await products.config(ctx, ready.id));
+    expect(configuration.availableQuantity).toBe(7);
+    const reserved = await connection
+        .getRepository(ctx, DigitalOrderReservation)
+        .find({ where: { configId: configuration.id, channelId: ctx.channelId } });
+    expect(reserved).toHaveLength(1);
+    expect(reserved[0]).toMatchObject({
+        quantity: 2,
+        consumedQuantity: 0,
+        releasedQuantity: 0,
+        state: 'HELD',
+        orderId: legacyOrder.id,
+    });
+    const after = await snapshot();
+    expect(after.stocks).toEqual(before.stocks);
+    expect(
+        after.configurations.find(item => String(item.productVariantId) === String(unresolved.id)),
+    ).toEqual(before.configurations.find(item => String(item.productVariantId) === String(unresolved.id)));
+    expect(
+        after.movements.filter(
+            item => item.type === 'MIGRATE' && String(item.productVariantId) === String(ready.id),
+        ),
+    ).toHaveLength(1);
+    expect(await products.config(ctx, unresolved.id)).toBeNull();
+    const repeated = await runDigitalInventoryMigrationBatch({ ...input, execute: true });
+    expect(repeated.records.map(record => record.status)).toEqual(['ACTIVE', 'NEEDS_REVIEW']);
+    expect(await snapshot()).toEqual(after);
+    writeFileSync(
+        path.join(output, 'native-inventory-batch.json'),
+        JSON.stringify(
+            {
+                source: mysql
+                    ? 'ISOLATED_MYSQL_NATIVE_GRAPHQL_FIXTURE'
+                    : 'ISOLATED_SQLJS_NATIVE_GRAPHQL_FIXTURE',
+                productionWritePerformed: false,
+                warehouseRowsPreserved: true,
+                repeatedExecutionUnchanged: true,
+                expectedAvailable: 7,
+                expectedReserved: 2,
+                dryRun,
+                executed,
+                repeated,
+            },
+            null,
+            2,
+        ) + '\n',
+    );
+});
+
 it('migrates legacy remaining quantities once while preserving the historical warehouse row', async () => {
     const variant = await syntheticDigital('manual_service');
     const original = requireFixture(await products.config(ctx, variant.id));

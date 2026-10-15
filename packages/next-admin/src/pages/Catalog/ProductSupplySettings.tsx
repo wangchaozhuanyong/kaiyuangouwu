@@ -7,60 +7,69 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { useProductEditor } from './ProductEditorContext';
 
-export function ProductSupplySettings() {
+export function ProductSupplySettings({
+    variantIndex,
+    inline = false,
+}: { variantIndex?: number; inline?: boolean } = {}) {
     const { variants, handleVariantFieldChange, saving } = useProductEditor();
     const { hasAnyPermission } = useAdminPermissions();
     const canRead = hasAnyPermission(['SuperAdmin', 'ReadCatalogSupplier']);
     const suppliers = useQuery<{
         catalogSuppliers: { items: Array<{ id: string; name: string; enabled: boolean }> };
-    }>(CATALOG_SUPPLIERS_QUERY, { skip: !canRead, variables: { options: { skip: 0, take: 100 } } });
-    if (!canRead) return null;
+    }>(CATALOG_SUPPLIERS_QUERY, {
+        skip: !canRead || (variantIndex !== undefined && !variants[variantIndex]),
+        variables: { options: { skip: 0, take: 100 } },
+    });
+    if (!canRead || (variantIndex !== undefined && !variants[variantIndex])) return null;
     return (
-        <section aria-label="供货来源" className="border-t border-slate-100 pt-4">
+        <section aria-label="供货来源" className={inline ? 'min-w-0' : 'border-t border-slate-100 pt-4'}>
             <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-xs font-semibold text-slate-700">供货来源（可选）</h3>
                 <FeatureHelpButton
                     title="供货来源"
                     content={{
                         purpose:
-                            '记录该规格的供货商，成本在规格与价格中填写。数字供货记录独立保存，不办理实物入库。',
+                            '记录该规格的供货商，成本在本规格中填写。供货商关联随“保存商品”提交，数字商品不办理实物入库。',
                         requirements: [],
                         example: '',
                     }}
                 />
             </div>
-            <div className="mt-3 grid gap-4 md:grid-cols-2">
-                {variants.map((variant, index) => (
-                    <AdminField
-                        key={variant.id ?? index}
-                        layout="stacked"
-                        className="space-y-1.5 text-xs font-semibold text-slate-700"
-                        label={variant.name || '默认规格'}
-                    >
-                        <AdminSelect
-                            aria-label={`规格 ${index + 1} 供货来源`}
-                            disabled={saving || suppliers.loading || Boolean(suppliers.error)}
-                            value={variant.supplierId ?? ''}
-                            onChange={event =>
-                                handleVariantFieldChange(index, 'supplierId', event.target.value || null)
-                            }
-                            className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs"
+            <div className={inline ? 'mt-3 grid min-w-0 gap-3' : 'mt-3 grid gap-4 md:grid-cols-2'}>
+                {variants
+                    .map((variant, index) => ({ variant, index }))
+                    .filter(entry => variantIndex === undefined || entry.index === variantIndex)
+                    .map(({ variant, index }) => (
+                        <AdminField
+                            key={variant.id ?? index}
+                            layout={inline ? 'auto' : 'stacked'}
+                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                            label={inline ? '供货商' : variant.name || '默认规格'}
                         >
-                            <option value="">不关联供货商</option>
-                            {suppliers.data?.catalogSuppliers.items
-                                .filter(item => item.enabled || item.id === variant.supplierId)
-                                .map(item => (
-                                    <option key={item.id} value={item.id}>
-                                        {item.name}
-                                    </option>
-                                ))}
-                            {variant.supplierId &&
-                                !suppliers.data?.catalogSuppliers.items.some(
-                                    item => item.id === variant.supplierId,
-                                ) && <option value={variant.supplierId}>已关联供货商</option>}
-                        </AdminSelect>
-                    </AdminField>
-                ))}
+                            <AdminSelect
+                                aria-label={`规格 ${index + 1} 供货来源`}
+                                disabled={saving || suppliers.loading || Boolean(suppliers.error)}
+                                value={variant.supplierId ?? ''}
+                                onChange={event =>
+                                    handleVariantFieldChange(index, 'supplierId', event.target.value || null)
+                                }
+                                className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs"
+                            >
+                                <option value="">不关联供货商</option>
+                                {suppliers.data?.catalogSuppliers.items
+                                    .filter(item => item.enabled || item.id === variant.supplierId)
+                                    .map(item => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.name}
+                                        </option>
+                                    ))}
+                                {variant.supplierId &&
+                                    !suppliers.data?.catalogSuppliers.items.some(
+                                        item => item.id === variant.supplierId,
+                                    ) && <option value={variant.supplierId}>已关联供货商</option>}
+                            </AdminSelect>
+                        </AdminField>
+                    ))}
             </div>
             {suppliers.error && (
                 <p role="alert" className="mt-2 text-xs text-rose-600">

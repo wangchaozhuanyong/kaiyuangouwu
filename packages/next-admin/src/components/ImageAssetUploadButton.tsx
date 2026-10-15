@@ -38,6 +38,7 @@ export function ImageAssetUploadButton({
     label = '上传图片',
     ariaLabel = label,
     className = '',
+    tags = [],
 }: {
     onUploaded: (assets: UploadedImageAsset[]) => void;
     multiple?: boolean;
@@ -46,6 +47,7 @@ export function ImageAssetUploadButton({
     label?: string;
     ariaLabel?: string;
     className?: string;
+    tags?: readonly string[];
 }) {
     const { hasAnyPermission } = useAdminPermissions();
     const canCreateAssets = hasAnyPermission(['CreateCatalog', 'CreateAsset']);
@@ -74,7 +76,10 @@ export function ImageAssetUploadButton({
                 CREATE_ASSETS_MULTIPART,
                 files,
                 placeholders => ({
-                    input: placeholders.map(file => ({ file, tags: ['后台上传'] })),
+                    input: placeholders.map(file => ({
+                        file,
+                        tags: [...new Set(['后台上传', ...tags.map(tag => tag.trim()).filter(Boolean)])],
+                    })),
                 }),
                 channelToken ? { channelToken } : undefined,
             );

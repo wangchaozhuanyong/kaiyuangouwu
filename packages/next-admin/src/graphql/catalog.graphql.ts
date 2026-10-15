@@ -67,6 +67,17 @@ export const GET_PRODUCTS = gql`
 `;
 
 export const GET_PRODUCT_DETAIL = gql`
+    fragment ProductVariantEditorDetails on ProductVariant {
+        prices {
+            currencyCode
+            price
+        }
+        translations {
+            id
+            languageCode
+            name
+        }
+    }
     query GetProductDetail($id: ID!) {
         product(id: $id) {
             id
@@ -110,6 +121,7 @@ export const GET_PRODUCT_DETAIL = gql`
                 }
             }
             variants {
+                ...ProductVariantEditorDetails
                 id
                 createdAt
                 updatedAt
@@ -393,6 +405,23 @@ export const REMOVE_PRODUCTS_FROM_CHANNEL = gql`
     }
 `;
 
+// Classification reads only metadata; the existing asset query still owns image pagination.
+export const GET_ASSET_CATEGORY_INDEX = gql`
+    query GetAssetCategoryIndex($options: AssetListOptions) {
+        assets(options: $options) {
+            items {
+                id
+                name
+                tags {
+                    id
+                    value
+                }
+            }
+            totalItems
+        }
+    }
+`;
+
 export const GET_ASSETS = gql`
     fragment NextAdminAssetFields on Asset {
         id
@@ -432,6 +461,7 @@ export const GET_ACTIVE_CHANNEL = gql`
             defaultLanguageCode
             currencyCode
             defaultCurrencyCode
+            availableCurrencyCodes
             customFields {
                 storefrontNameZh
                 storefrontNameEn

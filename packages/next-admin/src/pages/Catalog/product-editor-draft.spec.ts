@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { DigitalWorkspaceVariant } from '../../graphql/product-domains.graphql';
 import {
+    hasCreatedProductDraft,
     hasPendingDigitalDeliveryDraft,
     productEditorDraft,
+    restoreCreatedProductDraft,
+    retainCreatedProductDraft,
     revertPendingDigitalDeliveryDraft,
+    takeCreatedProductDraft,
 } from './product-editor-draft';
 import type { ProductDetailRecord } from './product-editor-types';
 
@@ -62,6 +66,27 @@ describe('product editor source projection', () => {
                 },
             ],
         });
+    });
+
+    it('preserves a missing operating price as empty while keeping independent other-currency prices', () => {
+        const draft = productEditorDraft(
+            {
+                ...product,
+                variants: [
+                    {
+                        ...product.variants[0],
+                        price: null,
+                        currencyCode: 'MYR',
+                        prices: [{ currencyCode: 'CNY', price: 1299 }],
+                    },
+                ],
+            },
+            'physical',
+            [],
+        );
+        expect(draft.variants[0].price).toBe('');
+        expect(draft.variants[0].currencyPrices).toEqual({ CNY: '12.99' });
+        expect(draft.variants[0].currencyPrices).not.toHaveProperty('MYR');
     });
 
     it('keeps missing Chinese editor values empty instead of copying the first English record', () => {
@@ -215,5 +240,187 @@ describe('product editor source projection', () => {
             expect(revertPendingDigitalDeliveryDraft(edited, invalid)).toBe(edited);
             expect(hasPendingDigitalDeliveryDraft(edited, invalid)).toBe(false);
         }
+    });
+    it('hydrates other currencies, localized SKU fields and authoritative inventory without replacing the raw edit quantity', () => {
+        const summary = {
+            source: 'LIMITED_QUOTA',
+            availableQuantity: 7,
+            reservedQuantity: 2,
+            consumedQuantity: 3,
+            observedAt: '2026-10-16T00:00:00Z',
+        };
+        const input = {
+            ...product,
+            variants: [
+                {
+                    ...product.variants[0],
+                    currencyCode: 'CNY',
+                    prices: [
+                        { currencyCode: 'CNY', price: 1299 },
+                        { currencyCode: 'MYR', price: 850 },
+                    ],
+                    customFields: { specification: '1个月' },
+                    translations: [
+                        { languageCode: 'zh_Hans', name: '源规格', customFields: { notes: '说明' } },
+                    ],
+                },
+            ],
+        };
+        const workspace = {
+            id: 'v1',
+            sku: 'SKU-1',
+            deliveryMode: 'manual_service' as const,
+            stockPolicy: 'limited' as const,
+            availableQuantity: 9,
+            migrationRequired: false,
+            purchaseCostMicrounits: null,
+            fileVersion: null,
+            inventory: summary,
+        };
+        const fields = [
+            { name: 'specification', type: 'string', list: false },
+            { name: 'notes', type: 'localeString', list: false },
+        ];
+        const draft = productEditorDraft(input, 'digital', [], [workspace], fields);
+        expect(draft.variants[0]).toMatchObject({
+            price: '12.99',
+            currencyPrices: { MYR: '8.50' },
+            variantCustomFields: { specification: '1个月', notes: { zh_Hans: '说明' } },
+            digitalAvailableQuantity: 9,
+            inventorySummary: summary,
+        });
+        expect(draft.variants[0].currencyPrices).not.toHaveProperty('CNY');
+    });
+});
+
+describe('one-use partial-create draft handoff', () => {
+    const baseline = () => productEditorDraft(product, 'physical', []);
+    it('isolates target products and query scopes, clones the draft and consumes it once', () => {
+        const draft = baseline();
+        retainCreatedProductDraft('recovery-scope', 'created-1', draft, []);
+        draft.productName = 'edited after handoff';
+        expect(takeCreatedProductDraft('another-scope', 'created-1')).toBeUndefined();
+        expect(takeCreatedProductDraft('recovery-scope', 'another-product')).toBeUndefined();
+        expect(hasCreatedProductDraft('recovery-scope', 'created-1')).toBe(true);
+        expect(takeCreatedProductDraft('recovery-scope', 'created-1')?.draft.productName).toBe('源商品');
+        expect(takeCreatedProductDraft('recovery-scope', 'created-1')).toBeUndefined();
+    });
+
+    it('uses real SKU identity while preserving failed settings and unsaved collection selection', () => {
+        const persisted = baseline();
+        const draft = structuredClone(persisted);
+        draft.selectedCollectionIds = ['pending-category'];
+        draft.variants[0] = {
+            ...draft.variants[0],
+            id: undefined,
+            isNew: true,
+            costPrice: '9.00',
+            currencyPrices: { MYR: '22.00' },
+            digitalDeliveryMode: 'manual_service',
+            digitalStockPolicy: 'limited',
+            digitalAvailableQuantity: 40,
+        };
+        retainCreatedProductDraft('recovery-scope', 'created-2', draft, [{ id: 'v1', sku: 'SKU-1' }]);
+        const restored = restoreCreatedProductDraft(
+            takeCreatedProductDraft('recovery-scope', 'created-2')!,
+            persisted,
+        );
+        expect(restored.variants).toHaveLength(1);
+        expect(restored.variants[0]).toMatchObject({
+            id: 'v1',
+            isNew: false,
+            costPrice: '9.00',
+            currencyPrices: { MYR: '22.00' },
+            digitalAvailableQuantity: 40,
+        });
+        expect(restored.selectedCollectionIds).toEqual(['pending-category']);
+        expect(restored.productName).toBe(persisted.productName);
+    });
+
+    it('adopts current committed inventory and currency values instead of replaying an earlier create snapshot', () => {
+        const persisted = baseline();
+        persisted.variants[0] = {
+            ...persisted.variants[0],
+            digitalAvailableQuantity: 39,
+            currencyPrices: { MYR: '23.00' },
+            stockAllocated: 1,
+        };
+        const draft = structuredClone(persisted);
+        draft.variants[0] = {
+            ...draft.variants[0],
+            id: undefined,
+            isNew: true,
+            digitalAvailableQuantity: 40,
+            currencyPrices: { MYR: '22.00' },
+            costPrice: '9.00',
+        };
+        retainCreatedProductDraft('recovery-scope', 'created-3', draft, [{ id: 'v1', sku: 'SKU-1' }], {
+            v1: ['digital', 'prices'],
+        });
+        const restored = restoreCreatedProductDraft(
+            takeCreatedProductDraft('recovery-scope', 'created-3')!,
+            persisted,
+        );
+        expect(restored.variants[0]).toMatchObject({
+            id: 'v1',
+            isNew: false,
+            digitalAvailableQuantity: 39,
+            currencyPrices: { MYR: '23.00' },
+            stockAllocated: 1,
+            costPrice: '9.00',
+        });
+    });
+
+    it('does not recreate an acknowledged SKU even if the workspace read omits it', () => {
+        const persisted = baseline();
+        const draft = structuredClone(persisted);
+        draft.variants[0] = { ...draft.variants[0], id: undefined, isNew: true };
+        persisted.variants = [];
+        retainCreatedProductDraft('recovery-scope', 'created-4', draft, [
+            { id: 'created-sku', sku: 'SKU-1' },
+        ]);
+        const restored = restoreCreatedProductDraft(
+            takeCreatedProductDraft('recovery-scope', 'created-4')!,
+            persisted,
+        );
+        expect(restored.variants[0]).toMatchObject({ id: 'created-sku', isNew: false });
+    });
+});
+
+it('uses current stock for an unconfirmed quantity attempt without discarding other failed fields', () => {
+    const baseline = productEditorDraft(product, 'physical', []);
+    baseline.variants[0] = {
+        ...baseline.variants[0],
+        digitalDeliveryMode: 'manual_service',
+        digitalStockPolicy: 'limited',
+        digitalAvailableQuantity: 39,
+    };
+    const draft = structuredClone(baseline);
+    draft.variants[0] = {
+        ...draft.variants[0],
+        id: undefined,
+        isNew: true,
+        digitalAvailableQuantity: 40,
+        costPrice: '9.00',
+        currencyPrices: { MYR: '22.00' },
+    };
+    retainCreatedProductDraft(
+        'unconfirmed-scope',
+        'created-response-lost',
+        draft,
+        [{ id: 'v1', sku: 'SKU-1' }],
+        {},
+        ['v1'],
+    );
+    const restored = restoreCreatedProductDraft(
+        takeCreatedProductDraft('unconfirmed-scope', 'created-response-lost')!,
+        baseline,
+    );
+    expect(restored.variants[0]).toMatchObject({
+        id: 'v1',
+        isNew: false,
+        digitalAvailableQuantity: 39,
+        costPrice: '9.00',
+        currencyPrices: { MYR: '22.00' },
     });
 });

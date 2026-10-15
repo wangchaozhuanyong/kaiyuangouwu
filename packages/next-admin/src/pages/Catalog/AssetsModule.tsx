@@ -21,7 +21,7 @@ import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { systemFieldDisplayLabel } from '../../../../common/src/system-display-labels';
 import { sensitiveActionContext, uploadAdminFiles } from '../../apollo';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { AdminButton, AdminInput, AdminTextArea } from '../../components/AdminControls';
+import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { AdminVirtualGrid } from '../../components/AdminVirtualGrid';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
@@ -48,6 +48,12 @@ import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { copyAdminText } from '../../utils/admin-clipboard';
 import { AdminImage } from '../../utils/admin-image';
+import {
+    ASSET_CATEGORIES,
+    assetCategoryForAsset,
+    assetTagsForCategory,
+    type AssetCategory,
+} from '../../utils/asset-categories';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { SOURCE_LANGUAGE_CODE } from './product-editor-types';
 
@@ -146,6 +152,7 @@ export function AssetsModule() {
     const [isUploading, setIsUploading] = useState(false);
     const [editName, setEditName] = useState('');
     const [editTags, setEditTags] = useState('');
+    const [editCategory, setEditCategory] = useState<Exclude<AssetCategory, 'ALL'>>('OTHER');
     const [customFieldValues, setCustomFieldValues] = useState<CustomFieldValueMap>({});
     const [savingAsset, setSavingAsset] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -292,6 +299,7 @@ export function AssetsModule() {
     const openAsset = (asset: AssetItem) => {
         setSelectedAsset(asset);
         setEditName(asset.name);
+        setEditCategory(assetCategoryForAsset(asset));
         setEditTags(asset.tags.map(tag => tag.value).join('，'));
         setCustomFieldValues(
             customFieldValuesFromEntity(assetCustomFields, asset.customFields, asset.translations),
@@ -306,10 +314,13 @@ export function AssetsModule() {
             showError('素材名称不能为空');
             return;
         }
-        const tags = editTags
-            .split(/[，,\n]/)
-            .map(tag => tag.trim())
-            .filter(Boolean);
+        const tags = assetTagsForCategory(
+            editTags
+                .split(/[，,\n]/)
+                .map(tag => tag.trim())
+                .filter(Boolean),
+            editCategory,
+        );
         const customFieldErrors = validateCustomFieldValues(assetCustomFields, customFieldValues);
         if (Object.keys(customFieldErrors).length > 0) {
             showError(Object.values(customFieldErrors)[0] ?? '素材扩展字段校验失败');
@@ -879,6 +890,27 @@ export function AssetsModule() {
                                     </div>
                                 </div>
                             </div>
+                            <AdminField label="素材分类">
+                                <AdminSelect
+                                    aria-label="素材分类"
+                                    value={editCategory}
+                                    onChange={event =>
+                                        setEditCategory(event.target.value as Exclude<AssetCategory, 'ALL'>)
+                                    }
+                                    className="w-full rounded-lg border border-slate-300 p-2.5"
+                                >
+                                    {ASSET_CATEGORIES.filter(category => category.value !== 'ALL').map(
+                                        category => (
+                                            <option key={category.value} value={category.value}>
+                                                {category.label}
+                                            </option>
+                                        ),
+                                    )}
+                                </AdminSelect>
+                                <p className="mt-1 text-xs text-slate-500">
+                                    用于图片选择器筛选，随素材一起保存。
+                                </p>
+                            </AdminField>
                             <div>
                                 <label className="mb-1 block font-bold text-slate-700">
                                     标签（逗号分隔）

@@ -11,7 +11,7 @@ import {
     RefreshCw,
     Trash2,
 } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AdminButton, AdminInput, AdminSelect, AdminTextArea } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
@@ -68,6 +68,7 @@ export function ProductAutoCardSetupPanel({
     onSaveProduct,
     onRefreshProduct,
 }: AutoCardSetupPanelProps) {
+    const headingId = useId();
     const entries = useMemo<AutoCardVariantEntry[]>(
         () =>
             variants
@@ -85,7 +86,7 @@ export function ProductAutoCardSetupPanel({
     return (
         <section
             className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_45px_-36px_rgba(15,23,42,0.55)]"
-            aria-labelledby="auto-card-setup-title"
+            aria-labelledby={headingId}
         >
             <div className="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.09),transparent_42%)] px-5 py-5 sm:px-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -94,10 +95,7 @@ export function ProductAutoCardSetupPanel({
                             <KeyRound className="h-3.5 w-3.5" />
                             一站式设置
                         </div>
-                        <h3
-                            id="auto-card-setup-title"
-                            className="text-lg font-semibold tracking-tight text-slate-950"
-                        >
+                        <h3 id={headingId} className="text-lg font-semibold tracking-tight text-slate-950">
                             自动发卡
                             <FeatureHelpButton
                                 topic="catalog.auto-card"

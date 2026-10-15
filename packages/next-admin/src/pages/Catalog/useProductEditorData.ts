@@ -19,6 +19,8 @@ import {
     type DigitalWorkspaceVariant,
 } from '../../graphql/product-domains.graphql';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
+import { useAssetCategoryIndex } from '../../hooks/use-asset-category-index';
+import type { AssetCategory } from '../../utils/asset-categories';
 import { fulfillmentTypeForMode } from '../../utils/commerce-mode';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { SYSTEM_IMPORT_OPTION_GROUP_CODE_PREFIX } from './catalog-option-groups';
@@ -40,6 +42,7 @@ export function useProductEditorData({
     assetPage,
     assetPageSize,
     deferredAssetSearch,
+    assetCategory = 'ALL',
     optionGroupPage,
     optionGroupPageSize,
     deferredOptionGroupSearch,
@@ -55,6 +58,7 @@ export function useProductEditorData({
     assetPage: number;
     assetPageSize: number;
     deferredAssetSearch: string;
+    assetCategory?: AssetCategory;
     optionGroupPage: number;
     optionGroupPageSize: number;
     deferredOptionGroupSearch: string;
@@ -77,6 +81,7 @@ export function useProductEditorData({
             defaultLanguageCode: string;
             currencyCode: string;
             defaultCurrencyCode: string;
+            availableCurrencyCodes?: string[];
         };
     }>(GET_ACTIVE_CHANNEL, { fetchPolicy: 'cache-first' });
 
@@ -292,12 +297,11 @@ export function useProductEditorData({
         setErrorMessage,
     ]);
 
-    const {
-        data: assetsData,
-        loading: assetsLoading,
-        error: assetsError,
-        refetch: refetchAssets,
-    } = useQuery<{ assets: { items: AssetItem[]; totalItems: number } }>(GET_ASSETS, {
+    const classifiedAssets = assetCategory !== 'ALL';
+    const assetIndex = useAssetCategoryIndex(isAssetPickerOpen && classifiedAssets, assetCategory);
+    const categoryReady = !classifiedAssets || assetIndex.ready;
+    const emptyCategory = classifiedAssets && assetIndex.ready && assetIndex.ids.length === 0;
+    const assetQuery = useQuery<{ assets: { items: AssetItem[]; totalItems: number } }>(GET_ASSETS, {
         variables: {
             options: {
                 skip: assetPage * assetPageSize,
@@ -305,13 +309,32 @@ export function useProductEditorData({
                 sort: { updatedAt: 'DESC', id: 'DESC' },
                 filter: {
                     type: { eq: 'IMAGE' },
+                    ...(classifiedAssets ? { id: { in: assetIndex.ids } } : {}),
                     ...(deferredAssetSearch ? { name: { contains: deferredAssetSearch } } : {}),
                 },
             },
         },
-        skip: !isAssetPickerOpen,
+        skip: !isAssetPickerOpen || !categoryReady || emptyCategory,
         fetchPolicy: 'cache-first',
     });
+    const assetsData = !categoryReady
+        ? undefined
+        : emptyCategory
+          ? { assets: { items: [] as AssetItem[], totalItems: 0 } }
+          : assetQuery.data;
+    const assetsLoading =
+        isAssetPickerOpen &&
+        ((classifiedAssets && assetIndex.loading) || (!emptyCategory && assetQuery.loading));
+    const assetsError = (classifiedAssets ? assetIndex.error : undefined) ?? assetQuery.error;
+    const refetchAssets = (options?: { refreshCategories?: boolean }) => {
+        if (!classifiedAssets) {
+            return options?.refreshCategories
+                ? Promise.all([assetIndex.retry(), assetQuery.refetch()])
+                : assetQuery.refetch();
+        }
+        if (!categoryReady || emptyCategory || assetIndex.error) return assetIndex.retry();
+        return Promise.all([assetIndex.retry(), assetQuery.refetch()]);
+    };
 
     const {
         data: optionGroupsData,

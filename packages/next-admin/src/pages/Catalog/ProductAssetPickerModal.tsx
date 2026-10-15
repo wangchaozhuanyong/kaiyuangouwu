@@ -1,7 +1,10 @@
 import { AlertCircle, Image as ImageIcon, Search, X } from 'lucide-react';
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminButton } from '../../components/AdminControls';
+import { AssetCategoryFilter } from '../../components/AssetCategoryFilter';
 import { ImageAssetUploadButton, type UploadedImageAsset } from '../../components/ImageAssetUploadButton';
+import { SearchInput } from '../../components/SearchInput';
+import { assetTagsForCategory } from '../../utils/asset-categories';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { LookupPager } from './LookupPager';
 import { useProductEditor } from './ProductEditorContext';
@@ -13,6 +16,8 @@ export function ProductAssetPickerModal() {
         assetPickerMode,
         assetSearch,
         setAssetSearch,
+        assetCategory,
+        setAssetCategory,
         assetPage,
         assetPageSize,
         setAssetPageSize,
@@ -36,6 +41,7 @@ export function ProductAssetPickerModal() {
             ...Object.fromEntries(assets.map(asset => [asset.id, asset])),
         }));
         setAssetSearch('');
+        setAssetCategory('PRODUCT');
         setAssetPage(0);
         if (assetPickerMode === 'FEATURED') {
             const [asset] = assets;
@@ -45,7 +51,7 @@ export function ProductAssetPickerModal() {
         } else {
             setSelectedAssetIds(current => [...new Set([...current, ...assets.map(asset => asset.id)])]);
         }
-        void refetchAssets().catch(() => undefined);
+        void refetchAssets({ refreshCategories: true }).catch(() => undefined);
     };
 
     if (!isAssetPickerOpen) return null;
@@ -69,7 +75,7 @@ export function ProductAssetPickerModal() {
                         <p className="text-xs text-slate-400 mt-0.5">
                             {assetPickerMode === 'FEATURED'
                                 ? '选中后立即作为商品主图'
-                                : '可连续选择或取消多个后端素材'}
+                                : `已选 ${selectedAssetIds.length} 张，可跨分类连续选择或取消`}
                         </p>
                     </div>
                     <div className="flex items-start gap-2">
@@ -77,6 +83,7 @@ export function ProductAssetPickerModal() {
                             ariaLabel={assetPickerMode === 'FEATURED' ? '上传商品主图' : '上传商品详情图'}
                             label={assetPickerMode === 'FEATURED' ? '上传主图' : '上传详情图'}
                             multiple={assetPickerMode === 'GALLERY'}
+                            tags={assetTagsForCategory([], 'PRODUCT')}
                             onUploaded={selectUploadedAssets}
                         />
                         <AdminButton
@@ -90,13 +97,21 @@ export function ProductAssetPickerModal() {
                     </div>
                 </div>
 
+                <AssetCategoryFilter
+                    value={assetCategory ?? 'ALL'}
+                    onChange={category => {
+                        setAssetCategory(category);
+                        setAssetPage(0);
+                    }}
+                />
+
                 <div className="relative">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <AdminInput
+                    <SearchInput
                         aria-label="搜索图片素材"
                         value={assetSearch}
-                        onChange={event => {
-                            setAssetSearch(event.target.value);
+                        onValueChange={value => {
+                            setAssetSearch(value);
                             setAssetPage(0);
                         }}
                         placeholder="搜索图片素材名称"
@@ -104,12 +119,12 @@ export function ProductAssetPickerModal() {
                     />
                 </div>
 
-                <div className="flex-1 overflow-y-auto min-h-[300px]">
+                <div className="min-h-0 flex-1 overflow-y-auto">
                     {assetsLoading && !assetsData && (
                         <div className="p-12 text-center text-slate-400 text-xs">正在加载素材库...</div>
                     )}
 
-                    {!assetsLoading && assetsError && (
+                    {!assetsLoading && Boolean(assetsError) && !assetsData && (
                         <div
                             role="alert"
                             className="flex min-h-52 flex-col items-center justify-center gap-3 p-8 text-center text-xs text-rose-700"
@@ -118,10 +133,25 @@ export function ProductAssetPickerModal() {
                             <span>{toUserFacingError(assetsError, '素材库读取失败，请稍后重试')}</span>
                             <AdminButton
                                 type="button"
-                                onClick={() => void refetchAssets()}
+                                onClick={() => void refetchAssets().catch(() => undefined)}
                                 className="rounded-lg bg-rose-600 px-4 py-2 font-bold text-white"
                             >
                                 重试
+                            </AdminButton>
+                        </div>
+                    )}
+
+                    {Boolean(assetsError) && assetsData && (
+                        <div
+                            role="alert"
+                            className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700"
+                        >
+                            <span>{toUserFacingError(assetsError, '素材更新失败，已保留当前图片')}</span>
+                            <AdminButton
+                                type="button"
+                                onClick={() => void refetchAssets().catch(() => undefined)}
+                            >
+                                重试更新
                             </AdminButton>
                         </div>
                     )}
@@ -131,11 +161,15 @@ export function ProductAssetPickerModal() {
                         (!assetsData?.assets?.items || assetsData.assets.items.length === 0) && (
                             <div className="p-12 text-center text-slate-400 text-xs space-y-2">
                                 <ImageIcon className="w-8 h-8 mx-auto text-slate-300" />
-                                <div>素材库中暂无图片，可使用上方按钮直接上传。</div>
+                                <div>
+                                    {assetSearch || (assetCategory && assetCategory !== 'ALL')
+                                        ? '当前分类没有匹配的图片，可切换分类或清空搜索。'
+                                        : '素材库中暂无图片，可使用上方按钮直接上传。'}
+                                </div>
                             </div>
                         )}
 
-                    {!assetsError && assetsData?.assets?.items && assetsData.assets.items.length > 0 && (
+                    {assetsData?.assets?.items && assetsData.assets.items.length > 0 && (
                         <div className="grid grid-cols-2 gap-3 p-1 sm:grid-cols-4 md:grid-cols-5">
                             {assetsData.assets.items.map(asset => {
                                 const isSelected =
@@ -182,14 +216,22 @@ export function ProductAssetPickerModal() {
                 </div>
 
                 <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                    <LookupPager
-                        page={assetPage}
-                        loading={assetsLoading}
-                        pageSize={assetPageSize}
-                        onPageSizeChange={setAssetPageSize}
-                        totalItems={assetsData?.assets.totalItems ?? 0}
-                        onPageChange={setAssetPage}
-                    />
+                    {!assetsData && assetsLoading ? (
+                        <p role="status" className="text-xs text-slate-400">
+                            正在读取素材数量…
+                        </p>
+                    ) : !assetsData && assetsError ? (
+                        <p className="text-xs text-slate-400">素材数量暂不可用</p>
+                    ) : (
+                        <LookupPager
+                            page={assetPage}
+                            loading={assetsLoading}
+                            pageSize={assetPageSize}
+                            onPageSizeChange={setAssetPageSize}
+                            totalItems={assetsData?.assets.totalItems ?? 0}
+                            onPageChange={setAssetPage}
+                        />
+                    )}
                     <AdminButton
                         type="button"
                         onClick={() => setIsAssetPickerOpen(false)}

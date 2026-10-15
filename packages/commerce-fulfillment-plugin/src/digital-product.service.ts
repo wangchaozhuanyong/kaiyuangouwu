@@ -122,24 +122,23 @@ export class DigitalProductService implements OnApplicationBootstrap {
 
     async configForDisplay(ctx: RequestContext, variantId: ID) {
         if (this.sources && (await this.sources.hasManagedProducts(ctx))) return this.config(ctx, variantId);
-        return this.requestCache.load(
-            ctx,
-            `digital-variant-config:${ctx.channelId}`,
-            variantId,
-            async ids => {
-                const configurations = await this.connection.getRepository(ctx, DigitalVariantConfig).find({
-                    where: {
-                        channelId: ctx.channelId,
-                        productVariantId: In([...ids]),
-                        migrationState: 'ACTIVE',
-                    },
-                });
-                const byVariant = new Map(
-                    configurations.map(config => [String(config.productVariantId), config]),
-                );
-                return ids.map(id => byVariant.get(id) ?? null);
-            },
-        );
+        return this.configAtChannelForDisplay(ctx, variantId, ctx.channelId);
+    }
+
+    private configAtChannelForDisplay(ctx: RequestContext, variantId: ID, channelId: ID) {
+        return this.requestCache.load(ctx, `digital-variant-config:${channelId}`, variantId, async ids => {
+            const configurations = await this.connection.getRepository(ctx, DigitalVariantConfig).find({
+                where: {
+                    channelId,
+                    productVariantId: In([...ids]),
+                    migrationState: 'ACTIVE',
+                },
+            });
+            const byVariant = new Map(
+                configurations.map(config => [String(config.productVariantId), config]),
+            );
+            return ids.map(id => byVariant.get(id) ?? null);
+        });
     }
 
     async initialize(ctx: RequestContext, variant: ProductVariant) {
@@ -171,16 +170,11 @@ export class DigitalProductService implements OnApplicationBootstrap {
         const currentStoreVariants = await this.connection.getRepository(ctx, ProductVariant).find({
             where: { productId, deletedAt: IsNull(), channels: { id: ctx.channelId } },
         });
+        const observedAt = new Date();
         const variants = await Promise.all(
             currentStoreVariants.map(async variant => {
                 const displayCtx = (await this.sources?.contextForDisplay(ctx, variant.id)) ?? ctx;
-                const config = await this.connection.getRepository(ctx, DigitalVariantConfig).findOne({
-                    where: {
-                        channelId: displayCtx.channelId,
-                        productVariantId: variant.id,
-                        migrationState: 'ACTIVE',
-                    },
-                });
+                const config = await this.configAtChannelForDisplay(ctx, variant.id, displayCtx.channelId);
                 const file = config?.fileVersionId
                     ? await this.connection.getRepository(ctx, DigitalFileVersion).findOne({
                           where: { id: config.fileVersionId, channelId: config.channelId },
@@ -197,6 +191,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                     stockPolicy:
                         config?.stockPolicy ?? variant.customFields.digitalStockPolicy ?? 'unlimited',
                     availableQuantity: config?.availableQuantity ?? null,
+                    inventory: await this.inventorySummary(ctx, variant, config, observedAt),
                     migrationRequired: !config,
                     fileVersion: file,
                     purchaseCostMicrounits: cost?.costMicrounits == null ? null : Number(cost.costMicrounits),
@@ -204,6 +199,77 @@ export class DigitalProductService implements OnApplicationBootstrap {
             }),
         );
         return { productId, variants };
+    }
+
+    private async inventorySummary(
+        ctx: RequestContext,
+        variant: ProductVariant,
+        config: DigitalVariantConfig | null,
+        observedAt: Date,
+    ) {
+        if (!config)
+            return {
+                source: 'LEGACY_UNMIGRATED',
+                availableQuantity: null,
+                reservedQuantity: null,
+                consumedQuantity: null,
+                observedAt,
+            };
+        const [availableQuantity, totals] = await Promise.all([
+            this.availableFromConfig(ctx, variant.id, config, true),
+            this.requestCache.load(
+                ctx,
+                `digital-inventory-reservation-totals:${ctx.channelId}:${config.channelId}`,
+                config.id,
+                async ids => {
+                    const remaining =
+                        'reservation.quantity - reservation.releasedQuantity - reservation.consumedQuantity';
+                    const rows = await this.connection
+                        .getRepository(ctx, DigitalOrderReservation)
+                        .createQueryBuilder('reservation')
+                        .select('reservation.configId', 'configId')
+                        .addSelect(
+                            `SUM(CASE WHEN reservation.state = :heldState AND ${remaining} > 0 THEN ${remaining} ELSE 0 END)`,
+                            'reservedQuantity',
+                        )
+                        .addSelect('SUM(reservation.consumedQuantity)', 'consumedQuantity')
+                        .where('reservation.configId IN (:...ids)', { ids })
+                        // Shared availability comes from the source; order quantities stay store-private.
+                        .andWhere('reservation.channelId = :channelId', {
+                            channelId: ctx.channelId,
+                            heldState: 'HELD',
+                        })
+                        .groupBy('reservation.configId')
+                        .getRawMany<{
+                            configId: ID;
+                            reservedQuantity: string | number;
+                            consumedQuantity: string | number;
+                        }>();
+                    const byConfig = new Map(
+                        rows.map(row => [
+                            String(row.configId),
+                            {
+                                reservedQuantity: Number(row.reservedQuantity),
+                                consumedQuantity: Number(row.consumedQuantity),
+                            },
+                        ]),
+                    );
+                    return ids.map(id => byConfig.get(id) ?? { reservedQuantity: 0, consumedQuantity: 0 });
+                },
+            ),
+        ]);
+        return {
+            source:
+                config.stockPolicy === 'pool_derived'
+                    ? 'CARD_POOL'
+                    : config.stockPolicy === 'unlimited'
+                      ? 'UNLIMITED'
+                      : 'LIMITED_QUOTA',
+            // Quota already excludes held units; AVAILABLE cards also exclude RESERVED cards.
+            availableQuantity,
+            ...totals,
+            observedAt,
+        };
     }
 
     async update(ctx: RequestContext, input: UpdateDigitalVariantInput) {
@@ -298,12 +364,21 @@ export class DigitalProductService implements OnApplicationBootstrap {
             ? this.configForDisplay(ctx, variant.id)
             : this.config(ctx, variant.id));
         if (!config) return undefined; // Explicit compatibility path until migration is activated.
+        return this.availableFromConfig(ctx, variant.id, config, forDisplay);
+    }
+
+    private async availableFromConfig(
+        ctx: RequestContext,
+        variantId: ID,
+        config: DigitalVariantConfig,
+        forDisplay: boolean,
+    ): Promise<number | null> {
         if (config.stockPolicy === 'pool_derived') {
             const cards = forDisplay
                 ? await this.requestCache.load(
                       ctx,
-                      `digital-local-card-config:${ctx.channelId}`,
-                      variant.id,
+                      `digital-local-card-config:${config.channelId}`,
+                      variantId,
                       async ids => {
                           const configs = await this.connection.getRepository(ctx, AutoCardConfig).find({
                               where: {
@@ -319,7 +394,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                       },
                   )
                 : await this.connection.getRepository(ctx, AutoCardConfig).findOne({
-                      where: { channelId: config.channelId, productVariantId: variant.id, enabled: true },
+                      where: { channelId: config.channelId, productVariantId: variantId, enabled: true },
                   });
             return cards
                 ? forDisplay
@@ -804,6 +879,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
         const lockedProduct = await this.lock(ctx, Product, lockedVariant.productId);
         if (lockedProduct.customFields.fulfillmentType !== 'digital')
             throw new UserInputError('该操作仅适用于数字商品');
+        await this.sources?.assertEditable(ctx, lockedVariant.productId);
         const stocksRepository = this.connection.getRepository(ctx, StockLevel);
         const stockQuery = stocksRepository
             .createQueryBuilder('lockedRow')

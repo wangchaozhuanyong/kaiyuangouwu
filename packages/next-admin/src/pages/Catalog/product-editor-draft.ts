@@ -10,6 +10,110 @@ import {
     type ProductVariantState,
 } from './product-editor-types';
 
+type ProductEditorDraft = Parameters<typeof serializeProductEditor>[0];
+export type CreatedProductSavedDomain = 'prices' | 'details' | 'digital' | 'physical' | 'supplier' | 'cost';
+interface CreatedProductDraftRecovery {
+    draft: ProductEditorDraft;
+    createdVariants: Array<{ id: string; sku: string }>;
+    savedDomains: Record<string, CreatedProductSavedDomain[]>;
+    attemptedDigitalQuantityIds: string[];
+}
+// This is a one-use handoff of an unsaved form, never a server-data cache or persistent storage.
+const createdProductDrafts = new Map<string, CreatedProductDraftRecovery>();
+const recoveryKey = (scope: string, productId: string) => JSON.stringify([scope, productId]);
+
+export function retainCreatedProductDraft(
+    scope: string,
+    productId: string,
+    draft: ProductEditorDraft,
+    createdVariants: CreatedProductDraftRecovery['createdVariants'],
+    savedDomains: CreatedProductDraftRecovery['savedDomains'] = {},
+    attemptedDigitalQuantityIds: string[] = [],
+) {
+    createdProductDrafts.set(
+        recoveryKey(scope, productId),
+        structuredClone({ draft, createdVariants, savedDomains, attemptedDigitalQuantityIds }),
+    );
+}
+
+export const hasCreatedProductDraft = (scope: string, productId: string) =>
+    createdProductDrafts.has(recoveryKey(scope, productId));
+
+export function takeCreatedProductDraft(scope: string, productId: string) {
+    const key = recoveryKey(scope, productId);
+    const recovery = createdProductDrafts.get(key);
+    if (recovery) createdProductDrafts.delete(key);
+    return recovery;
+}
+
+/** Match committed SKU identities before restoring settings that later create stages could not save. */
+export function restoreCreatedProductDraft(
+    recovery: CreatedProductDraftRecovery,
+    baseline: ProductEditorDraft,
+): ProductEditorDraft {
+    const restoredVariants = recovery.draft.variants.map(variant => {
+        const confirmed = recovery.createdVariants.find(item => item.sku === variant.sku.trim());
+        const saved = baseline.variants.find(item =>
+            variant.id || confirmed?.id
+                ? item.id === (variant.id ?? confirmed?.id)
+                : item.sku.trim() === variant.sku.trim(),
+        );
+        const restored = {
+            ...variant,
+            id: saved?.id ?? confirmed?.id,
+            isNew: !saved?.id && !confirmed?.id,
+            ...(saved
+                ? {
+                      sku: saved.sku,
+                      name: saved.name,
+                      price: saved.price,
+                      enabled: saved.enabled,
+                      optionIds: saved.optionIds,
+                      variantCustomFields: saved.variantCustomFields,
+                      stockOnHand: saved.stockOnHand,
+                      stockAllocated: saved.stockAllocated,
+                      digitalMigrationRequired: saved.digitalMigrationRequired,
+                      inventorySummary: saved.inventorySummary,
+                  }
+                : {}),
+        };
+        if (saved?.id) {
+            // A rejected response does not prove the stock write failed. Never replay the old quantity.
+            if (recovery.attemptedDigitalQuantityIds.includes(saved.id)) {
+                restored.digitalAvailableQuantity = saved.digitalAvailableQuantity;
+            }
+            const savedFields: Record<CreatedProductSavedDomain, ReadonlyArray<keyof ProductVariantState>> = {
+                prices: ['currencyPrices'],
+                details: ['variantCustomFields'],
+                digital: [
+                    'digitalDeliveryMode',
+                    'digitalStockPolicy',
+                    'digitalAvailableQuantity',
+                    'digitalFileVersionId',
+                    'digitalFileName',
+                ],
+                physical: ['physicalSettings'],
+                supplier: ['supplierId'],
+                cost: ['costPrice'],
+            };
+            for (const domain of recovery.savedDomains[saved.id] ?? []) {
+                for (const field of savedFields[domain]) Object.assign(restored, { [field]: saved[field] });
+            }
+        }
+        return restored;
+    });
+    const matchedIds = new Set(restoredVariants.map(variant => variant.id).filter(Boolean));
+    return {
+        // The product itself was already committed in stage 1; respect normalized source values.
+        ...baseline,
+        dynamicCustomFields: recovery.draft.dynamicCustomFields,
+        selectedCollectionIds: recovery.draft.selectedCollectionIds,
+        selectedChannelIds: recovery.draft.selectedChannelIds,
+        selectedOptionGroupIds: recovery.draft.selectedOptionGroupIds,
+        variants: [...restoredVariants, ...baseline.variants.filter(variant => !matchedIds.has(variant.id))],
+    };
+}
+
 const digitalDraftFields = [
     'digitalDeliveryMode',
     'digitalStockPolicy',
@@ -58,6 +162,7 @@ export function productEditorDraft(
           }
         | DigitalWorkspaceVariant
     >,
+    variantExtensionFields: Parameters<typeof customFieldValuesFromEntity>[0] = [],
 ): Parameters<typeof serializeProductEditor>[0] {
     const sourceTranslation = getLocalizedEntityTranslation(product.translations, SOURCE_LANGUAGE_CODE);
     const fulfillmentType =
@@ -106,6 +211,24 @@ export function productEditorDraft(
                     sourceTranslation?.name ??
                     '',
                 price: variant.price == null ? '' : (variant.price / 100).toFixed(2),
+                ...(variant.prices
+                    ? {
+                          currencyPrices: Object.fromEntries(
+                              variant.prices
+                                  .filter(price => price.currencyCode !== variant.currencyCode)
+                                  .map(price => [price.currencyCode, (price.price / 100).toFixed(2)]),
+                          ),
+                      }
+                    : {}),
+                ...(variantExtensionFields.length
+                    ? {
+                          variantCustomFields: customFieldValuesFromEntity(
+                              variantExtensionFields,
+                              variant.customFields,
+                              variant.translations,
+                          ),
+                      }
+                    : {}),
                 costPrice,
                 supplierId: wsVariant?.supplier?.id ?? null,
                 physicalSettings:
@@ -136,6 +259,7 @@ export function productEditorDraft(
                           digitalMigrationRequired: wsVariant.migrationRequired,
                           digitalFileVersionId: wsVariant.fileVersion?.id ?? null,
                           digitalFileName: wsVariant.fileVersion?.fileName,
+                          inventorySummary: wsVariant.inventory,
                       }
                     : {}),
                 autoCardAvailableStock: variant.autoCardAvailableStock,

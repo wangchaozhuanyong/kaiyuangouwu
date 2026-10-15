@@ -1,7 +1,6 @@
-import React, { createContext, useContext } from 'react';
+import React from 'react';
+import { ProductEditorContext, useOptionalProductEditor } from './product-editor-context';
 import type { ProductEditorFormState } from './useProductEditorForm';
-
-const ProductEditorContext = createContext<ProductEditorFormState | null>(null);
 
 export function ProductEditorProvider({
     value,
@@ -14,7 +13,7 @@ export function ProductEditorProvider({
 }
 
 export function useProductEditor(): ProductEditorFormState {
-    const ctx = useContext(ProductEditorContext);
+    const ctx = useOptionalProductEditor();
     if (!ctx) {
         throw new Error('useProductEditor must be used within ProductEditorProvider');
     }

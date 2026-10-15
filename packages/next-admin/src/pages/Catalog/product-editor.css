@@ -59,7 +59,7 @@
 }
 .product-editor-columns {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) 340px;
     align-items: start;
     gap: 20px;
 }
@@ -80,8 +80,7 @@
         grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
         align-items: start;
     }
-    .product-editor-identity,
-    .product-editor-settings-grid {
+    .product-editor-identity {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         align-items: start;
     }
@@ -106,6 +105,150 @@
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 12px;
+}
+.product-editor-variant-toolbar,
+.product-editor-variant-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+}
+.product-editor-variant-toolbar {
+    justify-content: space-between;
+}
+.product-editor-variant-batch {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    width: 240px;
+    max-width: 100%;
+}
+.product-editor-variant {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    min-width: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--admin-border-subtle);
+}
+.product-editor-variant-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+}
+.product-editor-sale-row {
+    min-width: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--admin-border-subtle);
+}
+.product-editor-sale-row .product-editor-variant {
+    padding-top: 0;
+    border-top: 0;
+}
+.product-editor-variant-domain {
+    margin-top: 12px;
+    min-width: 0;
+}
+.product-editor-variant-domain-fields,
+.product-editor-after-sales-fields,
+.product-editor-sale-extras {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    min-width: 0;
+}
+.product-editor-sale-extras > [role='alert'] {
+    grid-column: 1 / -1;
+}
+.product-editor-sale-extras h3 {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+}
+.product-editor-extra-currencies {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+    gap: 12px;
+    min-width: 0;
+}
+.product-editor-variant-more {
+    min-width: 0;
+    margin-top: 12px;
+    border-top: 1px solid var(--admin-border-subtle);
+}
+.product-editor-variant-more > summary {
+    display: list-item;
+    padding: 10px 0 0;
+    color: var(--admin-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+.product-editor-variant-more > div {
+    margin-top: 12px;
+}
+.product-editor-after-sales {
+    display: grid;
+    gap: 12px;
+}
+.product-editor-after-sales .product-editor-panel-heading {
+    margin-bottom: 0;
+}
+@container product-editor-main (min-width: 36rem) {
+    .product-editor-variant-domain-fields,
+    .product-editor-after-sales-fields,
+    .product-editor-sale-extras {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .product-editor-variant {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .product-editor-variant-actions {
+        grid-column: 1 / -1;
+    }
+}
+@container product-editor-main (min-width: 64rem) {
+    .product-editor-variant-domain-fields {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .product-editor-sale-extras {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .product-editor-after-sales {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        gap: 24px;
+    }
+    .product-editor-after-sales-fields > .admin-field > .admin-field-row {
+        grid-template-columns: max-content minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+    }
+    .product-editor-variant {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr) auto;
+    }
+    .product-editor-variant-actions {
+        grid-column: auto;
+        align-self: end;
+    }
+}
+.product-editor-variant-domain-fields > * {
+    min-width: 0;
+}
+@container product-editor-main (min-width: 76rem) {
+    .product-editor-variant > .admin-field > .admin-field-row {
+        grid-template-columns: max-content minmax(0, 1fr);
+        align-items: start;
+        gap: 8px;
+    }
+    .product-editor-variant > .admin-field > .admin-field-row > .admin-field-label {
+        align-self: center;
+        white-space: nowrap;
+    }
 }
 .product-editor-description-field .admin-field-label {
     display: none;

@@ -13,7 +13,8 @@ const blankVariant = (
     stockAllocated: 0,
     enabled: true,
     digitalDeliveryMode: 'manual_service',
-    digitalStockPolicy: 'unlimited',
+    digitalStockPolicy: 'limited',
+    digitalAvailableQuantity: 0,
     optionIds,
     isNew: true,
 });
@@ -62,6 +63,7 @@ export function applyNewOptionGroupToVariants(
             digitalFileVersionId: null,
             digitalFileName: undefined,
             autoCardAvailableStock: undefined,
+            inventorySummary: undefined,
             digitalMigrationRequired: false,
             optionIds: [...variant.optionIds, option.id],
             isNew: true,

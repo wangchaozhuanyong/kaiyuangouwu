@@ -108,7 +108,7 @@ const button = (label: string) =>
     )!;
 
 describe('ProductEditorSidebar', () => {
-    it('keeps media, status, category slot and store together while identity moves to the main panel', () => {
+    it('keeps media, status and inline category slot while store context belongs to more settings', () => {
         const html = renderToStaticMarkup(
             <ProductEditorSidebar>
                 <section>商品分类摘要</section>
@@ -120,13 +120,13 @@ describe('ProductEditorSidebar', () => {
         expect(html).toContain('图片编号 #asset-1');
         expect(html).toContain('AI 生成主图');
         expect(html).toContain('商品分类摘要');
-        expect(html).toContain('当前销售店铺');
+        expect(html).not.toContain('当前销售店铺');
         expect(html).toContain('标价销售');
         expect(html).toContain('aspect-square');
         expect(html).toContain('object-contain');
         expect(html).not.toContain('group-hover');
         expect(html.indexOf('商品状态')).toBeLessThan(html.indexOf('商品分类摘要'));
-        expect(html.indexOf('商品分类摘要')).toBeLessThan(html.indexOf('销售店铺'));
+        expect(html).not.toContain('销售店铺');
 
         const identityHtml = renderToStaticMarkup(<ProductEditorIdentityFields />);
         expect(identityHtml).toContain('value="测试商品"');

@@ -1,19 +1,22 @@
-import { Check, X } from 'lucide-react';
-import { useState } from 'react';
-import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
-import { AdminButton } from '../../components/AdminControls';
-import { AdminOverlayPortal } from '../../components/AdminOverlayHost';
+import { useId } from 'react';
+import { AdminButton, AdminInput } from '../../components/AdminControls';
+import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
+import { SearchInput } from '../../components/SearchInput';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { buildProductCollectionGroups } from './product-collection-hierarchy';
+import { buildProductCollectionGroups, filterProductCollectionGroups } from './product-collection-hierarchy';
+import type { CollectionItem } from './product-editor-types';
 import { useProductEditor } from './ProductEditorContext';
-import { ProductFacetsCollectionsTab } from './ProductFacetsCollectionsTab';
 
-/** Shared sidebar summary; category edits join the product draft only after confirmation. */
+/** Inline choices update the existing product draft; only Save Product submits the selection. */
 export function ProductCategorySummary() {
+    const fieldId = useId();
     const {
         selectedCollectionIds,
+        setSelectedCollectionIds,
+        collectionSearch,
+        setCollectionSearch,
         collectionsData,
         collectionsLoading,
         collectionsError,
@@ -23,13 +26,58 @@ export function ProductCategorySummary() {
         isCreateMode,
         saving,
     } = useProductEditor();
-    const [isOpen, setIsOpen] = useState(false);
     const groups = buildProductCollectionGroups(collectionsData?.collections.items ?? []);
-    const availableCollections = groups.flatMap(group => [group.parent, ...group.children]);
-    const collectionById = new Map([
-        ...(productData?.product?.collections ?? []).map(collection => [collection.id, collection] as const),
-        ...availableCollections.map(collection => [collection.id, collection] as const),
-    ]);
+    const filteredGroups = filterProductCollectionGroups(groups, collectionSearch);
+    const availableIds = new Set(
+        groups.flatMap(group => [group.parent.id, ...group.children.map(c => c.id)]),
+    );
+    const visibleIds = new Set(
+        filteredGroups.flatMap(group => [group.parent.id, ...group.children.map(c => c.id)]),
+    );
+    const existingById = new Map(
+        (productData?.product?.collections ?? []).map(collection => [collection.id, collection] as const),
+    );
+    const automaticIds = new Set(
+        isCreateMode
+            ? []
+            : [...existingById.values()]
+                  .filter(collection => !hasDirectProductAssignment(collection.filters, productId ?? ''))
+                  .map(collection => collection.id),
+    );
+    const assignedIds = [...new Set([...selectedCollectionIds, ...automaticIds])];
+    const missingIds = assignedIds.filter(id => !availableIds.has(id));
+    const hiddenSelectedCount = assignedIds.filter(id => availableIds.has(id) && !visibleIds.has(id)).length;
+    const automaticallyMatched = (collection: CollectionItem) => automaticIds.has(collection.id);
+    const toggleCollection = (id: string) => {
+        if (saving) return;
+        setSelectedCollectionIds(ids =>
+            ids.includes(id) ? ids.filter(selectedId => selectedId !== id) : [...ids, id],
+        );
+    };
+    const renderChoice = (collection: CollectionItem, child: boolean) => {
+        const automatic = automaticallyMatched(collection);
+        const selected = automatic || selectedCollectionIds.includes(collection.id);
+        return (
+            <label
+                key={collection.id}
+                className="flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-1 text-xs text-slate-700 has-disabled:cursor-default"
+            >
+                <AdminInput
+                    type="checkbox"
+                    checked={selected}
+                    disabled={saving || automatic}
+                    onChange={() => toggleCollection(collection.id)}
+                    aria-label={`${automatic ? '自动匹配' : selected ? '取消选择' : '选择'}${child ? '二级分类' : '一级分类'}：${collection.name}`}
+                    aria-describedby={automatic ? `${fieldId}-automatic` : undefined}
+                    className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600"
+                />
+                <span className={`min-w-0 flex-1 break-words ${child ? '' : 'font-semibold'}`}>
+                    {collection.name}
+                </span>
+                {automatic && <span className="shrink-0 text-[10px] text-emerald-700">自动匹配</span>}
+            </label>
+        );
+    };
 
     if (!isCreateMode && !productData?.product) return null;
 
@@ -40,144 +88,92 @@ export function ProductCategorySummary() {
                     商品分类
                     <FeatureHelpButton topic="catalog.collections" title="所属商品分类" />
                 </h3>
-                <AdminButton
-                    type="button"
-                    aria-label="修改商品分类"
-                    aria-haspopup="dialog"
-                    onClick={() => setIsOpen(true)}
-                    disabled={saving}
-                    className="min-h-11 px-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
-                >
-                    修改
-                </AdminButton>
+                <span className="text-xs text-slate-500">已选 {assignedIds.length} 项</span>
             </div>
-
-            {selectedCollectionIds.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                    {selectedCollectionIds.map(id => {
-                        const collection = collectionById.get(id);
-                        const automaticallyMatched =
-                            collection &&
-                            !isCreateMode &&
-                            productData?.product?.collections.some(item => item.id === id) &&
-                            !hasDirectProductAssignment(collection.filters, productId ?? '');
-                        return (
-                            <span
-                                key={id}
-                                className="inline-flex max-w-full items-start gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs text-blue-700"
-                            >
-                                <Check aria-hidden="true" className="mt-0.5 h-3 w-3 shrink-0" />
-                                <span className="min-w-0 break-words">
-                                    {collection?.name ?? `分类 #${id}`}
-                                    {automaticallyMatched && (
-                                        <span className="ml-1 text-[10px] text-emerald-700">自动匹配</span>
-                                    )}
-                                </span>
-                            </span>
-                        );
-                    })}
-                </div>
-            ) : (
-                <p className="text-xs text-slate-500">尚未选择商品分类。</p>
-            )}
-
+            <AdminField
+                htmlFor={`${fieldId}-search`}
+                label="搜索分类"
+                layout="stacked"
+                className="text-xs text-slate-600"
+            >
+                <SearchInput
+                    id={`${fieldId}-search`}
+                    aria-label="搜索商品分类或专辑"
+                    value={collectionSearch}
+                    onValueChange={setCollectionSearch}
+                    placeholder="搜索分类名称"
+                    disabled={saving}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                />
+            </AdminField>
             {collectionsError && (
                 <div role="alert" className="space-y-1 text-xs text-rose-700">
-                    <p>{toUserFacingError(collectionsError, '商品分类读取失败，请重试')}</p>
+                    <p>
+                        {collectionsData ? '商品分类更新失败：' : ''}
+                        {toUserFacingError(collectionsError, '商品分类读取失败，请重试')}
+                    </p>
                     <AdminButton
                         type="button"
-                        disabled={collectionsLoading}
+                        disabled={collectionsLoading || saving}
                         onClick={() => void refetchCollections()}
-                        className="min-h-11 px-2 font-semibold text-rose-700 underline"
+                        className="min-h-11 px-1 font-semibold text-rose-700 underline"
                     >
                         重试分类读取
                     </AdminButton>
                 </div>
             )}
-            <div className="flex flex-wrap justify-between gap-2 text-[11px] text-slate-500">
-                <span>已选择 {selectedCollectionIds.length} 个分类</span>
-                <span>
-                    {collectionsLoading && !collectionsData
-                        ? '正在读取分类…'
-                        : collectionsData
-                          ? `${availableCollections.length} 个可选`
-                          : '分类数量暂不可用'}
-                </span>
-            </div>
-            {isOpen && <ProductCategoryDialog onClose={() => setIsOpen(false)} />}
+            {collectionsLoading && !collectionsData ? (
+                <p role="status" className="text-xs text-slate-500">
+                    正在读取商品分类…
+                </p>
+            ) : groups.length > 0 ? (
+                filteredGroups.length > 0 ? (
+                    <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-x-2">
+                        {filteredGroups.map(group => (
+                            <div
+                                key={group.parent.id}
+                                className={`min-w-0 ${group.children.length > 0 ? 'col-span-full' : ''}`}
+                            >
+                                {renderChoice(group.parent, false)}
+                                {group.children.length > 0 && (
+                                    <div className="ml-3 grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,8rem),1fr))] gap-x-2 border-l border-slate-100 pl-2">
+                                        {group.children.map(child => renderChoice(child, true))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p role="status" className="text-xs text-slate-500">
+                        未找到匹配的商品分类。
+                    </p>
+                )
+            ) : !collectionsError ? (
+                <p className="text-xs text-slate-500">当前店铺暂无商品分类。</p>
+            ) : null}
+            {hiddenSelectedCount > 0 && (
+                <p className="text-xs text-slate-500">
+                    另有 {hiddenSelectedCount} 个已选分类未在搜索结果中显示，选择仍保留。
+                </p>
+            )}
+            {missingIds.length > 0 && (
+                <p className="break-words text-xs text-slate-500">
+                    已选分类暂未返回，仍保留：
+                    {missingIds
+                        .map(id => {
+                            const collection = existingById.get(id);
+                            return `${collection?.name ?? `分类 #${id}`}${collection && automaticallyMatched(collection) ? '（自动匹配）' : ''}`;
+                        })
+                        .join('、')}
+                    。
+                </p>
+            )}
+            {automaticIds.size > 0 && (
+                <p id={`${fieldId}-automatic`} className="text-xs text-slate-500">
+                    其中 {automaticIds.size} 项自动匹配，由分类规则决定，需在分类规则中调整。
+                </p>
+            )}
+            <p className="text-xs text-slate-500">直接勾选，保存商品后生效。</p>
         </section>
-    );
-}
-
-function ProductCategoryDialog({ onClose }: { onClose: () => void }) {
-    const { selectedCollectionIds, setSelectedCollectionIds, collectionsData, saving } = useProductEditor();
-    const [draftIds, setDraftIds] = useState(() => [...selectedCollectionIds]);
-
-    const applySelection = () => {
-        const unchanged =
-            draftIds.length === selectedCollectionIds.length &&
-            draftIds.every(id => selectedCollectionIds.includes(id));
-        if (!unchanged) setSelectedCollectionIds(draftIds);
-        onClose();
-    };
-
-    return (
-        <AdminOverlayPortal>
-            <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-6"
-                onClick={onClose}
-            >
-                <AccessibleDialogSurface
-                    accessibleName="选择商品分类"
-                    onRequestClose={onClose}
-                    mobilePresentation="sheet"
-                    className="flex max-h-[85dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
-                    onClick={event => event.stopPropagation()}
-                >
-                    <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-6">
-                        <div className="min-w-0">
-                            <h2 className="flex items-center gap-2 text-base font-bold text-slate-900">
-                                选择商品分类
-                                <FeatureHelpButton topic="catalog.collections" title="选择商品分类" />
-                            </h2>
-                            <p className="mt-1 text-xs text-slate-500">
-                                确认后加入商品草稿，保存商品后生效。
-                            </p>
-                        </div>
-                        <AdminButton
-                            type="button"
-                            aria-label="关闭分类选择"
-                            onClick={onClose}
-                            className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-                        >
-                            <X aria-hidden="true" className="h-5 w-5" />
-                        </AdminButton>
-                    </div>
-                    <div className="min-h-0 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
-                        <ProductFacetsCollectionsTab
-                            section="category"
-                            collectionSelection={{ selectedIds: draftIds, onChange: setDraftIds }}
-                        />
-                    </div>
-                    <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 px-4 py-3 sm:px-6">
-                        <AdminButton
-                            type="button"
-                            onClick={onClose}
-                            className="min-h-11 rounded-lg border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                        >
-                            取消
-                        </AdminButton>
-                        <AdminButton
-                            type="button"
-                            onClick={applySelection}
-                            disabled={saving || !collectionsData}
-                            className="min-h-11 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            确认选择
-                        </AdminButton>
-                    </div>
-                </AccessibleDialogSurface>
-            </div>
-        </AdminOverlayPortal>
     );
 }

@@ -9,7 +9,6 @@ import { COPY_PRODUCT_DOMAIN, PRODUCT_TYPE_CHANGE_ALLOWED } from '../../graphql/
 import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
-import { getChannelDisplayName } from '../../utils/channel-display';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { ProductAiImageDialog } from './ProductAiImageDialog';
 import { useProductEditor } from './ProductEditorContext';
@@ -125,7 +124,6 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
         navigate,
         isDirty,
         setErrorMessage,
-        catalogChannelsData,
         dynamicCustomFieldValues,
         saving,
     } = useProductEditor();
@@ -352,27 +350,10 @@ export function ProductEditorSidebar({ children }: { children?: ReactNode }) {
             <fieldset
                 key={String(canEditProduct)}
                 disabled={!canEditProduct}
-                className="min-w-0 border-0 p-0"
+                className="min-w-0 space-y-4 border-0 p-0"
             >
                 {children}
             </fieldset>
-
-            <div className="space-y-1 px-1 text-xs text-slate-500">
-                <p className="flex items-center gap-1.5">
-                    销售店铺
-                    <FeatureHelpButton
-                        topic="catalog.variant-channels"
-                        title="店铺独立商品"
-                        description="如果其他店铺也要销售同款商品，请切换到目标店铺后重新创建或导入独立副本。"
-                    />
-                </p>
-                <p className="break-words font-semibold text-slate-600">
-                    {catalogChannelsData
-                        ? getChannelDisplayName(catalogChannelsData.activeChannel)
-                        : '当前店铺'}
-                </p>
-                <p className="text-[11px]">单店独立商品</p>
-            </div>
 
             {aiDialogOpen && canEditProduct && canCreateAsset && (
                 <ProductAiImageDialog
