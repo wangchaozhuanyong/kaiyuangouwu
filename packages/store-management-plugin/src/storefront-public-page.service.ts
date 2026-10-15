@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { SortOrder } from '@vendure/common/lib/generated-types';
 import {
@@ -6,6 +6,7 @@ import {
     CollectionService,
     ConfigService,
     CountryService,
+    ProcessContext,
     ProvinceService,
     PUBLIC_PRODUCT_SUMMARY_READER,
     RequestContext,
@@ -29,6 +30,7 @@ import {
     StorefrontAuthSettingsService,
     StorefrontContentService,
     StorefrontVisualPresetService,
+    validInlineImagePreview,
     type MediaDescriptor,
     type PrimaryStorefrontMediaRoute,
     type PublicNavigationCollection,
@@ -40,6 +42,7 @@ import { clearTimeout, setTimeout } from 'node:timers';
 import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import {
+    preservePublicMediaPreviews,
     publicMediaAssetIdentity,
     publicMediaWithPreviews,
     publicPageMedia,
@@ -98,6 +101,7 @@ export class StorefrontPublicPageService {
         private readonly campaigns: StorePromotionCampaignService,
         private readonly announcements: SystemAnnouncementService,
         private readonly activation: StorefrontActivationService,
+        @Optional() private readonly processContext?: ProcessContext,
     ) {}
 
     private key(host: string, request: PublicPageRequest) {
@@ -277,7 +281,7 @@ export class StorefrontPublicPageService {
         ctx: RequestContext,
         host: string,
         request: PublicPageRequest = { kind: 'home' },
-        options: { refresh?: boolean } = {},
+        options: { refresh?: boolean; prepareMedia?: boolean } = {},
     ): Promise<StorefrontPageData> {
         if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop')
             throw new Error('Public page requires anonymous Shop context');
@@ -289,7 +293,7 @@ export class StorefrontPublicPageService {
         ctx: RequestContext,
         host: string,
         request: PublicPageRequest,
-        options: { refresh?: boolean },
+        options: { refresh?: boolean; prepareMedia?: boolean },
     ): Promise<StorefrontPageData> {
         for (let attempt = 0; attempt < 2; attempt++) {
             const mode = await this.getAccessMode(ctx);
@@ -297,6 +301,16 @@ export class StorefrontPublicPageService {
             // Concurrent section completions share only a currently executing authority lookup.
             // Clear it immediately: cache hits, later phases and delayed sections must query again.
             let guardInFlight: Promise<void> | undefined;
+            const deferredMedia = new WeakSet<StorefrontPageData>();
+            const rejectedMediaPages = new WeakSet<StorefrontPageData>();
+            const mediaAuthorizations = new WeakMap<StorefrontPageData, ReadonlySet<string>>();
+            const losesMedia = (next: StorefrontPageData, previous: StorefrontPageData) =>
+                JSON.stringify(next.scope) === JSON.stringify(previous.scope) &&
+                preservePublicMediaPreviews(next.media, previous.media, host).some(
+                    (item, index) =>
+                        validInlineImagePreview(item.placeholder?.inlineData) &&
+                        !validInlineImagePreview(next.media[index]?.placeholder?.inlineData),
+                );
             const assertReusable = () => {
                 if (!guardInFlight)
                     guardInFlight = this.assertMode(ctx, 'LIVE').finally(() => {
@@ -305,6 +319,11 @@ export class StorefrontPublicPageService {
                 return guardInFlight;
             };
             const load = async (): Promise<StorefrontPageData> => {
+                // Capture per loader invocation: a revision retry must never reuse a prior entry.
+                const mediaRevision =
+                    mode === 'LIVE' && options.refresh
+                        ? this.cache.revision(ctx.channelId)
+                        : Promise.resolve(undefined);
                 const commonData = this.assemble(ctx, host, request.kind === 'home', mode);
                 const routeData = this.cache.trackSource(() =>
                     request.kind === 'catalog'
@@ -348,27 +367,122 @@ export class StorefrontPublicPageService {
                     request,
                     requestKey: publicPageRequestKey(request),
                 };
-                const media = await this.publicMedia(ctx, host, combined);
+                const authorizedMedia = new Set<string>();
+                const rejectedMedia = new Set<string>();
+                const [prepared, previous, revision] = await Promise.all([
+                    this.publicMedia(
+                        ctx,
+                        host,
+                        combined,
+                        mode === 'LIVE' && options.prepareMedia === true && this.processContext?.isWorker,
+                        authorizedMedia,
+                        rejectedMedia,
+                    ),
+                    mode === 'LIVE' && options.refresh
+                        ? this.cache.peekEntry<StorefrontPageData>(ctx, this.key(host, request))
+                        : Promise.resolve(undefined),
+                    mediaRevision,
+                ]);
+                // These pixels were manifest-authorized in this exact shared generation.
+                // Keep only matching new descriptors, never old content or another scope's media.
+                const reusableMedia =
+                    revision &&
+                    previous?.revision === revision &&
+                    JSON.stringify(previous.value.scope) === JSON.stringify(combined.scope);
+                const media = reusableMedia
+                    ? preservePublicMediaPreviews(
+                          prepared,
+                          previous.value.media.filter(item =>
+                              authorizedMedia.has(publicMediaAssetIdentity(item, host)?.path ?? ''),
+                          ),
+                          host,
+                      )
+                    : prepared;
                 const page = {
                     ...combined,
                     media,
                 };
-                return {
+                const result = {
                     ...page,
                     version: createHash('sha256').update(JSON.stringify(page)).digest('hex').slice(0, 24),
                 };
+                mediaAuthorizations.set(result, new Set(authorizedMedia));
+                if (rejectedMedia.size) rejectedMediaPages.add(result);
+                if (
+                    reusableMedia &&
+                    !rejectedMedia.size &&
+                    preservePublicMediaPreviews(prepared, previous.value.media, host).some(
+                        (item, index) =>
+                            validInlineImagePreview(item.placeholder?.inlineData) &&
+                            !validInlineImagePreview(media[index]?.placeholder?.inlineData),
+                    )
+                )
+                    deferredMedia.add(result);
+                return result;
             };
             try {
                 const page =
                     mode === 'PREVIEW'
                         ? await this.cache.runUncached(load)
                         : await this.cache.runGuarded(assertReusable, async () => {
+                              const pageCacheOptions = {
+                                  ...options,
+                                  shouldCache: (value: StorefrontPageData, current?: StorefrontPageData) => {
+                                      const allowed = mediaAuthorizations.get(value);
+                                      if (
+                                          current &&
+                                          isReusablePublicPageData(current) &&
+                                          JSON.stringify(value.scope) === JSON.stringify(current.scope) &&
+                                          allowed?.size
+                                      ) {
+                                          const merged = preservePublicMediaPreviews(
+                                              value.media,
+                                              current.media.filter(item =>
+                                                  allowed.has(
+                                                      publicMediaAssetIdentity(item, host)?.path ?? '',
+                                                  ),
+                                              ),
+                                              host,
+                                          );
+                                          if (
+                                              merged.some(
+                                                  (item, index) =>
+                                                      item.placeholder?.inlineData !==
+                                                      value.media[index]?.placeholder?.inlineData,
+                                              )
+                                          ) {
+                                              value.media = merged;
+                                              value.version = createHash('sha256')
+                                                  .update(
+                                                      JSON.stringify(
+                                                          Object.fromEntries(
+                                                              Object.entries(value).filter(
+                                                                  ([key]) => key !== 'version',
+                                                              ),
+                                                          ),
+                                                      ),
+                                                  )
+                                                  .digest('hex')
+                                                  .slice(0, 24);
+                                          }
+                                      }
+                                      return (
+                                          !deferredMedia.has(value) &&
+                                          (!current ||
+                                              !isReusablePublicPageData(current) ||
+                                              rejectedMediaPages.has(value) ||
+                                              !losesMedia(value, current))
+                                      );
+                                  },
+                                  invalidateOnConflict: (value: StorefrontPageData) =>
+                                      rejectedMediaPages.has(value),
+                              };
                               let result = await this.cache.readThrough(
                                   ctx,
                                   this.key(host, request),
                                   PAGE_TTL,
                                   load,
-                                  options,
+                                  pageCacheOptions,
                               );
                               if (!isReusablePublicPageData(result)) {
                                   // Snapshots created before access metadata existed must never be reusable.
@@ -378,7 +492,7 @@ export class StorefrontPublicPageService {
                                       this.key(host, request),
                                       PAGE_TTL,
                                       load,
-                                      { refresh: true },
+                                      { ...pageCacheOptions, refresh: true },
                                   );
                               }
                               return result;
@@ -394,7 +508,14 @@ export class StorefrontPublicPageService {
         throw new ServiceUnavailableException('Public access changed; retry the read');
     }
 
-    private async publicMedia(ctx: RequestContext, host: string, page: StorefrontPageData) {
+    private async publicMedia(
+        ctx: RequestContext,
+        host: string,
+        page: StorefrontPageData,
+        prepare = false,
+        authorized = new Set<string>(),
+        rejected = new Set<string>(),
+    ) {
         const media = publicPageMedia(page);
         if (!media.length) return media;
         const providers = this.previewProviders();
@@ -458,8 +579,20 @@ export class StorefrontPublicPageService {
         const populated = await publicMediaWithPreviews(
             ordered,
             host,
-            path => manifest.isPublic(ctx, host, path),
+            async path => {
+                try {
+                    const allowed = await manifest.isPublic(ctx, host, path);
+                    (allowed ? authorized : rejected).add(path);
+                    return allowed;
+                } catch (error) {
+                    rejected.add(path);
+                    throw error;
+                }
+            },
             path => reader.readPublicInlinePreview(path),
+            // Only the existing queue-owned worker may finish cold inline conversion.
+            // Public/preview reads retain their 250ms cap and SSI remains cache-only.
+            prepare ? 2_000 : 250,
         );
         return [
             ...populated,

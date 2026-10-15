@@ -287,7 +287,13 @@ describe('platform governance real database and API boundaries', () => {
             }
         }
         await server.init({
-            initialData: { ...initialData, collections: [], paymentMethods: [] },
+            initialData: {
+                ...initialData,
+                defaultLanguage: LanguageCode.zh_Hans,
+                collections: [],
+                shippingMethods: [],
+                paymentMethods: [],
+            },
             customerCount: 0,
         });
         connection = server.app.get(TransactionalConnection);

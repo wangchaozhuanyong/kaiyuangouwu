@@ -18,7 +18,11 @@ import {
     StorefrontPublicCacheInvalidatedEvent,
     StoreManagementPlugin,
 } from '@vendure/store-management-plugin';
-import { responsiveImageSources, type StorefrontImageKind } from '@vendure/storefront-content-plugin';
+import {
+    responsiveImageSources,
+    validInlineImagePreview,
+    type StorefrontImageKind,
+} from '@vendure/storefront-content-plugin';
 import type { Request } from 'express';
 import { Subscription } from 'rxjs';
 
@@ -138,13 +142,25 @@ export class StorefrontMediaJobsService implements OnApplicationBootstrap, OnApp
         } as unknown as Request);
         if (!request || String(request.channelId) !== data.channelId) return { prepared: 0 };
         const manifest = await this.manifests.get(request.ctx, request.host);
-        const plans = publicDerivativePlans(manifest.uses);
+        // Prepare the bounded inline pixels before expensive responsive derivatives.
+        // A visitor's 250ms page budget must not be their only chance to finish conversion.
+        const plans: Array<
+            ReturnType<typeof publicDerivativePlans>[number] | { path: string; inline: true }
+        > = [
+            ...[...new Set(manifest.uses.map(use => use.path))]
+                .sort()
+                .map(path => ({ path, inline: true as const })),
+            ...publicDerivativePlans(manifest.uses),
+        ];
         let prepared = 0;
         let failed = 0;
         for (const plan of plans.slice(data.offset, data.offset + CHUNK_SIZE)) {
             if (!manifest.paths.includes(plan.path)) continue;
             try {
-                await this.assets.preparePublicDerivative(plan.path, plan.preset, plan.quality);
+                if ('inline' in plan) {
+                    if (!validInlineImagePreview(await this.assets.readPublicInlinePreview(plan.path)))
+                        throw new Error('Public inline media preparation is unavailable');
+                } else await this.assets.preparePublicDerivative(plan.path, plan.preset, plan.quality);
                 prepared++;
             } catch {
                 failed++;

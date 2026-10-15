@@ -3,6 +3,58 @@ import { describe, expect, it, vi } from 'vitest';
 import { RedisCacheStrategy } from './redis-cache-strategy';
 
 describe('Redis public cache generations', () => {
+    it('atomically compares serialized entries and applies the existing namespace, TTL and tags', async () => {
+        const strategy = new RedisCacheStrategy({ namespace: 'test' });
+        const client = { eval: vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(0), set: vi.fn() };
+        (strategy as any).client = client;
+        expect(
+            await strategy.compareAndSet(
+                'page',
+                undefined,
+                { media: 'ready' },
+                { ttl: 1500, tags: ['public'] },
+            ),
+        ).toBe(true);
+        expect(client.eval).toHaveBeenCalledWith(
+            expect.stringContaining('current ~= ARGV[2]'),
+            2,
+            'test:page',
+            'test:tag:public',
+            '0',
+            '',
+            '{"media":"ready"}',
+            2,
+        );
+        expect(
+            await strategy.compareAndSet('page', { media: 'old' }, { media: 'partial' }, { ttl: 30_000 }),
+        ).toBe(false);
+        expect(client.eval.mock.calls[1].slice(-4)).toEqual([
+            '1',
+            '{"media":"old"}',
+            '{"media":"partial"}',
+            30,
+        ]);
+        expect(client.set).not.toHaveBeenCalled();
+    });
+    it('does not attempt an oversized or invalid-TTL conditional write', async () => {
+        const strategy = new RedisCacheStrategy({ namespace: 'test', maxItemSizeInBytes: 12 });
+        const client = { eval: vi.fn() };
+        (strategy as any).client = client;
+        expect(await strategy.compareAndSet('page', undefined, { image: 'too large' }, { ttl: 1000 })).toBe(
+            false,
+        );
+        expect(await strategy.compareAndSet('page', undefined, 'ok', { ttl: -1000 })).toBe(false);
+        expect(client.eval).not.toHaveBeenCalled();
+    });
+    it('propagates conditional-write errors without falling back to SET', async () => {
+        const strategy = new RedisCacheStrategy({ namespace: 'test' });
+        const client = { eval: vi.fn().mockRejectedValue(new Error('offline')), set: vi.fn() };
+        (strategy as any).client = client;
+        await expect(strategy.compareAndSet('page', undefined, 'ready', { ttl: 30_000 })).rejects.toThrow(
+            'offline',
+        );
+        expect(client.set).not.toHaveBeenCalled();
+    });
     it('initializes with NX and rereads the winning generation from another worker', async () => {
         const strategy = new RedisCacheStrategy({ namespace: 'test' });
         const client = {

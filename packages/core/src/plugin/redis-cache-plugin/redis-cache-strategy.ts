@@ -52,6 +52,42 @@ export class RedisCacheStrategy implements CacheStrategy {
         return version;
     }
 
+    /** Optional public-snapshot CAS; never falls back to an unconditional write. */
+    async compareAndSet(
+        key: string,
+        expected: unknown,
+        value: unknown,
+        options?: SetCacheKeyOptions,
+    ): Promise<boolean> {
+        const serialized = JSON.stringify(value);
+        const ttl = Math.round(options?.ttl ? options.ttl / 1000 : DEFAULT_TTL);
+        if (
+            serialized === undefined ||
+            ttl <= 0 ||
+            (this.options.maxItemSizeInBytes &&
+                Buffer.byteLength(serialized) > this.options.maxItemSizeInBytes)
+        )
+            return false;
+        const tags = (options?.tags ?? []).map(tag => this.tagNamespace(tag));
+        const result = await this.client.eval(
+            [
+                "local current = redis.call('GET', KEYS[1]);",
+                "if ARGV[1] == '0' then if current then return 0 end",
+                'elseif current ~= ARGV[2] then return 0 end;',
+                "redis.call('SET', KEYS[1], ARGV[3], 'EX', ARGV[4]);",
+                "for i = 2, #KEYS do redis.call('SADD', KEYS[i], KEYS[1]); end; return 1",
+            ].join(' '),
+            1 + tags.length,
+            this.namespace(key),
+            ...tags,
+            expected === undefined ? '0' : '1',
+            JSON.stringify(expected) ?? '',
+            serialized,
+            ttl,
+        );
+        return result === 1;
+    }
+
     async addToBoundedSet(key: string, value: string, limit: number, ttlSeconds: number): Promise<boolean> {
         const result = await this.client.eval(
             [

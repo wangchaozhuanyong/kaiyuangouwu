@@ -5,6 +5,7 @@ import {
     StorefrontAccountSettingsService,
     StorefrontVisualPresetService,
 } from '@vendure/storefront-content-plugin';
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
@@ -217,7 +218,7 @@ describe('public page boundary', () => {
     });
 });
 
-function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
+function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE', worker = false, strategy = {}) {
     const state = { mode: initial };
     const entries = new Map<string, unknown>();
     const raw = {
@@ -229,7 +230,7 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
     };
     const cache = new StorefrontPublicCacheService(
         raw as never,
-        { systemOptions: { cacheStrategy: {} } } as never,
+        { systemOptions: { cacheStrategy: strategy } } as never,
     );
     const invalidate = vi.spyOn(cache, 'invalidate');
     const accessActivation = { getAccessMode: vi.fn(() => Promise.resolve(state.mode)) };
@@ -272,6 +273,7 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
         { findFlashSales: vi.fn().mockResolvedValue([]) } as never,
         sources.announcements as never,
         accessActivation as never,
+        { isWorker: worker } as never,
     );
     const config = vi
         .spyOn(service as unknown as { loadConfig(): Promise<unknown> }, 'loadConfig')
@@ -304,6 +306,227 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE') {
 }
 
 describe('public page inline artwork', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.unstubAllEnvs();
+    });
+    function artworkHarness(worker = false, images = ['hero.webp'], strategy = {}) {
+        const h = accessHarness('LIVE', worker, strategy);
+        h.content.mockResolvedValue({
+            blocks: images.map(image => ({ type: 'HERO', imageUrl: `/assets/preview/${image}` })),
+        });
+        const read = vi.fn().mockResolvedValue('data:image/webp;base64,AAAA');
+        const authorize = vi.fn().mockResolvedValue(true);
+        const original = h.modules.get.getMockImplementation();
+        if (!original) throw new Error('Expected media provider fixture');
+        h.modules.get.mockImplementation(token => {
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
+                return { readPublicInlinePreview: read } as never;
+            if (token === StorefrontMediaManifestService) return { isPublic: authorize } as never;
+            return original(token);
+        });
+        return { ...h, read, authorize };
+    }
+    it.each([false, true])(
+        'reconciles a CAS winner only while its artwork stays authorized (%s)',
+        async denied => {
+            const versions = new Map<string, string>();
+            let generation = 0;
+            const strategy = {
+                getOrCreateVersion: vi.fn((key: string) => {
+                    if (!versions.has(key)) versions.set(key, String(++generation));
+                    return Promise.resolve(versions.get(key));
+                }),
+                rotateVersion: vi.fn((key: string) => {
+                    versions.set(key, String(++generation));
+                    return Promise.resolve(versions.get(key));
+                }),
+                compareAndSet: vi.fn<(key: string, expected: unknown, entry: unknown) => Promise<boolean>>(),
+            };
+            const h = artworkHarness(false, ['hero.webp'], strategy);
+            strategy.compareAndSet.mockImplementation((key, _, entry) => {
+                h.entries.set(key, entry);
+                return Promise.resolve(true);
+            });
+            const healthy = await h.service.read(h.ctx, 'a.test');
+            const saved = [...h.entries.entries()].find(
+                ([, entry]) => (entry as { value: unknown }).value === healthy,
+            );
+            if (!saved) throw new Error('Expected the healthy page entry');
+            h.entries.clear();
+            h.read.mockResolvedValue(undefined);
+            h.authorize.mockResolvedValue(!denied);
+            h.content.mockResolvedValue({
+                blocks: [{ type: 'HERO', imageUrl: '/assets/preview/hero.webp', title: 'New content' }],
+            });
+            strategy.compareAndSet.mockClear().mockImplementationOnce((key: string) => {
+                h.entries.set(key, saved[1]);
+                return Promise.resolve(false);
+            });
+            const current = await h.service.read(h.ctx, 'a.test');
+            expect(current.content).toMatchObject({ blocks: [{ title: 'New content' }] });
+            expect(current.media[0].placeholder).toEqual(denied ? undefined : healthy.media[0].placeholder);
+            expect(current.version).not.toBe(healthy.version);
+            expect(h.raw.set.mock.calls.filter(([key]) => key === saved[0])).toHaveLength(0);
+            if (denied) {
+                expect(strategy.rotateVersion).toHaveBeenCalledOnce();
+                expect((await h.service.read(h.ctx, 'a.test')).media[0].placeholder).toBeUndefined();
+            } else {
+                const { version, ...payload } = current;
+                expect(version).toBe(
+                    createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 24),
+                );
+                expect(strategy.compareAndSet).toHaveBeenCalledOnce();
+                expect(h.entries.get(saved[0])).toBe(saved[1]);
+            }
+        },
+    );
+    it('preserves healthy pixels on refresh only after current manifest authorization', async () => {
+        const h = artworkHarness();
+        const original = await h.service.read(h.ctx, 'a.test');
+        expect(original.media[0].placeholder?.inlineData).toBe('data:image/webp;base64,AAAA');
+        h.read.mockResolvedValue(undefined);
+        const next = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(next.media[0].placeholder).toEqual(original.media[0].placeholder);
+        expect(h.authorize).toHaveBeenCalledTimes(2);
+        h.authorize.mockResolvedValue(false);
+        const denied = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(denied.media[0].placeholder).toBeUndefined();
+        expect((await h.service.read(h.ctx, 'a.test')).media[0].placeholder).toBeUndefined();
+        expect(h.read).toHaveBeenCalledTimes(2);
+    });
+    it('returns newly authorized matching pixels from a healthy producer that won during this cold read', async () => {
+        const h = artworkHarness();
+        const healthy = await h.service.read(h.ctx, 'a.test');
+        const saved = [...h.entries.entries()].find(
+            ([, entry]) => (entry as { value: unknown }).value === healthy,
+        );
+        if (!saved) throw new Error('Expected the healthy page entry');
+        h.entries.clear();
+        h.read.mockResolvedValue(undefined);
+        let pageReads = 0;
+        h.raw.get.mockImplementation(key => {
+            if (key === saved[0] && ++pageReads === 2) h.entries.set(saved[0], saved[1]);
+            return Promise.resolve(h.entries.get(key));
+        });
+        const current = await h.service.read(h.ctx, 'a.test');
+        expect(current.media[0].placeholder).toEqual(healthy.media[0].placeholder);
+        expect(current.config).toMatchObject({ sourceVersion: 2 });
+        expect(current.version).not.toBe(healthy.version);
+        expect(h.authorize).toHaveBeenCalledTimes(2);
+    });
+    it('fails closed on authorization timeout without replacing or extending a healthy cache entry', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        await h.service.read(h.ctx, 'a.test');
+        const before = [...h.entries.entries()];
+        h.authorize.mockImplementation(() => new Promise<boolean>(() => undefined));
+        const pending = h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        await vi.advanceTimersByTimeAsync(251);
+        const result = await pending;
+        expect(result.media.every(item => !item.placeholder)).toBe(true);
+        expect([...h.entries.entries()]).toEqual(before);
+        expect(h.read).toHaveBeenCalledOnce();
+    });
+    it('removes denied old pixels even when another asset authorization times out in the same refresh', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness(false, ['denied.webp', 'unknown.webp']);
+        await h.service.read(h.ctx, 'a.test');
+        h.authorize.mockImplementation((path: string) =>
+            path.includes('denied') ? Promise.resolve(false) : new Promise<boolean>(() => undefined),
+        );
+        const pending = h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        await vi.advanceTimersByTimeAsync(251);
+        expect((await pending).media.every(item => !item.placeholder)).toBe(true);
+        expect((await h.service.read(h.ctx, 'a.test')).media.every(item => !item.placeholder)).toBe(true);
+        expect(h.read).toHaveBeenCalledTimes(2);
+    });
+    it('never inherits pixels across shared revision, currency, preview or closed access', async () => {
+        const h = artworkHarness();
+        await h.service.read(h.ctx, 'a.test');
+        h.read.mockResolvedValue(undefined);
+        const currency = { ...(h.ctx as object), currencyCode: 'CNY' } as never;
+        const other = await h.service.read(currency, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(other.media.every(item => !item.placeholder)).toBe(true);
+        await h.cache.invalidate('a');
+        const revised = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(revised.media.every(item => !item.placeholder)).toBe(true);
+        h.state.mode = 'PREVIEW';
+        const preview = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(preview.media.every(item => !item.placeholder)).toBe(true);
+        h.state.mode = 'CLOSED';
+        await expect(
+            h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true }),
+        ).rejects.toBeInstanceOf(StorefrontClosedError);
+    });
+    it.each([false, true])(
+        'only the existing worker may prepare a cold preview beyond the visitor budget (%s)',
+        async worker => {
+            vi.useFakeTimers();
+            vi.stubEnv('STOREFRONT_MEDIA_PREGENERATE', 'false');
+            const h = artworkHarness(worker);
+            let prepared = false;
+            h.read.mockImplementation(async () => {
+                if (!prepared) {
+                    await new Promise(resolve => setTimeout(resolve, 400));
+                    prepared = true;
+                }
+                return 'data:image/webp;base64,AAAA';
+            });
+            const pending = h.service.read(
+                h.ctx,
+                'a.test',
+                { kind: 'home' },
+                { refresh: true, prepareMedia: true },
+            );
+            await vi.advanceTimersByTimeAsync(worker ? 401 : 251);
+            const first = await pending;
+            expect(Boolean(first.media[0].placeholder)).toBe(worker);
+            if (worker) {
+                const visitor = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+                expect(visitor.media[0].placeholder?.inlineData).toBe('data:image/webp;base64,AAAA');
+                expect(h.read).toHaveBeenCalledTimes(2);
+            }
+        },
+    );
+    it('does not carry a captured old preview into a retried generation or revision outage', async () => {
+        const h = artworkHarness();
+        await h.service.read(h.ctx, 'a.test');
+        h.read.mockResolvedValue(undefined);
+        h.authorize.mockImplementationOnce(async () => {
+            await h.cache.invalidate('a');
+            return true;
+        });
+        const revised = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(revised.media.every(item => !item.placeholder)).toBe(true);
+        expect(h.authorize.mock.calls.length).toBeGreaterThanOrEqual(3);
+        vi.spyOn(h.cache, 'revision').mockResolvedValue(undefined);
+        const unavailable = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { refresh: true });
+        expect(unavailable.media.every(item => !item.placeholder)).toBe(true);
+    });
+    it('keeps an absolute cold authorization timeout within the visitor cap without inventing pixels', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        h.authorize.mockImplementation(() => new Promise<boolean>(() => undefined));
+        const pending = h.service.read(h.ctx, 'a.test');
+        await vi.advanceTimersByTimeAsync(251);
+        const result = await pending;
+        expect(result.media.every(item => !item.placeholder)).toBe(true);
+        expect(result.content).toBeDefined();
+        expect(h.read).not.toHaveBeenCalled();
+    });
+    it('never expands preview-mode work to the worker preparation window', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness(true);
+        h.state.mode = 'PREVIEW';
+        h.read.mockImplementation(
+            () => new Promise(resolve => setTimeout(() => resolve('data:image/webp;base64,AAAA'), 400)),
+        );
+        const pending = h.service.read(h.ctx, 'a.test', { kind: 'home' }, { prepareMedia: true });
+        await vi.advanceTimersByTimeAsync(251);
+        expect((await pending).media.every(item => !item.placeholder)).toBe(true);
+        expect(h.entries.size).toBe(0);
+    });
     it('reserves the bounded preview slots for the current page before navigation or unrelated content', async () => {
         const h = accessHarness();
         h.content.mockResolvedValue({
@@ -1095,7 +1318,6 @@ describe('public page optional section budgets', () => {
         },
     );
 });
-
 describe('public page media assembly', () => {
     it('does not reuse a previous runtime snapshot with the old unscoped default catalog', async () => {
         const h = accessHarness();

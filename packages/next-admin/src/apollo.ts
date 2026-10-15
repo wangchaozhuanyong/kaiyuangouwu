@@ -132,6 +132,21 @@ interface GraphqlUploadResponse<T> {
     errors?: Array<{ message: string }>;
 }
 
+async function readGraphqlUploadResponse<T>(response: Response): Promise<GraphqlUploadResponse<T>> {
+    const sizeFailure = '上传文件超过后台允许的大小，请压缩文件或选择较小文件后重试';
+    // A proxy can reject the body before GraphQL and return an HTML 413 page.
+    if (response.status === 413) throw new Error(sizeFailure);
+    const result = (await response.json()) as GraphqlUploadResponse<T>;
+    // graphql-upload reports stream limits as a GraphQL error with HTTP 200.
+    if (
+        result.errors?.some(error =>
+            /^File truncated as it exceeds the \d+ byte size limit\.$/iu.test(error.message),
+        )
+    )
+        throw new Error(sizeFailure);
+    return result;
+}
+
 /**
  * Vendure 的 Upload 标量遵循 GraphQL multipart request 规范，普通 HttpLink
  * 无法直接序列化浏览器 File，因此素材上传单独走 FormData 请求。
@@ -174,7 +189,7 @@ export const uploadAdminFiles = async <T>(
                 },
                 body: formData,
             });
-            const result = (await response.json()) as GraphqlUploadResponse<T>;
+            const result = await readGraphqlUploadResponse<T>(response);
             if (revision !== channelRevision) throw new Error('店铺已切换，旧上传结果已取消');
 
             if (!response.ok || result.errors?.length) {
@@ -225,7 +240,7 @@ export const uploadAdminFile = async <T>(
                 },
                 body: formData,
             });
-            const result = (await response.json()) as GraphqlUploadResponse<T>;
+            const result = await readGraphqlUploadResponse<T>(response);
             if (revision !== channelRevision) throw new Error('店铺已切换，旧上传结果已取消');
             if (!response.ok || result.errors?.length) {
                 throw new Error(
