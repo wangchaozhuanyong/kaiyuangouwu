@@ -105,7 +105,7 @@ export function productEditorDraft(
                     getLocalizedEntityTranslation(variant.translations, SOURCE_LANGUAGE_CODE)?.name ??
                     sourceTranslation?.name ??
                     '',
-                price: (variant.price / 100).toFixed(2),
+                price: variant.price == null ? '' : (variant.price / 100).toFixed(2),
                 costPrice,
                 supplierId: wsVariant?.supplier?.id ?? null,
                 physicalSettings:

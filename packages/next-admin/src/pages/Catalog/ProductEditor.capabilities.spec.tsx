@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     queryScope: 'scope-a',
     channelToken: 'fixture-channel-a',
     initialTab: 'BASIC' as ProductEditorTab,
+    managedBy: null as string | null,
 }));
 vi.mock('@apollo/client/react', () => ({
     useMutation: (document: DocumentNode) => {
@@ -43,7 +44,13 @@ vi.mock('../../apollo', () => ({
     }),
 }));
 vi.mock('../../hooks/use-admin-query', () => ({
-    useAdminQuery: () => ({ data: { productTypeChangeAllowed: true }, loading: false }),
+    useAdminQuery: () => ({
+        data: {
+            productTypeChangeAllowed: true,
+            myProductSalesOffer: mocks.managedBy ? { managedBy: mocks.managedBy } : null,
+        },
+        loading: false,
+    }),
 }));
 vi.mock('../../components/FeatureHelp', () => ({ FeatureHelpButton: () => null }));
 vi.mock('../../extensions/extension-hosts', () => ({ NextAdminPageBlocks: () => null }));
@@ -193,6 +200,7 @@ function snapshot(
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+    mocks.managedBy = null;
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     mocks.mutations.clear();
     mocks.query.mockReset();
@@ -488,5 +496,18 @@ it('retains the description reading mode and independent specification draft acr
     expect(host.querySelector('[aria-label="商品描述"]')).toBe(description);
     expect(host.querySelector('[aria-label="规格 1 售价"]')).toBe(pricing);
     expect(button('阅读').getAttribute('aria-pressed')).toBe('true');
+    expectNoWrites();
+});
+
+it('keeps a source-managed product readable while disabling target-store maintenance', async () => {
+    mocks.managedBy = '来源店铺A';
+    if (!mocks.editor) throw new Error('Missing editor');
+    mocks.editor.channelData = {
+        activeChannel: { id: 'store-a', code: 'store-a' },
+    } as ProductEditorFormState['channelData'];
+    await render(snapshot('STORE', true), ['ReadProduct', 'UpdateProduct', 'CreateAsset']);
+    expect(host.textContent).toContain('由 来源店铺A 统一管理');
+    expect(host.textContent).not.toContain('保存商品');
+    expect(host.querySelector('fieldset[disabled]')).not.toBeNull();
     expectNoWrites();
 });

@@ -582,8 +582,8 @@ export class ShopApi {
     prepareShipping: CartCheckoutApi['prepareShipping'] = input =>
         this.cartCheckoutApi.prepareShipping(input);
     eligibleShippingMethods = () => this.cartCheckoutApi.eligibleShippingMethods();
-    setShippingMethod = (id: string) => this.cartCheckoutApi.setShippingMethod(id);
-    setShippingMethodWithCart = (id: string) => this.cartCheckoutApi.setShippingMethodWithCart(id);
+    setShippingMethod = (id: string | string[]) => this.cartCheckoutApi.setShippingMethod(id);
+    setShippingMethodWithCart = (id: string | string[]) => this.cartCheckoutApi.setShippingMethodWithCart(id);
 
     async setCurrencyForOrder(currencyCode: string): Promise<Order> {
         return this.cartCheckoutApi.setCurrencyForOrder(currencyCode);

@@ -1,0 +1,39 @@
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts (49 tests | 1 failed | 44 skipped) 18285ms
+         × receives a source purchase batch, unpacks for the target checkout and sells only the source lot 523ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts > platform governance real database and API boundaries > catalog continuous sync > physical source and grouped delivery > receives a source purchase batch, unpacks for the target checkout and sells only the source lot
+AssertionError: expected OrderStateTransitionError{ …(6) } to be null
+
+- Expected:
+null
+
++ Received:
+OrderStateTransitionError {
+  "__typename": "OrderStateTransitionError",
+  "errorCode": "ORDER_STATE_TRANSITION_ERROR",
+  "fromState": "AddingItems",
+  "message": "ORDER_STATE_TRANSITION_ERROR",
+  "toState": "ArrangingPayment",
+  "transitionError": "message.commerce-physical-order-requires-complete-address",
+}
+
+ ❯ packages/store-management-plugin/e2e/catalog-sync-physical-acceptance.ts:523:67
+    521|                 expect('errorCode' in selected).toBe(false);
+    522|                 const arranged = await orders.transitionToState(f.b, o…
+    523|                 expect('errorCode' in arranged ? arranged : null).toBe…
+       |                                                                   ^
+    524|                 if ('errorCode' in arranged) throw new Error('Source p…
+    525|                 await f.connection.withTransaction(f.b, tx =>
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed | 44 skipped (49)
+   Start at  00:37:22
+   Duration  27.49s (transform 3.88s, setup 0ms, import 9.07s, tests 18.29s, environment 0ms)

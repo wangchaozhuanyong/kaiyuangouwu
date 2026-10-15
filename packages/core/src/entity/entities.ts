@@ -1,4 +1,9 @@
 import { CatalogResourceOwnership } from './catalog-governance/catalog-resource-ownership.entity';
+import {
+    CatalogSupplySnapshot,
+    CatalogSyncBinding,
+    CatalogSyncRule,
+} from './catalog-governance/catalog-sync.entity';
 import { ProductSalesAuthorization } from './catalog-governance/product-sales-authorization.entity';
 /* eslint-disable import/order -- Prettier organizes hyphenated entity paths before parent paths. */
 import { Address } from './address/address.entity';
@@ -84,6 +89,9 @@ import { Zone } from './zone/zone.entity';
  * A map of all the core database entities.
  */
 export const coreEntitiesMap = {
+    CatalogSyncRule,
+    CatalogSyncBinding,
+    CatalogSupplySnapshot,
     StorePaymentMethodState,
     CatalogResourceOwnership,
     ProductSalesAuthorization,

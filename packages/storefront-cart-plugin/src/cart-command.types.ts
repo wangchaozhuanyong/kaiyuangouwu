@@ -16,6 +16,7 @@ export interface CartCommandInput {
     prepareShipping?: {
         shippingAddress: CreateAddressInput;
         selectedShippingMethodId?: ID | null;
+        selectedShippingMethodIds?: ID[] | null;
         preferredShippingCode?: string | null;
         defaultShippingCode?: string | null;
     };

@@ -17,6 +17,7 @@ import {
     CurrencyCode,
     Customer,
     CustomerService,
+    DefaultSchedulerPlugin,
     dummyPaymentHandler,
     EventBus,
     FacetService,
@@ -62,6 +63,7 @@ import { ClientRequest, request as httpRequest } from 'node:http';
 import { createConnection as connectTcp } from 'node:net';
 import { join } from 'node:path';
 import { Duplex } from 'node:stream';
+import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -76,6 +78,7 @@ import { AutoCardConfig } from '../../commerce-fulfillment-plugin/src/entities/a
 import { AutoCardDelivery } from '../../commerce-fulfillment-plugin/src/entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from '../../commerce-fulfillment-plugin/src/entities/auto-card-pool-item.entity';
 import { StoreCatalogStatusService } from '../../commerce-fulfillment-plugin/src/store-catalog-status.service';
+import { AddCatalogContinuousSync1792022400000 } from '../../dev-server/migrations/1792022400000-add-catalog-continuous-sync';
 import { createCiGovernanceDatabase } from '../../dev-server/scripts/platform-governance-ci-fixture.mjs';
 import { collectPlatformPaymentDataPlan } from '../../dev-server/scripts/platform-payment-data-plan.mjs';
 import {
@@ -94,15 +97,28 @@ import { DataSubjectRequest } from '../src/entities/data-subject-request.entity'
 import { GovernanceAuditEntry } from '../src/entities/governance-audit-entry.entity';
 import { StoreProfile } from '../src/entities/store-profile.entity';
 import { StorefrontDataChangedEvent } from '../src/realtime/storefront-data-changed.event';
+import { StoreDefaultCurrencyPriceSelectionStrategy } from '../src/store-currency-price-selection-strategy';
 import { StoreManagementPlugin } from '../src/store-management.plugin';
 
 import { registerCardConcurrencyAcceptance } from './card-concurrency-acceptance';
+import { registerCatalogSyncAcceptance } from './catalog-sync-acceptance';
 import { registerPaymentCustomerAcceptance } from './payment-customer-acceptance';
 const artifactsDirectory = join(__dirname, '../../../artifacts/platform-governance');
 const serverConfig = mergeConfig(testConfig, {
-    apiOptions: { port: 3477 },
+    apiOptions: { port: Number(process.env.CATALOG_SYNC_TEST_PORT ?? 3477) },
     entityOptions: { entityIdStrategy: new AutoIncrementIdStrategy() },
     authOptions: { requireVerification: false },
+    catalogOptions: {
+        productVariantPriceSelectionStrategy: new StoreDefaultCurrencyPriceSelectionStrategy(),
+    },
+    customFields: {
+        Channel: [
+            { name: 'cnyToMyrRate', type: 'float', nullable: true },
+            { name: 'currencyRateMode', type: 'string', defaultValue: 'MANUAL' },
+            { name: 'currencyRateMarkupBps', type: 'int', defaultValue: 0 },
+            { name: 'currencyRoundingMode', type: 'string', defaultValue: 'CENT' },
+        ],
+    },
     paymentOptions: { paymentMethodHandlers: [dummyPaymentHandler] },
     plugins: [
         OperationsDashboardPlugin,
@@ -141,12 +157,25 @@ let categoryId: string;
 describe('platform governance real database and API boundaries', () => {
     beforeAll(async () => {
         await mkdir(artifactsDirectory, { recursive: true });
+        if (process.env.CATALOG_SYNC_CLOSEOUT === '1') {
+            const privateFiles = join(
+                artifactsDirectory,
+                `catalog-files-${process.env.CATALOG_SYNC_TEST_PORT ?? '3477'}`,
+            );
+            await mkdir(privateFiles, { recursive: true });
+            process.env.DIGITAL_DELIVERY_ROOT = privateFiles;
+            process.env.DIGITAL_DELIVERY_SIGNING_SECRET = randomUUID() + randomUUID();
+            serverConfig.plugins.push(DefaultSchedulerPlugin.init());
+            serverConfig.schedulerOptions = { ...serverConfig.schedulerOptions, runTasksInWorkerOnly: false };
+        }
         if (process.env.PLATFORM_GOVERNANCE_MYSQL === '1') {
             mysqlLab = await createLab({ subnet: 'synthetic-auto' });
             const caseFile = await createCase(mysqlLab);
+            process.env.CATALOG_SYNC_CRASH_CASE = caseFile;
             const opened = await connectCase(caseFile);
             const descriptor = await verifyLab(mysqlLab);
             const database = `service_${descriptor.runId}`;
+            process.env.CATALOG_SYNC_CRASH_DATABASE = database;
             await opened.connection.query(`CREATE DATABASE \`${database}\``);
             await opened.connection.end();
             const stream = () => {
@@ -206,6 +235,56 @@ describe('platform governance real database and API boundaries', () => {
                 'sqljs',
                 new SqljsInitializer(join(artifactsDirectory, `sqljs-${randomUUID()}/`)),
             );
+        }
+        if (serverConfig.dbConnectionOptions.type === 'mysql') {
+            // Rehearse the actual additive migration in this owned empty database before ORM startup.
+            const migrationDatabase = await new DataSource({
+                ...serverConfig.dbConnectionOptions,
+                entities: [],
+                migrations: [],
+                synchronize: false,
+            }).initialize();
+            try {
+                const runner = migrationDatabase.createQueryRunner();
+                const migration = new AddCatalogContinuousSync1792022400000();
+                await migration.up(runner);
+                await migration.up(runner);
+                const tables = ['catalog_sync_rule', 'catalog_sync_binding', 'catalog_supply_snapshot'];
+                for (const name of tables) expect(await runner.hasTable(name)).toBe(true);
+                const rules = await runner.getTable('catalog_sync_rule');
+                expect(rules?.findColumnByName('runGeneration')).toBeDefined();
+                await runner.startTransaction();
+                try {
+                    await runner.query(
+                        'INSERT INTO catalog_sync_rule (sourceChannelId, sourceCollectionId, targetChannelId, actorUserId) VALUES (1, 2, 3, 4)',
+                    );
+                    const [createdRule] = await runner.query(
+                        'SELECT enabled, state, runGeneration FROM catalog_sync_rule',
+                    );
+                    expect(Number(createdRule.enabled)).toBe(0);
+                    expect(createdRule.state).toBe('DISABLED');
+                    expect(Number(createdRule.runGeneration)).toBe(0);
+                } finally {
+                    await runner.rollbackTransaction();
+                }
+                await writeFile(
+                    join(artifactsDirectory, 'catalog-sync-migration-mysql.json'),
+                    JSON.stringify(
+                        {
+                            environment: 'mysql',
+                            synthetic: true,
+                            tables,
+                            defaultEnabled: false,
+                            repeatedUpPreservedTables: true,
+                            productionReady: false,
+                        },
+                        null,
+                        2,
+                    ),
+                );
+            } finally {
+                await migrationDatabase.destroy();
+            }
         }
         await server.init({
             initialData: { ...initialData, collections: [], paymentMethods: [] },
@@ -2040,4 +2119,5 @@ describe('platform governance real database and API boundaries', () => {
         await expect(client.query(query)).rejects.toThrow();
     });
     registerCardConcurrencyAcceptance(() => ({ server, connection, platform, a, b, variantIds }));
+    registerCatalogSyncAcceptance(() => ({ server, connection, platform, a, b }));
 });

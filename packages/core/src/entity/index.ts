@@ -73,4 +73,5 @@ export * from './zone/zone.entity';
 export * from './customer-store-entry/customer-store-entry.entity';
 
 export * from './catalog-governance/catalog-resource-ownership.entity';
+export * from './catalog-governance/catalog-sync.entity';
 export * from './catalog-governance/product-sales-authorization.entity';

@@ -1,0 +1,177 @@
+$ cross-env PACKAGE=cli vitest --config ../../e2e-common/vitest.config.mts --run --pool=forks
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/cli
+
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+(node:33700) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 unhandledRejection listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+[?25l│
+(node:33700) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 uncaughtExceptionMonitor listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:33700) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 SIGINT listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:33700) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 SIGTERM listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(node:33700) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 exit listeners added to [process]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Running migrations...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Running migrations...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Running migrations...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Running migrations...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Reverting last migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Reverting last migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Running migrations...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Running migrations...
+[?25l│
+[?25l│
+[?25l│
+[999D[J◒  Analyzing project[999D[J◒  Analyzing project[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+│
+●  Generating migration...
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+[?25l│
+[999D[J◒  Analyzing project[999D[J◇  Project analyzed
+[?25h│
+●  Using VendureConfig from src/vendure-config.ts
+
+ Test Files  4 passed (4)
+      Tests  46 passed (46)
+   Start at  02:57:15
+   Duration  41.16s (transform 196ms, setup 0ms, import 1.28s, tests 39.60s, environment 0ms)

@@ -1,6 +1,5 @@
 import { AlertCircle, ArrowLeft, CheckCircle2, Save } from 'lucide-react';
 import { AdminButton } from '../../components/AdminControls';
-import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { SeoEditorLink } from '../Storefront/SeoEditorLink';
 import { ProductAssetPickerModal } from './ProductAssetPickerModal';
@@ -8,14 +7,12 @@ import { ProductEditorProvider } from './ProductEditorContext';
 import { ProductEditorTitle } from './ProductEditorTitle';
 import { ProductEditorWorkspace } from './ProductEditorWorkspace';
 import { useProductEditorForm } from './useProductEditorForm';
+import { useProductMaintenanceScope } from './useProductMaintenanceScope';
 
 export function ProductEditor() {
     const editor = useProductEditorForm();
-    const { canUseCapability } = useAdminCapabilities();
-    const canWriteProduct = canUseCapability(
-        editor.isCreateMode ? '/catalog/products/new' : '/catalog/products',
-        'write',
-    );
+    const { offerRequired, managedOffer, managedBy, sourceReadOnly, canWriteProduct } =
+        useProductMaintenanceScope(editor);
     const {
         isCreateMode,
         leaveToProductList,
@@ -208,7 +205,25 @@ export function ProductEditor() {
                                 当前商品仅可查看，不能修改或保存。
                             </p>
                         )}
-                        <ProductEditorWorkspace />
+                        {managedBy && (
+                            <p role="status">
+                                由 {managedBy} 统一管理商品、售价、库存和交付；请在来源店铺维护。
+                            </p>
+                        )}
+                        {offerRequired && managedOffer.loading && !managedOffer.data && (
+                            <p role="status">正在核对商品维护范围…</p>
+                        )}
+                        {offerRequired && managedOffer.error && (
+                            <p role="alert">
+                                维护范围核对失败，暂不能编辑。
+                                <AdminButton onClick={() => void managedOffer.refetch()}>
+                                    重新核对
+                                </AdminButton>
+                            </p>
+                        )}
+                        <fieldset disabled={sourceReadOnly} className="contents">
+                            <ProductEditorWorkspace />
+                        </fieldset>
                     </div>
                 </div>
 

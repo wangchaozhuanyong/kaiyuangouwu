@@ -1,0 +1,20 @@
+{
+  "headRevision": "fe751d36b8f1f069e9e782f79368ab36800a2c0e",
+  "runId": 38790333244,
+  "jobId": 116616524225,
+  "conclusion": "success",
+  "url": "https://github.com/wangchaozhuanyong/kaiyuangouwu/actions/runs/38790333244/job/116616524225",
+  "nativeE2E": "all selected packages completed successfully",
+  "platform": {
+    "files": 2,
+    "passed": 46,
+    "skipped": 5,
+    "total": 51
+  },
+  "cart": {
+    "files": 1,
+    "passed": 12
+  },
+  "pluginLogTruncated": true,
+  "note": "Counts transcribed from completed Code Review provider log; omitted native package totals are not inferred."
+}

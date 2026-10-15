@@ -1,0 +1,7 @@
+{
+  "environment": "mysql",
+  "synthetic": true,
+  "eventMs": 2233.5989999999947,
+  "reconciliationAfterEnqueueMs": 1494.9463329999999,
+  "scheduledIntervalSeconds": 300
+}

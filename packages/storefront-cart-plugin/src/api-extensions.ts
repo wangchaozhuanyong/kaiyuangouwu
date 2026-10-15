@@ -143,11 +143,13 @@ export const shopApiExtensions = gql`
         currencyCode: CurrencyCode
         shippingAddress: CreateAddressInput
         shippingMethodId: ID
+        shippingMethodIds: [ID!]
         customer: CreateCustomerInput
     }
     input StorefrontCartShippingPreparationInput {
         shippingAddress: CreateAddressInput!
         selectedShippingMethodId: ID
+        selectedShippingMethodIds: [ID!]
         preferredShippingCode: String
         defaultShippingCode: String
     }
@@ -179,6 +181,7 @@ export const shopApiExtensions = gql`
         session: StorefrontCheckoutSession
         shippingMethods: [ShippingMethodQuote!]
         selectedShippingMethodId: ID
+        selectedShippingMethodIds: [ID!]
     }
 
     extend type Query {

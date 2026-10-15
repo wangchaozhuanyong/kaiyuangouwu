@@ -1,0 +1,28 @@
+{
+  "synthetic": true,
+  "baseRevision": "3dfcf5ef84c2cb24113c105d36e56c77b5867f72",
+  "admin": {
+    "documentWidth": 375,
+    "height": 844,
+    "width": 390
+  },
+  "checkoutEn": {
+    "checkedDeliveryOptions": 2,
+    "documentWidth": 390,
+    "height": 844,
+    "width": 390
+  },
+  "checkoutZh": {
+    "documentWidth": 390,
+    "height": 844,
+    "width": 390
+  },
+  "cases": [
+    "save disabled rule",
+    "preview 102 products and 2 categories",
+    "enable shows queued only",
+    "two independently checked source groups",
+    "zh changed first shipping group, second retained; shipping 7 total 113"
+  ],
+  "productionWrites": false
+}

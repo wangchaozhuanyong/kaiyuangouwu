@@ -36,11 +36,13 @@ export interface CartCommandResult {
     session: StorefrontCheckoutSession | null;
     shippingMethods: ShippingMethodQuote[] | null;
     selectedShippingMethodId: ID | null;
+    selectedShippingMethodIds?: ID[] | null;
 }
 
 interface ShippingPreparationOutcome {
     shippingMethods: ShippingMethodQuote[];
     selectedShippingMethodId: ID | null;
+    selectedShippingMethodIds?: ID[] | null;
 }
 export type CartCommandHandler = (
     ctx: RequestContext,
@@ -319,6 +321,8 @@ export class CartCommandService {
         if (value.currencyCode) return this.orders.updateOrderCurrency(ctx, order.id, value.currencyCode);
         if (value.shippingAddress)
             return this.orders.setShippingAddress(ctx, order.id, value.shippingAddress);
+        if (value.shippingMethodIds?.length)
+            return this.orders.setShippingMethod(ctx, order.id, value.shippingMethodIds);
         if (value.shippingMethodId)
             return this.orders.setShippingMethod(ctx, order.id, [value.shippingMethodId]);
         if (value.customer) {
@@ -347,10 +351,31 @@ export class CartCommandService {
         }
         const methods = await this.orders.getEligibleShippingMethods(ctx, order.id);
         if (!methods.length) return { shippingMethods: [], selectedShippingMethodId: null };
-        const selected = selectShippingMethod(methods, input);
-        const shippingResult = await this.orders.setShippingMethod(ctx, order.id, [selected.id]);
+        const groups = new Map<string, ShippingMethodQuote[]>();
+        for (const method of methods) {
+            const key = String(method.metadata?.shippingGroupId ?? 'default');
+            groups.set(key, [...(groups.get(key) ?? []), method]);
+        }
+        const selected = [...groups.values()].map(group =>
+            selectShippingMethod(group, {
+                ...input,
+                selectedShippingMethodId:
+                    input.selectedShippingMethodIds?.find(id =>
+                        group.some(m => String(m.id) === String(id)),
+                    ) ?? input.selectedShippingMethodId,
+            }),
+        );
+        const shippingResult = await this.orders.setShippingMethod(
+            ctx,
+            order.id,
+            selected.map(m => m.id),
+        );
         if (isGraphQlErrorResult(shippingResult)) return shippingResult;
-        return { shippingMethods: methods, selectedShippingMethodId: selected.id };
+        return {
+            shippingMethods: methods,
+            selectedShippingMethodId: selected[0].id,
+            ...(selected.length > 1 ? { selectedShippingMethodIds: selected.map(m => m.id) } : {}),
+        };
     }
 
     private async shippingPreparationSnapshot(
@@ -359,9 +384,14 @@ export class CartCommandService {
     ): Promise<ShippingPreparationOutcome | undefined> {
         if (!cart.checkoutOrder) return undefined;
         const shippingMethods = await this.orders.getEligibleShippingMethods(ctx, cart.checkoutOrder.id);
-        const appliedId = cart.checkoutOrder.shippingLines?.[0]?.shippingMethodId;
+        const appliedIds =
+            cart.checkoutOrder.shippingLines?.flatMap(line =>
+                line.shippingMethodId == null ? [] : [line.shippingMethodId],
+            ) ?? [];
+        const appliedId = appliedIds[0];
         return {
             shippingMethods,
+            ...(appliedIds.length > 1 ? { selectedShippingMethodIds: appliedIds } : {}),
             selectedShippingMethodId:
                 shippingMethods.find(method => String(method.id) === String(appliedId))?.id ?? null,
         };
@@ -391,6 +421,9 @@ export class CartCommandService {
             session: await this.carts.checkoutContext(ctx, cart),
             shippingMethods: shippingPreparation?.shippingMethods ?? null,
             selectedShippingMethodId: shippingPreparation?.selectedShippingMethodId ?? null,
+            ...(shippingPreparation?.selectedShippingMethodIds
+                ? { selectedShippingMethodIds: shippingPreparation.selectedShippingMethodIds }
+                : {}),
         };
     }
 }
@@ -400,6 +433,7 @@ interface OrderChange {
     currencyCode?: CurrencyCode;
     shippingAddress?: CreateAddressInput;
     shippingMethodId?: ID;
+    shippingMethodIds?: ID[];
     customer?: CreateCustomerInput;
 }
 function contextForCartOrder(ctx: RequestContext, cart: StorefrontCart): RequestContext {

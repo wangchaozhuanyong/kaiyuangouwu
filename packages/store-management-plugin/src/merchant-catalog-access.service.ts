@@ -3,6 +3,7 @@ import { DEFAULT_CHANNEL_CODE } from '@vendure/common/lib/shared-constants';
 import { ID, Type } from '@vendure/common/lib/shared-types';
 import {
     Asset,
+    CatalogSyncBinding,
     Channel,
     ChannelAware,
     ChannelService,
@@ -329,6 +330,10 @@ interface CatalogMutationInput {
     paymentId?: ID;
     refundId?: ID;
     productId?: ID;
+    productVariantId?: ID;
+    variantId?: ID;
+    unitVariantId?: ID;
+    packageVariantId?: ID;
     productOptionGroupId?: ID;
     stockLevels?: Array<{ stockLocationId: ID }> | null;
     transferToLocationId?: ID;
@@ -426,6 +431,65 @@ export class MerchantCatalogAccessService {
         }
 
         if (parentType === 'Mutation') {
+            if (
+                ['updateShippingMethod', 'deleteShippingMethod', 'deleteShippingMethods'].includes(fieldName)
+            ) {
+                const ids = this.directIds(args).concat(
+                    this.getInputs(args).flatMap(input => (input.id == null ? [] : [input.id])),
+                );
+                if (
+                    ids.length &&
+                    (await this.connection
+                        .getRepository(ctx, CatalogSyncBinding)
+                        .exists({ where: { kind: 'SHIPPING', targetId: In(ids) } }))
+                )
+                    throw new UserInputError('此配送方式由来源店铺管理，请在平台调整同步关系');
+            }
+            if (
+                ctx.channel.code !== DEFAULT_CHANNEL_CODE &&
+                [
+                    'updateDigitalVariant',
+                    'updatePhysicalVariant',
+                    'updateAutoCardConfig',
+                    'importAutoCardPoolItems',
+                    'saveCatalogInventoryLot',
+                    'adjustCatalogLegacyInventory',
+                    'transferCatalogInventoryLot',
+                    'updateProductPackaging',
+                    'migrateDigitalInventory',
+                ].includes(fieldName)
+            ) {
+                const fulfillmentInputs = this.getInputs(args);
+                const variantIds = fulfillmentInputs.flatMap(input =>
+                    [
+                        input.productVariantId,
+                        input.variantId,
+                        input.unitVariantId,
+                        input.packageVariantId,
+                    ].filter((id): id is ID => id != null),
+                );
+                const variants = variantIds.length
+                    ? await this.connection
+                          .getRepository(ctx, ProductVariant)
+                          .find({ where: { id: In(variantIds) } })
+                    : [];
+                const productIds = [
+                    ...fulfillmentInputs.flatMap(input => (input.productId == null ? [] : [input.productId])),
+                    ...variants.map(variant => variant.productId),
+                ];
+                if (
+                    productIds.length &&
+                    (await this.connection.getRepository(ctx, CatalogSyncBinding).exists({
+                        where: {
+                            kind: 'PRODUCT',
+                            targetId: In(productIds),
+                            targetChannelId: ctx.channelId,
+                            state: In(['ACTIVE', 'PENDING', 'ERROR']),
+                        },
+                    }))
+                )
+                    throw new UserInputError('此商品由来源店铺统一管理，不能修改本店库存或交付配置');
+            }
             await this.assertCouponManagementEntry(ctx, fieldName, args);
             if (crossStoreAssignmentMutations.has(fieldName)) {
                 throw new UserInputError('跨店销售授权请使用平台商品分配中心，私有经营配置不能直接共享');

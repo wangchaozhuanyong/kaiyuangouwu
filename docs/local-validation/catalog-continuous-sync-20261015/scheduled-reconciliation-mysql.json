@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "manualEnqueue": false,
+  "scheduleMinutes": 5,
+  "observedMilliseconds": 128185,
+  "scheduledAt": "2026-10-15T16:50:00.171Z",
+  "correctedTargetPrice": 1020
+}

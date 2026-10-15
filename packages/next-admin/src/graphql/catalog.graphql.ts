@@ -26,8 +26,8 @@ export const GET_PRODUCTS = gql`
                     id
                     name
                     sku
-                    price
-                    currencyCode
+                    price: catalogOperatingPrice
+                    currencyCode: catalogOperatingCurrency
                     stockLevel
                     stockOnHand
                     stockAllocated
@@ -116,8 +116,8 @@ export const GET_PRODUCT_DETAIL = gql`
                 enabled
                 name
                 sku
-                price
-                currencyCode
+                price: catalogOperatingPrice
+                currencyCode: catalogOperatingCurrency
                 stockOnHand
                 stockAllocated
                 stockLevel

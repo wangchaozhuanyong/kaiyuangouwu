@@ -85,6 +85,10 @@ async function renderPage(
         data: {
             afterSalesRequests: { items: [record], totalItems: 1 },
             stockLocations: { items: [{ id: 'warehouse-1', name: 'Fixture warehouse' }] },
+            afterSalesReturnLocations: record.items.map(item => ({
+                orderLineId: item.orderLineId,
+                locations: [{ id: 'warehouse-1', name: 'Fixture warehouse' }],
+            })),
             physicalReturnReceipts: receipts,
         },
         loading: false,

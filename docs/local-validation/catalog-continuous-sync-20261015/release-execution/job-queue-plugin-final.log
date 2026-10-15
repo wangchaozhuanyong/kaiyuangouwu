@@ -1,0 +1,28 @@
+$ node e2e/check-connection.js || cross-env PACKAGE=job-queue-plugin vitest --config ../../e2e-common/vitest.config.mts --run
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/job-queue-plugin
+
+warn 10/16/26, 2:58 AM - [Vendure Server] No scheduler strategy is configured! Scheduled tasks will not be executed.
+warn 10/16/26, 2:58 AM - [Vendure Server] Please use the `DefaultSchedulerPlugin` (or alternative) to enable scheduled tasks.
+
+warn 10/16/26, 2:58 AM - [Vendure Server] No scheduler strategy is configured! Scheduled tasks will not be executed.
+warn 10/16/26, 2:58 AM - [Vendure Server] Please use the `DefaultSchedulerPlugin` (or alternative) to enable scheduled tasks.
+warn 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Job 7 [list-flaky] failed (attempt 1 of 2)
+warn 10/16/26, 2:58 AM - [Vendure Server] No scheduler strategy is configured! Scheduled tasks will not be executed.
+warn 10/16/26, 2:58 AM - [Vendure Server] Please use the `DefaultSchedulerPlugin` (or alternative) to enable scheduled tasks.
+info 10/16/26, 2:58 AM - [Populate] Populated initial data
+
+info 10/16/26, 2:58 AM - [Populate] Created 1 Collections
+info 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Closing worker(s)
+info 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Worker(s) closed
+info 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Queue closed
+warn 10/16/26, 2:58 AM - [Vendure Server] No scheduler strategy is configured! Scheduled tasks will not be executed.
+warn 10/16/26, 2:58 AM - [Vendure Server] Please use the `DefaultSchedulerPlugin` (or alternative) to enable scheduled tasks.
+info 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Closing worker(s)
+info 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Worker(s) closed
+info 10/16/26, 2:58 AM - [BullMQJobQueuePlugin] Queue closed
+
+ Test Files  3 passed (3)
+      Tests  16 passed (16)
+   Start at  02:58:08
+   Duration  23.97s (transform 123ms, setup 0ms, import 1.73s, tests 22.01s, environment 0ms)

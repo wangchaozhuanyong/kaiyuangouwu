@@ -124,7 +124,7 @@ export interface ProductDetailRecord {
         enabled: boolean;
         name: string;
         sku: string;
-        price: number;
+        price: number | null;
         stockOnHand: number;
         stockAllocated: number;
         trackInventory: string;

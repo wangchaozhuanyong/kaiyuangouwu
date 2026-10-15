@@ -1,0 +1,8 @@
+{
+  "synthetic": true,
+  "scope": "isolated fault-injection process holding a native-format rule lease",
+  "signal": "SIGKILL",
+  "leaseMilliseconds": 60000,
+  "nativeWorkerRecovered": true,
+  "firstPagePriceRecovered": true
+}

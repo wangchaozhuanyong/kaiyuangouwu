@@ -32,6 +32,7 @@ import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { CatalogGovernanceAccessStrategy } from './catalog-governance-access.strategy';
 import { CatalogGovernanceService } from './catalog-governance.service';
 import { CatalogOwnershipSubscriber } from './catalog-ownership.subscriber';
+import { CatalogSyncSourceService } from './catalog-sync-source.service';
 import {
     managePlatformCatalogPermission,
     managePlatformTeamPermission,
@@ -332,6 +333,7 @@ import {
         StorefrontPublicPageController,
     ],
     providers: [
+        CatalogSyncSourceService,
         CatalogOwnershipSubscriber,
         CatalogGovernanceService,
         AdministratorAccessService,
@@ -429,6 +431,7 @@ import {
         },
     ],
     exports: [
+        CatalogSyncSourceService,
         AdminCapabilitiesService,
         StorefrontClientPluginAccessService,
         StorefrontActivationService,

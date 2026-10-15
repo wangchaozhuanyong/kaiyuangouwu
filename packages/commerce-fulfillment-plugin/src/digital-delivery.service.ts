@@ -1,11 +1,14 @@
 import { Injectable, Optional } from '@nestjs/common';
 import {
     assertOrderSalesChannel,
+    CatalogSupplySnapshot,
     Order,
     OrderLine,
+    ProductVariant,
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 import { In } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
@@ -47,6 +50,7 @@ export class DigitalDeliveryService {
         @Optional() private readonly digitalProducts?: DigitalProductService,
         @Optional() private readonly files?: DigitalFileService,
         @Optional() private readonly cipher?: AutoCardCipherService,
+        @Optional() private readonly sources?: CatalogSyncSourceService,
     ) {}
 
     /** Same filesystem/path checks as downloads, once per unique source, without signing links. */
@@ -55,10 +59,49 @@ export class DigitalDeliveryService {
     ): Promise<ProcessingFileCandidate[]> {
         if (!this.tokens.configured) return [];
         const byChannel = new Map<string, ProcessingFileCandidate[]>();
+        const versions = candidates.flatMap(candidate =>
+            candidate.fileVersionId ? [candidate.fileVersionId] : [],
+        );
+        const sourceRows =
+            this.sources && versions.length
+                ? await this.connection.rawConnection
+                      .getRepository(CatalogSupplySnapshot)
+                      .createQueryBuilder('snapshot')
+                      .innerJoin(
+                          DigitalOrderReservation,
+                          'reservation',
+                          'reservation.orderLineId = snapshot.orderLineId AND reservation.channelId = snapshot.channelId',
+                      )
+                      .innerJoin(ProductVariant, 'variant', 'variant.id = snapshot.productVariantId')
+                      .select('snapshot.channelId', 'channelId')
+                      .addSelect('snapshot.sourceChannelId', 'sourceChannelId')
+                      .addSelect('reservation.fileVersionId', 'fileVersionId')
+                      .addSelect('variant.sku', 'sku')
+                      .distinct(true)
+                      .where('snapshot.channelId IN (:...channels)', {
+                          channels: [...new Set(candidates.map(c => c.channelId))],
+                      })
+                      .andWhere('reservation.fileVersionId IN (:...versions)', { versions })
+                      .getRawMany<{
+                          channelId: string;
+                          sourceChannelId: string;
+                          fileVersionId: string;
+                          sku: string;
+                      }>()
+                : [];
+        const sources = new Map(
+            sourceRows.map(row => [
+                `${row.channelId}:${row.fileVersionId}:${row.sku}`,
+                String(row.sourceChannelId),
+            ]),
+        );
         for (const candidate of candidates) {
-            const rows = byChannel.get(String(candidate.channelId)) ?? [];
+            const sourceId =
+                sources.get(`${candidate.channelId}:${candidate.fileVersionId}:${candidate.sku}`) ??
+                String(candidate.channelId);
+            const rows = byChannel.get(sourceId) ?? [];
             rows.push(candidate);
-            byChannel.set(String(candidate.channelId), rows);
+            byChannel.set(sourceId, rows);
         }
         const ready: ProcessingFileCandidate[] = [];
         await Promise.all(
@@ -119,10 +162,22 @@ export class DigitalDeliveryService {
               })
             : [];
         const byLine = new Map(reservations.map(item => [String(item.orderLineId), item]));
-        const resources = await this.files?.resources(
-            ctx.channelId,
-            reservations.flatMap(item => (item.fileVersionId ? [item.fileVersionId] : [])),
-        );
+        const sourceChannels =
+            (await this.sources?.historicalChannelsForLines(
+                ctx.channelId,
+                lines.map(line => line.id),
+            )) ?? new Map<string, string | number>();
+        const groups = new Map<string, Array<string | number>>();
+        for (const item of reservations)
+            if (item.fileVersionId) {
+                const source = String(sourceChannels.get(String(item.orderLineId)) ?? ctx.channelId);
+                groups.set(source, [...(groups.get(source) ?? []), item.fileVersionId]);
+            }
+        const resources = new Set<string>();
+        for (const [source, ids] of groups) {
+            const files = await this.files?.resources(source, ids);
+            for (const id of files?.keys() ?? []) resources.add(`${source}:${id}`);
+        }
         const skuResources = new Map<string, boolean>();
         for (const order of orders) {
             result.set(
@@ -137,16 +192,17 @@ export class DigitalDeliveryService {
                         return { ...base, status: 'PAYMENT_REQUIRED' as const };
                     if (!this.tokens.configured) return { ...base, status: 'NOT_CONFIGURED' as const };
                     const reservation = byLine.get(String(line.id));
+                    const sourceId = String(sourceChannels.get(String(line.id)) ?? ctx.channelId);
                     let ready: boolean;
                     if (reservation?.fileVersionId)
-                        ready = resources?.has(String(reservation.fileVersionId)) ?? false;
+                        ready = resources.has(`${sourceId}:${reservation.fileVersionId}`);
                     else {
-                        if (!skuResources.has(base.sku))
+                        if (!skuResources.has(`${sourceId}:${base.sku}`))
                             skuResources.set(
-                                base.sku,
-                                Boolean(this.tokens.resourceForSku(String(ctx.channelId), base.sku)),
+                                `${sourceId}:${base.sku}`,
+                                Boolean(this.tokens.resourceForSku(sourceId, base.sku)),
                             );
-                        ready = skuResources.get(base.sku) ?? false;
+                        ready = skuResources.get(`${sourceId}:${base.sku}`) ?? false;
                     }
                     return { ...base, status: ready ? ('READY' as const) : ('FILE_MISSING' as const) };
                 }),
@@ -225,9 +281,11 @@ export class DigitalDeliveryService {
                   .findOne({ where: { orderLineId: line.id, channelId: payload.channelId } })
             : null;
         if (payload.fileVersionId && String(reservation?.fileVersionId) !== payload.fileVersionId) return;
+        const sourceChannelId =
+            (await this.sources?.historicalChannelId(payload.channelId, line.id)) ?? payload.channelId;
         const resource = payload.fileVersionId
-            ? await this.files?.resource(payload.channelId, payload.fileVersionId)
-            : this.tokens.resourceForSku(payload.channelId, payload.sku);
+            ? await this.files?.resource(sourceChannelId, payload.fileVersionId)
+            : this.tokens.resourceForSku(String(sourceChannelId), payload.sku);
         return resource ? { resource, payload } : undefined;
     }
 
@@ -250,9 +308,11 @@ export class DigitalDeliveryService {
         }
         const channelId = String(ctx.channelId);
         const reservation = await this.digitalProducts?.reservation(ctx, line.id);
+        const sourceChannelId =
+            (await this.sources?.historicalChannelId(ctx.channelId, line.id)) ?? channelId;
         const resource = reservation?.fileVersionId
-            ? await this.files?.resource(channelId, reservation.fileVersionId)
-            : this.tokens.resourceForSku(channelId, line.productVariant.sku);
+            ? await this.files?.resource(sourceChannelId, reservation.fileVersionId)
+            : this.tokens.resourceForSku(String(sourceChannelId), line.productVariant.sku);
         if (!resource) {
             return { ...base, status: 'FILE_MISSING' };
         }

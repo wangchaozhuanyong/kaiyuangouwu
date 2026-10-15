@@ -150,23 +150,23 @@ describe('physicalSubtotalShippingCalculator', () => {
         },
     );
 
-    it('does not bypass the order exchange requirements when the request uses the source currency', () => {
-        expect(() =>
+    it('does not bypass the order exchange requirements when the request uses the source currency', async () => {
+        await expect(
             physicalSubtotalShippingCalculator.calculate(
                 ctx,
                 { ...order, currencyCode: 'MYR' },
                 calculatorArgs,
                 {} as any,
             ),
-        ).toThrow('运费币种汇率配置无效');
-        expect(() =>
+        ).rejects.toThrow('运费币种汇率配置无效');
+        await expect(
             physicalSubtotalShippingCalculator.calculate(
                 ctx,
                 { ...order, currencyCode: 'USD' },
                 calculatorArgs,
                 {} as any,
             ),
-        ).toThrow('运费币种汇率配置无效');
+        ).rejects.toThrow('运费币种汇率配置无效');
     });
 
     it('uses saved source currency even after default currency changes', async () => {
@@ -193,15 +193,15 @@ describe('physicalSubtotalShippingCalculator', () => {
         expect(quote).toMatchObject({ price: 720, metadata: { freeShippingThreshold: 6000 } });
     });
 
-    it('rejects shipping quotes without a supported exchange path or required rate', () => {
+    it('rejects shipping quotes without a supported exchange path or required rate', async () => {
         const unsupported = { ...ctx, currencyCode: 'USD' };
-        expect(() =>
+        await expect(
             physicalSubtotalShippingCalculator.calculate(unsupported, order, calculatorArgs, unsupported),
-        ).toThrow('运费币种汇率配置无效');
+        ).rejects.toThrow('运费币种汇率配置无效');
         const missingRate = { ...ctx, currencyCode: 'MYR' };
-        expect(() =>
+        await expect(
             physicalSubtotalShippingCalculator.calculate(missingRate, order, calculatorArgs, missingRate),
-        ).toThrow('运费币种汇率配置无效');
+        ).rejects.toThrow('运费币种汇率配置无效');
     });
 
     it('uses discounted tax-inclusive physical subtotal instead of undiscounted or digital totals', async () => {

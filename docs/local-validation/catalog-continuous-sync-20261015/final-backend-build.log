@@ -1,0 +1,2 @@
+COMMAND: ['bun', 'run', '--cwd', 'packages/commerce-fulfillment-plugin', 'build']
+$ tsc --project tsconfig.build.json

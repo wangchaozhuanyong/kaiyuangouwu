@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import {
     isConfirmedControlledTestPayment,
     isControlledTestPaymentMethod,
@@ -27,6 +27,7 @@ import {
     assertOrderSalesChannel,
     effectiveRefundLines,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 import { In, LessThan } from 'typeorm';
 
 import { DigitalProductService } from './digital-product.service';
@@ -44,6 +45,7 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         private readonly stock: StockMovementService,
         private readonly contexts: RequestContextService,
         private readonly packaging: ProductPackagingService,
+        @Optional() private readonly sources?: CatalogSyncSourceService,
     ) {}
 
     onApplicationBootstrap() {
@@ -275,6 +277,7 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
     async reserve(ctx: RequestContext, order: Order, physicalLines: Order['lines']) {
         assertOrderSalesChannel(ctx, order);
         await this.digital.lock(ctx, Order, order.id);
+        await this.sources?.snapshotOrder(ctx, order);
         const old = await this.hold(ctx, order.id);
         if (old && ['PAYING', 'REVIEW'].includes(old.state))
             throw new UserInputError('付款结果尚待核验，暂不能重新结算');
@@ -314,6 +317,7 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                 const rules = await this.packaging.rulesForVariantIds(
                     tx,
                     physical.map(line => line.productVariantId),
+                    order,
                 );
                 await this.packaging.ensureStockLevelPairs(tx, rules);
                 const ids = this.packaging.variantIdsForLock(
@@ -530,6 +534,7 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
         const rules = await this.packaging.rulesForVariantIds(
             ctx,
             physical.map(line => line.productVariantId),
+            order,
         );
         await this.packaging.ensureStockLevelPairs(ctx, rules);
         const ids = this.packaging.variantIdsForLock(

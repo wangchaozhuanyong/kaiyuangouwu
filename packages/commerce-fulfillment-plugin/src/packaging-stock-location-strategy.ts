@@ -4,6 +4,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import {
     AvailableStock,
     idsAreEqual,
+    Injector,
     LocationWithQuantity,
     MultiChannelStockLocationStrategy,
     OrderLine,
@@ -14,6 +15,7 @@ import {
     StockLocation,
     UserInputError,
 } from '@vendure/core';
+import { CatalogSyncSourceService } from '@vendure/store-management-plugin';
 import { In } from 'typeorm';
 
 import { DigitalVariantConfig } from './entities/digital-product.entity';
@@ -27,7 +29,20 @@ import { getOrderLineFulfillmentType } from './fulfillment-classification';
  * The physical stock transfer itself happens only during payment confirmation.
  */
 export class PackagingStockLocationStrategy extends MultiChannelStockLocationStrategy {
+    private sources?: CatalogSyncSourceService;
+    async init(injector: Injector) {
+        await super.init(injector);
+        this.sources = injector.get(CatalogSyncSourceService);
+    }
+    private async supplyLocations(ctx: RequestContext, original: StockLocation[], source: RequestContext) {
+        return String(ctx.channelId) === String(source.channelId)
+            ? original
+            : this.connection
+                  .getRepository(source, StockLocation)
+                  .find({ where: { channels: { id: source.channelId } }, order: { id: 'ASC' } });
+    }
     async supportsStockLocationsForDisplay(ctx: RequestContext, variant: ProductVariant): Promise<boolean> {
+        ctx = (await this.sources?.contextForDisplay(ctx, variant.id)) ?? ctx;
         if (variant.product?.customFields.fulfillmentType === 'physical') return true;
         return this.requestContextCache.load(
             ctx,
@@ -80,6 +95,7 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         variant: ProductVariant,
         operation: 'flow' | 'create' | 'adjust' = 'flow',
     ): Promise<boolean> {
+        ctx = (await this.sources?.context(ctx, variant.id)) ?? ctx;
         const product = await this.connection.getEntityOrThrow(ctx, Product, variant.productId);
         if (product.customFields.fulfillmentType !== 'digital') return true;
         if (operation !== 'flow') return false;
@@ -101,14 +117,16 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
     }
 
     async forSale(ctx: RequestContext, locations: StockLocation[], line: OrderLine, quantity: number) {
-        return (await this.digitalWithoutWarehouse(ctx, line))
+        const source = (await this.sources?.context(ctx, line.productVariantId, line.id, true)) ?? ctx;
+        return (await this.digitalWithoutWarehouse(source, line))
             ? []
-            : super.forSale(ctx, locations, line, quantity);
+            : super.forSale(source, await this.supplyLocations(ctx, locations, source), line, quantity);
     }
     async forRelease(ctx: RequestContext, locations: StockLocation[], line: OrderLine, quantity: number) {
-        return (await this.digitalWithoutWarehouse(ctx, line))
+        const source = (await this.sources?.context(ctx, line.productVariantId, line.id, true)) ?? ctx;
+        return (await this.digitalWithoutWarehouse(source, line))
             ? []
-            : super.forRelease(ctx, locations, line, quantity);
+            : super.forRelease(source, await this.supplyLocations(ctx, locations, source), line, quantity);
     }
     async forCancellation(
         ctx: RequestContext,
@@ -116,7 +134,9 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         line: OrderLine,
         quantity: number,
     ) {
-        if (await this.digitalWithoutWarehouse(ctx, line)) return [];
+        const source = (await this.sources?.context(ctx, line.productVariantId, line.id, true)) ?? ctx;
+        locations = await this.supplyLocations(ctx, locations, source);
+        if (await this.digitalWithoutWarehouse(source, line)) return [];
         if (getOrderLineFulfillmentType(line) === 'physical') {
             const receipt = await this.connection.getRepository(ctx, PhysicalReturnReceipt).findOne({
                 where: {
@@ -133,7 +153,7 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
             if (!location) throw new UserInputError('验收仓库不属于当前店铺');
             return [{ location, quantity }];
         }
-        return super.forCancellation(ctx, locations, line, quantity);
+        return super.forCancellation(source, locations, line, quantity);
     }
     async getAvailableStock(
         ctx: RequestContext,
@@ -157,6 +177,10 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         stockLevels: StockLevel[],
         forDisplay: boolean,
     ): Promise<AvailableStock> {
+        ctx =
+            (await (ctx.apiType === 'admin'
+                ? this.sources?.contextForDisplay(ctx, productVariantId)
+                : this.sources?.context(ctx, productVariantId))) ?? ctx;
         const available = forDisplay
             ? super.getChannelStockForDisplay.bind(this)
             : super.getAvailableStock.bind(this);
@@ -278,6 +302,10 @@ export class PackagingStockLocationStrategy extends MultiChannelStockLocationStr
         orderLine: OrderLine,
         quantity: number,
     ): Promise<LocationWithQuantity[]> {
+        const source =
+            (await this.sources?.context(ctx, orderLine.productVariantId, orderLine.id, true)) ?? ctx;
+        stockLocations = await this.supplyLocations(ctx, stockLocations, source);
+        ctx = source;
         if (await this.digitalWithoutWarehouse(ctx, orderLine)) return [];
         const repository = this.connection.getRepository(ctx, StockLevel);
         const stockLevels =

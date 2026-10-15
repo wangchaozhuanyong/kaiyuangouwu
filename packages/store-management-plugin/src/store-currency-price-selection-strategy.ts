@@ -2,15 +2,18 @@ import {
     CurrencyCode,
     DefaultProductVariantPriceSelectionStrategy,
     idsAreEqual,
+    Injector,
     ProductVariantPrice,
     ProductVariantPriceSelectionStrategy,
     RequestContext,
 } from '@vendure/core';
 
+import { CatalogSyncSourceService } from './catalog-sync-source.service';
 import { convertMinorPrice } from './store-currency-conversion';
 import { StoreCurrencyRoundingMode } from './types';
 
 interface CurrencyChannelFields {
+    currencyRateMode?: string | null;
     cnyToMyrRate?: number | null;
     currencyRateMarkupBps?: number | null;
     currencyRoundingMode?: string | null;
@@ -23,8 +26,30 @@ interface CurrencyChannelFields {
  */
 export class StoreDefaultCurrencyPriceSelectionStrategy implements ProductVariantPriceSelectionStrategy {
     private readonly fallback = new DefaultProductVariantPriceSelectionStrategy();
+    private sources?: CatalogSyncSourceService;
+    init(injector: Injector) {
+        this.sources = injector.get(CatalogSyncSourceService);
+    }
 
-    selectPrice(ctx: RequestContext, prices: ProductVariantPrice[]): ProductVariantPrice | undefined {
+    selectPrice(
+        ctx: RequestContext,
+        prices: ProductVariantPrice[],
+    ): ProductVariantPrice | undefined | Promise<ProductVariantPrice | undefined> {
+        const base = prices.find(
+            p =>
+                idsAreEqual(p.channelId, ctx.channelId) && p.currencyCode === ctx.channel.defaultCurrencyCode,
+        );
+        if (this.sources && base)
+            return this.sources
+                .price(ctx, base)
+                .then(result => (result.managed ? result.price : this.selectLocalPrice(ctx, prices)));
+        return this.selectLocalPrice(ctx, prices);
+    }
+
+    private selectLocalPrice(
+        ctx: RequestContext,
+        prices: ProductVariantPrice[],
+    ): ProductVariantPrice | undefined {
         const defaultCurrency = ctx.channel.defaultCurrencyCode;
         if (!isManagedCurrency(defaultCurrency) || !isManagedCurrency(ctx.currencyCode)) {
             return this.fallback.selectPrice(ctx, prices);
@@ -78,6 +103,24 @@ export function convertChannelAmount(
         markupPercent,
         normalizeRoundingMode(customFields.currencyRoundingMode),
     );
+}
+
+/** Supply rules reuse the store's one configured rate, but never opt into live exchange repricing. */
+export function convertSyncedCatalogAmount(
+    ctx: Pick<RequestContext, 'channel'>,
+    price: number,
+    sourceCurrencyCode: CurrencyCode,
+    targetCurrencyCode: CurrencyCode,
+): number | null {
+    if (
+        sourceCurrencyCode !== ctx.channel.defaultCurrencyCode &&
+        (ctx.channel.customFields as CurrencyChannelFields).currencyRateMode !== 'MANUAL'
+    )
+        return null;
+    const operating = convertChannelAmount(ctx, price, sourceCurrencyCode, ctx.channel.defaultCurrencyCode);
+    return operating == null
+        ? null
+        : convertChannelAmount(ctx, operating, ctx.channel.defaultCurrencyCode, targetCurrencyCode);
 }
 
 export function isManagedCurrency(value: CurrencyCode): value is CurrencyCode.CNY | CurrencyCode.MYR {

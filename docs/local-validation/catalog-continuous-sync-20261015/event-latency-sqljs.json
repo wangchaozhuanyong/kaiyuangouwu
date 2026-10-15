@@ -1,0 +1,7 @@
+{
+  "environment": "sqljs",
+  "synthetic": true,
+  "eventMs": 864.9158749999988,
+  "reconciliationAfterEnqueueMs": 522.9625000000015,
+  "scheduledIntervalSeconds": 300
+}

@@ -1,0 +1,11 @@
+$ cross-env PACKAGE=storefront-cart-plugin vitest --config ../../e2e-common/vitest.config.mts --run
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/storefront-cart-plugin
+
+
+
+
+ Test Files  2 passed (2)
+      Tests  17 passed (17)
+   Start at  02:58:32
+   Duration  32.13s (transform 146ms, setup 0ms, import 1.75s, tests 30.23s, environment 0ms)

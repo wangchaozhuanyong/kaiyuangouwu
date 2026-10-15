@@ -21,6 +21,7 @@ const SAVE = gql`
 interface Offer {
     productId: string;
     ownerChannelId: string;
+    managedBy?: string | null;
     state: string;
     version: number;
     variants: Array<{ id: string; name: string; price: number | null; currencyCode: string }>;
@@ -101,6 +102,12 @@ export function StoreOfferDialog({
                 )}
                 {offer && (
                     <div className="space-y-4">
+                        {offer.managedBy && (
+                            <p role="status">
+                                由 {offer.managedBy}{' '}
+                                统一管理售价、库存和交付。本店仅查看；调整请前往平台分类持续同步。
+                            </p>
+                        )}
                         <p className="text-sm">
                             授权状态：
                             {offer.state === 'ACTIVE'
@@ -114,7 +121,7 @@ export function StoreOfferDialog({
                         <AdminField className="block text-sm" label="本店销售状态">
                             <AdminSelect
                                 className="ml-3 rounded-lg border border-slate-200 p-2"
-                                disabled={offer.state === 'REVOKED'}
+                                disabled={offer.state === 'REVOKED' || Boolean(offer.managedBy)}
                                 value={state ?? (offer.state === 'ACTIVE' ? 'ACTIVE' : 'PAUSED')}
                                 onChange={e => setState(e.target.value)}
                             >
@@ -130,7 +137,7 @@ export function StoreOfferDialog({
                                     type="number"
                                     step="1"
                                     min="0"
-                                    disabled={offer.state === 'REVOKED'}
+                                    disabled={offer.state === 'REVOKED' || Boolean(offer.managedBy)}
                                     value={prices[v.id] ?? (v.price == null ? '' : String(v.price))}
                                     onChange={e => setPrices({ ...prices, [v.id]: e.target.value })}
                                     className="w-40 rounded-lg border border-slate-200 p-2"
@@ -142,7 +149,7 @@ export function StoreOfferDialog({
                             ¥1.00。库存为零显示缺货，卡密还需平台供货授权。
                         </p>
                         <AdminButton
-                            disabled={status.loading || offer.state === 'REVOKED'}
+                            disabled={status.loading || offer.state === 'REVOKED' || Boolean(offer.managedBy)}
                             onClick={() => void submit()}
                             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                         >

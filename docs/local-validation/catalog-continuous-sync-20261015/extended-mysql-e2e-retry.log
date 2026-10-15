@@ -1,0 +1,33 @@
+COMMAND: ['bunx', 'vitest', '--config', 'scripts/vitest.platform-governance.mts', '--run', 'packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts', '--testNamePattern', 'catalog continuous sync']
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts (45 tests | 1 failed | 30 skipped) 112853ms
+       × follows new variants and subcategories, renames, parent moves and source listing changes 173ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts > platform governance real database and API boundaries > catalog continuous sync > follows new variants and subcategories, renames, parent moves and source listing changes
+GraphQLError: Cannot save ProductOptionGroup: Simplified Chinese source content is missing
+ ❯ new I18nError packages/core/src/i18n/i18n-error.ts:25:8
+ ❯ new UserInputError packages/core/src/common/error/errors.ts:29:8
+ ❯ NativeContentTranslationService.lockManualTranslation packages/content-translation-plugin/src/native-content-translation.service.ts:183:19
+    181|         ]);
+    182|         if (!source) {
+    183|             throw new UserInputError(
+       |                   ^
+    184|                 `Cannot save ${entityType}: Simplified Chinese source …
+    185|             );
+ ❯ NativeContentTranslationService.handle packages/content-translation-plugin/src/native-content-translation.service.ts:165:17
+ ❯ EventBus.executeBlockingEventHandlers packages/core/src/event-bus/event-bus.ts:219:12
+ ❯ EventBus.publish packages/core/src/event-bus/event-bus.ts:118:8
+ ❯ ProductOptionGroupService.create packages/core/src/service/services/product-option-group.service.ts:218:8
+ ❯ packages/store-management-plugin/e2e/catalog-sync-acceptance.ts:756:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 passed | 30 skipped (45)
+   Start at  00:02:59
+   Duration  122.84s (transform 5.65s, setup 0ms, import 9.88s, tests 112.85s, environment 0ms)

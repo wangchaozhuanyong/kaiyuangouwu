@@ -1,0 +1,10 @@
+$ cross-env PACKAGE=dev-server vitest --config ../../e2e-common/vitest.config.mts --run e2e/cart-checkout.e2e-spec.ts
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/dev-server
+
+{"database":"mysql","cartMeasurements":[{"lines":1,"samples":10,"p50Ms":34,"p95Ms":74,"maxSqlQueries":80,"maxPricingCalls":1,"maxResponseBytes":2138},{"lines":4,"samples":10,"p50Ms":38,"p95Ms":57,"maxSqlQueries":92,"maxPricingCalls":1,"maxResponseBytes":5647},{"lines":20,"samples":10,"p50Ms":53,"p95Ms":59,"maxSqlQueries":156,"maxPricingCalls":1,"maxResponseBytes":24455},{"lines":50,"samples":10,"p50Ms":80,"p95Ms":157,"maxSqlQueries":276,"maxPricingCalls":1,"maxResponseBytes":59766}]}
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  02:56:09
+   Duration  53.12s (transform 119ms, setup 0ms, import 1.94s, tests 51.09s, environment 0ms)

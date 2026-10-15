@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts (49 tests | 1 failed | 46 skipped) 98113ms
+       × recovers after SIGKILL of a lease-holding isolated process and the real sixty-second lease expiry 1844ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts > platform governance real database and API boundaries > catalog continuous sync > recovers after SIGKILL of a lease-holding isolated process and the real sixty-second lease expiry
+Error: Synthetic crash process exited before lease readiness: node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+Error: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'cursor = ?, runGeneration = generation, generation = generation + 1 WHERE id = ?' at line 1
+    at file:///Users/wangchao/Desktop/%E6%BA%90%E7%A0%81%E6%96%87%E4%BB%B6%E5%A4%B9/vendure%E5%BC%80%E6%BA%90/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/store-management-plugin/e2e/catalog-sync-crash-worker.mjs:12:35
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  code: 'ER_PARSE_ERROR',
+  errno: 1064,
+  sqlState: '42000',
+  sqlMessage: "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'cursor = ?, runGeneration = generation, generation = generation + 1 WHERE id = ?' at line 1",
+  sql: 'UPDATE catalog_sync_rule SET leaseUntil = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 60 SECOND), leaseToken = ?, state = ?, cursor = ?, runGeneration = generation, generation = generation + 1 WHERE id = ? AND enabled = 1 AND leaseToken IS NULL'
+}
+
+Node.js v24.19.0
+
+ ❯ ../../../../../%E6%BA%90%E7%A0%81%E6%96%87%E4%BB%B6%E5%A4%B9/vendure%E5%BC%80%E6%BA%90/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015/packages/store-management-plugin/e2e/catalog-sync-crash-worker.mjs:12:35
+ ❯ ChildProcess.<anonymous> packages/store-management-plugin/e2e/catalog-sync-closeout-acceptance.ts:255:29
+    253|                         clearTimeout(timeout);
+    254|                         reject(
+    255|                             new Error(
+       |                             ^
+    256|                                 `Synthetic crash process exited before…
+    257|                             ),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed | 46 skipped (49)
+   Start at  00:51:39
+   Duration  103.29s (transform 2.75s, setup 0ms, import 5.08s, tests 98.11s, environment 0ms)

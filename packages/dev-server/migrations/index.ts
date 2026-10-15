@@ -154,6 +154,7 @@ import { AddStorefrontSeo1791580800000 } from './1791580800000-add-storefront-se
 import { AllowUnsetCatalogCost1791676800000 } from './1791676800000-allow-unset-catalog-cost';
 import { AddStorefrontPaymentAttempts1791763200000 } from './1791763200000-add-storefront-payment-attempts';
 import { AddReferralPosterDesign1791849600000 } from './1791849600000-add-referral-poster-design';
+import { AddCatalogContinuousSync1792022400000 } from './1792022400000-add-catalog-continuous-sync';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -312,4 +313,5 @@ export const devServerMigrations = [
     AllowUnsetCatalogCost1791676800000,
     AddStorefrontPaymentAttempts1791763200000,
     AddReferralPosterDesign1791849600000,
+    AddCatalogContinuousSync1792022400000,
 ];

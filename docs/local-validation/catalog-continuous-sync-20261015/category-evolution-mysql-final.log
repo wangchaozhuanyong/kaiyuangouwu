@@ -1,0 +1,9 @@
+COMMAND: ['bunx', 'vitest', '--config', 'scripts/vitest.platform-governance.mts', '--run', 'packages/store-management-plugin/e2e/platform-governance.e2e-spec.ts', '--testNamePattern', 'saves disabled rules|processes all pages|follows new variants']
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+
+ Test Files  1 passed (1)
+      Tests  3 passed | 42 skipped (45)
+   Start at  00:14:04
+   Duration  87.63s (transform 2.51s, setup 0ms, import 5.57s, tests 81.96s, environment 0ms)

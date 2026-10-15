@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+
+ Test Files  1 passed (1)
+      Tests  14 passed (14)
+   Start at  03:04:04
+   Duration  4.33s (transform 2.19s, setup 0ms, import 4.23s, tests 18ms, environment 0ms)

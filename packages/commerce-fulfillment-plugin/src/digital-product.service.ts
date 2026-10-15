@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { CatalogOperationsService } from '@vendure/catalog-management-plugin';
 import { GlobalFlag, ModifyOrderInput } from '@vendure/common/lib/generated-types';
 import { ID } from '@vendure/common/lib/shared-types';
@@ -17,7 +17,7 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { GovernanceService } from '@vendure/store-management-plugin';
+import { CatalogSyncSourceService, GovernanceService } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
 import { In, IsNull, ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
@@ -69,6 +69,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
         private readonly catalog: CatalogOperationsService,
         private readonly requestCache: RequestContextCacheService = new RequestContextCacheService(),
         private readonly audit?: GovernanceService,
+        @Optional() private readonly sources?: CatalogSyncSourceService,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -112,13 +113,15 @@ export class DigitalProductService implements OnApplicationBootstrap {
         return variant;
     }
 
-    config(ctx: RequestContext, variantId: ID) {
+    async config(ctx: RequestContext, variantId: ID) {
+        ctx = (await this.sources?.context(ctx, variantId)) ?? ctx;
         return this.connection.getRepository(ctx, DigitalVariantConfig).findOne({
             where: { channelId: ctx.channelId, productVariantId: variantId, migrationState: 'ACTIVE' },
         });
     }
 
-    configForDisplay(ctx: RequestContext, variantId: ID) {
+    async configForDisplay(ctx: RequestContext, variantId: ID) {
+        if (this.sources && (await this.sources.hasManagedProducts(ctx))) return this.config(ctx, variantId);
         return this.requestCache.load(
             ctx,
             `digital-variant-config:${ctx.channelId}`,
@@ -170,10 +173,17 @@ export class DigitalProductService implements OnApplicationBootstrap {
         });
         const variants = await Promise.all(
             currentStoreVariants.map(async variant => {
-                const config = await this.config(ctx, variant.id);
+                const displayCtx = (await this.sources?.contextForDisplay(ctx, variant.id)) ?? ctx;
+                const config = await this.connection.getRepository(ctx, DigitalVariantConfig).findOne({
+                    where: {
+                        channelId: displayCtx.channelId,
+                        productVariantId: variant.id,
+                        migrationState: 'ACTIVE',
+                    },
+                });
                 const file = config?.fileVersionId
                     ? await this.connection.getRepository(ctx, DigitalFileVersion).findOne({
-                          where: { id: config.fileVersionId, channelId: ctx.channelId },
+                          where: { id: config.fileVersionId, channelId: config.channelId },
                       })
                     : null;
                 const cost = await this.catalog.latestCost(ctx, variant.id, ctx.currencyCode);
@@ -198,6 +208,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
 
     async update(ctx: RequestContext, input: UpdateDigitalVariantInput) {
         const variant = await this.requireVariant(ctx, input.productVariantId);
+        await this.sources?.assertEditable(ctx, variant.productId);
         if (!['auto_card', 'manual_service', 'file_download'].includes(input.deliveryMode))
             throw new UserInputError('数字交付方式无效');
         let config = await this.config(ctx, variant.id);
@@ -296,7 +307,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                       async ids => {
                           const configs = await this.connection.getRepository(ctx, AutoCardConfig).find({
                               where: {
-                                  channelId: ctx.channelId,
+                                  channelId: config.channelId,
                                   productVariantId: In([...ids]),
                                   enabled: true,
                               },
@@ -308,7 +319,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                       },
                   )
                 : await this.connection.getRepository(ctx, AutoCardConfig).findOne({
-                      where: { channelId: ctx.channelId, productVariantId: variant.id, enabled: true },
+                      where: { channelId: config.channelId, productVariantId: variant.id, enabled: true },
                   });
             return cards
                 ? forDisplay
@@ -327,7 +338,24 @@ export class DigitalProductService implements OnApplicationBootstrap {
             .filter(line => getOrderLineFulfillmentType(line) === 'digital')
             .sort((a, b) => String(a.productVariantId).localeCompare(String(b.productVariantId)));
         for (const line of lines) {
-            let config = await this.config(ctx, line.productVariantId);
+            const historical = ![
+                'AddingItems',
+                'ArrangingPayment',
+                'AwaitingManualPayment',
+                'Draft',
+            ].includes(order.state);
+            const supplyCtx = historical
+                ? ((await this.sources?.context(ctx, line.productVariantId, line.id, true)) ?? ctx)
+                : ctx;
+            let config = historical
+                ? await this.connection.getRepository(ctx, DigitalVariantConfig).findOne({
+                      where: {
+                          channelId: supplyCtx.channelId,
+                          productVariantId: line.productVariantId,
+                          migrationState: 'ACTIVE',
+                      },
+                  })
+                : await this.config(ctx, line.productVariantId);
             if (!config) continue; // Legacy stores keep their old path until explicitly migrated.
             config = await this.lock(ctx, DigitalVariantConfig, config.id);
             validateDigitalQuantity(line.quantity);
@@ -364,7 +392,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                 config.deliveryMode === 'file_download' &&
                 (!config.fileVersionId ||
                     !(await this.connection.getRepository(ctx, DigitalFileVersion).exists({
-                        where: { id: config.fileVersionId, channelId: ctx.channelId },
+                        where: { id: config.fileVersionId, channelId: config.channelId },
                     })))
             )
                 throw new UserInputError(`数字商品“${line.productVariant.name}”尚未配置交付文件`);
@@ -374,7 +402,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
             if (config.stockPolicy === 'pool_derived') {
                 const cards = await this.connection.getRepository(ctx, AutoCardConfig).findOne({
                     where: {
-                        channelId: ctx.channelId,
+                        channelId: config.channelId,
                         productVariantId: line.productVariantId,
                         enabled: true,
                     },
@@ -902,7 +930,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
     ) {
         await this.connection.getRepository(ctx, DigitalQuotaMovement).save(
             new DigitalQuotaMovement({
-                channelId: ctx.channelId,
+                channelId: config.channelId,
                 productVariantId: config.productVariantId,
                 type,
                 quantity,

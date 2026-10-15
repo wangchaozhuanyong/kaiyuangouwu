@@ -711,7 +711,9 @@ export class CartController {
                 if ('prepareShipping' in operation) return true;
                 return (
                     'order' in operation &&
-                    ('currencyCode' in operation.order || 'shippingMethodId' in operation.order)
+                    ('currencyCode' in operation.order ||
+                        'shippingMethodId' in operation.order ||
+                        'shippingMethodIds' in operation.order)
                 );
             });
         this.state = {

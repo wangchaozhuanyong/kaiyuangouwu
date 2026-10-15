@@ -1,0 +1,55 @@
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015
+
+ ❯ packages/commerce-fulfillment-plugin/src/catalog-sync-shipping.service.spec.ts (3 tests | 2 failed) 8ms
+     × excludes a ACTIVE inherited mapping from the target own order 6ms
+     × excludes a REMOVED inherited mapping from the target own order 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  packages/commerce-fulfillment-plugin/src/catalog-sync-shipping.service.spec.ts > inherited shipping after the final managed product leaves > excludes a ACTIVE inherited mapping from the target own order
+ FAIL  packages/commerce-fulfillment-plugin/src/catalog-sync-shipping.service.spec.ts > inherited shipping after the final managed product leaves > excludes a REMOVED inherited mapping from the target own order
+AssertionError: expected { …(5) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "ctx": {
+    "channelId": "target",
+    "currencyCode": "MYR",
+    "languageCode": "en",
+  },
+  "groupId": "target",
+  "groupName": "",
+  "order": {
+    "lines": [
+      {
+        "customFields": {
+          "fulfillmentTypeSnapshot": "physical",
+        },
+        "id": "local-line",
+        "productVariantId": "local-variant",
+      },
+    ],
+    "state": "AddingItems",
+  },
+  "sourceMethod": undefined,
+}
+
+ ❯ packages/commerce-fulfillment-plugin/src/catalog-sync-shipping.service.spec.ts:30:62
+     28|     it.each(['ACTIVE', 'REMOVED'] as const)('excludes a %s inherited m…
+     29|         const f = fixture(state);
+     30|         await expect(f.service.scope(f.ctx, f.order, f.method)).resolv…
+       |                                                              ^
+     31|     });
+     32|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  03:49:32
+   Duration  6.89s (transform 3.12s, setup 0ms, import 6.72s, tests 8ms, environment 0ms)
