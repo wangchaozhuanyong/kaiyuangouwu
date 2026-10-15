@@ -6,29 +6,26 @@ import { NextAdminPageBlocks } from '../../extensions/extension-hosts';
 import type { RefundPolicy } from '../../graphql/commerce.graphql';
 import { useAdminCapabilities } from '../../hooks/use-admin-capabilities';
 import { ProductPackagingBlock } from './CatalogOperationsBlocks';
-import { DigitalProductWorkspace } from './DigitalProductWorkspace';
-import { PhysicalProductWorkspace } from './PhysicalProductWorkspace';
 import { ProductBasicTab } from './ProductBasicTab';
 import { ProductCategorySummary } from './ProductCategorySummary';
 import { useProductEditor } from './ProductEditorContext';
 import { ProductEditorIdentityFields, ProductEditorSidebar } from './ProductEditorSidebar';
 import { ProductFacetsCollectionsTab } from './ProductFacetsCollectionsTab';
 import { ProductMoreSettings } from './ProductMoreSettings';
-import { ProductSupplySettings } from './ProductSupplySettings';
 import { ProductVariantsTab } from './ProductVariantsTab';
 import type { ProductEditorTab } from './product-editor-types';
 import './product-editor.css';
 
 const sections = [
-    ['BASIC', '商品信息与规格价格'],
-    ['DELIVERY', '交付售后与更多设置'],
+    ['BASIC', '商品信息与销售设置'],
+    ['DELIVERY', '售后与更多设置'],
 ] as const;
 const pricingBlocks = ['product-variant-multi-currency-prices', 'product-variant-custom-fields'];
 
 export function ProductEditorWorkspace() {
     const id = useId();
     const workspace = useRef<HTMLDivElement>(null);
-    const userTabSelection = useRef<{ tab: ProductEditorTab; error: string } | null>(null);
+    const userTabSelection = useRef<{ tab: ProductEditorTab; error: string; revision: number } | null>(null);
     const {
         isCreateMode,
         productData,
@@ -43,6 +40,9 @@ export function ProductEditorWorkspace() {
         description,
         saving,
         errorMessage,
+        errorRevision = 0,
+        formErrors,
+        setFormErrors,
     } = useProductEditor();
     const { canUseCapability } = useAdminCapabilities();
     const canWriteProduct = canUseCapability(
@@ -54,7 +54,7 @@ export function ProductEditorWorkspace() {
     const hasMigration =
         effectiveFulfillmentType === 'digital' && variants.some(v => v.digitalMigrationRequired);
     const selectTab = (tab: ProductEditorTab, focus = false) => {
-        userTabSelection.current = { tab, error: errorMessage };
+        userTabSelection.current = { tab, error: errorMessage, revision: errorRevision };
         setActiveTab(tab);
         workspace.current?.closest('.admin-mobile-editor-body')?.scrollTo?.({ top: 0 });
         if (focus) document.getElementById(`${id}-tab-${tab}`)?.focus();
@@ -63,15 +63,29 @@ export function ProductEditorWorkspace() {
         const selection = userTabSelection.current;
         userTabSelection.current = null;
         if (!errorMessage) return;
-        if (selection?.tab === selectedTab && selection.error === errorMessage) return;
+        if (
+            selection?.tab === selectedTab &&
+            selection.error === errorMessage &&
+            selection.revision === errorRevision
+        )
+            return;
         const target = workspace.current?.querySelector<HTMLElement>(
             '[role="tabpanel"]:not([hidden]) [aria-invalid="true"]',
         );
+        const summary = workspace.current
+            ?.closest('.product-editor-page')
+            ?.querySelector<HTMLElement>('[data-product-editor-error-summary]');
         const focusTarget =
-            target ?? workspace.current?.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden])');
+            target ??
+            summary ??
+            workspace.current?.querySelector<HTMLElement>('[role="tabpanel"]:not([hidden])');
+        for (let parent = target?.parentElement; parent; parent = parent.parentElement) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+            if (parent === workspace.current) break;
+        }
         focusTarget?.focus({ preventScroll: true });
-        if (target) target.scrollIntoView?.({ block: 'nearest' });
-    }, [errorMessage, selectedTab]);
+        focusTarget?.scrollIntoView?.({ block: target ? 'center' : 'nearest' });
+    }, [errorMessage, errorRevision, selectedTab]);
     if (!isCreateMode && !productData?.product) return null;
     return (
         <div className="product-editor-workspace" ref={workspace}>
@@ -103,10 +117,10 @@ export function ProductEditorWorkspace() {
                             0{index + 1}
                         </span>
                         {name}
-                        {key === 'DELIVERY' && hasMigration && (
+                        {key === 'BASIC' && hasMigration && (
                             <span
                                 className="h-1.5 w-1.5 rounded-full bg-amber-500"
-                                aria-label="有待核对的旧库存"
+                                aria-label="有待处理的历史库存"
                             />
                         )}
                     </AdminButton>
@@ -114,7 +128,7 @@ export function ProductEditorWorkspace() {
             </nav>
             <div className="product-editor-columns">
                 <div className="product-editor-main">
-                    {/* Panels remain mounted so independent extension drafts survive tab changes. */}
+                    {/* Keep drafts and lazily opened SKU tools mounted across task tabs. */}
                     <section
                         role="tabpanel"
                         tabIndex={-1}
@@ -172,24 +186,7 @@ export function ProductEditorWorkspace() {
                                 </div>
                             )}
                             <section className="product-editor-panel">
-                                <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                    规格与价格{' '}
-                                    <FeatureHelpButton topic="catalog.variants" title="规格与价格" />
-                                </h2>
                                 <ProductVariantsTab />
-                            </section>
-                            <div className="product-editor-independent-fields">
-                                <p className="mb-3 text-xs text-slate-500">
-                                    其他币种价格和规格补充资料请分别保存。
-                                </p>
-                                <NextAdminPageBlocks
-                                    pageId="product-detail"
-                                    entity={productData?.product as unknown as Record<string, unknown>}
-                                    includeIds={pricingBlocks}
-                                />
-                            </div>
-                            <section className="product-editor-panel">
-                                <ProductFacetsCollectionsTab section="facets" />
                             </section>
                         </fieldset>
                     </section>
@@ -206,26 +203,13 @@ export function ProductEditorWorkspace() {
                             disabled={!canWriteProduct}
                             className="contents"
                         >
-                            <section className="product-editor-panel">
-                                <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
-                                    {effectiveFulfillmentType === 'digital'
-                                        ? '数字商品交付'
-                                        : '实物库存与交付'}{' '}
-                                    <FeatureHelpButton topic="catalog.product-editor" title="交付与售后" />
-                                </h2>
-                                {effectiveFulfillmentType === 'digital' ? (
-                                    <DigitalProductWorkspace />
-                                ) : (
-                                    <PhysicalProductWorkspace />
-                                )}
-                            </section>
                             <div className="product-editor-settings-grid">
-                                <section className="product-editor-panel">
+                                <section className="product-editor-panel product-editor-after-sales">
                                     <h2 className="product-editor-panel-heading text-sm font-bold text-slate-900">
                                         售后规则{' '}
                                         <FeatureHelpButton topic="catalog.product-policy" title="售后规则" />
                                     </h2>
-                                    <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="product-editor-after-sales-fields">
                                         <AdminField
                                             layout="stacked"
                                             label={
@@ -265,19 +249,42 @@ export function ProductEditorWorkspace() {
                                                 <AdminField layout="stacked" label="预计人工处理时长（分钟）">
                                                     <AdminInput
                                                         aria-label="预计人工处理时长"
+                                                        aria-invalid={Boolean(
+                                                            formErrors.manualDeliverySlaMinutes,
+                                                        )}
+                                                        aria-describedby={
+                                                            formErrors.manualDeliverySlaMinutes
+                                                                ? `${id}-manual-duration-error`
+                                                                : undefined
+                                                        }
                                                         type="number"
                                                         min="5"
                                                         max="525600"
                                                         step="5"
                                                         value={manualDeliverySlaMinutes}
                                                         disabled={saving}
-                                                        onChange={event =>
+                                                        onChange={event => {
                                                             setManualDeliverySlaMinutes(
                                                                 Number(event.target.value),
-                                                            )
-                                                        }
+                                                            );
+                                                            if (formErrors.manualDeliverySlaMinutes) {
+                                                                setFormErrors(current => ({
+                                                                    ...current,
+                                                                    manualDeliverySlaMinutes: undefined,
+                                                                }));
+                                                            }
+                                                        }}
                                                         className="w-full rounded-lg border border-slate-300 bg-white p-2.5"
                                                     />
+                                                    {formErrors.manualDeliverySlaMinutes && (
+                                                        <span
+                                                            id={`${id}-manual-duration-error`}
+                                                            role="alert"
+                                                            className="block text-xs text-rose-600"
+                                                        >
+                                                            {formErrors.manualDeliverySlaMinutes}
+                                                        </span>
+                                                    )}
                                                 </AdminField>
                                             )}
                                     </div>
@@ -288,7 +295,6 @@ export function ProductEditorWorkspace() {
                                         <FeatureHelpButton topic="catalog.product-editor" title="更多设置" />
                                     </h2>
                                     <ProductMoreSettings />
-                                    <ProductSupplySettings />
                                 </section>
                             </div>
                             {effectiveFulfillmentType === 'physical' && productData?.product && (
@@ -315,6 +321,9 @@ export function ProductEditorWorkspace() {
                 </div>
                 <ProductEditorSidebar>
                     <ProductCategorySummary />
+                    <section className="product-editor-panel">
+                        <ProductFacetsCollectionsTab section="facets" compact />
+                    </section>
                 </ProductEditorSidebar>
             </div>
         </div>

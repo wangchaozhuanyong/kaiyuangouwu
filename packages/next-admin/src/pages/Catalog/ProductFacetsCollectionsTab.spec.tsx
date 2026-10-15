@@ -98,9 +98,11 @@ describe('ProductFacetsCollectionsTab collection hierarchy', () => {
     });
 });
 
-describe('ProductCategorySummary draft dialog', () => {
+describe('ProductCategorySummary inline draft selection', () => {
     let root: Root | undefined;
     let host: HTMLDivElement | undefined;
+    const originalCollections = editorState.collectionsData;
+    const originalProduct = editorState.productData;
 
     afterEach(async () => {
         if (root) await act(async () => root?.unmount());
@@ -111,114 +113,159 @@ describe('ProductCategorySummary draft dialog', () => {
         editorState.collectionSearch = '';
         editorState.collectionsLoading = false;
         editorState.collectionsError = null;
+        editorState.collectionsData = originalCollections;
+        editorState.productData = originalProduct;
         editorState.saving = false;
         vi.clearAllMocks();
     });
+
+    async function renderSummary() {
+        await act(async () =>
+            root?.render(
+                <FeatureHelpProvider>
+                    <ProductCategorySummary />
+                </FeatureHelpProvider>,
+            ),
+        );
+    }
 
     async function mountSummary() {
         (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
         host = document.createElement('div');
         document.body.append(host);
         root = createRoot(host);
-        await act(async () => {
-            root?.render(
-                <FeatureHelpProvider>
-                    <ProductCategorySummary />
-                </FeatureHelpProvider>,
-            );
+        editorState.setSelectedCollectionIds.mockImplementation(update => {
+            editorState.selectedCollectionIds =
+                typeof update === 'function' ? update(editorState.selectedCollectionIds) : update;
         });
-        const trigger = document.querySelector<HTMLButtonElement>('[aria-label="修改商品分类"]')!;
-        trigger.focus();
-        await act(async () => trigger.click());
-        return trigger;
+        editorState.setCollectionSearch.mockImplementation(value => {
+            editorState.collectionSearch = value;
+        });
+        await renderSummary();
     }
 
     async function click(label: string) {
-        const target = Array.from(document.querySelectorAll<HTMLElement>('button, input')).find(
-            element => element.getAttribute('aria-label') === label || element.textContent?.trim() === label,
-        );
+        const target = host?.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
         expect(target, label).toBeTruthy();
         await act(async () => target!.click());
+        await renderSummary();
     }
 
-    it('holds changes locally, discards cancellation and restores focus', async () => {
-        const trigger = await mountSummary();
-        await click('选择二级分类：Claude订阅');
-        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
-        expect(document.querySelector('[role="dialog"]')?.textContent).toContain('已选择 2 个分类');
-
-        await click('取消');
-        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
-        expect(document.querySelector('[role="dialog"]')).toBeNull();
-        expect(document.activeElement).toBe(trigger);
-
-        await click('修改商品分类');
-        expect(
-            document.querySelector<HTMLInputElement>('[aria-label="选择二级分类：Claude订阅"]')?.checked,
-        ).toBe(false);
-        expect(
-            document.querySelector<HTMLInputElement>('[aria-label="取消选择二级分类：GPT订阅"]')?.checked,
-        ).toBe(true);
-    });
-
-    it('applies every selected level once, without treating confirmation as a product save', async () => {
+    it('updates the existing draft immediately and keeps parent and child selections independent', async () => {
         await mountSummary();
+        expect(host?.querySelector('[role="dialog"]')).toBeNull();
+        expect(host?.textContent).not.toContain('修改');
         await click('选择一级分类：订阅服务');
+        expect(editorState.selectedCollectionIds).toEqual(['gpt', 'subscriptions']);
+        expect(
+            host?.querySelector<HTMLInputElement>('[aria-label="选择二级分类：Claude订阅"]')?.checked,
+        ).toBe(false);
         await click('选择二级分类：Claude订阅');
-        await click('确认选择');
-        expect(editorState.setSelectedCollectionIds).toHaveBeenCalledExactlyOnceWith([
-            'gpt',
-            'subscriptions',
-            'claude',
-        ]);
-        expect(document.querySelector('[role="dialog"]')).toBeNull();
-    });
-
-    it('discards Escape changes and avoids marking an unchanged selection dirty', async () => {
-        const trigger = await mountSummary();
         await click('取消选择二级分类：GPT订阅');
-        await act(async () => {
-            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-        });
-        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
-        expect(document.activeElement).toBe(trigger);
-        await click('修改商品分类');
-        await click('确认选择');
-        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
+        expect(editorState.selectedCollectionIds).toEqual(['subscriptions', 'claude']);
+        expect(host?.textContent).toContain('已选 2 项');
+        expect(host?.textContent).toContain('保存商品后生效');
+        expect(editorState.setSelectedCollectionIds).toHaveBeenCalledTimes(3);
     });
 
-    it('keeps search separate from product selection and preserves all choices', async () => {
+    it('searches with the shared control, retains hidden selections and restores their checked state', async () => {
         await mountSummary();
-        const search = document.querySelector<HTMLInputElement>('[aria-label="搜索商品分类或专辑"]')!;
+        const search = host!.querySelector<HTMLInputElement>('[aria-label="搜索商品分类或专辑"]')!;
         await act(async () => {
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, 'Claude');
             search.dispatchEvent(new Event('input', { bubbles: true }));
             search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         });
+        await renderSummary();
         expect(editorState.setCollectionSearch).toHaveBeenCalledWith('Claude');
-        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
-        await click('取消');
+        expect(host?.textContent).toContain('订阅服务');
+        expect(host?.textContent).toContain('Claude订阅');
+        expect(host?.textContent).not.toContain('GPT订阅');
+        expect(host?.textContent).toContain('另有 1 个已选分类');
         expect(editorState.selectedCollectionIds).toEqual(['gpt']);
+        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
+        editorState.collectionSearch = '';
+        await renderSummary();
+        expect(
+            host?.querySelector<HTMLInputElement>('[aria-label="取消选择二级分类：GPT订阅"]')?.checked,
+        ).toBe(true);
     });
 
-    it('retains selected category names and automatic matching during lookup failure', async () => {
-        const selected = { id: 'retained', name: '已关联分类', slug: 'retained', filters: [] };
-        const originalProduct = editorState.productData;
+    it('keeps cached choices and missing selected IDs on an update failure and supports local retry', async () => {
         Object.assign(editorState, {
-            selectedCollectionIds: ['retained'],
+            selectedCollectionIds: ['retained', 'gpt'],
             collectionsError: new Error('读取失败'),
-            productData: { product: { collections: [selected] } },
+            productData: {
+                product: {
+                    collections: [{ id: 'retained', name: '已关联分类', slug: 'retained', filters: [] }],
+                },
+            },
         });
-        try {
-            await mountSummary();
-            const summary = host?.querySelector('[aria-label="商品分类摘要"]');
-            expect(summary?.textContent).toContain('已关联分类');
-            expect(summary?.textContent).toContain('自动匹配');
-            expect(summary?.textContent).toContain('重试分类读取');
-            expect(document.querySelector('[role="dialog"]')?.textContent).toContain('GPT订阅');
-        } finally {
-            editorState.productData = originalProduct;
-        }
+        await mountSummary();
+        expect(host?.textContent).toContain('商品分类更新失败');
+        expect(host?.textContent).toContain('已关联分类');
+        expect(host?.textContent).toContain('GPT订阅');
+        await click('选择二级分类：Claude订阅');
+        expect(editorState.selectedCollectionIds).toEqual(['retained', 'gpt', 'claude']);
+        const retry = [...host!.querySelectorAll('button')].find(button =>
+            button.textContent?.includes('重试分类读取'),
+        )!;
+        await act(async () => retry.click());
+        expect(editorState.refetchCollections).toHaveBeenCalledOnce();
+    });
+
+    it('explains automatic assignments without suggesting that manual selection overrides rules', async () => {
+        Object.assign(editorState, {
+            selectedCollectionIds: [],
+            productData: {
+                product: {
+                    collections: [{ id: 'gpt', name: 'GPT订阅', slug: 'gpt-subscription', filters: [] }],
+                },
+            },
+        });
+        await mountSummary();
+        const automatic = host!.querySelector<HTMLInputElement>('[aria-label="自动匹配二级分类：GPT订阅"]')!;
+        expect(automatic.checked).toBe(true);
+        expect(automatic.disabled).toBe(true);
+        expect(host?.textContent).toContain('已选 1 项');
+        expect(host?.textContent).toContain('其中 1 项自动匹配');
+        expect(host?.textContent).toContain('自动匹配');
+        expect(host?.textContent).toContain('需在分类规则中调整');
+        expect(document.getElementById(automatic.getAttribute('aria-describedby')!)).not.toBeNull();
+        await act(async () => automatic.click());
+        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
+        expect(editorState.selectedCollectionIds).toEqual([]);
+        await click('选择二级分类：Claude订阅');
+        expect(editorState.selectedCollectionIds).toEqual(['claude']);
+        expect(host?.textContent).toContain('已选 2 项');
+    });
+
+    it('disables choices while a product save is in progress', async () => {
+        editorState.saving = true;
+        await mountSummary();
+        for (const input of host!.querySelectorAll<HTMLInputElement>('input'))
+            expect(input.disabled).toBe(true);
+        await click('选择二级分类：Claude订阅');
+        expect(editorState.setSelectedCollectionIds).not.toHaveBeenCalled();
+    });
+
+    it('distinguishes first loading, empty categories and an empty search', async () => {
+        Object.assign(editorState, { collectionsLoading: true, collectionsData: undefined });
+        await mountSummary();
+        expect(host?.textContent).toContain('正在读取商品分类');
+        Object.assign(editorState, {
+            collectionsLoading: false,
+            collectionsData: { collections: { items: [], totalItems: 0 } },
+        });
+        await renderSummary();
+        expect(host?.textContent).toContain('当前店铺暂无商品分类');
+        Object.assign(editorState, {
+            collectionsData: originalCollections,
+            collectionSearch: '找不到的分类',
+        });
+        await renderSummary();
+        expect(host?.textContent).toContain('未找到匹配的商品分类');
+        expect(editorState.selectedCollectionIds).toEqual(['gpt']);
     });
 });
 

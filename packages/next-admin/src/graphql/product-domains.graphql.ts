@@ -18,6 +18,13 @@ export interface DigitalWorkspaceVariant {
     migrationRequired: boolean;
     purchaseCostMicrounits: number | null;
     fileVersion: { id: string; fileName: string } | null;
+    inventory?: {
+        source: string;
+        availableQuantity: number | null;
+        reservedQuantity: number | null;
+        consumedQuantity: number | null;
+        observedAt: string;
+    };
 }
 export const DIGITAL_PRODUCT_WORKSPACE = gql`
     query DigitalProductWorkspace($productId: ID!) {
@@ -30,6 +37,13 @@ export const DIGITAL_PRODUCT_WORKSPACE = gql`
                 stockPolicy
                 availableQuantity
                 migrationRequired
+                inventory {
+                    source
+                    availableQuantity
+                    reservedQuantity
+                    consumedQuantity
+                    observedAt
+                }
                 purchaseCostMicrounits
                 supplier {
                     id

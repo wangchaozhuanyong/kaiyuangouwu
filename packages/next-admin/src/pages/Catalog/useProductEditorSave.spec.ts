@@ -13,6 +13,12 @@ import {
     UPDATE_VARIANT_COST,
     UPDATE_VARIANT_SUPPLIER,
 } from '../../graphql/product-domains.graphql';
+import {
+    hasCreatedProductDraft,
+    restoreCreatedProductDraft,
+    retainCreatedProductDraft,
+    takeCreatedProductDraft,
+} from './product-editor-draft';
 import type { ProductDetailRecord } from './product-editor-types';
 import { useProductEditorSave } from './useProductEditorSave';
 
@@ -167,12 +173,32 @@ function fixture(): SaveInput {
             setSaving: vi.fn(),
             showError: vi.fn(),
             showNotice: vi.fn(),
+            onProductCreated: vi.fn(),
         },
     };
 }
 
+function createFixture(): SaveInput {
+    const input = fixture();
+    input.productId = 'new';
+    input.baselineDraft = null;
+    input.draft.variants = [{ ...input.draft.variants[0], id: undefined, isNew: true }];
+    mocks.mutations.set(
+        CREATE_PRODUCT,
+        vi.fn().mockResolvedValue({ data: { createProduct: { id: 'created-product' } } }),
+    );
+    mocks.mutations.set(
+        CREATE_PRODUCT_VARIANTS,
+        vi.fn().mockResolvedValue({
+            data: { createProductVariants: [{ id: 'created-sku', sku: 'SKU-1' }] },
+        }),
+    );
+    return input;
+}
+
 describe('product save orchestration', () => {
     beforeEach(() => {
+        takeCreatedProductDraft('scope-a', 'created-product');
         mocks.mutations.clear();
         mocks.query.mockReset();
         mocks.mutate.mockReset();
@@ -189,18 +215,104 @@ describe('product save orchestration', () => {
         );
         mocks.mutations.set(
             CREATE_PRODUCT_VARIANTS,
-            vi
-                .fn()
-                .mockResolvedValue({
-                    data: { createProductVariants: [{ id: 'created-sku', sku: 'SKU-1' }] },
-                }),
+            vi.fn().mockResolvedValue({
+                data: { createProductVariants: [{ id: 'created-sku', sku: 'SKU-1' }] },
+            }),
         );
         await useProductEditorSave(input).handleSave();
         expect(mocks.mutations.get(CREATE_PRODUCT)).toHaveBeenCalledOnce();
-        expect(input.controls.navigate).toHaveBeenCalledWith(
-            '/catalog/products/created-product?tab=variants',
-            { replace: true },
+        expect(input.controls.onProductCreated).toHaveBeenCalledExactlyOnceWith('created-product');
+        expect(input.controls.navigate).not.toHaveBeenCalled();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+    });
+
+    it('only resets a created product after the final sales-channel write has completed', async () => {
+        const input = createFixture();
+        input.draft.selectedChannelIds = ['another-store'];
+        let finishChannelWrite: (value: unknown) => void = () => {};
+        mocks.mutations.set(
+            ASSIGN_PRODUCTS_TO_CHANNEL,
+            vi.fn().mockImplementation(
+                () =>
+                    new Promise(resolve => {
+                        finishChannelWrite = resolve;
+                    }),
+            ),
         );
+        const pending = useProductEditorSave(input).handleSave();
+        await vi.waitFor(() =>
+            expect(mocks.mutations.get(ASSIGN_PRODUCTS_TO_CHANNEL)).toHaveBeenCalledOnce(),
+        );
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        finishChannelWrite({});
+        await pending;
+        expect(input.controls.onProductCreated).toHaveBeenCalledExactlyOnceWith('created-product');
+        expect(input.controls.showNotice).toHaveBeenCalledOnce();
+        expect(input.controls.navigate).not.toHaveBeenCalled();
+    });
+
+    it('does not reset a new-product draft when validation prevents any write', async () => {
+        const input = createFixture();
+        input.draft.productName = '';
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenCalledWith('请补充商品名称后再保存');
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it('does not reset a new-product draft when the product creation itself fails', async () => {
+        const input = createFixture();
+        mocks.mutations.set(CREATE_PRODUCT, vi.fn().mockRejectedValue(new Error('Creation unavailable')));
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('阶段 1'));
+        expect(input.controls.navigate).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+    });
+
+    it.each([2, 3, 4])(
+        'does not reset a partially created product when creation stage %s fails',
+        async stage => {
+            const input = createFixture();
+            if (stage === 2) {
+                input.draft.selectedOptionGroupIds = ['group-1'];
+                input.draft.variants[0].optionIds = ['option-1'];
+                mocks.mutations.set(
+                    ADD_OPTION_GROUP_TO_PRODUCT,
+                    vi.fn().mockRejectedValue(new Error('Template unavailable')),
+                );
+            } else if (stage === 3) {
+                mocks.mutations.set(
+                    CREATE_PRODUCT_VARIANTS,
+                    vi.fn().mockRejectedValue(new Error('Variant unavailable')),
+                );
+            } else {
+                input.draft.selectedChannelIds = ['another-store'];
+                mocks.mutations.set(
+                    ASSIGN_PRODUCTS_TO_CHANNEL,
+                    vi.fn().mockRejectedValue(new Error('Channel unavailable')),
+                );
+            }
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+            expect(input.controls.showNotice).not.toHaveBeenCalled();
+            expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining(`阶段 ${stage}`));
+            expect(input.controls.navigate).toHaveBeenCalledWith(
+                '/catalog/products/created-product?tab=variants',
+                { replace: true },
+            );
+        },
+    );
+
+    it('does not reset an existing product after a successful update', async () => {
+        const input = fixture();
+        await useProductEditorSave(input).handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
+        expect(input.controls.showNotice).toHaveBeenCalledOnce();
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(input.controls.navigate).not.toHaveBeenCalled();
         expect(input.controls.showError).not.toHaveBeenCalled();
     });
 
@@ -227,20 +339,39 @@ describe('product save orchestration', () => {
         expect(input.controls.showNotice).not.toHaveBeenCalled();
     });
 
-    it.each(['productName', 'description'] as const)(
-        'opens product information for an invalid %s before making writes',
-        async field => {
-            const input = fixture();
-            input.draft[field] = '';
-            await useProductEditorSave(input).handleSave();
-            expect(input.controls.setActiveTab).toHaveBeenCalledWith('BASIC');
-            for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
-            expect(mocks.mutate).not.toHaveBeenCalled();
-        },
-    );
+    it.each([
+        ['productName', '商品名称'],
+        ['description', '中文商品详情'],
+    ] as const)('names the missing %s before making writes', async (field, label) => {
+        const input = fixture();
+        input.draft[field] = '';
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.setActiveTab).toHaveBeenCalledWith('BASIC');
+        expect(input.controls.showError).toHaveBeenCalledWith(`请补充${label}后再保存`);
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it('lists both missing basic fields on every repeated save attempt without making writes', async () => {
+        const input = fixture();
+        input.draft.productName = '';
+        input.draft.description = '';
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        await handleSave();
+        expect(input.controls.showError).toHaveBeenCalledTimes(2);
+        expect(input.controls.showError).toHaveBeenNthCalledWith(1, '请补充商品名称、中文商品详情后再保存');
+        expect(input.controls.showError).toHaveBeenNthCalledWith(2, '请补充商品名称、中文商品详情后再保存');
+        expect(input.controls.setFormErrors).toHaveBeenLastCalledWith({
+            name: '请输入名称',
+            description: '请输入中文商品详情',
+        });
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
 
     it.each(['digital', 'physical'] as const)(
-        'opens delivery for stock-only validation errors on %s products',
+        'opens the SKU section for stock-only validation errors on %s products',
         async fulfillmentType => {
             const input = fixture();
             input.draft.fulfillmentType = fulfillmentType;
@@ -250,7 +381,7 @@ describe('product save orchestration', () => {
                 digitalAvailableQuantity: fulfillmentType === 'digital' ? -1 : 5,
             };
             await useProductEditorSave(input).handleSave();
-            expect(input.controls.setActiveTab).toHaveBeenCalledWith('DELIVERY');
+            expect(input.controls.setActiveTab).toHaveBeenCalledWith('VARIANTS');
             expect(input.controls.setFormErrors).toHaveBeenCalledWith({
                 variants: {
                     0: {
@@ -273,6 +404,9 @@ describe('product save orchestration', () => {
         expect(input.controls.showError).toHaveBeenCalledWith(
             '人工交付预计时长必须是 5 到 525600 分钟之间的整数',
         );
+        expect(input.controls.setFormErrors).toHaveBeenCalledWith({
+            manualDeliverySlaMinutes: '人工交付预计时长必须是 5 到 525600 分钟之间的整数',
+        });
         for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
         expect(mocks.mutate).not.toHaveBeenCalled();
     });
@@ -1010,8 +1144,8 @@ describe('product save orchestration', () => {
         input.draft.variants[0].digitalMigrationRequired = true;
         input.draft.variants[0].digitalFileVersionId = 'new-file';
         await useProductEditorSave(input).handleSave();
-        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('先核对并迁移'));
-        expect(input.controls.setActiveTab).toHaveBeenCalledWith('DELIVERY');
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('待系统接管'));
+        expect(input.controls.setActiveTab).toHaveBeenCalledWith('VARIANTS');
         for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
         expect(mocks.mutate).not.toHaveBeenCalled();
     });
@@ -1023,6 +1157,9 @@ describe('product save orchestration', () => {
             input.draft.variants[0].costPrice = costPrice;
             await useProductEditorSave(input).handleSave();
             expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('非负成本价'));
+            expect(input.controls.setFormErrors).toHaveBeenCalledWith({
+                variants: { 0: { cost: '请输入有效的 MYR 非负成本价' } },
+            });
             for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
             expect(mocks.mutate).not.toHaveBeenCalled();
         },
@@ -1049,6 +1186,334 @@ describe('product save orchestration', () => {
                 }
             }
         }
+    });
+});
+
+describe('unified SKU sales draft', () => {
+    beforeEach(() => {
+        takeCreatedProductDraft('scope-a', 'created-product');
+        mocks.mutations.clear();
+        mocks.query.mockReset();
+        mocks.mutate.mockReset();
+    });
+    const unchanged = () => {
+        const input = fixture();
+        input.draft = structuredClone(input.baselineDraft!);
+        return input;
+    };
+    it('saves price, other currency, cost and quantity together without a stale active-currency overwrite', async () => {
+        const input = unchanged();
+        input.baselineDraft!.variants[0].digitalAvailableQuantity = 10;
+        input.baselineDraft!.variants[0].currencyPrices = { CNY: '20.00', MYR: '999' };
+        input.draft.variants[0] = {
+            ...input.draft.variants[0],
+            name: '新规格',
+            price: '11.00',
+            costPrice: '5.50',
+            digitalAvailableQuantity: 12,
+            currencyPrices: { CNY: '22.00', MYR: '999' },
+        };
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        const writes = mocks.mutations
+            .get(UPDATE_PRODUCT_VARIANTS)!
+            .mock.calls.flatMap(([request]) => request.variables.input);
+        expect(writes).toContainEqual(expect.objectContaining({ id: 'variant-1', price: 1100 }));
+        expect(writes).toContainEqual({ id: 'variant-1', prices: [{ currencyCode: 'CNY', price: 2200 }] });
+        expect(mocks.mutate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                mutation: UPDATE_VARIANT_COST,
+                variables: { productVariantId: 'variant-1', currencyCode: 'MYR', costMicrounits: 5500 },
+            }),
+        );
+        expect(mocks.mutate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                mutation: UPDATE_DIGITAL_VARIANT,
+                variables: {
+                    input: expect.objectContaining({ availableQuantity: 12, expectedAvailableQuantity: 10 }),
+                },
+            }),
+        );
+    });
+    it('saves only supplementary edits without rewriting the current price or inventory', async () => {
+        const input = unchanged();
+        input.baselineDraft!.variants[0].currencyPrices = { CNY: '20.00' };
+        input.baselineDraft!.variants[0].variantCustomFields = {
+            specification: '旧规格',
+            notes: { zh_Hans: '旧说明', en: 'Old' },
+        };
+        input.draft = structuredClone(input.baselineDraft!);
+        input.variantExtensionFields = [
+            { name: 'specification', type: 'string', list: false },
+            { name: 'notes', type: 'localeString', list: false },
+        ];
+        input.draft.variants[0].currencyPrices = { CNY: '22' };
+        input.draft.variants[0].variantCustomFields = {
+            specification: '新规格',
+            notes: { zh_Hans: '新说明', en: 'New' },
+        };
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        const handler = mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)!;
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(handler).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variables: {
+                    input: [
+                        {
+                            id: 'variant-1',
+                            prices: [{ currencyCode: 'CNY', price: 2200 }],
+                            customFields: { specification: '新规格' },
+                            translations: [
+                                { languageCode: 'zh_Hans', customFields: { notes: '新说明' } },
+                                { languageCode: 'en', customFields: { notes: 'New' } },
+                            ],
+                        },
+                    ],
+                },
+            }),
+        );
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+    it('removes a cleared optional other-currency price using the existing delete API input', async () => {
+        const input = unchanged();
+        input.baselineDraft!.variants[0].currencyPrices = { CNY: '20.00' };
+        input.draft.variants[0].currencyPrices = { CNY: '' };
+        await useProductEditorSave(input).handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variables: { input: [{ id: 'variant-1', prices: [{ currencyCode: 'CNY', delete: true }] }] },
+            }),
+        );
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+    it.each(['-1', 'Infinity', 'not-a-number', '999999999999999'])(
+        'rejects invalid other-currency value before any write: %s',
+        async value => {
+            const input = unchanged();
+            input.draft.variants[0].currencyPrices = { CNY: value };
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.setActiveTab).toHaveBeenCalledWith('VARIANTS');
+            expect(input.controls.setFormErrors).toHaveBeenCalledWith({
+                variants: { 0: { details: '请输入有效的 CNY 非负金额' } },
+            });
+            for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+            expect(mocks.mutate).not.toHaveBeenCalled();
+        },
+    );
+    it('validates required supplemental fields before any product write', async () => {
+        const input = fixture();
+        input.variantExtensionFields = [
+            {
+                name: 'specification',
+                type: 'string',
+                list: false,
+                nullable: false,
+                label: [{ languageCode: 'zh_Hans', value: '规格资料' }],
+            },
+        ];
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.setFormErrors).toHaveBeenCalledWith({
+            variants: { 0: { details: '规格资料不能为空' } },
+        });
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+    it('writes new SKU fields during creation and prices after receiving the saved identity', async () => {
+        const input = createFixture();
+        input.variantExtensionFields = [
+            { name: 'specification', type: 'string', list: false },
+            { name: 'notes', type: 'localeString', list: false },
+        ];
+        input.draft.variants[0].variantCustomFields = { specification: '1个月', notes: { zh_Hans: '说明' } };
+        input.draft.variants[0].currencyPrices = { CNY: '22.00' };
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variables: {
+                    input: [
+                        expect.objectContaining({
+                            customFields: { specification: '1个月' },
+                            translations: [
+                                { languageCode: 'zh_Hans', name: '规格', customFields: { notes: '说明' } },
+                            ],
+                        }),
+                    ],
+                },
+            }),
+        );
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).toHaveBeenCalledWith(
+            expect.objectContaining({
+                variables: { input: [{ id: 'created-sku', prices: [{ currencyCode: 'CNY', price: 2200 }] }] },
+            }),
+        );
+        expect(input.controls.onProductCreated).toHaveBeenCalledWith('created-product');
+    });
+    it.each(['NaN', 'Infinity', '-1', '999999999999999'])(
+        'rejects invalid current-currency price before creating anything: %s',
+        async price => {
+            const input = createFixture();
+            input.draft.variants[0].price = price;
+            await useProductEditorSave(input).handleSave();
+            expect(input.controls.setFormErrors).toHaveBeenCalledWith({
+                variants: { 0: { price: '请输入有效的 MYR 非负金额' } },
+            });
+            for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+            expect(mocks.mutate).not.toHaveBeenCalled();
+        },
+    );
+
+    it('restores a partial create on its saved identity and retries only failed fields without recreating or replenishing inventory', async () => {
+        const input = createFixture();
+        input.draft.fulfillmentType = 'digital';
+        input.draft.selectedCollectionIds = ['pending-category'];
+        input.draft.variants[0] = {
+            ...input.draft.variants[0],
+            digitalStockPolicy: 'limited',
+            digitalAvailableQuantity: 40,
+            costPrice: '9.00',
+            currencyPrices: { CNY: '22.00' },
+        };
+        mocks.mutate.mockImplementation(request =>
+            request.mutation === UPDATE_VARIANT_COST
+                ? Promise.reject(new Error('Cost unavailable'))
+                : Promise.resolve({}),
+        );
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('阶段 3'));
+        const recovery = takeCreatedProductDraft('scope-a', 'created-product')!;
+        expect(recovery.createdVariants).toEqual([{ id: 'created-sku', sku: 'SKU-1' }]);
+        expect(recovery.savedDomains['created-sku']).toEqual(['prices', 'digital']);
+        const baseline = structuredClone(input.draft);
+        baseline.selectedCollectionIds = [];
+        baseline.variants[0] = {
+            ...baseline.variants[0],
+            id: 'created-sku',
+            isNew: false,
+            costPrice: '',
+            digitalAvailableQuantity: 39,
+        };
+        const recovered = restoreCreatedProductDraft(recovery, baseline);
+        expect(recovered.variants[0]).toMatchObject({
+            id: 'created-sku',
+            isNew: false,
+            costPrice: '9.00',
+            digitalAvailableQuantity: 39,
+        });
+        expect(recovered.selectedCollectionIds).toEqual(['pending-category']);
+        for (const mutation of mocks.mutations.values()) mutation.mockClear();
+        mocks.mutate.mockReset().mockResolvedValue({});
+        mocks.query.mockResolvedValue({ data: { collection: { id: 'pending-category', filters: [] } } });
+        input.productId = 'created-product';
+        input.baselineDraft = baseline;
+        input.draft = recovered;
+        const existingProductRecord = input.data.productData!.product!;
+        input.data.productData!.product = {
+            ...existingProductRecord,
+            id: 'created-product',
+            variants: [{ ...existingProductRecord.variants[0], id: 'created-sku' }],
+        };
+        input.controls.showError = vi.fn();
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT)).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(UPDATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+        expect(mocks.mutate).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+                mutation: UPDATE_VARIANT_COST,
+                variables: { productVariantId: 'created-sku', currencyCode: 'MYR', costMicrounits: 9000 },
+            }),
+        );
+    });
+
+    it('does not replay stock after a lost quantity-write response and a subsequent order deduction', async () => {
+        const input = createFixture();
+        input.draft.fulfillmentType = 'digital';
+        input.draft.variants[0] = {
+            ...input.draft.variants[0],
+            digitalStockPolicy: 'limited',
+            digitalAvailableQuantity: 40,
+            costPrice: '9.00',
+        };
+        mocks.mutate.mockImplementation(request =>
+            request.mutation === UPDATE_DIGITAL_VARIANT
+                ? Promise.reject(new Error('Response lost after commit'))
+                : Promise.resolve({}),
+        );
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).toHaveBeenCalledWith(expect.stringContaining('库存写入结果未确认'));
+        const recovery = takeCreatedProductDraft('scope-a', 'created-product')!;
+        expect(recovery.attemptedDigitalQuantityIds).toEqual(['created-sku']);
+        expect(recovery.savedDomains['created-sku']).toBeUndefined();
+        const baseline = structuredClone(input.draft);
+        baseline.variants[0] = {
+            ...baseline.variants[0],
+            id: 'created-sku',
+            isNew: false,
+            costPrice: '',
+            digitalAvailableQuantity: 39,
+        };
+        const recovered = restoreCreatedProductDraft(recovery, baseline);
+        expect(recovered.variants[0]).toMatchObject({
+            id: 'created-sku',
+            isNew: false,
+            costPrice: '9.00',
+            digitalAvailableQuantity: 39,
+        });
+        for (const mutation of mocks.mutations.values()) mutation.mockClear();
+        mocks.mutate.mockReset().mockResolvedValue({});
+        input.productId = 'created-product';
+        input.baselineDraft = baseline;
+        input.draft = recovered;
+        const existingProductRecord = input.data.productData!.product!;
+        input.data.productData!.product = {
+            ...existingProductRecord,
+            id: 'created-product',
+            variants: [{ ...existingProductRecord.variants[0], id: 'created-sku' }],
+        };
+        input.controls.showError = vi.fn();
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT)).not.toHaveBeenCalled();
+        expect(mocks.mutations.get(CREATE_PRODUCT_VARIANTS)).not.toHaveBeenCalled();
+        expect(mocks.mutate).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({
+                mutation: UPDATE_VARIANT_COST,
+                variables: { productVariantId: 'created-sku', currencyCode: 'MYR', costMicrounits: 9000 },
+            }),
+        );
+    });
+
+    it('only retries reads while a partial-create handoff is still awaiting real SKU and workspace data', async () => {
+        const input = createFixture();
+        input.productId = 'created-product';
+        retainCreatedProductDraft('scope-a', 'created-product', input.draft, []);
+        input.data.refetchWorkspace = vi.fn().mockRejectedValue(new Error('Workspace unavailable'));
+        await useProductEditorSave(input).handleSave();
+        expect(input.data.refetchProduct).toHaveBeenCalledOnce();
+        expect(input.data.refetchWorkspace).toHaveBeenCalledOnce();
+        expect(input.controls.showError).toHaveBeenCalledWith(
+            expect.stringContaining('再次保存只会重试读取'),
+        );
+        expect(hasCreatedProductDraft('scope-a', 'created-product')).toBe(true);
+        for (const mutation of mocks.mutations.values()) expect(mutation).not.toHaveBeenCalled();
+        expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it('continues card setup on the new saved entity while ordinary save still clears the create form', async () => {
+        const input = createFixture();
+        await useProductEditorSave(input).handleSaveAndContinue();
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(hasCreatedProductDraft('scope-a', 'created-product')).toBe(false);
+        expect(input.controls.navigate).toHaveBeenCalledWith(
+            '/catalog/products/created-product?tab=variants',
+            { replace: true },
+        );
     });
 });
 

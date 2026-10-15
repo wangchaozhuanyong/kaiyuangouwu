@@ -5,6 +5,7 @@ import type {
     FulfillmentType,
     RefundPolicy,
 } from '../../graphql/commerce.graphql';
+import type { DigitalWorkspaceVariant } from '../../graphql/product-domains.graphql';
 import { stockPolicyForDeliveryMode, trackInventoryForDigitalVariant } from '../../utils/commerce-mode';
 import type { CollectionFilterValue } from '../../utils/product-collection-assignment';
 
@@ -29,6 +30,9 @@ export interface ProductVariantState {
     name: string;
     price: string;
     costPrice?: string;
+    currencyPrices?: Record<string, string>;
+    variantCustomFields?: CustomFieldValueMap;
+    inventorySummary?: DigitalWorkspaceVariant['inventory'];
     supplierId?: string | null;
     stockOnHand: number | '';
     stockAllocated: number;
@@ -125,19 +129,25 @@ export interface ProductDetailRecord {
         name: string;
         sku: string;
         price: number | null;
+        currencyCode?: string;
+        prices?: Array<{ currencyCode: string; price: number }>;
         stockOnHand: number;
         stockAllocated: number;
         trackInventory: string;
         autoCardAvailableStock?: number | null;
-        customFields?: {
-            fulfillmentType?: FulfillmentType | null;
-            digitalDeliveryMode?: DigitalDeliveryMode | null;
-            digitalStockPolicy?: DigitalStockPolicy | null;
-        } | null;
+        customFields?:
+            | ({
+                  fulfillmentType?: FulfillmentType | null;
+                  digitalDeliveryMode?: DigitalDeliveryMode | null;
+                  digitalStockPolicy?: DigitalStockPolicy | null;
+              } & Record<string, unknown>)
+            | null;
         options: Array<{ id: string }>;
         translations: Array<{
+            id?: string;
             languageCode: string;
             name: string;
+            customFields?: Record<string, unknown> | null;
         }>;
     }>;
 }
@@ -173,6 +183,8 @@ export const serializeProductEditor = (input: ProductEditorSnapshotInput) =>
             sku: variant.sku,
             name: variant.name,
             price: variant.price,
+            currencyPrices: variant.currencyPrices,
+            variantCustomFields: variant.variantCustomFields,
             physicalSettings: variant.physicalSettings,
             costPrice: variant.costPrice?.trim()
                 ? Number.isFinite(Math.round(Number(variant.costPrice) * 1_000))
@@ -223,5 +235,9 @@ export const variantFulfillmentInput = (variant: ProductVariantState, fulfillmen
 export type ProductEditorFormErrors = {
     name?: string;
     description?: string;
-    variants?: Record<number, { sku?: string; price?: string; stock?: string }>;
+    manualDeliverySlaMinutes?: string;
+    variants?: Record<
+        number,
+        { sku?: string; price?: string; stock?: string; cost?: string; details?: string }
+    >;
 };

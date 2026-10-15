@@ -6,11 +6,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { ProductMoreSettings } from './ProductMoreSettings';
 import { ProductVariantsTab } from './ProductVariantsTab';
+import type { ProductVariantState } from './product-editor-types';
 
 const editorState = vi.hoisted(() => ({
     activeCurrencyCode: 'CNY',
     effectiveFulfillmentType: 'physical',
-    variants: [],
+    variants: [] as ProductVariantState[],
     selectedOptionGroupIds: [] as string[],
     knownOptionGroups: {} as Record<string, any>,
     optionGroupSearch: '',
@@ -42,6 +43,21 @@ const editorState = vi.hoisted(() => ({
 
 vi.mock('@apollo/client/react', () => ({ useMutation: () => [vi.fn(), { loading: false }] }));
 vi.mock('./ProductEditorContext', () => ({ useProductEditor: () => editorState }));
+vi.mock('./ProductSupplySettings', () => ({
+    ProductSupplySettings: ({ variantIndex }: { variantIndex: number }) => (
+        <div data-supplier-index={variantIndex} />
+    ),
+}));
+vi.mock('./DigitalProductWorkspace', () => ({
+    DigitalProductWorkspace: ({ variantIndex, inline }: { variantIndex: number; inline: boolean }) => (
+        <div data-domain="digital" data-index={variantIndex} data-inline={String(inline)} />
+    ),
+}));
+vi.mock('./PhysicalProductWorkspace', () => ({
+    PhysicalProductWorkspace: ({ variantIndex, inline }: { variantIndex: number; inline: boolean }) => (
+        <div data-domain="physical" data-index={variantIndex} data-inline={String(inline)} />
+    ),
+}));
 
 describe('ProductVariantsTab store isolation', () => {
     it('preserves single-store ownership when an older draft contains other channel IDs', () => {
@@ -89,3 +105,43 @@ describe('ProductVariantsTab store isolation', () => {
         expect(container.textContent).toContain('单盒、整条');
     });
 });
+
+it.each(['digital', 'physical'])(
+    'keeps each %s SKU price, cost and inventory settings in its own sales row',
+    domain => {
+        editorState.effectiveFulfillmentType = domain;
+        editorState.variants = [0, 1].map(index => ({
+            id: `variant-${index}`,
+            name: `规格 ${index}`,
+            sku: `sku-${index}`,
+            price: String(100 + index),
+            costPrice: '20',
+            stockOnHand: 0,
+            stockAllocated: 0,
+            enabled: true,
+            digitalDeliveryMode: 'manual_service',
+            digitalStockPolicy: 'limited',
+            optionIds: [],
+        }));
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <FeatureHelpProvider>
+                <ProductVariantsTab />
+            </FeatureHelpProvider>,
+        );
+        expect(host.textContent).toContain('规格、价格与库存');
+        const rows = host.querySelectorAll('.product-editor-sale-row');
+        expect(rows).toHaveLength(2);
+        rows.forEach((row, index) => {
+            expect(row.querySelector(`[aria-label="规格 ${index + 1} 售价"]`)).not.toBeNull();
+            expect(row.querySelector(`[aria-label="规格 ${index + 1} 成本"]`)).not.toBeNull();
+            expect(
+                row.querySelector(`[data-domain="${domain}"][data-index="${index}"][data-inline="true"]`),
+            ).not.toBeNull();
+            expect(row.querySelector('.product-editor-variant-more summary')!.textContent).toBe(
+                '更多销售设置',
+            );
+        });
+        editorState.variants = [];
+    },
+);

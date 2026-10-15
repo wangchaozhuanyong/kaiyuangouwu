@@ -11,8 +11,8 @@ import { useProductMaintenanceScope } from './useProductMaintenanceScope';
 
 export function ProductEditor() {
     const editor = useProductEditorForm();
-    const { offerRequired, managedOffer, managedBy, sourceReadOnly, canWriteProduct } =
-        useProductMaintenanceScope(editor);
+    const maintenance = useProductMaintenanceScope(editor);
+    const { offerRequired, managedOffer, managedBy, sourceReadOnly, canWriteProduct } = maintenance;
     const {
         isCreateMode,
         leaveToProductList,
@@ -30,11 +30,6 @@ export function ProductEditor() {
         saving,
         isDirty,
     } = editor;
-    const legacyTypeMismatch =
-        !isCreateMode &&
-        !!productData?.product?.customFields?.fulfillmentType &&
-        !!editor.fixedFulfillmentType &&
-        productData.product.customFields.fulfillmentType !== editor.fixedFulfillmentType;
 
     return (
         <ProductEditorProvider value={editor}>
@@ -67,7 +62,10 @@ export function ProductEditor() {
                 </header>
 
                 {/* Main Form Body */}
-                <div className="admin-mobile-editor-body w-full min-h-0 overflow-y-auto md:col-start-1 md:col-span-2 md:row-start-2">
+                <div
+                    key={editor.createDraftRevision}
+                    className="admin-mobile-editor-body w-full min-h-0 overflow-y-auto md:col-start-1 md:col-span-2 md:row-start-2"
+                >
                     <div className="product-editor-body-content w-full min-w-0 space-y-4 p-3 sm:p-4">
                         {/* 成功通知 */}
                         {notification && (
@@ -80,7 +78,7 @@ export function ProductEditor() {
                         )}
 
                         {/* 错误提示 */}
-                        {legacyTypeMismatch && (
+                        {maintenance.legacyTypeMismatch && (
                             <div
                                 role="alert"
                                 className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900"
@@ -91,6 +89,8 @@ export function ProductEditor() {
                         {errorMessage && (
                             <div
                                 role="alert"
+                                tabIndex={-1}
+                                data-product-editor-error-summary
                                 className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2 animate-fadeIn"
                             >
                                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -242,7 +242,7 @@ export function ProductEditor() {
                         <AdminButton
                             type="button"
                             onClick={handleSave}
-                            disabled={saving || legacyTypeMismatch}
+                            disabled={saving || maintenance.legacyTypeMismatch}
                             className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer transition-colors"
                         >
                             {saving ? (

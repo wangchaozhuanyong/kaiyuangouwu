@@ -1,19 +1,21 @@
-import { Check, CornerDownRight, FolderTree, Search, Tag } from 'lucide-react';
+import { CornerDownRight, FolderTree, Search } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { SearchInput } from '../../components/SearchInput';
 import { hasDirectProductAssignment } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
-import { LookupPager } from './LookupPager';
 import { buildProductCollectionGroups, filterProductCollectionGroups } from './product-collection-hierarchy';
 import { type CollectionItem } from './product-editor-types';
 import { useProductEditor } from './ProductEditorContext';
+import { ProductFacetChoices } from './ProductFacetChoices';
 
 export function ProductFacetsCollectionsTab({
     section,
     collectionSelection,
+    compact = false,
 }: {
+    compact?: boolean;
     section?: 'category' | 'facets';
     collectionSelection?: {
         selectedIds: string[];
@@ -21,22 +23,10 @@ export function ProductFacetsCollectionsTab({
     };
 }) {
     const {
-        selectedFacetValueIds,
         selectedCollectionIds: productCollectionIds,
         setSelectedCollectionIds: setProductCollectionIds,
-        facetSearch,
-        setFacetSearch,
-        facetPage,
-        facetPageSize,
-        setFacetPageSize,
-        setFacetPage,
         collectionSearch,
         setCollectionSearch,
-        toggleFacetValue,
-        facetsData,
-        facetsLoading,
-        facetsError,
-        refetchFacets,
         collectionsData,
         collectionsLoading,
         collectionsError,
@@ -74,93 +64,7 @@ export function ProductFacetsCollectionsTab({
 
     return (
         <div className={`grid min-w-0 items-start gap-4 ${section ? '' : '2xl:grid-cols-2'}`}>
-            {/* Facet 筛选标签属性 */}
-            {section !== 'category' && (
-                <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h3 className="flex shrink-0 items-center gap-2 text-sm font-bold text-slate-900">
-                            筛选属性
-                            <FeatureHelpButton topic="catalog.facets" title="筛选属性" />
-                        </h3>
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                            <AdminInput
-                                aria-label="搜索商品属性"
-                                value={facetSearch}
-                                onChange={event => {
-                                    setFacetSearch(event.target.value);
-                                    setFacetPage(0);
-                                }}
-                                placeholder="搜索属性名称"
-                                className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-blue-500"
-                            />
-                        </div>
-                    </div>
-
-                    {facetsLoading && !facetsData ? (
-                        <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
-                            正在读取属性标签…
-                        </div>
-                    ) : facetsError ? (
-                        <div
-                            role="alert"
-                            className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700"
-                        >
-                            <span>{toUserFacingError(facetsError, '属性标签读取失败，请稍后重试')}</span>
-                            <AdminButton
-                                type="button"
-                                onClick={() => void refetchFacets()}
-                                className="shrink-0 rounded bg-rose-600 px-3 py-1 font-bold text-white"
-                            >
-                                重试
-                            </AdminButton>
-                        </div>
-                    ) : facetsData?.facets?.items && facetsData.facets.items.length > 0 ? (
-                        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,22rem),1fr))] gap-x-6 gap-y-3">
-                            {facetsData.facets.items.map(facet => (
-                                <div key={facet.id} className="min-w-0 space-y-2">
-                                    <div className="flex flex-wrap items-center gap-1.5 text-xs font-bold text-slate-700">
-                                        <Tag className="h-3.5 w-3.5 shrink-0 text-blue-500" />
-                                        <span className="break-words">{facet.name}</span>
-                                        <span className="break-all text-[10px] text-slate-400 font-mono">
-                                            ({facet.code})
-                                        </span>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2">
-                                        {facet.values.map(fv => {
-                                            const isSelected = selectedFacetValueIds.includes(fv.id);
-                                            return (
-                                                <AdminButton
-                                                    key={fv.id}
-                                                    type="button"
-                                                    onClick={() => toggleFacetValue(fv.id)}
-                                                    className={`flex max-w-full cursor-pointer items-center gap-1 rounded-lg border px-2.5 py-1 text-left text-xs font-medium transition-colors ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
-                                                >
-                                                    {isSelected && <Check className="w-3 h-3" />}
-                                                    <span className="min-w-0 break-words">{fv.name}</span>
-                                                </AdminButton>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-4 bg-slate-50 rounded-lg text-xs text-slate-500">
-                            暂无筛选属性，可在商品分类与属性中添加。
-                        </div>
-                    )}
-                    <LookupPager
-                        page={facetPage}
-                        loading={facetsLoading}
-                        pageSize={facetPageSize}
-                        onPageSizeChange={setFacetPageSize}
-                        totalItems={facetsData?.facets.totalItems ?? 0}
-                        onPageChange={setFacetPage}
-                    />
-                </div>
-            )}
+            {section !== 'category' && <ProductFacetChoices compact={compact} />}
             {/* 所属商品分类 */}
             {section !== 'facets' && (
                 <div className={`min-w-0 space-y-3 ${section ? '' : 'border-t border-slate-100 pt-3'}`}>

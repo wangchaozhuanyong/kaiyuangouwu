@@ -24,10 +24,18 @@ export const digitalProductAdminSchema = gql`
         deliveryMode: String!
         stockPolicy: String!
         availableQuantity: Int
+        inventory: DigitalVariantInventorySummary!
         migrationRequired: Boolean!
         fileVersion: DigitalFileVersion
         purchaseCostMicrounits: Float
         supplier: CatalogSupplier
+    }
+    type DigitalVariantInventorySummary {
+        source: String!
+        availableQuantity: Int
+        reservedQuantity: Int
+        consumedQuantity: Int
+        observedAt: DateTime!
     }
     type CheckoutDeliveryException {
         id: ID!

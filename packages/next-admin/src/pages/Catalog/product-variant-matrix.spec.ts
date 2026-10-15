@@ -67,7 +67,8 @@ describe('applyNewOptionGroupToVariants', () => {
         expect(result[1]).toMatchObject({
             isNew: true,
             optionIds: ['large'],
-            digitalStockPolicy: 'unlimited',
+            digitalStockPolicy: 'limited',
+            digitalAvailableQuantity: 0,
         });
         expect(result[1].sku).toMatch(/^P-/);
     });

@@ -64,7 +64,10 @@ function MigrationPreviewReader({ request }: { request: MigrationPreviewRequest 
     return null;
 }
 
-export function DigitalProductWorkspace() {
+export function DigitalProductWorkspace({
+    variantIndex,
+    inline = false,
+}: { variantIndex?: number; inline?: boolean } = {}) {
     const fieldId = useId();
     const {
         productId,
@@ -76,17 +79,20 @@ export function DigitalProductWorkspace() {
         saving,
         refetchWorkspace,
         handleSave,
+        handleSaveAndContinue,
         isDirty,
         refetchProduct,
     } = useProductEditor();
     const [perVariantEnabled, setPerVariant] = useState(false);
     const mixedModes = new Set(variants.map(variant => variant.digitalDeliveryMode)).size > 1;
-    const perVariant = mixedModes || perVariantEnabled;
+    const scoped = variantIndex !== undefined;
+    const perVariant = scoped || mixedModes || perVariantEnabled;
+    const [resourcesActivated, setResourcesActivated] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const scope = getAdminQueryScope();
-    const identity = `${scope}:${productId ?? 'new'}`;
+    const identity = `${scope}:${productId ?? 'new'}:${scoped ? (variants[variantIndex]?.id ?? `draft-${variantIndex}`) : 'all'}`;
     const identityRef = useRef(identity);
     const [reviewIdentity, setReviewIdentity] = useState(identity);
     const reviewSequence = useRef(0);
@@ -300,65 +306,70 @@ export function DigitalProductWorkspace() {
     };
     const commonMode = variants[0]?.digitalDeliveryMode ?? 'manual_service';
     return (
-        <div className="space-y-4" data-product-domain="digital">
+        <div
+            className={inline ? 'product-editor-variant-domain min-w-0 space-y-3' : 'space-y-4'}
+            data-product-domain="digital"
+        >
             {previewRequest?.identity === identity && <MigrationPreviewReader request={previewRequest} />}
-            <div className="grid items-start gap-4 md:grid-cols-2">
-                <AdminField
-                    className="space-y-1.5 text-xs font-semibold text-slate-700"
-                    label={
-                        <>
-                            <span className="flex min-h-6 items-center gap-2">
-                                交付方式
-                                <FeatureHelpButton topic="catalog.auto-card" title="数字交付方式" />
-                            </span>
-                        </>
-                    }
-                >
-                    {' '}
-                    <AdminSelect
-                        aria-label="统一交付方式"
-                        value={mixedModes ? '' : commonMode}
-                        disabled={saving || busy || variants.some(v => v.digitalMigrationRequired)}
-                        onChange={event =>
-                            setVariants(current =>
-                                current.map(variant => ({
-                                    ...variant,
-                                    digitalDeliveryMode: event.target.value as DigitalDeliveryMode,
-                                    digitalStockPolicy:
-                                        event.target.value === 'auto_card'
-                                            ? 'pool_derived'
-                                            : variant.digitalStockPolicy === 'limited'
-                                              ? 'limited'
-                                              : 'unlimited',
-                                })),
-                            )
+            {!scoped && (
+                <div className="grid items-start gap-4 md:grid-cols-2">
+                    <AdminField
+                        className="space-y-1.5 text-xs font-semibold text-slate-700"
+                        label={
+                            <>
+                                <span className="flex min-h-6 items-center gap-2">
+                                    交付方式
+                                    <FeatureHelpButton topic="catalog.auto-card" title="数字交付方式" />
+                                </span>
+                            </>
                         }
-                        className={fieldClass}
                     >
-                        {mixedModes && (
-                            <option value="" disabled>
-                                已按规格设置
-                            </option>
-                        )}
-                        {modes.map(([value, label]) => (
-                            <option key={value} value={value}>
-                                {label}
-                            </option>
-                        ))}
-                    </AdminSelect>
-                </AdminField>
-                {variants.length > 1 && (
-                    <label className="flex min-h-6 items-center gap-2 pt-1 text-xs font-semibold text-slate-700">
-                        <AdminInput
-                            type="checkbox"
-                            checked={perVariant}
-                            disabled={mixedModes}
-                            onChange={event => setPerVariant(event.target.checked)}
-                        />
-                        按规格设置
-                    </label>
-                )}
-            </div>
+                        {' '}
+                        <AdminSelect
+                            aria-label="统一交付方式"
+                            value={mixedModes ? '' : commonMode}
+                            disabled={saving || busy || variants.some(v => v.digitalMigrationRequired)}
+                            onChange={event =>
+                                setVariants(current =>
+                                    current.map(variant => ({
+                                        ...variant,
+                                        digitalDeliveryMode: event.target.value as DigitalDeliveryMode,
+                                        digitalStockPolicy:
+                                            event.target.value === 'auto_card'
+                                                ? 'pool_derived'
+                                                : variant.digitalStockPolicy === 'limited'
+                                                  ? 'limited'
+                                                  : 'unlimited',
+                                    })),
+                                )
+                            }
+                            className={fieldClass}
+                        >
+                            {mixedModes && (
+                                <option value="" disabled>
+                                    已按规格设置
+                                </option>
+                            )}
+                            {modes.map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </AdminSelect>
+                    </AdminField>
+                    {variants.length > 1 && (
+                        <label className="flex min-h-6 items-center gap-2 pt-1 text-xs font-semibold text-slate-700">
+                            <AdminInput
+                                type="checkbox"
+                                checked={perVariant}
+                                disabled={mixedModes}
+                                onChange={event => setPerVariant(event.target.checked)}
+                            />
+                            按规格设置
+                        </label>
+                    )}
+                </div>
+            )}
             {commonMode === 'file_download' && !perVariant && (
                 <AdminField
                     className="block space-y-2 text-xs font-semibold text-slate-700"
@@ -379,183 +390,260 @@ export function DigitalProductWorkspace() {
                     />
                 </AdminField>
             )}
-            {variants.map((variant, index) => (
-                <div key={variant.id ?? index} className="space-y-3 border-t border-slate-100 pt-3">
-                    <strong className="block text-xs font-semibold text-slate-800">
-                        {variant.name || '默认规格'}
-                        {variant.sku ? ` · ${variant.sku}` : ''}
-                    </strong>
-                    {variant.digitalMigrationRequired ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-800">
-                            <span>本店数字库存尚未启用，请先核对旧库存，再确认切换。</span>
-                            <AdminButton
-                                type="button"
-                                disabled={pending || saving || readbackFailed}
-                                onClick={() => variant.id && void reviewMigration(variant.id)}
-                                className="font-semibold text-blue-700 disabled:opacity-50"
-                            >
-                                核对旧库存
-                            </AdminButton>
-                            {hasPendingDigitalDeliveryDraft(
-                                variant,
-                                baselineVariants?.find(baseline => baseline.id === variant.id),
-                            ) && (
-                                <>
+            {variants
+                .map((variant, index) => ({ variant, index }))
+                .filter(entry => !scoped || entry.index === variantIndex)
+                .map(({ variant, index }) => (
+                    <div
+                        key={variant.id ?? index}
+                        className={inline ? 'min-w-0 space-y-3' : 'space-y-3 border-t border-slate-100 pt-3'}
+                    >
+                        {!inline && (
+                            <strong className="block text-xs font-semibold text-slate-800">
+                                {variant.name || '默认规格'}
+                                {variant.sku ? ` · ${variant.sku}` : ''}
+                            </strong>
+                        )}
+                        {variant.digitalMigrationRequired ? (
+                            <details className="text-xs text-amber-800">
+                                <summary className="cursor-pointer font-semibold">
+                                    {inline ? '历史库存尚未接管 · 查看异常' : '历史库存处理'}
+                                </summary>
+                                {formErrors.variants?.[index]?.stock && (
+                                    <p
+                                        role="alert"
+                                        tabIndex={-1}
+                                        aria-invalid="true"
+                                        className="mt-3 text-rose-600"
+                                    >
+                                        {formErrors.variants[index].stock}
+                                    </p>
+                                )}
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                                    <span>
+                                        {inline
+                                            ? '系统尚未接管这条历史库存，当前数量未被当作新库存。需要处理的归属或占用冲突可在此查看。'
+                                            : '本店数字库存尚未启用，请先核对旧库存，再确认切换。'}
+                                    </span>
                                     <AdminButton
                                         type="button"
                                         disabled={pending || saving || readbackFailed}
-                                        onClick={() => variant.id && revertDeliveryDraft(variant.id)}
+                                        onClick={() => variant.id && void reviewMigration(variant.id)}
                                         className="font-semibold text-blue-700 disabled:opacity-50"
                                     >
-                                        撤回未保存的交付修改
+                                        {inline ? '查看接管异常' : '核对旧库存'}
                                     </AdminButton>
-                                    <p className="basis-full text-xs">
-                                        仅撤回本规格的交付方式、销售数量、可售份数和文件绑定，名称、成本及其他输入保留。
-                                    </p>
-                                </>
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <div className="grid items-start gap-4 md:grid-cols-2">
-                                {perVariant && (
-                                    <AdminField
-                                        className="space-y-1.5 text-xs font-semibold text-slate-700"
-                                        label={<>交付方式</>}
-                                    >
-                                        {' '}
-                                        <AdminSelect
-                                            aria-label={`规格 ${index + 1} 交付方式`}
-                                            value={variant.digitalDeliveryMode}
-                                            disabled={saving}
-                                            onChange={event =>
-                                                setVariants(current =>
-                                                    current.map((item, i) =>
-                                                        i === index
-                                                            ? {
-                                                                  ...item,
-                                                                  digitalDeliveryMode: event.target
-                                                                      .value as DigitalDeliveryMode,
-                                                                  digitalStockPolicy:
-                                                                      event.target.value === 'auto_card'
-                                                                          ? 'pool_derived'
-                                                                          : item.digitalStockPolicy ===
-                                                                              'limited'
-                                                                            ? 'limited'
-                                                                            : 'unlimited',
-                                                              }
-                                                            : item,
-                                                    ),
-                                                )
-                                            }
-                                            className={fieldClass}
-                                        >
-                                            {modes.map(([value, label]) => (
-                                                <option key={value} value={value}>
-                                                    {label}
-                                                </option>
-                                            ))}
-                                        </AdminSelect>
-                                    </AdminField>
-                                )}
-                                {variant.digitalDeliveryMode !== 'auto_card' && (
-                                    <AdminField
-                                        className="space-y-1.5 text-xs font-semibold text-slate-700"
-                                        label={<>销售数量</>}
-                                    >
-                                        {' '}
-                                        <AdminSelect
-                                            aria-label={`规格 ${index + 1} 销售数量`}
-                                            value={variant.digitalStockPolicy}
-                                            disabled={saving}
-                                            onChange={event =>
-                                                handleVariantFieldChange(
-                                                    index,
-                                                    'digitalStockPolicy',
-                                                    event.target.value === 'limited'
-                                                        ? 'limited'
-                                                        : 'unlimited',
-                                                )
-                                            }
-                                            className={fieldClass}
-                                        >
-                                            <option value="unlimited">不限量</option>
-                                            <option value="limited">限量销售</option>
-                                        </AdminSelect>
-                                    </AdminField>
-                                )}
-                                {variant.digitalStockPolicy === 'limited' && (
-                                    <AdminField
-                                        className="space-y-1.5 text-xs font-semibold text-slate-700"
-                                        label={<>剩余可售份数</>}
-                                    >
-                                        {' '}
-                                        <AdminInput
-                                            aria-label={`规格 ${index + 1} 可售份数`}
-                                            aria-invalid={Boolean(formErrors.variants?.[index]?.stock)}
-                                            aria-describedby={
-                                                formErrors.variants?.[index]?.stock
-                                                    ? `${fieldId}-${index}-stock-error`
-                                                    : undefined
-                                            }
-                                            type="number"
-                                            min="0"
-                                            step="1"
-                                            value={variant.digitalAvailableQuantity ?? 0}
-                                            disabled={saving}
-                                            onChange={event =>
-                                                handleVariantFieldChange(
-                                                    index,
-                                                    'digitalAvailableQuantity',
-                                                    Number(event.target.value),
-                                                )
-                                            }
-                                            className={fieldClass}
-                                        />
-                                        {formErrors.variants?.[index]?.stock && (
-                                            <span
-                                                id={`${fieldId}-${index}-stock-error`}
-                                                role="alert"
-                                                className="block text-rose-600"
+                                    {hasPendingDigitalDeliveryDraft(
+                                        variant,
+                                        baselineVariants?.find(baseline => baseline.id === variant.id),
+                                    ) && (
+                                        <>
+                                            <AdminButton
+                                                type="button"
+                                                disabled={pending || saving || readbackFailed}
+                                                onClick={() => variant.id && revertDeliveryDraft(variant.id)}
+                                                className="font-semibold text-blue-700 disabled:opacity-50"
                                             >
-                                                {formErrors.variants[index].stock}
-                                            </span>
-                                        )}
-                                    </AdminField>
-                                )}
-                                {variant.digitalDeliveryMode === 'file_download' && (
-                                    <div className="space-y-2 text-xs text-slate-600">
-                                        <span>{variant.digitalFileName ?? '尚未配置交付文件'}</span>
-                                        {perVariant && (
+                                                撤回未保存的交付修改
+                                            </AdminButton>
+                                            <p className="basis-full text-xs">
+                                                仅撤回本规格的交付方式、销售数量、可售份数和文件绑定，名称、成本及其他输入保留。
+                                            </p>
+                                        </>
+                                    )}
+                                </div>
+                            </details>
+                        ) : (
+                            <>
+                                <div className="product-editor-variant-domain-fields grid min-w-0 items-start gap-3 md:grid-cols-3">
+                                    {perVariant && (
+                                        <AdminField
+                                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                                            label={<>交付方式</>}
+                                        >
+                                            {' '}
+                                            <AdminSelect
+                                                aria-label={`规格 ${index + 1} 交付方式`}
+                                                value={variant.digitalDeliveryMode}
+                                                disabled={saving || pending}
+                                                onChange={event =>
+                                                    setVariants(current =>
+                                                        current.map((item, i) =>
+                                                            i === index
+                                                                ? {
+                                                                      ...item,
+                                                                      digitalDeliveryMode: event.target
+                                                                          .value as DigitalDeliveryMode,
+                                                                      digitalStockPolicy:
+                                                                          event.target.value === 'auto_card'
+                                                                              ? 'pool_derived'
+                                                                              : item.digitalStockPolicy ===
+                                                                                  'limited'
+                                                                                ? 'limited'
+                                                                                : 'unlimited',
+                                                                  }
+                                                                : item,
+                                                        ),
+                                                    )
+                                                }
+                                                className={fieldClass}
+                                            >
+                                                {modes.map(([value, label]) => (
+                                                    <option key={value} value={value}>
+                                                        {label}
+                                                    </option>
+                                                ))}
+                                            </AdminSelect>
+                                        </AdminField>
+                                    )}
+                                    {variant.digitalDeliveryMode !== 'auto_card' && (
+                                        <AdminField
+                                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                                            label={<>销售数量</>}
+                                        >
+                                            {' '}
+                                            <AdminSelect
+                                                aria-label={`规格 ${index + 1} 销售数量`}
+                                                value={variant.digitalStockPolicy}
+                                                disabled={saving}
+                                                onChange={event =>
+                                                    handleVariantFieldChange(
+                                                        index,
+                                                        'digitalStockPolicy',
+                                                        event.target.value === 'limited'
+                                                            ? 'limited'
+                                                            : 'unlimited',
+                                                    )
+                                                }
+                                                className={fieldClass}
+                                            >
+                                                <option value="unlimited">不限量</option>
+                                                <option value="limited">限量销售</option>
+                                            </AdminSelect>
+                                        </AdminField>
+                                    )}
+                                    {variant.digitalStockPolicy === 'limited' && (
+                                        <AdminField
+                                            className="space-y-1.5 text-xs font-semibold text-slate-700"
+                                            label={<>{variant.id ? '调整可售份数' : '初始可售份数'}</>}
+                                        >
+                                            {' '}
                                             <AdminInput
-                                                aria-label={`规格 ${index + 1} 交付文件`}
-                                                type="file"
-                                                accept=".zip,.pdf,.txt,.md"
-                                                disabled={saving || busy}
-                                                onChange={event => {
-                                                    const file = event.target.files?.[0];
-                                                    if (file) void upload(file, index);
-                                                    event.target.value = '';
-                                                }}
-                                                className="block w-full text-xs"
+                                                aria-label={`规格 ${index + 1} 可售份数`}
+                                                aria-invalid={Boolean(formErrors.variants?.[index]?.stock)}
+                                                aria-describedby={
+                                                    formErrors.variants?.[index]?.stock
+                                                        ? `${fieldId}-${index}-stock-error`
+                                                        : undefined
+                                                }
+                                                type="number"
+                                                min="0"
+                                                step="1"
+                                                value={variant.digitalAvailableQuantity ?? 0}
+                                                disabled={saving}
+                                                onChange={event =>
+                                                    handleVariantFieldChange(
+                                                        index,
+                                                        'digitalAvailableQuantity',
+                                                        Number(event.target.value),
+                                                    )
+                                                }
+                                                className={fieldClass}
                                             />
+                                            {formErrors.variants?.[index]?.stock && (
+                                                <span
+                                                    id={`${fieldId}-${index}-stock-error`}
+                                                    role="alert"
+                                                    className="block text-rose-600"
+                                                >
+                                                    {formErrors.variants[index].stock}
+                                                </span>
+                                            )}
+                                        </AdminField>
+                                    )}
+                                </div>
+                                <div
+                                    className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600"
+                                    aria-label={`规格 ${index + 1} 库存统计`}
+                                >
+                                    {variant.digitalStockPolicy === 'unlimited' ? (
+                                        <span>不限量销售</span>
+                                    ) : (
+                                        <span>
+                                            {variant.id ? '当前可售' : '初始可售'}{' '}
+                                            {variant.inventorySummary
+                                                ? (variant.inventorySummary.availableQuantity ?? '待更新')
+                                                : ((variant.digitalDeliveryMode === 'auto_card'
+                                                      ? variant.autoCardAvailableStock
+                                                      : variant.digitalAvailableQuantity) ?? '待更新')}
+                                        </span>
+                                    )}
+                                    <span>
+                                        {variant.id ? (
+                                            <>
+                                                订单占用{' '}
+                                                {variant.inventorySummary?.reservedQuantity ?? '待更新'}
+                                            </>
+                                        ) : (
+                                            '保存后统计订单占用'
                                         )}
-                                    </div>
+                                    </span>
+                                    {variant.inventorySummary?.consumedQuantity != null && (
+                                        <span>已扣减 {variant.inventorySummary.consumedQuantity}</span>
+                                    )}
+                                </div>
+                                {(variant.digitalDeliveryMode === 'file_download' ||
+                                    variant.digitalDeliveryMode === 'auto_card') && (
+                                    <details
+                                        className="product-editor-variant-resources"
+                                        onToggle={event => {
+                                            if (event.currentTarget.open) setResourcesActivated(true);
+                                        }}
+                                    >
+                                        <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                                            {variant.digitalDeliveryMode === 'auto_card'
+                                                ? '卡密与发卡设置'
+                                                : '交付文件'}
+                                        </summary>
+                                        <div className="mt-3">
+                                            {variant.digitalDeliveryMode === 'file_download' && (
+                                                <div className="space-y-2 text-xs text-slate-600">
+                                                    <span>
+                                                        {variant.digitalFileName ?? '尚未配置交付文件'}
+                                                    </span>
+                                                    {perVariant && (
+                                                        <AdminInput
+                                                            aria-label={`规格 ${index + 1} 交付文件`}
+                                                            type="file"
+                                                            accept=".zip,.pdf,.txt,.md"
+                                                            disabled={saving || busy}
+                                                            onChange={event => {
+                                                                const file = event.target.files?.[0];
+                                                                if (file) void upload(file, index);
+                                                                event.target.value = '';
+                                                            }}
+                                                            className="block w-full text-xs"
+                                                        />
+                                                    )}
+                                                </div>
+                                            )}
+                                            {variant.digitalDeliveryMode === 'auto_card' &&
+                                                resourcesActivated && (
+                                                    <ProductAutoCardSetupPanel
+                                                        variants={[variant]}
+                                                        productSaving={saving}
+                                                        productIsDirty={isDirty}
+                                                        onSaveProduct={handleSaveAndContinue ?? handleSave}
+                                                        onRefreshProduct={refetchProduct}
+                                                    />
+                                                )}
+                                        </div>
+                                    </details>
                                 )}
-                            </div>
-                            {variant.digitalDeliveryMode === 'auto_card' && (
-                                <ProductAutoCardSetupPanel
-                                    variants={[variant]}
-                                    productSaving={saving}
-                                    productIsDirty={isDirty}
-                                    onSaveProduct={handleSave}
-                                    onRefreshProduct={refetchProduct}
-                                />
-                            )}
-                        </>
-                    )}
-                </div>
-            ))}
+                            </>
+                        )}
+                    </div>
+                ))}
             {activePreview && (
                 <div
                     className="space-y-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-900"

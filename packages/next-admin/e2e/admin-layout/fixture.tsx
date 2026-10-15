@@ -9,8 +9,10 @@ import {
     adminCapabilityScopeAllows,
 } from '../../../common/src/admin-capabilities';
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
+import { client as adminClient } from '../../src/apollo';
 import { AdminPermissionsProvider } from '../../src/components/admin-permissions-context';
 import { AdminButton, PAGE_REFRESH_EVENT } from '../../src/components/AdminControls';
+import { AdminFeedbackCenter } from '../../src/components/AdminFeedbackCenter';
 import { AdminOverlayHost } from '../../src/components/AdminOverlayHost';
 import { AdminPageWorkspace } from '../../src/components/AdminPageWorkspace';
 import { ConfirmDialogContext } from '../../src/components/confirm-dialog-context';
@@ -90,6 +92,8 @@ const authFixture = view === 'login' || view === 'initial-password';
 const mockWritesEnabled =
     params.has('mockWrites') && !layoutAudit && !authFixture && !productEditorDesign && !adminRollout;
 const legacyOwnershipFixture = params.has('legacyOwnership') && digitalFixture && mockWritesEnabled;
+const productCreateResetFixture = params.has('productCreateReset') && mockWritesEnabled;
+const productCreateFieldsFixture = productCreateResetFixture && params.has('productUnifiedFields');
 const legacyStockLevel = {
     id: 'legacy-stock-demo',
     stockLocationId: 'legacy-location-demo',
@@ -224,33 +228,18 @@ const auditFacets = productEditorDesign
               translations: [{ languageCode: 'zh_Hans', name: value }],
           })),
       }));
-const auditCustomFieldEntities: EntityCustomFieldsDefinition[] = productEditorDesign
-    ? productEditorDesignCustomFields
-    : [
-          {
-              entityName: 'Product',
-              customFields: [
-                  ['auditBrand', '品牌'],
-                  ['auditOrigin', '产地'],
-                  ['auditMaterial', '主要材质'],
-                  ['auditWarranty', '保修期限'],
-                  ['auditCare', '保养说明'],
-              ].map(([name, label]) => ({
-                  __typename: 'StringCustomFieldConfig',
-                  name,
-                  type: 'string',
-                  list: false,
-                  nullable: true,
-                  label: [{ languageCode: 'zh_Hans', value: label }],
-              })),
-          },
-          {
-              entityName: 'ProductVariant',
-              customFields: [
-                  ...[
-                      ['auditSpecification', '规格'],
-                      ['auditServicePeriod', '服务周期'],
-                      ['auditDeliveryMethod', '交付方式'],
+const auditCustomFieldEntities: EntityCustomFieldsDefinition[] =
+    productEditorDesign || productCreateFieldsFixture
+        ? productEditorDesignCustomFields
+        : [
+              {
+                  entityName: 'Product',
+                  customFields: [
+                      ['auditBrand', '品牌'],
+                      ['auditOrigin', '产地'],
+                      ['auditMaterial', '主要材质'],
+                      ['auditWarranty', '保修期限'],
+                      ['auditCare', '保养说明'],
                   ].map(([name, label]) => ({
                       __typename: 'StringCustomFieldConfig',
                       name,
@@ -259,17 +248,33 @@ const auditCustomFieldEntities: EntityCustomFieldsDefinition[] = productEditorDe
                       nullable: true,
                       label: [{ languageCode: 'zh_Hans', value: label }],
                   })),
-                  {
-                      __typename: 'TextCustomFieldConfig',
-                      name: 'deliveryNote',
-                      type: 'text',
-                      list: false,
-                      nullable: true,
-                      label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
-                  },
-              ],
-          },
-      ];
+              },
+              {
+                  entityName: 'ProductVariant',
+                  customFields: [
+                      ...[
+                          ['auditSpecification', '规格'],
+                          ['auditServicePeriod', '服务周期'],
+                          ['auditDeliveryMethod', '交付方式'],
+                      ].map(([name, label]) => ({
+                          __typename: 'StringCustomFieldConfig',
+                          name,
+                          type: 'string',
+                          list: false,
+                          nullable: true,
+                          label: [{ languageCode: 'zh_Hans', value: label }],
+                      })),
+                      {
+                          __typename: 'TextCustomFieldConfig',
+                          name: 'deliveryNote',
+                          type: 'text',
+                          list: false,
+                          nullable: true,
+                          label: [{ languageCode: 'zh_Hans', value: '交付说明' }],
+                      },
+                  ],
+              },
+          ];
 const auditVariantCount = Math.min(12, Math.max(1, Number(params.get('auditVariants')) || 4));
 const variants = Array.from(
     {
@@ -769,7 +774,10 @@ const data: Record<string, unknown> = {
     globalSettings: {
         availableLanguages: ['zh_Hans', 'en'],
         serverConfig: {
-            entityCustomFields: layoutAudit || productEditorDesign ? auditCustomFieldEntities : [],
+            entityCustomFields:
+                layoutAudit || productEditorDesign || productCreateFieldsFixture
+                    ? auditCustomFieldEntities
+                    : [],
         },
         trackInventory: true,
         outOfStockThreshold: 0,
@@ -1033,8 +1041,21 @@ const data: Record<string, unknown> = {
             id: variant.id,
             sku: variant.sku,
             deliveryMode: 'manual_service',
-            stockPolicy: 'unlimited',
-            availableQuantity: null,
+            stockPolicy: params.has('limitedInventory') ? 'limited' : 'unlimited',
+            availableQuantity: params.has('limitedInventory') ? 100 : null,
+            inventory: {
+                source:
+                    params.has('migration') ||
+                    (productEditorDesign && digitalFixture && !params.has('currentInventory'))
+                        ? 'LEGACY_UNMIGRATED'
+                        : params.has('limitedInventory')
+                          ? 'LIMITED_QUOTA'
+                          : 'UNLIMITED',
+                availableQuantity: params.has('limitedInventory') ? 100 : null,
+                reservedQuantity: 2,
+                consumedQuantity: 11,
+                observedAt: now,
+            },
             migrationRequired:
                 params.has('migration') ||
                 (productEditorDesign && digitalFixture && !params.has('currentInventory')),
@@ -1325,8 +1346,18 @@ function project(
             continue;
         }
         const typeFragment = selection.selections.find(item => item.kind === Kind.FRAGMENT_SPREAD);
+        const record = source as Record<string, unknown>;
+        // Mirror the Admin operating-price resolvers while keeping each synthetic write's price live.
+        // Explicit nullable operating values must not fall back to a core price.
+        const fixtureField = Object.hasOwn(record, field.name.value)
+            ? field.name.value
+            : field.name.value === 'catalogOperatingPrice'
+              ? 'price'
+              : field.name.value === 'catalogOperatingCurrency'
+                ? 'currencyCode'
+                : field.name.value;
         const value =
-            (source as Record<string, unknown>)[field.name.value] ??
+            record[fixtureField] ??
             (field.name.value === '__typename'
                 ? typeFragment?.kind === Kind.FRAGMENT_SPREAD
                     ? fragments[typeFragment.name.value].typeCondition.name.value
@@ -1370,7 +1401,39 @@ const client = new ApolloClient({
                     }
                     const input = operation.variables.input ?? {};
                     let result: unknown;
-                    if (field.name.value === 'updateStorefrontContentBlock') {
+                    if (productCreateResetFixture && field.name.value === 'createProduct') {
+                        result = {
+                            id: `synthetic-created-${mutationReceipts.length + 1}`,
+                            name: input.translations[0].name,
+                            slug: input.translations[0].slug,
+                            enabled: input.enabled,
+                            createdAt: now,
+                            updatedAt: now,
+                        };
+                    } else if (productCreateResetFixture && field.name.value === 'createProductVariants') {
+                        result = (input as Array<Record<string, unknown>>).map((variant, index) => ({
+                            ...variant,
+                            id: `synthetic-created-variant-${mutationReceipts.length + 1}-${index}`,
+                            name: (variant.translations as Array<{ name: string }>)[0].name,
+                            stockOnHand: 0,
+                        }));
+                    } else if (
+                        productCreateResetFixture &&
+                        field.name.value === 'updateDigitalVariantConfig'
+                    ) {
+                        result = {
+                            id: input.productVariantId,
+                            availableQuantity: input.availableQuantity ?? null,
+                        };
+                    } else if (productCreateResetFixture && field.name.value === 'updateProductVariants') {
+                        result = (input as Array<Record<string, unknown>>).map(variant => ({
+                            ...variant,
+                            name: '本地新建规格',
+                            price: 0,
+                        }));
+                    } else if (productCreateResetFixture && field.name.value === 'updateProductVariantCost') {
+                        result = true;
+                    } else if (field.name.value === 'updateStorefrontContentBlock') {
                         const blocks = data.storefrontContentBlocks as Array<Record<string, unknown>>;
                         const block = blocks.find(b => b.id === input.id);
                         if (!block || input.expectedUpdatedAt !== block.updatedAt) {
@@ -1646,7 +1709,9 @@ const client = new ApolloClient({
                             availableLanguages: ['zh_Hans', 'en'],
                             serverConfig: {
                                 entityCustomFields:
-                                    layoutAudit || productEditorDesign ? auditCustomFieldEntities : [],
+                                    layoutAudit || productEditorDesign || productCreateFieldsFixture
+                                        ? auditCustomFieldEntities
+                                        : [],
                             },
                         },
                         me: {
@@ -1852,6 +1917,8 @@ const client = new ApolloClient({
             }),
     ),
 });
+// Domain writes use the exported client; keep this opt-in creation scenario on the same local-only link.
+if (productCreateResetFixture) adminClient.setLink(client.link);
 const tabOperations: Array<{
     name: string;
     variables: Record<string, unknown>;
@@ -2116,6 +2183,7 @@ if (view === 'performance') {
 } else if (view === 'tabs' || view === 'split') {
     createRoot(document.getElementById('root')!).render(
         <ThemeProvider>
+            <AdminFeedbackCenter />
             {layoutAudit && <FixtureAuditTheme />}
             <ApolloProvider client={client}>
                 <FixtureSettingsConfirmation

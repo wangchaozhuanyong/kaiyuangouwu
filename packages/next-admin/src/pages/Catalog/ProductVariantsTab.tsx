@@ -5,14 +5,17 @@ import { AdminField } from '../../components/AdminField';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { CREATE_OPTION_GROUP } from '../../graphql/catalog-admin.graphql';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import { DigitalProductWorkspace } from './DigitalProductWorkspace';
+import { PhysicalProductWorkspace } from './PhysicalProductWorkspace';
 import { useProductEditor } from './ProductEditorContext';
+import { ProductVariantSaleExtras } from './ProductVariantSaleExtras';
 import { splitOptionValues, toOptionGroupCode } from './catalog-option-groups';
 import { SOURCE_LANGUAGE_CODE, type OptionGroupItem } from './product-editor-types';
 
 const inputClass =
     'w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs focus:border-blue-500 focus:outline-none';
 
-/** Shared specifications and pricing only. Stock and delivery belong to their domain workspaces. */
+/** Each SKU owns one editing row; domain workspaces retain their original inventory sources. */
 export function ProductVariantsTab() {
     const fieldId = useId();
     const {
@@ -27,6 +30,7 @@ export function ProductVariantsTab() {
         formErrors,
         saving,
         optionGroupsData,
+        effectiveFulfillmentType,
     } = useProductEditor();
     const [multi, setMulti] = useState(false);
     const [specName, setSpecName] = useState('');
@@ -70,18 +74,24 @@ export function ProductVariantsTab() {
     };
     return (
         <div className="min-w-0 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                    <AdminInput
-                        type="checkbox"
-                        checked={multi || variants.length > 1 || selectedOptionGroupIds.length > 0}
-                        disabled={saving || variants.length > 1 || selectedOptionGroupIds.length > 0}
-                        onChange={event => setMulti(event.target.checked)}
-                    />
-                    多规格
-                    <FeatureHelpButton topic="catalog.variants" title="商品规格" />
-                </label>
-                <div className="grid w-full max-w-64 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:w-64">
+            <div className="product-editor-variant-toolbar">
+                <div className="product-editor-variant-heading">
+                    <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                        规格、价格与库存
+                        <FeatureHelpButton topic="catalog.variants" title="规格、价格与库存" />
+                    </h2>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <AdminInput
+                            type="checkbox"
+                            checked={multi || variants.length > 1 || selectedOptionGroupIds.length > 0}
+                            disabled={saving || variants.length > 1 || selectedOptionGroupIds.length > 0}
+                            onChange={event => setMulti(event.target.checked)}
+                        />
+                        多规格
+                        <FeatureHelpButton topic="catalog.variants" title="商品规格" />
+                    </label>
+                </div>
+                <div className="product-editor-variant-batch">
                     <AdminInput
                         aria-label="批量售价"
                         value={batchPrice}
@@ -187,103 +197,104 @@ export function ProductVariantsTab() {
             )}
             <div className="space-y-3">
                 {variants.map((variant, index) => (
-                    <div
-                        key={variant.id ?? index}
-                        className="product-editor-variant grid min-w-0 grid-cols-1 items-start gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2"
-                    >
-                        <AdminField
-                            layout="stacked"
-                            className="space-y-1.5 text-xs font-semibold text-slate-700"
-                            label={<>{variants.length === 1 ? '规格名称' : `规格 ${index + 1}`}</>}
-                        >
-                            {' '}
-                            <AdminInput
-                                aria-label={`规格 ${index + 1} 名称`}
-                                value={variant.name}
-                                placeholder="默认规格"
-                                disabled={saving}
-                                onChange={event =>
-                                    handleVariantFieldChange(index, 'name', event.target.value)
-                                }
-                                className={inputClass}
-                            />
-                        </AdminField>
-                        <AdminField
-                            layout="stacked"
-                            className="space-y-1.5 text-xs font-semibold text-slate-700"
-                            label={<>商品编码</>}
-                        >
-                            {' '}
-                            <AdminInput
-                                aria-label={`规格 ${index + 1} 编码`}
-                                aria-invalid={Boolean(formErrors.variants?.[index]?.sku)}
-                                aria-describedby={
-                                    formErrors.variants?.[index]?.sku
-                                        ? `${fieldId}-${index}-sku-error`
-                                        : undefined
-                                }
-                                value={variant.sku}
-                                disabled={saving}
-                                onChange={event => handleVariantFieldChange(index, 'sku', event.target.value)}
-                                className={inputClass}
-                            />
-                            {formErrors.variants?.[index]?.sku && (
-                                <span
-                                    id={`${fieldId}-${index}-sku-error`}
-                                    role="alert"
-                                    className="block text-rose-600"
-                                >
-                                    {formErrors.variants[index].sku}
-                                </span>
-                            )}
-                        </AdminField>
-                        <AdminField
-                            layout="stacked"
-                            className="space-y-1.5 text-xs font-semibold text-slate-700"
-                            label={
-                                <>
-                                    售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
-                                </>
-                            }
-                        >
-                            {' '}
-                            <AdminInput
-                                aria-label={`规格 ${index + 1} 售价`}
-                                aria-invalid={Boolean(formErrors.variants?.[index]?.price)}
-                                aria-describedby={
-                                    formErrors.variants?.[index]?.price
-                                        ? `${fieldId}-${index}-price-error`
-                                        : undefined
-                                }
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={variant.price}
-                                disabled={saving}
-                                onChange={event =>
-                                    handleVariantFieldChange(index, 'price', event.target.value)
-                                }
-                                className={inputClass}
-                            />
-                            {formErrors.variants?.[index]?.price && (
-                                <span
-                                    id={`${fieldId}-${index}-price-error`}
-                                    role="alert"
-                                    className="block text-rose-600"
-                                >
-                                    {formErrors.variants[index].price}
-                                </span>
-                            )}
-                        </AdminField>
-                        <div className="min-w-0 space-y-2">
+                    <div key={variant.id ?? index} className="product-editor-sale-row min-w-0 space-y-3">
+                        <div className="product-editor-variant">
                             <AdminField
-                                layout="stacked"
+                                className="space-y-1.5 text-xs font-semibold text-slate-700"
+                                label={<>{variants.length === 1 ? '规格名称' : `规格 ${index + 1}`}</>}
+                            >
+                                {' '}
+                                <AdminInput
+                                    aria-label={`规格 ${index + 1} 名称`}
+                                    value={variant.name}
+                                    placeholder="默认规格"
+                                    disabled={saving}
+                                    onChange={event =>
+                                        handleVariantFieldChange(index, 'name', event.target.value)
+                                    }
+                                    className={inputClass}
+                                />
+                            </AdminField>
+                            <AdminField
+                                className="space-y-1.5 text-xs font-semibold text-slate-700"
+                                label={<>商品编码</>}
+                            >
+                                {' '}
+                                <AdminInput
+                                    aria-label={`规格 ${index + 1} 编码`}
+                                    aria-invalid={Boolean(formErrors.variants?.[index]?.sku)}
+                                    aria-describedby={
+                                        formErrors.variants?.[index]?.sku
+                                            ? `${fieldId}-${index}-sku-error`
+                                            : undefined
+                                    }
+                                    value={variant.sku}
+                                    disabled={saving}
+                                    onChange={event =>
+                                        handleVariantFieldChange(index, 'sku', event.target.value)
+                                    }
+                                    className={inputClass}
+                                />
+                                {formErrors.variants?.[index]?.sku && (
+                                    <span
+                                        id={`${fieldId}-${index}-sku-error`}
+                                        role="alert"
+                                        className="block text-rose-600"
+                                    >
+                                        {formErrors.variants[index].sku}
+                                    </span>
+                                )}
+                            </AdminField>
+                            <AdminField
+                                className="space-y-1.5 text-xs font-semibold text-slate-700"
+                                label={
+                                    <>
+                                        售价 ({activeCurrencyCode}) <span className="text-rose-500">*</span>
+                                    </>
+                                }
+                            >
+                                {' '}
+                                <AdminInput
+                                    aria-label={`规格 ${index + 1} 售价`}
+                                    aria-invalid={Boolean(formErrors.variants?.[index]?.price)}
+                                    aria-describedby={
+                                        formErrors.variants?.[index]?.price
+                                            ? `${fieldId}-${index}-price-error`
+                                            : undefined
+                                    }
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={variant.price}
+                                    disabled={saving}
+                                    onChange={event =>
+                                        handleVariantFieldChange(index, 'price', event.target.value)
+                                    }
+                                    className={inputClass}
+                                />
+                                {formErrors.variants?.[index]?.price && (
+                                    <span
+                                        id={`${fieldId}-${index}-price-error`}
+                                        role="alert"
+                                        className="block text-rose-600"
+                                    >
+                                        {formErrors.variants[index].price}
+                                    </span>
+                                )}
+                            </AdminField>
+                            <AdminField
                                 className="block space-y-1.5 text-xs font-semibold text-slate-700"
                                 label={<>成本 ({activeCurrencyCode}，选填)</>}
                             >
                                 {' '}
                                 <AdminInput
                                     aria-label={`规格 ${index + 1} 成本`}
+                                    aria-invalid={Boolean(formErrors.variants?.[index]?.cost)}
+                                    aria-describedby={
+                                        formErrors.variants?.[index]?.cost
+                                            ? `${fieldId}-${index}-cost-error`
+                                            : undefined
+                                    }
                                     type="number"
                                     min="0"
                                     step="0.001"
@@ -294,8 +305,17 @@ export function ProductVariantsTab() {
                                     }
                                     className={inputClass}
                                 />
+                                {formErrors.variants?.[index]?.cost && (
+                                    <span
+                                        id={`${fieldId}-${index}-cost-error`}
+                                        role="alert"
+                                        className="block text-xs text-rose-600"
+                                    >
+                                        {formErrors.variants[index].cost}
+                                    </span>
+                                )}
                             </AdminField>
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="product-editor-variant-actions text-xs">
                                 <label className="flex items-center gap-1.5">
                                     <AdminInput
                                         type="checkbox"
@@ -318,6 +338,19 @@ export function ProductVariantsTab() {
                                 )}
                             </div>
                         </div>
+                        {effectiveFulfillmentType === 'digital' ? (
+                            <DigitalProductWorkspace variantIndex={index} inline />
+                        ) : (
+                            <PhysicalProductWorkspace variantIndex={index} inline />
+                        )}
+                        <details className="product-editor-variant-more">
+                            <summary className="cursor-pointer text-xs font-semibold text-slate-700">
+                                更多销售设置
+                            </summary>
+                            <div className="mt-3 space-y-3" data-variant-more-index={index}>
+                                <ProductVariantSaleExtras variantIndex={index} />
+                            </div>
+                        </details>
                     </div>
                 ))}
             </div>

@@ -15,7 +15,7 @@ const ctx = (currency: CurrencyCode, rate: number) =>
             },
         },
         currencyCode: currency,
-    }) as RequestContext;
+    }) as unknown as RequestContext;
 
 describe('inherited shipping money readiness', () => {
     it('keeps a valid template available beside a historical unsupported currency', () => {

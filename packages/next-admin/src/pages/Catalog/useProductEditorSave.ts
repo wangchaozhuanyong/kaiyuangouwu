@@ -41,6 +41,11 @@ import {
     type CollectionFilterValue,
 } from '../../utils/product-collection-assignment';
 import { toUserFacingError } from '../../utils/user-facing-error';
+import {
+    hasCreatedProductDraft,
+    retainCreatedProductDraft,
+    type CreatedProductSavedDomain,
+} from './product-editor-draft';
 import type { ProductEditorFormErrors, ProductEditorSnapshotInput } from './product-editor-types';
 import {
     createSlugFromName,
@@ -65,6 +70,7 @@ interface ProductEditorSaveInput {
     >;
     productId: string | undefined;
     productExtensionFields: Parameters<typeof validateCustomFieldValues>[0];
+    variantExtensionFields?: Parameters<typeof validateCustomFieldValues>[0];
     controls: {
         requestConfirmation: ReturnType<typeof useConfirmDialog>;
         navigate: ReturnType<typeof useNavigate>;
@@ -74,6 +80,7 @@ interface ProductEditorSaveInput {
         setSaving: (saving: boolean) => void;
         showError: (message: string) => void;
         showNotice: (message: string) => void;
+        onProductCreated?: (productId: string) => void;
         acceptSavedDraft?: (saved: ProductEditorSaveDraft) => void;
         acceptSavedVariantIdentities?: (saved: Array<{ id: string; sku: string }>) => void;
     };
@@ -116,6 +123,8 @@ const comparableVariant = (variant: ProductEditorSaveDraft['variants'][number]) 
     name: variant.name,
     price: variant.price,
     costPrice: costDraftValue(variant.costPrice),
+    currencyPrices: variant.currencyPrices,
+    variantCustomFields: variant.variantCustomFields,
     supplierId: variant.supplierId ?? null,
     physicalSettings: variant.physicalSettings,
     digitalAvailableQuantity: digitalQuantity(variant),
@@ -210,6 +219,7 @@ export function useProductEditorSave({
     data,
     productId,
     productExtensionFields,
+    variantExtensionFields = [],
     controls,
 }: ProductEditorSaveInput) {
     const isCreateMode = !productId || productId === 'new';
@@ -277,6 +287,7 @@ export function useProductEditorSave({
         showError,
         showNotice,
         acceptSavedDraft,
+        onProductCreated,
         acceptSavedVariantIdentities,
     } = controls;
     const [createProductMutation] = useMutation<{ createProduct: { id: string } }>(CREATE_PRODUCT);
@@ -304,16 +315,91 @@ export function useProductEditorSave({
 
     const [removeProductsFromChannel] = useMutation(REMOVE_PRODUCTS_FROM_CHANNEL);
 
+    const editableVariantFields = variantExtensionFields.filter(
+        field =>
+            effectiveFulfillmentType !== 'digital' ||
+            !['barcode', 'purchaseUnit', 'saleUnit'].includes(field.name),
+    );
+    const variantCustomFieldInput = (variant: ProductEditorSaveDraft['variants'][number], create = false) => {
+        const values = variant.variantCustomFields ?? {};
+        const customFields = customFieldInputFromValues(editableVariantFields, values);
+        const original = productData?.product?.variants.find(item => item.id === variant.id);
+        const languages = new Set([
+            SOURCE_LANGUAGE_CODE,
+            ...(original?.translations.map(item => item.languageCode) ?? []),
+        ]);
+        for (const field of editableVariantFields) {
+            if (field.type !== 'localeString' && field.type !== 'localeText') continue;
+            const localized = values[field.name];
+            if (localized && typeof localized === 'object' && !Array.isArray(localized)) {
+                for (const languageCode of Object.keys(localized)) languages.add(languageCode);
+            }
+        }
+        const translations = [...languages].flatMap(languageCode => {
+            const localized = localizedCustomFieldInputFromValues(
+                editableVariantFields,
+                values,
+                languageCode,
+            );
+            if (!Object.keys(localized).length && !(create && languageCode === SOURCE_LANGUAGE_CODE))
+                return [];
+            return [
+                {
+                    languageCode,
+                    ...(create ? { name: variant.name.trim() || productName.trim() } : {}),
+                    ...(Object.keys(localized).length ? { customFields: localized } : {}),
+                },
+            ];
+        });
+        return {
+            ...(Object.keys(customFields).length ? { customFields } : {}),
+            ...(translations.length ? { translations } : {}),
+        };
+    };
+
     const saveDomainConfiguration = async (
         savedVariants: Array<{ id: string; sku: string }>,
         recordCompleted?: (stage: string) => void,
+        recordSavedDomain?: (id: string, domain: CreatedProductSavedDomain) => void,
+        recordAttemptedDigitalQuantity?: (id: string) => void,
     ) => {
         for (const variant of variants) {
             const id = variant.id ?? savedVariants.find(item => item.sku === variant.sku.trim())?.id;
             if (!id) throw new Error(`规格 ${variant.sku} 未返回保存结果`);
             const original = baselineDraft?.variants.find(item => item.id === id);
+            const prices = Object.entries(variant.currencyPrices ?? {}).flatMap(([currencyCode, value]) => {
+                if (currencyCode === activeCurrencyCode) return [];
+                const before = original?.currencyPrices?.[currencyCode]?.trim() ?? '';
+                const after = value.trim();
+                if (before === after || (before && after && Number(before) === Number(after))) return [];
+                return [
+                    {
+                        currencyCode,
+                        ...(after ? { price: Math.round(Number(after) * 100) } : { delete: true }),
+                    },
+                ];
+            });
+            const customFieldsChanged = Boolean(
+                original && !sameValue(variant.variantCustomFields, original.variantCustomFields),
+            );
+            const supplementalInput = customFieldsChanged ? variantCustomFieldInput(variant) : {};
+            if (prices.length || Object.keys(supplementalInput).length) {
+                await updateVariantsMutation({
+                    context: saveMutationContext(),
+                    variables: {
+                        input: [{ id, ...(prices.length ? { prices } : {}), ...supplementalInput }],
+                    },
+                });
+                recordCompleted?.(`SKU ${variant.sku.trim()} 币种与补充设置`);
+                if (prices.length) recordSavedDomain?.(id, 'prices');
+                if (Object.keys(supplementalInput).length) recordSavedDomain?.(id, 'details');
+            }
             if (effectiveFulfillmentType === 'digital' && digitalConfigurationChanged(variant, original)) {
                 if (variant.digitalMigrationRequired) throw new Error('请先核对并迁移该规格的旧数字库存');
+                const updatesQuantity =
+                    variant.digitalStockPolicy === 'limited' &&
+                    (!original || digitalQuantity(variant) !== digitalQuantity(original));
+                if (updatesQuantity) recordAttemptedDigitalQuantity?.(id);
                 await client.mutate({
                     context: saveMutationContext(),
                     mutation: UPDATE_DIGITAL_VARIANT,
@@ -322,8 +408,7 @@ export function useProductEditorSave({
                             productVariantId: id,
                             deliveryMode: variant.digitalDeliveryMode,
                             stockPolicy: variant.digitalStockPolicy,
-                            ...(variant.digitalStockPolicy === 'limited' &&
-                            (!original || digitalQuantity(variant) !== digitalQuantity(original))
+                            ...(updatesQuantity
                                 ? {
                                       availableQuantity: variant.digitalAvailableQuantity ?? 0,
                                       expectedAvailableQuantity: original?.digitalAvailableQuantity ?? 0,
@@ -337,6 +422,7 @@ export function useProductEditorSave({
                     },
                 });
                 recordCompleted?.(`SKU ${variant.sku.trim()} 交付配置`);
+                recordSavedDomain?.(id, 'digital');
             }
             if (
                 effectiveFulfillmentType === 'physical' &&
@@ -356,6 +442,7 @@ export function useProductEditorSave({
                     },
                 });
                 recordCompleted?.(`SKU ${variant.sku.trim()} 经营资料`);
+                recordSavedDomain?.(id, 'physical');
             }
             if (variant.supplierId !== original?.supplierId && variant.supplierId !== undefined) {
                 await client.mutate({
@@ -364,6 +451,7 @@ export function useProductEditorSave({
                     variables: { productVariantId: id, supplierId: variant.supplierId || null },
                 });
                 recordCompleted?.(`SKU ${variant.sku.trim()} 供应商`);
+                recordSavedDomain?.(id, 'supplier');
             }
             const costText = variant.costPrice?.trim();
             const originalCostText = original?.costPrice?.trim() ?? '';
@@ -382,6 +470,7 @@ export function useProductEditorSave({
                     },
                 });
                 recordCompleted?.(`SKU ${variant.sku.trim()} 成本`);
+                recordSavedDomain?.(id, 'cost');
             }
         }
     };
@@ -511,15 +600,18 @@ export function useProductEditorSave({
 
     const validateForm = (): boolean => {
         const errors: ProductEditorFormErrors = {};
-        for (const variant of variants) {
+        for (const [index, variant] of variants.entries()) {
             const original = baselineDraft?.variants.find(item => item.id === variant.id);
             if (
                 effectiveFulfillmentType === 'digital' &&
                 variant.digitalMigrationRequired &&
                 digitalConfigurationChanged(variant, original)
             ) {
-                setActiveTab('DELIVERY');
-                showError(`SKU ${variant.sku.trim()}：请先核对并迁移该规格的旧数字库存`);
+                setActiveTab('VARIANTS');
+                setFormErrors({
+                    variants: { [index]: { stock: '该规格有旧库存待系统接管，请先查看本规格的库存异常' } },
+                });
+                showError(`SKU ${variant.sku.trim()}：该规格有旧库存待系统接管，请查看本规格的库存异常`);
                 return false;
             }
             const costText = variant.costPrice?.trim();
@@ -530,7 +622,9 @@ export function useProductEditorSave({
                     !Number.isSafeInteger(Math.round(Number(costText) * 1_000)))
             ) {
                 setActiveTab('VARIANTS');
-                showError(`SKU ${variant.sku.trim()}：请输入有效的 ${activeCurrencyCode} 非负成本价`);
+                const message = `请输入有效的 ${activeCurrencyCode} 非负成本价`;
+                setFormErrors({ variants: { [index]: { cost: message } } });
+                showError(`SKU ${variant.sku.trim()}：${message}`);
                 return false;
             }
         }
@@ -550,25 +644,32 @@ export function useProductEditorSave({
                 manualDeliverySlaMinutes > 525600)
         ) {
             setActiveTab('DELIVERY');
-            showError('人工交付预计时长必须是 5 到 525600 分钟之间的整数');
+            const message = '人工交付预计时长必须是 5 到 525600 分钟之间的整数';
+            setFormErrors({ manualDeliverySlaMinutes: message });
+            showError(message);
             return false;
         }
 
         if (isCreateMode || changes.variants) {
-            const variantErrors: Record<number, { sku?: string; price?: string; stock?: string }> = {};
+            const variantErrors: NonNullable<ProductEditorFormErrors['variants']> = {};
             const skuCounts = variants.reduce<Record<string, number>>((counts, variant) => {
                 const sku = variant.sku.trim().toLowerCase();
                 if (sku) counts[sku] = (counts[sku] ?? 0) + 1;
                 return counts;
             }, {});
             variants.forEach((v, index) => {
-                const rowErr: { sku?: string; price?: string; stock?: string } = {};
+                const rowErr: NonNullable<ProductEditorFormErrors['variants']>[number] = {};
                 if (!v.sku.trim()) {
                     rowErr.sku = 'SKU 编码为必填项';
                 } else if (skuCounts[v.sku.trim().toLowerCase()] > 1) {
                     rowErr.sku = '同一商品内的 SKU 编码不能重复';
                 }
-                if (v.price === '' || isNaN(parseFloat(v.price)) || parseFloat(v.price) < 0) {
+                if (
+                    !v.price.trim() ||
+                    !Number.isFinite(Number(v.price)) ||
+                    Number(v.price) < 0 ||
+                    !Number.isSafeInteger(Math.round(Number(v.price) * 100))
+                ) {
                     rowErr.price = `请输入有效的 ${activeCurrencyCode} 非负金额`;
                 }
                 const requiresManualStock = effectiveFulfillmentType === 'physical';
@@ -586,6 +687,22 @@ export function useProductEditorSave({
                         (v.digitalAvailableQuantity ?? 0) < 0)
                 )
                     rowErr.stock = '可售份数必须为非负整数';
+                for (const [currencyCode, value] of Object.entries(v.currencyPrices ?? {})) {
+                    if (currencyCode === activeCurrencyCode || !value.trim()) continue;
+                    if (
+                        !Number.isFinite(Number(value)) ||
+                        Number(value) < 0 ||
+                        !Number.isSafeInteger(Math.round(Number(value) * 100))
+                    ) {
+                        rowErr.details = `请输入有效的 ${currencyCode} 非负金额`;
+                        break;
+                    }
+                }
+                const fieldErrors = validateCustomFieldValues(
+                    editableVariantFields,
+                    v.variantCustomFields ?? {},
+                );
+                if (Object.keys(fieldErrors).length) rowErr.details = Object.values(fieldErrors)[0];
                 if (Object.keys(rowErr).length > 0) {
                     variantErrors[index] = rowErr;
                 }
@@ -600,19 +717,25 @@ export function useProductEditorSave({
 
         if (errors.name || errors.description) {
             setActiveTab('BASIC');
-            showError('商品基础信息填写不完整，请修正标红字段');
+            const missing = [
+                ...(errors.name ? ['商品名称'] : []),
+                ...(errors.description ? ['中文商品详情'] : []),
+            ];
+            showError(`请补充${missing.join('、')}后再保存`);
             return false;
         }
 
         if (errors.variants) {
             const variantErrorEntries = Object.entries(errors.variants);
             const identityOrPriceError = variantErrorEntries.find(([, error]) => error.sku || error.price);
-            setActiveTab(identityOrPriceError ? 'VARIANTS' : 'DELIVERY');
+            setActiveTab('VARIANTS');
             const [indexText, firstError] = identityOrPriceError ?? variantErrorEntries[0];
             const index = Number(indexText);
             const variant = variants[index];
             const label = variant?.sku.trim() ? `SKU ${variant.sku.trim()}` : `第 ${index + 1} 行 SKU`;
-            showError(`${label}：${firstError.sku ?? firstError.price ?? firstError.stock ?? '填写有误'}`);
+            showError(
+                `${label}：${firstError.sku ?? firstError.price ?? firstError.stock ?? firstError.details ?? '填写有误'}`,
+            );
             return false;
         }
 
@@ -684,11 +807,30 @@ export function useProductEditorSave({
         return true;
     };
 
-    const handleSave = async () => {
+    const handleSave = async (options?: { continueEditing?: boolean }) => {
         if (saveInFlight.current) return;
         const accessError = saveAccessError();
         if (accessError) {
             showError(accessError);
+            return;
+        }
+        if (!isCreateMode && productId && hasCreatedProductDraft(saveScope.current.queryScope, productId)) {
+            saveInFlight.current = true;
+            setSaving(true);
+            setErrorMessage('');
+            try {
+                await Promise.all([refetchProduct(), data.refetchWorkspace?.()]);
+                assertSaveAccess();
+                showNotice('已读取当前商品与库存，请继续保存尚未完成的修改。');
+            } catch (failure) {
+                if (isCurrentSaveScope())
+                    showError(
+                        `部分商品已保存，当前规格与库存仍未读取成功：${toUserFacingError(failure, '请稍后重试读取')}。已填写内容仍保留，再次保存只会重试读取。`,
+                    );
+            } finally {
+                saveInFlight.current = false;
+                setSaving(false);
+            }
             return;
         }
         const savedReadback = pendingReadback.current;
@@ -797,6 +939,23 @@ export function useProductEditorSave({
             if (isCreateMode) {
                 // 阶段 1: 创建 SPU 商品实体
                 let newProductId = '';
+                let createdVariantIdentities: Array<{ id: string; sku: string }> = [];
+                const savedDomains: Record<string, CreatedProductSavedDomain[]> = {};
+                const attemptedDigitalQuantityIds = new Set<string>();
+                const continuePartialCreate = () => {
+                    retainCreatedProductDraft(
+                        saveScope.current.queryScope,
+                        newProductId,
+                        draft,
+                        createdVariantIdentities,
+                        savedDomains,
+                        [...attemptedDigitalQuantityIds],
+                    );
+                    navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
+                    return [...attemptedDigitalQuantityIds].some(id => !savedDomains[id]?.includes('digital'))
+                        ? '库存写入结果未确认，将以重新读取的库存为准，不会自动重放原数量。'
+                        : '';
+                };
                 try {
                     const createRes = await createProductMutation({
                         context: saveMutationContext(),
@@ -842,9 +1001,9 @@ export function useProductEditorSave({
                     await syncProductOptionGroups(newProductId, []);
                 } catch (err: unknown) {
                     if (!isCurrentSaveScope()) return;
-                    navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
+                    continuePartialCreate();
                     showError(
-                        `[阶段 2：商品已创建，但规格模板分配失败] ${toUserFacingError(err, '请稍后重试')}`,
+                        `[阶段 2：商品已创建，但规格模板分配失败] ${toUserFacingError(err, '请稍后重试')}。未完成的填写已保留，可继续保存。`,
                     );
                     setSaving(false);
                     return;
@@ -866,6 +1025,7 @@ export function useProductEditorSave({
                                     name: v.name.trim() || productName.trim(),
                                 },
                             ],
+                            ...variantCustomFieldInput(v, true),
                         }));
 
                         const createdResult = await createVariantsMutation({
@@ -879,14 +1039,21 @@ export function useProductEditorSave({
                                     createProductVariants?: Array<{ id: string; sku: string }>;
                                 }
                             )?.createProductVariants ?? [];
-
-                        await saveDomainConfiguration(createdList);
+                        createdVariantIdentities = createdList;
+                        await saveDomainConfiguration(
+                            createdList,
+                            undefined,
+                            (id, domain) => {
+                                (savedDomains[id] ??= []).push(domain);
+                            },
+                            id => attemptedDigitalQuantityIds.add(id),
+                        );
                     } catch (err: unknown) {
                         if (!isCurrentSaveScope()) return;
                         // SPU 已创建但规格失败，如实告知用户，不能冒充成功
-                        navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
+                        const inventoryNotice = continuePartialCreate();
                         showError(
-                            `[阶段 3：商品与规格模板已保存，但 SKU 变体创建失败] ${toUserFacingError(err, '请稍后重试')}`,
+                            `[阶段 3：${createdVariantIdentities.length ? '商品与 SKU 已保存，但规格配置未完成' : '商品与规格模板已保存，但 SKU 变体创建未完成'}] ${toUserFacingError(err, '请稍后重试')}。未完成的填写已保留，可继续保存。${inventoryNotice}`,
                         );
                         setSaving(false);
                         return;
@@ -900,17 +1067,24 @@ export function useProductEditorSave({
                     await syncProductCollections(newProductId);
                 } catch (err: unknown) {
                     if (!isCurrentSaveScope()) return;
-                    navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
+                    continuePartialCreate();
                     showError(
-                        `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}`,
+                        `[阶段 4：商品与 SKU 已保存，但销售店铺或分类归属保存失败] ${toUserFacingError(err, '请稍后重试')}。未完成的填写已保留，可继续保存。`,
                     );
                     setSaving(false);
                     return;
                 }
 
                 assertSaveAccess();
-                showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已保存！`);
-                navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
+                if (onProductCreated && !options?.continueEditing) {
+                    onProductCreated(newProductId);
+                    showNotice(
+                        `商品《${productName}》及 ${variants.length} 个规格变体已保存！表单已清空，可继续添加下一个商品。`,
+                    );
+                } else {
+                    showNotice(`商品《${productName}》及 ${variants.length} 个规格变体已保存！`);
+                    navigate(`/catalog/products/${newProductId}?tab=variants`, { replace: true });
+                }
             } else {
                 const existingVariants = variants.filter(v => v.id && !v.isNew);
                 const newVariants = variants.filter(v => v.isNew);
@@ -1023,6 +1197,7 @@ export function useProductEditorSave({
                             name: v.name.trim() || productName.trim(),
                         },
                     ],
+                    ...variantCustomFieldInput(v, true),
                 }));
                 let createdVariantList: Array<{ id: string; sku: string }> = [];
                 const hasVariantMatrix =
@@ -1177,5 +1352,8 @@ export function useProductEditorSave({
             setSaving(false);
         }
     };
-    return { handleSave };
+    return {
+        handleSave: () => handleSave(),
+        handleSaveAndContinue: () => handleSave({ continueEditing: true }),
+    };
 }

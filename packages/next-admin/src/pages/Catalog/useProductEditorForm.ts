@@ -1,10 +1,23 @@
 import { useMutation } from '@apollo/client/react';
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+    useCallback,
+    useDeferredValue,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type SetStateAction,
+} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getAdminQueryScope, sensitiveActionContext } from '../../apollo';
 import { useConfirmDialog } from '../../components/confirm-dialog-context';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
-import { addCustomFieldsToDocument } from '../../custom-fields/custom-field-utils';
+import {
+    addCustomFieldsToDocument,
+    isDashboardVisibleCustomField,
+} from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
 import { DELETE_PRODUCT_VARIANT, GET_PRODUCT_DETAIL } from '../../graphql/catalog.graphql';
 import {
@@ -12,14 +25,22 @@ import {
     type FulfillmentType,
     type RefundPolicy,
 } from '../../graphql/commerce.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminReturn } from '../../hooks/use-admin-return';
 import { usePageSize } from '../../hooks/use-page-size';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
 import { useUrlTab } from '../../hooks/use-url-tab';
+import { publishAdminFeedback } from '../../utils/admin-feedback';
+import type { AssetCategory } from '../../utils/asset-categories';
 import { stockPolicyForDeliveryMode } from '../../utils/commerce-mode';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { findUnusedSystemOptionGroupIds, isSystemImportOptionGroup } from './catalog-option-groups';
-import { productEditorDraft } from './product-editor-draft';
+import {
+    hasCreatedProductDraft,
+    productEditorDraft,
+    restoreCreatedProductDraft,
+    takeCreatedProductDraft,
+} from './product-editor-draft';
 import type { ProductEditorFormErrors } from './product-editor-types';
 import {
     PRODUCT_EDITOR_TABS,
@@ -89,12 +110,31 @@ export function mergeProductEditorReadbackDraft(
 }
 
 export function useProductEditorForm() {
+    const feedbackId = useId();
     const requestConfirmation = useConfirmDialog();
     const params = useParams<{ id: string }>();
     const navigate = useNavigate();
     const productId = params.id;
     const isCreateMode = !productId || productId === 'new';
     const productCustomFieldDefinitions = useCustomFieldDefinitions('Product');
+    const variantDefinitions = useCustomFieldDefinitions('ProductVariant');
+    const { hasAnyPermission } = useAdminPermissions();
+    const variantExtensionFields = useMemo(
+        () =>
+            variantDefinitions.filter(
+                field =>
+                    isDashboardVisibleCustomField(field) &&
+                    ![
+                        'fulfillmentType',
+                        'digitalDeliveryMode',
+                        'digitalStockPolicy',
+                        'packageQuantity',
+                        'shelfLifeDays',
+                    ].includes(field.name) &&
+                    hasAnyPermission(field.requiresPermission ?? []),
+            ),
+        [variantDefinitions, hasAnyPermission],
+    );
     const productExtensionFields = useMemo(
         () =>
             productCustomFieldDefinitions.filter(
@@ -107,20 +147,25 @@ export function useProductEditorForm() {
     );
     const productDetailDocument = useMemo(
         () =>
-            addCustomFieldsToDocument(GET_PRODUCT_DETAIL, 'Product', productCustomFieldDefinitions, [
-                'product',
-            ]),
-        [productCustomFieldDefinitions],
+            addCustomFieldsToDocument(
+                addCustomFieldsToDocument(GET_PRODUCT_DETAIL, 'Product', productCustomFieldDefinitions, [
+                    'product',
+                ]),
+                'ProductVariant',
+                variantExtensionFields,
+            ),
+        [productCustomFieldDefinitions, variantExtensionFields],
     );
 
     const [activeTab, setActiveTab] = useUrlTab<ProductEditorTab>(PRODUCT_EDITOR_TABS, 'basic');
 
     // SPU 基础字段 (严格无演示默认数据)
     const [productName, setProductName] = useState('');
+    const queuedProductName = useRef(productName);
     const [slug, setSlug] = useState('');
     const [enabled, setEnabled] = useState(true);
     const [description, setDescription] = useState('');
-    const [initialVariant] = useState<ProductVariantState>(() => ({
+    const [initialVariant, setInitialVariant] = useState<ProductVariantState>(() => ({
         sku: `P-${Date.now().toString(36)}`,
         name: '',
         price: '',
@@ -129,7 +174,7 @@ export function useProductEditorForm() {
         stockAllocated: 0,
         enabled: true,
         digitalDeliveryMode: 'manual_service',
-        digitalStockPolicy: 'unlimited',
+        digitalStockPolicy: 'limited',
         digitalAvailableQuantity: 0,
         optionIds: [],
         isNew: true,
@@ -146,6 +191,7 @@ export function useProductEditorForm() {
     const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
     const [assetPickerMode, setAssetPickerMode] = useState<'FEATURED' | 'GALLERY'>('FEATURED');
     const [assetSearch, setAssetSearch] = useState('');
+    const [assetCategory, setAssetCategory] = useState<AssetCategory>('ALL');
     const [assetPage, setAssetPage] = useState(0);
     const [assetPageSize, setAssetPageSize] = usePageSize(setAssetPage);
     const [knownAssets, setKnownAssets] = useState<Record<string, AssetItem>>({});
@@ -174,7 +220,9 @@ export function useProductEditorForm() {
 
     const [notification, setNotification] = useState('');
     const [errorMessage, setErrorMessage] = useState('');
+    const [errorRevision, setErrorRevision] = useState(0);
     const [saving, setSaving] = useState(false);
+    const [createDraftRevision, setCreateDraftRevision] = useState(0);
 
     const deferredAssetSearch = useDeferredValue(assetSearch.trim());
     const deferredFacetSearch = useDeferredValue(facetSearch.trim());
@@ -225,6 +273,7 @@ export function useProductEditorForm() {
         assetPage,
         assetPageSize,
         deferredAssetSearch,
+        assetCategory,
         optionGroupPage,
         optionGroupPageSize,
         deferredOptionGroupSearch,
@@ -233,7 +282,8 @@ export function useProductEditorForm() {
     });
 
     const effectiveFulfillmentType = fixedFulfillmentType ?? fulfillmentType;
-    const editorIdentity = `${getAdminQueryScope()}:${productId ?? 'new'}`;
+    const editorScope = getAdminQueryScope();
+    const editorIdentity = `${editorScope}:${productId ?? 'new'}`;
     const initializedEditorIdentity = useRef<string | null>(null);
     const latestEditorDraft = useRef<ProductEditorSaveDraft | null>(null);
     const hydratedEditor = useRef<{
@@ -242,23 +292,79 @@ export function useProductEditorForm() {
         draft: ProductEditorSaveDraft;
     } | null>(null);
 
+    const createChannelId = catalogChannelsData?.activeChannel.id;
+    const resetCreateDraft = useCallback(
+        (variant: ProductVariantState) => {
+            setProductName('');
+            setSlug('');
+            setEnabled(true);
+            setDescription('');
+            setFulfillmentType(fixedFulfillmentType ?? 'digital');
+            setRefundPolicy('MERCHANT_REVIEW');
+            setManualDeliverySlaMinutes(1440);
+            setDynamicCustomFieldValues(
+                productExtensionFields.some(field => field.name === 'pricingMode')
+                    ? { pricingMode: 'FIXED' }
+                    : {},
+            );
+            setFeaturedAssetId(null);
+            setFeaturedAssetPreview(null);
+            setSelectedAssetIds([]);
+            setKnownAssets({});
+            setSelectedFacetValueIds([]);
+            setSelectedCollectionIds([]);
+            setSelectedChannelIds(createChannelId ? [createChannelId] : []);
+            setSelectedOptionGroupIds([]);
+            setKnownOptionGroups({});
+            setVariants([{ ...variant }]);
+            setIsOptionTemplatesOpen(false);
+            setIsQuickCreateSpecOpen(false);
+            setIsAssetPickerOpen(false);
+            setAssetPickerMode('FEATURED');
+            setAssetSearch('');
+            setAssetCategory('ALL');
+            setAssetPage(0);
+            setFacetSearch('');
+            setFacetPage(0);
+            setCollectionSearch('');
+            setOptionGroupSearch('');
+            setOptionGroupPage(0);
+            setFormErrors({});
+            setErrorMessage('');
+        },
+        [fixedFulfillmentType, createChannelId, productExtensionFields],
+    );
+
     // 绑定从后端查询到的真实商品数据；查询结果到达后需要初始化可编辑表单。
     /* oxlint-disable react/set-state-in-effect */
     useEffect(() => {
         if (productData?.product) {
             const p = productData.product;
+            const hasRecovery = p.id === productId && hasCreatedProductDraft(editorScope, p.id);
+            // A failed create must not consume its handoff before current-store SKU identities are readable.
+            if (
+                hasRecovery &&
+                (fixedFulfillmentType ?? p.customFields?.fulfillmentType ?? 'digital') === 'digital' &&
+                p.variants.length > 0 &&
+                workspaceVariants === undefined
+            )
+                return;
             const draft = productEditorDraft(
                 p,
                 fixedFulfillmentType,
                 productExtensionFields,
                 workspaceVariants,
+                variantExtensionFields,
             );
+            const recovery = hasRecovery ? takeCreatedProductDraft(editorScope, p.id) : undefined;
             const previous = hydratedEditor.current;
-            const nextDraft =
-                previous?.identity === editorIdentity && latestEditorDraft.current
-                    ? mergeProductEditorReadbackDraft(latestEditorDraft.current, previous.draft, draft)
-                    : draft;
+            const nextDraft = recovery
+                ? restoreCreatedProductDraft(recovery, draft)
+                : previous?.identity === editorIdentity && latestEditorDraft.current
+                  ? mergeProductEditorReadbackDraft(latestEditorDraft.current, previous.draft, draft)
+                  : draft;
             hydratedEditor.current = { identity: editorIdentity, product: p, draft };
+            if (recovery) latestEditorDraft.current = nextDraft;
             initializedEditorIdentity.current = editorIdentity;
             // Compare against the previous server/save snapshot, so a late read cannot replace newer input.
             setProductName(nextDraft.productName);
@@ -290,39 +396,32 @@ export function useProductEditorForm() {
             if (initializedEditorIdentity.current === editorIdentity) return;
             initializedEditorIdentity.current = editorIdentity;
             hydratedEditor.current = null;
-            setProductName('');
-            setSlug('');
-            setEnabled(true);
-            setDescription('');
-            setFulfillmentType(fixedFulfillmentType ?? 'digital');
-            setRefundPolicy('MERCHANT_REVIEW');
-            setManualDeliverySlaMinutes(1440);
-            setDynamicCustomFieldValues({});
-            setFeaturedAssetId(null);
-            setFeaturedAssetPreview(null);
-            setSelectedAssetIds([]);
-            setKnownAssets({});
-            setSelectedFacetValueIds([]);
-            setSelectedCollectionIds([]);
-            setSelectedChannelIds([]);
-            setSelectedOptionGroupIds([]);
-            setKnownOptionGroups({});
-            setVariants([{ ...initialVariant }]);
-            setIsOptionTemplatesOpen(false);
+            resetCreateDraft(initialVariant);
         }
     }, [
         fixedFulfillmentType,
         productData,
         isCreateMode,
         productExtensionFields,
+        variantExtensionFields,
         workspaceVariants,
         initialVariant,
         editorIdentity,
+        editorScope,
+        productId,
+        resetCreateDraft,
     ]);
 
     useEffect(() => {
         if (fixedFulfillmentType) setFulfillmentType(fixedFulfillmentType);
     }, [fixedFulfillmentType]);
+
+    useEffect(() => {
+        if (!isCreateMode || !productExtensionFields.some(field => field.name === 'pricingMode')) return;
+        setDynamicCustomFieldValues(current =>
+            current.pricingMode === undefined ? { ...current, pricingMode: 'FIXED' } : current,
+        );
+    }, [isCreateMode, productExtensionFields]);
 
     useEffect(() => {
         if (isCreateMode && catalogChannelsData?.activeChannel.id) {
@@ -372,6 +471,7 @@ export function useProductEditorForm() {
     );
     useLayoutEffect(() => {
         latestEditorDraft.current = currentEditorDraft;
+        queuedProductName.current = currentEditorDraft.productName;
     }, [currentEditorDraft]);
     const currentEditorSnapshot = useMemo(
         () => serializeProductEditor(currentEditorDraft),
@@ -395,12 +495,20 @@ export function useProductEditorForm() {
                 selectedChannelIds: activeChannelId ? [activeChannelId] : [],
                 selectedOptionGroupIds: [],
                 variants: [{ ...initialVariant }],
-                dynamicCustomFields: {},
+                dynamicCustomFields: productExtensionFields.some(field => field.name === 'pricingMode')
+                    ? { pricingMode: 'FIXED' }
+                    : {},
             };
         }
         const product = productData?.product;
         if (!product) return null;
-        return productEditorDraft(product, fixedFulfillmentType, productExtensionFields, workspaceVariants);
+        return productEditorDraft(
+            product,
+            fixedFulfillmentType,
+            productExtensionFields,
+            workspaceVariants,
+            variantExtensionFields,
+        );
     }, [
         catalogChannelsData?.activeChannel.id,
         initialVariant,
@@ -409,6 +517,7 @@ export function useProductEditorForm() {
         productData,
         workspaceVariants,
         productExtensionFields,
+        variantExtensionFields,
     ]);
     const baselineEditorSnapshot = useMemo(
         () => (baselineEditorDraft ? serializeProductEditor(baselineEditorDraft) : null),
@@ -437,9 +546,25 @@ export function useProductEditorForm() {
         setTimeout(() => setNotification(''), 4000);
     };
 
-    const showError = (msg: string) => {
+    const showError = (msg: string, title = '商品操作未完成') => {
         setErrorMessage(msg);
+        setErrorRevision(revision => revision + 1);
         setNotification('');
+        publishAdminFeedback({
+            id: `product-editor-error-${feedbackId}`,
+            kind: 'error',
+            title,
+            message: msg,
+        });
+    };
+
+    const changeProductName = (value: SetStateAction<string>) => {
+        const name = typeof value === 'function' ? value(queuedProductName.current) : value;
+        queuedProductName.current = name;
+        setProductName(name);
+        setVariants(current =>
+            current.length === 1 && current[0].optionIds.length === 0 ? [{ ...current[0], name }] : current,
+        );
     };
 
     const handleVariantFieldChange = <K extends keyof ProductVariantState>(
@@ -462,6 +587,11 @@ export function useProductEditorForm() {
                 : {}),
         };
         setVariants(updated);
+        if (field === 'name' && updated.length === 1 && current.optionIds.length === 0) {
+            queuedProductName.current = value as string;
+            setProductName(value as string);
+            if (formErrors.name) setFormErrors(previous => ({ ...previous, name: undefined }));
+        }
 
         // 清除对应字段的表单错误
         if (formErrors.variants?.[index]) {
@@ -507,7 +637,8 @@ export function useProductEditorForm() {
                 stockAllocated: 0,
                 enabled: true,
                 digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'unlimited',
+                digitalStockPolicy: 'limited',
+                digitalAvailableQuantity: 0,
                 optionIds: [],
                 isNew: true,
             },
@@ -594,7 +725,8 @@ export function useProductEditorForm() {
                 stockAllocated: 0,
                 enabled: true,
                 digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'unlimited',
+                digitalStockPolicy: 'limited',
+                digitalAvailableQuantity: 0,
                 optionIds: combination.map(option => option.id),
                 isNew: true,
             }));
@@ -625,7 +757,8 @@ export function useProductEditorForm() {
                 stockAllocated: 0,
                 enabled: true,
                 digitalDeliveryMode: 'manual_service',
-                digitalStockPolicy: 'unlimited',
+                digitalStockPolicy: 'limited',
+                digitalAvailableQuantity: 0,
                 optionIds: combination.map(option => option.id),
                 isNew: true,
             }));
@@ -672,7 +805,7 @@ export function useProductEditorForm() {
         );
     };
 
-    const { handleSave } = useProductEditorSave({
+    const { handleSave, handleSaveAndContinue } = useProductEditorSave({
         draft: currentEditorDraft,
         baselineDraft: isCreateMode ? null : baselineEditorDraft,
         activeCurrencyCode,
@@ -686,6 +819,7 @@ export function useProductEditorForm() {
         },
         productId,
         productExtensionFields,
+        variantExtensionFields,
         controls: {
             requestConfirmation,
             navigate,
@@ -693,8 +827,19 @@ export function useProductEditorForm() {
             setErrorMessage,
             setFormErrors,
             setSaving,
-            showError,
+            showError: message => showError(message, '商品未保存'),
             showNotice,
+            onProductCreated: () => {
+                if (!isCreateMode || initializedEditorIdentity.current !== editorIdentity) return;
+                const nextVariant = {
+                    ...initialVariant,
+                    sku: `P-${Math.max(Date.now(), Number.parseInt(initialVariant.sku.slice(2), 36) + 1).toString(36)}`,
+                };
+                setInitialVariant(nextVariant);
+                resetCreateDraft(nextVariant);
+                setActiveTab('BASIC');
+                setCreateDraftRevision(revision => revision + 1);
+            },
             acceptSavedDraft: saved => {
                 const previous = hydratedEditor.current;
                 if (previous?.identity !== editorIdentity) return;
@@ -718,15 +863,18 @@ export function useProductEditorForm() {
 
     return {
         isCreateMode,
+        createDraftRevision,
         productId,
         activeTab,
         setActiveTab,
         leaveToProductList,
         effectiveFulfillmentType,
+        variantExtensionFields,
+        availableCurrencyCodes: channelData?.activeChannel.availableCurrencyCodes ?? [activeCurrencyCode],
         commerceMode,
         activeCurrencyCode,
         productName,
-        setProductName,
+        setProductName: changeProductName,
         slug,
         setSlug,
         enabled,
@@ -754,6 +902,8 @@ export function useProductEditorForm() {
         setAssetPickerMode,
         assetSearch,
         setAssetSearch,
+        assetCategory,
+        setAssetCategory,
         assetPage,
         assetPageSize,
         setAssetPageSize,
@@ -798,6 +948,7 @@ export function useProductEditorForm() {
         notification,
         setNotification,
         errorMessage,
+        errorRevision,
         setErrorMessage,
         saving,
         isDirty: hasUnsavedChanges,
@@ -835,6 +986,7 @@ export function useProductEditorForm() {
         handleGenerateVariantMatrix,
         handleDeleteVariant,
         handleSave,
+        handleSaveAndContinue,
         navigate,
         fixedFulfillmentType,
     };

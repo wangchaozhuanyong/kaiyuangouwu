@@ -10,7 +10,6 @@ import { useServerDraft } from '../../hooks/use-server-draft';
 
 import { AccessibleDialogSurface } from '../../components/AccessibleDialogSurface';
 import { FeatureHelpButton } from '../../components/FeatureHelp';
-import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { CustomFieldValueMap } from '../../custom-fields/custom-field-types';
 import {
     addCustomFieldsToDocument,
@@ -21,6 +20,7 @@ import {
     validateCustomFieldValues,
 } from '../../custom-fields/custom-field-utils';
 import { useCustomFieldDefinitions } from '../../custom-fields/custom-fields-context';
+import { DynamicCustomFieldsForm } from '../../custom-fields/DynamicCustomFieldsForm';
 import type { NextAdminPageBlockContext } from '../../extensions/extension-api';
 import {
     CATALOG_PRODUCT_WORKSPACE_QUERY,
@@ -45,6 +45,7 @@ import { dateInputToUtcDateTime } from './catalog-date';
 import { calculateDefaultExpiryDate } from './catalog-expiry';
 import { calculateDraftMargin } from './catalog-margin';
 import { CatalogUnitInput } from './catalog-unit-input';
+import { useOptionalProductEditor } from './product-editor-context';
 
 interface VariantDraft {
     id: string;
@@ -743,6 +744,8 @@ interface VariantPricesData {
 
 export function ProductVariantPricesBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
+    const editor = useOptionalProductEditor();
+    const linkedEditor = editor?.productId === productId ? editor : null;
     const query = useQuery<VariantPricesData>(PRODUCT_VARIANT_PRICES_QUERY, {
         variables: { productId },
         skip: !productId,
@@ -796,6 +799,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
             <PanelState tone="error" label="多币种 SKU 价格加载失败" action={() => void query.refetch()} />
         );
     if (data.product.variants.length === 0) return null;
+    const editableCurrencies = currencies.filter(currency => currency !== linkedEditor?.activeCurrencyCode);
     const change = (variantId: string, currencyCode: string, value: string) => {
         setDrafts(current => ({
             ...current,
@@ -809,7 +813,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
         try {
             const input = dirtyIds.map(id => ({
                 id,
-                prices: currencies.map(currencyCode => ({
+                prices: editableCurrencies.map(currencyCode => ({
                     currencyCode,
                     price: Math.round(number(drafts[id]?.[currencyCode] ?? '', `${currencyCode} 价格`) * 100),
                 })),
@@ -819,7 +823,7 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                 throw new Error('后端未返回所有已更新 SKU');
             }
             setDirtyIds([]);
-            setNotice(`已保存 ${input.length} 个 SKU 的 ${currencies.length} 种币种价格`);
+            setNotice(`已保存 ${input.length} 个 SKU 的 ${editableCurrencies.length} 种币种价格`);
             await query.refetch();
         } catch (cause) {
             setError(toUserFacingError(cause, '多币种价格保存失败'));
@@ -833,6 +837,12 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                         <CircleDollarSign className="h-4 w-4 text-emerald-600" /> 其他币种价格（可选）
                         <FeatureHelpButton topic="catalog.variant-channels" title="其他币种价格" />
                     </h2>
+                    {linkedEditor && (
+                        <p className="mt-2 text-xs text-slate-500">
+                            {linkedEditor.activeCurrencyCode}{' '}
+                            售价与上方同步，随“保存商品”提交；“保存价格”仅保存其他币种。
+                        </p>
+                    )}
                 </div>
                 <AdminButton
                     type="button"
@@ -864,29 +874,46 @@ export function ProductVariantPricesBlock({ context }: { context: NextAdminPageB
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {data.product.variants.map(variant => (
-                            <tr key={variant.id}>
-                                <td className="px-3 py-3">
-                                    <strong>{variant.name}</strong>
-                                    <small className="ml-2 font-mono text-slate-500">{variant.sku}</small>
-                                </td>
-                                {currencies.map(currency => (
-                                    <td key={currency} className="px-3 py-3">
-                                        <AdminInput
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            aria-label={`${variant.sku} ${currency} 价格`}
-                                            value={drafts[variant.id]?.[currency] ?? ''}
-                                            onChange={event =>
-                                                change(variant.id, currency, event.target.value)
-                                            }
-                                            className="w-32 rounded-lg border border-slate-300 px-3 py-2 font-mono"
-                                        />
+                        {data.product.variants.map(variant => {
+                            const draftVariant = linkedEditor?.variants.find(item => item.id === variant.id);
+                            const displayName =
+                                draftVariant?.name || linkedEditor?.productName || variant.name;
+                            const displaySku = draftVariant?.sku ?? variant.sku;
+                            return (
+                                <tr key={variant.id}>
+                                    <td className="px-3 py-3">
+                                        <strong>{displayName}</strong>
+                                        <small className="ml-2 font-mono text-slate-500">{displaySku}</small>
                                     </td>
-                                ))}
-                            </tr>
-                        ))}
+                                    {currencies.map(currency => (
+                                        <td key={currency} className="px-3 py-3">
+                                            <AdminInput
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                aria-label={`${displaySku} ${currency} 价格`}
+                                                readOnly={currency === linkedEditor?.activeCurrencyCode}
+                                                title={
+                                                    currency === linkedEditor?.activeCurrencyCode
+                                                        ? '请在上方修改售价，并点击“保存商品”'
+                                                        : undefined
+                                                }
+                                                value={
+                                                    draftVariant &&
+                                                    currency === linkedEditor?.activeCurrencyCode
+                                                        ? draftVariant.price
+                                                        : (drafts[variant.id]?.[currency] ?? '')
+                                                }
+                                                onChange={event =>
+                                                    change(variant.id, currency, event.target.value)
+                                                }
+                                                className="w-32 rounded-lg border border-slate-300 px-3 py-2 font-mono"
+                                            />
+                                        </td>
+                                    ))}
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -914,10 +941,13 @@ interface ProductVariantCustomFieldsData {
 
 export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdminPageBlockContext }) {
     const productId = stringId(context.entity?.id);
+    const editor = useOptionalProductEditor();
+    const linkedEditor = editor?.productId === productId ? editor : null;
     const isDigital = isDigitalProduct(context);
     const productName =
-        (typeof context.entity?.name === 'string' && context.entity.name) ||
-        ((context.entity?.translations as Array<{ name?: string }>)?.[0]?.name ?? '');
+        linkedEditor?.productName ??
+        ((typeof context.entity?.name === 'string' && context.entity.name) ||
+            ((context.entity?.translations as Array<{ name?: string }>)?.[0]?.name ?? ''));
     const definitions = useCustomFieldDefinitions('ProductVariant');
     const { hasAnyPermission } = useAdminPermissions();
     const visibleDefinitions = useMemo(
@@ -1108,11 +1138,15 @@ export function ProductVariantCustomFieldsBlock({ context }: { context: NextAdmi
                         {selectedId && !selected && (
                             <option value={selectedId}>当前规格已不可用，请重新选择</option>
                         )}
-                        {variants.map(variant => (
-                            <option key={variant.id} value={variant.id}>
-                                {variant.name} · {variant.sku}
-                            </option>
-                        ))}
+                        {variants.map(variant => {
+                            const draftVariant = linkedEditor?.variants.find(item => item.id === variant.id);
+                            return (
+                                <option key={variant.id} value={variant.id}>
+                                    {draftVariant?.name || linkedEditor?.productName || variant.name} ·{' '}
+                                    {draftVariant?.sku ?? variant.sku}
+                                </option>
+                            );
+                        })}
                     </AdminSelect>
                     <AdminButton
                         type="button"
