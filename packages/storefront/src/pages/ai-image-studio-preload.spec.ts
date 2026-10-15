@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
-import type { ShopApi } from '../api';
-import type { MarketConfig } from '../types';
+
+import { type ShopApi } from '../api';
+import { type MarketConfig } from '../types';
 
 const runtime = vi.hoisted(() => {
     let release = () => undefined as void;

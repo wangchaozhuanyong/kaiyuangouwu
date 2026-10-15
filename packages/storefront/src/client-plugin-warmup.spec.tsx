@@ -2,14 +2,14 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StorefrontContentBlock } from './types';
+
+import { ClientPluginSlot } from './client-plugins/client-plugin-registry';
+import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
+import { type StorefrontContentBlock } from './types';
 
 const runtime = vi.hoisted(() => ({ prepare: vi.fn(), route: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('./pages/ai-image-studio-preload', () => ({ prepareImageStudioData: runtime.prepare }));
 vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: runtime.route }));
-
-import { ClientPluginSlot } from './client-plugins/client-plugin-registry';
-import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const block = {
