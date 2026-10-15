@@ -2,7 +2,7 @@
   "project": "kaiyuangouwu / Vendure",
   "baseSha": "3dfcf5ef84c2cb24113c105d36e56c77b5867f72",
   "branch": "codex/catalog-continuous-sync-20261015",
-  "generatedAtUtc": "2026-10-15T19:05:43.223Z",
+  "generatedAtUtc": "2026-10-15T20:01:21.714Z",
   "worktree": "/Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/catalog-continuous-sync-20261015",
   "committed": false,
   "pushed": false,
@@ -22,7 +22,7 @@
       "sha256": "23218c5676629a9bcc0448ededb271592401719e49613e655c3036f69265e04f"
     }
   ],
-  "sourceDigest": "3bf7d6531c075176ac07a050da77a4fca889893e20b78974032efb224edeb4b7",
+  "sourceDigest": "89c7bb1ff6b2d84ae0600601b15b505450c613f0a9da627a26b83b2bf2dabf2f",
   "changedFiles": [
     {
       "path": "packages/catalog-management-plugin/src/api-extensions.ts",
@@ -69,8 +69,20 @@
       "sha256": "eeb4155526d65a219f08d81106f696d8c62eae238fad1d38cb5347b2689e35f2"
     },
     {
+      "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-shipping-money.spec.ts",
+      "sha256": "d71beb03356cbccba67a4a932e0c474074b4e83c4f0887aafc9444fd94bb98b8"
+    },
+    {
+      "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-shipping-money.ts",
+      "sha256": "35d49bb24acbb6afd17ebeda988db4dab61721ebdf2d1fbb133667cd903ea8fa"
+    },
+    {
+      "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-shipping.service.spec.ts",
+      "sha256": "79b05f4efc3bd5c43a663a2b05f756d48f39322d6d37162412775dbf30ff94b9"
+    },
+    {
       "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-shipping.service.ts",
-      "sha256": "9fe4eb821204c588ee3864cba60a6c0d31e5be04be6964c4adc6197b87e47708"
+      "sha256": "6761231b6170ed9974932bd298b3f0e2cb0db1c71f2d61d08f58a77e3ef9909a"
     },
     {
       "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-supply.service.ts",
@@ -221,6 +233,10 @@
       "sha256": "aa8e7909f06b6aad46e7b4cf82b90f99ea503dcfceb3297029dca4654d2f5f5a"
     },
     {
+      "path": "packages/next-admin/src/pages/Catalog/useProductMaintenanceScope.ts",
+      "sha256": "08f073907a74c973b867b7878661ab59e373c6b8729aa5874e3c0a465272337b"
+    },
+    {
       "path": "packages/next-admin/src/pages/Sales/AfterSalesModule.spec.tsx",
       "sha256": "782d8112ae8fff553b4dfb5e35a41cfd40df6f2d5bf848bb7f456e77361c1baf"
     },
@@ -237,12 +253,20 @@
       "sha256": "0a65e4230410e675549bf2adb449f8cd0e14da5b60f78b00b70b62f360afef8b"
     },
     {
+      "path": "packages/store-management-plugin/e2e/catalog-sync-closeout-acceptance.ts",
+      "sha256": "72e9f335af6d85edd373283201244849f81290f9f6b0402c277c5570e129a1c6"
+    },
+    {
+      "path": "packages/store-management-plugin/e2e/catalog-sync-crash-worker.mjs",
+      "sha256": "01403b1015e88d9102a0e509a351c2c9004b36a7d161db0900d783b73a9d9469"
+    },
+    {
       "path": "packages/store-management-plugin/e2e/catalog-sync-fixture-links.ts",
       "sha256": "a06b15599d18e16d166f5ad8391a845edf41f2cc6ac2393eca9a95e85e7e4dc7"
     },
     {
       "path": "packages/store-management-plugin/e2e/catalog-sync-physical-acceptance.ts",
-      "sha256": "bd049c5dc7fc7b129a6255edc9beb5a72c686fc7a8cc06cc6e87c39394bdf3c2"
+      "sha256": "38ef7a83a0f0db31ebd34514142ab3dc09cfdbb531f8627d375965a6b5643a30"
     },
     {
       "path": "packages/store-management-plugin/e2e/catalog-sync-scale-acceptance.ts",
@@ -321,6 +345,14 @@
       "sha256": "c9d6d8238d5ab99bb8749bd4c486bc91bdd9292d27e1950e2f80ae53756d2e1c"
     },
     {
+      "path": "packages/storefront/src/api/cart-shipping-selection.spec.ts",
+      "sha256": "8b9f70ca873ba3e85d4aca853fb2c57fb468f93616234f64d8f26b2f6c583e4a"
+    },
+    {
+      "path": "packages/storefront/src/api/cart-shipping-selection.ts",
+      "sha256": "29e4806adff51689fcfb6b38e15c8439a996e03665033b00851dafbc71b5d749"
+    },
+    {
       "path": "packages/storefront/src/cart/cart-controller.ts",
       "sha256": "7cd56c1b39e6a9b26b370622e5aa48bcd5d8f84d56cd8dfbb0418a80dac03c2e"
     },
@@ -339,34 +371,6 @@
     {
       "path": "packages/storefront/src/types.ts",
       "sha256": "cd2bb2196463b7a34d20994d1b2e20b8966a4dc90ad1b3966256078cea9252e7"
-    },
-    {
-      "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-shipping-money.spec.ts",
-      "sha256": "d71beb03356cbccba67a4a932e0c474074b4e83c4f0887aafc9444fd94bb98b8"
-    },
-    {
-      "path": "packages/commerce-fulfillment-plugin/src/catalog-sync-shipping-money.ts",
-      "sha256": "35d49bb24acbb6afd17ebeda988db4dab61721ebdf2d1fbb133667cd903ea8fa"
-    },
-    {
-      "path": "packages/next-admin/src/pages/Catalog/useProductMaintenanceScope.ts",
-      "sha256": "08f073907a74c973b867b7878661ab59e373c6b8729aa5874e3c0a465272337b"
-    },
-    {
-      "path": "packages/store-management-plugin/e2e/catalog-sync-closeout-acceptance.ts",
-      "sha256": "72e9f335af6d85edd373283201244849f81290f9f6b0402c277c5570e129a1c6"
-    },
-    {
-      "path": "packages/store-management-plugin/e2e/catalog-sync-crash-worker.mjs",
-      "sha256": "01403b1015e88d9102a0e509a351c2c9004b36a7d161db0900d783b73a9d9469"
-    },
-    {
-      "path": "packages/storefront/src/api/cart-shipping-selection.spec.ts",
-      "sha256": "8b9f70ca873ba3e85d4aca853fb2c57fb468f93616234f64d8f26b2f6c583e4a"
-    },
-    {
-      "path": "packages/storefront/src/api/cart-shipping-selection.ts",
-      "sha256": "29e4806adff51689fcfb6b38e15c8439a996e03665033b00851dafbc71b5d749"
     }
   ]
 }

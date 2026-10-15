@@ -104,8 +104,15 @@ export class CatalogSyncShippingService {
 
     async scope(ctx: RequestContext, order: Order, method?: ShippingMethod) {
         const repo = this.connection.getRepository(ctx, CatalogSyncBinding);
+        const bindings = method
+            ? await repo.find({
+                  where: { kind: 'SHIPPING', targetId: method.id, targetChannelId: ctx.channelId },
+              })
+            : [];
         const managed = await this.sources.hasManagedProducts(ctx);
-        if (!managed)
+        // Shipping mappings outlive catalog membership for accepted orders.
+        // They must never become independent target-store rates implicitly.
+        if (!managed && !bindings.length)
             return {
                 ctx,
                 order,
@@ -113,11 +120,6 @@ export class CatalogSyncShippingService {
                 groupName: '',
                 sourceMethod: undefined as ShippingMethod | undefined,
             };
-        const bindings = method
-            ? await repo.find({
-                  where: { kind: 'SHIPPING', targetId: method.id, targetChannelId: ctx.channelId },
-              })
-            : [];
         let sourceChannelId = ctx.channelId;
         if (bindings.length) {
             const active = await this.connection.getRepository(ctx, CatalogSyncRule).find({

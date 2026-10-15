@@ -1,6 +1,7 @@
 import { InventoryLot } from '@vendure/catalog-management-plugin';
 import { GlobalFlag } from '@vendure/common/lib/generated-types';
 import {
+    CatalogSyncBinding,
     CatalogSyncRule,
     Channel,
     Collection,
@@ -28,6 +29,7 @@ import {
     TransactionalConnection,
     ZoneService,
 } from '@vendure/core';
+import { In } from 'typeorm';
 import { describe, expect, it } from 'vitest';
 
 import { CatalogSupplierService } from '../../catalog-management-plugin/src/catalog-supplier.service';
@@ -484,6 +486,46 @@ export function registerCatalogSyncPhysicalAcceptance(state: () => State) {
                 (await f.server.app.get(CatalogSyncSourceService).resolve(f.b, sourceVariant.id))?.ctx
                     .channelId,
             ).toBe(f.a.channelId);
+        }, 120_000);
+
+        it('keeps inherited shipping out of local orders after the last managed product leaves', async () => {
+            const f = state();
+            await f.connection.withTransaction(f.b.copy(), async tx => {
+                const repo = f.connection.getRepository(tx, CatalogSyncBinding);
+                const bindings = await repo.find({
+                    where: {
+                        kind: 'PRODUCT',
+                        targetChannelId: f.b.channelId,
+                        state: In(['ACTIVE', 'PENDING', 'ERROR']),
+                    },
+                });
+                expect(bindings.length).toBeGreaterThan(0);
+                // removeProduct leaves shipping mappings to preserve accepted orders. Exercise
+                // that committed projection boundary without changing unrelated rule fixtures.
+                await repo.update({ id: In(bindings.map(binding => binding.id)) }, { state: 'REMOVED' });
+                try {
+                    expect(await f.server.app.get(CatalogSyncSourceService).hasManagedProducts(tx)).toBe(
+                        false,
+                    );
+                    const methods = await f.server.app
+                        .get(ShippingMethodService)
+                        .getActiveShippingMethods(tx);
+                    const inherited = requireSyntheticFixture(
+                        methods.find(method => method.name === `Physical shipping ${f.a.channelId}`),
+                    );
+                    const local = requireSyntheticFixture(
+                        methods.find(method => method.name === `Physical shipping ${f.b.channelId}`),
+                    );
+                    const order = await createOrder(tx, [{ variant: localVariant, amount: 10000 }]);
+                    expect(
+                        await f.server.app.get(CatalogSyncShippingService).scope(tx, order, inherited),
+                    ).toBeNull();
+                    expect(await inherited.test(tx, order)).toBe(false);
+                    expect(await local.test(tx, order)).toBe(true);
+                } finally {
+                    for (const binding of bindings) await repo.update(binding.id, { state: binding.state });
+                }
+            });
         }, 120_000);
 
         it.runIf(process.env.CATALOG_SYNC_CLOSEOUT === '1')(
