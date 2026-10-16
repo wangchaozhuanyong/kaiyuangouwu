@@ -9,6 +9,7 @@ import {
 
 const machineMailboxPermissions: ReadonlyMap<string, Permission> = new Map([
     ...[
+        'Query.icloudMailHealth',
         'Query.icloudPrimaryAccounts',
         'Query.icloudPrimaryAccount',
         'Query.icloudVirtualEmails',

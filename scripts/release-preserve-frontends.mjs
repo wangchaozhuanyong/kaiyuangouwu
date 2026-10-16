@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { lstatSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { classifyChanges, isAutomationOnly, isDocumentation, packageInventory } from './ci-impact.mjs';
+import {
+    classifyChanges,
+    isAutomationOnly,
+    isDocumentation,
+    packageInventory,
+    STATIC_APPS,
+} from './ci-impact.mjs';
 
 const frontendOnly = file => /^packages\/(?:storefront|next-admin)\/(?:src|e2e)\//u.test(file);
 export function retainedFrontendPlan(plan, packageList = packageInventory()) {
@@ -13,6 +19,12 @@ export function retainedFrontendPlan(plan, packageList = packageInventory()) {
         assert.ok(
             frontendOnly(file) ||
                 file.startsWith('packages/icloud-relay-plugin/src/') ||
+                [
+                    'packages/store-management-plugin/src/constants.ts',
+                    'packages/store-management-plugin/src/merchant-catalog-access.service.ts',
+                    'packages/store-management-plugin/src/administrator-access.interceptor.spec.ts',
+                    'packages/store-management-plugin/src/merchant-catalog-access.service.spec.ts',
+                ].includes(file) ||
                 isAutomationOnly(file) ||
                 isDocumentation(file) ||
                 ['deploy/deploy-production-from-s3.sh', 'deploy/release-route.mjs'].includes(file),
@@ -20,7 +32,9 @@ export function retainedFrontendPlan(plan, packageList = packageInventory()) {
         );
     const selected = classifyChanges(
         plan.files.filter(file => !frontendOnly(file)),
-        packageList,
+        // Independent static apps keep their verified pointers and bytes. Their
+        // dev-server tooling dependency must not turn a server guard into a UI release.
+        packageList.filter(pkg => !STATIC_APPS.includes(pkg.directory)),
         false,
     );
     assert.equal(selected.lane, 'runtime', 'Frontend preservation requires a pending mailbox runtime change');

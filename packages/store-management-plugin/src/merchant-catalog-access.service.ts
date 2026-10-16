@@ -230,6 +230,7 @@ const platformOwnerFields = new Set([
     'Mutation.testImagePromptModel',
     'Mutation.archiveImagePromptModel',
     'Mutation.anonymizeImageGenerationCustomerData',
+    'Query.icloudMailHealth',
     'Query.icloudPrimaryAccounts',
     'Query.icloudPrimaryAccount',
     'Query.icloudVirtualEmails',

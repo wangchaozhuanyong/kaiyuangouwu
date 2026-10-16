@@ -143,6 +143,7 @@ const merchantContext = {
 
 // Independent contract fixtures checked against the mailbox resolver's @Allow.
 const mailboxRootPermissions = [
+    ['Query', 'icloudMailHealth', 'ReadIcloudRelay'],
     ['Query', 'icloudPrimaryAccounts', 'ReadIcloudRelay'],
     ['Query', 'icloudPrimaryAccount', 'ReadIcloudRelay'],
     ['Query', 'icloudVirtualEmails', 'ReadIcloudRelay'],
@@ -277,10 +278,13 @@ describe('MerchantCatalogAccessService', () => {
             typeof mailboxMachineContext
         >;
         expect(hasMachineMailboxAccess(ctx, 'Query.icloudPrimaryAccounts')).toBe(false);
+        expect(hasMachineMailboxAccess(ctx, 'Query.icloudMailHealth')).toBe(false);
         expect(ctx.permissionMock).not.toHaveBeenCalled();
     });
 
     it.each([
+        'Query.icloudMailHealthExtra',
+        'Mutation.icloudMailHealth',
         'Query.icloudPrimaryAccountsExtra',
         'Mutation.icloudPrimaryAccounts',
         'Query.createIcloudPrimaryAccount',
@@ -330,6 +334,7 @@ describe('MerchantCatalogAccessService', () => {
                 authorizedAsOwnerOnly: false,
             });
             expect(hasMachineMailboxAccess(ctx, 'Query.icloudPrimaryAccounts')).toBe(expected);
+            expect(hasMachineMailboxAccess(ctx, 'Query.icloudMailHealth')).toBe(expected);
         },
     );
 
@@ -338,6 +343,7 @@ describe('MerchantCatalogAccessService', () => {
         ['Mutation', 'saveImageProviderCredential'],
         ['Mutation', 'testImageProviderCredential'],
         ['Query', 'icloudPrimaryAccounts'],
+        ['Query', 'icloudMailHealth'],
         ['Query', 'icloudReceivedMails'],
         ['Mutation', 'resetIcloudVirtualEmailCode'],
     ])(

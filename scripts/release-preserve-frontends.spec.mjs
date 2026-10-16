@@ -19,6 +19,8 @@ const packages = [
         dependencies: { '@vendure/icloud-relay-plugin': '*' },
     },
     { directory: 'storefront', name: '@vendure/storefront' },
+    { directory: 'store-management-plugin', name: '@vendure/store-management-plugin' },
+    { directory: 'next-admin', name: '@vendure/next-admin', devDependencies: { '@vendure/dev-server': '*' } },
 ];
 test('retain mode checks the mailbox backend while leaving unrelated frontend changes unpublished', () => {
     const files = [
@@ -39,6 +41,30 @@ test('retain mode checks the mailbox backend while leaving unrelated frontend ch
     assert.throws(() =>
         retainedFrontendPlan(classifyChanges(['packages/storefront/src/safe-image.tsx'], packages), packages),
     );
+});
+test('mailbox health governance files keep the frontend pointers while unrelated store logic is rejected', () => {
+    const files = [
+        'packages/store-management-plugin/src/constants.ts',
+        'packages/store-management-plugin/src/merchant-catalog-access.service.ts',
+        'packages/store-management-plugin/src/administrator-access.interceptor.spec.ts',
+        'packages/store-management-plugin/src/merchant-catalog-access.service.spec.ts',
+    ];
+    const consumers = packages.map(pkg =>
+        pkg.directory === 'dev-server'
+            ? { ...pkg, dependencies: { ...pkg.dependencies, '@vendure/store-management-plugin': '*' } }
+            : pkg,
+    );
+    assert.deepEqual(classifyChanges(files, consumers).frontends, ['next-admin']);
+    const result = retainedFrontendPlan(classifyChanges(files, consumers), consumers);
+    assert.equal(result.lane, 'runtime');
+    assert.deepEqual(result.frontends, []);
+    assert.deepEqual(result.changedPackages, ['store-management-plugin']);
+    for (const file of [
+        'packages/store-management-plugin/src/merchant-initial-password.service.ts',
+        'packages/store-management-plugin/src/merchant-catalog-access.service.ts.extra',
+        'packages/store-management-plugin/src/promotion.service.ts',
+    ])
+        assert.throws(() => retainedFrontendPlan(classifyChanges([...files, file], packages), packages));
 });
 test('real pointer and full asset snapshots reject moved versions, changes, extra files and symlinks', () => {
     const base = path.resolve('.runtime/mailbox-release/frontend-tests');
