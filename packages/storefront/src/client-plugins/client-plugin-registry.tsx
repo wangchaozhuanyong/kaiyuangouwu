@@ -1,5 +1,5 @@
 import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
-import { type ComponentType, lazy, Suspense, useCallback, useContext, useEffect, useRef } from 'react';
+import { type ComponentType, useCallback, useContext, useEffect, useRef } from 'react';
 
 import { prepareImageStudioData } from '../pages/ai-image-studio-preload';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
@@ -150,61 +150,52 @@ function AiImageStudioEntryPlugin({ language, onNavigate }: Readonly<ClientPlugi
     );
 }
 
-function TwoFactorEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
-    const isZh = language === 'zh';
+const toolCopy = {
+    'two-factor': [
+        ['2FA 动态码', '密钥不上传，在当前浏览器本地生成', '立即使用'],
+        ['2FA codes', 'Generate codes locally without uploading secrets', 'Open'],
+    ],
+    'mail-query': [
+        ['邮件验证码查询', '输入买家查询码，快速查看专属接收的验证码与邮件', '立即查询'],
+        ['Mail verification codes', 'Enter your query code to view verification codes and emails', 'Query'],
+    ],
+    'gpt-recharge': [
+        ['GPT自助充值', '验证兑换码，为你的 ChatGPT 账号充值并查询结果', '进入充值'],
+        ['GPT self-service recharge', 'Redeem your code and check your recharge status', 'Recharge'],
+    ],
+} as const;
+
+/** Public entries share their original frame; only the actual tool pages load lazily. */
+function ToolEntryPlugin({
+    onNavigate,
+    language,
+    name = 'gpt-recharge',
+}: Readonly<ClientPluginComponentProps & { name?: keyof typeof toolCopy }>) {
+    const [title, description, action] = toolCopy[name][language === 'zh' ? 0 : 1];
+    const Icon = name === 'mail-query' ? Mail : KeyRound;
     return (
         <button
             type="button"
-            className="category-client-plugin category-client-plugin-two-factor"
-            onClick={() => onNavigate({ name: 'two-factor' })}
+            className={`category-client-plugin${name === 'gpt-recharge' ? '' : ` category-client-plugin-${name}`}`}
+            onClick={() => onNavigate({ name })}
         >
-            <span className="category-client-plugin-icon" aria-hidden="true">
-                <KeyRound />
+            <span
+                className="category-client-plugin-icon"
+                aria-hidden={name === 'gpt-recharge' ? undefined : true}
+            >
+                <Icon />
             </span>
             <span className="category-client-plugin-copy">
-                <strong>{isZh ? '2FA 动态码' : '2FA codes'}</strong>
-                <span>
-                    {isZh
-                        ? '密钥不上传，在当前浏览器本地生成'
-                        : 'Generate codes locally without uploading secrets'}
-                </span>
+                <strong>{title}</strong>
+                <span>{description}</span>
             </span>
-            <span className="category-client-plugin-action">{isZh ? '立即使用' : 'Open'}</span>
+            <span className="category-client-plugin-action">{action}</span>
         </button>
     );
 }
 
-function MailQueryEntryPlugin({ language, onNavigate }: Readonly<ClientPluginComponentProps>) {
-    const isZh = language === 'zh';
-    return (
-        <button
-            type="button"
-            className="category-client-plugin category-client-plugin-mail-query"
-            onClick={() => onNavigate({ name: 'mail-query' })}
-        >
-            <span className="category-client-plugin-icon" aria-hidden="true">
-                <Mail />
-            </span>
-            <span className="category-client-plugin-copy">
-                <strong>{isZh ? '邮件验证码查询' : 'Mail verification codes'}</strong>
-                <span>
-                    {isZh
-                        ? '输入买家查询码，快速查看专属接收的验证码与邮件'
-                        : 'Enter your query code to view verification codes and emails'}
-                </span>
-            </span>
-            <span className="category-client-plugin-action">{isZh ? '立即查询' : 'Query'}</span>
-        </button>
-    );
-}
-
-const LazyGptRechargeEntry = lazy(() => import('./gpt-recharge-entry'));
-function GptRechargeEntryPlugin(props: Readonly<ClientPluginComponentProps>) {
-    return (
-        <Suspense fallback={null}>
-            <LazyGptRechargeEntry {...props} />
-        </Suspense>
-    );
+function toolEntry(name: 'two-factor' | 'mail-query'): ComponentType<ClientPluginComponentProps> {
+    return props => <ToolEntryPlugin {...props} name={name} />;
 }
 
 const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginComponentProps> | undefined>> =
@@ -212,9 +203,9 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'category-coupon-entry': CouponEntryPlugin,
         'category-support-entry': SupportEntryPlugin,
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
-        'two-factor-code-tool': TwoFactorEntryPlugin,
-        'icloud-mail-query-entry': MailQueryEntryPlugin,
-        'gpt-recharge-entry': GptRechargeEntryPlugin,
+        'two-factor-code-tool': toolEntry('two-factor'),
+        'icloud-mail-query-entry': toolEntry('mail-query'),
+        'gpt-recharge-entry': ToolEntryPlugin,
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {

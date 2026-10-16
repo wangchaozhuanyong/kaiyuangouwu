@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -52,6 +52,40 @@ function pluginBlock(items: StorefrontContentItem[]): StorefrontContentBlock {
 }
 
 describe('category client plugin registry', () => {
+    it.each([
+        ['zh', 'GPT自助充值', '进入充值'],
+        ['en', 'GPT self-service recharge', 'Recharge'],
+    ] as const)('includes every configured tool in the first %s server render', (language, title, action) => {
+        const block = pluginBlock([
+            pluginItem('ai-image-studio-entry', 'BUSINESS_SERVICES_MAIN', 0),
+            pluginItem('two-factor-code-tool', 'BUSINESS_SERVICES_MAIN', 1),
+            pluginItem('icloud-mail-query-entry', 'BUSINESS_SERVICES_MAIN', 2),
+            pluginItem('gpt-recharge-entry', 'BUSINESS_SERVICES_MAIN', 3),
+        ]);
+        const render = () =>
+            renderToString(
+                <ClientPluginSlot
+                    block={block}
+                    placement="BUSINESS_SERVICES_MAIN"
+                    toolsFirst
+                    language={language}
+                    onNavigate={() => undefined}
+                />,
+            );
+
+        // No prior client import or async render may be required to keep a visible
+        // tool in the replacement HTML during a document refresh.
+        const first = render();
+        expect(first).toContain(title);
+        expect(first).toContain(action);
+        expect(first.match(/<button /g)).toHaveLength(4);
+        expect(first).not.toContain('data-msg="Switched to client rendering');
+        block.items[3].enabled = false;
+        const disabled = render();
+        expect(disabled).not.toContain(title);
+        expect(disabled.match(/<button /g)).toHaveLength(3);
+    });
+
     it('groups tools and assistance without losing managed order or rendering empty groups', () => {
         const block = pluginBlock([
             pluginItem('category-support-entry', 'BUSINESS_SERVICES_MAIN', 0),
