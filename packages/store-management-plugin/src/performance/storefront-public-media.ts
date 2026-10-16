@@ -310,8 +310,8 @@ export function publicPageMedia(
     const result = [...media.values()];
     if (page.request?.kind !== 'home') return result;
 
-    // The first art-directed slide and a fair share of visible quick links/product rows
-    // precede later carousel slides and remote sections, without adding any descriptors.
+    // Keep the first art-directed slide and its complete shortcut row ahead of
+    // later product candidates, without adding descriptors or expanding the preview budget.
     const hero = blocks.find(
         block => block.type === 'HERO' && typeof block.imageUrl === 'string' && block.imageUrl.trim(),
     );
@@ -381,11 +381,11 @@ export function publicPageMedia(
     };
     prioritize(hero?.imageUrl);
     if (hero) prioritize(publicHeroMobileImage(hero, `https://${page.scope.host}`));
-    for (let index = 0; index < Math.max(quick.length, products.length, bestSources.length); index++) {
+    for (const item of quick) prioritize(item.imageUrl);
+    for (let index = 0; index < Math.max(products.length, bestSources.length); index++) {
         const item = products[index];
         if (item) prioritize(productCover(item));
         prioritize(bestSources[index]);
-        prioritize(quick[index]?.imageUrl);
     }
     return result.sort(
         (left, right) =>

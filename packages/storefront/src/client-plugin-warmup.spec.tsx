@@ -127,4 +127,58 @@ describe('configured image-studio warmup intent', () => {
         root = undefined;
         expect(finalScope()).toBe(false);
     });
+
+    it.each(['zh', 'en'] as const)(
+        'keeps the three synchronous %s tool entries and their own routes',
+        async language => {
+            const onNavigate = vi.fn();
+            const tools = {
+                ...block,
+                items: ['two-factor-code-tool', 'icloud-mail-query-entry', 'gpt-recharge-entry'].map(
+                    (pluginCode, position) => ({
+                        ...block.items[0],
+                        id: pluginCode,
+                        position,
+                        settings: { pluginCode, placement: 'BUSINESS_SERVICES_MAIN' },
+                    }),
+                ),
+            };
+            await act(() => {
+                root?.render(
+                    <ClientPluginSlot
+                        block={tools}
+                        placement="BUSINESS_SERVICES_MAIN"
+                        language={language}
+                        onNavigate={onNavigate}
+                    />,
+                );
+                return Promise.resolve();
+            });
+            const buttons = [...host.querySelectorAll('button')];
+            expect(buttons.map(button => button.querySelector('strong')?.textContent)).toEqual(
+                language === 'zh'
+                    ? ['2FA 动态码', '邮件验证码查询', 'GPT自助充值']
+                    : ['2FA codes', 'Mail verification codes', 'GPT self-service recharge'],
+            );
+            expect(buttons.map(button => button.className)).toEqual([
+                'category-client-plugin category-client-plugin-two-factor',
+                'category-client-plugin category-client-plugin-mail-query',
+                'category-client-plugin',
+            ]);
+            expect(
+                buttons.map(button => button.querySelector('svg')?.classList.contains('lucide-mail')),
+            ).toEqual([false, true, false]);
+            await act(() => {
+                buttons.forEach(button => button.click());
+                return Promise.resolve();
+            });
+            expect(onNavigate.mock.calls).toEqual([
+                [{ name: 'two-factor' }],
+                [{ name: 'mail-query' }],
+                [{ name: 'gpt-recharge' }],
+            ]);
+            expect(runtime.route).not.toHaveBeenCalled();
+            expect(runtime.prepare).not.toHaveBeenCalled();
+        },
+    );
 });

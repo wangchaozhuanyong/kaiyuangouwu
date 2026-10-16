@@ -247,6 +247,104 @@ describe('public page media projection', () => {
 
 describe('bounded public inline image assembly', () => {
     const preview = `data:image/webp;base64,${'A'.repeat(960)}`;
+    it('keeps the complete first shortcut row ahead of later products in the eight-asset preview budget', async () => {
+        const apple = '/assets/preview/apple.webp';
+        const products = [
+            { id: 'apple-20', featuredAsset: { preview: apple } },
+            { id: 'apple-100', featuredAsset: { preview: apple } },
+            { id: 'google', featuredAsset: { preview: '/assets/preview/google.webp' } },
+            { id: 'token', featuredAsset: { preview: '/assets/preview/token.webp' } },
+        ];
+        const media = publicPageMedia(
+            page({
+                request: { kind: 'home' },
+                products,
+                bestSellers: {
+                    pinnedProducts: products.slice(0, 2),
+                    salesByProductId: {},
+                    catalog: { items: products },
+                },
+                content: {
+                    blocks: [
+                        {
+                            type: 'HERO',
+                            imageUrl: '/assets/preview/hero.webp',
+                            settings: { mobileImageUrl: '/assets/preview/phone.webp' },
+                        },
+                        {
+                            type: 'QUICK_LINKS',
+                            items: [
+                                { enabled: false, imageUrl: '/assets/preview/disabled-quick.webp' },
+                                ...Array.from({ length: 6 }, (_, index) => ({
+                                    imageUrl: `/assets/preview/quick-${index}.webp`,
+                                })),
+                            ],
+                        },
+                        {
+                            type: 'CATEGORY_AD',
+                            settings: { selectedProductIds: ['apple-20', 'apple-100'] },
+                        },
+                        { type: 'BEST_SELLERS', settings: { displayCount: 4 } },
+                    ],
+                },
+            }),
+        );
+        let active = 0;
+        let peak = 0;
+        const read = vi.fn(async (_path: string) => {
+            peak = Math.max(peak, ++active);
+            await new Promise(resolve => setTimeout(resolve, 1));
+            active--;
+            return preview;
+        });
+        const authorize = vi.fn((_path: string) => Promise.resolve(true));
+        const preparation = { deferred: true };
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            authorize,
+            read,
+            250,
+            preparation,
+        );
+        const expected = [
+            'preview/hero.webp',
+            'preview/phone.webp',
+            ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
+            'preview/apple.webp',
+        ];
+        expect(read.mock.calls.map(call => call[0])).toEqual(expected);
+        expect(authorize.mock.calls.map(call => call[0])).toEqual(expected);
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(peak).toBe(2);
+        expect(preparation.deferred).toBe(false);
+        for (let index = 0; index < 5; index++) {
+            expect(
+                result.find(
+                    item => item.identity === `/assets/preview/quick-${index}.webp` && item.kind === 'icon',
+                )?.placeholder,
+            ).toEqual({ inlineData: preview });
+            expect(
+                result.find(
+                    item =>
+                        item.identity === `/assets/preview/quick-${index}.webp` && item.kind === 'thumbnail',
+                )?.placeholder,
+            ).toBeUndefined();
+        }
+        expect(result.find(item => item.identity === apple && item.kind === 'card')?.placeholder).toEqual({
+            inlineData: preview,
+        });
+        for (const name of ['google', 'token', 'quick-5'])
+            expect(
+                result.find(item => item.identity === `/assets/preview/${name}.webp`)?.placeholder,
+            ).toBeUndefined();
+        expect(result.filter(item => item.placeholder)).toHaveLength(8);
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+        expect(result.map(({ placeholder: _placeholder, ...item }) => item)).toEqual(media);
+        expect(media.every(item => !item.placeholder)).toBe(true);
+    });
     it.each([
         { name: 'sales-ranked b3 before b2', sales: { b0: 0, b1: 0, b2: 20, b3: 30 } },
         { name: 'daily stable shuffle with no sales', sales: {} },
@@ -304,13 +402,14 @@ describe('bounded public inline image assembly', () => {
         expect(read.mock.calls.map(call => call[0])).toEqual([
             'preview/hero.webp',
             'preview/phone.webp',
+            ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
             'preview/desktop-0.webp',
-            `preview/best-${actualFirstRow[0].id.slice(1)}.webp`,
-            'preview/quick-0.webp',
-            'preview/desktop-1.webp',
-            `preview/best-${actualFirstRow[1].id.slice(1)}.webp`,
-            'preview/quick-1.webp',
         ]);
+        expect(
+            sources(media, 'card')
+                .filter(source => source.includes('/best-'))
+                .slice(0, 2),
+        ).toEqual(actualFirstRow.map(item => `/assets/preview/best-${item.id.slice(1)}.webp`));
         for (const item of actualFirstRow)
             expect(
                 result.find(
@@ -318,7 +417,7 @@ describe('bounded public inline image assembly', () => {
                         descriptor.identity.endsWith(`best-${item.id.slice(1)}.webp`) &&
                         descriptor.kind === 'card',
                 )?.placeholder,
-            ).toBeDefined();
+            ).toBeUndefined();
         expect(
             result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
         ).toBeLessThanOrEqual(8192);
@@ -375,8 +474,8 @@ describe('bounded public inline image assembly', () => {
             expect(read.mock.calls.map(call => call[0])).toEqual([
                 'preview/hero.webp',
                 'preview/phone.webp',
-                `preview/${expected}.webp`,
                 ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
+                `preview/${expected}.webp`,
             ]);
             expect(
                 result.find(
@@ -395,7 +494,7 @@ describe('bounded public inline image assembly', () => {
             ).toBeLessThanOrEqual(8192);
         },
     );
-    it('shares the eight-asset homepage budget between the first art-directed hero, quick links and actual selected first-row products', async () => {
+    it('keeps selected first-row product order after the complete shortcut row within eight assets', async () => {
         const products = Array.from({ length: 4 }, (_, index) => ({
             id: `p${index}`,
             featuredAsset: { preview: `/assets/preview/product-${index}.webp?v=one` },
@@ -436,17 +535,19 @@ describe('bounded public inline image assembly', () => {
         expect(read.mock.calls.map(call => call[0])).toEqual([
             'preview/hero-0.webp',
             'preview/phone-0.webp',
+            ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
             'preview/product-2.webp',
-            'preview/quick-0.webp',
-            'preview/product-0.webp',
-            'preview/quick-1.webp',
-            'preview/product-3.webp',
-            'preview/quick-2.webp',
         ]);
-        for (const source of ['/assets/preview/product-2.webp?v=one', '/assets/preview/product-0.webp?v=one'])
-            expect(
-                result.find(item => item.identity === source && item.kind === 'card')?.placeholder,
-            ).toBeDefined();
+        expect(
+            result.find(
+                item => item.identity === '/assets/preview/product-2.webp?v=one' && item.kind === 'card',
+            )?.placeholder,
+        ).toBeDefined();
+        expect(
+            result.find(
+                item => item.identity === '/assets/preview/product-0.webp?v=one' && item.kind === 'card',
+            )?.placeholder,
+        ).toBeUndefined();
         expect(result.find(item => item.identity === '/assets/preview/phone-0.webp')).toMatchObject({
             width: 1200,
             height: 900,
@@ -458,6 +559,9 @@ describe('bounded public inline image assembly', () => {
         expect(
             result.filter(item => item.kind === 'card' && item.identity.includes('product-')),
         ).toHaveLength(4);
+        expect(sources(media, 'card').filter(source => source.includes('product-'))).toEqual(
+            [2, 0, 3, 1].map(index => `/assets/preview/product-${index}.webp?v=one`),
+        );
         expect(
             result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
         ).toBeLessThanOrEqual(8192);
@@ -504,7 +608,7 @@ describe('bounded public inline image assembly', () => {
             preserved.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
         ).toBeLessThanOrEqual(8192);
     });
-    it('includes all four desktop first-row products when the first hero has one shared source', async () => {
+    it('retains four desktop products and previews the first two after one hero and the complete shortcut row', async () => {
         const media = publicPageMedia(
             page({
                 request: { kind: 'home' },
@@ -540,17 +644,25 @@ describe('bounded public inline image assembly', () => {
             read,
         );
         expect(read).toHaveBeenCalledTimes(8);
-        expect(
-            result
-                .filter(item => item.kind === 'card' && item.identity.includes('product-'))
-                .every(item => item.placeholder),
-        ).toBe(true);
+        const productMedia = result.filter(
+            item => item.kind === 'card' && item.identity.includes('product-'),
+        );
+        expect(productMedia.map(item => item.identity)).toEqual(
+            Array.from({ length: 4 }, (_, index) => `/assets/preview/product-${index}.webp`),
+        );
+        expect(productMedia.map(item => Boolean(item.placeholder))).toEqual([true, true, false, false]);
+        expect(read.mock.calls.map(call => call[0])).toEqual([
+            'preview/hero-0.webp',
+            ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
+            'preview/product-0.webp',
+            'preview/product-1.webp',
+        ]);
         expect(read.mock.calls.map(call => call[0])).not.toContain('preview/hero-1.webp');
         expect(
             result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
         ).toBeLessThanOrEqual(8192);
     });
-    it('reserves distinct mobile best-seller and desktop managed first rows alongside quick links within eight assets', async () => {
+    it('preserves distinct mobile best-seller and desktop managed order after the full shortcut row', async () => {
         const managed = Array.from({ length: 4 }, (_, index) => ({
             id: `d${index}`,
             featuredAsset: { preview: `/assets/preview/desktop-${index}.webp?v=desktop` },
@@ -605,17 +717,26 @@ describe('bounded public inline image assembly', () => {
         expect(read.mock.calls.map(call => call[0])).toEqual([
             'preview/hero-0.webp',
             'preview/phone-0.webp',
+            ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
             'preview/desktop-0.webp',
-            'preview/best-0.webp',
-            'preview/quick-0.webp',
-            'preview/desktop-1.webp',
-            'preview/best-1.webp',
-            'preview/quick-1.webp',
         ]);
-        for (const source of ['desktop-0', 'desktop-1', 'best-0', 'best-1'])
+        expect(
+            result.find(item => item.identity.includes('desktop-0') && item.kind === 'card')?.placeholder,
+        ).toBeDefined();
+        for (const source of ['desktop-1', 'best-0', 'best-1'])
             expect(
                 result.find(item => item.identity.includes(source) && item.kind === 'card')?.placeholder,
-            ).toBeDefined();
+            ).toBeUndefined();
+        expect(
+            sources(media, 'card')
+                .filter(source => /\/(?:desktop|best)-/u.test(source))
+                .slice(0, 4),
+        ).toEqual([
+            '/assets/preview/desktop-0.webp?v=desktop',
+            '/assets/preview/best-0.webp?v=mobile',
+            '/assets/preview/desktop-1.webp?v=desktop',
+            '/assets/preview/best-1.webp?v=mobile',
+        ]);
         expect(result.find(item => item.identity.includes('best-1') && item.kind === 'card')?.version).toBe(
             'mobile',
         );
@@ -699,19 +820,19 @@ describe('bounded public inline image assembly', () => {
         expect(read.mock.calls.map(call => call[0])).toEqual([
             'preview/hero.webp',
             'preview/phone.webp',
+            ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
             'preview/desktop-gallery.webp',
-            'preview/best-gallery.webp',
-            'preview/quick-0.webp',
-            'preview/desktop-variant.webp',
-            'preview/best-variant.webp',
-            'preview/quick-1.webp',
         ]);
         expect(
             result.find(item => item.identity.includes('desktop-gallery') && item.kind === 'card'),
         ).toMatchObject({ version: 'gallery', placeholder: { inlineData: preview } });
         expect(
             result.find(item => item.identity.includes('desktop-variant') && item.kind === 'card'),
-        ).toMatchObject({ version: 'variant', placeholder: { inlineData: preview } });
+        ).toMatchObject({ version: 'variant' });
+        expect(
+            result.find(item => item.identity.includes('desktop-variant') && item.kind === 'card')
+                ?.placeholder,
+        ).toBeUndefined();
         expect(result.some(item => item.identity.includes('unused-gallery'))).toBe(false);
         expect(
             result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
