@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { earlierReleases, staleTargetRejected } from './release-lock.mjs';
+import { earlierReleases, readReleaseRuns, staleTargetRejected } from './release-lock.mjs';
 
 const target = 'a'.repeat(40);
 const other = 'b'.repeat(40);
@@ -42,4 +42,26 @@ test('same-target failures, active runs and missing or ambiguous native evidence
         ),
         false,
     );
+});
+
+test('history transport projects large native API records before buffering and keeps all lock fields', () => {
+    const rows = [
+        {
+            id: 12,
+            head_sha: target,
+            path: run.path,
+            status: 'completed',
+            conclusion: 'failure',
+            html_url: 'https://example.invalid/run/12',
+        },
+    ];
+    const execute = (command, args, options) => {
+        assert.equal(command, 'gh');
+        assert.match(args[1], /per_page=100$/u);
+        assert.equal(args[2], '--jq');
+        for (const field of Object.keys(rows[0])) assert.ok(args[3].includes(field));
+        assert.equal(options.maxBuffer, 4 * 1024 * 1024);
+        return JSON.stringify({ workflow_runs: rows });
+    };
+    assert.deepEqual(readReleaseRuns('owner/repo', execute), rows);
 });

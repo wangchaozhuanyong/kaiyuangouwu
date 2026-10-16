@@ -27,6 +27,16 @@ export function earlierReleases(runs, target, current) {
         .sort((left, right) => left.id - right.id);
 }
 
+export function readReleaseRuns(repository, execute = execFileSync) {
+    const projection = '{workflow_runs: [.workflow_runs[] | {id,head_sha,path,status,conclusion,html_url}]}';
+    const raw = execute(
+        'gh',
+        ['api', `repos/${repository}/actions/runs?branch=main&per_page=100`, '--jq', projection],
+        { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 },
+    );
+    return JSON.parse(raw).workflow_runs;
+}
+
 function main() {
     const env = process.env;
     const target = env.TARGET_SHA;
@@ -34,10 +44,11 @@ function main() {
     assert.match(target, /^[a-f0-9]{40}$/u);
     assert.match(env.GITHUB_RUN_ID, /^[1-9][0-9]*$/u);
     const prefix = `repos/${env.GITHUB_REPOSITORY}`;
-    const api = path => execFileSync('gh', ['api', path], { encoding: 'utf8' });
+    const api = path => execFileSync('gh', ['api', path], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
     const json = path => JSON.parse(api(path));
-    assert.equal(json(`${prefix}/git/ref/heads/main`).object.sha, target, 'target_sha is not current main');
-    const runs = json(`${prefix}/actions/runs?branch=main&per_page=100`).workflow_runs;
+    const latest = json(`${prefix}/git/ref/heads/main`).object.sha;
+    assert.equal(latest, target, `target_sha is not current main; start a new release for ${latest}`);
+    const runs = readReleaseRuns(env.GITHUB_REPOSITORY);
     for (const run of earlierReleases(runs, target, Number(env.GITHUB_RUN_ID))) {
         if (run.status === 'completed' && run.conclusion === 'failure') {
             const jobs = json(`${prefix}/actions/runs/${run.id}/jobs?per_page=100`).jobs;
