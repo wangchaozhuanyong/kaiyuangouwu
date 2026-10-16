@@ -3,6 +3,7 @@ import { Allow, Ctx, ID, RequestContext, Transaction } from '@vendure/core';
 
 import { manageIcloudRelayPermission } from '../constants';
 import { IcloudAdminService } from '../services/icloud-admin.service';
+import { IcloudMailHealthService } from '../services/icloud-mail-health.service';
 import { IcloudMailHistoryService } from '../services/icloud-mail-history.service';
 import {
     BatchCreateVirtualEmailsInput,
@@ -17,7 +18,14 @@ export class IcloudAdminResolver {
     constructor(
         private readonly adminService: IcloudAdminService,
         private readonly mailHistory: IcloudMailHistoryService,
+        private readonly mailHealth: IcloudMailHealthService,
     ) {}
+
+    @Query()
+    @Allow(manageIcloudRelayPermission.Read)
+    icloudMailHealth(@Ctx() ctx: RequestContext) {
+        return this.mailHealth.read(ctx);
+    }
 
     @Mutation()
     @Allow(manageIcloudRelayPermission.Update)

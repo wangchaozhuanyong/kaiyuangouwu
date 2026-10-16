@@ -1,6 +1,23 @@
 import { gql } from 'graphql-tag';
 
 export const adminApiExtensions = gql`
+    type IcloudMailListenerHealth {
+        primaryAccountId: ID!
+        state: String!
+        reason: String!
+        leaseExpiresAt: DateTime
+    }
+    type IcloudMailDeliveryHealth {
+        configured: Boolean!
+        pendingCount: Int!
+        oldestPendingAt: DateTime
+        lastDeliveredAt: DateTime
+    }
+    type IcloudMailHealth {
+        checkedAt: DateTime!
+        listeners: [IcloudMailListenerHealth!]!
+        delivery: IcloudMailDeliveryHealth!
+    }
     enum IcloudAccountStatus {
         ACTIVE
         DISABLED
@@ -143,6 +160,7 @@ export const adminApiExtensions = gql`
     }
 
     extend type Query {
+        icloudMailHealth: IcloudMailHealth!
         icloudPrimaryAccounts: [IcloudPrimaryAccountView!]!
         icloudPrimaryAccount(id: ID!): IcloudPrimaryAccountView
         icloudVirtualEmails(primaryAccountId: ID): [IcloudVirtualEmailView!]!

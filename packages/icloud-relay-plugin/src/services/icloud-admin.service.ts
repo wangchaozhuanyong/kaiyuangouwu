@@ -1,7 +1,9 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { ID, RequestContext, TransactionalConnection, UserInputError } from '@vendure/core';
+import { IsNull } from 'typeorm';
 
 import { validateIcloudInput } from '../client/admin-validation';
+import { ICLOUD_IDLE_UNSUPPORTED_ERROR } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
@@ -65,6 +67,7 @@ export interface VirtualEmailView {
 
 @Injectable()
 export class IcloudAdminService {
+    private readonly manualSyncs = new Map<string, Promise<SyncAccountResult>>();
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly cipher: IcloudCipherService,
@@ -142,7 +145,7 @@ export class IcloudAdminService {
         });
 
         const saved = await repo.save(account);
-        this.idle?.reconcile(String(saved.id));
+        void this.idle?.reconcile(String(saved.id));
         return this.toPrimaryView(await repo.findOneByOrFail({ id: saved.id }), 0);
     }
 
@@ -178,7 +181,7 @@ export class IcloudAdminService {
         await updateIcloudRecord(repo, account, patch, guards);
         const saved = await repo.findOneByOrFail({ id: account.id });
         if (['email', 'appPassword', 'status', 'imapHost', 'imapPort'].some(key => key in input))
-            this.idle?.reconcile(String(saved.id));
+            void this.idle?.reconcile(String(saved.id));
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const count = await virtualRepo.count({ where: { primaryAccountId: saved.id } });
         return this.toPrimaryView(saved, count);
@@ -187,7 +190,7 @@ export class IcloudAdminService {
     async deletePrimaryAccount(ctx: RequestContext, id: ID): Promise<boolean> {
         const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         await repo.delete({ id });
-        this.idle?.reconcile(String(id));
+        void this.idle?.reconcile(String(id));
         return true;
     }
 
@@ -206,20 +209,41 @@ export class IcloudAdminService {
                     encryptedAppPassword: account.encryptedAppPassword,
                     imapHost: account.imapHost,
                     imapPort: account.imapPort,
+                    lastSyncError: account.lastSyncError ?? IsNull(),
                 },
-                { status: IcloudAccountStatus.ACTIVE, lastSyncError: null },
+                {
+                    status: IcloudAccountStatus.ACTIVE,
+                    lastSyncError:
+                        account.lastSyncError === ICLOUD_IDLE_UNSUPPORTED_ERROR
+                            ? ICLOUD_IDLE_UNSUPPORTED_ERROR
+                            : null,
+                },
             );
+            await this.idle?.ensureWatching(String(id), account).catch(() => undefined);
         }
         return result;
     }
 
     async syncPrimaryAccount(ctx: RequestContext, id: ID): Promise<SyncAccountResult> {
+        const key = String(id);
+        const running = this.manualSyncs.get(key);
+        if (running) return running;
+        const request = this.syncPrimaryAccountOnce(ctx, id).finally(() => {
+            if (this.manualSyncs.get(key) === request) this.manualSyncs.delete(key);
+        });
+        this.manualSyncs.set(key, request);
+        return request;
+    }
+
+    private async syncPrimaryAccountOnce(ctx: RequestContext, id: ID): Promise<SyncAccountResult> {
         const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         const account = await repo.findOne({ where: { id } });
         if (!account) {
             return { success: false, syncedCount: 0, error: '主邮箱不存在' };
         }
-        return this.imapSyncService.syncAccount(ctx, account);
+        const result = await this.imapSyncService.syncAccount(ctx, account);
+        if (result.success) await this.idle?.ensureWatching(String(id), account).catch(() => undefined);
+        return result;
     }
 
     async resetMasterCode(ctx: RequestContext, id: ID): Promise<PrimaryAccountView> {

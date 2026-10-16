@@ -40,6 +40,30 @@ function fixture() {
     return { service, repo, row, options };
 }
 describe('durable mailbox notification outbox', () => {
+    it('reads metadata without delivering, decrypting or fetching mail', async () => {
+        const f = fixture();
+        const repo = f.repo as typeof f.repo & {
+            count: ReturnType<typeof vi.fn>;
+            findOne: ReturnType<typeof vi.fn>;
+        };
+        repo.count = vi.fn().mockResolvedValue(2);
+        repo.findOne = vi
+            .fn()
+            .mockResolvedValueOnce({ createdAt: f.row.createdAt })
+            .mockResolvedValueOnce({ deliveredAt: null });
+        const fetch = vi.fn();
+        vi.stubGlobal('fetch', fetch);
+        expect(await f.service.health()).toMatchObject({
+            configured: true,
+            pendingCount: 2,
+            oldestPendingAt: f.row.createdAt,
+            lastDeliveredAt: null,
+        });
+        expect(fetch).not.toHaveBeenCalled();
+        expect(f.repo.update).not.toHaveBeenCalled();
+        f.options.mailWebhookSecret = '';
+        expect((await f.service.health()).configured).toBe(false);
+    });
     it('sends signed metadata and does no database polling when the queue is empty', async () => {
         vi.useFakeTimers();
         const fetch = vi.fn().mockResolvedValue({

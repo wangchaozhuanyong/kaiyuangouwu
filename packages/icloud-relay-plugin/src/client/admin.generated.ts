@@ -52,6 +52,19 @@ export type IcloudBatchCreateResult = {
     skippedCount: Scalars['Int']['output'];
 };
 
+export type IcloudMailDeliveryHealth = {
+    configured: Scalars['Boolean']['output'];
+    lastDeliveredAt?: Maybe<Scalars['DateTime']['output']>;
+    oldestPendingAt?: Maybe<Scalars['DateTime']['output']>;
+    pendingCount: Scalars['Int']['output'];
+};
+
+export type IcloudMailHealth = {
+    checkedAt: Scalars['DateTime']['output'];
+    delivery: IcloudMailDeliveryHealth;
+    listeners: Array<IcloudMailListenerHealth>;
+};
+
 export type IcloudMailHistoryResult = {
     ambiguousCount: Scalars['Int']['output'];
     matchedCount: Scalars['Int']['output'];
@@ -60,6 +73,13 @@ export type IcloudMailHistoryResult = {
     unmatchedCount: Scalars['Int']['output'];
     unresolvedCount: Scalars['Int']['output'];
     updatedCount: Scalars['Int']['output'];
+};
+
+export type IcloudMailListenerHealth = {
+    leaseExpiresAt?: Maybe<Scalars['DateTime']['output']>;
+    primaryAccountId: Scalars['ID']['output'];
+    reason: Scalars['String']['output'];
+    state: Scalars['String']['output'];
 };
 
 export type IcloudPrimaryAccountView = Node & {
@@ -214,6 +234,7 @@ export type Node = {
 
 export type Query = {
     _contract?: Maybe<Scalars['Boolean']['output']>;
+    icloudMailHealth: IcloudMailHealth;
     icloudPrimaryAccount?: Maybe<IcloudPrimaryAccountView>;
     icloudPrimaryAccounts: Array<IcloudPrimaryAccountView>;
     icloudReceivedMails: Array<IcloudReceivedMailView>;
