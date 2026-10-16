@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { isControlledTestPaymentMethod } from '@vendure/common/lib/controlled-test-payment';
-import { CacheService, Logger, Order, RequestContext, TransactionalConnection } from '@vendure/core';
-import { addDays, differenceInCalendarDays, endOfDay, startOfDay } from 'date-fns';
+import {
+    CacheService,
+    Logger,
+    Order,
+    RequestContext,
+    TransactionalConnection,
+    UserInputError,
+} from '@vendure/core';
 import { createHash } from 'node:crypto';
 
 import {
@@ -26,8 +32,12 @@ export type MetricData = {
 };
 
 const metricDateFormatters = new Map<string, Intl.DateTimeFormat>();
+const METRIC_TIMEZONE = 'Asia/Shanghai';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const BUSINESS_OFFSET_MS = 8 * 60 * 60 * 1000;
+const businessDay = (date: Date) => Math.floor((date.getTime() + BUSINESS_OFFSET_MS) / DAY_MS);
 
-export function metricDateKey(date: Date, timeZone = process.env.TZ?.trim()): string {
+export function metricDateKey(date: Date, timeZone = METRIC_TIMEZONE): string {
     const cacheKey = timeZone || 'system';
     let formatter = metricDateFormatters.get(cacheKey);
     if (!formatter) {
@@ -76,9 +86,10 @@ export function buildMetricDataByDay(
     endDate: Date,
 ): Map<string, MetricData> {
     const dataPerDay = new Map<string, MetricData>();
-    const dayCount = differenceInCalendarDays(endDate, startDate) + 1;
+    const firstDay = businessDay(startDate);
+    const dayCount = businessDay(endDate) - firstDay + 1;
     for (let index = 0; index < dayCount; index++) {
-        const currentDate = addDays(startDate, index);
+        const currentDate = new Date((firstDay + index) * DAY_MS - BUSINESS_OFFSET_MS);
         const dateKey = metricDateKey(currentDate);
         dataPerDay.set(dateKey, {
             orders: [],
@@ -96,8 +107,8 @@ export function buildMetricDataByDay(
         entry.orders.push(order);
         if (orderCountsTowardsSales(order)) {
             entry.countedOrders.push(order);
+            entry.netSales += orderNetSales(order);
         }
-        entry.netSales += orderNetSales(order);
     }
     return dataPerDay;
 }
@@ -121,8 +132,17 @@ export class MetricsService {
         ctx: RequestContext,
         { types, refresh, startDate, endDate }: DashboardMetricSummaryInput,
     ): Promise<DashboardMetricSummary[]> {
-        const calculatedStartDate = startOfDay(new Date(startDate));
-        const calculatedEndDate = endOfDay(new Date(endDate));
+        const calculatedStartDate = new Date(startDate);
+        const calculatedEndDate = new Date(endDate);
+        if (
+            !Number.isFinite(calculatedStartDate.getTime()) ||
+            !Number.isFinite(calculatedEndDate.getTime())
+        ) {
+            throw new UserInputError('统计时间格式不正确');
+        }
+        if (calculatedStartDate > calculatedEndDate) {
+            throw new UserInputError('统计开始时间不能晚于结束时间');
+        }
         // Check if we have cached result
         const hash = createHash('sha1')
             .update(
@@ -130,20 +150,21 @@ export class MetricsService {
                     startDate: calculatedStartDate,
                     endDate: calculatedEndDate,
                     types: [...types].sort((a, b) => a.localeCompare(b)),
-                    channel: ctx.channel.token,
+                    channel: ctx.channelId,
+                    currency: ctx.channel.defaultCurrencyCode,
                 }),
             )
             .digest('base64');
         const cacheKey = `MetricsService:${hash}`;
         const cachedMetricList = await this.cacheService.get<DashboardMetricSummary[]>(cacheKey);
         if (cachedMetricList && refresh !== true) {
-            Logger.verbose(`Returning cached metrics for channel ${ctx.channel.token}`, loggerCtx);
+            Logger.verbose(`Returning cached metrics for channel ${ctx.channelId}`, loggerCtx);
             return cachedMetricList;
         }
         // No cache, calculating new metrics
         Logger.verbose(
             `No cache hit, calculating metrics from ${calculatedStartDate.toISOString()} to ${calculatedEndDate.toISOString()} for channel ${
-                ctx.channel.token
+                ctx.channelId
             } for all orders`,
             loggerCtx,
         );
@@ -181,24 +202,25 @@ export class MetricsService {
         while (hasMoreOrders) {
             const query = orderRepo
                 .createQueryBuilder('order')
-                .leftJoin('order.channels', 'orderChannel')
                 .leftJoinAndSelect('order.payments', 'metricPayment')
                 .leftJoinAndSelect('metricPayment.refunds', 'metricRefund')
-                .where('orderChannel.id=:channelId', { channelId: ctx.channelId })
+                .where('order.salesChannelId=:channelId', { channelId: ctx.channelId })
+                .andWhere('order.currencyCode=:currencyCode', {
+                    currencyCode: ctx.channel.defaultCurrencyCode,
+                })
                 .andWhere('order.orderPlacedAt >= :startDate', {
-                    startDate: startDate.toISOString(),
+                    startDate,
                 })
                 .andWhere('order.orderPlacedAt <= :endDate', {
-                    endDate: endDate.toISOString(),
+                    endDate,
                 })
+                .orderBy('order.id', 'ASC')
                 .skip(skip)
                 .take(take);
             const [items, nrOfOrders] = await query.getManyAndCount();
             orders.push(...items);
             Logger.verbose(
-                `Fetched orders ${skip}-${skip + take} for channel ${
-                    ctx.channel.token
-                } for date range metrics`,
+                `Fetched orders ${skip}-${skip + take} for channel ${ctx.channelId} for date range metrics`,
                 loggerCtx,
             );
             skip += items.length;
@@ -207,7 +229,7 @@ export class MetricsService {
             }
         }
         Logger.verbose(
-            `Finished fetching all ${orders.length} orders for channel ${ctx.channel.token} for date range metrics`,
+            `Finished fetching all ${orders.length} orders for channel ${ctx.channelId} for date range metrics`,
             loggerCtx,
         );
 

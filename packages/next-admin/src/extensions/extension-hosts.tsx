@@ -220,7 +220,7 @@ export function NextAdminDashboardWidgets() {
     );
     if (widgets.length === 0) return null;
     return (
-        <div className="grid gap-4 xl:grid-cols-2" data-extension-location="dashboard:widgets">
+        <div className="grid items-start gap-4 xl:grid-cols-2" data-extension-location="dashboard:widgets">
             {widgets.map(widget => {
                 const Widget = widget.component;
                 return (

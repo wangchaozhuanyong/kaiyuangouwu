@@ -19,7 +19,7 @@ export function ReferralTodayExtensionWidget() {
     const cards = value
         ? [
               ['独立访客（估算）', value.visitorCount ?? '—'],
-              ['新增注册', value.newCustomerCount],
+              ['新增本店客户', value.newCustomerCount],
               ['消费客户', value.consumerCount],
               ['首次消费', value.firstTimeConsumerCount],
               ['老客复购', value.returningConsumerCount],
@@ -48,6 +48,11 @@ export function ReferralTodayExtensionWidget() {
 
     return (
         <div>
+            {query.error && (
+                <p role="status" className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                    今日数据更新失败，以下为上次成功读取的数据。请点击刷新重试。
+                </p>
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {cards.map(([label, count]) => (
                     <div key={label} className="rounded-lg bg-slate-50 p-3">
@@ -69,6 +74,7 @@ export function ReferralTodayExtensionWidget() {
                         refreshPage
                         type="button"
                         onClick={() => void query.refetch()}
+                        disabled={query.loading}
                         className="inline-flex items-center gap-1 font-bold text-slate-600"
                     >
                         <RefreshCw

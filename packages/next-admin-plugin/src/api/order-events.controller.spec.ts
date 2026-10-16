@@ -30,7 +30,7 @@ function harness() {
         status: vi.fn(),
         setHeader: vi.fn(),
         flushHeaders: vi.fn(),
-        write: vi.fn(() => true),
+        write: vi.fn<(frame: string) => boolean>(() => true),
         end: vi.fn(),
     });
     res.status.mockReturnValue(res);
