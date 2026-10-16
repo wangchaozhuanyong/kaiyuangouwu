@@ -91,6 +91,31 @@ test('preview reads are ephemeral and a closed fixture never exposes an old LIVE
     assert.equal((await closed.json()).errorCode, 'STOREFRONT_CLOSED');
 });
 
+test('service-media scenario keeps exact artwork while a stale no-preview response warms through normal aggregate reads', async () => {
+    const url = `${base}/_storefront/page-data?kind=page&id=services&qaServiceMedia=warm-after-first`;
+    const first = await (await fetch(url)).json();
+    const second = await (await fetch(url)).json();
+    assert.ok(Date.now() - first.generatedAt >= 31_000);
+    assert.ok(Date.now() - second.generatedAt < 5_000);
+    const artwork = page => page.content.blocks.find(block => block.code === 'storefront-client-plugins');
+    assert.equal(artwork(first).imageUrl, '/assets/preview/qa-services.svg');
+    assert.deepEqual(artwork(first), artwork(second));
+    assert.equal(artwork(second).settings.businessServicesHeroLayout, 'shared-banner');
+    assert.ok(first.media.every(item => item.placeholder === undefined));
+    assert.match(
+        second.media.find(item => item.kind === 'hero').placeholder.inlineData,
+        /^data:image\/webp;base64,/u,
+    );
+    const previews = second.media.flatMap(item => (item.placeholder ? [item.placeholder.inlineData] : []));
+    assert.equal(previews.length, 8);
+    assert.ok(previews.every(item => item.length <= 1024));
+    assert.ok(previews.join('').length <= 8192);
+    const ordinary = buildPublicPage({ kind: 'page', id: 'services' }, 'localhost');
+    assert.equal(artwork(ordinary).imageUrl, '/assets/preview/qa-client_plugins.svg');
+    assert.notEqual(artwork(ordinary).settings.businessServicesHeroLayout, 'shared-banner');
+    assert.ok(ordinary.media.every(item => item.placeholder === undefined));
+});
+
 test('qaDelay/qaEmpty/qaLegacy inherit the document query via Referer without cookies', async () => {
     const start = Date.now();
     const response = await fetch(catalogUrl(), {

@@ -7,10 +7,17 @@ import {
 import { ShopApiGraphQlError } from './shop-api-errors';
 
 let generation = 0;
+const generationListeners = new Set<() => void>();
 export const publicPageReadGeneration = () => generation;
+/** Control notifications only; response data remains exclusively in Query. */
+export function watchPublicPageReadGeneration(notify: () => void): () => void {
+    generationListeners.add(notify);
+    return () => generationListeners.delete(notify);
+}
 export function invalidatePublicPageReads(): void {
     generation++;
     bootstrap = undefined;
+    generationListeners.forEach(notify => notify());
 }
 
 const flights = new Map<string, Promise<unknown>>();

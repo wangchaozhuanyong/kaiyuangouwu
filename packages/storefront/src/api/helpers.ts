@@ -1,11 +1,8 @@
-import { productAvailability } from '../product-availability';
 import { ShopApiGraphQlError } from '../shop-api-errors';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import {
     AccountRecommendationSettings,
-    Product,
     StorefrontAuthSettings,
-    StorefrontCatalogInput,
     StorefrontContentBlock,
     StorefrontFlashSale,
     StorefrontSystemAnnouncement,
@@ -95,57 +92,6 @@ export function isMissingStorefrontCatalogSchema(error: unknown): boolean {
         error.message.includes('Unknown type "StorefrontCatalogInput"') ||
         error.message.includes('Cannot query field "storefrontCatalog"')
     );
-}
-
-export function catalogVariants(product: Product, input: StorefrontCatalogInput): Product['variants'] {
-    if (!input.fulfillmentType) return product.variants;
-    return product.variants.filter(variant => variant.customFields.fulfillmentType === input.fulfillmentType);
-}
-
-export function minimumCatalogPrice(product: Product, input: StorefrontCatalogInput): number {
-    if (product.customFields?.pricingMode === 'QUOTE_ONLY') return Number.POSITIVE_INFINITY;
-    const prices = catalogVariants(product, input).map(variant => variant.priceWithTax);
-    return prices.length ? Math.min(...prices) : Number.POSITIVE_INFINITY;
-}
-
-export function matchesCatalogFilters(product: Product, input: StorefrontCatalogInput): boolean {
-    if (
-        product.customFields?.pricingMode === 'QUOTE_ONLY' &&
-        (input.minPriceWithTax != null || input.maxPriceWithTax != null)
-    )
-        return false;
-    const variants = catalogVariants(product, input);
-    if (!variants.length) return false;
-    if (input.inStockOnly && !variants.some(variant => !productAvailability(variant).soldOut)) {
-        return false;
-    }
-    const minimumPrice = Math.min(...variants.map(variant => variant.priceWithTax));
-    if (input.minPriceWithTax != null && minimumPrice < input.minPriceWithTax) return false;
-    if (input.maxPriceWithTax != null && minimumPrice > input.maxPriceWithTax) return false;
-    return true;
-}
-
-export function sortNativeCatalogProducts(
-    products: Product[],
-    input: StorefrontCatalogInput,
-    locale: string,
-): Product[] {
-    const sorted = [...products];
-    if (input.sort === 'sales') return sorted;
-    if (input.sort === 'newest') {
-        return sorted.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-    }
-    if (input.sort === 'price-asc' || input.sort === 'price-desc') {
-        const direction = input.sort === 'price-asc' ? 1 : -1;
-        return sorted.sort((left, right) => {
-            const quoteDifference =
-                Number(left.customFields?.pricingMode === 'QUOTE_ONLY') -
-                Number(right.customFields?.pricingMode === 'QUOTE_ONLY');
-            if (quoteDifference) return quoteDifference;
-            return (minimumCatalogPrice(left, input) - minimumCatalogPrice(right, input)) * direction;
-        });
-    }
-    return sorted.sort((left, right) => left.name.localeCompare(right.name, locale));
 }
 
 export function createRequestSignal(external?: AbortSignal, timeoutMs?: number) {

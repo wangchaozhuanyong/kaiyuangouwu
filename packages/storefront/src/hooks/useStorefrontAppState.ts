@@ -342,6 +342,7 @@ export function useStorefrontAppState() {
         recommendationsBlock,
         bestSellersLoading,
         recommendationsLoading,
+        catalogTakes,
     } = useStorefrontMerchandising({
         ...queryContext,
         customer,
@@ -857,6 +858,7 @@ export function useStorefrontAppState() {
         displayedRoute,
         api,
         publicMedia,
+        catalogTakes,
         products,
         productsQuery,
         collections,

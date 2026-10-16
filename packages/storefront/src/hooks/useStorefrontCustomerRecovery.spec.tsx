@@ -112,6 +112,9 @@ describe('account and home coupon dependency recovery', () => {
         mocks.runtime = {
             ...bootstrap,
             ...account,
+            catalogTakes: { sales: 16, recommended: 16 },
+            bestSellerProducts: [],
+            recommendationProducts: [],
             retryAccount: account.retryCustomer,
         };
         return <HomeRoutePage />;

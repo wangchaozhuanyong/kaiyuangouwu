@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryObserver, skipToken } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -928,6 +928,43 @@ describe('navigation query ownership', () => {
         const { setPublicPageNavigationScope } = await import('./storefront-page-data');
         setPublicPageNavigationScope(undefined);
         vi.unstubAllGlobals();
+    });
+    it('refreshes expired disabled public metadata through its aggregate owner while returning cached content immediately', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const stale = syntheticPage('synthetic-a', 'en', 'home');
+        stale.scope.host = 'store.test';
+        const request = { kind: 'page', id: 'services' } as const;
+        stale.request = request;
+        stale.requestKey = publicPageRequestKey(stale.request);
+        stale.generatedAt = Date.now() - 31_000;
+        const src = '/assets/preview/warm-service.webp';
+        stale.media = [mediaDescriptor(src, 'hero')];
+        seedPublicPage(client, stale);
+        const key = publicSeoQueryKey('synthetic-a:MYR', 'en', stale.request);
+        const observer = new QueryObserver(client, { queryKey: key, queryFn: skipToken, enabled: false });
+        const stop = observer.subscribe(() => undefined);
+        const fresh = {
+            ...stale,
+            generatedAt: Date.now(),
+            media: [mediaDescriptor(src, 'hero', { inlinePreview: 'data:image/webp;base64,AAAA' })],
+        };
+        const fetch = vi.fn().mockResolvedValue(Response.json(fresh));
+        vi.stubGlobal('fetch', fetch);
+        setPublicPageNavigationScope({ channelCode: 'synthetic-a', currencyCode: 'MYR', languageCode: 'en' });
+        try {
+            await prefetchPublicPage(client, '/en/services');
+            expect(client.getQueryData(key)).toBeDefined();
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+            await vi.waitFor(() =>
+                expect(
+                    client.getQueryData(publicSeoQueryKey('synthetic-a:MYR', 'en', request, 'public-media')),
+                ).toEqual(fresh.media),
+            );
+        } finally {
+            stop();
+            client.clear();
+        }
     });
     it.each(['product', 'catalog'] as const)(
         'restores missing %s hints without rereading its fresh business query',

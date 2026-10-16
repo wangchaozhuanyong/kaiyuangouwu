@@ -95,7 +95,7 @@ export function useStorefrontMerchandising({
     ) => ({
         ...publicOptions,
         queryKey: storefrontQueryKeys.catalog(marketCode, vendureLanguageCode, { purpose, sort, take }),
-        queryFn: ({ signal }: { signal: AbortSignal }) => api.catalog({ sort, take }, signal),
+        queryFn: ({ signal }: { signal: AbortSignal }) => api.catalog({ sort, take }, signal, 'store'),
         enabled,
     });
     const bestSellerCatalogQuery = useQuery(
@@ -151,7 +151,7 @@ export function useStorefrontMerchandising({
     const recommendationCandidates = recommendationCatalogQuery.data?.items ?? products;
 
     const day = new Date().toISOString().slice(0, 10);
-    const bestSellerProducts = buildBestSellerProducts({
+    const rankedBestSellerProducts = buildBestSellerProducts({
         pinnedProducts: pinnedBestSellerQuery.data ?? [],
         candidates: [...bestSellerCandidates, ...(pinnedBestSellerQuery.data ?? [])],
         salesByProductId: bestSellerSalesQuery.data ?? {},
@@ -180,7 +180,7 @@ export function useStorefrontMerchandising({
         kind: 'best-sellers',
         ready: bestSellersEnabled && !bestSellersLoading,
         candidates: [...bestSellerCandidates, ...(pinnedBestSellerQuery.data ?? [])],
-        select: () => bestSellerProducts,
+        select: () => rankedBestSellerProducts,
     });
     const recommendations = usePageLoadProductOrder({
         scope,
@@ -224,15 +224,18 @@ export function useStorefrontMerchandising({
                       : [];
               })
             : selected;
+    const bestSellerProducts = resolvedProducts(
+        bestSellers.products,
+        Math.max(bestSellerCatalogQuery.dataUpdatedAt, pinnedBestSellerQuery.dataUpdatedAt),
+    );
+    const recommendationProducts = resolvedProducts(
+        recommendations.products,
+        recommendationCatalogQuery.dataUpdatedAt,
+    );
     return {
-        bestSellerProducts: resolvedProducts(
-            bestSellers.products,
-            Math.max(bestSellerCatalogQuery.dataUpdatedAt, pinnedBestSellerQuery.dataUpdatedAt),
-        ),
-        recommendationProducts: resolvedProducts(
-            recommendations.products,
-            recommendationCatalogQuery.dataUpdatedAt,
-        ),
+        bestSellerProducts,
+        recommendationProducts,
+        catalogTakes: { sales: bestSellerCandidateCount, recommended: recommendationCandidateCount },
         recommendationsBlock,
         bestSellersLoading:
             storefrontContextResolved && homeContentReady && showBestSellers && bestSellers.loading,

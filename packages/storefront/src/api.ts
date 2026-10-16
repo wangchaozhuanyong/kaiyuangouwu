@@ -187,8 +187,12 @@ export class ShopApi {
         return this.catalogApi.searchProducts(term, sort, skip, take, collectionId, signal);
     }
 
-    async catalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<ProductSearchPage> {
-        return this.catalogApi.catalog(input, signal);
+    async catalog(
+        input: StorefrontCatalogInput,
+        signal?: AbortSignal,
+        scope: 'route' | 'store' = 'route',
+    ): Promise<ProductSearchPage> {
+        return this.catalogApi.catalog(input, signal, scope);
     }
 
     dailyRecommendations = (signal?: AbortSignal) => this.catalogApi.dailyRecommendations(signal);

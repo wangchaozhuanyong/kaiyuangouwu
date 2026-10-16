@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { catalogRouteState } from '../catalog-route-query';
 import { offlineLoadError } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
+import { PublicCatalogMediaProvider, merchandisingMediaCatalogs } from '../public-catalog-media';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { HomePageContext, ProductDetailPageContext, SearchPageContext } from '../storefront-page-contexts';
@@ -127,7 +128,19 @@ export function HomeRoutePage() {
                 onRetry: () => void runtime.refetchStorefront(),
             }}
         >
-            <HomePage />
+            <PublicCatalogMediaProvider
+                market={runtime.market}
+                language={runtime.language}
+                collections={runtime.collections}
+                catalogs={merchandisingMediaCatalogs(
+                    runtime.catalogTakes,
+                    runtime.bestSellerProducts,
+                    runtime.recommendationProducts,
+                    true,
+                )}
+            >
+                <HomePage />
+            </PublicCatalogMediaProvider>
         </HomePageContext.Provider>
     );
 }
