@@ -9,6 +9,8 @@ import {
 export const publicRouteRewrite = {
     input: ({ url }: { url: URL }): URL => {
         const language = publicLanguageFromUrl(url.pathname);
+        // Internal code-read identity follows the actual target, never a supplied query value.
+        url.searchParams.set('__route', publicUnlocalizedPathname(url.pathname));
         url.searchParams.delete('__storefrontLanguage');
         if (language) {
             url.pathname = publicUnlocalizedPathname(url.pathname);
@@ -18,6 +20,7 @@ export const publicRouteRewrite = {
     },
     output: ({ url }: { url: URL }): URL => {
         const selected = url.searchParams.get('__storefrontLanguage');
+        url.searchParams.delete('__route');
         const current =
             typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
         const language = selected === 'zh' ? 'zh_Hans' : selected === 'en' ? 'en' : current;

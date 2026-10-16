@@ -1004,16 +1004,108 @@ describe('navigation query ownership', () => {
                 expect(catalog).not.toHaveBeenCalled();
                 expect(product).not.toHaveBeenCalled();
                 expect(client.getQueryData(key)).toEqual(business);
-                expect(
-                    client.getQueryData(
-                        publicSeoQueryKey('synthetic-a:MYR', 'en', request, 'public-media', collections),
-                    ),
-                ).toEqual(page.media);
+                await vi.waitFor(() =>
+                    expect(
+                        client.getQueryData(
+                            publicSeoQueryKey('synthetic-a:MYR', 'en', request, 'public-media', collections),
+                        ),
+                    ).toEqual(page.media),
+                );
+                expect(catalog).not.toHaveBeenCalled();
+                expect(product).not.toHaveBeenCalled();
             } finally {
                 client.clear();
             }
         },
     );
+    it('opens home from shared service content while its missing media query continues independently', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const services = syntheticPage('synthetic-a', 'en', 'home', { host: 'store.test' });
+        const content = services.content;
+        if (!content) throw new Error('Expected shared configured content');
+        const quick = content.blocks.find(block => block.type === 'QUICK_LINKS');
+        if (!quick) throw new Error('Expected configured shortcut content');
+        content.blocks = [
+            {
+                ...quick,
+                id: 'home-hero',
+                code: 'homepage-hero',
+                type: 'HERO',
+                position: 0,
+                title: 'Configured home campaign',
+                imageUrl: '/assets/preview/home-hero.webp',
+                items: [],
+                settings: { heroArtworkLayout: 'campaign' },
+            },
+            { ...quick, position: 1 },
+        ];
+        content.settings.configuredBlockTypes = ['HERO', 'QUICK_LINKS'];
+        services.request = { kind: 'page', id: 'services' };
+        services.requestKey = publicPageRequestKey(services.request);
+        services.route = '/en/services';
+        services.media = [mediaDescriptor('/assets/preview/services-hero.webp', 'hero')];
+        delete services.products;
+        seedPublicPage(client, services);
+        const contentKey = [...storefrontQueryKeys.content('synthetic-a:MYR', 'en'), 'public'];
+        const mediaKey = publicSeoQueryKey('synthetic-a:MYR', 'en', { kind: 'home' }, 'public-media');
+        const productsKey = storefrontQueryKeys.products('synthetic-a:MYR', 'en', 12);
+        const sharedContent = client.getQueryData(contentKey);
+        expect(sharedContent).toEqual(services.content);
+        expect(client.getQueryData(mediaKey)).toBeUndefined();
+        expect(client.getQueryData(productsKey)).toBeUndefined();
+        const home = syntheticPage('synthetic-a', 'en', 'home', { host: 'store.test' });
+        const products = home.products;
+        if (!products?.length) throw new Error('Expected home product aggregate');
+        home.content = content;
+        home.media = [
+            mediaDescriptor('/assets/preview/home-hero.webp', 'hero', {
+                inlinePreview: 'data:image/webp;base64,AAAA',
+            }),
+        ];
+        let release: ((response: Response) => void) | undefined;
+        const fetch = vi.fn(
+            () =>
+                new Promise<Response>(resolve => {
+                    release = resolve;
+                }),
+        );
+        vi.stubGlobal('fetch', fetch);
+        const mediaReads = vi.spyOn(client, 'fetchQuery');
+        setPublicPageNavigationScope({
+            channelCode: 'synthetic-a',
+            currencyCode: 'MYR',
+            languageCode: 'en',
+            api: { product: vi.fn(), catalog: vi.fn() },
+        });
+        try {
+            await expect(prefetchPublicPage(client, '/en/')).resolves.toBeUndefined();
+            const owner = client.getQueryCache().find({ queryKey: mediaKey, exact: true });
+            expect(owner?.state.fetchStatus).toBe('fetching');
+            expect(client.getQueryData(contentKey)).toBe(sharedContent);
+            expect(client.getQueryData(mediaKey)).toBeUndefined();
+            // An overlapping home navigation keeps the same Query owner and shared content.
+            await expect(prefetchPublicPage(client, '/en/')).resolves.toBeUndefined();
+            expect(client.getQueryCache().find({ queryKey: mediaKey, exact: true })).toBe(owner);
+            expect(mediaReads.mock.calls.map(([options]) => options.queryKey)).toEqual([mediaKey, mediaKey]);
+            expect(fetch).toHaveBeenCalledOnce();
+            expect(client.getQueryData(contentKey)).toBe(sharedContent);
+            expect(client.getQueryData(productsKey)).toBeUndefined();
+            if (!release) throw new Error('Expected pending home aggregate read');
+            release(Response.json(home));
+            await vi.waitFor(() => {
+                expect(client.getQueryData(mediaKey)).toEqual(home.media);
+                expect(client.getQueryData(productsKey)).toEqual(products);
+            });
+            expect(client.getQueryData(contentKey)).toEqual(home.content);
+            await prefetchPublicPage(client, '/en/');
+            expect(fetch).toHaveBeenCalledOnce();
+        } finally {
+            mediaReads.mockRestore();
+            client.clear();
+        }
+    });
+
     it('discards a late media response after currency changes without caching an empty capability', async () => {
         const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
         const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -1038,12 +1130,14 @@ describe('navigation query ownership', () => {
             languageCode: 'en',
             api: { product: vi.fn(), catalog: vi.fn() },
         };
+        const mediaReads = vi.spyOn(client, 'fetchQuery');
         setPublicPageNavigationScope(scope);
         try {
             const href = `/en${publicPageRouteHref(request)}`;
-            const navigation = prefetchPublicPage(client, href);
-            const rejected = expect(navigation).rejects.toMatchObject({ name: 'AbortError' });
-            await Promise.resolve();
+            await expect(prefetchPublicPage(client, href)).resolves.toBeUndefined();
+            const background = mediaReads.mock.results[0]?.value;
+            if (!background) throw new Error('Expected independent media query');
+            const rejected = expect(background).rejects.toMatchObject({ name: 'AbortError' });
             if (!release) throw new Error('Expected pending artwork recovery');
             setPublicPageNavigationScope({ ...scope, currencyCode: 'CNY' });
             release(Response.json(page));
@@ -1053,13 +1147,14 @@ describe('navigation query ownership', () => {
             setPublicPageNavigationScope(scope);
             fetch.mockResolvedValue(Response.json(page));
             await prefetchPublicPage(client, href);
+            await vi.waitFor(() => expect(client.getQueryData(mediaKey)).toEqual(page.media));
             expect(fetch).toHaveBeenCalledTimes(2);
-            expect(client.getQueryData(mediaKey)).toEqual(page.media);
         } finally {
+            mediaReads.mockRestore();
             client.clear();
         }
     });
-    it('propagates closure through the media query before cached product artwork can return', async () => {
+    it('propagates background media closure and clears the cached destination', async () => {
         const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
         const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         const key = storefrontQueryKeys.product('store-a:MYR', 'en', 'p1');
@@ -1067,11 +1162,19 @@ describe('navigation query ownership', () => {
         const config = [...storefrontQueryKeys.config('store-a:MYR', 'en'), 'public'];
         client.setQueryData(config, fixture().config);
         const queryScope = await import('./query-client');
-        const stop = queryScope.watchStorefrontScopeAccess(client, () => undefined);
+        const notify = vi.fn();
+        const stop = queryScope.watchStorefrontScopeAccess(client, notify);
+        let release: ((response: Response) => void) | undefined;
         vi.stubGlobal(
             'fetch',
-            vi.fn().mockResolvedValue(Response.json({ errorCode: 'STOREFRONT_CLOSED' }, { status: 403 })),
+            vi.fn(
+                () =>
+                    new Promise<Response>(resolve => {
+                        release = resolve;
+                    }),
+            ),
         );
+        const mediaReads = vi.spyOn(client, 'fetchQuery');
         setPublicPageNavigationScope({
             channelCode: 'store-a',
             currencyCode: 'MYR',
@@ -1079,9 +1182,15 @@ describe('navigation query ownership', () => {
             api: { product: vi.fn(), catalog: vi.fn() },
         });
         try {
-            await expect(prefetchPublicPage(client, '/en/product?id=p1')).rejects.toMatchObject({
-                errorCode: 'STOREFRONT_CLOSED',
-            });
+            await expect(prefetchPublicPage(client, '/en/product?id=p1')).resolves.toBeUndefined();
+            expect(client.getQueryData(key)).toEqual({ id: 'p1' });
+            const background = mediaReads.mock.results[0]?.value;
+            if (!background || !release) throw new Error('Expected pending independent media query');
+            const rejected = expect(background).rejects.toMatchObject({ errorCode: 'STOREFRONT_CLOSED' });
+            expect(notify).not.toHaveBeenCalled();
+            release(Response.json({ errorCode: 'STOREFRONT_CLOSED' }, { status: 403 }));
+            await rejected;
+            expect(notify).toHaveBeenCalled();
             expect(client.getQueryData(key)).toBeUndefined();
             expect(
                 queryScope.isStorefrontScopeAccessDenied(client, {
@@ -1090,16 +1199,18 @@ describe('navigation query ownership', () => {
                 }),
             ).toBe(true);
         } finally {
+            mediaReads.mockRestore();
             stop();
             client.clear();
         }
     });
-    it('fetches route artwork before resolving when fresh SEO exists without media', async () => {
+    it('returns fresh SEO immediately while one independent query restores missing route artwork', async () => {
         const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
         const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         const page = fixture();
         page.request = { kind: 'page', id: 'services' };
         page.requestKey = publicPageRequestKey(page.request);
+        const request = page.request;
         page.media = [
             mediaDescriptor('/assets/preview/service.webp', 'hero', {
                 inlinePreview: 'data:image/webp;base64,AAAA',
@@ -1121,15 +1232,22 @@ describe('navigation query ownership', () => {
             const navigation = prefetchPublicPage(client, '/en/services').then(() => {
                 finished = true;
             });
-            await Promise.resolve();
-            expect(fetch).toHaveBeenCalledOnce();
-            expect(finished).toBe(false);
-            if (!release) throw new Error('Expected the pending public media read');
-            release(Response.json(page));
             await navigation;
+            expect(fetch).toHaveBeenCalledOnce();
+            expect(finished).toBe(true);
             expect(
                 client.getQueryData(publicSeoQueryKey('store-a:MYR', 'en', page.request, 'public-media')),
-            ).toEqual(page.media);
+            ).toBeUndefined();
+            // A second cached navigation shares the pending hints read.
+            await prefetchPublicPage(client, '/en/services');
+            expect(fetch).toHaveBeenCalledOnce();
+            if (!release) throw new Error('Expected the pending public media read');
+            release(Response.json(page));
+            await vi.waitFor(() =>
+                expect(
+                    client.getQueryData(publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media')),
+                ).toEqual(page.media),
+            );
             await prefetchPublicPage(client, '/en/services');
             expect(fetch).toHaveBeenCalledOnce();
         } finally {
@@ -1215,6 +1333,8 @@ describe('navigation query ownership', () => {
         const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
         const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         const product = vi.fn();
+        const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
+        vi.stubGlobal('fetch', fetch);
         const key = storefrontQueryKeys.product('store-a:MYR', 'en', 'p1');
         client.setQueryDefaults(key, { queryFn: product });
         client.setQueryData(key, { id: 'p1' }, { updatedAt: Date.now() - 45_000 });
@@ -1226,8 +1346,65 @@ describe('navigation query ownership', () => {
         });
         try {
             await prefetchPublicPage(client, '/en/product?id=p1');
+            await vi.waitFor(() =>
+                expect(
+                    client.getQueryData(
+                        publicSeoQueryKey('store-a:MYR', 'en', { kind: 'product', id: 'p1' }, 'public-media'),
+                    ),
+                ).toEqual([]),
+            );
+            await prefetchPublicPage(client, '/en/product?id=p1');
+            expect(fetch).toHaveBeenCalledOnce();
             expect(product).not.toHaveBeenCalled();
             expect(client.getQueryData(key)).toEqual({ id: 'p1' });
+        } finally {
+            client.clear();
+        }
+    });
+
+    it('refreshes stale business data after background legacy hints resolve without repeating the capability read', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const key = storefrontQueryKeys.product('store-a:MYR', 'en', 'p1');
+        const mediaKey = publicSeoQueryKey(
+            'store-a:MYR',
+            'en',
+            { kind: 'product', id: 'p1' },
+            'public-media',
+        );
+        const fresh = { id: 'p1', name: 'fresh' };
+        const product = vi.fn().mockResolvedValue(fresh);
+        client.setQueryDefaults(key, { queryFn: product });
+        client.setQueryData(
+            key,
+            { id: 'p1', name: 'old' },
+            { updatedAt: Date.now() - PUBLIC_QUERY_STALE_TIME - 1 },
+        );
+        let release: ((response: Response) => void) | undefined;
+        const fetch = vi.fn(
+            () =>
+                new Promise<Response>(resolve => {
+                    release = resolve;
+                }),
+        );
+        vi.stubGlobal('fetch', fetch);
+        setPublicPageNavigationScope({
+            channelCode: 'store-a',
+            currencyCode: 'MYR',
+            languageCode: 'en',
+            api: { product, catalog: vi.fn() },
+        });
+        try {
+            await prefetchPublicPage(client, '/en/product?id=p1');
+            expect(product).not.toHaveBeenCalled();
+            if (!release) throw new Error('Expected pending legacy capability read');
+            release(new Response(null, { status: 404 }));
+            await vi.waitFor(() => expect(client.getQueryData(key)).toEqual(fresh));
+            expect(client.getQueryData(mediaKey)).toEqual([]);
+            expect(product).toHaveBeenCalledOnce();
+            await prefetchPublicPage(client, '/en/product?id=p1');
+            expect(fetch).toHaveBeenCalledOnce();
+            expect(product).toHaveBeenCalledOnce();
         } finally {
             client.clear();
         }
