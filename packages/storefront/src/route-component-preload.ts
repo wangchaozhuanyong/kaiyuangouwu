@@ -2,83 +2,53 @@ import { RouteName } from './storefront-router';
 
 type RoutePreloader = () => Promise<void>;
 
+function preload<T extends string>(module: Promise<Record<T, RoutePreloader>>, name: T): Promise<void> {
+    return module.then(value => value[name]());
+}
+
 const routePreloaders = {
-    home: () => import('./route-pages/catalog-route-pages').then(module => module.preloadHomeRoutePage()),
-    category: () =>
-        import('./route-pages/category-route-page').then(module => module.preloadCategoryRoutePage()),
-    product: () =>
-        import('./route-pages/catalog-route-pages').then(module => module.preloadProductRoutePage()),
-    search: () => import('./route-pages/catalog-route-pages').then(module => module.preloadSearchRoutePage()),
-    cart: () => import('./route-pages/cart-route-page').then(module => module.preloadCartRoutePage()),
-    account: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadAccountRoutePage()),
-    favorites: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadFavoritesRoutePage()),
-    history: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadHistoryRoutePage()),
+    home: () => preload(import('./route-pages/catalog-route-pages'), 'preloadHomeRoutePage'),
+    category: () => preload(import('./route-pages/category-route-page'), 'preloadCategoryRoutePage'),
+    product: () => preload(import('./route-pages/catalog-route-pages'), 'preloadProductRoutePage'),
+    search: () => preload(import('./route-pages/catalog-route-pages'), 'preloadSearchRoutePage'),
+    cart: () => preload(import('./route-pages/cart-route-page'), 'preloadCartRoutePage'),
+    account: () => preload(import('./route-pages/account-route-pages'), 'preloadAccountRoutePage'),
+    favorites: () => preload(import('./route-pages/account-route-pages'), 'preloadFavoritesRoutePage'),
+    history: () => preload(import('./route-pages/account-route-pages'), 'preloadHistoryRoutePage'),
     notifications: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadNotificationsRoutePage()),
-    coupons: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadCouponsRoutePage()),
-    referral: () =>
-        import('./route-pages/account-route-pages').then(module => module.preloadReferralRoutePage()),
-    login: () => import('./route-pages/auth-route-pages').then(module => module.preloadLoginRoutePage()),
-    register: () =>
-        import('./route-pages/auth-route-pages').then(module => module.preloadRegisterRoutePage()),
+        preload(import('./route-pages/account-route-pages'), 'preloadNotificationsRoutePage'),
+    coupons: () => preload(import('./route-pages/account-route-pages'), 'preloadCouponsRoutePage'),
+    referral: () => preload(import('./route-pages/account-route-pages'), 'preloadReferralRoutePage'),
+    login: () => preload(import('./route-pages/auth-route-pages'), 'preloadLoginRoutePage'),
+    register: () => preload(import('./route-pages/auth-route-pages'), 'preloadRegisterRoutePage'),
     'verify-account': () =>
-        import('./route-pages/auth-route-pages').then(module => module.preloadVerifyAccountRoutePage()),
+        preload(import('./route-pages/auth-route-pages'), 'preloadVerifyAccountRoutePage'),
     'forgot-password': () =>
-        import('./route-pages/auth-route-pages').then(module => module.preloadForgotPasswordRoutePage()),
+        preload(import('./route-pages/auth-route-pages'), 'preloadForgotPasswordRoutePage'),
     'reset-password': () =>
-        import('./route-pages/auth-route-pages').then(module => module.preloadResetPasswordRoutePage()),
-    purchase: () =>
-        import('./route-pages/checkout-route-pages').then(module => module.preloadPurchaseRoutePage()),
-    checkout: () =>
-        import('./route-pages/checkout-route-pages').then(module => module.preloadCheckoutRoutePage()),
-    payment: () =>
-        import('./route-pages/checkout-route-pages').then(module => module.preloadPaymentRoutePage()),
+        preload(import('./route-pages/auth-route-pages'), 'preloadResetPasswordRoutePage'),
+    purchase: () => preload(import('./route-pages/checkout-route-pages'), 'preloadPurchaseRoutePage'),
+    checkout: () => preload(import('./route-pages/checkout-route-pages'), 'preloadCheckoutRoutePage'),
+    payment: () => preload(import('./route-pages/checkout-route-pages'), 'preloadPaymentRoutePage'),
     'order-confirmation': () =>
-        import('./route-pages/checkout-route-pages').then(module =>
-            module.preloadOrderConfirmationRoutePage(),
-        ),
-    orders: () => import('./route-pages/order-route-pages').then(module => module.preloadOrdersRoutePage()),
-    logistics: () =>
-        import('./route-pages/order-route-pages').then(module => module.preloadLogisticsRoutePage()),
-    'order-detail': () =>
-        import('./route-pages/order-route-pages').then(module => module.preloadOrderDetailRoutePage()),
-    addresses: () =>
-        import('./route-pages/order-route-pages').then(module => module.preloadAddressesRoutePage()),
+        preload(import('./route-pages/checkout-route-pages'), 'preloadOrderConfirmationRoutePage'),
+    orders: () => preload(import('./route-pages/order-route-pages'), 'preloadOrdersRoutePage'),
+    logistics: () => preload(import('./route-pages/order-route-pages'), 'preloadLogisticsRoutePage'),
+    'order-detail': () => preload(import('./route-pages/order-route-pages'), 'preloadOrderDetailRoutePage'),
+    addresses: () => preload(import('./route-pages/order-route-pages'), 'preloadAddressesRoutePage'),
     'account-security': () =>
-        import('./route-pages/order-route-pages').then(module => module.preloadAccountSecurityRoutePage()),
-    services: () =>
-        import('./route-pages/content-route-pages').then(module => module.preloadServicesRoutePage()),
-    'image-studio': () =>
-        import('./route-pages/content-route-pages').then(module => module.preloadImageStudioRoutePage()),
-    'two-factor': () =>
-        import('./route-pages/content-route-pages').then(module => module.preloadTwoFactorRoutePage()),
-    'mail-query': () =>
-        import('./route-pages/content-route-pages').then(module => module.preloadMailQueryRoutePage()),
-    reviews: () =>
-        import('./route-pages/content-route-pages').then(module => module.preloadReviewsRoutePage()),
-    support: () =>
-        import('./route-pages/content-route-pages').then(module => module.preloadSupportRoutePage()),
-    legal: () => import('./route-pages/legal-route-page').then(module => module.preloadLegalRoutePage()),
+        preload(import('./route-pages/order-route-pages'), 'preloadAccountSecurityRoutePage'),
+    services: () => preload(import('./route-pages/content-route-pages'), 'preloadServicesRoutePage'),
+    'image-studio': () => preload(import('./route-pages/content-route-pages'), 'preloadImageStudioRoutePage'),
+    'two-factor': () => preload(import('./route-pages/content-route-pages'), 'preloadTwoFactorRoutePage'),
+    'mail-query': () => preload(import('./route-pages/content-route-pages'), 'preloadMailQueryRoutePage'),
+    reviews: () => preload(import('./route-pages/content-route-pages'), 'preloadReviewsRoutePage'),
+    support: () => preload(import('./route-pages/content-route-pages'), 'preloadSupportRoutePage'),
+    legal: () => preload(import('./route-pages/legal-route-page'), 'preloadLegalRoutePage'),
 } satisfies Partial<Record<RouteName, RoutePreloader>>;
 
-const routePreloadRequests = new Map<RouteName, Promise<void>>();
-
 export function preloadStorefrontRouteComponent(routeName: RouteName): Promise<void> {
-    const existingRequest = routePreloadRequests.get(routeName);
-    if (existingRequest) return existingRequest;
-
     const preloader = routePreloaders[routeName as keyof typeof routePreloaders];
-    if (!preloader) return Promise.resolve();
-
-    const request = Promise.resolve()
-        .then(preloader)
-        .catch(() => {
-            routePreloadRequests.delete(routeName);
-        });
-    routePreloadRequests.set(routeName, request);
-    return request;
+    // Imports and lazyRouteComponent already share their module read and retry state.
+    return preloader?.().catch(() => undefined) ?? Promise.resolve();
 }

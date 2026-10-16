@@ -18,10 +18,13 @@ import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 import { useStorefrontNavigation } from './hooks/useStorefrontNavigation';
 import { PUBLIC_QUERY_STALE_TIME, storefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { router as productionRouter } from './router';
-import { setPublicPageNavigationScope } from './storefront-page-data';
+import { publicSeoQueryKey, setPublicPageNavigationScope } from './storefront-page-data';
 import { type Product } from './types';
 
 vi.hoisted(() => vi.stubEnv('VITE_CLIENT_CHANNEL_SWITCHING', 'false'));
+
+const preloadRoute = vi.hoisted(() => vi.fn<(name: string) => Promise<void>>());
+vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: preloadRoute }));
 
 // Keep the real Router options, public product loader, Query cache and navigation hook.
 // The page body is small so every intermediate commit can be checked independently of styling.
@@ -31,7 +34,18 @@ vi.mock('./routeTree.gen', async () => {
     const { Route: CategoryRoute } = await import('./routes/category');
     const { Route: ServicesRoute } = await import('./routes/services');
     const { Route: SupportRoute } = await import('./routes/support');
-    const root = createRootRoute({ component: () => <NavigationHarness /> });
+    const { storefrontRouteCodeLoader } = await import('./storefront-page-data');
+    const root = createRootRoute({
+        pendingMs: Infinity,
+        shouldReload: true,
+        preload: false,
+        loaderDeps: ({ search }: { search: Record<string, unknown> }) => [
+            search.__route,
+            search.__storefrontLanguage,
+        ],
+        loader: { handler: storefrontRouteCodeLoader, staleReloadMode: 'blocking' },
+        component: () => <NavigationHarness />,
+    });
     return {
         routeTree: root.addChildren([
             createRoute({
@@ -172,6 +186,8 @@ describe('real storefront router continuity', () => {
         storefrontQueryClient.clear();
         storefrontQueryClient.setDefaultOptions({ queries: { retry: false } });
         storefrontQueryClient.setQueryData(storefrontQueryKeys.collections('store-a:MYR', 'en'), []);
+        preloadRoute.mockReset();
+        preloadRoute.mockResolvedValue(undefined);
         readProduct.mockReset();
         readProduct.mockImplementation(id => Promise.resolve(product(id)));
         readCatalog.mockClear();
@@ -316,6 +332,238 @@ describe('real storefront router continuity', () => {
             await refresh.promise;
         });
         await vi.waitFor(() => expect(host.querySelector('article')?.textContent).toBe('Updated A'));
+        expect(pendingNodes).toEqual([]);
+    });
+
+    it('keeps the cached article and interactive shell beyond 200ms until route code is ready without waiting for optional aggregate data', async () => {
+        await start();
+        expect(preloadRoute).toHaveBeenCalledWith('product');
+        const code = deferred<void>();
+        preloadRoute.mockImplementation(name => (name === 'services' ? code.promise : Promise.resolve()));
+        const response = deferred<Response>();
+        const fetch = vi.fn(() => response.promise);
+        vi.stubGlobal('fetch', fetch);
+        const page = syntheticPage('synthetic-a', 'en', 'home');
+        page.scope.host = window.location.host;
+        page.scope.channelCode = 'store-a';
+        page.config.code = 'store-a';
+        const request = { kind: 'page' as const, id: 'services' as const };
+        page.request = request;
+        page.requestKey = publicPageRequestKey(request);
+        page.media = [mediaDescriptor('/assets/preview/services.webp', 'hero')];
+        const seoKey = publicSeoQueryKey('store-a:MYR', 'en', request);
+        const mediaKey = publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media');
+        storefrontQueryClient.setQueryData(seoKey, null);
+        storefrontQueryClient.setQueryData(
+            [...storefrontQueryKeys.content('store-a:MYR', 'en'), 'public'],
+            page.content,
+        );
+        const header = host.querySelector('header');
+        const article = host.querySelector('article');
+        pendingNodes.length = 0;
+        let navigation: Promise<void> | undefined;
+        await act(async () => {
+            navigation = router.navigate({
+                to: '/services',
+                search: { __storefrontLanguage: 'en' },
+            } as never);
+            await new Promise(resolve => setTimeout(resolve, 230));
+        });
+        expect(preloadRoute).toHaveBeenCalledWith('services');
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(host.querySelector('header')).toBe(header);
+        expect(host.querySelector('article')).toBe(article);
+        expect(article?.textContent).toBe('a');
+        expect(header?.dataset.presentedProduct).toBe('a');
+        expect(host.querySelector('[data-content]')).toBeNull();
+        expect(pendingNodes).toEqual([]);
+        const action = host.querySelector('header button');
+        if (!(action instanceof HTMLButtonElement)) throw new Error('Expected the retained shell action');
+        act(() => action.click());
+        expect(action.textContent).toBe('Shell action 1');
+        // Code readiness owns the commit; the aggregate remains deliberately unresolved.
+        await act(async () => {
+            code.resolve();
+            await navigation;
+        });
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedRoute).toBe('services');
+        expect(host.querySelector('[data-content]')?.textContent).toBe('Unbacked artwork');
+        expect(storefrontQueryClient.getQueryData(mediaKey)).toBeUndefined();
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(pendingNodes).toEqual([]);
+        await act(async () => {
+            response.resolve(Response.json(page));
+            await Promise.resolve();
+        });
+        await vi.waitFor(() => expect(storefrontQueryClient.getQueryData(mediaKey)).toEqual(page.media));
+        expect(fetch).toHaveBeenCalledOnce();
+    });
+
+    it('ignores an obsolete route code completion after a newer cached navigation commits', async () => {
+        await start();
+        const obsoleteCode = deferred<void>();
+        preloadRoute.mockImplementation(name =>
+            name === 'services' ? obsoleteCode.promise : Promise.resolve(),
+        );
+        const request = { kind: 'page' as const, id: 'services' as const };
+        storefrontQueryClient.setQueryData(publicSeoQueryKey('store-a:MYR', 'en', request), null);
+        storefrontQueryClient.setQueryData(
+            publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media'),
+            [],
+        );
+        storefrontQueryClient.setQueryData(productKey('b'), product('b'));
+        const header = host.querySelector('header');
+        pendingNodes.length = 0;
+        let abandoned: Promise<void> | undefined;
+        await act(async () => {
+            abandoned = router.navigate({ to: '/services', search: { __storefrontLanguage: 'en' } } as never);
+            await Promise.resolve();
+        });
+        await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('services'));
+        expect(host.querySelector('article')?.textContent).toBe('a');
+        await navigate('b');
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedProduct).toBe('b');
+        expect(host.querySelector('article')?.textContent).toBe('b');
+        await act(async () => {
+            obsoleteCode.resolve();
+            await abandoned;
+        });
+        expect(header?.dataset.presentedProduct).toBe('b');
+        expect(host.querySelector('article')?.textContent).toBe('b');
+        expect(host.querySelector('[data-content]')).toBeNull();
+        expect(pendingNodes).toEqual([]);
+    });
+
+    it.each([
+        ['retained search', true],
+        ['forged route search', { __route: '/services', __storefrontLanguage: 'en' }],
+    ] as const)(
+        'keeps %s hover preloads out of the root code owner and binds the later navigation to its actual path',
+        async (_label, search) => {
+            await start();
+            const services = { kind: 'page' as const, id: 'services' as const };
+            const support = { kind: 'page' as const, id: 'support' as const };
+            storefrontQueryClient.setQueryData(publicSeoQueryKey('store-a:MYR', 'en', services), null);
+            storefrontQueryClient.setQueryData(
+                publicSeoQueryKey('store-a:MYR', 'en', services, 'public-media'),
+                [],
+            );
+            await act(async () => {
+                await router.navigate({ to: '/services', search: { __storefrontLanguage: 'en' } } as never);
+            });
+            expect(host.querySelector('header')?.dataset.presentedRoute).toBe('services');
+            storefrontQueryClient.setQueryData(publicSeoQueryKey('store-a:MYR', 'en', support), null);
+            const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
+            vi.stubGlobal('fetch', fetch);
+            preloadRoute.mockClear();
+
+            await act(async () => {
+                await router.preloadRoute({ to: '/support', search } as never);
+            });
+
+            // Hover can warm the leaf's optional media without owning the blocking code flight.
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+            await vi.waitFor(() =>
+                expect(
+                    storefrontQueryClient.getQueryData(
+                        publicSeoQueryKey('store-a:MYR', 'en', support, 'public-media'),
+                    ),
+                ).toEqual([]),
+            );
+            expect(preloadRoute).not.toHaveBeenCalled();
+            expect(host.querySelector('header')?.dataset.presentedRoute).toBe('services');
+            const code = deferred<void>();
+            preloadRoute.mockImplementation(name => (name === 'support' ? code.promise : Promise.resolve()));
+            const header = host.querySelector('header');
+            const article = host.querySelector('article');
+            pendingNodes.length = 0;
+            let navigation: Promise<void> | undefined;
+            await act(async () => {
+                navigation = router.navigate({ to: '/support', search } as never);
+                await Promise.resolve();
+            });
+            await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('support'));
+            // Intent preparation and the required root loader both use this facade.
+            expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual(['support', 'support']);
+            expect(host.querySelector('header')).toBe(header);
+            expect(header?.dataset.presentedRoute).toBe('services');
+            expect(host.querySelector('article')).toBe(article);
+            expect(pendingNodes).toEqual([]);
+            await act(async () => {
+                code.resolve();
+                await navigation;
+            });
+            expect(header?.dataset.presentedRoute).toBe('support');
+            expect(router.state.location.search.__route).toBe('/support');
+            const publicUrl = new URL(router.state.location.publicHref, 'https://example.test');
+            expect(publicUrl.pathname).toBe('/en/support');
+            expect(publicUrl.searchParams.has('__route')).toBe(false);
+            expect(publicUrl.searchParams.has('__storefrontLanguage')).toBe(false);
+            expect(pendingNodes).toEqual([]);
+        },
+    );
+
+    it('commits a ready support target with retained search before an obsolete services code flight finishes', async () => {
+        await start();
+        for (const id of ['services', 'support'] as const) {
+            const request = { kind: 'page' as const, id };
+            storefrontQueryClient.setQueryData(publicSeoQueryKey('store-a:MYR', 'en', request), null);
+            storefrontQueryClient.setQueryData(
+                publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media'),
+                [],
+            );
+        }
+        const obsoleteCode = deferred<void>();
+        preloadRoute.mockClear();
+        preloadRoute.mockImplementation(name =>
+            name === 'services' ? obsoleteCode.promise : Promise.resolve(),
+        );
+        const header = host.querySelector('header');
+        pendingNodes.length = 0;
+        let abandoned: Promise<void> | undefined;
+        await act(async () => {
+            abandoned = router.navigate({
+                to: '/services',
+                search: { __storefrontLanguage: 'en', __route: '/support', term: 'same' },
+            } as never);
+            await Promise.resolve();
+        });
+        await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('services'));
+        expect(router.state.location.pathname).toBe('/services');
+        expect(router.state.location.search.__route).toBe('/services');
+        expect(host.querySelector('article')?.textContent).toBe('a');
+
+        // Retaining search also retains the old internal value before rewrite.input replaces it.
+        // This must use a distinct root code owner even though the public business search is identical.
+        await act(async () => {
+            await router.navigate({ to: '/support', search: true } as never);
+        });
+        expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual([
+            'services',
+            'services',
+            'support',
+            'support',
+        ]);
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedRoute).toBe('support');
+        expect(host.querySelector('[data-content]')?.textContent).toBe('Backed artwork');
+        expect(router.state.location.search.__route).toBe('/support');
+        const publicUrl = new URL(router.state.location.publicHref, 'https://example.test');
+        expect(publicUrl.pathname).toBe('/en/support');
+        expect(publicUrl.searchParams.get('term')).toBe('same');
+        expect(publicUrl.searchParams.has('__route')).toBe(false);
+        expect(publicUrl.searchParams.has('__storefrontLanguage')).toBe(false);
+        expect(pendingNodes).toEqual([]);
+        await act(async () => {
+            obsoleteCode.resolve();
+            await abandoned;
+        });
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedRoute).toBe('support');
+        expect(router.state.location.pathname).toBe('/support');
+        expect(host.querySelector('[data-content]')?.textContent).toBe('Backed artwork');
         expect(pendingNodes).toEqual([]);
     });
 

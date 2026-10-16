@@ -44,8 +44,10 @@ import {
     storefrontQueryClient,
     storefrontQueryKeys,
 } from './query-client';
+import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
+import { routeFromRouterLocation, routeHref } from './storefront-router';
 import {
     contentStringArraySetting,
     contentNumberSetting,
@@ -438,6 +440,17 @@ export function setPublicPageNavigationScope(scope: typeof navigationScope) {
     navigationScope = scope;
 }
 
+/** Keep the current body until page code is ready; data keeps its leaf loading feedback. */
+export function storefrontRouteCodeLoader({
+    location,
+}: {
+    location: { pathname: string; search: Record<string, unknown> };
+}): Promise<void> {
+    const route = routeFromRouterLocation(location.pathname, location.search);
+    void prefetchPublicPage(storefrontQueryClient, routeHref(route)).catch(() => undefined);
+    return preloadStorefrontRouteComponent(route.name);
+}
+
 /** Existing router waits use the same Query owner and leave error UI to its page. */
 export function publicPageRouteLoader({
     location,
@@ -506,20 +519,20 @@ export async function prefetchPublicPage(
         return page;
     };
     if (cached?.data !== undefined && client.getQueryData(mediaKey) === undefined) {
-        await awaitPublicPage(
-            client.fetchQuery({
+        // Optional route hints must not hide an already available destination.
+        // Re-enter the same owner after recovery so legacy/stale business reads keep their rules.
+        void client
+            .fetchQuery({
                 queryKey: mediaKey,
                 queryFn: async ({ signal: querySignal }) => {
                     await readPage(querySignal);
-                    // Legacy endpoints have no hints; retain that empty capability
-                    // result with this route instead of rereading fresh business data.
                     return client.getQueryData<PublicPageData['media']>(mediaKey) ?? [];
                 },
                 gcTime: PUBLIC_QUERY_GC_TIME,
-            }),
-            signal,
-        );
-        if (navigationScope !== scope) return;
+            })
+            .then(() => (navigationScope === scope ? prefetchPublicPage(client, href, signal) : undefined))
+            .catch(() => undefined);
+        return;
     }
     const queryOwned = Boolean(
         scope.api &&
