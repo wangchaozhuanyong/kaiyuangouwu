@@ -724,7 +724,7 @@ function coverageFixture({ targetProof = true, changes, mutateRun, mutateProof, 
     if (mutateProof) Object.values(proofs).forEach(mutateProof);
     const api = endpoint => {
         const workflowMatch =
-            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=(?:5|20)$/u.exec(
+            /\/actions\/workflows\/([^/]+)\/runs\?status=completed&(?:created=[^&]+&)?per_page=(?:5|100)$/u.exec(
                 endpoint,
             );
         if (workflowMatch)
@@ -1135,7 +1135,7 @@ test('bounded history reads keep unavailable proof missing instead of authorizin
     let reads = 0;
     fixture.api = endpoint => {
         if (endpoint.includes('/actions/workflows/')) {
-            assert.match(endpoint, /per_page=(?:5|20)$/u);
+            assert.match(endpoint, /per_page=(?:5|100)$/u);
             assert.equal(endpoint.endsWith('per_page=5'), endpoint.includes('&created='));
             reads++;
             return { workflow_runs: [] };
@@ -1154,10 +1154,10 @@ test('bounded history reads keep unavailable proof missing instead of authorizin
     );
 });
 
-test('bounded historical lookup retains verified native success beyond five failed or cancelled follow-ups', async () => {
+test('bounded historical lookup retains verified native success beyond twenty failed or cancelled follow-ups', async () => {
     const fixture = nativeRecoveryFixture();
     const api = fixture.api;
-    const newer = Array.from({ length: 6 }, (_, index) => ({
+    const newer = Array.from({ length: 25 }, (_, index) => ({
         id: 10 + index,
         status: 'completed',
         conclusion: 'cancelled',
@@ -1170,7 +1170,7 @@ test('bounded historical lookup retains verified native success beyond five fail
         if (endpoint.includes('/actions/workflows/') && endpoint.includes('/runs?')) {
             const response = api(endpoint);
             const limit = Number(/per_page=(\d+)$/u.exec(endpoint)[1]);
-            assert.ok(limit === 5 || limit === 20);
+            assert.ok(limit === 5 || limit === 100);
             indexReads.push({ endpoint, limit });
             return {
                 workflow_runs: endpoint.includes('/build_and_test.yml/')
@@ -1183,7 +1183,7 @@ test('bounded historical lookup retains verified native success beyond five fail
     const result = await findInputCoverage(fixture);
     assert.equal(indexReads.length, 6);
     assert.equal(indexReads.filter(read => read.limit === 5).length, 3);
-    assert.equal(indexReads.filter(read => read.limit === 20).length, 3);
+    assert.equal(indexReads.filter(read => read.limit === 100).length, 3);
     assert.equal(result.anchor, undefined);
     assert.ok(result.reused.some(check => check.check === 'backend:core' && check.runId === 1));
     assert.ok(result.reused.every(check => check.runId === 1 && check.evidenceKind === 'partial-native'));
