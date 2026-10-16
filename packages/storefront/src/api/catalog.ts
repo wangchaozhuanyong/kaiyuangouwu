@@ -18,8 +18,6 @@ import { isMissingStorefrontCatalogSchema } from './helpers';
 
 export { storefrontNavigationCollections } from '../../../storefront-content-plugin/src/shared/public-page-data';
 
-const NATIVE_CATALOG_BATCH_SIZE = 100;
-
 export class CatalogApi extends BaseDomainApi {
     private storefrontCatalogAvailable: boolean | null = null;
     private nativeCatalogApi?: import('./native-catalog').NativeCatalogApi;
@@ -74,40 +72,12 @@ export class CatalogApi extends BaseDomainApi {
     }
 
     async productsByIds(ids: string[], signal?: AbortSignal): Promise<Product[]> {
-        const uniqueIds = [...new Set(ids)];
-        if (!uniqueIds.length) return [];
-        const products: Product[] = [];
-        for (let offset = 0; offset < uniqueIds.length; offset += NATIVE_CATALOG_BATCH_SIZE) {
-            const batch = uniqueIds.slice(offset, offset + NATIVE_CATALOG_BATCH_SIZE);
-            const result = await this.request<{ products: { items: Product[]; totalItems: number } }>(
-                `
-                query StorefrontProductsByIds($options: ProductListOptions) {
-                    products(options: $options) {
-                        totalItems
-                        items { ${productFields} }
-                    }
-                }
-            `,
-                {
-                    options: {
-                        take: batch.length,
-                        filter: { id: { in: batch } },
-                    },
-                },
-                signal,
-            );
-            if (
-                !Array.isArray(result.products?.items) ||
-                result.products.items.length !== result.products.totalItems
-            )
-                throw new Error('Product references response is incomplete');
-            products.push(...result.products.items);
-        }
-        const productsById = new Map(products.map(product => [product.id, product]));
-        return uniqueIds.flatMap(id => {
-            const product = productsById.get(id);
-            return product ? [product] : [];
-        });
+        if (!ids.length) return [];
+        const referenceIds = [...ids];
+        signal?.throwIfAborted();
+        const reader = await this.nativeReader();
+        signal?.throwIfAborted();
+        return reader.productsByIds(referenceIds, signal);
     }
 
     async searchProducts(
@@ -176,11 +146,15 @@ export class CatalogApi extends BaseDomainApi {
         signal?: AbortSignal,
     ): Promise<ProductSearchPage> {
         if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
+        return (await this.nativeReader()).catalog(input, signal);
+    }
+
+    private async nativeReader(): Promise<import('./native-catalog').NativeCatalogApi> {
         if (!this.nativeCatalogApi) {
             const { NativeCatalogApi } = await import('./native-catalog');
             this.nativeCatalogApi ??= new NativeCatalogApi(this.ctx, this);
         }
-        return this.nativeCatalogApi.catalog(input, signal);
+        return this.nativeCatalogApi;
     }
 
     async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {

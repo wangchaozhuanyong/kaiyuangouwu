@@ -32,6 +32,8 @@ import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './r
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontLanguage } from './types';
 
+const stringify = JSON.stringify;
+
 /** Image accessibility uses the same language in anonymous HTML and the interactive frame. */
 export const ImageLanguageContext = createContext<StorefrontLanguage | null>(null);
 
@@ -149,7 +151,7 @@ export function SafeImage(props: SafeImageProps) {
         !props.retainedOwnerKey && borrowedSources?.has(mediaPreviewKey(props.src, props.imageKind))
             ? borrowedGeneration
             : undefined;
-    const ownerKey = JSON.stringify([
+    const ownerKey = stringify([
         scope,
         props.retainedOwnerKey,
         ...(borrowedOwner === undefined ? [] : [borrowedOwner]),
@@ -164,50 +166,93 @@ export function SafeImage(props: SafeImageProps) {
         props.retainedOwnerKey,
         scope,
         borrowedOwner,
-        JSON.stringify(props.mediaSources ?? []),
+        stringify(props.mediaSources ?? []),
     ].join('\u0000');
-    const [previous, setPrevious] = useState<{
-        identity: string;
-        presentation?: ImagePresentation;
-        ownerKey?: string;
-    }>({ identity: '', ownerKey });
+    const [[previousIdentity, previousPresentation, previousOwnerKey], setPrevious] = useState<
+        [identity: string, presentation: ImagePresentation | undefined, ownerKey: string]
+    >(['', undefined, ownerKey]);
     return (
         <SafeImageSource
             key={identity}
             {...props}
             retainedPresentation={
-                previous.ownerKey === ownerKey && previous.identity !== identity
-                    ? previous.presentation
+                previousOwnerKey === ownerKey && previousIdentity !== identity
+                    ? previousPresentation
                     : undefined
             }
             onPresented={presentation =>
-                setPrevious(current =>
-                    current.identity === identity &&
-                    current.presentation?.source === presentation.source &&
-                    current.presentation?.size === presentation.size &&
-                    current.presentation?.position === presentation.position
+                setPrevious(current => {
+                    const [currentIdentity, currentPresentation] = current;
+                    // Both presentations have all four named slots, including undefined raster.
+                    return currentIdentity === identity &&
+                        currentPresentation?.every((value, index) => value === presentation[index])
                         ? current
-                        : { identity, presentation, ownerKey },
-                )
+                        : [identity, presentation, ownerKey];
+                })
             }
         />
     );
 }
 
 const decodedImageUrls = new Set<string>();
-// This is decode bookkeeping for actual image resources, never a server-data cache.
-type ImagePresentation = { source: string; size: string; position: string };
+// The bounded raster is an already drawn backing, not another URL/decode request.
+type ImagePresentation = [
+    source: string,
+    size: string,
+    position: string,
+    raster: HTMLCanvasElement | undefined,
+];
 const decodedImagePreviews = new Map<string, ImagePresentation>();
 const ImageRecovery = lazy(() => import('./image-recovery').catch(() => ({ default: () => <></> })));
 
-function rememberImagePresentation(key: string | undefined, presentation: ImagePresentation) {
-    if (!key) return;
+function copyRaster(source: CanvasImageSource, width: number, height: number, target?: HTMLCanvasElement) {
+    if (!width || !height || typeof CanvasRenderingContext2D === 'undefined') return;
+    try {
+        const canvas = target ?? document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
+        if (context) {
+            context.drawImage(source, 0, 0, width, height);
+            return canvas;
+        }
+    } catch {
+        // Retain the native URL/inline backing when drawing is unsupported.
+    }
+}
+
+function rememberImagePresentation(key: string | undefined, image: HTMLImageElement) {
+    const presentation = imagePresentation(image);
+    if (!key) return presentation;
+    const [source] = presentation;
+    const [previousSource, , , previousRaster] = decodedImagePreviews.get(key) ?? [];
+    let raster = previousSource === source ? previousRaster : undefined;
+    if (!raster) {
+        const scale = Math.min(1, 128 / Math.max(image.naturalWidth, image.naturalHeight));
+        // Draw only the decoded candidate. No readback, encoding or persistence.
+        raster = copyRaster(
+            image,
+            Math.ceil(image.naturalWidth * scale),
+            Math.ceil(image.naturalHeight * scale),
+        );
+    }
+    presentation[3] = raster; // The named tuple's raster slot stays explicit, including undefined.
     decodedImagePreviews.delete(key);
     decodedImagePreviews.set(key, presentation);
+    // 128 entries of at most 128x128 pixels bound retained bitmap storage to 8 MiB.
     if (decodedImagePreviews.size > 128) {
         const oldest = decodedImagePreviews.keys().next().value;
-        if (oldest !== undefined) decodedImagePreviews.delete(oldest);
+        if (oldest !== undefined) {
+            const [, , , evictedRaster] = decodedImagePreviews.get(oldest) ?? [];
+            if (evictedRaster) evictedRaster.width = 0;
+            decodedImagePreviews.delete(oldest);
+        }
     }
+    return presentation;
+}
+
+function previewStyle(fit?: CSSProperties['objectFit'], position?: string) {
+    return { objectFit: fit, objectPosition: position };
 }
 
 function imageFrameCrop(image: HTMLImageElement) {
@@ -232,7 +277,7 @@ function imageFrameCrop(image: HTMLImageElement) {
 
 function imagePresentation(image: HTMLImageElement): ImagePresentation {
     const { size, position } = imageFrameCrop(image);
-    return { source: image.currentSrc || image.src, size, position };
+    return [image.currentSrc || image.src, size, position, undefined];
 }
 
 export function isImageAlreadyDecoded(
@@ -240,11 +285,10 @@ export function isImageAlreadyDecoded(
     fallbackSrc?: string | null,
     sourceKey?: string | null,
 ): boolean {
-    if (typeof window === 'undefined') return false;
-    if (src && decodedImageUrls.has(src)) return true;
-    if (fallbackSrc && decodedImageUrls.has(fallbackSrc)) return true;
-    if (sourceKey && decodedImageUrls.has(sourceKey)) return true;
-    return false;
+    return (
+        typeof window !== 'undefined' &&
+        [src, fallbackSrc, sourceKey].some(source => !!source && decodedImageUrls.has(source))
+    );
 }
 
 export function markImageDecoded(url?: string | null): void {
@@ -253,6 +297,9 @@ export function markImageDecoded(url?: string | null): void {
 
 export function clearDecodedImageCache(): void {
     decodedImageUrls.clear();
+    for (const [, , , raster] of decodedImagePreviews.values()) {
+        if (raster) raster.width = 0;
+    }
     decodedImagePreviews.clear();
 }
 
@@ -316,7 +363,7 @@ function SafeImageSource({
         const preview = inlinePreviewFor(source.src, source.previewSourceDimensions);
         return preview ? [{ media: source.media, src: preview }] : [];
     });
-    const hasInlinePreview = Boolean(inlinePreview || inlineMediaSources?.length);
+    const hasInlinePreview = !!(inlinePreview || inlineMediaSources?.length);
     const currentArtworkSource = () =>
         mediaSources?.find(
             source => typeof window !== 'undefined' && window.matchMedia?.(source.media).matches,
@@ -331,9 +378,9 @@ function SafeImageSource({
     const presentationCacheKey = () => {
         const key = currentArtworkKey();
         return retainedOwnerKey
-            ? JSON.stringify(['owner', publicMedia.scope, retainedOwnerKey, key])
+            ? stringify(['owner', publicMedia.scope, retainedOwnerKey, key])
             : publicMedia.scope && publicMedia.sources.has(key)
-              ? JSON.stringify([
+              ? stringify([
                     'public',
                     publicMedia.scope,
                     key,
@@ -343,8 +390,6 @@ function SafeImageSource({
               : undefined;
     };
     const presentationKey = presentationCacheKey();
-    const retainedPreview =
-        replacementPresentation || (presentationKey ? decodedImagePreviews.get(presentationKey) : undefined);
     const [previewReady, setPreviewReady] = useState(hasInlinePreview);
     const [frameCrop, setFrameCrop] = useState<ReturnType<typeof imageFrameCrop>>();
     const [, setArtworkRevision] = useState(0);
@@ -354,10 +399,29 @@ function SafeImageSource({
         sources.src,
         sources.srcSet ?? srcSet,
         sources.sizes,
-        JSON.stringify(mediaSources ?? []),
+        stringify(mediaSources ?? []),
     ].join('\u0000');
     // A previous URL decode cannot prove that this DOM node's selected candidate is ready.
     const [loadedCandidate, setLoadedCandidate] = useState('');
+    // Capture admission at mount or successful candidate decode. Eviction must
+    // not erase this mount's copied backing while its next candidate is pending.
+    const retainedPreview = useMemo(
+        () =>
+            replacementPresentation ||
+            (presentationKey ? decodedImagePreviews.get(presentationKey) : undefined),
+        [replacementPresentation, presentationKey, loadedCandidate],
+    );
+    const [retainedSource, retainedSize, retainedPosition, retainedRaster] = retainedPreview ?? [];
+    const retainedCrop = replacementPresentation ? undefined : frameCrop;
+    const effectiveSize = retainedCrop?.size ?? retainedSize;
+    const effectivePosition = retainedCrop?.position ?? retainedPosition;
+    // Match the retained URL backing; intrinsic-size/unsupported values cannot use a reduced bitmap.
+    const rasterFit =
+        effectiveSize === '100% 100%'
+            ? 'fill'
+            : effectiveSize === 'contain' || effectiveSize === 'cover'
+              ? effectiveSize
+              : undefined;
     const [presentedCandidate, setPresentedCandidate] = useState('');
     const [paintedCandidate, setPaintedCandidate] = useState('');
     const handoffFrames = useRef<number[]>([]);
@@ -371,16 +435,16 @@ function SafeImageSource({
     const nodeCandidate = imageRef.current && imageCandidateIdentity(imageRef.current);
     const nodeKey = sourceKey + '\u0001' + nodeCandidate;
     const candidateComplete = imageRef.current && isImageCandidateComplete(imageRef.current);
-    const loaded = Boolean(candidateComplete && loadedCandidate === nodeKey && !failed);
-    const presented = Boolean(candidateComplete && presentedCandidate === nodeKey && !failed);
+    const loaded = !!(candidateComplete && loadedCandidate === nodeKey && !failed);
+    const presented = !!(candidateComplete && presentedCandidate === nodeKey && !failed);
     const painted = presented && paintedCandidate === nodeKey;
     const placeholder =
-        retainedPreview?.source ||
+        retainedSource ||
         inlinePreview ||
         (placeholderSrc && imageKind
             ? (storefrontPlaceholderUrl(placeholderSrc, imageKind) ?? placeholderSrc)
             : placeholderSrc);
-    const hasPreview = Boolean(placeholder || inlineMediaSources?.length);
+    const hasPreview = !!(placeholder || inlineMediaSources?.length);
 
     function retryImage() {
         if (!active.current || !failed || retrying.current) return;
@@ -484,15 +548,14 @@ function SafeImageSource({
                 // Keep its backing until this candidate can paint, without hiding native SSR media.
                 cancelHandoffFrames();
                 if (typeof window.requestAnimationFrame === 'function') {
-                    handoffFrames.current.push(
-                        window.requestAnimationFrame(() => {
+                    const afterPaint = (frames: number) => {
+                        if (frames)
                             handoffFrames.current.push(
-                                window.requestAnimationFrame(() => {
-                                    if (isCurrentCandidate()) setPaintedCandidate(candidateKey);
-                                }),
+                                window.requestAnimationFrame(() => afterPaint(frames - 1)),
                             );
-                        }),
-                    );
+                        else if (isCurrentCandidate()) setPaintedCandidate(candidateKey);
+                    };
+                    afterPaint(2);
                 } else setPaintedCandidate(candidateKey);
                 markImageDecoded(image.currentSrc || image.src);
                 if (!mediaSources?.length && !sources.srcSet && !srcSet) {
@@ -501,14 +564,14 @@ function SafeImageSource({
                     markImageDecoded(sourceKey);
                 }
                 markImageDecoded(candidate);
-                rememberImagePresentation(presentationCacheKey(), imagePresentation(image));
+                const presentation = rememberImagePresentation(presentationCacheKey(), image);
                 if (notifiedCandidate.current !== candidate) {
                     notifiedCandidate.current = candidate;
                     onImageReady?.(image);
                 }
                 setLoadedCandidate(candidateKey);
                 setTimedOut(false);
-                onPresented(imagePresentation(image));
+                onPresented(presentation);
                 onDecoded?.();
             })
             .catch(() => {
@@ -561,9 +624,12 @@ function SafeImageSource({
             setTimedOut(true);
             boundRequest();
         };
-        image?.addEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
-        image?.addEventListener('load', clearRequestTimer);
-        image?.addEventListener('error', clearRequestTimer);
+        const listeners = [
+            [IMAGE_WAIT_EXPIRED_EVENT, expire],
+            ['load', clearRequestTimer],
+            ['error', clearRequestTimer],
+        ] as const;
+        for (const [event, handler] of listeners) image?.addEventListener(event, handler);
         // Start fetching near-screen images before they scroll into view; geometry is unchanged.
         let observer: IntersectionObserver | undefined;
         if (image?.getAttribute('loading') !== 'lazy') boundRequest();
@@ -589,9 +655,7 @@ function SafeImageSource({
             cancelHandoffFrames();
             clearRequestTimer();
             observer?.disconnect();
-            image?.removeEventListener(IMAGE_WAIT_EXPIRED_EVENT, expire);
-            image?.removeEventListener('load', clearRequestTimer);
-            image?.removeEventListener('error', clearRequestTimer);
+            for (const [event, handler] of listeners) image?.removeEventListener(event, handler);
         };
     }, [sourceKey, requestAttempt]);
 
@@ -659,17 +723,33 @@ function SafeImageSource({
                 style={
                     !failed && retainedPreview
                         ? {
-                              backgroundImage: [retainedPreview.source, artworkInlinePreview]
+                              backgroundImage: [retainedSource, artworkInlinePreview]
                                   .filter(Boolean)
-                                  .map(source => `url(${JSON.stringify(source)})`)
+                                  .map(source => `url(${stringify(source)})`)
                                   .join(', '),
-                              backgroundSize: (replacementPresentation ?? frameCrop ?? retainedPreview).size,
-                              backgroundPosition: (replacementPresentation ?? frameCrop ?? retainedPreview)
-                                  .position,
+                              backgroundSize: effectiveSize,
+                              backgroundPosition: effectivePosition,
                           }
                         : undefined
                 }
             >
+                {!failed && !painted && retainedRaster && rasterFit && (
+                    <canvas
+                        ref={canvas => {
+                            // An evicted source must not resize this mount's already drawn copy.
+                            if (canvas)
+                                copyRaster(
+                                    retainedRaster,
+                                    retainedRaster.width,
+                                    retainedRaster.height,
+                                    canvas,
+                                );
+                        }}
+                        className="safe-image-preview is-ready"
+                        aria-hidden="true"
+                        style={previewStyle(rasterFit, effectivePosition)}
+                    />
+                )}
                 {!failed && loadingFallback && !hasPreview ? (
                     loadingFallback
                 ) : !failed && hasPreview && !retainedPreview ? (
@@ -683,12 +763,7 @@ function SafeImageSource({
                             <img
                                 ref={previewRef}
                                 className={`safe-image-preview${previewReady ? ' is-ready' : ''}`}
-                                style={
-                                    frameCrop && {
-                                        objectFit: frameCrop.objectFit,
-                                        objectPosition: frameCrop.position,
-                                    }
-                                }
+                                style={frameCrop && previewStyle(frameCrop.objectFit, frameCrop.position)}
                                 src={placeholder}
                                 alt=""
                                 aria-hidden="true"

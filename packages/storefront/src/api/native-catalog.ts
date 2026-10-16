@@ -12,6 +12,7 @@ import {
 } from '../query-client';
 
 import { BaseDomainApi } from './base-domain-api';
+import { productFields } from './fragments';
 
 const NATIVE_CATALOG_BATCH_SIZE = 100;
 const STOREFRONT_CATALOG_MAX_TAKE = 48;
@@ -26,14 +27,51 @@ function awaitCatalogSnapshot<T>(snapshot: Promise<T>, signal?: AbortSignal): Pr
     });
 }
 
-/** Legacy-schema compatibility only; normal public aggregates never download this reader. */
+/** Demand-loaded product references and legacy-schema catalog compatibility. */
 export class NativeCatalogApi extends BaseDomainApi {
     constructor(
         ctx: ShopApiContext,
-        private readonly source: Pick<CatalogApi, 'productsByIds' | 'productSales'>,
+        private readonly source: Pick<CatalogApi, 'productSales'>,
     ) {
         super(ctx);
     }
+    async productsByIds(ids: string[], signal?: AbortSignal): Promise<Product[]> {
+        const uniqueIds = [...new Set(ids)];
+        if (!uniqueIds.length) return [];
+        const products: Product[] = [];
+        for (let offset = 0; offset < uniqueIds.length; offset += NATIVE_CATALOG_BATCH_SIZE) {
+            const batch = uniqueIds.slice(offset, offset + NATIVE_CATALOG_BATCH_SIZE);
+            const result = await this.request<{ products: { items: Product[]; totalItems: number } }>(
+                `
+                query StorefrontProductsByIds($options: ProductListOptions) {
+                    products(options: $options) {
+                        totalItems
+                        items { ${productFields} }
+                    }
+                }
+            `,
+                {
+                    options: {
+                        take: batch.length,
+                        filter: { id: { in: batch } },
+                    },
+                },
+                signal,
+            );
+            if (
+                !Array.isArray(result.products?.items) ||
+                result.products.items.length !== result.products.totalItems
+            )
+                throw new Error('Product references response is incomplete');
+            products.push(...result.products.items);
+        }
+        const productsById = new Map(products.map(product => [product.id, product]));
+        return uniqueIds.flatMap(id => {
+            const product = productsById.get(id);
+            return product ? [product] : [];
+        });
+    }
+
     async catalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<ProductSearchPage> {
         if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
         const products = await awaitCatalogSnapshot(
@@ -136,7 +174,7 @@ export class NativeCatalogApi extends BaseDomainApi {
         const products: Product[] = [];
         for (let offset = 0; offset < productIds.length; offset += NATIVE_CATALOG_BATCH_SIZE) {
             products.push(
-                ...(await this.source.productsByIds(
+                ...(await this.productsByIds(
                     productIds.slice(offset, offset + NATIVE_CATALOG_BATCH_SIZE),
                     signal,
                 )),
