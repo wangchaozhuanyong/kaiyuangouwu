@@ -35,11 +35,14 @@ import { StorefrontLanguage } from './types';
 /** Image accessibility uses the same language in anonymous HTML and the interactive frame. */
 export const ImageLanguageContext = createContext<StorefrontLanguage | null>(null);
 
-const SafeImageMediaContext = createContext<{
+export const SafeImageMediaContext = createContext<{
     previews: ReadonlyMap<string, string>;
     sources: ReadonlySet<string>;
     scope?: string;
+    borrowedSources?: ReadonlySet<string>;
+    borrowedGeneration?: number;
 }>({ previews: new Map(), sources: new Set() });
+export type BorrowedPublicMedia = { media: readonly MediaDescriptor[]; generation: number };
 const mediaPreviewKey = (source: string, kind?: StorefrontImageKind) =>
     `${imageSources(source).identity}\u0000${kind ?? ''}`;
 
@@ -141,8 +144,16 @@ export type SafeImageProps = {
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
 
 export function SafeImage(props: SafeImageProps) {
-    const { scope } = useContext(SafeImageMediaContext);
-    const ownerKey = JSON.stringify([scope, props.retainedOwnerKey]);
+    const { scope, borrowedSources, borrowedGeneration } = useContext(SafeImageMediaContext);
+    const borrowedOwner =
+        !props.retainedOwnerKey && borrowedSources?.has(mediaPreviewKey(props.src, props.imageKind))
+            ? borrowedGeneration
+            : undefined;
+    const ownerKey = JSON.stringify([
+        scope,
+        props.retainedOwnerKey,
+        ...(borrowedOwner === undefined ? [] : [borrowedOwner]),
+    ]);
     const identity = [
         props.src,
         props.fallbackSrc,
@@ -152,6 +163,7 @@ export function SafeImage(props: SafeImageProps) {
         props.sizes,
         props.retainedOwnerKey,
         scope,
+        borrowedOwner,
         JSON.stringify(props.mediaSources ?? []),
     ].join('\u0000');
     const [previous, setPrevious] = useState<{
@@ -321,7 +333,13 @@ function SafeImageSource({
         return retainedOwnerKey
             ? JSON.stringify(['owner', publicMedia.scope, retainedOwnerKey, key])
             : publicMedia.scope && publicMedia.sources.has(key)
-              ? JSON.stringify(['public', publicMedia.scope, key, srcSet ?? ''])
+              ? JSON.stringify([
+                    'public',
+                    publicMedia.scope,
+                    key,
+                    srcSet ?? '',
+                    ...(publicMedia.borrowedSources?.has(key) ? [publicMedia.borrowedGeneration] : []),
+                ])
               : undefined;
     };
     const presentationKey = presentationCacheKey();

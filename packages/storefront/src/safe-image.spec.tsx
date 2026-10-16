@@ -14,6 +14,7 @@ import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { CustomerAvatar } from './components/common/customer-avatar';
 import { IMAGE_WAIT_EXPIRED_EVENT } from './image-readiness';
+import { CatalogImageMediaProvider } from './public-catalog-media';
 import { storefrontQueryKeys } from './query-client';
 import {
     clearDecodedImageCache,
@@ -97,6 +98,50 @@ function visibleFrameRect(top = 10, size = 180): DOMRect {
 }
 
 describe('SafeImage public presentation reuse', () => {
+    it('reuses borrowed catalog backing only within its admitted generation and never replaces primary hints', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/assets/preview/borrowed-card.webp?v=one';
+        const descriptor = mediaDescriptor(src, 'card');
+        const render = (generation: number, present = true, primary = false) => (
+            <SafeImageMediaProvider scope="shared:MYR:en" media={primary ? [descriptor] : []}>
+                <CatalogImageMediaProvider
+                    borrowed={{
+                        media: present
+                            ? [{ ...descriptor, placeholder: { inlineData: 'data:image/webp;base64,AAAA' } }]
+                            : [],
+                        generation,
+                    }}
+                >
+                    <SafeImage src={src} imageKind="card" alt="Selected catalog product" />
+                </CatalogImageMediaProvider>
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render(1)));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(null));
+            act(() => root.render(render(1)));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+                src,
+            );
+            act(() => root.render(null));
+            act(() => root.render(render(2)));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            act(() => root.render(null));
+            act(() => root.render(render(1, false)));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+            act(() => root.render(null));
+            act(() => root.render(render(1, true, true)));
+            expect(host.querySelector('.has-inline-preview')).toBeNull();
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
     it('returns to services with its query-owned inline artwork after home replaces media and decoded pixels are evicted', async () => {
         clearDecodedImageCache();
         const client = new QueryClient();

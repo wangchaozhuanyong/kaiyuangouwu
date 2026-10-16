@@ -7,6 +7,7 @@ import type {
     StorefrontConfig,
     StorefrontContentResponse,
 } from './types';
+import type { MediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
 import {
@@ -195,8 +196,9 @@ export function seedPublicPage(
         const updatedAt = page.generatedAt - now > 5_000 ? now - PUBLIC_QUERY_STALE_TIME : page.generatedAt;
         const previous = client.getQueryState(key);
         if (previous && previous.dataUpdatedAt > updatedAt) return;
-        client.setQueryData(key, data, { updatedAt });
+        const committed = client.setQueryData(key, data, { updatedAt });
         markStorefrontPublicQuerySource(client, key, page.config.accessMode);
+        return committed;
     };
     if (includeConfig) set([...storefrontQueryKeys.config(market, language), 'public'], page.config);
     if (request) set(publicSeoQueryKey(market, language, request), page.seo ?? null);
@@ -270,10 +272,22 @@ export function seedPublicPage(
     if (managedIds.length && managedProducts.length === managedIds.length)
         set(storefrontQueryKeys.productsByIds(market, language, managedIds), managedProducts);
     set([...storefrontQueryKeys.scope(market, language), 'visual-preset'], page.visualPreset);
-    set(
+    const committedMedia = set(
         publicSeoQueryKey(market, language, request ?? { kind: 'home' }, 'public-media', collections),
         page.media,
-    );
+    ) as MediaDescriptor[] | undefined;
+    if (committedMedia)
+        publicMediaOrigins.set(committedMedia, [
+            publicPageReadGeneration(),
+            page.scope,
+            page.config.accessMode,
+            new Map(
+                (page.catalog?.items ?? []).map(product => [
+                    product.id,
+                    product.featuredAsset?.preview || product.assets?.find(asset => asset.preview)?.preview,
+                ]),
+            ),
+        ]);
     set(storefrontQueryKeys.flashSales(market, language), page.flashSales);
     // An API query in progress owns its result commit and pagination; do not collapse its pages.
     if (includeRoute && request?.kind === 'catalog' && page.catalog) {
@@ -385,6 +399,20 @@ export async function fetchPublicPage(
 
 const validatedFlights = new Map<string, Promise<PublicPageData | undefined>>();
 const pageGenerations = new WeakMap<PublicPageData, number>();
+// Provenance of the existing Query-owned array, not another store of response data.
+const publicMediaOrigins = new WeakMap<
+    readonly MediaDescriptor[],
+    readonly [
+        number,
+        PublicPageData['scope'],
+        StorefrontConfig['accessMode'],
+        ReadonlyMap<string, string | undefined>,
+    ]
+>();
+
+export function publicMediaOrigin(media: readonly MediaDescriptor[]) {
+    return publicMediaOrigins.get(media);
+}
 
 export function currentPublicPageRequest(href?: string): PublicPageRequest {
     try {
@@ -567,9 +595,10 @@ export async function prefetchPublicPage(
         // Cached destinations render immediately, even when a background read is due.
         // Existing infinite queries retain their own full pagination refresh.
         const query = client.getQueryCache().find({ queryKey: key, exact: true });
-        const refresh = query?.options.queryFn
-            ? client.refetchQueries({ queryKey: key, exact: true, type: 'all' }, { cancelRefetch: false })
-            : read();
+        const refresh =
+            typeof query?.options.queryFn === 'function'
+                ? client.refetchQueries({ queryKey: key, exact: true, type: 'all' }, { cancelRefetch: false })
+                : read();
         void refresh.catch(() => undefined);
         return;
     }

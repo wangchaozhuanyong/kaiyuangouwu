@@ -1,7 +1,41 @@
+import {
+    canonicalPublicPageRequest,
+    type PublicPageRequest,
+} from '../../storefront-content-plugin/src/shared/public-page-data';
+
 import { priceInputToMinorUnits } from './catalog-page-utils';
 import { STOREFRONT_CATALOG_PAGE_SIZE } from './query-client';
 import { RouteState } from './storefront-router';
-import { CollectionSummary, StorefrontCatalogInput } from './types';
+import { CollectionSummary, ProductSearchSort, StorefrontCatalogInput } from './types';
+
+/** The API read and its media observer must address exactly the same public request. */
+export function publicCatalogRequest(
+    input: StorefrontCatalogInput,
+    pathname = typeof window === 'undefined' ? '/category' : window.location.pathname,
+    scope: 'route' | 'store' = 'route',
+): Extract<PublicPageRequest, { kind: 'catalog' }> {
+    const sorts: Record<
+        ProductSearchSort,
+        NonNullable<Extract<PublicPageRequest, { kind: 'catalog' }>['input']['sort']>
+    > = {
+        recommended: 'RECOMMENDED',
+        sales: 'SALES',
+        newest: 'NEWEST',
+        name: 'NAME',
+        'price-asc': 'PRICE_ASC',
+        'price-desc': 'PRICE_DESC',
+    };
+    return canonicalPublicPageRequest({
+        kind: 'catalog',
+        // Search's existing public contract has no implicit navigation-category filter.
+        path: scope === 'store' || /^(?:\/(?:zh|en))?\/search\/?$/u.test(pathname) ? '/search' : '/category',
+        input: {
+            ...input,
+            sort: sorts[input.sort ?? 'recommended'],
+            fulfillmentType: input.fulfillmentType?.toUpperCase() as 'PHYSICAL' | 'DIGITAL' | undefined,
+        },
+    }) as Extract<PublicPageRequest, { kind: 'catalog' }>;
+}
 
 export type CatalogRouteState = Pick<
     RouteState,

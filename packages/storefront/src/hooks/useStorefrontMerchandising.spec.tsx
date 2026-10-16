@@ -5,8 +5,14 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mediaDescriptor } from '../../../storefront-content-plugin/src/shared/responsive-image';
+import { syntheticPage } from '../../e2e/seo-public/fixtures.mjs';
 import type { ShopApi } from '../api';
 import { enabledMarkets } from '../i18n';
+import { productImage } from '../product-media';
+import { merchandisingMediaCatalogs, PublicCatalogMediaProvider } from '../public-catalog-media';
+import { SafeImage, SafeImageMediaProvider } from '../safe-image';
+import { seedPublicPage } from '../storefront-page-data';
 import type { RouteState } from '../storefront-router';
 import type { Product, StorefrontContentBlock } from '../types';
 
@@ -153,12 +159,31 @@ function mount(api: Partial<ShopApi>, { pinned = false, recent = false } = {}) {
             activeRoute,
             contentReady: true,
         });
+        const recommendationImage = productImage(data.recommendationProducts[0]);
         history.push(data);
         return (
-            <>
-                {data.bestSellersLoading ? 'best-loading' : 'best-ready'}{' '}
-                {data.recommendationsLoading ? 'rec-loading' : 'rec-ready'}
-            </>
+            <SafeImageMediaProvider scope="fixture-home">
+                <PublicCatalogMediaProvider
+                    market={enabledMarkets[0]}
+                    language="zh"
+                    catalogs={
+                        data.catalogTakes
+                            ? merchandisingMediaCatalogs(
+                                  data.catalogTakes,
+                                  data.bestSellerProducts,
+                                  data.recommendationProducts,
+                                  activeRoute === 'home',
+                              )
+                            : []
+                    }
+                >
+                    {data.bestSellersLoading ? 'best-loading' : 'best-ready'}{' '}
+                    {data.recommendationsLoading ? 'rec-loading' : 'rec-ready'}
+                    {recommendationImage ? (
+                        <SafeImage src={recommendationImage} imageKind="card" alt="" />
+                    ) : null}
+                </PublicCatalogMediaProvider>
+            </SafeImageMediaProvider>
         );
     }
     const render = () =>
@@ -186,6 +211,45 @@ function mount(api: Partial<ShopApi>, { pinned = false, recent = false } = {}) {
         },
     };
 }
+
+it('consumes the existing late catalog media for the homepage selected products without another read', async () => {
+    const source = '/assets/preview/late-ranked-product.webp?v=one';
+    const candidates = [
+        { ...product('late-ranked'), featuredAsset: { id: 'late-asset', preview: source }, variants: [] },
+    ] as Product[];
+    const media = mediaDescriptor(source, 'card', { inlinePreview: 'data:image/webp;base64,AAAA' });
+    const api = {
+        catalog: vi.fn(async (input: { sort?: string; take?: number }) => {
+            await Promise.resolve();
+            const page = syntheticPage('synthetic-a', 'en', 'catalog');
+            page.scope.channelCode = enabledMarkets[0].code;
+            page.config.code = enabledMarkets[0].code;
+            page.scope.languageCode = 'zh_Hans';
+            page.scope.host = window.location.host;
+            page.scope.currencyCode = enabledMarkets[0].currencyCode;
+            page.collections = [];
+            page.request = {
+                kind: 'catalog',
+                path: '/search',
+                input: { sort: input.sort === 'sales' ? 'SALES' : 'RECOMMENDED', take: input.take },
+            };
+            page.catalog = { items: candidates, totalItems: 1 };
+            page.media = [media];
+            seedPublicPage(fixture.client, page, true, false);
+            return page.catalog;
+        }),
+        productSales: vi.fn(() => Promise.resolve({})),
+        productsByIds: vi.fn(() => Promise.resolve(candidates)),
+    };
+    const fixture = mount(api);
+    try {
+        await act(() => vi.waitFor(() => expect(fixture.element.textContent).toBe('best-ready rec-ready')));
+        expect(fixture.element.querySelector('.has-inline-preview')).not.toBeNull();
+        expect(api.catalog).toHaveBeenCalledTimes(2);
+    } finally {
+        fixture.dispose();
+    }
+});
 
 it('keeps recommendation membership/order through visits, detail/back, catalog refresh and midnight until reload', async () => {
     const candidates = ['a', 'b', 'c', 'd'].map(product);

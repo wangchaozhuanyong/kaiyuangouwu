@@ -8,40 +8,21 @@ import type {
 } from '../types';
 
 import { storefrontNavigationCollections } from '../../../storefront-content-plugin/src/shared/public-page-data';
+import { publicCatalogRequest } from '../catalog-route-query';
 import { asListProduct } from '../product-summary';
-import {
-    PUBLIC_QUERY_GC_TIME,
-    PUBLIC_QUERY_STALE_TIME,
-    publicQueryMeta,
-    storefrontQueryClient,
-    storefrontQueryKeys,
-} from '../query-client';
+import { storefrontQueryClient } from '../query-client';
 
 import { BaseDomainApi } from './base-domain-api';
 import { productFields, productPackagingFields, productSummaryFields } from './fragments';
-import {
-    isMissingStorefrontCatalogSchema,
-    matchesCatalogFilters,
-    sortNativeCatalogProducts,
-} from './helpers';
+import { isMissingStorefrontCatalogSchema } from './helpers';
 
 export { storefrontNavigationCollections } from '../../../storefront-content-plugin/src/shared/public-page-data';
 
 const NATIVE_CATALOG_BATCH_SIZE = 100;
-const STOREFRONT_CATALOG_MAX_TAKE = 48;
-
-function awaitCatalogSnapshot<T>(snapshot: Promise<T>, signal?: AbortSignal): Promise<T> {
-    if (!signal) return snapshot;
-    if (signal.aborted) return Promise.reject(new DOMException('The request was aborted', 'AbortError'));
-    return new Promise((resolve, reject) => {
-        const abort = () => reject(new DOMException('The request was aborted', 'AbortError'));
-        signal.addEventListener('abort', abort, { once: true });
-        snapshot.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
-    });
-}
 
 export class CatalogApi extends BaseDomainApi {
     private storefrontCatalogAvailable: boolean | null = null;
+    private nativeCatalogApi?: import('./native-catalog').NativeCatalogApi;
 
     async products(take = 16, signal?: AbortSignal): Promise<Product[]> {
         const result = await this.request<{ products: { items: Product[] } }>(
@@ -140,37 +121,21 @@ export class CatalogApi extends BaseDomainApi {
         return this.catalog({ term, sort, skip, take, collectionId }, signal);
     }
 
-    async catalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<ProductSearchPage> {
+    async catalog(
+        input: StorefrontCatalogInput,
+        signal?: AbortSignal,
+        scope: 'route' | 'store' = 'route',
+    ): Promise<ProductSearchPage> {
         if (this.storefrontCatalogAvailable === false) {
             return this.nativeCatalog(input, signal);
         }
-        const sortMap: Record<ProductSearchSort, string> = {
-            recommended: 'RECOMMENDED',
-            sales: 'SALES',
-            newest: 'NEWEST',
-            name: 'NAME',
-            'price-asc': 'PRICE_ASC',
-            'price-desc': 'PRICE_DESC',
-        };
+        const request = publicCatalogRequest(input, undefined, scope);
         const { fetchPublicPage, seedPublicPage } = await import('../storefront-page-data');
         const pageData = await fetchPublicPage(
             this.languageCode,
             this.market.currencyCode,
             signal,
-            {
-                kind: 'catalog',
-                path:
-                    typeof window !== 'undefined' &&
-                    /^(?:\/(?:zh|en))?\/search\/?$/u.test(window.location.pathname)
-                        ? '/search'
-                        : '/category',
-                input: {
-                    ...input,
-                    sort: sortMap[input.sort ?? 'recommended'] as 'RECOMMENDED',
-                    fulfillmentType: input.fulfillmentType?.toUpperCase() as
-                        'PHYSICAL' | 'DIGITAL' | undefined,
-                },
-            },
+            request,
             this.market.code,
         );
         if (pageData) {
@@ -189,19 +154,7 @@ export class CatalogApi extends BaseDomainApi {
                     }
                 `,
                 {
-                    input: {
-                        ...(input.term ? { term: input.term } : {}),
-                        ...(input.collectionId ? { collectionId: input.collectionId } : {}),
-                        sort: sortMap[input.sort ?? 'recommended'],
-                        ...(input.fulfillmentType
-                            ? { fulfillmentType: input.fulfillmentType.toUpperCase() }
-                            : {}),
-                        inStockOnly: input.inStockOnly === true,
-                        ...(input.minPriceWithTax != null ? { minPriceWithTax: input.minPriceWithTax } : {}),
-                        ...(input.maxPriceWithTax != null ? { maxPriceWithTax: input.maxPriceWithTax } : {}),
-                        skip: input.skip ?? 0,
-                        take: input.take ?? 12,
-                    },
+                    input: request.input,
                 },
                 signal,
             );
@@ -223,113 +176,11 @@ export class CatalogApi extends BaseDomainApi {
         signal?: AbortSignal,
     ): Promise<ProductSearchPage> {
         if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
-        const products = await awaitCatalogSnapshot(
-            storefrontQueryClient.fetchQuery({
-                queryKey: [
-                    ...storefrontQueryKeys.scope(storefrontQueryKeys.market(this.market), this.languageCode),
-                    'native-catalog',
-                    {
-                        term: input.term?.trim() ?? '',
-                        collectionId: input.collectionId ?? null,
-                        inStockOnly: input.inStockOnly === true,
-                    },
-                ],
-                queryFn: ({ signal: querySignal }) => this.loadNativeCatalog(input, querySignal),
-                // A first-page refresh obtains a new snapshot; later offsets reuse that snapshot.
-                staleTime: (input.skip ?? 0) > 0 ? PUBLIC_QUERY_STALE_TIME : 0,
-                gcTime: PUBLIC_QUERY_GC_TIME,
-                meta: publicQueryMeta(),
-            }),
-            signal,
-        );
-        if (signal?.aborted) throw new DOMException('The request was aborted', 'AbortError');
-        const filteredProducts = products.filter(product => matchesCatalogFilters(product, input));
-        let sortedProducts = sortNativeCatalogProducts(filteredProducts, input, this.market.locale);
-        if (input.sort === 'sales') {
-            const productIds = products.map(product => product.id);
-            const sales = await awaitCatalogSnapshot(
-                storefrontQueryClient.fetchQuery({
-                    queryKey: [
-                        ...storefrontQueryKeys.scope(
-                            storefrontQueryKeys.market(this.market),
-                            this.languageCode,
-                        ),
-                        'native-catalog-sales',
-                        productIds,
-                    ],
-                    queryFn: ({ signal: querySignal }) => this.productSales(productIds, querySignal),
-                    staleTime: (input.skip ?? 0) > 0 ? PUBLIC_QUERY_STALE_TIME : 0,
-                    gcTime: PUBLIC_QUERY_GC_TIME,
-                    meta: publicQueryMeta(),
-                }),
-                signal,
-            );
-            sortedProducts = [...filteredProducts].sort(
-                (left, right) =>
-                    (sales[right.id] ?? 0) - (sales[left.id] ?? 0) ||
-                    Date.parse(right.createdAt) - Date.parse(left.createdAt) ||
-                    left.id.localeCompare(right.id),
-            );
+        if (!this.nativeCatalogApi) {
+            const { NativeCatalogApi } = await import('./native-catalog');
+            this.nativeCatalogApi ??= new NativeCatalogApi(this.ctx, this);
         }
-        const skip = Math.max(0, Math.trunc(input.skip ?? 0));
-        const take = Math.min(STOREFRONT_CATALOG_MAX_TAKE, Math.max(1, Math.trunc(input.take ?? 12)));
-        return {
-            items: sortedProducts.slice(skip, skip + take),
-            totalItems: sortedProducts.length,
-        };
-    }
-
-    private async loadNativeCatalog(input: StorefrontCatalogInput, signal?: AbortSignal): Promise<Product[]> {
-        const productIds: string[] = [];
-        const seenProductIds = new Set<string>();
-        let searchSkip = 0;
-        let nativeTotalItems = Number.POSITIVE_INFINITY;
-
-        while (searchSkip < nativeTotalItems) {
-            const result = await this.request<{
-                search: { totalItems: number; items: Array<{ productId: string }> };
-            }>(
-                `
-                    query StorefrontNativeCatalog($input: SearchInput!) {
-                        search(input: $input) {
-                            totalItems
-                            items { productId }
-                        }
-                    }
-                `,
-                {
-                    input: {
-                        ...(input.term?.trim() ? { term: input.term.trim() } : {}),
-                        ...(input.collectionId ? { collectionId: input.collectionId } : {}),
-                        groupByProduct: true,
-                        // Legacy index stock can lag behind live auto-card inventory.
-                        // Filter hydrated variants before slicing the cached result.
-                        skip: searchSkip,
-                        take: NATIVE_CATALOG_BATCH_SIZE,
-                    },
-                },
-                signal,
-            );
-            nativeTotalItems = result.search.totalItems;
-            for (const item of result.search.items) {
-                if (seenProductIds.has(item.productId)) continue;
-                seenProductIds.add(item.productId);
-                productIds.push(item.productId);
-            }
-            if (!result.search.items.length) break;
-            searchSkip += result.search.items.length;
-        }
-
-        const products: Product[] = [];
-        for (let offset = 0; offset < productIds.length; offset += NATIVE_CATALOG_BATCH_SIZE) {
-            products.push(
-                ...(await this.productsByIds(
-                    productIds.slice(offset, offset + NATIVE_CATALOG_BATCH_SIZE),
-                    signal,
-                )),
-            );
-        }
-        return products;
+        return this.nativeCatalogApi.catalog(input, signal);
     }
 
     async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {

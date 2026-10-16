@@ -50,6 +50,10 @@ const attribute = value =>
         char => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[char],
     );
 
+// A 48px WebP derived from fixtureData's existing synthetic artwork; never a merchant asset.
+const fixtureInlinePreview =
+    'data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAADQBACdASowABwAPvFeo06ppSMiNVv8ATAeCWUAzJQsbhKMc43XPpDPUacLZgecAAD+6ir3N4OULwL8j+/QeEbe+AHsiGFR7Q+1IAAA';
+
 function optionsFor(req, url, defaults) {
     let reference;
     try {
@@ -65,6 +69,7 @@ function optionsFor(req, url, defaults) {
         missingProduct: value('qaMissingProduct') === '1',
         ssi: value('qaSsi') === 'hot' ? 'hot' : 'cold',
         legacy: value('qaLegacy') === '1',
+        serviceMedia: value('qaServiceMedia') === 'warm-after-first',
         preset: value('qaPreset') === 'classic' ? 'classic' : 'neo-minimalist',
         accessMode: ['PREVIEW', 'CLOSED'].includes(value('qaAccessMode')) ? value('qaAccessMode') : 'LIVE',
     };
@@ -187,6 +192,16 @@ export function buildPublicPage(request, host, options = {}, scope = {}) {
         flashSalesDeferred: true,
         systemAnnouncements: [],
     };
+    if (options.serviceMedia)
+        content.blocks = content.blocks.map(block =>
+            block.code === 'storefront-client-plugins'
+                ? {
+                      ...block,
+                      imageUrl: '/assets/preview/qa-services.svg',
+                      settings: { ...block.settings, businessServicesHeroLayout: 'shared-banner' },
+                  }
+                : block,
+        );
     const route =
         request.kind === 'catalog'
             ? { catalog: fixtureCatalog(data.products.items, request.input, options.empty) }
@@ -198,6 +213,8 @@ export function buildPublicPage(request, host, options = {}, scope = {}) {
                 }
               : { products: options.empty ? [] : data.products.items.slice(0, 12) };
     const media = [mediaDescriptor(config.logoUrl, 'icon')];
+    if (options.serviceMedia && request.kind === 'page' && request.id === 'services')
+        media.push(mediaDescriptor('/assets/preview/qa-services.svg', 'hero'));
     for (const product of route.catalog?.items ?? route.products ?? (route.product ? [route.product] : []))
         media.push(
             mediaDescriptor(product.featuredAsset.preview, request.kind === 'product' ? 'detail' : 'card'),
@@ -207,7 +224,7 @@ export function buildPublicPage(request, host, options = {}, scope = {}) {
     return {
         schemaVersion: 1,
         version: 'synthetic-local-fixture-v1',
-        generatedAt: Date.now(),
+        generatedAt: Date.now() - (options.staleServiceMedia ? 31_000 : 0),
         scope: {
             host,
             channelCode: channel.code,
@@ -223,7 +240,12 @@ export function buildPublicPage(request, host, options = {}, scope = {}) {
         collections: data.collections.items,
         visualPreset: data.storefrontVisualPreset,
         flashSales: [],
-        media,
+        media:
+            options.serviceMedia && options.inlineMedia
+                ? media.map((item, index) =>
+                      index < 8 ? { ...item, placeholder: { inlineData: fixtureInlinePreview } } : item,
+                  )
+                : media,
         failures: [],
         ...route,
     };
@@ -269,6 +291,7 @@ function hotSsi(page, url) {
 export function createPreviewServer({ dist = defaultDist, defaults = {} } = {}) {
     const requests = [];
     const images = new Map();
+    const serviceReads = new Map();
     const record = value => {
         requests.push({ at: Date.now(), ...value });
         if (requests.length > 1000) requests.shift();
@@ -301,7 +324,7 @@ export function createPreviewServer({ dist = defaultDist, defaults = {} } = {}) 
                               path: url.searchParams.get('path') ?? '/category',
                               input: JSON.parse(url.searchParams.get('input') ?? '{}'),
                           }
-                        : kind === 'product'
+                        : ['product', 'article', 'page'].includes(kind)
                           ? { kind, id: url.searchParams.get('id') ?? '' }
                           : { kind },
                 );
@@ -311,12 +334,29 @@ export function createPreviewServer({ dist = defaultDist, defaults = {} } = {}) 
                     delay: options.delay,
                 });
                 if (options.delay) await new Promise(done => setTimeout(done, options.delay));
+                const serviceKey = url.searchParams.get('languageCode') === 'en' ? 'en' : 'zh';
+                const serviceRead =
+                    options.serviceMedia &&
+                    aggregateRequest.kind === 'page' &&
+                    aggregateRequest.id === 'services'
+                        ? (serviceReads.get(serviceKey) ?? 0)
+                        : undefined;
+                if (serviceRead !== undefined) serviceReads.set(serviceKey, serviceRead + 1);
                 return json(
                     res,
                     200,
-                    buildPublicPage(aggregateRequest, host, options, {
-                        languageCode: url.searchParams.get('languageCode'),
-                    }),
+                    buildPublicPage(
+                        aggregateRequest,
+                        host,
+                        {
+                            ...options,
+                            inlineMedia: options.serviceMedia && serviceRead !== 0,
+                            staleServiceMedia: serviceRead === 0,
+                        },
+                        {
+                            languageCode: url.searchParams.get('languageCode'),
+                        },
+                    ),
                 );
             }
             if (url.pathname === '/shop-api') {

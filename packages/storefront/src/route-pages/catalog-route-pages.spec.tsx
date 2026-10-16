@@ -56,6 +56,11 @@ describe('home selection read boundaries', () => {
             try {
                 const value = {
                     language: 'zh',
+                    market: enabledMarkets[0],
+                    collections: [],
+                    catalogTakes: { sales: 16, recommended: 16 },
+                    bestSellerProducts: [],
+                    recommendationProducts: [],
                     configQuery: {},
                     contentQuery: { data: {} },
                     productsQuery: { data: [] },
