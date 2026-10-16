@@ -10,6 +10,9 @@ on:
                 description: 'Optional revision to check'
                 type: string
                 default: ''
+            retain_frontends:
+                type: boolean
+                default: false
             full:
                 description: 'Explicitly run the complete repository checks'
                 type: boolean
@@ -22,6 +25,9 @@ on:
             target_sha:
                 required: true
                 type: string
+            retain_frontends:
+                type: boolean
+                default: false
             full:
                 type: boolean
                 default: false
@@ -80,7 +86,7 @@ jobs:
                       packages/dev-server/scripts/production-release-impact.spec.mjs \
                       packages/dev-server/scripts/production-release-smoke.spec.mjs \
                       packages/dev-server/scripts/production-release-retention.spec.mjs
-                  node --test scripts/release-lock.spec.mjs scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
+                  node --test scripts/release-preserve-frontends.spec.mjs scripts/release-lock.spec.mjs scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
                   node --test deploy/frontend-retention.spec.mjs deploy/frontend-disk-guard.spec.mjs deploy/runtime-disk-guard.spec.mjs deploy/file-retention-repair.spec.mjs
                   python3 deploy/systemd/tests/file-backup-retention.spec.py
                   python3 deploy/systemd/tests/file-backup.spec.py
@@ -146,6 +152,7 @@ jobs:
               env:
                   BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || 'HEAD^' }}
                   FULL: ${{ inputs.full || false }}
+                  RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
                   GH_TOKEN: ${{ github.token }}
               run: |
                   base="$(git merge-base "$BASE_SHA" HEAD)"

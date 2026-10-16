@@ -3,6 +3,7 @@ import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { classifyChanges, inspection } from '../scripts/ci-impact.mjs';
+import { retainedFrontendPlan } from '../scripts/release-preserve-frontends.mjs';
 
 import { frontendChangedSinceObserved, pendingFrontendComponents } from './frontend-release.mjs';
 
@@ -13,9 +14,20 @@ export function selectReleaseRoute({
     storefrontSha,
     adminSha,
     managed = false,
+    retainFrontends = false,
     changedSince = frontendChangedSinceObserved,
 }) {
     for (const sha of [baseSha, targetSha]) assert.match(sha, /^[a-f0-9]{40}$/u);
+    if (retainFrontends) {
+        assert.equal(managed, false, 'Runtime-only release cannot publish managed content');
+        retainedFrontendPlan(plan);
+        for (const sha of [storefrontSha, adminSha]) assert.match(sha, /^[a-f0-9]{40}$/u);
+        return {
+            lane: 'runtime',
+            components: [],
+            reasons: ['Publish the mailbox backend and preserve all frontend pointers and asset bytes.'],
+        };
+    }
     if (managed)
         return {
             lane: 'runtime',
@@ -71,6 +83,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         storefrontSha: process.env.STOREFRONT_SHA,
         adminSha: process.env.ADMIN_SHA,
         managed: process.env.MANAGED === 'true',
+        retainFrontends: process.env.RETAIN_FRONTENDS === 'true',
     });
     if (process.env.GITHUB_OUTPUT)
         appendFileSync(

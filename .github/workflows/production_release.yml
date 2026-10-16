@@ -6,6 +6,11 @@ on:
             target_sha:
                 required: true
                 type: string
+            retain_frontends:
+                description: 'Mailbox backend only: preserve active storefront, Admin and 2FA versions'
+                required: false
+                default: false
+                type: boolean
             governance_plan_sha256:
                 required: false
                 default: ''
@@ -16,6 +21,11 @@ on:
                 description: 'Full 40-character SHA currently at origin/main'
                 required: true
                 type: string
+            retain_frontends:
+                description: 'Mailbox backend only: preserve active storefront, Admin and 2FA versions'
+                required: false
+                default: false
+                type: boolean
             governance_plan_sha256:
                 description: 'Separately approved platform reconciliation manifest SHA-256; blank keeps historical data unchanged'
                 required: false
@@ -137,6 +147,7 @@ jobs:
                   TARGET_SHA: ${{ inputs.target_sha || github.sha }}
                   STOREFRONT_SHA: ${{ needs.preflight.outputs.storefront_sha }}
                   ADMIN_SHA: ${{ needs.preflight.outputs.admin_sha }}
+                  RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
                   MANAGED: ${{ inputs.media_keys != '' || inputs.auth_visuals || inputs.moyao_brand || inputs.homepage_carousel || inputs.damatong_storefront || (inputs.referral_posters != '' && inputs.referral_posters != 'none') }}
               run: node deploy/release-route.mjs
             - name: Find successful checks for the exact content and required scope
@@ -148,6 +159,7 @@ jobs:
                   TARGET_SHA: ${{ inputs.target_sha || github.sha }}
                   STOREFRONT_SHA: ${{ needs.preflight.outputs.storefront_sha }}
                   ADMIN_SHA: ${{ needs.preflight.outputs.admin_sha }}
+                  RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
               run: node scripts/release-evidence.mjs find "$BASE_SHA" "$TARGET_SHA"
 
     checks:
@@ -156,6 +168,7 @@ jobs:
         if: needs.route.outputs.lane != 'none' && needs.route.outputs.ci_run_id == ''
         uses: ./.github/workflows/build_and_test.yml
         with:
+            retain_frontends: ${{ inputs.retain_frontends || false }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
         permissions:
@@ -203,6 +216,7 @@ jobs:
         if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'runtime'
         uses: ./.github/workflows/build_production_runtime.yml
         with:
+            retain_frontends: ${{ inputs.retain_frontends || false }}
             ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
@@ -233,10 +247,13 @@ jobs:
 
     deploy:
         name: deploy the verified runtime
-        needs: [build, offhost_file_restore]
+        needs: [build, offhost_file_restore, preflight]
         if: always() && !cancelled() && needs.build.result == 'success' && needs.offhost_file_restore.result == 'success'
         uses: ./.github/workflows/deploy_production_runtime.yml
         with:
+            retain_frontends: ${{ inputs.retain_frontends || false }}
+            expected_storefront_sha: ${{ needs.preflight.outputs.storefront_sha }}
+            expected_admin_sha: ${{ needs.preflight.outputs.admin_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
             governance_plan_sha256: ${{ inputs.governance_plan_sha256 || '' }}
         permissions:

@@ -6,6 +6,15 @@ on:
             target_sha:
                 required: true
                 type: string
+            retain_frontends:
+                type: boolean
+                default: false
+            expected_storefront_sha:
+                type: string
+                default: ''
+            expected_admin_sha:
+                type: string
+                default: ''
             governance_plan_sha256:
                 required: false
                 default: ''
@@ -27,6 +36,9 @@ jobs:
             AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
             INSTANCE_ID: i-041a146558e432cbf
             ARTIFACT_BUCKET: yunqiao-vendure-prod-backup-079740175286-apne1
+            RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
+            EXPECTED_STOREFRONT_SHA: ${{ inputs.expected_storefront_sha || '' }}
+            EXPECTED_ADMIN_SHA: ${{ inputs.expected_admin_sha || '' }}
             TARGET_SHA: ${{ inputs.target_sha }}
             SOURCE_RUN_ID: ${{ github.run_id }}
             GOVERNANCE_PLAN_SHA256: ${{ inputs.governance_plan_sha256 || '' }}
@@ -294,7 +306,8 @@ jobs:
                           f"VENDURE_REVIEWED_HOMEPAGE_CAROUSEL={quote('HOMEPAGE_CAROUSEL')}",
                           f"VENDURE_REVIEWED_REFERRAL_POSTERS={quote('REFERRAL_POSTERS')}",
                       ]) + ' /bin/bash "$deploy_script" ' + ' '.join([
-                          quote('TARGET_SHA'), quote('ARTIFACT_NAME'), quote('ARTIFACT_S3_PREFIX')
+                          quote('TARGET_SHA'), quote('ARTIFACT_NAME'), quote('ARTIFACT_S3_PREFIX'),
+                          quote('RETAIN_FRONTENDS'), quote('EXPECTED_STOREFRONT_SHA'), quote('EXPECTED_ADMIN_SHA')
                       ]) + ' 2>&1 | tail -c 12000',
                   ]) + '\nVENDURE_DEPLOY_SCRIPT'
                   payload = json.dumps({'commands': [command], 'executionTimeout': ['3600']})

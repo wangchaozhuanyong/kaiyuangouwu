@@ -3,6 +3,9 @@ name: Production Runtime Artifact
 on:
     workflow_call:
         inputs:
+            retain_frontends:
+                type: boolean
+                default: false
             ci_run_id:
                 required: true
                 type: string
@@ -220,6 +223,7 @@ jobs:
               env:
                   GH_TOKEN: ${{ github.token }}
                   CI_RUN_ID: ${{ inputs.ci_run_id }}
+                  RETAIN_FRONTENDS: ${{ inputs.retain_frontends || false }}
                   BASE_SHA: ${{ inputs.base_sha }}
                   TARGET_SHA: ${{ inputs.target_sha }}
               run: |
