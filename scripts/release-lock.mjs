@@ -57,7 +57,10 @@ function main() {
         assert.equal(
             run.status === 'completed' && run.conclusion === 'success',
             true,
-            `Release ${target} already has run ${run.id}. Diagnose that fixed run; do not redispatch.`,
+            `Release ${target} already has run ${run.id}. Diagnose that fixed run: node deploy/release-recovery.mjs report ${run.id}; do not redispatch.`,
+        );
+        process.stdout.write(
+            `Previous successful release: ${run.html_url}; verify live component versions before deciding to deploy.\n`,
         );
     }
     if (env.GITHUB_STEP_SUMMARY)

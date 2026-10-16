@@ -1183,8 +1183,11 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(releaseWorkflow, /group: production-release/u);
     assert.match(releaseWorkflow, /cancel-in-progress: false/u);
     assert.match(releaseWorkflow, /lock exact revision and reject duplicate full runs/u);
-    assert.match(releaseWorkflow, /node deploy\/release-recovery\.mjs report \$\{prior_id\}/u);
-    assert.match(releaseWorkflow, /verify live component versions before deciding to deploy/u);
+    assert.match(releaseWorkflow, /node scripts\/release-lock\.mjs/u);
+    const releaseLock = await readFile(path.join(repositoryRoot, 'scripts/release-lock.mjs'), 'utf8');
+    assert.match(releaseLock, /node deploy\/release-recovery\.mjs report \$\{run\.id\}/u);
+    assert.match(releaseLock, /verify live component versions before deciding to deploy/u);
+    assert.match(releaseLock, /staleTargetRejected\(run, jobs, log, target\)/u);
     assert.match(releaseWorkflow, /node deploy\/release-route\.mjs/u);
     assert.match(releaseWorkflow, /needs\.route\.outputs\.lane == 'frontend'/u);
     assert.match(releaseWorkflow, /needs\.route\.outputs\.lane == 'runtime'/u);
