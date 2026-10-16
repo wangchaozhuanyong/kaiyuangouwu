@@ -1,6 +1,9 @@
 import { API_KEY_AUTH_STRATEGY_NAME, UserInputError } from '@vendure/core';
+import { Kind } from 'graphql';
 import { defer, from, lastValueFrom } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { adminApiExtensions } from '../../icloud-relay-plugin/src/api/api-extensions';
 
 const state = vi.hoisted(() => ({
     parsed: {
@@ -28,6 +31,7 @@ import { MerchantCatalogAccessInterceptor } from './merchant-catalog-access.inte
 import { MerchantCatalogAccessService } from './merchant-catalog-access.service';
 
 const mailboxRootPermissions = [
+    ['Query', 'icloudMailHealth', 'ReadIcloudRelay'],
     ['Query', 'icloudPrimaryAccounts', 'ReadIcloudRelay'],
     ['Query', 'icloudPrimaryAccount', 'ReadIcloudRelay'],
     ['Query', 'icloudVirtualEmails', 'ReadIcloudRelay'],
@@ -106,6 +110,17 @@ function invokeMailboxChain(field: string, parentType = 'Query') {
 }
 
 describe('administrator access failure audit', () => {
+    it('requires an explicit machine-access decision for every mailbox admin root field', () => {
+        const fields = adminApiExtensions.definitions.flatMap(definition =>
+            definition.kind === Kind.OBJECT_TYPE_EXTENSION &&
+            ['Query', 'Mutation'].includes(definition.name.value)
+                ? (definition.fields ?? []).map(field => `${definition.name.value}.${field.name.value}`)
+                : [],
+        );
+        expect(new Set(mailboxRootPermissions.map(([parent, field]) => `${parent}.${field}`))).toEqual(
+            new Set(fields),
+        );
+    });
     it.each(mailboxRootPermissions)(
         'passes exact %s.%s permission through both gates',
         async (parentType, fieldName, permission) => {
@@ -162,7 +177,7 @@ describe('administrator access failure audit', () => {
         state.requestContext.userHasPermissions.mockReset().mockReturnValue(true);
     });
 
-    it.each(['icloudPrimaryAccounts', 'icloudVirtualEmails'])(
+    it.each(['icloudPrimaryAccounts', 'icloudVirtualEmails', 'icloudMailHealth'])(
         'passes a read-only mailbox API key through both authorization gates for %s',
         async field => {
             state.requestContext.session.authenticationStrategy = API_KEY_AUTH_STRATEGY_NAME;
