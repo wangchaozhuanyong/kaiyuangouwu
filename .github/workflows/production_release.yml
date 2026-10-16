@@ -93,54 +93,13 @@ jobs:
         env:
             TARGET_SHA: ${{ inputs.target_sha || github.sha }}
         steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
+              with:
+                  ref: ${{ github.sha }}
             - name: Lock latest main and enforce one release run per revision
               env:
                   GH_TOKEN: ${{ github.token }}
-              run: |
-                  set -Eeuo pipefail
-                  [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
-                    echo 'Production Release must be started from main' >&2
-                    exit 1
-                  }
-                  [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-                    echo 'target_sha must be a full lowercase Git SHA' >&2
-                    exit 1
-                  }
-                  latest_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
-                  [[ "$TARGET_SHA" == "$latest_main" ]] || {
-                    echo "target_sha is not current main; start a new release for ${latest_main}" >&2
-                    exit 1
-                  }
-
-                  runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=100")"
-                  prior="$(
-                    jq -r --arg sha "$TARGET_SHA" --argjson current "$GITHUB_RUN_ID" '
-                      .workflow_runs
-                      | map(select(.head_sha == $sha and .id < $current and
-                          (.path == ".github/workflows/production_release.yml" or .path == ".github/workflows/deploy_storefront_fast_lane.yml")))
-                      | sort_by(.id)
-                      | .[0]
-                      | if . then [.id, .status, (.conclusion // ""), .html_url] | @tsv else empty end
-                    ' <<< "$runs"
-                  )"
-                  if [[ -n "$prior" ]]; then
-                    IFS=$'\t' read -r prior_id prior_status prior_conclusion prior_url <<< "$prior"
-                    if [[ "$prior_status" == "completed" && "$prior_conclusion" != "success" ]]; then
-                      echo "Release ${TARGET_SHA} already has run ${prior_id}. Diagnose that run: node deploy/release-recovery.mjs report ${prior_id}. Only proven transient failures permit one failed-job retry" >&2
-                    elif [[ "$prior_status" == "completed" ]]; then
-                      echo "Previous successful release: ${prior_url}; verify live component versions before deciding to deploy" >&2
-                    else
-                      echo "Release ${TARGET_SHA} is already ${prior_status} in ${prior_url}; wait for that fixed run" >&2
-                    fi
-                    if [[ "$prior_conclusion" != success ]]; then exit 1; fi
-                  fi
-                  {
-                    echo '## Locked production release'
-                    echo
-                    echo "- Target SHA: \`$TARGET_SHA\`"
-                    echo "- Workflow run: \`$GITHUB_RUN_ID\`"
-                    echo '- Retry policy: diagnose this run with deploy/release-recovery.mjs; at most one proven transient failed-job retry. Do not dispatch the same failed SHA again.'
-                  } >> "$GITHUB_STEP_SUMMARY"
+              run: node scripts/release-lock.mjs
 
     preflight:
         name: verify live production prerequisites
