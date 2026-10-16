@@ -1210,7 +1210,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
 
     assert.ok(
         releaseWorkflow.indexOf('needs: preflight') <
-            releaseWorkflow.indexOf('needs: [build, offhost_file_restore]'),
+            releaseWorkflow.indexOf('needs: [build, offhost_file_restore, preflight]'),
         'release must finish preflight, build, and full offsite restore before deployment',
     );
     assert.match(releaseWorkflow, /uses: \.\/\.github\/workflows\/build_production_runtime\.yml/u);

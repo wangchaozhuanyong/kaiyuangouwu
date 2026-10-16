@@ -5,6 +5,13 @@ set -Eeuo pipefail
 readonly target_sha="${1:-}"
 readonly artifact_name="${2:-}"
 readonly artifact_s3_prefix="${3:-}"
+readonly retain_frontends="${4:-false}"
+readonly expected_storefront_sha="${5:-}"
+readonly expected_admin_sha="${6:-}"
+[[ "$retain_frontends" == false || "$retain_frontends" == true ]] || exit 1
+if [[ "$retain_frontends" == true ]]; then
+    [[ "$expected_storefront_sha" =~ ^[a-f0-9]{40}$ && "$expected_admin_sha" =~ ^[a-f0-9]{40}$ ]] || exit 1
+fi
 readonly repository="/var/www/kaiyuangouwu"
 readonly releases_dir="/var/www/kaiyuangouwu-releases"
 readonly current_pointer="/var/www/kaiyuangouwu-current"
@@ -481,6 +488,15 @@ readonly staging_dir="$(mktemp -d "${releases_dir}/.incoming-${artifact_name}.XX
 readonly archive_path="${staging_dir}/${archive_name}"
 readonly checksum_path="${staging_dir}/${checksum_name}"
 readonly nginx_backup="${nginx_target}.pre-${deployment_id}"
+readonly frontend_preservation_receipt="${releases_dir}/frontend-preservation-${deployment_id}.json"
+if [[ "$retain_frontends" == true ]]; then
+    [[ -z "$reviewed_storefront_media_keys$governance_plan_sha256" && "$reviewed_auth_visuals" == false &&
+       "$reviewed_moyao_brand" == false && "$reviewed_damatong_storefront" == false &&
+       "$reviewed_homepage_carousel" == false && "$reviewed_referral_posters" == none ]] ||
+        fail 'runtime-only mailbox release cannot publish managed content'
+    node "${repository}/scripts/release-preserve-frontends.mjs" snapshot \
+        "$frontend_preservation_receipt" "$expected_storefront_sha" "$expected_admin_sha"
+fi
 readonly memory_guard="${repository}/deploy/production-memory-guard.cjs"
 readonly swap_controller_source="${repository}/deploy/ensure-production-swap.sh"
 readonly swap_controller="/usr/local/sbin/vendure-production-swap"
@@ -1117,6 +1133,10 @@ sudo -n systemctl is-active --quiet vendure-nginx-error-log.service
 sudo -n test -S /run/vendure-nginx-log/error.sock
 # Initialize/switch the frontend before Nginx starts using its independent pointer.
 # Both full releases and the fast lane are covered by the shared deployment lock.
+if [[ "$retain_frontends" == true ]]; then
+    node "${repository}/scripts/release-preserve-frontends.mjs" verify \
+        "$frontend_preservation_receipt" "$expected_storefront_sha" "$expected_admin_sha"
+else
 sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
     "${candidate}/packages/storefront/dist" "${storefront_pointer}"
 storefront_pointer_changed=1
@@ -1126,6 +1146,7 @@ two_factor_pointer_changed=1
 sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
     "${candidate}/packages/next-admin/dist" "${admin_pointer}"
 admin_pointer_changed=1
+fi
 sudo -n cp -p "${nginx_target}" "${nginx_backup}"
 sudo -n install -o root -g root -m 0644 "${repository}/deploy/nginx/damatong.conf" "${nginx_target}"
 nginx_changed=1
@@ -1292,6 +1313,10 @@ process.stdin.on('data', chunk => (input += chunk)).on('end', () => {
 sudo -n journalctl -t vendure-production-switch --since '30 minutes ago' --no-pager -o cat |
     grep -F "deployment_id=${deployment_id}" | grep -F 'event=succeeded'
 
+if [[ "$retain_frontends" == true ]]; then
+    node "${repository}/scripts/release-preserve-frontends.mjs" verify \
+        "$frontend_preservation_receipt" "$expected_storefront_sha" "$expected_admin_sha"
+fi
 rollback_needed=0
 trap - ERR
 printf 'deployment_id=%s\n' "${deployment_id}"

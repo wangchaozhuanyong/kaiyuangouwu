@@ -25,6 +25,7 @@ import {
     isFailedNativeSource,
     loadNativeCoverage,
 } from './ci-native-coverage.mjs';
+import { retainedFrontendPlan } from './release-preserve-frontends.mjs';
 
 export function frontendEvidencePlan(
     plan,
@@ -61,8 +62,10 @@ export function frontendEvidencePlan(
 }
 
 function releaseInspection(base, target, full = false) {
+    const observed = inspection(base, target, full);
+    const plan = process.env.RETAIN_FRONTENDS === 'true' ? retainedFrontendPlan(observed) : observed;
     return frontendEvidencePlan(
-        inspection(base, target, full),
+        plan,
         {
             storefrontSha: process.env.STOREFRONT_SHA,
             adminSha: process.env.ADMIN_SHA,
