@@ -1664,7 +1664,11 @@ function inspectIcloudRelay(
     checkAncestry(plan.markerSha, request.sourceSha);
     const result = spawn(
         '/usr/bin/node',
-        [`--env-file=${PRODUCTION_ENVIRONMENT_FILE}`, path.join(__dirname, 'icloud-relay-diagnostic.mjs')],
+        [
+            `--env-file=${PRODUCTION_ENVIRONMENT_FILE}`,
+            path.join(__dirname, 'icloud-relay-diagnostic.mjs'),
+            '--health-only',
+        ],
         { encoding: 'utf8', timeout: 70000, maxBuffer: 16384, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     // A completed diagnostic may report a failed dependency. Never forward stderr,

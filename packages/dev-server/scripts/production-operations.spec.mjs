@@ -252,9 +252,10 @@ void test('mailbox inspection pins the live revision and never forwards secrets 
         spawn: (command, args, options) => {
             calls++;
             assert.equal(command, '/usr/bin/node');
-            assert.equal(args.length, 2);
+            assert.equal(args.length, 3);
             assert.equal(args[0], '--env-file=/var/www/kaiyuangouwu/packages/dev-server/.env');
             assert.equal(path.basename(args[1]), 'icloud-relay-diagnostic.mjs');
+            assert.equal(args[2], '--health-only');
             assert.equal(options.timeout, 70000);
             assert.equal(options.maxBuffer, 16384);
             assert.deepEqual(options.stdio, ['ignore', 'pipe', 'pipe']);
