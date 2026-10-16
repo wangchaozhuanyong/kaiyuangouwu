@@ -245,7 +245,7 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE', worker =
     };
     let version = 0;
     const modules = {
-        get: vi.fn(token => {
+        get: vi.fn<(token: unknown) => unknown>(token => {
             if (token === StorefrontAccountSettingsService) return sources.account;
             if (token === PUBLIC_PRODUCT_SUMMARY_READER)
                 return {
@@ -320,13 +320,101 @@ describe('public page inline artwork', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected media provider fixture');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
-                return { readPublicInlinePreview: read } as never;
-            if (token === StorefrontMediaManifestService) return { isPublic: authorize } as never;
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === StorefrontMediaManifestService) return { isPublic: authorize };
             return original(token);
         });
         return { ...h, read, authorize };
     }
+    it('keeps API and worker caches separate and never freezes unfinished cold metadata across consecutive TTL cycles', async () => {
+        vi.useFakeTimers();
+        const api = artworkHarness();
+        const worker = artworkHarness(true);
+        const latch = () => {
+            let resolve!: () => void;
+            const promise = new Promise<void>(yes => {
+                resolve = yes;
+            });
+            return { promise, resolve };
+        };
+        let gate = latch();
+        const attach = (h: ReturnType<typeof artworkHarness>, wait: () => Promise<void>) => {
+            const manifest = new StorefrontMediaManifestService(
+                h.cache,
+                {} as never,
+                {} as never,
+                {} as never,
+            );
+            const build = vi
+                .spyOn(
+                    manifest as unknown as {
+                        build(): Promise<{ channelId: string; host: string; paths: string[]; uses: [] }>;
+                    },
+                    'build',
+                )
+                .mockImplementation(async () => {
+                    await wait();
+                    return { channelId: 'a', host: 'a.test', paths: ['preview/hero.webp'], uses: [] };
+                });
+            const original = h.modules.get.getMockImplementation();
+            if (!original) throw new Error('Expected media fixture');
+            h.modules.get.mockImplementation(token =>
+                token === StorefrontMediaManifestService ? manifest : original(token),
+            );
+            return { manifest, build };
+        };
+        const apiManifest = attach(api, () => gate.promise);
+        const workerManifest = attach(worker, () => Promise.resolve());
+        const workerPage = await worker.service.read(
+            worker.ctx,
+            'a.test',
+            { kind: 'home' },
+            { prepareMedia: true },
+        );
+        expect(workerPage.media[0].placeholder).toBeDefined();
+        expect(await api.service.peek(api.ctx, 'a.test')).toBeUndefined();
+        expect(api.entries).not.toBe(worker.entries);
+        for (let cycle = 0; cycle < 3; cycle++) {
+            const pending = api.service.read(api.ctx, 'a.test');
+            await vi.advanceTimersByTimeAsync(251);
+            const cold = await pending;
+            expect(cold.media[0].placeholder).toBeUndefined();
+            expect(await api.service.peek(api.ctx, 'a.test')).toBeUndefined();
+            gate.resolve();
+            await apiManifest.manifest.get(api.ctx, 'a.test');
+            const warm = await api.service.read(api.ctx, 'a.test');
+            expect(warm.media[0].placeholder?.inlineData).toBe('data:image/webp;base64,AAAA');
+            expect(await api.service.peek(api.ctx, 'a.test')).toBe(warm);
+            expect(await api.service.read(api.ctx, 'a.test')).toBe(warm);
+            expect(cold.media[0].placeholder).toBeUndefined();
+            if (cycle < 2) {
+                gate = latch();
+                await vi.advanceTimersByTimeAsync(31_000);
+            }
+        }
+        expect(apiManifest.build).toHaveBeenCalledTimes(3);
+        expect(workerManifest.build).toHaveBeenCalledOnce();
+        expect(api.read).toHaveBeenCalledTimes(3);
+    });
+    it.each(['denied', 'authorization-error', 'missing', 'storage-error', 'invalid'])(
+        'caches a completed %s result instead of retrying it on every public read',
+        async outcome => {
+            const h = artworkHarness();
+            if (outcome === 'denied') h.authorize.mockResolvedValue(false);
+            else if (outcome === 'authorization-error')
+                h.authorize.mockRejectedValue(new Error('unavailable'));
+            else if (outcome === 'storage-error') h.read.mockRejectedValue(new Error('unavailable'));
+            else h.read.mockResolvedValue(outcome === 'invalid' ? 'invalid' : undefined);
+            const first = await h.service.read(h.ctx, 'a.test');
+            expect(first.media[0].placeholder).toBeUndefined();
+            expect(await h.service.peek(h.ctx, 'a.test')).toBe(first);
+            expect(await h.service.read(h.ctx, 'a.test')).toBe(first);
+            expect(h.authorize).toHaveBeenCalledOnce();
+            expect(h.read).toHaveBeenCalledTimes(
+                outcome === 'denied' || outcome === 'authorization-error' ? 0 : 1,
+            );
+        },
+    );
     it.each([false, true])(
         'reconciles a CAS winner only while its artwork stays authorized (%s)',
         async denied => {
@@ -553,10 +641,9 @@ describe('public page inline artwork', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the module harness implementation');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
-                return { readPublicInlinePreview: read } as never;
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
             if (token === StorefrontMediaManifestService)
-                return { isPublic: vi.fn().mockResolvedValue(true) } as never;
+                return { isPublic: vi.fn().mockResolvedValue(true) };
             return original(token);
         });
         const page = await h.service.read(h.ctx, 'a.test', { kind: 'page', id: 'services' });
@@ -592,9 +679,8 @@ describe('public page inline artwork', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the module harness implementation');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
-                return { readPublicInlinePreview: read } as never;
-            if (token === StorefrontMediaManifestService) return { isPublic: authorize } as never;
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === StorefrontMediaManifestService) return { isPublic: authorize };
             return original(token);
         });
         const page = await h.service.read(h.ctx, 'a.test', { kind: 'page', id: 'services' });
@@ -634,9 +720,9 @@ describe('ranked home data in the public snapshot', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the default public provider fixture');
         h.modules.get.mockImplementation(token => {
-            if (token === PUBLIC_CATALOG_READER) return { find, sales } as never;
+            if (token === PUBLIC_CATALOG_READER) return { find, sales };
             if (token === PUBLIC_PRODUCT_SUMMARY_READER)
-                return { list: vi.fn().mockResolvedValue({ items: [{ id: 'ordinary' }] }), byId } as never;
+                return { list: vi.fn().mockResolvedValue({ items: [{ id: 'ordinary' }] }), byId };
             return original(token);
         });
         h.content.mockResolvedValue({
@@ -742,9 +828,8 @@ describe('private-route public configuration bootstrap', () => {
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the module harness implementation');
         h.modules.get.mockImplementation(token => {
-            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW')
-                return { readPublicInlinePreview: read } as never;
-            if (token === StorefrontMediaManifestService) return { isPublic: authorize } as never;
+            if (token === 'STOREFRONT_PUBLIC_IMAGE_PREVIEW') return { readPublicInlinePreview: read };
+            if (token === StorefrontMediaManifestService) return { isPublic: authorize };
             return original(token);
         });
         await h.service.read(h.ctx, 'a.test');
@@ -1083,7 +1168,7 @@ describe('authoritative public access modes', () => {
         if (!modules) throw new Error('Missing module fixture');
         const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
         h.modules.get.mockImplementation(token =>
-            token === PUBLIC_CATALOG_READER ? ({ find } as never) : modules(token),
+            token === PUBLIC_CATALOG_READER ? { find } : modules(token),
         );
         h.config.mockRejectedValue(new Error('required config unavailable'));
         // An explicit category starts in parallel; the default category must wait

@@ -116,7 +116,9 @@ export async function publicMediaWithPreviews(
     isPublic: (path: string) => Promise<boolean>,
     readPreview: (path: string) => Promise<string | undefined>,
     budgetMs = 250,
+    preparation?: { deferred: boolean },
 ): Promise<MediaDescriptor[]> {
+    if (preparation) preparation.deferred = false;
     const groups = new Map<string, { path: string; indexes: number[] }>();
     media.forEach((item, index) => {
         const identity = publicMediaAssetIdentity(item, host);
@@ -130,18 +132,28 @@ export async function publicMediaWithPreviews(
     const resolved = new Map<number, string>();
     let next = 0;
     let accepting = true;
+    let completed = 0;
+    let deferredByDeadline = false;
     const deadline = Date.now() + budgetMs;
     const worker = async () => {
         while (accepting && Date.now() < deadline && next < pending.length) {
             const group = pending[next++];
             try {
-                if (!(await isPublic(group.path)) || !accepting || Date.now() >= deadline) continue;
+                if (!(await isPublic(group.path))) continue;
+                if (!accepting || Date.now() >= deadline) {
+                    deferredByDeadline = true;
+                    continue;
+                }
                 const preview = await readPreview(group.path);
-                if (accepting && Date.now() < deadline && validInlineImagePreview(preview)) {
-                    for (const index of group.indexes) resolved.set(index, preview);
+                if (validInlineImagePreview(preview)) {
+                    if (accepting && Date.now() < deadline) {
+                        for (const index of group.indexes) resolved.set(index, preview);
+                    } else deferredByDeadline = true;
                 }
             } catch {
                 /* Optional artwork must not fail the public page or grant access. */
+            } finally {
+                completed++;
             }
         }
     };
@@ -155,6 +167,9 @@ export async function publicMediaWithPreviews(
         ]);
     } finally {
         accepting = false;
+        // A completed denial/missing result is stable; unfinished work is not a complete snapshot.
+        // Copy the outcome now: late completions must not mutate the returned page or admission decision.
+        if (preparation) preparation.deferred = deferredByDeadline || completed < pending.length;
         if (timer) clearTimeout(timer);
     }
     return boundedMediaPreviews(
