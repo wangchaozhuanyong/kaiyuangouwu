@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { diagnoseIcloudRelay, ICLOUD_DIAGNOSTIC_URL } from './icloud-relay-diagnostic.mjs';
+import safeIcloudRelayReceipt from './icloud-relay-receipt.cjs';
 
 const username = 'fixture-admin-private';
 const password = '  fixture-password-private  ';
@@ -127,6 +128,75 @@ async function fixture(t, handler) {
     return { entries, request, maximumActive: () => maximumActive };
 }
 const probes = receipt => receipt.channels.flatMap(channel => channel.probes);
+
+test('health-only inspection reads no mailbox rows and transports only controlled metadata', async t => {
+    const api = await fixture(t, (entry, response) => {
+        if (entry.operation === 'IcloudRelayDiagnosticLogin') return login(response);
+        assert.equal(entry.operation, 'IcloudRelayHealth');
+        assert.doesNotMatch(entry.query, /bodyText|extractedCode|masterQueryCode|buyerQueryCode|email /u);
+        json(response, {
+            data: {
+                icloudMailHealth: {
+                    checkedAt: new Date().toISOString(),
+                    listeners: [{ primaryAccountId: '1', state: 'listening' }],
+                    delivery: { configured: true, pendingCount: 0 },
+                    extra: 'fixture-query-code-private',
+                },
+            },
+        });
+    });
+    const receipt = await diagnoseIcloudRelay({ ...credentials, healthOnly: true, request: api.request });
+    assert.equal(receipt.category, 'OK');
+    assert.deepEqual(
+        api.entries.map(entry => entry.operation),
+        ['IcloudRelayDiagnosticLogin', 'IcloudRelayHealth'],
+    );
+    assert.equal(probes(receipt)[0].count, 1);
+    assert.equal(
+        safeIcloudRelayReceipt({ status: 0, stdout: JSON.stringify(receipt) }, 'a'.repeat(40), 'b'.repeat(40))
+            .category,
+        'OK',
+    );
+    assertNoSecrets(receipt);
+});
+
+test('health inspection retains safe schema and non-null failure causes without raw errors', async t => {
+    for (const [status, message, code, reason] of [
+        [
+            400,
+            'Cannot query field "icloudMailHealth" fixture-error-private',
+            'GRAPHQL_VALIDATION_FAILED',
+            'SCHEMA_MISMATCH',
+        ],
+        [
+            200,
+            'Cannot return null for non-nullable field IcloudMailHealth.checkedAt fixture-error-private',
+            'INTERNAL_SERVER_ERROR',
+            'NON_NULL_RESULT',
+        ],
+    ]) {
+        const api = await fixture(t, (entry, response) => {
+            if (entry.operation === 'IcloudRelayDiagnosticLogin') return login(response);
+            json(
+                response,
+                { errors: [{ message, extensions: { code }, path: ['icloudMailHealth'] }] },
+                {},
+                status,
+            );
+        });
+        const receipt = await diagnoseIcloudRelay({ ...credentials, healthOnly: true, request: api.request });
+        assert.equal(receipt.category, 'PARTIAL_FAILURE');
+        const safe = safeIcloudRelayReceipt(
+            { status: 1, stdout: JSON.stringify(receipt) },
+            'a'.repeat(40),
+            'b'.repeat(40),
+        );
+        assert.equal(probes(safe)[0].healthFailure, reason);
+        assert.equal(probes(safe)[0].code, code);
+        assert.deepEqual(probes(safe)[0].path, ['icloudMailHealth']);
+        assertNoSecrets(safe);
+    }
+});
 
 test('uses existing login and fixed read contracts, preserves password bytes and queries channels serially', async t => {
     const api = await fixture(t, (entry, response) => {

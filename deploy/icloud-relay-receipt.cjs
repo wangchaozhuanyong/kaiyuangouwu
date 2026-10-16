@@ -37,6 +37,7 @@ module.exports = function safeIcloudRelayReceipt(result, sourceSha, runtimeSha) 
             'alias_minimal',
             'primary_full',
             'alias_full',
+            'health',
         ]);
         const errorCodes = new Set([
             'FORBIDDEN',
@@ -54,7 +55,7 @@ module.exports = function safeIcloudRelayReceipt(result, sourceSha, runtimeSha) 
                 'id createdAt updatedAt email note status imapHost imapPort masterQueryCode ' +
                 'codeExpiresAt codeResetIntervalDays remainingDays lastQueriedAt lastQueriedIp lastSyncedAt ' +
                 'lastSyncError virtualEmailCount primaryAccountId primaryAccountEmail aliasEmail ' +
-                'buyerQueryCode mailCount lastMailReceivedAt'
+                'buyerQueryCode mailCount lastMailReceivedAt icloudMailHealth checkedAt listeners primaryAccountId state reason leaseExpiresAt delivery configured pendingCount oldestPendingAt lastDeliveredAt'
             ).split(' '),
         );
         const record = value => {
@@ -87,6 +88,20 @@ module.exports = function safeIcloudRelayReceipt(result, sourceSha, runtimeSha) 
                 count: value.count,
                 errorCount: value.errorCount,
                 code: value.code === null ? null : errorCodes.has(value.code) ? value.code : 'UNKNOWN',
+                ...(value.operation === 'health' && value.category !== 'OK'
+                    ? {
+                          healthFailure: [
+                              'NON_NULL_RESULT',
+                              'SCHEMA_MISMATCH',
+                              'DATABASE_COLUMN',
+                              'ENTITY_METADATA',
+                              'SCALAR_SERIALIZATION',
+                              'UPSTREAM_ERROR',
+                          ].includes(value.healthFailure)
+                              ? value.healthFailure
+                              : 'UPSTREAM_ERROR',
+                      }
+                    : {}),
                 path:
                     Array.isArray(value.path) &&
                     value.path.length <= 8 &&
@@ -111,8 +126,9 @@ module.exports = function safeIcloudRelayReceipt(result, sourceSha, runtimeSha) 
             assert.equal(receipt.login?.operation, 'login');
             assert.equal(receipt.login?.category, 'OK');
             for (const channel of receipt.channels) {
-                assert.equal(channel.probes.length, 4);
-                assert.equal(new Set(channel.probes.map(probe => probe.operation)).size, 4);
+                const count = channel.probes.length === 1 && channel.probes[0].operation === 'health' ? 1 : 4;
+                assert.equal(channel.probes.length, count);
+                assert.equal(new Set(channel.probes.map(probe => probe.operation)).size, count);
                 for (const probe of channel.probes) {
                     assert.ok(probe.operation !== 'login');
                     assert.equal(probe.category, 'OK');

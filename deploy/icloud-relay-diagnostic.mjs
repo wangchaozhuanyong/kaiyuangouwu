@@ -43,6 +43,15 @@ const OPERATIONS = Object.freeze([
         query: `query IcloudRelayAliasFull { icloudVirtualEmails { ${ALIAS_FIELDS} } }`,
     }),
 ]);
+const HEALTH_OPERATION = Object.freeze({
+    operation: 'IcloudRelayHealth',
+    label: 'health',
+    field: 'icloudMailHealth',
+    query: `query IcloudRelayHealth { icloudMailHealth {
+        checkedAt listeners { primaryAccountId state reason leaseExpiresAt }
+        delivery { configured pendingCount oldestPendingAt lastDeliveredAt }
+    } }`,
+});
 const SAFE_ERROR_CODES = new Set([
     'FORBIDDEN',
     'UNAUTHENTICATED',
@@ -63,8 +72,20 @@ const SAFE_PATH_FIELDS = new Set([
     'code',
     'token',
     '__typename',
+    'icloudMailHealth',
+    'checkedAt',
+    'listeners',
+    'primaryAccountId',
+    'state',
+    'reason',
+    'leaseExpiresAt',
+    'delivery',
+    'configured',
+    'pendingCount',
+    'oldestPendingAt',
+    'lastDeliveredAt',
 ]);
-const CONFIG_KEYS = new Set(['username', 'password', 'request', 'budgetMs', 'clock']);
+const CONFIG_KEYS = new Set(['username', 'password', 'request', 'budgetMs', 'clock', 'healthOnly']);
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 class DiagnosticFailure extends Error {
@@ -172,9 +193,11 @@ async function runDiagnostic(options = {}) {
             budgetMs = 60_000,
             // Dependency injection is only used by local fixtures; CLI callers cannot override it.
             clock = Date.now,
+            healthOnly = false,
         } = options;
         if (
             typeof request !== 'function' ||
+            typeof healthOnly !== 'boolean' ||
             typeof clock !== 'function' ||
             !Number.isInteger(budgetMs) ||
             budgetMs < 30_000 ||
@@ -250,7 +273,14 @@ async function runDiagnostic(options = {}) {
                             ? response.status
                             : null;
                     record.contentType = safeContentType(response.headers);
-                    if (record.status === null || response.status < 200 || response.status >= 300) {
+                    const graphqlBadRequest =
+                        operation === 'health' &&
+                        response.status === 400 &&
+                        ['json', 'graphql-json'].includes(record.contentType);
+                    if (
+                        record.status === null ||
+                        ((response.status < 200 || response.status >= 300) && !graphqlBadRequest)
+                    ) {
                         discardBody(response);
                         throw new DiagnosticFailure('HTTP_ERROR');
                     }
@@ -271,8 +301,23 @@ async function runDiagnostic(options = {}) {
                         record.errorCount = envelope.errors.length;
                         // Keep the representative code/path consistent with the failure category.
                         Object.assign(record, safeError(failure.error));
+                        if (operation === 'health') {
+                            const message = String(failure.error.message ?? '');
+                            record.healthFailure = /Cannot return null for non-nullable field/u.test(message)
+                                ? 'NON_NULL_RESULT'
+                                : /Cannot query field/u.test(message)
+                                  ? 'SCHEMA_MISMATCH'
+                                  : /Unknown column|does not exist|doesn't exist/u.test(message)
+                                    ? 'DATABASE_COLUMN'
+                                    : /No metadata|No repository/u.test(message)
+                                      ? 'ENTITY_METADATA'
+                                      : /cannot represent|Invalid.*Date/u.test(message)
+                                        ? 'SCALAR_SERIALIZATION'
+                                        : 'UPSTREAM_ERROR';
+                        }
                         throw new DiagnosticFailure(failure.category);
                     }
+                    if (graphqlBadRequest) throw new DiagnosticFailure('HTTP_ERROR');
                     if (!isObject(envelope.data)) throw new DiagnosticFailure('INVALID_ENVELOPE');
                     return {
                         data: envelope.data,
@@ -344,10 +389,11 @@ async function runDiagnostic(options = {}) {
             const isDefaultChannel = channel.code === '__default_channel__';
             const channelResult = { channelIndex, isDefaultChannel, probes: [] };
             receipt.channels.push(channelResult);
-            for (const operation of OPERATIONS) {
+            for (const operation of healthOnly ? [HEALTH_OPERATION] : OPERATIONS) {
                 const result = await run(operation.label, operation.query, {}, channel.token);
                 if (result.record.category === 'OK') {
-                    const rows = result.data[operation.field];
+                    const value = result.data[operation.field];
+                    const rows = operation.label === 'health' ? value?.listeners : value;
                     if (!Array.isArray(rows) || rows.length > 100_000 || !rows.every(isObject))
                         result.record.category = 'INVALID_ENVELOPE';
                     else result.record.count = rows.length;
@@ -383,7 +429,12 @@ export async function diagnoseIcloudRelay(options = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-    const options = process.argv.length === 2 ? {} : { unsupportedArguments: true };
+    const options =
+        process.argv.length === 2
+            ? {}
+            : process.argv.length === 3 && process.argv[2] === '--health-only'
+              ? { healthOnly: true }
+              : { unsupportedArguments: true };
     diagnoseIcloudRelay(options)
         .then(receipt => {
             process.stdout.write(`${JSON.stringify(receipt)}\n`);
