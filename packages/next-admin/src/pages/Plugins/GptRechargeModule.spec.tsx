@@ -6,6 +6,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it } from 'vitest';
 import { adminSchema } from '../../../../store-management-plugin/src/gpt-recharge/api-extensions';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { GptRechargeModule } from './GptRechargeModule';
 const schema = buildASTSchema({
     kind: Kind.DOCUMENT,
@@ -68,7 +69,9 @@ it('loads the actual admin schema, saves a secret once, clears it, and preserves
     await act(async () =>
         root.render(
             <ApolloProvider client={client}>
-                <GptRechargeModule />
+                <FeatureHelpProvider>
+                    <GptRechargeModule />
+                </FeatureHelpProvider>
             </ApolloProvider>,
         ),
     );
