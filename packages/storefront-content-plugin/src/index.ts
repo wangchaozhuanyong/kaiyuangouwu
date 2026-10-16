@@ -17,6 +17,7 @@ export type { StorefrontContentBlockType, StorefrontContentTargetType } from './
 export { StorefrontContentBlock } from './entities/storefront-content-block.entity';
 export { StorefrontContentItem } from './entities/storefront-content-item.entity';
 export { sourceImageReplacements } from './image-replacement-policy';
+export { buildBestSellerProducts } from './shared/home-merchandising';
 export { primaryAuthVisualContent, primaryStorefrontMedia } from './shared/primary-media';
 export type {
     PrimaryStorefrontMediaCandidate,

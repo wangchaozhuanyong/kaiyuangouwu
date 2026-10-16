@@ -584,6 +584,7 @@ function SafeImageSource({
         handoffFrames.current = [];
     }
 
+    // Late public hints re-admit complete nodes without extending a pending candidate's deadline.
     useLayoutEffect(() => {
         active.current = true;
         retrying.current = false;
@@ -591,10 +592,9 @@ function SafeImageSource({
         if (
             image &&
             fetchPriority !== 'low' &&
-            (imageKind === 'hero' || imageKind === 'detail') &&
             isFirstViewportElement(image, image.closest('.storefront-app') ?? document.body)
         ) {
-            image.fetchPriority = 'high';
+            if (imageKind === 'hero' || imageKind === 'detail') image.fetchPriority = 'high';
             setNearViewport(true);
         }
         let requestTimer: number | undefined;
@@ -657,7 +657,7 @@ function SafeImageSource({
             observer?.disconnect();
             for (const [event, handler] of listeners) image?.removeEventListener(event, handler);
         };
-    }, [sourceKey, requestAttempt]);
+    }, [sourceKey, requestAttempt, candidateComplete ? presentationKey : undefined]);
 
     const state = failed
         ? timedOut

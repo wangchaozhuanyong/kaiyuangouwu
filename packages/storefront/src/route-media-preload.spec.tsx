@@ -100,6 +100,38 @@ describe('navigation image hints', () => {
         expect(vi.mocked(preload).mock.calls[0][0]).toContain('/first.jpg?');
     });
 
+    it.each([false, true])(
+        'warms only the first visible shortcut group using its actual %s layout',
+        desktop => {
+            const quick = {
+                ...block('QUICK_LINKS', ''),
+                items: Array.from({ length: 7 }, (_, index) => ({
+                    id: String(index),
+                    enabled: index !== 2,
+                    imageUrl: index === 3 ? '' : `/assets/preview/quick-${index}.webp`,
+                })),
+            } as StorefrontContentBlock;
+            preloadRouteMedia({ name: 'home' }, [quick], [], desktop);
+            expect(preload).toHaveBeenCalledTimes(3);
+            expect(vi.mocked(preload).mock.calls.map(([src]) => src)).toEqual([
+                expect.stringContaining('/quick-0.webp?'),
+                expect.stringContaining('/quick-1.webp?'),
+                expect.stringContaining('/quick-4.webp?'),
+            ]);
+            for (const [, options] of vi.mocked(preload).mock.calls) {
+                expect(options?.imageSizes).toBe(desktop ? '(min-width: 1400px) 210px, 20vw' : '48px');
+                expect(options?.fetchPriority).toBe('auto');
+                expect(options?.imageSrcSet).toContain(
+                    desktop ? 'storefront-card-square-' : 'storefront-icon-',
+                );
+            }
+            vi.mocked(preload).mockClear();
+            preloadRouteMedia({ name: 'services' }, [quick], [], desktop);
+            preloadRouteMedia({ name: 'home' }, [{ ...quick, enabled: false }], [], desktop);
+            expect(preload).not.toHaveBeenCalled();
+        },
+    );
+
     it('uses the published shared services banner without requesting an ignored phone override', () => {
         preloadRouteMedia(
             { name: 'services' },

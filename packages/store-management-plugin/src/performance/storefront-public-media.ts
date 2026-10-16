@@ -1,5 +1,6 @@
 import {
     boundedMediaPreviews,
+    buildBestSellerProducts,
     mediaDescriptor,
     validInlineImagePreview,
     type MediaDescriptor,
@@ -33,6 +34,15 @@ type Data = Record<string, unknown>;
 const record = (value: unknown): Data =>
     value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Data) : {};
 const records = (value: unknown): Data[] => (Array.isArray(value) ? value.map(record) : []);
+const productCover = (item: Data) =>
+    [
+        record(item.featuredAsset).preview,
+        ...records(item.assets).map(asset => asset.preview),
+        ...records(item.variants).flatMap(variant => [
+            record(variant.featuredAsset).preview,
+            record(record(variant.product).featuredAsset).preview,
+        ]),
+    ].find((source): source is string => typeof source === 'string' && Boolean(source.trim()));
 
 /** Only a published phone binding that an existing layout consumes may join public media. */
 export function publicHeroMobileImage(block: unknown, origin: string): string | undefined {
@@ -86,6 +96,29 @@ export function publicMediaAssetIdentity(media: MediaDescriptor, host: string) {
     }
 }
 
+/** Give each asset's first use a preview before duplicate purposes spend the shared wire budget. */
+function boundedAssetPreviews(media: readonly MediaDescriptor[], host: string): MediaDescriptor[] {
+    const valid = media.filter(
+        item => item && typeof item.identity === 'string' && typeof item.src === 'string',
+    );
+    const first: number[] = [];
+    const remaining: number[] = [];
+    const seen = new Set<string>();
+    valid.forEach((item, index) => {
+        const identity = publicMediaAssetIdentity(item, host);
+        if (identity && !seen.has(identity.key)) {
+            seen.add(identity.key);
+            first.push(index);
+        } else remaining.push(index);
+    });
+    const order = [...first, ...remaining];
+    const result: MediaDescriptor[] = new Array(valid.length);
+    boundedMediaPreviews(order.map(index => valid[index])).forEach((item, index) => {
+        result[order[index]] = item;
+    });
+    return result;
+}
+
 /** Callers must supply only a guarded cache entry from the same public scope/revision. */
 export function preservePublicMediaPreviews(
     media: readonly MediaDescriptor[],
@@ -99,13 +132,14 @@ export function preservePublicMediaPreviews(
         if (identity && validInlineImagePreview(preview))
             previews.set(JSON.stringify([identity.key, item.kind]), preview);
     }
-    return boundedMediaPreviews(
+    return boundedAssetPreviews(
         media.map(item => {
             if (validInlineImagePreview(item.placeholder?.inlineData)) return item;
             const identity = publicMediaAssetIdentity(item, host);
             const preview = identity && previews.get(JSON.stringify([identity.key, item.kind]));
             return preview ? { ...item, placeholder: { inlineData: preview } } : item;
         }),
+        host,
     );
 }
 
@@ -127,7 +161,7 @@ export async function publicMediaWithPreviews(
         if (existing) existing.indexes.push(index);
         else if (groups.size < 8) groups.set(identity.key, { path: identity.path, indexes: [index] });
     });
-    if (!groups.size) return boundedMediaPreviews(media);
+    if (!groups.size) return boundedAssetPreviews(media, host);
     const pending = [...groups.values()];
     const resolved = new Map<number, string>();
     let next = 0;
@@ -172,11 +206,12 @@ export async function publicMediaWithPreviews(
         if (preparation) preparation.deferred = deferredByDeadline || completed < pending.length;
         if (timer) clearTimeout(timer);
     }
-    return boundedMediaPreviews(
+    return boundedAssetPreviews(
         media.map((item, index) => {
             const preview = resolved.get(index);
             return preview ? { ...item, placeholder: { inlineData: preview } } : { ...item };
         }),
+        host,
     );
 }
 
@@ -193,7 +228,9 @@ export function publicPageMedia(
         | 'collections'
         | 'flashSales'
         | 'bestSellers'
-    >,
+        | 'request'
+    > &
+        Partial<Pick<StorefrontPageData, 'generatedAt'>>,
 ): MediaDescriptor[] {
     const media = new Map<string, MediaDescriptor>();
     const add = (
@@ -254,7 +291,7 @@ export function publicPageMedia(
     for (const item of records(page.collections)) collection(item);
     const product = (item: Data, detail: boolean) => {
         const kinds = detail ? PUBLIC_MEDIA_USES.productDetail : PUBLIC_MEDIA_USES.productList;
-        add(record(item.featuredAsset).preview, kinds);
+        add(productCover(item), kinds);
         if (detail) for (const asset of records(item.assets)) add(asset.preview, kinds);
         for (const variant of records(item.variants)) {
             add(record(variant.featuredAsset).preview, kinds);
@@ -270,5 +307,89 @@ export function publicPageMedia(
     for (const sale of records(page.flashSales)) {
         for (const item of records(sale.items)) add(item.imageUrl, PUBLIC_MEDIA_USES.productList);
     }
-    return [...media.values()];
+    const result = [...media.values()];
+    if (page.request?.kind !== 'home') return result;
+
+    // The first art-directed slide and a fair share of visible quick links/product rows
+    // precede later carousel slides and remote sections, without adding any descriptors.
+    const hero = blocks.find(
+        block => block.type === 'HERO' && typeof block.imageUrl === 'string' && block.imageUrl.trim(),
+    );
+    const quick = records(blocks.find(block => block.type === 'QUICK_LINKS')?.items)
+        .filter(item => item.enabled !== false && typeof item.imageUrl === 'string' && item.imageUrl.trim())
+        .slice(0, 5);
+    const pool = [
+        ...records(page.products),
+        ...records(record(page.bestSellers).pinnedProducts),
+        ...records(record(record(page.bestSellers).catalog).items),
+    ];
+    const firstProductBlock = blocks.find(block =>
+        ['CATEGORY_AD', 'FEATURED_COLLECTION'].includes(String(block.type)),
+    );
+    const productSettings = record(firstProductBlock?.settings);
+    const selected = [productSettings.selectedProductIds, productSettings.pinnedProductIds].find(
+        value => Array.isArray(value) && value.some(id => typeof id === 'string' && Boolean(id.trim())),
+    );
+    const ids = Array.isArray(selected)
+        ? selected
+              .filter((id): id is string => typeof id === 'string' && Boolean(id.trim()))
+              .map(id => id.trim())
+        : [];
+    const products = !firstProductBlock
+        ? []
+        : ids.length
+          ? ids
+                .flatMap(id => {
+                    const item = pool.find(candidate => String(candidate.id) === id);
+                    return item ? [item] : [];
+                })
+                .slice(0, 4)
+          : pool.slice(0, 4);
+    const best = page.bestSellers;
+    const pinned = records(best?.pinnedProducts).filter(
+        (item): item is Data & { id: string } => typeof item.id === 'string',
+    );
+    const candidates = records(best?.catalog.items).filter(
+        (item): item is Data & { id: string } => typeof item.id === 'string',
+    );
+    const bestSettings = record(blocks.find(block => block.type === 'BEST_SELLERS')?.settings);
+    const displayCount = bestSettings.displayCount;
+    const count = Math.min(
+        50,
+        Math.max(1, typeof displayCount === 'number' && Number.isFinite(displayCount) ? displayCount : 4),
+    );
+    const generatedAt = page.generatedAt ?? 0;
+    const bestAssets = new Map<string, string>();
+    for (const item of buildBestSellerProducts({
+        pinnedProducts: pinned,
+        candidates: [...candidates, ...pinned],
+        salesByProductId: best?.salesByProductId ?? {},
+        count,
+        seed: `${page.scope.channelCode}:${new Date(generatedAt).toISOString().slice(0, 10)}:best-sellers`,
+    })) {
+        const source = productCover(item);
+        if (typeof source !== 'string' || !source.trim()) continue;
+        const identity = publicMediaAssetIdentity(mediaDescriptor(source), page.scope.host);
+        if (identity && !bestAssets.has(identity.key)) bestAssets.set(identity.key, source);
+    }
+    const bestSources = [...bestAssets.values()].slice(0, 4);
+    const priority = new Map<string, number>();
+    const prioritize = (source: unknown) => {
+        if (typeof source !== 'string' || !source.trim()) return;
+        const identity = publicMediaAssetIdentity(mediaDescriptor(source), page.scope.host);
+        if (identity && !priority.has(identity.key)) priority.set(identity.key, priority.size);
+    };
+    prioritize(hero?.imageUrl);
+    if (hero) prioritize(publicHeroMobileImage(hero, `https://${page.scope.host}`));
+    for (let index = 0; index < Math.max(quick.length, products.length, bestSources.length); index++) {
+        const item = products[index];
+        if (item) prioritize(productCover(item));
+        prioritize(bestSources[index]);
+        prioritize(quick[index]?.imageUrl);
+    }
+    return result.sort(
+        (left, right) =>
+            (priority.get(publicMediaAssetIdentity(left, page.scope.host)?.key ?? '') ?? priority.size) -
+            (priority.get(publicMediaAssetIdentity(right, page.scope.host)?.key ?? '') ?? priority.size),
+    );
 }

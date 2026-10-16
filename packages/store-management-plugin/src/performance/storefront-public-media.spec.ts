@@ -1,6 +1,8 @@
 import { mediaDescriptor } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildBestSellerProducts } from '../../../storefront/src/home-merchandising';
+
 import {
     preservePublicMediaPreviews,
     PUBLIC_MEDIA_USES,
@@ -20,6 +22,7 @@ function page(data: Record<string, unknown> = {}) {
             priceContext: 'public',
         },
         config: {},
+        generatedAt: Date.parse('2026-10-16T12:00:00Z'),
         ...data,
     } as any;
 }
@@ -244,6 +247,476 @@ describe('public page media projection', () => {
 
 describe('bounded public inline image assembly', () => {
     const preview = `data:image/webp;base64,${'A'.repeat(960)}`;
+    it.each([
+        { name: 'sales-ranked b3 before b2', sales: { b0: 0, b1: 0, b2: 20, b3: 30 } },
+        { name: 'daily stable shuffle with no sales', sales: {} },
+    ])('prioritizes the actual $name display order rather than raw catalog order', async ({ sales }) => {
+        const fixture = page({
+            request: { kind: 'home' },
+            generatedAt: Date.parse('2026-10-16T12:00:00Z'),
+            products: Array.from({ length: 2 }, (_, index) => ({
+                id: `d${index}`,
+                featuredAsset: { preview: `/assets/preview/desktop-${index}.webp` },
+            })),
+            bestSellers: {
+                pinnedProducts: [],
+                salesByProductId: sales,
+                catalog: {
+                    items: Array.from({ length: 4 }, (_, index) => ({
+                        id: `b${index}`,
+                        featuredAsset: { preview: `/assets/preview/best-${index}.webp` },
+                    })),
+                },
+            },
+            content: {
+                blocks: [
+                    {
+                        type: 'HERO',
+                        imageUrl: '/assets/preview/hero.webp',
+                        settings: { mobileImageUrl: '/assets/preview/phone.webp' },
+                    },
+                    {
+                        type: 'QUICK_LINKS',
+                        items: Array.from({ length: 5 }, (_, index) => ({
+                            imageUrl: `/assets/preview/quick-${index}.webp`,
+                        })),
+                    },
+                    { type: 'CATEGORY_AD', settings: { selectedProductIds: ['d0', 'd1'] } },
+                ],
+            },
+        });
+        const actualFirstRow = buildBestSellerProducts({
+            pinnedProducts: fixture.bestSellers.pinnedProducts,
+            candidates: fixture.bestSellers.catalog.items,
+            salesByProductId: sales,
+            count: 4,
+            seed: 'a:2026-10-16:best-sellers',
+        }).slice(0, 2);
+        if (Object.keys(sales).length) expect(actualFirstRow.map(item => item.id)).toEqual(['b3', 'b2']);
+        const read = vi.fn().mockResolvedValue(preview);
+        const media = publicPageMedia(fixture);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read.mock.calls.map(call => call[0])).toEqual([
+            'preview/hero.webp',
+            'preview/phone.webp',
+            'preview/desktop-0.webp',
+            `preview/best-${actualFirstRow[0].id.slice(1)}.webp`,
+            'preview/quick-0.webp',
+            'preview/desktop-1.webp',
+            `preview/best-${actualFirstRow[1].id.slice(1)}.webp`,
+            'preview/quick-1.webp',
+        ]);
+        for (const item of actualFirstRow)
+            expect(
+                result.find(
+                    descriptor =>
+                        descriptor.identity.endsWith(`best-${item.id.slice(1)}.webp`) &&
+                        descriptor.kind === 'card',
+                )?.placeholder,
+            ).toBeDefined();
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+    });
+    it.each([
+        { generatedAt: '2026-10-16T00:30:00+08:00', expected: 'very-long-product-id' },
+        { generatedAt: '2026-10-16T12:00:00Z', expected: 'aaa' },
+    ])(
+        'uses the snapshot UTC day and published displayCount for $generatedAt',
+        async ({ generatedAt, expected }) => {
+            const items = [
+                'apple-2026',
+                'b',
+                'very-long-product-id',
+                'service-codex',
+                'aa',
+                'ccc',
+                '6257',
+                '1',
+                'z',
+                'aaa',
+                '0',
+            ].map(id => ({ id, featuredAsset: { preview: `/assets/preview/${id}.webp` } }));
+            const media = publicPageMedia(
+                page({
+                    request: { kind: 'home' },
+                    generatedAt: Date.parse(generatedAt),
+                    bestSellers: { pinnedProducts: [], salesByProductId: {}, catalog: { items } },
+                    content: {
+                        blocks: [
+                            {
+                                type: 'HERO',
+                                imageUrl: '/assets/preview/hero.webp',
+                                settings: { mobileImageUrl: '/assets/preview/phone.webp' },
+                            },
+                            {
+                                type: 'QUICK_LINKS',
+                                items: Array.from({ length: 5 }, (_, index) => ({
+                                    imageUrl: `/assets/preview/quick-${index}.webp`,
+                                })),
+                            },
+                            { type: 'BEST_SELLERS', settings: { displayCount: 1 } },
+                        ],
+                    },
+                }),
+            );
+            const read = vi.fn().mockResolvedValue(preview);
+            const result = await publicMediaWithPreviews(
+                media,
+                'shop.example',
+                () => Promise.resolve(true),
+                read,
+            );
+            expect(read.mock.calls.map(call => call[0])).toEqual([
+                'preview/hero.webp',
+                'preview/phone.webp',
+                `preview/${expected}.webp`,
+                ...Array.from({ length: 5 }, (_, index) => `preview/quick-${index}.webp`),
+            ]);
+            expect(
+                result.find(
+                    item => item.identity === `/assets/preview/${expected}.webp` && item.kind === 'card',
+                )?.placeholder,
+            ).toBeDefined();
+            for (const item of items.filter(candidate => candidate.id !== expected))
+                expect(
+                    result.find(
+                        descriptor =>
+                            descriptor.identity === item.featuredAsset.preview && descriptor.kind === 'card',
+                    )?.placeholder,
+                ).toBeUndefined();
+            expect(
+                result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+            ).toBeLessThanOrEqual(8192);
+        },
+    );
+    it('shares the eight-asset homepage budget between the first art-directed hero, quick links and actual selected first-row products', async () => {
+        const products = Array.from({ length: 4 }, (_, index) => ({
+            id: `p${index}`,
+            featuredAsset: { preview: `/assets/preview/product-${index}.webp?v=one` },
+        }));
+        const media = publicPageMedia(
+            page({
+                request: { kind: 'home' },
+                products,
+                content: {
+                    blocks: [
+                        ...Array.from({ length: 3 }, (_, index) => ({
+                            type: 'HERO',
+                            imageUrl: `/assets/preview/hero-${index}.webp`,
+                            settings: {
+                                mobileImageUrl: `/assets/preview/phone-${index}.webp`,
+                                mobileImageWidth: 1200,
+                                mobileImageHeight: 900,
+                            },
+                        })),
+                        {
+                            type: 'QUICK_LINKS',
+                            items: Array.from({ length: 5 }, (_, index) => ({
+                                imageUrl: `/assets/preview/quick-${index}.webp`,
+                            })),
+                        },
+                        { type: 'CATEGORY_AD', settings: { selectedProductIds: ['p2', 'p0', 'p3', 'p1'] } },
+                    ],
+                },
+            }),
+        );
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read.mock.calls.map(call => call[0])).toEqual([
+            'preview/hero-0.webp',
+            'preview/phone-0.webp',
+            'preview/product-2.webp',
+            'preview/quick-0.webp',
+            'preview/product-0.webp',
+            'preview/quick-1.webp',
+            'preview/product-3.webp',
+            'preview/quick-2.webp',
+        ]);
+        for (const source of ['/assets/preview/product-2.webp?v=one', '/assets/preview/product-0.webp?v=one'])
+            expect(
+                result.find(item => item.identity === source && item.kind === 'card')?.placeholder,
+            ).toBeDefined();
+        expect(result.find(item => item.identity === '/assets/preview/phone-0.webp')).toMatchObject({
+            width: 1200,
+            height: 900,
+            placeholder: { inlineData: preview },
+        });
+        expect(
+            result.find(item => item.identity === '/assets/preview/hero-1.webp')?.placeholder,
+        ).toBeUndefined();
+        expect(
+            result.filter(item => item.kind === 'card' && item.identity.includes('product-')),
+        ).toHaveLength(4);
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+        expect(result.map(({ placeholder: _placeholder, ...item }) => item)).toEqual(media);
+    });
+    it('spends wire bytes on one use per selected asset before duplicate kinds, including preserved previews', async () => {
+        const media = [
+            mediaDescriptor('/assets/preview/hero.webp', 'hero'),
+            ...(['icon', 'thumbnail', 'card'] as const).map(kind =>
+                mediaDescriptor('/assets/preview/quick.webp', kind),
+            ),
+            ...Array.from({ length: 6 }, (_, index) =>
+                mediaDescriptor(`/assets/preview/product-${index}.webp`, 'card'),
+            ),
+        ];
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(
+            result
+                .filter(item => item.kind === 'card' && item.identity.includes('product-'))
+                .every(item => item.placeholder),
+        ).toBe(true);
+        expect(
+            result.find(item => item.identity.includes('quick') && item.kind === 'icon')?.placeholder,
+        ).toBeDefined();
+        expect(
+            result.find(item => item.identity.includes('quick') && item.kind === 'card')?.placeholder,
+        ).toBeUndefined();
+        const old = media.map(item => ({ ...item, placeholder: { inlineData: preview } }));
+        const preserved = preservePublicMediaPreviews(media, old, 'shop.example');
+        expect(
+            preserved
+                .filter(item => item.kind === 'card' && item.identity.includes('product-'))
+                .every(item => item.placeholder),
+        ).toBe(true);
+        expect(preserved.map(item => item.identity)).toEqual(media.map(item => item.identity));
+        expect(
+            preserved.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+    });
+    it('includes all four desktop first-row products when the first hero has one shared source', async () => {
+        const media = publicPageMedia(
+            page({
+                request: { kind: 'home' },
+                products: Array.from({ length: 4 }, (_, index) => ({
+                    id: `p${index}`,
+                    featuredAsset: { preview: `/assets/preview/product-${index}.webp` },
+                })),
+                content: {
+                    blocks: [
+                        ...Array.from({ length: 3 }, (_, index) => ({
+                            type: 'HERO',
+                            imageUrl: `/assets/preview/hero-${index}.webp`,
+                        })),
+                        {
+                            type: 'QUICK_LINKS',
+                            items: Array.from({ length: 5 }, (_, index) => ({
+                                imageUrl: `/assets/preview/quick-${index}.webp`,
+                            })),
+                        },
+                        {
+                            type: 'CATEGORY_AD',
+                            settings: { selectedProductIds: ['p0', 'p1', 'p2', 'p3'] },
+                        },
+                    ],
+                },
+            }),
+        );
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(
+            result
+                .filter(item => item.kind === 'card' && item.identity.includes('product-'))
+                .every(item => item.placeholder),
+        ).toBe(true);
+        expect(read.mock.calls.map(call => call[0])).not.toContain('preview/hero-1.webp');
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+    });
+    it('reserves distinct mobile best-seller and desktop managed first rows alongside quick links within eight assets', async () => {
+        const managed = Array.from({ length: 4 }, (_, index) => ({
+            id: `d${index}`,
+            featuredAsset: { preview: `/assets/preview/desktop-${index}.webp?v=desktop` },
+        }));
+        const best = Array.from({ length: 4 }, (_, index) => ({
+            id: `b${index}`,
+            featuredAsset: { preview: `/assets/preview/best-${index}.webp?v=mobile` },
+        }));
+        const media = publicPageMedia(
+            page({
+                request: { kind: 'home' },
+                products: managed,
+                bestSellers: {
+                    pinnedProducts: [
+                        {
+                            ...best[0],
+                            featuredAsset: {
+                                preview: 'https://shop.example/assets/preview/best-0.webp?v=mobile',
+                            },
+                        },
+                    ],
+                    catalog: { items: best },
+                },
+                content: {
+                    blocks: [
+                        ...Array.from({ length: 3 }, (_, index) => ({
+                            type: 'HERO',
+                            imageUrl: `/assets/preview/hero-${index}.webp`,
+                            settings: { mobileImageUrl: `/assets/preview/phone-${index}.webp` },
+                        })),
+                        {
+                            type: 'QUICK_LINKS',
+                            items: Array.from({ length: 5 }, (_, index) => ({
+                                imageUrl: `/assets/preview/quick-${index}.webp`,
+                            })),
+                        },
+                        {
+                            type: 'CATEGORY_AD',
+                            settings: { selectedProductIds: managed.map(item => item.id) },
+                        },
+                    ],
+                },
+            }),
+        );
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read.mock.calls.map(call => call[0])).toEqual([
+            'preview/hero-0.webp',
+            'preview/phone-0.webp',
+            'preview/desktop-0.webp',
+            'preview/best-0.webp',
+            'preview/quick-0.webp',
+            'preview/desktop-1.webp',
+            'preview/best-1.webp',
+            'preview/quick-1.webp',
+        ]);
+        for (const source of ['desktop-0', 'desktop-1', 'best-0', 'best-1'])
+            expect(
+                result.find(item => item.identity.includes(source) && item.kind === 'card')?.placeholder,
+            ).toBeDefined();
+        expect(result.find(item => item.identity.includes('best-1') && item.kind === 'card')?.version).toBe(
+            'mobile',
+        );
+        expect(
+            result.find(item => item.identity.includes('best-1') && item.kind === 'thumbnail')?.placeholder,
+        ).toBeUndefined();
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+        expect(result.map(({ placeholder: _placeholder, ...item }) => item)).toEqual(media);
+    });
+    it('uses gallery and variant covers and falls back from empty selected ids to pinned first-row ids', async () => {
+        const gallery = {
+            id: 'gallery',
+            featuredAsset: null,
+            assets: [
+                { preview: '/assets/preview/desktop-gallery.webp?v=gallery' },
+                { preview: '/assets/preview/unused-gallery.webp' },
+            ],
+        };
+        const variant = {
+            id: 'variant',
+            featuredAsset: null,
+            variants: [{ featuredAsset: { preview: '/assets/preview/desktop-variant.webp?v=variant' } }],
+        };
+        const media = publicPageMedia(
+            page({
+                request: { kind: 'home' },
+                products: [
+                    { id: 'unselected', featuredAsset: { preview: '/assets/preview/unselected.webp' } },
+                    gallery,
+                    variant,
+                ],
+                bestSellers: {
+                    pinnedProducts: [
+                        { id: 'best-gallery', assets: [{ preview: '/assets/preview/best-gallery.webp' }] },
+                    ],
+                    catalog: {
+                        items: [
+                            {
+                                id: 'best-variant',
+                                variants: [
+                                    {
+                                        product: {
+                                            featuredAsset: { preview: '/assets/preview/best-variant.webp' },
+                                        },
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                },
+                content: {
+                    blocks: [
+                        {
+                            type: 'HERO',
+                            imageUrl: '/assets/preview/hero.webp',
+                            settings: { mobileImageUrl: '/assets/preview/phone.webp' },
+                        },
+                        {
+                            type: 'QUICK_LINKS',
+                            items: Array.from({ length: 5 }, (_, index) => ({
+                                imageUrl: `/assets/preview/quick-${index}.webp`,
+                            })),
+                        },
+                        {
+                            type: 'FEATURED_COLLECTION',
+                            settings: { selectedProductIds: [], pinnedProductIds: ['gallery', 'variant'] },
+                        },
+                    ],
+                },
+            }),
+        );
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+        );
+        expect(read.mock.calls.map(call => call[0])).toEqual([
+            'preview/hero.webp',
+            'preview/phone.webp',
+            'preview/desktop-gallery.webp',
+            'preview/best-gallery.webp',
+            'preview/quick-0.webp',
+            'preview/desktop-variant.webp',
+            'preview/best-variant.webp',
+            'preview/quick-1.webp',
+        ]);
+        expect(
+            result.find(item => item.identity.includes('desktop-gallery') && item.kind === 'card'),
+        ).toMatchObject({ version: 'gallery', placeholder: { inlineData: preview } });
+        expect(
+            result.find(item => item.identity.includes('desktop-variant') && item.kind === 'card'),
+        ).toMatchObject({ version: 'variant', placeholder: { inlineData: preview } });
+        expect(result.some(item => item.identity.includes('unused-gallery'))).toBe(false);
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+    });
     it('inherits only matching canonical asset, version and purpose without importing old descriptors', () => {
         const old = [
             mediaDescriptor('https://shop.example/assets/preview/a.webp?v=1', 'hero', {

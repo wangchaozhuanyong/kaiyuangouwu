@@ -1018,7 +1018,7 @@ describe('navigation query ownership', () => {
             }
         },
     );
-    it('opens home from shared service content while its missing media query continues independently', async () => {
+    it('prepares the first home aggregate instead of treating shared service content as a cached home', async () => {
         const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
         const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
         const services = syntheticPage('synthetic-a', 'en', 'home', { host: 'store.test' });
@@ -1071,7 +1071,6 @@ describe('navigation query ownership', () => {
                 }),
         );
         vi.stubGlobal('fetch', fetch);
-        const mediaReads = vi.spyOn(client, 'fetchQuery');
         setPublicPageNavigationScope({
             channelCode: 'synthetic-a',
             currencyCode: 'MYR',
@@ -1079,29 +1078,175 @@ describe('navigation query ownership', () => {
             api: { product: vi.fn(), catalog: vi.fn() },
         });
         try {
-            await expect(prefetchPublicPage(client, '/en/')).resolves.toBeUndefined();
-            const owner = client.getQueryCache().find({ queryKey: mediaKey, exact: true });
-            expect(owner?.state.fetchStatus).toBe('fetching');
+            let complete = false;
+            const first = prefetchPublicPage(client, '/en/').then(() => {
+                complete = true;
+            });
+            const second = prefetchPublicPage(client, '/en/');
+            await Promise.resolve();
+            expect(complete).toBe(false);
             expect(client.getQueryData(contentKey)).toBe(sharedContent);
             expect(client.getQueryData(mediaKey)).toBeUndefined();
-            // An overlapping home navigation keeps the same Query owner and shared content.
-            await expect(prefetchPublicPage(client, '/en/')).resolves.toBeUndefined();
-            expect(client.getQueryCache().find({ queryKey: mediaKey, exact: true })).toBe(owner);
-            expect(mediaReads.mock.calls.map(([options]) => options.queryKey)).toEqual([mediaKey, mediaKey]);
+            // Overlapping navigations share one public read without publishing partial home data.
             expect(fetch).toHaveBeenCalledOnce();
-            expect(client.getQueryData(contentKey)).toBe(sharedContent);
             expect(client.getQueryData(productsKey)).toBeUndefined();
             if (!release) throw new Error('Expected pending home aggregate read');
             release(Response.json(home));
-            await vi.waitFor(() => {
-                expect(client.getQueryData(mediaKey)).toEqual(home.media);
-                expect(client.getQueryData(productsKey)).toEqual(products);
-            });
+            await Promise.all([first, second]);
+            expect(complete).toBe(true);
+            expect(client.getQueryData(mediaKey)).toEqual(home.media);
+            expect(client.getQueryData(productsKey)).toEqual(products);
             expect(client.getQueryData(contentKey)).toEqual(home.content);
             await prefetchPublicPage(client, '/en/');
             expect(fetch).toHaveBeenCalledOnce();
         } finally {
-            mediaReads.mockRestore();
+            client.clear();
+        }
+    });
+
+    it.each(['404', '501', 'non-JSON', 'legacy envelope'] as const)(
+        'leaves an unavailable %s home aggregate to SPA queries without a warm media-query loop',
+        async unavailable => {
+            const { prefetchPublicPage, setPublicPageNavigationScope } =
+                await import('./storefront-page-data');
+            const { createStorefrontQueryClient, isStorefrontScopeAccessDenied } =
+                await import('./query-client');
+            const client = createStorefrontQueryClient();
+            const home = syntheticPage('synthetic-a', 'en', 'home', { host: 'store.test' });
+            delete home.request;
+            delete home.requestKey;
+            const response = () => {
+                if (unavailable === 'legacy envelope') return Response.json(home);
+                if (unavailable === 'non-JSON')
+                    return new Response('<html>Legacy storefront</html>', {
+                        headers: { 'Content-Type': 'text/html' },
+                    });
+                return new Response(null, { status: Number(unavailable) });
+            };
+            const fetch = vi.fn().mockImplementation(() => Promise.resolve(response()));
+            vi.stubGlobal('fetch', fetch);
+            const product = vi.fn().mockResolvedValue({ id: 'fallback-product' });
+            setPublicPageNavigationScope({
+                channelCode: 'synthetic-a',
+                currencyCode: 'MYR',
+                languageCode: 'en',
+                api: { product, catalog: vi.fn() },
+            });
+            expect(client.getDefaultOptions().queries?.staleTime).toBe(PUBLIC_QUERY_STALE_TIME);
+            const read = client.fetchQuery.bind(client);
+            const reads = vi.spyOn(client, 'fetchQuery').mockImplementation(options => {
+                // Bound the old failure before asserting, so a cached microtask loop cannot hang the suite.
+                if (reads.mock.calls.length > 8) throw new Error('Recursive public home query');
+                return read(options);
+            });
+            try {
+                await prefetchPublicPage(client, '/en/');
+                await new Promise(resolve => setTimeout(resolve, 0));
+                expect(reads).toHaveBeenCalledOnce();
+                expect(fetch).toHaveBeenCalledOnce();
+                expect(
+                    client.getQueryData(publicSeoQueryKey('synthetic-a:MYR', 'en', { kind: 'home' })),
+                ).toBeUndefined();
+                expect(
+                    isStorefrontScopeAccessDenied(client, {
+                        marketCode: 'synthetic-a:MYR',
+                        languageCode: 'en',
+                    }),
+                ).toBe(false);
+                // The next visit remains bounded, and an ordinary SPA destination still uses its API owner.
+                await prefetchPublicPage(client, '/en/');
+                await prefetchPublicPage(client, '/en/product?id=fallback-product');
+                expect(product).toHaveBeenCalledWith('fallback-product', expect.any(AbortSignal));
+                expect(
+                    client.getQueryData(
+                        storefrontQueryKeys.product('synthetic-a:MYR', 'en', 'fallback-product'),
+                    ),
+                ).toEqual({ id: 'fallback-product' });
+                expect(fetch).toHaveBeenCalledOnce();
+            } finally {
+                reads.mockRestore();
+                client.clear();
+            }
+        },
+    );
+
+    it('observes a first home closure through its Query owner and retries only after live config recovery', async () => {
+        const {
+            prefetchPublicPage,
+            seedPublicPage: seedCurrentPage,
+            setPublicPageNavigationScope,
+        } = await import('./storefront-page-data');
+        const access = await import('./query-client');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const home = syntheticPage('synthetic-a', 'en', 'home', { host: 'store.test' });
+        const services = { ...home, request: { kind: 'page', id: 'services' } as const };
+        services.requestKey = publicPageRequestKey(services.request);
+        delete services.products;
+        seedCurrentPage(client, services);
+        const scope = { marketCode: 'synthetic-a:MYR', languageCode: 'en' };
+        const contentKey = [...storefrontQueryKeys.content(scope.marketCode, 'en'), 'public'];
+        const configKey = [...storefrontQueryKeys.config(scope.marketCode, 'en'), 'public'];
+        const privateKey = [...storefrontQueryKeys.scope(scope.marketCode, 'en'), 'private', 'customer'];
+        client.setQueryData(privateKey, { id: 'synthetic-customer' });
+        const notify = vi.fn();
+        const stop = access.watchStorefrontScopeAccess(client, notify);
+        const fetch = vi
+            .fn()
+            .mockResolvedValue(Response.json({ errorCode: 'STOREFRONT_CLOSED' }, { status: 403 }));
+        vi.stubGlobal('fetch', fetch);
+        setPublicPageNavigationScope({ channelCode: 'synthetic-a', currencyCode: 'MYR', languageCode: 'en' });
+        try {
+            await expect(prefetchPublicPage(client, '/en/')).rejects.toMatchObject({
+                errorCode: 'STOREFRONT_CLOSED',
+            });
+            expect(notify).toHaveBeenCalled();
+            expect(access.isStorefrontScopeAccessDenied(client, scope)).toBe(true);
+            expect(client.getQueryData(contentKey)).toBeUndefined();
+            expect(client.getQueryData(privateKey)).toBeUndefined();
+            await prefetchPublicPage(client, '/en/');
+            expect(fetch).toHaveBeenCalledOnce();
+            await client.fetchQuery({ queryKey: configKey, queryFn: () => home.config, staleTime: 0 });
+            expect(access.isStorefrontScopeAccessDenied(client, scope)).toBe(false);
+            fetch.mockResolvedValue(Response.json(home));
+            await prefetchPublicPage(client, '/en/');
+            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(client.getQueryData(contentKey)).toEqual(home.content);
+        } finally {
+            stop();
+            client.clear();
+        }
+    });
+
+    it('cancels only an aborted first-home waiter while the shared Query completes for another caller', async () => {
+        const { prefetchPublicPage, setPublicPageNavigationScope } = await import('./storefront-page-data');
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const home = syntheticPage('synthetic-a', 'en', 'home', { host: 'store.test' });
+        let release!: (response: Response) => void;
+        const fetch = vi.fn(
+            () =>
+                new Promise<Response>(resolve => {
+                    release = resolve;
+                }),
+        );
+        vi.stubGlobal('fetch', fetch);
+        setPublicPageNavigationScope({ channelCode: 'synthetic-a', currencyCode: 'MYR', languageCode: 'en' });
+        const controller = new AbortController();
+        try {
+            const abandoned = prefetchPublicPage(client, '/en/', controller.signal);
+            const rejected = expect(abandoned).rejects.toMatchObject({ name: 'AbortError' });
+            const current = prefetchPublicPage(client, '/en/');
+            controller.abort();
+            await rejected;
+            expect(fetch).toHaveBeenCalledOnce();
+            release(Response.json(home));
+            await current;
+            expect(client.getQueryData(storefrontQueryKeys.products('synthetic-a:MYR', 'en', 12))).toEqual(
+                home.products,
+            );
+            expect(client.getQueryData(publicSeoQueryKey('synthetic-a:MYR', 'en', { kind: 'home' }))).toEqual(
+                home.seo ?? null,
+            );
+        } finally {
             client.clear();
         }
     });
