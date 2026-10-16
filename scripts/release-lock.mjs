@@ -8,6 +8,37 @@ const releasePaths = new Set([
     '.github/workflows/deploy_storefront_fast_lane.yml',
 ]);
 
+function readApi(path, projection, request = execFileSync) {
+    try {
+        return request('gh', ['api', path, ...(projection ? ['--jq', projection] : [])], {
+            encoding: 'utf8',
+            // Project 100 run records before buffering; never truncate the
+            // duplicate window. Keep other native reads bounded as well.
+            maxBuffer: 1024 * 1024,
+            timeout: 30_000,
+            stdio: ['ignore', 'pipe', 'pipe'],
+        });
+    } catch {
+        // child_process errors otherwise print their captured Actions response.
+        throw new Error('Unable to read bounded release evidence; inspect this run before retrying.');
+    }
+}
+
+export function readReleaseRuns(prefix, request = execFileSync) {
+    const payload = readApi(
+        `${prefix}/actions/runs?branch=main&per_page=100`,
+        '.workflow_runs | map({id, head_sha, path, status, conclusion, html_url})',
+        request,
+    );
+    try {
+        const runs = JSON.parse(payload);
+        assert.ok(Array.isArray(runs) && runs.length <= 100);
+        return runs;
+    } catch {
+        throw new Error('Invalid projected release run inventory; duplicate proof is unavailable.');
+    }
+}
+
 export function staleTargetRejected(run, jobs, jobLog, target) {
     if (run.status !== 'completed' || run.conclusion !== 'failure') return false;
     const locks = jobs.filter(job => job.name === 'lock exact revision and reject duplicate full runs');
@@ -34,10 +65,10 @@ function main() {
     assert.match(target, /^[a-f0-9]{40}$/u);
     assert.match(env.GITHUB_RUN_ID, /^[1-9][0-9]*$/u);
     const prefix = `repos/${env.GITHUB_REPOSITORY}`;
-    const api = path => execFileSync('gh', ['api', path], { encoding: 'utf8' });
+    const api = path => readApi(path);
     const json = path => JSON.parse(api(path));
     assert.equal(json(`${prefix}/git/ref/heads/main`).object.sha, target, 'target_sha is not current main');
-    const runs = json(`${prefix}/actions/runs?branch=main&per_page=100`).workflow_runs;
+    const runs = readReleaseRuns(prefix);
     for (const run of earlierReleases(runs, target, Number(env.GITHUB_RUN_ID))) {
         if (run.status === 'completed' && run.conclusion === 'failure') {
             const jobs = json(`${prefix}/actions/runs/${run.id}/jobs?per_page=100`).jobs;
