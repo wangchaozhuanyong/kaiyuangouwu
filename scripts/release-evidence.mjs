@@ -250,7 +250,9 @@ export async function findInputCoverage({
     // Read only workflows that can produce trusted CI evidence.
     // Some cached workflow indexes omit newly completed runs. A rolling created
     // filter obtains the recent index; a separate bounded historical window keeps
-    // verified business proof reachable after several failed or cancelled follow-ups.
+    // verified business proof reachable after failed or cancelled follow-ups. One
+    // release may finish more than twenty scoped runs without invalidating their
+    // older business proof; keep a bounded full API page for that source history.
     const recentSince = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
         .toISOString()
         .replace(/\.\d{3}Z$/u, 'Z');
@@ -261,7 +263,7 @@ export async function findInputCoverage({
                 // Missing older evidence only reduces reuse; required checks still run.
                 `repos/${repository}/actions/workflows/${workflow}/runs?status=completed&created=${recentFilter}&per_page=5`,
             ).workflow_runs,
-            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=20`)
+            ...api(`repos/${repository}/actions/workflows/${workflow}/runs?status=completed&per_page=100`)
                 .workflow_runs,
         ])
         .sort((left, right) => right.id - left.id);
