@@ -433,7 +433,8 @@ if [[ "${VENDURE_DEPLOY_REEXECUTED:-0}" != "1" ]]; then
         VENDURE_RELEASE_BACKUP_POLICY="${release_backup_policy}" \
         VENDURE_RELEASE_AFFECTED_CHECKS="${release_affected_checks}" \
         "${repository}/deploy/deploy-production-from-s3.sh" \
-        "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}"
+        "${target_sha}" "${artifact_name}" "${artifact_s3_prefix}" \
+        "${retain_frontends}" "${expected_storefront_sha}" "${expected_admin_sha}"
     exit $?
 fi
 
