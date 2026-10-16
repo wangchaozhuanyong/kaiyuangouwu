@@ -349,4 +349,95 @@ describe('bounded public inline image assembly', () => {
         );
         expect(result.every(item => !item.placeholder)).toBe(true);
     });
+    it.each(['denied', 'authorization-error', 'missing', 'storage-error', 'invalid', 'ready'])(
+        'reports completed %s separately from unfinished work',
+        async outcome => {
+            const preparation = { deferred: true };
+            const authorize = () =>
+                outcome === 'authorization-error'
+                    ? Promise.reject(new Error('authorization unavailable'))
+                    : Promise.resolve(outcome !== 'denied');
+            const read = vi.fn(() =>
+                outcome === 'storage-error'
+                    ? Promise.reject(new Error('storage unavailable'))
+                    : Promise.resolve(
+                          outcome === 'ready' ? preview : outcome === 'invalid' ? 'invalid' : undefined,
+                      ),
+            );
+            const result = await publicMediaWithPreviews(
+                [mediaDescriptor('/assets/preview/state.webp', 'hero')],
+                'shop.example',
+                authorize,
+                read,
+                250,
+                preparation,
+            );
+            expect(preparation.deferred).toBe(false);
+            expect(Boolean(result[0].placeholder)).toBe(outcome === 'ready');
+            if (outcome === 'denied' || outcome === 'authorization-error')
+                expect(read).not.toHaveBeenCalled();
+        },
+    );
+    it('reports pending authorization without starting storage after the returned deadline', async () => {
+        let finish!: (value: boolean) => void;
+        const authorize = () =>
+            new Promise<boolean>(resolve => {
+                finish = resolve;
+            });
+        const read = vi.fn().mockResolvedValue(preview);
+        const preparation = { deferred: false };
+        const result = await publicMediaWithPreviews(
+            [mediaDescriptor('/assets/preview/pending.webp', 'hero')],
+            'shop.example',
+            authorize,
+            read,
+            20,
+            preparation,
+        );
+        expect(preparation.deferred).toBe(true);
+        expect(result[0].placeholder).toBeUndefined();
+        finish(true);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(read).not.toHaveBeenCalled();
+        expect(preparation.deferred).toBe(true);
+        expect(result[0].placeholder).toBeUndefined();
+    });
+    it('reports a deadline cutoff even if the worker promise settles before a delayed timer runs', async () => {
+        let now = 0;
+        const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+        try {
+            const preparation = { deferred: false };
+            const read = vi.fn().mockResolvedValue(preview);
+            const result = await publicMediaWithPreviews(
+                [mediaDescriptor('/assets/preview/cutoff.webp', 'hero')],
+                'shop.example',
+                () => {
+                    now = 251;
+                    return Promise.resolve(true);
+                },
+                read,
+                250,
+                preparation,
+            );
+            expect(preparation.deferred).toBe(true);
+            expect(read).not.toHaveBeenCalled();
+            expect(result[0].placeholder).toBeUndefined();
+        } finally {
+            clock.mockRestore();
+        }
+    });
+    it('does not mistake the deliberate eight-identity wire limit for unfinished work', async () => {
+        const preparation = { deferred: false };
+        const result = await publicMediaWithPreviews(
+            Array.from({ length: 9 }, (_, i) => mediaDescriptor(`/assets/preview/${i}.webp`, 'hero')),
+            'shop.example',
+            () => Promise.resolve(true),
+            () => Promise.resolve(preview),
+            250,
+            preparation,
+        );
+        expect(result.filter(item => item.placeholder)).toHaveLength(8);
+        expect(preparation.deferred).toBe(false);
+    });
 });

@@ -369,6 +369,7 @@ export class StorefrontPublicPageService {
                 };
                 const authorizedMedia = new Set<string>();
                 const rejectedMedia = new Set<string>();
+                const mediaPreparation = { deferred: false };
                 const [prepared, previous, revision] = await Promise.all([
                     this.publicMedia(
                         ctx,
@@ -377,6 +378,7 @@ export class StorefrontPublicPageService {
                         mode === 'LIVE' && options.prepareMedia === true && this.processContext?.isWorker,
                         authorizedMedia,
                         rejectedMedia,
+                        mediaPreparation,
                     ),
                     mode === 'LIVE' && options.refresh
                         ? this.cache.peekEntry<StorefrontPageData>(ctx, this.key(host, request))
@@ -408,6 +410,9 @@ export class StorefrontPublicPageService {
                 };
                 mediaAuthorizations.set(result, new Set(authorizedMedia));
                 if (rejectedMedia.size) rejectedMediaPages.add(result);
+                // Preserve the current denial priority: revoked pixels must leave a healthy cache.
+                // Otherwise the ordinary 30s page lifetime must not freeze unfinished optional work.
+                if (mediaPreparation.deferred && !rejectedMedia.size) deferredMedia.add(result);
                 if (
                     reusableMedia &&
                     !rejectedMedia.size &&
@@ -515,6 +520,7 @@ export class StorefrontPublicPageService {
         prepare = false,
         authorized = new Set<string>(),
         rejected = new Set<string>(),
+        preparation?: { deferred: boolean },
     ) {
         const media = publicPageMedia(page);
         if (!media.length) return media;
@@ -593,6 +599,7 @@ export class StorefrontPublicPageService {
             // Only the existing queue-owned worker may finish cold inline conversion.
             // Public/preview reads retain their 250ms cap and SSI remains cache-only.
             prepare ? 2_000 : 250,
+            preparation,
         );
         return [
             ...populated,
