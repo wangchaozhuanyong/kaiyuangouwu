@@ -140,8 +140,8 @@
     display: flex;
     flex-wrap: wrap;
     gap: 4px 6px;
-    /* Delivery and warranty may wrap after an independent product read. */
-    min-height: calc(2lh + 4px);
+    /* Reserve one line; delivery and warranty grow only when they actually wrap. */
+    min-height: 1lh;
     margin-top: 4px;
     color: var(--muted);
     font-size: var(--type-helper-size);
@@ -151,13 +151,6 @@
 .product-card-delivery {
     color: var(--accent-ink);
     font-weight: var(--font-weight-medium);
-}
-
-/* Narrow cards can wrap the delivery clause before the warranty row. */
-@container (max-width: 220px) {
-    .product-card-meta {
-        min-height: calc(3lh + 4px);
-    }
 }
 
 .product-card-content > footer {
