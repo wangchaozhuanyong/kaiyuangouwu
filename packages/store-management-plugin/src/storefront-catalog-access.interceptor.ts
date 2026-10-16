@@ -38,6 +38,9 @@ const publicQueries = new Set([
     'imageStudioConfig',
     // The mail service authorizes each read with its query code and expiry.
     'icloudQueryMails',
+    // Recharge reads are scoped by the active store and opaque task credentials.
+    'gptRechargeConfig',
+    'gptRechargeTask',
     'me',
     'activeCustomer',
     'myCustomerAvatar',
@@ -63,6 +66,10 @@ const publicQueries = new Set([
     'orderAdditionalPaymentQuote',
 ]);
 const publicMutations = new Set([
+    // Code-bound recharge admission, ownership and rate limits remain in its service.
+    'verifyGptRechargeCode',
+    'queryGptRechargeCode',
+    'submitGptRecharge',
     'recordStorefrontPageView',
     'recordStorefrontAnalyticsConsent',
     'recordStorefrontHeartbeat',

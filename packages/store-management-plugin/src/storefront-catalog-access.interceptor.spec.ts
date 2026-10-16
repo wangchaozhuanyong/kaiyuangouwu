@@ -42,6 +42,23 @@ beforeEach(() => {
 });
 
 describe('public storefront browsing boundary', () => {
+    it('admits only the declared anonymous recharge operations before their service checks', () => {
+        for (const field of ['gptRechargeConfig', 'gptRechargeTask']) {
+            const { run, next } = invoke(field);
+            expect(run).not.toThrow();
+            expect(next.handle).toHaveBeenCalledTimes(1);
+            expect(invoke(field, 'Mutation').run).toThrow();
+        }
+        for (const field of ['verifyGptRechargeCode', 'queryGptRechargeCode', 'submitGptRecharge']) {
+            const { run, next } = invoke(field, 'Mutation');
+            expect(run).not.toThrow();
+            expect(next.handle).toHaveBeenCalledTimes(1);
+            expect(invoke(field).run).toThrow();
+        }
+        expect(invoke('gptRechargeAdminConfig').run).toThrow();
+        expect(invoke('updateGptRechargeConfig', 'Mutation').run).toThrow();
+        expect(invoke('futureRechargeExport').run).toThrow();
+    });
     it.each([
         'products',
         'product',
