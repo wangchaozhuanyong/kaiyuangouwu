@@ -369,6 +369,13 @@ jobs:
 
                   jq '{Status, ResponseCode}' "$SSM_RESULT"
                   if [[ "$status" == Success ]]; then
+                    if [[ "$RETAIN_FRONTENDS" == true ]]; then
+                      jq -r '.StandardOutputContent // ""' "$SSM_RESULT" |
+                        grep -Fx "PRODUCTION_FRONTEND_PRESERVED storefront=$EXPECTED_STOREFRONT_SHA next-admin=$EXPECTED_ADMIN_SHA" >/dev/null || {
+                          echo 'Mailbox release did not prove preservation of the observed frontend pointers and bytes' >&2
+                          exit 1
+                        }
+                    fi
                     jq -r '.StandardOutputContent // ""' "$SSM_RESULT" |
                       grep -E '^(PRODUCTION_|DEPLOY_|STOREFRONT_MEDIA_|AUTH_VISUAL_|MOYAO_BRAND_|DAMATONG_|HOMEPAGE_CAROUSEL_|REFERRAL_POSTERS_|Runtime artifact verified)' |
                       tail -n 120 || true
