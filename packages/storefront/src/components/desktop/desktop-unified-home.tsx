@@ -164,6 +164,7 @@ export function DesktopUnifiedHome({
                                 frameClassName="proto-featured-media-frame"
                                 className="proto-featured-media"
                                 src={hero.imageUrl}
+                                previewSourceDimensions={hero.imageAsset}
                                 alt=""
                                 imageKind="hero"
                                 fetchPriority="high"

@@ -20,6 +20,7 @@ import {
     ImagePlaceholder,
     isImageAlreadyDecoded,
     SafeImageMediaProvider,
+    type SafeImageProps,
 } from './safe-image';
 import { seedPublicPage, type PublicPageData } from './storefront-page-data';
 import { ProductImagePlaceholder, ProductVariantImage, SafeImage } from './storefront-ui/product-display';
@@ -43,6 +44,18 @@ function requiredElement<T extends Element>(host: ParentNode, selector: string):
     expect(element).not.toBeNull();
     if (!element) throw new Error(`Expected an element matching ${selector}`);
     return element;
+}
+
+function requiredInlineSvg(source: string | null): Element {
+    const prefix = 'data:image/svg+xml;charset=utf-8,';
+    expect(source?.startsWith(prefix)).toBe(true);
+    const document = new DOMParser().parseFromString(
+        decodeURIComponent((source ?? '').slice(prefix.length)),
+        'image/svg+xml',
+    );
+    expect(document.querySelector('parsererror')).toBeNull();
+    expect(document.documentElement.tagName).toBe('svg');
+    return document.documentElement;
 }
 
 function completeCandidate(image: HTMLImageElement, candidate = image.src): void {
@@ -196,7 +209,13 @@ describe('SafeImage public presentation reuse', () => {
                     mediaDescriptor(next, 'hero', { inlinePreview: 'data:image/webp;base64,cHJldmlldw==' }),
                 ]}
             >
-                <SafeImage src={src} imageKind="hero" alt="Banner" style={{ objectFit, objectPosition }} />
+                <SafeImage
+                    src={src}
+                    imageKind="hero"
+                    alt="Banner"
+                    previewSourceDimensions={{ width: 1376, height: 768 }}
+                    style={{ objectFit, objectPosition }}
+                />
             </SafeImageMediaProvider>
         );
         try {
@@ -205,6 +224,8 @@ describe('SafeImage public presentation reuse', () => {
             act(() => root.render(render(next, 'contain', 'left bottom')));
             const backing = host.querySelector<HTMLElement>('.safe-image-fallback');
             expect(backing?.style.backgroundImage).toContain(original);
+            expect(backing?.style.backgroundImage).toContain('data:image/svg+xml');
+            expect(backing?.style.backgroundImage).toContain('1376%20768');
             expect(backing?.style.backgroundSize).toBe('cover');
             expect(backing?.style.backgroundPosition).toBe('right center');
             act(() => root.render(null));
@@ -276,7 +297,7 @@ describe('SafeImage public presentation reuse', () => {
         }
     });
 
-    it('keeps an admitted replacement backing after load until paint without marking a pending decode ready', async () => {
+    it('keeps an admitted replacement backing until decode completes and the replacement can paint', async () => {
         clearDecodedImageCache();
         const frames = new Map<number, FrameRequestCallback>();
         let nextFrame = 0;
@@ -321,13 +342,19 @@ describe('SafeImage public presentation reuse', () => {
             expect(backing?.style.backgroundImage).toContain('/admitted-original.webp');
             expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
             advanceFrame();
-            expect(host.querySelector('.safe-image-frame.is-painted')).not.toBeNull();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            expect(backing?.style.backgroundImage).toContain('/admitted-original.webp');
             expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
             await act(async () => {
                 finishDecode();
                 await Promise.resolve();
             });
             expect(host.querySelector('[data-safe-image=ready]')).not.toBeNull();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            advanceFrame();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            advanceFrame();
+            expect(host.querySelector('.safe-image-frame.is-painted')).not.toBeNull();
             act(() => root.render(render('/admitted-third.webp', 'other-store')));
             expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toBe('');
         } finally {
@@ -748,6 +775,32 @@ describe('SafeImage public presentation reuse', () => {
 });
 
 describe('SafeImage', () => {
+    it.each([
+        { priority: 'high', loading: undefined, decoding: undefined, expected: 'sync' },
+        { priority: 'high', loading: 'eager', decoding: undefined, expected: 'sync' },
+        { priority: 'high', loading: 'lazy', decoding: undefined, expected: 'async' },
+        { priority: undefined, loading: 'lazy', decoding: undefined, expected: 'async' },
+        { priority: undefined, loading: 'eager', decoding: undefined, expected: 'async' },
+        { priority: 'high', loading: 'eager', decoding: 'async', expected: 'async' },
+        { priority: 'high', loading: 'eager', decoding: 'auto', expected: 'auto' },
+        { priority: undefined, loading: 'lazy', decoding: 'sync', expected: 'sync' },
+    ] as const)(
+        'renders $expected decoding for priority=$priority loading=$loading explicit=$decoding in SSR',
+        ({ priority, loading, decoding, expected }) => {
+            const host = document.createElement('div');
+            host.innerHTML = renderToStaticMarkup(
+                <SafeImage
+                    src="/decode-priority.webp"
+                    alt="Cover"
+                    fetchPriority={priority}
+                    loading={loading}
+                    decoding={decoding}
+                />,
+            );
+            expect(requiredImage(host).getAttribute('decoding')).toBe(expected);
+        },
+    );
+
     it('retries only its failed native node, preserves the frame and waits for a real decode again', async () => {
         const rect = vi
             .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
@@ -1320,6 +1373,193 @@ describe('SafeImage', () => {
         );
         expect(stale).not.toContain('has-placeholder');
     });
+
+    it.each(['eager', 'lazy'] as const)(
+        'renders an inline preview synchronously while the main image remains %s and asynchronous',
+        loading => {
+            const src = '/inline-decode.webp';
+            const host = document.createElement('div');
+            host.innerHTML = renderToStaticMarkup(
+                <SafeImageMediaProvider
+                    media={[
+                        mediaDescriptor(src, 'hero', {
+                            inlinePreview: 'data:image/webp;base64,cHJldmlldw==',
+                        }),
+                    ]}
+                >
+                    <SafeImage src={src} imageKind="hero" alt="Cover" loading={loading} />
+                </SafeImageMediaProvider>,
+            );
+            const image = requiredElement<HTMLImageElement>(host, '.safe-image');
+            const preview = requiredElement<HTMLImageElement>(host, '.safe-image-preview');
+            expect(image.getAttribute('loading')).toBe(loading);
+            expect(image.getAttribute('decoding')).toBe('async');
+            expect(preview.getAttribute('decoding')).toBe('sync');
+            expect(preview.getAttribute('loading')).toBe('eager');
+            expect(preview.classList.contains('is-ready')).toBe(true);
+        },
+    );
+
+    it('restores rounded inline raster geometry to the actual source ratio in the first SSR markup', () => {
+        const src = '/rounded-preview.webp';
+        // A real 24x13 raster represents a 1376x768 source after integer rounding.
+        const inline =
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAANCAIAAAA8DjmHAAAAGElEQVR4nGMQ1w+mCmIYNWjUoFGD6GIQAG44unnlAuxWAAAAAElFTkSuQmCC';
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <SafeImageMediaProvider media={[mediaDescriptor(src, 'hero', { inlinePreview: inline })]}>
+                <SafeImage
+                    src={src}
+                    alt="Rounded preview"
+                    imageKind="hero"
+                    width={1376}
+                    height={768}
+                    previewSourceDimensions={{ width: 1376, height: 768 }}
+                    style={{ objectFit: 'contain', objectPosition: 'right bottom' }}
+                />
+            </SafeImageMediaProvider>,
+        );
+        const main = requiredElement<HTMLImageElement>(host, '.safe-image');
+        const preview = requiredElement<HTMLImageElement>(host, '.safe-image-preview');
+        const svg = requiredInlineSvg(preview.getAttribute('src'));
+        expect(svg.getAttribute('width')).toBe('1376');
+        expect(svg.getAttribute('height')).toBe('768');
+        expect(svg.getAttribute('viewBox')).toBe('0 0 1376 768');
+        const raster = requiredElement<SVGImageElement>(svg, 'image');
+        expect(raster.getAttribute('href')).toBe(inline);
+        expect(raster.getAttribute('width')).toBe('1376');
+        expect(raster.getAttribute('height')).toBe('768');
+        expect(raster.getAttribute('preserveAspectRatio')).toBe('none');
+        expect(main.getAttribute('src')).toBe(src);
+        expect(main.style.objectFit).toBe('contain');
+        expect(main.style.objectPosition).toBe('right bottom');
+        expect(main.getAttribute('width')).toBe('1376');
+        expect(main.getAttribute('height')).toBe('768');
+        expect(main.hasAttribute('previewSourceDimensions')).toBe(false);
+    });
+
+    it('does not guess inline source geometry from responsive presets or display dimensions', () => {
+        const src = '/assets/preview/unknown-ratio.webp';
+        const inline = 'data:image/png;base64,cHJldmlldw==';
+        const media = mediaDescriptor(src, 'hero', { inlinePreview: inline });
+        expect([media.width, media.height]).toEqual([1600, 800]);
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <SafeImageMediaProvider media={[media]}>
+                <SafeImage src={src} alt="Unknown ratio" imageKind="hero" width={40} height={40} />
+            </SafeImageMediaProvider>,
+        );
+        expect(requiredElement<HTMLImageElement>(host, '.safe-image-preview').getAttribute('src')).toBe(
+            inline,
+        );
+    });
+
+    it('keeps desktop and mobile inline rasters in their own source proportions before hydration', () => {
+        const desktop = '/desktop-ratio.webp';
+        const mobile = '/mobile-ratio.webp';
+        const unknown = '/unknown-mobile-ratio.webp';
+        const inline = 'data:image/webp;base64,cHJldmlldw==';
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <SafeImageMediaProvider
+                media={[desktop, mobile, unknown].map(src =>
+                    mediaDescriptor(src, 'hero', { inlinePreview: inline }),
+                )}
+            >
+                <SafeImage
+                    src={desktop}
+                    imageKind="hero"
+                    alt="Art direction"
+                    previewSourceDimensions={{ width: 1376, height: 768 }}
+                    mediaSources={[
+                        {
+                            media: '(max-width: 390px)',
+                            src: unknown,
+                            width: 40,
+                            height: 40,
+                        },
+                        {
+                            media: '(max-width: 1023px)',
+                            src: mobile,
+                            previewSourceDimensions: { width: 750, height: 1000 },
+                        },
+                    ]}
+                />
+            </SafeImageMediaProvider>,
+        );
+        const preview = requiredElement<HTMLImageElement>(host, '.safe-image-preview');
+        const mobilePreview = requiredElement<HTMLSourceElement>(
+            host,
+            '.safe-image-fallback source[media="(max-width: 1023px)"]',
+        );
+        expect(requiredInlineSvg(preview.getAttribute('src')).getAttribute('viewBox')).toBe('0 0 1376 768');
+        expect(requiredInlineSvg(mobilePreview.getAttribute('srcset')).getAttribute('viewBox')).toBe(
+            '0 0 750 1000',
+        );
+        expect(mobilePreview.getAttribute('media')).toBe('(max-width: 1023px)');
+        expect(
+            requiredElement<HTMLSourceElement>(
+                host,
+                '.safe-image-fallback source[media="(max-width: 390px)"]',
+            ).getAttribute('srcset'),
+        ).toBe(inline);
+    });
+
+    it.each([
+        undefined,
+        null,
+        { width: 1376 },
+        { height: 768 },
+        { width: 0, height: 768 },
+        { width: -1, height: 768 },
+        { width: 1376, height: Number.NaN },
+        { width: Number.POSITIVE_INFINITY, height: 768 },
+        { width: Number.MAX_SAFE_INTEGER + 1, height: 768 },
+        { width: 1376.5, height: 768 },
+        { width: '1376" onload="bad', height: 768 } as unknown as NonNullable<
+            SafeImageProps['previewSourceDimensions']
+        >,
+    ])('leaves the raster unchanged when true dimensions are missing or invalid: %j', dimensions => {
+        const src = '/invalid-dimensions.webp';
+        const inline = 'data:image/webp;base64,cHJldmlldw==';
+        const host = document.createElement('div');
+        host.innerHTML = renderToStaticMarkup(
+            <SafeImageMediaProvider media={[mediaDescriptor(src, 'hero', { inlinePreview: inline })]}>
+                <SafeImage
+                    src={src}
+                    alt="Invalid dimensions"
+                    previewSourceDimensions={dimensions}
+                    imageKind="hero"
+                />
+            </SafeImageMediaProvider>,
+        );
+        expect(requiredElement<HTMLImageElement>(host, '.safe-image-preview').getAttribute('src')).toBe(
+            inline,
+        );
+        expect(host.querySelector('[onload]')).toBeNull();
+    });
+
+    it.each(['data:image/svg+xml;base64,PHN2Zz4=', 'https://external.invalid/preview.png'])(
+        'does not admit or wrap a non-raster hint: %s',
+        inline => {
+            const src = '/non-raster-preview.webp';
+            const media = mediaDescriptor(src, 'hero');
+            const host = document.createElement('div');
+            host.innerHTML = renderToStaticMarkup(
+                <SafeImageMediaProvider media={[{ ...media, placeholder: { inlineData: inline } }]}>
+                    <SafeImage
+                        src={src}
+                        alt="Invalid hint"
+                        imageKind="hero"
+                        previewSourceDimensions={{ width: 1376, height: 768 }}
+                    />
+                </SafeImageMediaProvider>,
+            );
+            expect(host.querySelector('.safe-image-preview')).toBeNull();
+            expect(host.querySelector('.has-inline-preview')).toBeNull();
+            expect(host.innerHTML).not.toContain('data:image/svg+xml');
+        },
+    );
 
     it('marks only the actual responsive candidate decoded, never its larger fallback or original alias', async () => {
         clearDecodedImageCache();
@@ -2004,6 +2244,9 @@ describe('SafeImage', () => {
     });
 
     it('discards a decode that completes after the source changes', async () => {
+        const requestFrame = vi.fn(() => 1);
+        vi.stubGlobal('requestAnimationFrame', requestFrame);
+        vi.stubGlobal('cancelAnimationFrame', vi.fn());
         let finish!: () => void;
         const decode = vi.spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(
             () =>
@@ -2028,9 +2271,12 @@ describe('SafeImage', () => {
             });
             expect(host.querySelector('img')?.getAttribute('src')).toBe('/new.webp');
             expect(host.querySelector('[data-safe-image=ready]')).toBeNull();
+            expect(host.querySelector('.safe-image-frame.is-painted')).toBeNull();
+            expect(requestFrame).not.toHaveBeenCalled();
         } finally {
             act(() => root.unmount());
             decode.mockRestore();
+            vi.unstubAllGlobals();
         }
     });
 

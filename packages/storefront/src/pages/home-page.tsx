@@ -1329,6 +1329,9 @@ export function HomePage() {
                                                                 image={
                                                                     <SafeImage
                                                                         src={desktopImage.imageUrl}
+                                                                        previewSourceDimensions={
+                                                                            desktopImage.imageAsset
+                                                                        }
                                                                         mediaSources={
                                                                             mobileImage.imageUrl !==
                                                                             desktopImage.imageUrl
@@ -1343,6 +1346,8 @@ export function HomePage() {
                                                                                           height: mobileImage
                                                                                               .imageAsset
                                                                                               ?.height,
+                                                                                          previewSourceDimensions:
+                                                                                              mobileImage.imageAsset,
                                                                                       },
                                                                                   ]
                                                                                 : undefined
@@ -2081,6 +2086,9 @@ function CategoryPromotionSection({
                     {desktopImage.imageUrl || mobileImage.imageUrl ? (
                         <SafeImage
                             src={desktopImage.imageUrl || mobileImage.imageUrl}
+                            previewSourceDimensions={
+                                (desktopImage.imageUrl ? desktopImage : mobileImage).imageAsset
+                            }
                             mediaSources={
                                 mobileImage.imageUrl && mobileImage.imageUrl !== desktopImage.imageUrl
                                     ? [
@@ -2090,6 +2098,7 @@ function CategoryPromotionSection({
                                               sizes: 'calc(100vw - 32px)',
                                               width: mobileImage.imageAsset?.width,
                                               height: mobileImage.imageAsset?.height,
+                                              previewSourceDimensions: mobileImage.imageAsset,
                                           },
                                       ]
                                     : undefined
@@ -2392,6 +2401,7 @@ function ContentStorySection({
                             loading="lazy"
                             width={block.imageAsset?.width || undefined}
                             height={block.imageAsset?.height || undefined}
+                            previewSourceDimensions={block.imageAsset}
                         />
                     ) : (
                         <span className="content-story-placeholder" aria-hidden="true">

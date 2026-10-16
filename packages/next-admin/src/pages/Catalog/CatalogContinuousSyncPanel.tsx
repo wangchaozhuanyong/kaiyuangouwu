@@ -3,6 +3,7 @@ import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
 import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
@@ -279,14 +280,29 @@ export function CatalogContinuousSyncPanel({ stores, categories, active = true }
     };
     return (
         <section className="space-y-4 rounded-xl bg-white p-4" aria-label="分类持续同步">
-            <h2 className="text-lg font-bold">分类持续同步与共用货源</h2>
+            <h2 className="flex flex-wrap items-center gap-2 text-lg font-bold">
+                分类持续同步与共用货源
+                <FeatureHelpButton
+                    title="分类持续同步与共用货源"
+                    content={{
+                        purpose: '让目标店铺持续跟随来源分类的商品配置，并共用来源库存与交付资源。',
+                        requirements: [
+                            '选择来源店铺、分类和目标店铺',
+                            '先保存关闭的规则，再检查同步预览后启用',
+                        ],
+                        example:
+                            '例如：将 A 店铺的订阅分类同步到 B 店铺，跨币种售价使用 B 店铺已有的手动汇率。',
+                        impact: '缺少汇率或其他必要配置的项目会保持待配置，不会作为已完成同步处理。',
+                    }}
+                />
+            </h2>
             <p className="text-sm text-slate-600">
                 A 统一维护商品、分类、售价、库存和交付。B
                 持续跟随，共用真实库存；跨币种按目标店铺已有手动汇率换算，自动汇率或缺少规则时保持待配置。
             </p>
             {message && <p role="status">{message}</p>}
             {error && (
-                <p role="alert" className="text-red-600">
+                <p role="alert" className="text-red-600 dark:text-red-400">
                     {error}
                 </p>
             )}
@@ -370,7 +386,18 @@ export function CatalogContinuousSyncPanel({ stores, categories, active = true }
                 保存为关闭的规则
             </AdminButton>
             <div className="flex items-center justify-between">
-                <h3 className="font-bold">各目标同步状态</h3>
+                <h3 className="flex flex-wrap items-center gap-2 font-bold">
+                    各目标同步状态
+                    <FeatureHelpButton
+                        title="各目标同步状态"
+                        content={{
+                            purpose: '查看各目标店铺的实际同步进度、上次完成时间和失败原因。',
+                            requirements: ['已保存持续同步规则', '操作受理后刷新状态，确认实际结果'],
+                            example: '例如：启用规则后先显示等待同步，处理完成后再核对目标状态。',
+                            impact: '刷新仅重新读取状态；重新对账会继续处理规则中的待处理或失败项目。',
+                        }}
+                    />
+                </h3>
                 <AdminButton
                     refreshPage
                     className={control}
@@ -405,7 +432,7 @@ export function CatalogContinuousSyncPanel({ stores, categories, active = true }
                                 : '尚未完成同步'}
                         </p>
                         {rule.error && (
-                            <p role="alert" className="text-red-600">
+                            <p role="alert" className="text-red-600 dark:text-red-400">
                                 {rule.error}
                             </p>
                         )}
@@ -452,7 +479,21 @@ export function CatalogContinuousSyncPanel({ stores, categories, active = true }
             </div>
             {issueRuleId && (
                 <div aria-label="同步逐项原因" className="space-y-2">
-                    <h3 className="font-semibold">待处理项目</h3>
+                    <h3 className="flex flex-wrap items-center gap-2 font-semibold">
+                        待处理项目
+                        <FeatureHelpButton
+                            title="待处理项目"
+                            content={{
+                                purpose: '逐项查看待配置或同步失败的原因，定位需要补充的配置。',
+                                requirements: [
+                                    '先查看目标规则的逐项原因',
+                                    '修正对应原因后，再重新对账或续做失败项',
+                                ],
+                                example: '例如：商品缺少目标币种换算规则时，补齐手动汇率后继续同步。',
+                                impact: '查看原因和翻页不会修改商品或规则。',
+                            }}
+                        />
+                    </h3>
                     {issues.loading && !issues.data && <p role="status">正在读取逐项原因…</p>}
                     {issues.error && (
                         <p role="alert">
@@ -492,16 +533,28 @@ export function CatalogContinuousSyncPanel({ stores, categories, active = true }
             )}
             {selected && (
                 <div className="space-y-3" aria-label="持续同步预览">
-                    <h3 className="font-bold">
+                    <h3 className="flex flex-wrap items-center gap-2 font-bold">
                         同步到 {name(selected.rule.targetChannelId)}：{selected.preview.productCount} 个商品，
                         {selected.preview.categoryCount} 个分类
+                        <FeatureHelpButton
+                            title="持续同步预览"
+                            content={{
+                                purpose: '在启用前核对目标商品、分类、换算售价及已有配置的接管范围。',
+                                requirements: [
+                                    '检查预览中的阻塞原因',
+                                    '涉及已有经营配置时，明确确认接管后才能启用',
+                                ],
+                                example: '例如：核对目标标价和接管数量，确认无误后启用该分类的持续同步。',
+                                impact: '生成预览不会启用同步；启用后的实际处理结果以目标同步状态为准。',
+                            }}
+                        />
                     </h3>
                     <p className="text-sm">
                         已有配置接管 {selected.preview.takeoverCount}{' '}
                         个。库存、卡密和文件共用来源；现有客户、订单和收款配置保持归目标店铺。
                     </p>
                     {selected.preview.blockers.map(reason => (
-                        <p role="alert" key={reason} className="text-red-600">
+                        <p role="alert" key={reason} className="text-red-600 dark:text-red-400">
                             {reason}
                         </p>
                     ))}

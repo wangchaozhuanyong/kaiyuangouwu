@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCatalogSyncFixture } from '../../../fixtures/catalog-sync/model';
+import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { CatalogContinuousSyncPanel } from './CatalogContinuousSyncPanel';
 
 const cleanups: Array<() => void> = [];
@@ -27,11 +28,13 @@ async function setup(options: Parameters<typeof createCatalogSyncFixture>[0] = {
         act(async () =>
             root.render(
                 <ApolloProvider client={fixture.client}>
-                    <CatalogContinuousSyncPanel
-                        active={active}
-                        stores={fixture.stores}
-                        categories={fixture.categories}
-                    />
+                    <FeatureHelpProvider>
+                        <CatalogContinuousSyncPanel
+                            active={active}
+                            stores={fixture.stores}
+                            categories={fixture.categories}
+                        />
+                    </FeatureHelpProvider>
                 </ApolloProvider>,
             ),
         );
@@ -61,6 +64,20 @@ async function setup(options: Parameters<typeof createCatalogSyncFixture>[0] = {
     return { ...fixture, container, render, button, click, select, check, create };
 }
 describe('continuous category synchronization administration', () => {
+    it('explains the preview and enable workflow without changing synchronization rules', async () => {
+        const page = await setup();
+        const help = page.container.querySelector<HTMLButtonElement>(
+            'button[aria-label="查看“分类持续同步与共用货源”功能说明"]',
+        )!;
+        await act(async () => help.click());
+        const dialog = document.querySelector('[role="dialog"]');
+        expect(dialog?.textContent).toContain('先保存关闭的规则，再检查同步预览后启用');
+        expect(dialog?.textContent).toContain('不会作为已完成同步处理');
+        expect(page.state.operations.filter(operation => operation.name === 'SaveSyncRule')).toHaveLength(0);
+        expect(page.state.operations.filter(operation => operation.name === 'EnableSyncRule')).toHaveLength(
+            0,
+        );
+    });
     it('saves a disabled all-descendant rule and enables only the reviewed preview', async () => {
         const page = await setup();
         await page.create();

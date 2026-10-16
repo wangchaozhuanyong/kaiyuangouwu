@@ -130,6 +130,9 @@ export function BusinessServicesPage() {
                         src={heroImageUrl}
                         alt=""
                         imageKind="hero"
+                        previewSourceDimensions={
+                            (desktopImage.imageUrl ? desktopImage : mobileImage).imageAsset
+                        }
                         loading={mobileOnlyImage ? 'lazy' : 'eager'}
                         fetchPriority={mobileOnlyImage ? undefined : 'high'}
                         width={desktopImage.imageAsset?.width ?? mobileImage.imageAsset?.width}
@@ -142,6 +145,7 @@ export function BusinessServicesPage() {
                                           src: mobileImage.imageUrl,
                                           width: mobileImage.imageAsset?.width,
                                           height: mobileImage.imageAsset?.height,
+                                          previewSourceDimensions: mobileImage.imageAsset,
                                       },
                                   ]
                                 : undefined
