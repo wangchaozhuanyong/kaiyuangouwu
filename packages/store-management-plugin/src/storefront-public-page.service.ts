@@ -289,6 +289,70 @@ export class StorefrontPublicPageService {
         return this.readAuthorized(ctx, host, request, options);
     }
 
+    /** Complete this document's first-screen artwork without extending API or worker reads. */
+    async readForDocument(
+        ctx: RequestContext,
+        host: string,
+        request: PublicPageRequest = { kind: 'home' },
+    ): Promise<StorefrontPageData> {
+        if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop')
+            throw new Error('Public page requires anonymous Shop context');
+        const identity = () =>
+            JSON.stringify([host, ctx.channelId, ctx.channel.code, ctx.languageCode, ctx.currencyCode]);
+        const scope = identity();
+        const mode = await this.getAccessMode(ctx);
+        if (mode === 'CLOSED') throw new StorefrontClosedError();
+        // Preview and shared-cache outages retain their existing anonymous short-read path.
+        if (mode !== 'LIVE') return this.read(ctx, host, request);
+        const revision = await this.cache.revision(ctx.channelId);
+        if (!revision) return this.read(ctx, host, request);
+        const page = await this.read(ctx, host, request);
+        const assertCurrent = async () => {
+            try {
+                await this.assertMode(ctx, mode);
+            } catch (error) {
+                if (!(error instanceof PublicPageAccessChangedError)) throw error;
+                throw new ServiceUnavailableException('Public access changed; retry the document');
+            }
+            if (
+                identity() !== scope ||
+                page.scope.host !== host ||
+                page.scope.channelCode !== ctx.channel.code ||
+                page.scope.languageCode !== String(ctx.languageCode) ||
+                page.scope.currencyCode !== String(ctx.currencyCode) ||
+                revision !== (await this.cache.revision(ctx.channelId))
+            )
+                throw new ServiceUnavailableException('Public page changed; retry the document');
+        };
+        await assertCurrent();
+        const deadline = Date.now() + 500;
+        const media = await this.publicMedia(ctx, host, page, false, new Set(), new Set(), undefined, {
+            existing: page.media,
+            deadline,
+            run: (load, fallback) =>
+                publicSectionWithinBudget(
+                    this.cache.runGuarded(assertCurrent, () =>
+                        this.cache.readThrough(
+                            ctx,
+                            `document-media:${host}:${publicPageRequestKey(canonicalPublicPageRequest(request))}:${page.version}`,
+                            1,
+                            () => (Date.now() >= deadline ? Promise.resolve(fallback) : load()),
+                            { shouldCache: () => false },
+                        ),
+                    ),
+                    Math.max(0, deadline - Date.now()),
+                ).catch(() => fallback),
+        });
+        await assertCurrent();
+        if (media === page.media) return page;
+        const { version: _, ...payload } = page;
+        const complete = { ...payload, media };
+        return {
+            ...complete,
+            version: createHash('sha256').update(JSON.stringify(complete)).digest('hex').slice(0, 24),
+        };
+    }
+
     private async readAuthorized(
         ctx: RequestContext,
         host: string,
@@ -521,8 +585,16 @@ export class StorefrontPublicPageService {
         authorized = new Set<string>(),
         rejected = new Set<string>(),
         preparation?: { deferred: boolean },
+        document?: {
+            existing: MediaDescriptor[];
+            deadline: number;
+            run: (
+                load: () => Promise<MediaDescriptor[]>,
+                fallback: MediaDescriptor[],
+            ) => Promise<MediaDescriptor[]>;
+        },
     ) {
-        const media = publicPageMedia(page);
+        const media = document?.existing ?? publicPageMedia(page);
         if (!media.length) return media;
         const providers = this.previewProviders();
         if (!providers) return media;
@@ -582,29 +654,69 @@ export class StorefrontPublicPageService {
             ...selected.filter(item => priority.has(publicMediaAssetIdentity(item, host)?.key)),
             ...selected.filter(item => !priority.has(publicMediaAssetIdentity(item, host)?.key)),
         ];
-        const populated = await publicMediaWithPreviews(
-            ordered,
-            host,
-            async path => {
-                try {
-                    const allowed = await manifest.isPublic(ctx, host, path);
-                    (allowed ? authorized : rejected).add(path);
-                    return allowed;
-                } catch (error) {
-                    rejected.add(path);
-                    throw error;
-                }
-            },
-            path => reader.readPublicInlinePreview(path),
-            // Only the existing queue-owned worker may finish cold inline conversion.
-            // Public/preview reads retain their 250ms cap and SSI remains cache-only.
-            prepare ? 2_000 : 250,
-            preparation,
-        );
-        return [
-            ...populated,
-            ...media.filter(item => !eligible.has(publicMediaAssetIdentity(item, host)?.key)),
-        ];
+        const available = new Map<string, string>();
+        const documentPaths = new Set<string>();
+        if (document) {
+            const firstAssets = new Map<string, MediaDescriptor>();
+            const versionsByPath = new Map<string, Set<string>>();
+            for (const item of ordered) {
+                const identity = publicMediaAssetIdentity(item, host);
+                if (!identity) continue;
+                if (!firstAssets.has(identity.key) && firstAssets.size < 8)
+                    firstAssets.set(identity.key, item);
+                const versions = versionsByPath.get(identity.path) ?? new Set<string>();
+                versions.add(identity.key);
+                versionsByPath.set(identity.path, versions);
+                if (validInlineImagePreview(item.placeholder?.inlineData))
+                    available.set(identity.path, item.placeholder.inlineData);
+            }
+            if (
+                [...firstAssets.values()].every(item => validInlineImagePreview(item.placeholder?.inlineData))
+            )
+                return media;
+            for (const item of firstAssets.values()) {
+                const identity = publicMediaAssetIdentity(item, host);
+                if (identity) documentPaths.add(identity.path);
+            }
+            // The path-only derivative reader cannot select between multiple descriptor versions.
+            // Never borrow one version's inline pixels for another version of that path.
+            for (const [path, versions] of versionsByPath) if (versions.size !== 1) available.delete(path);
+        }
+        const safeDocumentMedia = (items: MediaDescriptor[]) =>
+            items.map(item => {
+                const path = publicMediaAssetIdentity(item, host)?.path ?? '';
+                return documentPaths.has(path) && !authorized.has(path)
+                    ? { ...item, placeholder: undefined }
+                    : item;
+            });
+        const load = async () => {
+            const populated = await publicMediaWithPreviews(
+                ordered,
+                host,
+                async path => {
+                    try {
+                        const allowed = await manifest.isPublic(ctx, host, path);
+                        (allowed ? authorized : rejected).add(path);
+                        return allowed;
+                    } catch (error) {
+                        rejected.add(path);
+                        throw error;
+                    }
+                },
+                path => Promise.resolve(available.get(path) ?? reader.readPublicInlinePreview(path)),
+                // Ordinary public/preview reads keep 250ms; only queue-owned workers use 2s.
+                // The HTML response has its own bounded continuation; SSI remains cache-only.
+                document ? Math.max(0, document.deadline - Date.now()) : prepare ? 2_000 : 250,
+                preparation,
+            );
+            const result = [
+                ...populated,
+                ...media.filter(item => !eligible.has(publicMediaAssetIdentity(item, host)?.key)),
+            ];
+            // Sanitize inside the phase owner: joined readers receive this same safe result.
+            return document ? safeDocumentMedia(result) : result;
+        };
+        return document ? document.run(load, safeDocumentMedia(media)) : load();
     }
 
     private previewProviders() {

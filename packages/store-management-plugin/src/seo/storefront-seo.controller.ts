@@ -133,7 +133,7 @@ export class StorefrontSeoController {
             const page = await this.publicSeo.enrich(
                 ctx,
                 verified.host,
-                await this.pages.read(ctx, verified.host, request),
+                await this.pages.readForDocument(ctx, verified.host, request),
             );
             if (page.failures.includes('content'))
                 throw new ServiceUnavailableException('Public content is unavailable');
