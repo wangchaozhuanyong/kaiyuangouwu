@@ -31,6 +31,18 @@ export function preloadRouteMedia(
         blocks,
         product: route.name === 'product' ? products.find(item => item.id === route.id) : undefined,
     });
+    if (route.name === 'home') {
+        for (const item of blocks
+            .find(block => block.enabled !== false && block.type === 'QUICK_LINKS')
+            ?.items?.slice(0, 5) ?? []) {
+            if (item.enabled === false || !item.imageUrl?.trim()) continue;
+            candidates.push({
+                source: item.imageUrl,
+                kind: desktopViewport ? 'card' : 'icon',
+                sizes: desktopViewport ? '(min-width: 1400px) 210px, 20vw' : '48px',
+            });
+        }
+    }
     for (const candidate of candidates) {
         if (candidate.media) {
             const matches =
@@ -44,7 +56,7 @@ export function preloadRouteMedia(
             as: 'image',
             imageSrcSet: descriptor.srcSet,
             imageSizes: descriptor.sizes,
-            fetchPriority: 'high',
+            fetchPriority: candidate.kind === 'icon' || candidate.kind === 'card' ? 'auto' : 'high',
         });
     }
 }

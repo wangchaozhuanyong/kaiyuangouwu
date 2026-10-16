@@ -440,15 +440,17 @@ export function setPublicPageNavigationScope(scope: typeof navigationScope) {
     navigationScope = scope;
 }
 
-/** Keep the current body until page code is ready; data keeps its leaf loading feedback. */
-export function storefrontRouteCodeLoader({
+/** Prepare required data and code together while the current body remains usable. */
+export async function storefrontRouteCodeLoader({
     location,
 }: {
     location: { pathname: string; search: Record<string, unknown> };
 }): Promise<void> {
     const route = routeFromRouterLocation(location.pathname, location.search);
-    void prefetchPublicPage(storefrontQueryClient, routeHref(route)).catch(() => undefined);
-    return preloadStorefrontRouteComponent(route.name);
+    await Promise.all([
+        prefetchPublicPage(storefrontQueryClient, routeHref(route)).catch(() => undefined),
+        preloadStorefrontRouteComponent(route.name),
+    ]);
 }
 
 /** Existing router waits use the same Query owner and leave error UI to its page. */
@@ -500,9 +502,7 @@ export async function prefetchPublicPage(
         ? storefrontQueryKeys.catalog(market, language, input ?? {})
         : request.kind === 'product'
           ? storefrontQueryKeys.product(market, language, request.id)
-          : request.kind === 'home'
-            ? [...storefrontQueryKeys.content(market, language), 'public']
-            : seoKey;
+          : seoKey;
     let cached = client.getQueryState(key);
     const mediaKey = publicSeoQueryKey(market, language, request, 'public-media', collections);
     const readPage = async (readSignal = signal) => {
@@ -518,20 +518,28 @@ export async function prefetchPublicPage(
         cached = client.getQueryState(key);
         return page;
     };
-    if (cached?.data !== undefined && client.getQueryData(mediaKey) === undefined) {
+    if (cached?.data === undefined ? request.kind === 'home' : client.getQueryData(mediaKey) === undefined) {
         // Optional route hints must not hide an already available destination.
         // Re-enter the same owner after recovery so legacy/stale business reads keep their rules.
-        void client
-            .fetchQuery({
-                queryKey: mediaKey,
-                queryFn: async ({ signal: querySignal }) => {
-                    await readPage(querySignal);
-                    return client.getQueryData<PublicPageData['media']>(mediaKey) ?? [];
-                },
-                gcTime: PUBLIC_QUERY_GC_TIME,
+        const restoring = client.fetchQuery({
+            queryKey: mediaKey,
+            queryFn: async ({ signal: querySignal }) => {
+                await readPage(querySignal);
+                return client.getQueryData<PublicPageData['media']>(mediaKey) ?? [];
+            },
+            gcTime: PUBLIC_QUERY_GC_TIME,
+        });
+        void restoring
+            .then(() => {
+                // Legacy/unavailable aggregates cannot establish a home route owner.
+                // Let its SPA queries take over instead of re-entering a fresh empty media query.
+                if (navigationScope === scope && (request.kind !== 'home' || cached?.data !== undefined))
+                    return prefetchPublicPage(client, href, signal);
             })
-            .then(() => (navigationScope === scope ? prefetchPublicPage(client, href, signal) : undefined))
             .catch(() => undefined);
+        // A first home read has no route cache yet; its existing Query owner must
+        // also observe closure/errors while shared service content stays displayed.
+        if (cached?.data === undefined) await awaitPublicPage(restoring, signal);
         return;
     }
     const queryOwned = Boolean(

@@ -24,6 +24,7 @@ import { frontendTestCommands, packageCommands } from './ci-run.mjs';
 import {
     coversChanges,
     downloadEvidenceArtifact,
+    executedEvidence,
     findEvidence,
     findInputCoverage,
     frontendEvidencePlan,
@@ -31,6 +32,7 @@ import {
     isTrustedRun,
     readNativeJobLog,
     requestGitHubApi,
+    reusedSourceReferences,
     validateExecutedChecks,
     waitForCompleteInputCoverage,
 } from './release-evidence.mjs';
@@ -1196,6 +1198,528 @@ test('backup-only follow-up combines narrow target proof with older full busines
     assert.equal(result.anchor.runId, 2);
     assert.equal(result.reused.find(item => item.check === 'backend:core').runId, 1);
     assert.equal(result.reused.find(item => item.check === 'controls').runId, 2);
+});
+
+function referencedCoverageFixture({ changes } = {}) {
+    const proofs = new Map();
+    const fixture = coverageFixture({ changes, mutateProof: proof => proofs.set(proof.runId, proof) });
+    const reference = {
+        kind: 'artifact',
+        runId: 1,
+        sourceSha,
+        artifactId: 1,
+        proofSha256: createHash('sha256')
+            .update(JSON.stringify(proofs.get(1)))
+            .digest('hex'),
+    };
+    proofs.get(2).sourceRefs = [reference];
+    const run = {
+        id: 1,
+        head_sha: sourceSha,
+        status: 'completed',
+        conclusion: 'success',
+        event: 'workflow_dispatch',
+        path: '.github/workflows/build_and_test.yml',
+        head_repository: { full_name: fixture.repository },
+    };
+    const requests = [];
+    const api = fixture.api;
+    fixture.api = endpoint => {
+        requests.push(endpoint);
+        if (endpoint.includes('/actions/workflows/'))
+            return { workflow_runs: api(endpoint).workflow_runs.filter(item => item.id === 2) };
+        if (endpoint === 'repos/owner/repo/actions/runs/1') return run;
+        return api(endpoint);
+    };
+    return { fixture, proofs, reference, run, requests };
+}
+
+function addReferencedArtifactFallback({ fixture, proofs, run }) {
+    const proof = { ...proofs.get(1), runId: 3 };
+    proofs.set(3, proof);
+    proofs.get(2).sourceRefs.push({
+        kind: 'artifact',
+        runId: 3,
+        sourceSha: proof.sourceSha,
+        artifactId: 3,
+        proofSha256: createHash('sha256').update(JSON.stringify(proof)).digest('hex'),
+    });
+    const api = fixture.api;
+    fixture.api = endpoint =>
+        endpoint === 'repos/owner/repo/actions/runs/3'
+            ? { ...run, id: 3, conclusion: 'success' }
+            : api(endpoint);
+    fixture.proofReader = (_repository, id) => proofs.get(id);
+}
+
+for (const unavailable of ['expired artifact', 'artifact download 404', 'run metadata 404']) {
+    test(`a referenced ${unavailable} retains missing checks and permits independent native proof`, async () => {
+        for (const fallback of [false, true]) {
+            const sample = referencedCoverageFixture();
+            const { fixture } = sample;
+            if (fallback) addReferencedArtifactFallback(sample);
+            const api = fixture.api;
+            const proofReader = fixture.proofReader;
+            const missing = () => {
+                throw Object.assign(new Error('Native proof unavailable'), {
+                    stderr: 'gh: Not Found (HTTP 404)',
+                });
+            };
+            let unavailableReads = 0;
+            fixture.api = endpoint => {
+                if (unavailable === 'run metadata 404' && endpoint === 'repos/owner/repo/actions/runs/1') {
+                    unavailableReads++;
+                    return missing();
+                }
+                if (
+                    unavailable === 'expired artifact' &&
+                    endpoint === 'repos/owner/repo/actions/runs/1/artifacts?per_page=100'
+                ) {
+                    unavailableReads++;
+                    return { artifacts: [{ id: 1, name: 'ci-evidence-1-1', expired: true }] };
+                }
+                return api(endpoint);
+            };
+            fixture.proofReader = (repository, id) => {
+                if (unavailable === 'artifact download 404' && id === 1) {
+                    unavailableReads++;
+                    return missing();
+                }
+                assert.ok(unavailable !== 'expired artifact' || id !== 1);
+                return proofReader(repository, id);
+            };
+            const result = await findInputCoverage(fixture);
+            assert.equal(unavailableReads, 1);
+            assert.equal(result.anchor.runId, 2);
+            assert.ok(!result.reused.some(item => item.runId === 1));
+            assert.equal(
+                result.missing.some(item => item.id === 'backend:core'),
+                !fallback,
+            );
+            assert.equal(
+                result.reused.some(item => item.check === 'backend:core'),
+                fallback,
+            );
+            if (fallback) {
+                assert.deepEqual(result.missing, []);
+                assert.equal(result.reused.find(item => item.check === 'backend:core').runId, 3);
+            }
+        }
+    });
+}
+
+test('a referenced partial-native log 404 retains missing checks and permits independent native proof', async () => {
+    for (const fallback of [false, true]) {
+        const fixture = nativeRecoveryFixture({ targetProof: true });
+        const initial = await findInputCoverage(fixture);
+        const refs = reusedSourceReferences(
+            initial.reused.filter(item => item.evidenceKind === 'partial-native'),
+        );
+        assert.equal(refs.length, 1);
+        const api = fixture.api;
+        const proofs = new Map([
+            [1, fixture.proofReader(fixture.repository, 1)],
+            [2, { ...fixture.proofReader(fixture.repository, 2), sourceRefs: refs }],
+        ]);
+        const run = api('repos/owner/repo/actions/runs/1/attempts/1');
+        fixture.api = endpoint => {
+            if (endpoint.includes('/actions/workflows/'))
+                return { workflow_runs: api(endpoint).workflow_runs.filter(item => item.id !== 1) };
+            if (endpoint === 'repos/owner/repo/actions/runs/1') return run;
+            return api(endpoint);
+        };
+        fixture.proofReader = (_repository, id) => proofs.get(id);
+        if (fallback) addReferencedArtifactFallback({ fixture, proofs, run });
+        let logReads = 0;
+        fixture.nativeLogReader = () => {
+            logReads++;
+            throw Object.assign(new Error('Native log unavailable'), {
+                stderr: 'gh: Not Found (HTTP 404)',
+            });
+        };
+        const result = await findInputCoverage(fixture);
+        assert.equal(logReads, 1);
+        assert.equal(result.anchor.runId, 2);
+        assert.ok(!result.reused.some(item => item.runId === 1));
+        assert.equal(
+            result.missing.some(item => item.id === 'backend:core'),
+            !fallback,
+        );
+        assert.equal(
+            result.reused.some(item => item.check === 'backend:core'),
+            fallback,
+        );
+        assert.deepEqual(result.nativeRejected, [{ runId: 1, reason: 'Native proof is unavailable (404)' }]);
+        if (fallback) assert.deepEqual(result.missing, []);
+    }
+});
+
+for (const resolution of ['native metadata', 'missing local tree']) {
+    test(`a referenced source tree 404 after ${resolution} retains missing checks and permits independent proof`, async () => {
+        for (const fallback of [false, true]) {
+            const sample = referencedCoverageFixture();
+            const { fixture, proofs, reference, run } = sample;
+            if (fallback) addReferencedArtifactFallback(sample);
+            const unavailableSha = 'd'.repeat(40);
+            run.head_sha = unavailableSha;
+            reference.sourceSha = unavailableSha;
+            proofs.get(1).sourceSha = unavailableSha;
+            reference.proofSha256 = createHash('sha256')
+                .update(JSON.stringify(proofs.get(1)))
+                .digest('hex');
+            if (resolution === 'missing local tree')
+                fixture.reader.tree = ref => {
+                    if (ref === unavailableSha) throw new Error('Historical Git object is unavailable');
+                    return ref === targetSha ? 'target-tree' : 'source-tree';
+                };
+            const api = fixture.api;
+            let unavailableReads = 0;
+            fixture.api = endpoint => {
+                if (fallback && endpoint === 'repos/owner/repo/actions/runs/3')
+                    return { ...api(endpoint), head_sha: sourceSha };
+                if (endpoint === `repos/owner/repo/git/commits/${unavailableSha}`) {
+                    unavailableReads++;
+                    throw Object.assign(new Error('Historical commit unavailable'), {
+                        stderr: 'gh: Not Found (HTTP 404)',
+                    });
+                }
+                return api(endpoint);
+            };
+            const result = await findInputCoverage(fixture);
+            assert.equal(unavailableReads, 1);
+            assert.equal(result.anchor.runId, 2);
+            assert.ok(!result.reused.some(item => item.runId === 1));
+            assert.equal(
+                result.missing.some(item => item.id === 'backend:core'),
+                !fallback,
+            );
+            assert.equal(
+                result.reused.some(item => item.check === 'backend:core' && item.runId === 3),
+                fallback,
+            );
+            if (fallback) assert.deepEqual(result.missing, []);
+        }
+    });
+}
+
+test('source tree metadata rejects permission, transport and parse failures after local lookup fails', async () => {
+    for (const failure of [403, 429, 500, 'invalid JSON']) {
+        const { fixture } = referencedCoverageFixture();
+        fixture.reader.tree = ref => {
+            if (ref === sourceSha) throw new Error('Historical Git object is unavailable');
+            return 'target-tree';
+        };
+        const error =
+            failure === 'invalid JSON'
+                ? new SyntaxError('Invalid native response')
+                : Object.assign(new Error('Native request failed'), {
+                      stderr: `gh: Request failed (HTTP ${failure})`,
+                  });
+        const api = fixture.api;
+        fixture.api = endpoint => {
+            if (endpoint === `repos/owner/repo/git/commits/${sourceSha}`) throw error;
+            return api(endpoint);
+        };
+        await assert.rejects(findInputCoverage(fixture), thrown => thrown === error);
+    }
+});
+
+test('reference metadata and proof reads reject permission, transport and parse failures', async () => {
+    for (const stage of ['run metadata', 'artifact download']) {
+        for (const failure of [403, 429, 500, 'invalid JSON']) {
+            const { fixture } = referencedCoverageFixture();
+            const error =
+                failure === 'invalid JSON'
+                    ? new SyntaxError('Invalid native response')
+                    : Object.assign(new Error('Native request failed'), {
+                          stderr: `gh: Request failed (HTTP ${failure})`,
+                      });
+            const api = fixture.api;
+            const proofReader = fixture.proofReader;
+            fixture.api = endpoint => {
+                if (stage === 'run metadata' && endpoint === 'repos/owner/repo/actions/runs/1') throw error;
+                return api(endpoint);
+            };
+            fixture.proofReader = (repository, id) => {
+                if (stage === 'artifact download' && id === 1) throw error;
+                return proofReader(repository, id);
+            };
+            await assert.rejects(findInputCoverage(fixture), thrown => thrown === error);
+        }
+    }
+});
+
+test('native evidence source references recover a real proof outside every discovery window', async () => {
+    const { fixture, requests } = referencedCoverageFixture();
+    const result = await findInputCoverage(fixture);
+    assert.equal(result.anchor.runId, 2);
+    assert.deepEqual(result.missing, []);
+    assert.equal(result.reused.find(item => item.check === 'backend:core').runId, 1);
+    const refs = reusedSourceReferences(result.reused.filter(item => item.runId === 1));
+    assert.equal(refs.length, 1, 'each native source is transported once, not once per reused check');
+    assert.equal(refs[0].artifactId, 1);
+    assert.match(refs[0].proofSha256, /^[a-f0-9]{64}$/u);
+    assert.ok(requests.includes('repos/owner/repo/actions/runs/1'));
+    assert.ok(requests.includes('repos/owner/repo/actions/runs/1/artifacts?per_page=100'));
+    assert.ok(!requests.some(endpoint => endpoint.includes('/compare/')), 'squashed PR heads may be reused');
+});
+
+test('a source reference only discovers proof and never bypasses changed input fingerprints', async () => {
+    const { fixture } = referencedCoverageFixture({
+        changes: { 'packages/core/src/service.ts': 'new input' },
+    });
+    const result = await findInputCoverage(fixture);
+    assert.ok(result.missing.some(item => item.id === 'backend:core'));
+    assert.ok(!result.reused.some(item => item.check === 'backend:core'));
+});
+
+test('source references reject foreign, failed, wrong-workflow and mismatched native run identities', async () => {
+    for (const mutate of [
+        run => {
+            run.head_repository.full_name = 'foreign/repo';
+        },
+        run => {
+            run.conclusion = 'failure';
+        },
+        run => {
+            run.path = '.github/workflows/untrusted.yml';
+        },
+        run => {
+            run.head_sha = 'f'.repeat(40);
+        },
+        run => {
+            run.id = 3;
+        },
+    ]) {
+        const { fixture, run } = referencedCoverageFixture();
+        mutate(run);
+        await assert.rejects(findInputCoverage(fixture), /Referenced (?:source|run)/u);
+    }
+});
+
+test('source references bind the exact native artifact and its proof content', async () => {
+    for (const mutate of [
+        ({ reference }) => {
+            reference.artifactId = 99;
+        },
+        ({ reference }) => {
+            reference.proofSha256 = '0'.repeat(64);
+        },
+        ({ proofs }) => {
+            proofs.get(1).runId = 99;
+        },
+        ({ proofs }) => {
+            proofs.get(1).sourceSha = 'f'.repeat(40);
+        },
+        ({ proofs }) => {
+            proofs.get(1).tree = 'different-tree';
+        },
+        ({ proofs }) => {
+            proofs.get(1).packages = [];
+        },
+    ]) {
+        const sample = referencedCoverageFixture();
+        mutate(sample);
+        await assert.rejects(findInputCoverage(sample.fixture), /Referenced (?:evidence|proof)/u);
+    }
+});
+
+test('source references reject cycles, unbounded lists and opaque endpoint fields', async () => {
+    for (const mutate of [
+        ({ reference }) => {
+            reference.runId = 2;
+            reference.sourceSha = targetSha;
+            reference.artifactId = 2;
+        },
+        ({ proofs, reference }) => {
+            proofs.get(2).sourceRefs = Array.from({ length: 33 }, (_, i) => ({
+                ...reference,
+                runId: i + 10,
+            }));
+        },
+        ({ reference }) => {
+            reference.repository = 'foreign/repo';
+        },
+        ({ reference }) => {
+            reference.runId = '../untrusted';
+        },
+    ]) {
+        const sample = referencedCoverageFixture();
+        mutate(sample);
+        await assert.rejects(
+            findInputCoverage(sample.fixture),
+            /(?:Cyclic|Invalid|Unknown) evidence source/u,
+        );
+        assert.ok(!sample.requests.some(endpoint => endpoint.startsWith('repos/foreign/')));
+    }
+});
+
+test('a narrow PR persists unchanged business origins before a broader production find skips checks and writing', async () => {
+    const { fixture, proofs } = referencedCoverageFixture();
+    delete proofs.get(2).sourceRefs;
+    // First discovery still sees old native proof; the narrow PR itself requires no backend checks.
+    const listed = fixture.api;
+    fixture.api = endpoint =>
+        endpoint.includes('/actions/workflows/build_and_test.yml/')
+            ? {
+                  workflow_runs: [
+                      {
+                          id: 2,
+                          head_sha: targetSha,
+                          status: 'completed',
+                          conclusion: 'success',
+                          event: 'workflow_dispatch',
+                          path: '.github/workflows/build_and_test.yml',
+                          head_repository: { full_name: 'owner/repo' },
+                      },
+                      {
+                          id: 1,
+                          head_sha: sourceSha,
+                          status: 'completed',
+                          conclusion: 'success',
+                          event: 'workflow_dispatch',
+                          path: '.github/workflows/build_and_test.yml',
+                          head_repository: { full_name: 'owner/repo' },
+                      },
+                  ],
+              }
+            : listed(endpoint);
+    const narrow = classifyChanges(['deploy/systemd/backup.py'], inputInventory);
+    const prCoverage = await findInputCoverage({ ...fixture, plan: narrow, retainOrigins: true });
+    assert.deepEqual(prCoverage.missing, []);
+    assert.ok(!prCoverage.reused.some(item => item.check === 'backend:core'));
+    assert.ok(prCoverage.origins.some(item => item.check === 'backend:core' && item.runId === 1));
+    const execution = {
+        ...missingPlan(narrow, prCoverage.missing),
+        sourceRefs: reusedSourceReferences([...prCoverage.reused, ...prCoverage.origins]),
+    };
+    assert.deepEqual(checkRequirements(execution, inputInventory), []);
+    const nativeArtifact = executedEvidence(
+        execution,
+        inputInventory,
+        {},
+        {
+            tree: 'target-tree',
+            sourceSha: targetSha,
+            runId: 3,
+        },
+    );
+    assert.deepEqual(nativeArtifact.packages, []);
+    assert.ok(nativeArtifact.sourceRefs.some(ref => ref.runId === 1));
+    proofs.set(3, nativeArtifact);
+    fixture.proofReader = (_repository, id) => proofs.get(id);
+    // Production has the cumulative backend scope, while every discovery index now contains only the new PR.
+    const currentRun = {
+        id: 3,
+        head_sha: targetSha,
+        status: 'completed',
+        conclusion: 'success',
+        event: 'workflow_dispatch',
+        path: '.github/workflows/build_and_test.yml',
+        head_repository: { full_name: 'owner/repo' },
+    };
+    fixture.api = endpoint => {
+        if (endpoint.includes('/actions/workflows/'))
+            return { workflow_runs: endpoint.includes('/build_and_test.yml/') ? [currentRun] : [] };
+        if (endpoint === 'repos/owner/repo/actions/runs/2') return { ...currentRun, id: 2 };
+        return listed(endpoint);
+    };
+    const production = await findInputCoverage(fixture);
+    assert.deepEqual(production.missing, []);
+    assert.equal(production.anchor.runId, 3);
+    assert.equal(production.reused.find(item => item.check === 'backend:core').runId, 1);
+    assert.equal(production.reused.find(item => item.check === 'controls').runId, 2);
+    // find can reuse this anchor and skip production checks/write: the PR's actual writer already persisted the locators.
+});
+
+test('linked PR proof keeps the existing owned-repository and exact-head provenance requirement', async () => {
+    for (const head of [
+        { sha: 'f'.repeat(40), repo: { full_name: 'owner/repo' } },
+        { sha: sourceSha, repo: { full_name: 'foreign/repo' } },
+    ]) {
+        const { fixture, run } = referencedCoverageFixture();
+        run.event = 'pull_request';
+        run.pull_requests = [{ number: 10 }];
+        const api = fixture.api;
+        fixture.api = endpoint => (endpoint === 'repos/owner/repo/pulls/10' ? { head } : api(endpoint));
+        await assert.rejects(findInputCoverage(fixture), /Referenced PR source is untrusted/u);
+    }
+});
+
+test('a valid native artifact chain cannot exceed the bounded reference depth', async () => {
+    const { fixture, proofs } = referencedCoverageFixture();
+    let next;
+    for (let id = 7; id >= 3; id--) {
+        const proof = {
+            ...proofs.get(id === 7 ? 1 : 2),
+            sourceSha: String(id).repeat(40),
+            tree: 'source-tree',
+            runId: id,
+        };
+        if (next) proof.sourceRefs = [next];
+        else delete proof.sourceRefs;
+        proofs.set(id, proof);
+        next = {
+            kind: 'artifact',
+            runId: id,
+            sourceSha: proof.sourceSha,
+            artifactId: id,
+            proofSha256: createHash('sha256').update(JSON.stringify(proof)).digest('hex'),
+        };
+    }
+    proofs.get(2).sourceRefs = [next];
+    const api = fixture.api;
+    fixture.api = endpoint => {
+        const match = /\/actions\/runs\/(\d+)$/u.exec(endpoint);
+        if (match && Number(match[1]) >= 3)
+            return {
+                id: Number(match[1]),
+                head_sha: match[1].repeat(40),
+                status: 'completed',
+                conclusion: 'success',
+                event: 'workflow_dispatch',
+                path: '.github/workflows/build_and_test.yml',
+                head_repository: { full_name: 'owner/repo' },
+            };
+        return api(endpoint);
+    };
+    const reader = fixture.reader;
+    fixture.reader = {
+        ...reader,
+        entries: ref => reader.entries(/^[3-7]{40}$/u.test(ref) ? sourceSha : ref),
+        text: (ref, path) => reader.text(/^[3-7]{40}$/u.test(ref) ? sourceSha : ref, path),
+    };
+    fixture.proofReader = (_repository, id) => proofs.get(id);
+    await assert.rejects(findInputCoverage(fixture), /Evidence source reference depth exceeded/u);
+});
+
+test('window-external partial native references retain successful jobs and exact scope-log binding', async () => {
+    const fixture = nativeRecoveryFixture({ targetProof: true });
+    const initial = await findInputCoverage(fixture);
+    const refs = reusedSourceReferences(
+        initial.reused.filter(item => item.evidenceKind === 'partial-native'),
+    );
+    assert.equal(refs.length, 1);
+    const oldApi = fixture.api;
+    const oldProof = fixture.proofReader;
+    fixture.api = endpoint => {
+        if (endpoint.includes('/actions/workflows/'))
+            return { workflow_runs: oldApi(endpoint).workflow_runs.filter(run => run.id !== 1) };
+        if (endpoint === 'repos/owner/repo/actions/runs/1')
+            return oldApi('repos/owner/repo/actions/runs/1/attempts/1');
+        return oldApi(endpoint);
+    };
+    fixture.proofReader = (repo, id) =>
+        id === 2 ? { ...oldProof(repo, id), sourceRefs: refs } : oldProof(repo, id);
+    const recovered = await findInputCoverage(fixture);
+    assert.ok(
+        recovered.reused.some(
+            item => item.check === 'backend:core' && item.evidenceKind === 'partial-native',
+        ),
+    );
+    assert.ok(recovered.missing.some(item => item.id === 'quality:packages/core/src/service.ts'));
+    refs[0].scopeLogSha256 = 'f'.repeat(64);
+    await assert.rejects(findInputCoverage(fixture), /Native source reference differs/u);
 });
 
 test('different shared lock inputs reject historical checks before expensive per-file hashing while preserving architecture reuse', async () => {

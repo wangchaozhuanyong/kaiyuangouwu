@@ -1,27 +1,13 @@
+import {
+    normalizeCount,
+    stableScore,
+    stableShuffle,
+    uniqueProducts,
+} from '../../storefront-content-plugin/src/shared/home-merchandising';
+
 import { Product, StorefrontContentTargetType } from './types';
 
-export function buildBestSellerProducts({
-    pinnedProducts,
-    candidates,
-    salesByProductId,
-    count,
-    seed,
-}: {
-    pinnedProducts: Product[];
-    candidates: Product[];
-    salesByProductId: Record<string, number>;
-    count: number;
-    seed: string;
-}): Product[] {
-    const hasSales = candidates.some(product => (salesByProductId[product.id] ?? 0) > 0);
-    const organic = hasSales
-        ? [...candidates].sort((first, second) => {
-              const difference = (salesByProductId[second.id] ?? 0) - (salesByProductId[first.id] ?? 0);
-              return difference || stableScore(first.id, seed) - stableScore(second.id, seed);
-          })
-        : stableShuffle(candidates, seed);
-    return uniqueProducts([...pinnedProducts, ...organic]).slice(0, normalizeCount(count));
-}
+export { buildBestSellerProducts } from '../../storefront-content-plugin/src/shared/home-merchandising';
 
 export function buildRecommendationProducts({
     candidates,
@@ -127,29 +113,4 @@ function recommendationScore(
 
 function collectionIdsFor(products: Product[]): Set<string> {
     return new Set(products.flatMap(product => product.collections.map(collection => collection.id)));
-}
-
-function stableShuffle(products: Product[], seed: string): Product[] {
-    return [...products].sort((first, second) => stableScore(first.id, seed) - stableScore(second.id, seed));
-}
-
-function stableScore(value: string, seed: string): number {
-    let hash = 0;
-    for (const character of `${seed}:${value}`) {
-        hash = (Math.imul(hash, 31) + character.charCodeAt(0)) % 2_147_483_647;
-    }
-    return hash;
-}
-
-function uniqueProducts(products: Product[]): Product[] {
-    const seen = new Set<string>();
-    return products.filter(product => {
-        if (seen.has(product.id)) return false;
-        seen.add(product.id);
-        return true;
-    });
-}
-
-function normalizeCount(count: number): number {
-    return Number.isFinite(count) ? Math.max(1, Math.trunc(count)) : 1;
 }

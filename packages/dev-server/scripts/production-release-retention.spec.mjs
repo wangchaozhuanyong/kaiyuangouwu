@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, realpath, symlink, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,7 +28,7 @@ function pm2Processes(currentRuntime, status = 'online') {
 }
 
 async function fixture() {
-    const root = await mkdtemp(path.join(os.tmpdir(), 'vendure-release-retention-'));
+    const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'vendure-release-retention-')));
     const releasesDir = path.join(root, 'releases');
     const currentPointer = path.join(root, 'current');
     await mkdir(releasesDir);

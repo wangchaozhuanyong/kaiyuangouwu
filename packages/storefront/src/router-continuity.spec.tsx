@@ -34,6 +34,7 @@ vi.mock('./routeTree.gen', async () => {
     const { Route: CategoryRoute } = await import('./routes/category');
     const { Route: ServicesRoute } = await import('./routes/services');
     const { Route: SupportRoute } = await import('./routes/support');
+    const { Route: HomeRoute } = await import('./routes/index');
     const { storefrontRouteCodeLoader } = await import('./storefront-page-data');
     const root = createRootRoute({
         pendingMs: Infinity,
@@ -48,6 +49,12 @@ vi.mock('./routeTree.gen', async () => {
     });
     return {
         routeTree: root.addChildren([
+            createRoute({
+                getParentRoute: () => root,
+                path: '/',
+                loader: HomeRoute.options.loader,
+                component: HomeBody,
+            }),
             createRoute({
                 getParentRoute: () => root,
                 path: '/services',
@@ -100,6 +107,13 @@ const productKey = (id: string) => storefrontQueryKeys.product('store-a:MYR', 'e
 const product = (id: string, name = id) => ({ id, name }) as Product;
 const readProduct = vi.fn<(id: string, signal?: AbortSignal) => Promise<Product | null>>();
 const readCatalog = vi.fn(() => Promise.resolve({ items: [], totalItems: 0 }));
+
+function HomeBody() {
+    const products = storefrontQueryClient.getQueryData<Product[]>(
+        storefrontQueryKeys.products('store-a:MYR', 'en', 12),
+    );
+    return <article data-home>{products?.map(item => item.name).join(',') ?? 'Waiting for home'}</article>;
+}
 
 function CategoryBody() {
     const result = useInfiniteQuery({
@@ -567,7 +581,7 @@ describe('real storefront router continuity', () => {
         expect(pendingNodes).toEqual([]);
     });
 
-    it('keeps the shell interactive during a cold read and limits the delayed fallback to the body', async () => {
+    it('keeps the current body and shell interactive until a cold destination is ready', async () => {
         await start();
         const cold = deferred<Product>();
         readProduct.mockImplementation(() => cold.promise);
@@ -584,8 +598,9 @@ describe('real storefront router continuity', () => {
         });
 
         expect(host.querySelector('header')).toBe(header);
-        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('cold');
-        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
+        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('a');
+        expect(host.querySelector('article')?.textContent).toBe('a');
+        expect(host.querySelector('main [data-page-pending]')).toBeNull();
         expect(host.querySelector('.brand-loading')).toBeNull();
         expect(host.querySelector('main main')).toBeNull();
         const button = host.querySelector('button');
@@ -598,6 +613,46 @@ describe('real storefront router continuity', () => {
             await navigation;
         });
         expect(host.querySelector('article')?.textContent).toBe('cold');
+    });
+
+    it('keeps service-shared content from publishing the first home before its product aggregate arrives', async () => {
+        await start();
+        const page = syntheticPage('synthetic-a', 'en', 'home');
+        page.scope.host = window.location.host;
+        page.scope.channelCode = 'store-a';
+        page.config.code = 'store-a';
+        storefrontQueryClient.setQueryData(
+            [...storefrontQueryKeys.content('store-a:MYR', 'en'), 'public'],
+            page.content,
+        );
+        const response = deferred<Response>();
+        const fetch = vi.fn(() => response.promise);
+        vi.stubGlobal('fetch', fetch);
+        const article = host.querySelector('article');
+        const header = host.querySelector('header');
+        let navigation: Promise<void> | undefined;
+        await act(async () => {
+            navigation = router.navigate({ to: '/', search: { __storefrontLanguage: 'en' } } as never);
+            await new Promise(resolve => setTimeout(resolve, 230));
+        });
+        expect(host.querySelector('article')).toBe(article);
+        expect(host.querySelector('[data-home]')).toBeNull();
+        expect(host.querySelector('main [data-page-pending]')).toBeNull();
+        const action = host.querySelector('button');
+        if (!action) throw new Error('Expected retained shell action');
+        act(() => action.click());
+        expect(action.textContent).toBe('Shell action 1');
+        await act(async () => {
+            response.resolve(Response.json(page));
+            await navigation;
+        });
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedRoute).toBe('home');
+        expect(host.querySelector('[data-home]')?.textContent).toBe(
+            page.products?.map(item => item.name).join(','),
+        );
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(pendingNodes).toEqual([]);
     });
 
     it('keeps the last navigation intent and restores visited content on history return', async () => {

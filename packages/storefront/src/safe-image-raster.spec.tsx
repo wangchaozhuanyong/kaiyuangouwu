@@ -79,6 +79,137 @@ describe('decoded raster backing', () => {
             act(() => root.unmount());
         }
     });
+    it('registers a decoded node when public admission arrives without another load event', async () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const source = '/late-admission-raster.webp?v=one';
+        const onImageReady = vi.fn();
+        const decode = vi.spyOn(HTMLImageElement.prototype, 'decode');
+        const render = (admitted: boolean, scope = 'public-a') => (
+            <SafeImageMediaProvider scope={scope} media={admitted ? [mediaDescriptor(source, 'card')] : []}>
+                <SafeImage
+                    src={source}
+                    imageKind="card"
+                    alt="Late admitted product"
+                    style={{ objectFit: 'contain' }}
+                    onImageReady={onImageReady}
+                />
+            </SafeImageMediaProvider>
+        );
+        try {
+            act(() => root.render(render(false)));
+            const original = await decoded(host);
+            expect(drawings).toHaveLength(0);
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+            await act(async () => {
+                root.render(render(true));
+                await Promise.resolve();
+            });
+            expect(host.querySelector('img.safe-image')).toBe(original);
+            expect(onImageReady).toHaveBeenCalledTimes(1);
+            expect(decode).toHaveBeenCalledTimes(1);
+            const snapshot = drawings.find(item => item.source === original)?.destination;
+            expect(snapshot?.width).toBe(128);
+            act(() => root.render(null));
+            act(() => root.render(render(true)));
+            const backing = host.querySelector('canvas');
+            expect(backing?.width).toBe(128);
+            expect(drawings.some(item => item.destination === backing && item.source === snapshot)).toBe(
+                true,
+            );
+            expect(host.querySelector('[data-safe-image="loading"]')).not.toBeNull();
+            expect(host.querySelector('.is-painted')).toBeNull();
+            for (const next of [render(false), render(true, 'other-store')]) {
+                act(() => root.render(null));
+                act(() => root.render(next));
+                expect(host.querySelector('canvas')).toBeNull();
+            }
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+    it.each(['card', 'icon'] as const)(
+        'starts a visible first-viewport %s eagerly without promoting its fetch priority',
+        kind => {
+            const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
+            const host = document.createElement('div');
+            document.body.append(host);
+            const root = createRoot(host);
+            try {
+                for (const state of [
+                    'visible',
+                    'offscreen',
+                    'hidden',
+                    'aria-hidden',
+                    'display',
+                    'visibility',
+                    'opacity',
+                    'low',
+                ] as const) {
+                    const top = state === 'offscreen' ? window.innerHeight + 1 : 10;
+                    rect.mockReturnValue({
+                        x: 10,
+                        y: top,
+                        top,
+                        left: 10,
+                        right: 190,
+                        bottom: top + 180,
+                        width: 180,
+                        height: 180,
+                        toJSON: () => ({}),
+                    });
+                    act(() => root.render(null));
+                    act(() =>
+                        root.render(
+                            <div
+                                hidden={state === 'hidden'}
+                                aria-hidden={state === 'aria-hidden' ? true : undefined}
+                                style={{
+                                    display: state === 'display' ? 'none' : undefined,
+                                    visibility: state === 'visibility' ? 'hidden' : undefined,
+                                    opacity: state === 'opacity' ? 0 : undefined,
+                                }}
+                            >
+                                <SafeImage
+                                    src={`/viewport-${kind}.webp`}
+                                    imageKind={kind}
+                                    alt="Visible media"
+                                    loading="lazy"
+                                    fetchPriority={state === 'low' ? 'low' : 'auto'}
+                                />
+                            </div>,
+                        ),
+                    );
+                    const image = host.querySelector('img');
+                    expect(image?.getAttribute('loading'), state).toBe(
+                        state === 'visible' ? 'eager' : 'lazy',
+                    );
+                    expect(image?.getAttribute('fetchpriority'), state).toBe(
+                        state === 'low' ? 'low' : 'auto',
+                    );
+                }
+            } finally {
+                act(() => root.unmount());
+                host.remove();
+            }
+        },
+    );
+    it('keeps a pending candidate deadline when public admission arrives', async () => {
+        vi.useFakeTimers();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() => root.render(view('/late-admission-pending.webp', 'public-a', false)));
+            expect(host.querySelector('img')?.complete).toBe(false);
+            await act(() => vi.advanceTimersByTimeAsync(10_000));
+            act(() => root.render(view('/late-admission-pending.webp')));
+            await act(() => vi.advanceTimersByTimeAsync(5_000));
+            expect(host.querySelector('[data-safe-image="timeout"]')).not.toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.useRealTimers();
+        }
+    });
     it('never supplies a cached bitmap outside the current scope, admitted source or version', async () => {
         const host = document.createElement('div');
         const root = createRoot(host);
