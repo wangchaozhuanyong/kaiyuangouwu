@@ -2,9 +2,9 @@ import { Injectable, Optional } from '@nestjs/common';
 import { Logger, RequestContext, TransactionalConnection } from '@vendure/core';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { LessThan } from 'typeorm';
+import { IsNull, LessThan } from 'typeorm';
 
-import { loggerCtx } from '../constants';
+import { ICLOUD_IDLE_UNSUPPORTED_ERROR, loggerCtx } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
 import { IcloudReceivedMail } from '../entities/icloud-received-mail.entity';
 import { IcloudVirtualEmail } from '../entities/icloud-virtual-email.entity';
@@ -257,8 +257,15 @@ export class IcloudImapSyncService {
                             encryptedAppPassword: account.encryptedAppPassword,
                             imapHost: account.imapHost,
                             imapPort: account.imapPort,
+                            lastSyncError: account.lastSyncError ?? IsNull(),
                         },
-                        { status: IcloudAccountStatus.ACTIVE, lastSyncError: null },
+                        {
+                            status: IcloudAccountStatus.ACTIVE,
+                            lastSyncError:
+                                account.lastSyncError === ICLOUD_IDLE_UNSUPPORTED_ERROR
+                                    ? ICLOUD_IDLE_UNSUPPORTED_ERROR
+                                    : null,
+                        },
                     );
 
                 return { success: true, syncedCount };

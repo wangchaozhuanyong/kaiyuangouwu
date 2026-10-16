@@ -2,6 +2,7 @@ import { CrudPermissionDefinition } from '@vendure/core';
 
 export const ICLOUD_RELAY_PLUGIN_OPTIONS = Symbol('ICLOUD_RELAY_PLUGIN_OPTIONS');
 export const loggerCtx = 'IcloudRelayPlugin';
+export const ICLOUD_IDLE_UNSUPPORTED_ERROR = '邮箱服务不支持实时收信，请使用手动同步';
 export const ID_BUSINESS_CLIENT_IP_HEADER = 'x-id-business-client-ip';
 
 export const manageIcloudRelayPermission = new CrudPermissionDefinition(

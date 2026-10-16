@@ -1,7 +1,7 @@
 import { Inject, Injectable, OnApplicationBootstrap, OnModuleDestroy, Optional } from '@nestjs/common';
 import { ProcessContext, RequestContext, TransactionalConnection } from '@vendure/core';
 import { createHmac, randomUUID } from 'node:crypto';
-import { IsNull } from 'typeorm';
+import { IsNull, Not } from 'typeorm';
 
 import { ICLOUD_RELAY_PLUGIN_OPTIONS } from '../constants';
 import { IcloudMailOutbox } from '../entities/icloud-mail-outbox.entity';
@@ -47,6 +47,30 @@ export class IcloudMailEventsService implements OnApplicationBootstrap, OnModule
     onModuleDestroy() {
         this.stopped = true;
         if (this.retry) clearTimeout(this.retry);
+    }
+
+    /** Read delivery metadata only; never starts a drain or reads mailbox contents. */
+    async health() {
+        const repo = this.connection.getRepository(RequestContext.empty(), IcloudMailOutbox);
+        const [pendingCount, oldest, latest] = await Promise.all([
+            repo.count({ where: { deliveredAt: IsNull() } }),
+            repo.findOne({
+                where: { deliveredAt: IsNull() },
+                order: { createdAt: 'ASC' },
+                select: { createdAt: true },
+            }),
+            repo.findOne({
+                where: { deliveredAt: Not(IsNull()) },
+                order: { deliveredAt: 'DESC' },
+                select: { deliveredAt: true },
+            }),
+        ]);
+        return {
+            configured: Boolean(this.destination()),
+            pendingCount,
+            oldestPendingAt: oldest?.createdAt ?? null,
+            lastDeliveredAt: latest?.deliveredAt ?? null,
+        };
     }
 
     /** Run on a committed insertion, startup recovery, or failed-delivery retry only. */

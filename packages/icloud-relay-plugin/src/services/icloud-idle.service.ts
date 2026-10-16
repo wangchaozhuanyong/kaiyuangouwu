@@ -3,12 +3,17 @@ import { ProcessContext, RequestContext, TransactionalConnection } from '@vendur
 import { ImapFlow } from 'imapflow';
 import { randomUUID } from 'node:crypto';
 
-import { ICLOUD_RELAY_PLUGIN_OPTIONS } from '../constants';
+import { ICLOUD_IDLE_UNSUPPORTED_ERROR, ICLOUD_RELAY_PLUGIN_OPTIONS } from '../constants';
 import { IcloudPrimaryAccount } from '../entities/icloud-primary-account.entity';
 import { IcloudAccountStatus, IcloudRelayPluginOptions } from '../types';
 
 import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudImapSyncService, isIcloudAuthenticationFailure } from './icloud-imap-sync.service';
+
+const connectionFields = ['email', 'encryptedAppPassword', 'imapHost', 'imapPort'] as const;
+type MailboxConnection = Pick<IcloudPrimaryAccount, (typeof connectionFields)[number]>;
+const sameConnection = (a: MailboxConnection, b: MailboxConnection) =>
+    connectionFields.every(key => a[key] === b[key]);
 
 interface Watcher {
     owner: string;
@@ -19,6 +24,26 @@ interface Watcher {
     renewal?: ReturnType<typeof setTimeout>;
     pending: boolean;
     busy: boolean;
+    listening: boolean;
+    reason: IcloudListenerHealth['reason'];
+    connection?: MailboxConnection;
+}
+
+export interface IcloudListenerHealth {
+    primaryAccountId: string;
+    state: 'listening' | 'recovering' | 'unavailable' | 'disabled' | 'unknown';
+    reason:
+        | 'connected'
+        | 'connecting'
+        | 'reconnecting'
+        | 'authorization_failed'
+        | 'unsupported'
+        | 'disabled'
+        | 'realtime_disabled'
+        | 'owned_elsewhere'
+        | 'capacity'
+        | 'not_started';
+    leaseExpiresAt: Date | null;
 }
 
 /** One elected watcher per primary mailbox. Alias count does not create connections. */
@@ -27,6 +52,7 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
     private readonly watchers = new Map<string, Watcher>();
     private stopped = false;
     private readonly revisions = new Map<string, number>();
+    private readonly ensuring = new Map<string, Promise<void>>();
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly cipher: IcloudCipherService,
@@ -38,17 +64,76 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
     async onApplicationBootstrap() {
         if (!this.processContext.isServer || this.options?.realtimeEnabled === false) return;
         const accounts = await this.repo().find({ where: { status: IcloudAccountStatus.ACTIVE } });
-        for (const account of accounts) this.reconcile(String(account.id));
+        for (const account of accounts) void this.reconcile(String(account.id));
     }
     async onModuleDestroy() {
         this.stopped = true;
         await Promise.all([...this.watchers.keys()].map(id => this.stop(id)));
     }
-    reconcile(id: string) {
-        if (this.stopped || !this.processContext.isServer || this.options?.realtimeEnabled === false) return;
+    /** Merge recovery requests without interrupting a healthy or reconnecting listener. */
+    ensureWatching(id: string, expected?: IcloudPrimaryAccount): Promise<void> {
+        if (this.stopped || !this.processContext.isServer || this.options?.realtimeEnabled === false)
+            return Promise.resolve();
+        const existing = this.ensuring.get(id);
+        if (existing) return existing;
+        const request = (async () => {
+            const account = await this.repo().findOneBy({ id });
+            if (!account) return;
+            if (expected && !sameConnection(account, expected)) return;
+            if (account.status !== IcloudAccountStatus.ACTIVE) return;
+            const watcher = this.watchers.get(id);
+            if (
+                watcher &&
+                !watcher.stopped &&
+                (!watcher.connection || sameConnection(watcher.connection, account))
+            )
+                return;
+            await this.reconcile(id);
+        })().finally(() => {
+            if (this.ensuring.get(id) === request) this.ensuring.delete(id);
+        });
+        this.ensuring.set(id, request);
+        return request;
+    }
+
+    health(account: IcloudPrimaryAccount): IcloudListenerHealth {
+        const id = String(account.id);
+        const result = (state: IcloudListenerHealth['state'], reason: IcloudListenerHealth['reason']) => ({
+            primaryAccountId: id,
+            state,
+            reason,
+            leaseExpiresAt: account.mailWatchLeaseUntil ?? null,
+        });
+        if (account.status === IcloudAccountStatus.DISABLED) return result('disabled', 'disabled');
+        if (this.options?.realtimeEnabled === false) return result('disabled', 'realtime_disabled');
+        if (account.status === IcloudAccountStatus.AUTH_ERROR)
+            return result('unavailable', 'authorization_failed');
+        if (account.lastSyncError === ICLOUD_IDLE_UNSUPPORTED_ERROR)
+            return result('unavailable', 'unsupported');
+        const watcher = this.watchers.get(id);
+        const leaseValid =
+            account.mailWatchLeaseUntil && new Date(account.mailWatchLeaseUntil).getTime() > Date.now();
+        if (watcher && !watcher.stopped) {
+            if (
+                watcher.listening &&
+                watcher.client?.usable &&
+                watcher.connection &&
+                sameConnection(watcher.connection, account) &&
+                leaseValid &&
+                account.mailWatchOwner === watcher.owner
+            )
+                return result('listening', 'connected');
+            return result('recovering', watcher.reason === 'connected' ? 'reconnecting' : watcher.reason);
+        }
+        return result('unknown', leaseValid ? 'owned_elsewhere' : 'not_started');
+    }
+
+    reconcile(id: string): Promise<void> {
+        if (this.stopped || !this.processContext.isServer || this.options?.realtimeEnabled === false)
+            return Promise.resolve();
         const revision = (this.revisions.get(id) ?? 0) + 1;
         this.revisions.set(id, revision);
-        void this.stop(id)
+        return this.stop(id)
             .then(() => {
                 if (this.stopped || this.revisions.get(id) !== revision) return;
                 const watcher: Watcher = {
@@ -57,6 +142,8 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
                     failures: 0,
                     pending: false,
                     busy: false,
+                    listening: false,
+                    reason: 'connecting',
                 };
                 this.watchers.set(id, watcher);
                 void this.connect(id, watcher);
@@ -66,9 +153,9 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
     private repo() {
         return this.connection.getRepository(RequestContext.empty(), IcloudPrimaryAccount);
     }
-    private async stop(id: string) {
+    private async stop(id: string, expected?: Watcher) {
         const watcher = this.watchers.get(id);
-        if (!watcher) return;
+        if (!watcher || (expected && expected !== watcher)) return;
         watcher.stopped = true;
         if (watcher.retry) clearTimeout(watcher.retry);
         if (watcher.renewal) clearTimeout(watcher.renewal);
@@ -99,6 +186,8 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
     private retry(id: string, watcher: Watcher) {
         if (watcher.stopped || this.stopped || watcher.retry) return;
         if (watcher.renewal) clearTimeout(watcher.renewal);
+        watcher.listening = false;
+        if (!['owned_elsewhere', 'capacity'].includes(watcher.reason)) watcher.reason = 'reconnecting';
         watcher.retry = setTimeout(
             () => {
                 watcher.retry = undefined;
@@ -115,16 +204,32 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
         let connectingClient: ImapFlow | undefined;
         try {
             const account = await this.repo().findOneBy({ id });
+            if (watcher.stopped || this.stopped || this.watchers.get(id) !== watcher) return;
             if (!account || account.status !== IcloudAccountStatus.ACTIVE) {
-                await this.stop(id);
+                await this.stop(id, watcher);
                 return;
             }
-            if (!(await this.claim(id, watcher))) throw new Error('idle_owned_elsewhere');
+            if (!(await this.claim(id, watcher))) {
+                watcher.reason = 'owned_elsewhere';
+                throw new Error('idle_owned_elsewhere');
+            }
+            if (watcher.stopped || this.stopped || this.watchers.get(id) !== watcher) return;
             const maximum = this.options?.maxIdleConnections ?? 16;
-            if ([...this.watchers.values()].filter(w => w !== watcher && !!w.client).length >= maximum)
+            if ([...this.watchers.values()].filter(w => w !== watcher && !!w.client).length >= maximum) {
+                watcher.reason = 'capacity';
                 throw new Error('idle_connection_limit');
+            }
             const password = this.cipher.decrypt(account.encryptedAppPassword);
-            if (!password) throw new Error('idle_authorization_unavailable');
+            if (!password)
+                throw Object.assign(new Error('idle_authorization_unavailable'), {
+                    authenticationFailed: true,
+                });
+            watcher.connection = {
+                email: account.email,
+                encryptedAppPassword: account.encryptedAppPassword,
+                imapHost: account.imapHost,
+                imapPort: account.imapPort,
+            };
             const client = (watcher.client = new ImapFlow({
                 host: account.imapHost || 'imap.mail.me.com',
                 port: account.imapPort || 993,
@@ -150,9 +255,9 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
             if (!client.capabilities.has('IDLE')) {
                 await this.repo().update(
                     { id, mailWatchOwner: watcher.owner },
-                    { lastSyncError: '邮箱服务不支持实时收信，请使用手动同步' },
+                    { lastSyncError: ICLOUD_IDLE_UNSUPPORTED_ERROR },
                 );
-                await this.stop(id);
+                await this.stop(id, watcher);
                 return;
             }
             await client.mailboxOpen('INBOX');
@@ -161,6 +266,13 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
                 return;
             }
             watcher.failures = 0;
+            await this.repo().update(
+                { id, mailWatchOwner: watcher.owner, lastSyncError: ICLOUD_IDLE_UNSUPPORTED_ERROR },
+                { lastSyncError: null },
+            );
+            if (watcher.client !== client || watcher.stopped || this.stopped) return;
+            watcher.listening = true;
+            watcher.reason = 'connected';
             this.changed(id, watcher); // One catch-up on connect/reconnect.
             const renew = async () => {
                 try {
@@ -191,6 +303,7 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
             };
             watcher.renewal = setTimeout(() => void renew(), 30_000);
         } catch (error) {
+            if (watcher.stopped || this.stopped || this.watchers.get(id) !== watcher) return;
             if (connectingClient && watcher.client !== connectingClient) return;
             if (isIcloudAuthenticationFailure(error)) {
                 await this.repo().update(
@@ -200,7 +313,7 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
                         lastSyncError: '实时收信授权失效，请重新授权邮箱',
                     },
                 );
-                await this.stop(id);
+                await this.stop(id, watcher);
             } else this.retry(id, watcher);
         }
     }
@@ -218,7 +331,7 @@ export class IcloudIdleService implements OnApplicationBootstrap, OnModuleDestro
                 if (!(await this.claim(id, watcher))) throw new Error('idle_lease_lost');
                 const account = await this.repo().findOneBy({ id });
                 if (!account || account.status !== IcloudAccountStatus.ACTIVE) {
-                    await this.stop(id);
+                    await this.stop(id, watcher);
                     return;
                 }
                 if (watcher.client !== syncClient || !syncClient.usable) {

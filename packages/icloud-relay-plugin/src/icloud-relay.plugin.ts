@@ -18,6 +18,7 @@ import { IcloudCipherService } from './services/icloud-cipher.service';
 import { IcloudIdleService } from './services/icloud-idle.service';
 import { IcloudImapSyncService } from './services/icloud-imap-sync.service';
 import { IcloudMailEventsService } from './services/icloud-mail-events.service';
+import { IcloudMailHealthService } from './services/icloud-mail-health.service';
 import { IcloudMailHistoryService } from './services/icloud-mail-history.service';
 import { IcloudMailSanitizerService } from './services/icloud-mail-sanitizer.service';
 import { IcloudOtpExtractorService } from './services/icloud-otp-extractor.service';
@@ -72,6 +73,7 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudMailSanitizerService,
         IcloudImapSyncService,
         IcloudMailHistoryService,
+        IcloudMailHealthService,
         IcloudAdminService,
         IcloudPublicQueryService,
         IcloudJobService,

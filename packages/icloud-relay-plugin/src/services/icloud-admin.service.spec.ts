@@ -53,6 +53,7 @@ describe('primary mailbox connection recovery', () => {
                 encryptedAppPassword: account.encryptedAppPassword,
                 imapHost: account.imapHost,
                 imapPort: account.imapPort,
+                lastSyncError: account.lastSyncError,
             },
             { status: IcloudAccountStatus.ACTIVE, lastSyncError: null },
         );
