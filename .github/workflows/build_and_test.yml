@@ -80,7 +80,7 @@ jobs:
                       packages/dev-server/scripts/production-release-impact.spec.mjs \
                       packages/dev-server/scripts/production-release-smoke.spec.mjs \
                       packages/dev-server/scripts/production-release-retention.spec.mjs
-                  node --test scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
+                  node --test scripts/release-lock.spec.mjs scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
                   node --test deploy/frontend-retention.spec.mjs deploy/frontend-disk-guard.spec.mjs deploy/runtime-disk-guard.spec.mjs deploy/file-retention-repair.spec.mjs
                   python3 deploy/systemd/tests/file-backup-retention.spec.py
                   python3 deploy/systemd/tests/file-backup.spec.py
