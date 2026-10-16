@@ -20,6 +20,7 @@ const browsingRoutes = new Set<RouteName>([
     'not-found',
     'two-factor',
     'mail-query',
+    'gpt-recharge',
 ]);
 
 const accountRoutes = new Set<RouteName>([

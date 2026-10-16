@@ -5,6 +5,7 @@ import { getAdminQueryScope } from '../../apollo';
 import { AdminButton, AdminInput } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
 import { DraftUpdateNotice } from '../../components/DraftUpdateNotice';
+import { FeatureHelpButton } from '../../components/FeatureHelp';
 import { useAdminQuery } from '../../hooks/use-admin-query';
 import { useServerDraft } from '../../hooks/use-server-draft';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
@@ -106,7 +107,21 @@ export function GptRechargeModule() {
         <section className="space-y-4" data-admin-page="gpt-recharge">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-xl font-semibold">GPT自助充值</h1>
+                    <h1 className="flex items-center gap-2 text-xl font-semibold">
+                        GPT自助充值
+                        <FeatureHelpButton
+                            title="GPT自助充值"
+                            content={{
+                                purpose: '配置当前店铺的 GPT 自助充值服务。',
+                                requirements: [
+                                    '仅超级管理员可维护连接，使用已加入服务器白名单的服务地址和独立凭证',
+                                    '保存连接后，在客户端插件中心启用并发布前台入口',
+                                ],
+                                example: '例如：为自营店开放兑换码充值，其他店铺保留原配置。',
+                                impact: '关闭只阻止当前店铺的新提交；原任务仍可查询。套餐由兑换码决定。',
+                            }}
+                        />
+                    </h1>
                     <p className="mt-1 text-sm text-slate-500">配置当前店铺的充值连接，仅超级管理员可见。</p>
                 </div>
                 <AdminButton refreshPage disabled={query.loading} onClick={() => void query.refetch()}>
