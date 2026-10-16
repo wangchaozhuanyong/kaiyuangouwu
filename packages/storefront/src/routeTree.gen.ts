@@ -21,6 +21,7 @@ import { Route as CouponsRouteImport } from './routes/coupons'
 import { Route as FavoritesRouteImport } from './routes/favorites'
 import { Route as FlashSaleRouteImport } from './routes/flash-sale'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as GptRechargeRouteImport } from './routes/gpt-recharge'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as ImageStudioRouteImport } from './routes/image-studio'
@@ -106,6 +107,11 @@ const FlashSaleRoute = FlashSaleRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GptRechargeRoute = GptRechargeRouteImport.update({
+  id: '/gpt-recharge',
+  path: '/gpt-recharge',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoryRoute = HistoryRouteImport.update({
@@ -252,6 +258,7 @@ export interface FileRoutesByFullPath {
   '/favorites': typeof FavoritesRoute
   '/flash-sale': typeof FlashSaleRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/gpt-recharge': typeof GptRechargeRoute
   '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
   '/image-studio': typeof ImageStudioRoute
@@ -292,6 +299,7 @@ export interface FileRoutesByTo {
   '/favorites': typeof FavoritesRoute
   '/flash-sale': typeof FlashSaleRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/gpt-recharge': typeof GptRechargeRoute
   '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
   '/image-studio': typeof ImageStudioRoute
@@ -333,6 +341,7 @@ export interface FileRoutesById {
   '/favorites': typeof FavoritesRoute
   '/flash-sale': typeof FlashSaleRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/gpt-recharge': typeof GptRechargeRoute
   '/history': typeof HistoryRoute
   '/home': typeof HomeRoute
   '/image-studio': typeof ImageStudioRoute
@@ -375,6 +384,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/flash-sale'
     | '/forgot-password'
+    | '/gpt-recharge'
     | '/history'
     | '/home'
     | '/image-studio'
@@ -415,6 +425,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/flash-sale'
     | '/forgot-password'
+    | '/gpt-recharge'
     | '/history'
     | '/home'
     | '/image-studio'
@@ -455,6 +466,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/flash-sale'
     | '/forgot-password'
+    | '/gpt-recharge'
     | '/history'
     | '/home'
     | '/image-studio'
@@ -496,6 +508,7 @@ export interface RootRouteChildren {
   FavoritesRoute: typeof FavoritesRoute
   FlashSaleRoute: typeof FlashSaleRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  GptRechargeRoute: typeof GptRechargeRoute
   HistoryRoute: typeof HistoryRoute
   HomeRoute: typeof HomeRoute
   ImageStudioRoute: typeof ImageStudioRoute
@@ -608,6 +621,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gpt-recharge': {
+      id: '/gpt-recharge'
+      path: '/gpt-recharge'
+      fullPath: '/gpt-recharge'
+      preLoaderRoute: typeof GptRechargeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/history': {
@@ -808,6 +828,7 @@ const rootRouteChildren: RootRouteChildren = {
   FavoritesRoute: FavoritesRoute,
   FlashSaleRoute: FlashSaleRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  GptRechargeRoute: GptRechargeRoute,
   HistoryRoute: HistoryRoute,
   HomeRoute: HomeRoute,
   ImageStudioRoute: ImageStudioRoute,

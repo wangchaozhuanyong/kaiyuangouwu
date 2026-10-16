@@ -56,6 +56,7 @@ import {
     type StoreDomainRoutingMode,
 } from '@vendure/store-domain-plugin';
 import {
+    GptRechargePlugin,
     StoreDefaultCurrencyPriceSelectionStrategy,
     StoreManagementPlugin,
 } from '@vendure/store-management-plugin';
@@ -974,6 +975,7 @@ export const devConfig: VendureConfig = {
         // FieldTestPlugin,
         OperationsDashboardPlugin,
         TwoFactorDashboardPlugin,
+        GptRechargePlugin,
         IcloudRelayPlugin.init({
             realtimeEnabled: true,
             mailWebhookUrl: process.env.ICLOUD_MAIL_WEBHOOK_URL,

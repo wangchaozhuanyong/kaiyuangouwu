@@ -37,6 +37,7 @@ export const desktopPageFamilyByRoute = {
     'image-studio': 'tools',
     'two-factor': 'tools',
     'mail-query': 'tools',
+    'gpt-recharge': 'tools',
     announcements: 'content',
     support: 'content',
     legal: 'content',

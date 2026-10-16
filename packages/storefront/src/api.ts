@@ -78,6 +78,7 @@ export class ShopApi {
     private readonly authTokens: AuthTokenState;
     private storefrontCatalogAvailable: boolean | null = null;
     readonly contentReviewsApi: ContentReviewsApi;
+    readonly rechargeRequest: ShopApiContext['request'];
     private readonly catalogApi: CatalogApi;
     private readonly accountApi: AccountApi;
     private readonly createReferralsApi: () => Promise<ReferralsApi>;
@@ -110,6 +111,7 @@ export class ShopApi {
             },
         };
         this.contentReviewsApi = new ContentReviewsApi(ctx);
+        this.rechargeRequest = ctx.request;
         this.catalogApi = new CatalogApi(ctx);
         this.accountApi = lazyAccountApi(ctx);
         this.createReferralsApi = async () => {

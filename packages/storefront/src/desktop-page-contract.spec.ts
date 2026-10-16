@@ -5,7 +5,8 @@ import { storefrontRouteNames } from './storefront-router';
 
 describe('desktop page family contract', () => {
     it('maps every storefront route exactly once into the seven desktop families', () => {
-        expect(storefrontRouteNames).toHaveLength(37);
+        expect(storefrontRouteNames).toHaveLength(38);
+        expect(desktopPageFamilyByRoute['gpt-recharge']).toBe('tools');
         expect(desktopPageFamilyByRoute.guide).toBe('content');
         expect(Object.keys(desktopPageFamilyByRoute).sort()).toEqual([...storefrontRouteNames].sort());
         expect(new Set(Object.values(desktopPageFamilyByRoute))).toEqual(

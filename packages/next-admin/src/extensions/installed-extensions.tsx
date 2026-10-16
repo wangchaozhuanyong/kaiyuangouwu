@@ -767,3 +767,20 @@ defineNextAdminExtension({
         };
     }),
 });
+
+const GptRechargeModule = lazy(() =>
+    import('../pages/Plugins/GptRechargeModule').then(module => ({ default: module.GptRechargeModule })),
+);
+defineNextAdminExtension({
+    id: 'gpt-recharge-dashboard-plugin',
+    routes: [
+        {
+            id: 'gpt-recharge',
+            path: '/plugins/gpt-recharge',
+            title: 'GPT自助充值',
+            component: GptRechargeModule,
+            permissions: ['SuperAdmin'],
+            navItem: { label: 'GPT自助充值', sectionId: 'plugins', icon: KeyRound, order: 70 },
+        },
+    ],
+});

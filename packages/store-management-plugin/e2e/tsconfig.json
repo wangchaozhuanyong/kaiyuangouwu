@@ -5,5 +5,5 @@
         "noEmit": true
     },
     "files": ["../src/markdown-it.d.ts"],
-    "include": ["./**/*.ts"]
+    "include": ["./**/*.ts", "./**/*.mts"]
 }

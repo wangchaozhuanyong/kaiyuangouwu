@@ -68,6 +68,15 @@ export const storefrontClientPluginCatalog: readonly StorefrontClientPluginDefin
         version: '1.0.0',
         defaultPlacement: 'BUSINESS_SERVICES_MAIN',
     },
+    {
+        code: 'gpt-recharge-entry',
+        name: 'GPT自助充值',
+        englishName: 'GPT self-service recharge',
+        description: '验证兑换码、提交账号资料并查询 GPT 充值结果。',
+        englishDescription: 'Redeem a code and track your GPT recharge.',
+        version: '1.0.0',
+        defaultPlacement: 'BUSINESS_SERVICES_MAIN',
+    },
 ] as const;
 
 export const storefrontClientPluginCodes = storefrontClientPluginCatalog.map(plugin => plugin.code);
