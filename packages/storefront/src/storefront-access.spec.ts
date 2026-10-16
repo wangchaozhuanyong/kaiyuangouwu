@@ -31,6 +31,7 @@ describe('storefront account boundary', () => {
         'services',
         'two-factor',
         'mail-query',
+        'gpt-recharge',
         'not-found',
     ] as const)('allows public browsing of %s', route => expect(isPublicStorefrontRoute(route)).toBe(true));
     it.each([
