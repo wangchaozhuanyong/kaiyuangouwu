@@ -78,7 +78,6 @@ export class ShopApi {
     private readonly authTokens: AuthTokenState;
     private storefrontCatalogAvailable: boolean | null = null;
     readonly contentReviewsApi: ContentReviewsApi;
-    readonly rechargeRequest: ShopApiContext['request'];
     private readonly catalogApi: CatalogApi;
     private readonly accountApi: AccountApi;
     private readonly createReferralsApi: () => Promise<ReferralsApi>;
@@ -111,7 +110,6 @@ export class ShopApi {
             },
         };
         this.contentReviewsApi = new ContentReviewsApi(ctx);
-        this.rechargeRequest = ctx.request;
         this.catalogApi = new CatalogApi(ctx);
         this.accountApi = lazyAccountApi(ctx);
         this.createReferralsApi = async () => {
@@ -623,7 +621,7 @@ export class ShopApi {
         return realtimeApi.watchRealtime(onEvent, signal, onConnectionChange);
     }
 
-    private async request<T>(
+    async request<T>(
         query: string,
         variables?: Record<string, unknown>,
         signal?: AbortSignal,

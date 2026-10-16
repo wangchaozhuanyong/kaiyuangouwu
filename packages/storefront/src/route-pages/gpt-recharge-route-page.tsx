@@ -18,7 +18,14 @@ export function GptRechargeRoutePage() {
     const rawTab = search.tab;
     const tab = rawTab === 'query' || rawTab === 'guide' ? rawTab : 'recharge';
     const navigate = useNavigate();
-    const client = useMemo(() => new GptRechargeApi({ request: runtime.api.rechargeRequest }), [runtime.api]);
+    const client = useMemo(
+        () =>
+            new GptRechargeApi({
+                request: (query, variables, signal, timeout, uncertain, currency) =>
+                    runtime.api.request(query, variables, signal, timeout, uncertain, false, currency),
+            }),
+        [runtime.api],
+    );
     return (
         <GptRechargePage
             key={`${runtime.market.code}:${runtime.language}`}
