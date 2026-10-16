@@ -2,18 +2,10 @@
 import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 
 import { publicRouteRewrite } from './public-route-rewrite';
-import { storefrontQueryClient } from './query-client';
-import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import { registerStorefrontNavigationHistory } from './storefront-navigation-history';
-import { prefetchPublicPage } from './storefront-page-data';
-import {
-    getStorefrontScrollRestorationKey,
-    routeFromHash,
-    routeFromRouterLocation,
-    routeHref,
-} from './storefront-router';
+import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
 
 function parseStorefrontSearch(searchString: string): Record<string, string> {
     return Object.fromEntries(new URLSearchParams(searchString.replace(/^\?/, '')));
@@ -54,12 +46,6 @@ export const router = createRouter({
 });
 
 registerStorefrontNavigationHistory(router);
-
-router.subscribe('onBeforeNavigate', event => {
-    const route = routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search);
-    void preloadStorefrontRouteComponent(route.name);
-    void prefetchPublicPage(storefrontQueryClient, routeHref(route)).catch(() => undefined);
-});
 
 function StorefrontPendingPage() {
     const location = useRouterState({ select: s => s.matches.at(-1) ?? s.location });

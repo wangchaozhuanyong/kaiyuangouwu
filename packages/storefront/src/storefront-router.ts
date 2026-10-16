@@ -171,6 +171,7 @@ export const storefrontRouteNames: readonly RouteName[] = Object.keys(routePaths
 const routeNamesByPath = new Map(Object.entries(routePaths).map(([name, path]) => [path, name as RouteName]));
 
 export type StorefrontRouteSearch = Omit<RouteState, 'name'> & {
+    __route?: string;
     __storefrontLanguage?: 'zh' | 'en';
     auth?: 'login' | 'register' | 'forgot-password';
     authTarget?: string;
@@ -239,6 +240,7 @@ export function normalizeRouteSearch(search: Record<string, unknown>): Storefron
     const focus = stringValue('focus');
     const page = Number(stringValue('page'));
     return {
+        __route: stringValue('__route'),
         __storefrontLanguage:
             search.__storefrontLanguage === 'zh' || search.__storefrontLanguage === 'en'
                 ? search.__storefrontLanguage
@@ -292,6 +294,7 @@ export function routeFromRouterLocation(pathname: string, search: Record<string,
         auth: _auth,
         authTarget: _target,
         __storefrontLanguage,
+        __route: _codePath,
         ...pageSearch
     } = normalizeRouteSearch(search);
     return {
