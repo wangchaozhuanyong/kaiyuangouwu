@@ -621,7 +621,7 @@ export class ShopApi {
         return realtimeApi.watchRealtime(onEvent, signal, onConnectionChange);
     }
 
-    private async request<T>(
+    async request<T>(
         query: string,
         variables?: Record<string, unknown>,
         signal?: AbortSignal,

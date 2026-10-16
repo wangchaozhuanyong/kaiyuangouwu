@@ -250,3 +250,10 @@
 .locale-preferences-currencies > button.is-selected small {
     color: inherit;
 }
+
+/* Keep the shared language control horizontal inside compact page headers. */
+.subpage-header-actions > .locale-preferences-trigger {
+    width: auto;
+    display: inline-flex;
+    padding-inline: var(--space-8);
+}

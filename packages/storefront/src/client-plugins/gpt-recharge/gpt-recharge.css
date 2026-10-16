@@ -1,0 +1,469 @@
+.gpt-recharge-page {
+    color: var(--text);
+}
+.gpt-recharge-page svg {
+    flex-shrink: 0;
+}
+.gpt-recharge-surface {
+    min-width: 0;
+    background: var(--surface);
+    border: var(--skin-card-outline, 0);
+    border-radius: var(--skin-card-radius);
+    box-shadow: var(--skin-card-shadow);
+    overflow: hidden;
+}
+.gpt-recharge-tabs {
+    display: flex;
+    gap: var(--space-24);
+    padding-inline: var(--space-32);
+    border-bottom: 1px solid var(--line-subtle);
+}
+.gpt-recharge-tabs button {
+    position: relative;
+    min-height: 60px;
+    min-width: 120px;
+    padding: var(--space-12) var(--space-8);
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-tabs button[aria-current] {
+    color: var(--text);
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-recharge-tabs button[aria-current]::after {
+    position: absolute;
+    content: '';
+    height: 3px;
+    inset: auto var(--space-8) 0;
+    background: var(--selection);
+}
+.gpt-recharge-page button:focus-visible,
+.gpt-recharge-page a:focus-visible,
+.gpt-recharge-page summary:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -3px;
+}
+.gpt-recharge-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.62fr);
+    gap: var(--space-32);
+    padding: var(--space-32);
+}
+.gpt-recharge-code-section {
+    min-width: 0;
+    padding-right: var(--space-32);
+    border-right: 1px solid var(--line-subtle);
+}
+.gpt-recharge-account-section {
+    min-width: 0;
+}
+.gpt-recharge-page h2,
+.gpt-recharge-page h3 {
+    margin: 0;
+    font-size: var(--type-section-compact-size);
+    line-height: var(--type-section-compact-leading);
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-recharge-section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin-bottom: var(--space-24);
+}
+.gpt-recharge-step {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--skin-control-radius);
+    background: var(--selection-soft);
+    color: var(--selection);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.gpt-recharge-plans {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8);
+}
+.gpt-recharge-plans button {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-12);
+    min-width: 0;
+    min-height: 76px;
+    padding: var(--space-8);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+    color: var(--text);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+}
+.gpt-recharge-plans strong {
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-recharge-plans button[aria-pressed='true'] {
+    background: var(--selection-soft);
+    border-color: var(--selection);
+    color: var(--selection);
+}
+.gpt-recharge-plans button:disabled {
+    cursor: default;
+}
+.gpt-recharge-plans .gpt-recharge-unavailable {
+    flex-direction: column;
+    gap: 0;
+    background: var(--soft);
+    border-style: dashed;
+    color: var(--muted);
+}
+.gpt-recharge-plans small {
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    font-weight: var(--font-weight-normal);
+}
+.gpt-recharge-plan-note {
+    margin: var(--space-8) 0 var(--space-24);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    color: var(--muted);
+}
+.gpt-recharge-label,
+.gpt-recharge-field {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-label {
+    display: block;
+    margin-bottom: var(--space-8);
+}
+.gpt-recharge-field {
+    display: grid;
+    gap: var(--space-8);
+}
+.gpt-recharge-field-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+}
+.gpt-recharge-field input,
+.gpt-recharge-field textarea,
+.gpt-recharge-code-row input {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: var(--space-12);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+    font-weight: var(--font-weight-normal);
+}
+.gpt-recharge-page input::placeholder,
+.gpt-recharge-page textarea::placeholder {
+    color: var(--muted);
+}
+.gpt-recharge-field textarea {
+    height: 128px;
+    min-height: 104px;
+    resize: vertical;
+    overflow-wrap: anywhere;
+    margin: 0;
+}
+.gpt-recharge-page input:focus-visible,
+.gpt-recharge-page textarea:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+.gpt-recharge-field textarea[aria-invalid='true'] {
+    border-color: var(--danger);
+}
+.gpt-recharge-code-row {
+    display: flex;
+    gap: var(--space-8);
+}
+.gpt-recharge-code-row > button {
+    flex-shrink: 0;
+    min-height: 48px;
+    padding-inline: var(--space-12);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+}
+.gpt-recharge-text-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: 44px;
+    padding: 0;
+    border: 0;
+    color: var(--muted);
+    background: transparent;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-field-heading .gpt-recharge-text-button {
+    margin-block: calc(-1 * var(--space-8));
+}
+.gpt-recharge-text-button:hover {
+    color: var(--accent-ink);
+}
+.gpt-recharge-helper,
+.gpt-recharge-valid,
+.gpt-recharge-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    margin: var(--space-12) 0;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    color: var(--muted);
+}
+.gpt-recharge-valid {
+    color: var(--success);
+}
+.gpt-recharge-alert {
+    color: var(--danger);
+}
+.gpt-recharge-notices {
+    padding: var(--space-16) var(--space-32) 0;
+}
+.gpt-recharge-notices > :last-child {
+    margin-bottom: 0;
+}
+.gpt-recharge-notices .gpt-recharge-text-button {
+    margin-top: calc(-1 * var(--space-8));
+}
+.gpt-recharge-summary {
+    margin: var(--space-16) 0 var(--space-8);
+    padding: var(--space-12);
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+    display: grid;
+    gap: var(--space-8);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-recharge-summary > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-16);
+}
+.gpt-recharge-summary dt {
+    color: var(--muted);
+    flex-shrink: 0;
+}
+.gpt-recharge-summary dd {
+    margin: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
+    min-width: 0;
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-confirm {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-height: 44px;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    color: var(--muted);
+}
+.gpt-recharge-confirm input {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--accent);
+}
+.gpt-recharge-submit {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: 48px;
+}
+.gpt-recharge-privacy {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    margin: var(--space-12) 0 0;
+    color: var(--muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.gpt-recharge-help-links {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-16);
+}
+.gpt-recharge-query,
+.gpt-recharge-guide {
+    padding: var(--space-32);
+    max-width: 760px;
+    width: 100%;
+    margin-inline: auto;
+}
+.gpt-recharge-query > svg {
+    color: var(--selection);
+    margin-bottom: var(--space-16);
+}
+.gpt-recharge-query > p {
+    color: var(--muted);
+    margin: var(--space-8) 0 var(--space-24);
+}
+.gpt-recharge-query form {
+    display: grid;
+    gap: var(--space-24);
+}
+.gpt-recharge-query .primary-action {
+    min-height: 48px;
+}
+.gpt-recharge-query-result {
+    margin-top: var(--space-24);
+    padding-top: var(--space-24);
+}
+.gpt-recharge-result {
+    padding: var(--space-32);
+    text-align: center;
+    max-width: 760px;
+    margin: auto;
+}
+.gpt-recharge-query-result .gpt-recharge-result {
+    padding: 0;
+}
+.gpt-recharge-result > svg {
+    color: var(--selection);
+    margin-bottom: var(--space-16);
+}
+.gpt-recharge-result[data-status='succeeded'] > svg {
+    color: var(--success);
+}
+.gpt-recharge-result[data-status='failed'] > svg {
+    color: var(--danger);
+}
+.gpt-recharge-result > p {
+    color: var(--muted);
+    margin: var(--space-12) auto var(--space-24);
+    max-width: 440px;
+}
+.gpt-recharge-result button {
+    min-height: 48px;
+    margin-top: var(--space-16);
+    padding-inline: var(--space-24);
+}
+.gpt-recharge-guide-steps {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-24) 0;
+    display: grid;
+    gap: var(--space-24);
+}
+.gpt-recharge-guide-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+}
+.gpt-recharge-guide-steps p {
+    color: var(--muted);
+    margin: var(--space-8) 0 0;
+}
+.gpt-recharge-guide a {
+    color: var(--accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.gpt-recharge-guide a svg {
+    display: inline;
+    vertical-align: middle;
+}
+.gpt-recharge-guide .gpt-recharge-faq-title {
+    margin-top: var(--space-32);
+    margin-bottom: var(--space-8);
+}
+.gpt-recharge-guide details {
+    padding-block: var(--space-8);
+}
+.gpt-recharge-guide summary {
+    min-height: 44px;
+    display: list-item;
+    align-content: center;
+    font-weight: var(--font-weight-medium);
+}
+.gpt-recharge-guide details p {
+    color: var(--muted);
+    padding-bottom: var(--space-8);
+}
+@media (max-width: 1023px) {
+    .gpt-recharge-tabs {
+        gap: 0;
+        padding-inline: var(--space-16);
+    }
+    .gpt-recharge-tabs button {
+        flex: 1;
+        min-width: 0;
+        min-height: 52px;
+        padding-inline: var(--space-4);
+    }
+    .gpt-recharge-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-24);
+        padding: var(--space-16);
+    }
+    .gpt-recharge-code-section {
+        border-right: 0;
+        border-bottom: 1px solid var(--line-subtle);
+        padding-right: 0;
+        padding-bottom: var(--space-24);
+    }
+    .gpt-recharge-section-title {
+        margin-bottom: var(--space-16);
+    }
+    .gpt-recharge-plans {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .gpt-recharge-plans button {
+        min-height: 60px;
+        padding: var(--space-4);
+        gap: 0;
+    }
+    .gpt-recharge-plans button > svg {
+        position: absolute;
+        top: var(--space-4);
+        right: var(--space-4);
+        width: 10px;
+        height: 10px;
+    }
+    .gpt-recharge-plan-note {
+        margin-bottom: var(--space-16);
+    }
+    .gpt-recharge-field textarea {
+        height: 104px;
+    }
+    .gpt-recharge-help-links {
+        display: none;
+    }
+    .gpt-recharge-notices {
+        padding-inline: var(--space-16);
+    }
+    .gpt-recharge-query,
+    .gpt-recharge-guide,
+    .gpt-recharge-result {
+        padding: var(--space-24) var(--space-16);
+    }
+}

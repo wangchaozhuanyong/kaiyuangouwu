@@ -309,6 +309,17 @@ describe('storefront skin system', () => {
                             'styles/order-aftercare.css|.order-logistics-item + .order-logistics-item',
                         ];
                         const functionalKey = `${path.relative(__dirname, file)}|${selector.trim().replace(/\s+/g, ' ')}`;
+                        // GPT_COMPACT_FORM_B_20261016: only navigation and the code/account boundary.
+                        if (
+                            file === path.join(__dirname, 'client-plugins/gpt-recharge/gpt-recharge.css') &&
+                            [
+                                '.gpt-recharge-tabs|bottom',
+                                '.gpt-recharge-code-section|right',
+                                '.gpt-recharge-code-section|bottom',
+                            ].includes(`${selector.trim()}|${border[1]}`) &&
+                            border[2].trim() === '1px solid var(--line-subtle)'
+                        )
+                            continue;
                         // Approved paired coupon design: ticket perforation and metadata,
                         // plus boundaries between page navigation, offers and usage guidance.
                         const couponSeparators: Record<string, string> = {
@@ -515,6 +526,13 @@ describe('storefront skin system', () => {
                             /height:\s*2px\s*;/.test(body) &&
                             /background:\s*var\(--hero-pagination-active-color, currentColor\)/.test(body) &&
                             /pointer-events:\s*none/.test(body)
+                        ) &&
+                        // GPT_COMPACT_FORM_B_20261016: functional marker on the selected tab only.
+                        !(
+                            file === path.join(__dirname, 'client-plugins/gpt-recharge/gpt-recharge.css') &&
+                            selector.trim() === '.gpt-recharge-tabs button[aria-current]::after' &&
+                            /height:\s*3px\s*;/.test(body) &&
+                            /background:\s*var\(--selection\)/.test(body)
                         ) &&
                         // The approved coupon navigation underline marks the active tab.
                         !(

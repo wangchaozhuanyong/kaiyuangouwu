@@ -1,5 +1,5 @@
 import { Headphones, KeyRound, Mail, TicketPercent, WandSparkles } from 'lucide-react';
-import { type ComponentType, useCallback, useContext, useEffect, useRef } from 'react';
+import { type ComponentType, lazy, Suspense, useCallback, useContext, useEffect, useRef } from 'react';
 
 import { prepareImageStudioData } from '../pages/ai-image-studio-preload';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
@@ -26,7 +26,7 @@ export interface CategoryClientPluginContext {
     ancestorCollectionIds: string[];
 }
 
-interface ClientPluginComponentProps {
+export interface ClientPluginComponentProps {
     illustrated?: boolean;
     language: StorefrontLanguage;
     onNavigate: (route: RouteState) => void;
@@ -198,6 +198,15 @@ function MailQueryEntryPlugin({ language, onNavigate }: Readonly<ClientPluginCom
     );
 }
 
+const LazyGptRechargeEntry = lazy(() => import('./gpt-recharge-entry'));
+function GptRechargeEntryPlugin(props: Readonly<ClientPluginComponentProps>) {
+    return (
+        <Suspense fallback={null}>
+            <LazyGptRechargeEntry {...props} />
+        </Suspense>
+    );
+}
+
 const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginComponentProps> | undefined>> =
     {
         'category-coupon-entry': CouponEntryPlugin,
@@ -205,6 +214,7 @@ const clientPluginRenderers: Readonly<Record<string, ComponentType<ClientPluginC
         'ai-image-studio-entry': AiImageStudioEntryPlugin,
         'two-factor-code-tool': TwoFactorEntryPlugin,
         'icloud-mail-query-entry': MailQueryEntryPlugin,
+        'gpt-recharge-entry': GptRechargeEntryPlugin,
     };
 
 function itemPlacement(item: StorefrontContentItem): ClientPluginPlacement | null {

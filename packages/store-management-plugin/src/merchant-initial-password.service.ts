@@ -87,6 +87,7 @@ const passwordProtectedAdminMutations = new Set([
     'transitionPaymentToState',
     'updateApiKey',
     'updateMyStoreCurrencyConfiguration',
+    'updateGptRechargeConfig',
     'adjustReferralBalance',
     'processReferralWithdrawal',
     'updateRole',

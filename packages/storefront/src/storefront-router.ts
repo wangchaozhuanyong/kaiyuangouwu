@@ -35,6 +35,7 @@ export type RouteName =
     | 'image-studio'
     | 'two-factor'
     | 'mail-query'
+    | 'gpt-recharge'
     | 'login'
     | 'register'
     | 'verify-account'
@@ -42,45 +43,7 @@ export type RouteName =
     | 'reset-password'
     | 'legal'
     | 'not-found';
-export const storefrontRouteNames = [
-    'home',
-    'category',
-    'services',
-    'cart',
-    'account',
-    'product',
-    'guide',
-    'search',
-    'purchase',
-    'checkout',
-    'payment',
-    'order-confirmation',
-    'orders',
-    'logistics',
-    'order-detail',
-    'addresses',
-    'account-security',
-    'favorites',
-    'announcements',
-    'history',
-    'notifications',
-    'coupons',
-    'referral',
-    'flash-sale',
-    'recommendations',
-    'support',
-    'reviews',
-    'image-studio',
-    'two-factor',
-    'mail-query',
-    'login',
-    'register',
-    'verify-account',
-    'forgot-password',
-    'reset-password',
-    'legal',
-    'not-found',
-] as const satisfies readonly RouteName[];
+
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'completed' | 'service';
 export type SortMode = ProductSearchSort;
 export type CheckoutRouteName = 'purchase' | 'checkout' | 'payment';
@@ -192,6 +155,7 @@ const routePaths: Record<RouteName, string> = {
     'image-studio': '/image-studio',
     'two-factor': '/two-factor',
     'mail-query': '/mail-query',
+    'gpt-recharge': '/gpt-recharge',
     login: '/login',
     register: '/register',
     'verify-account': '/verify-account',
@@ -200,6 +164,9 @@ const routePaths: Record<RouteName, string> = {
     legal: '/legal',
     'not-found': '/not-found',
 };
+
+// Registration and enumeration share the same canonical route ordering.
+export const storefrontRouteNames: readonly RouteName[] = Object.keys(routePaths) as RouteName[];
 
 const routeNamesByPath = new Map(Object.entries(routePaths).map(([name, path]) => [path, name as RouteName]));
 

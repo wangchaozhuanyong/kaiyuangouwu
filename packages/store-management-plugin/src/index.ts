@@ -193,3 +193,5 @@ export {
     type OfflinePaymentReceipt,
 } from './offline-payment-proof';
 export { storefrontCdnPurgeConfiguration } from './performance/storefront-cdn-purge-config';
+
+export { GptRechargePlugin } from './gpt-recharge/plugin.js';

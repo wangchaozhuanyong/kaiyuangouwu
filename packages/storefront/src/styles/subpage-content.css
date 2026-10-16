@@ -29,7 +29,10 @@
 .topbar.subpage-header {
     min-height: calc(var(--experience-control-min) + 2 * var(--space-4));
     height: auto;
-    grid-template-columns: var(--experience-control-min) minmax(0, 1fr) var(--experience-control-min);
+    grid-template-columns: var(--experience-control-min) minmax(0, 1fr) minmax(
+            var(--experience-control-min),
+            auto
+        );
     padding: var(--space-4) var(--page-section-inset, var(--experience-page-gutter-mobile));
     gap: var(--space-8);
 }
@@ -515,7 +518,7 @@
         gap: var(--space-8);
         flex: none;
     }
-    .desktop-store-layout .subpage-header-actions > button {
+    .desktop-store-layout .subpage-header-actions > button:not(.locale-preferences-trigger) {
         display: flex;
         align-items: center;
         justify-content: center;

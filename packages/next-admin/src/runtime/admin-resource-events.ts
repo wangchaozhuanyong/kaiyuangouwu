@@ -36,7 +36,7 @@ const domainRules: Array<[ResourceDomain, RegExp]> = [
     ],
     [
         'plugins',
-        /icloud|twofactor|imagegeneration|imageprovider|imageskill|image(?:model|promptskill|output)|clientplugin|telegram|incident/iu,
+        /gptrecharge|icloud|twofactor|imagegeneration|imageprovider|imageskill|image(?:model|promptskill|output)|clientplugin|telegram|incident/iu,
     ],
 ];
 // Session transitions own their existing redirect/cache lifecycle, rather than page refresh.
