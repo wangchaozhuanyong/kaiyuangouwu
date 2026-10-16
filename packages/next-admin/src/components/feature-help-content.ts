@@ -103,7 +103,7 @@ export const featureHelpContent = {
     'dashboard.overview': {
         purpose: '汇总当前店铺的订单、销售额、客户和待办事项，用于快速判断经营状态。',
         requirements: ['已选择要查看的店铺', '当前账号具有对应数据的查看权限'],
-        example: '例如：切换到默认店铺后，查看今日成交额、新增客户和待发货订单。',
+        example: '例如：切换到目标店铺后，查看今日成交额、新增本店客户和待发货订单。',
         impact: '只读统计当前店铺数据，不会修改订单或商品。',
     },
     'dashboard.customizer': {

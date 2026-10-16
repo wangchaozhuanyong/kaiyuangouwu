@@ -160,7 +160,8 @@ export function StorefrontTrafficReport({ report }: { report: StorefrontTrafficD
                 </div>
             </details>
             <p className="text-[10px] leading-5 text-slate-500">
-                北京时间 00:00–24:00，按当前店铺统计。— 表示没有采集记录或 IP 数据不完整。
+                北京时间 00:00–24:00，按当前店铺统计，仅包含允许访问统计的前台访问。
+                未选择或拒绝统计的访问不计入，因此不能代表全站总流量。— 表示没有采集记录或 IP 数据不完整。
                 数据是已记录的访问，首次采集当天与今天可能不足全天；屏蔽统计、断网等可能造成漏记。
                 已过滤常见机器人，但访客数不能保证等于真人数。
                 {report.lastRecordedAt && (

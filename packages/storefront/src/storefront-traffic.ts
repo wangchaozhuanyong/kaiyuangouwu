@@ -80,6 +80,7 @@ interface TrafficPage {
     businessDate: string;
     customerId: string | null;
     referrerHost?: string | null;
+    attribution?: ReturnType<typeof storefrontAttributionInput>;
 }
 
 /** One event per displayed route; rerenders and login only identify the existing view. */
@@ -116,7 +117,7 @@ export function createStorefrontTrafficTracker(generateId = () => crypto.randomU
                     eventId: operation.page.eventId,
                     visitorId,
                     pageView: !operation.page.recorded,
-                    ...storefrontAttributionInput(page.location, page.referrerHost),
+                    ...(page.attribution ?? storefrontAttributionInput(page.location, page.referrerHost)),
                 };
                 try {
                     operation.acknowledged = await send(input);
@@ -138,9 +139,12 @@ export function createStorefrontTrafficTracker(generateId = () => crypto.randomU
 
 export function storefrontAttributionInput(location: string, referrerHost?: string | null) {
     const parsed = new URL(location, 'https://storefront.invalid');
-    const parameter = (name: string) => parsed.searchParams.get(name)?.trim() || null;
-    const googleClick = parameter('gclid');
-    const metaClick = parameter('fbclid');
+    const parameter = (name: string, max = 160) => {
+        const value = parsed.searchParams.get(name)?.trim().normalize('NFKC');
+        return value && value.length <= max && !/[\u0000-\u001f\u007f]/u.test(value) ? value : null;
+    };
+    const googleClick = parsed.searchParams.get('gclid')?.trim();
+    const metaClick = parsed.searchParams.get('fbclid')?.trim();
     return {
         path: parsed.pathname,
         referrerHost:
@@ -148,8 +152,8 @@ export function storefrontAttributionInput(location: string, referrerHost?: stri
                 ?.trim()
                 .toLowerCase()
                 .replace(/^www\./u, '') || null,
-        source: parameter('utm_source') ?? (googleClick ? 'google' : metaClick ? 'facebook' : null),
-        medium: parameter('utm_medium') ?? (googleClick || metaClick ? 'cpc' : null),
+        source: parameter('utm_source', 100) ?? (googleClick ? 'google' : metaClick ? 'facebook' : null),
+        medium: parameter('utm_medium', 100) ?? (googleClick || metaClick ? 'cpc' : null),
         campaign: parameter('utm_campaign'),
         term: parameter('utm_term'),
         content: parameter('utm_content'),

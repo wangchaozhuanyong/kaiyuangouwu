@@ -5,6 +5,7 @@ import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import {
     createStorefrontTrafficTracker,
     shouldTrackStorefrontTraffic,
+    storefrontAttributionInput,
     storefrontTrafficOptedOut,
     TRAFFIC_PREFERENCE_EVENT,
 } from './storefront-traffic';
@@ -50,8 +51,19 @@ export function observeStorefrontTraffic(
         } catch {
             referrerHost = null;
         }
+        // routeHref intentionally omits campaign parameters. Read only the displayed
+        // same-origin route's whitelisted dimensions; pending routes must not lend
+        // their campaign or private query parameters to the previous page.
+        const displayed = new URL(location, window.location.origin);
+        const current = window.location;
+        const attribution = storefrontAttributionInput(
+            displayed.origin === current.origin && displayed.pathname === current.pathname
+                ? current.href
+                : location,
+            referrerHost,
+        );
         void tracker.current?.track(
-            { channel, location, businessDate, customerId, referrerHost },
+            { channel, location, businessDate, customerId, referrerHost, attribution },
             storefrontVisitorId(),
             value => api.recordStorefrontPageView(value),
         );

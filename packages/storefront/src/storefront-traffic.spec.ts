@@ -127,4 +127,20 @@ describe('storefront traffic collection', () => {
         expect(storefrontAttributionInput('/?gclid=private-click-id').source).toBe('google');
         expect(storefrontAttributionInput('/?gclid=private-click-id')).not.toHaveProperty('gclid');
     });
+
+    it('omits invalid campaign dimensions so malformed tags do not reject a valid page view', () => {
+        const params = new URLSearchParams({
+            utm_source: 'a'.repeat(101),
+            utm_medium: '\u0000cpc',
+            utm_campaign: 'b'.repeat(161),
+            utm_term: 'valid search',
+            gclid: 'private-click-id',
+        });
+        expect(storefrontAttributionInput(`/?${params.toString()}`)).toMatchObject({
+            source: 'google',
+            medium: 'cpc',
+            campaign: null,
+            term: 'valid search',
+        });
+    });
 });

@@ -419,7 +419,9 @@ export function DashboardModule() {
                                 <FeatureHelpButton
                                     topic="dashboard.overview"
                                     title="网站总览"
-                                    description={'订单、履约与售后数据每分钟自动更新'}
+                                    description={
+                                        '经营指标按北京时间的下单日期、店铺默认货币统计，截至当前时刻，与上一周期同时段比较。实付成交额为有效订单当前已结算支付减去已结算退款，退款回扣原下单日期；全额退款的有效支付订单仍计入订单数，平均客单价为成交额除以支付订单数。访问统计仅包含允许统计的前台访问，不能代表全站总流量。'
+                                    }
                                 />
                             </h1>
                             <p>经营指标与履约概况</p>
@@ -524,20 +526,7 @@ export function DashboardModule() {
                                 )}
 
                                 {widgetId === 'METRICS' && (
-                                    <section aria-labelledby="dashboard-metrics-title">
-                                        <div className="mb-3">
-                                            <h2
-                                                id="dashboard-metrics-title"
-                                                className="flex items-center gap-2 text-sm font-bold text-slate-900"
-                                            >
-                                                核心经营指标
-                                                <FeatureHelpButton
-                                                    topic="dashboard.overview"
-                                                    title="核心经营指标"
-                                                    description={'按已结算支付金额统计，退款会从成交额中扣除'}
-                                                />
-                                            </h2>
-                                        </div>
+                                    <section aria-label="经营指标">
                                         {metrics.error && !metrics.data ? (
                                             <ErrorPanel
                                                 message="经营指标加载失败"
@@ -882,7 +871,7 @@ export function DashboardModule() {
                                             />
                                         </h2>
 
-                                        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
                                             {canCreateProducts && (
                                                 <QuickAction
                                                     icon={Plus}
@@ -1230,16 +1219,15 @@ function QuickAction({
         <AdminButton
             type="button"
             onClick={onClick}
-            className="group flex w-full items-center gap-3 rounded-lg border border-slate-100 px-3 py-2 text-left hover:border-blue-200 hover:bg-blue-50/50"
+            className="group flex w-full items-center gap-2 rounded-lg border border-slate-100 px-3 py-2 text-left hover:border-blue-200 hover:bg-blue-50/50"
         >
-            <span className="rounded-md bg-slate-100 p-2 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-700">
+            <span className="shrink-0 rounded-md bg-slate-100 p-2 text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-700">
                 <Icon className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
                 <span className="block text-xs font-bold text-slate-800">{label}</span>
                 <span className="mt-0.5 block text-[11px] text-slate-400">{description}</span>
             </span>
-            <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-600" />
         </AdminButton>
     );
 }
