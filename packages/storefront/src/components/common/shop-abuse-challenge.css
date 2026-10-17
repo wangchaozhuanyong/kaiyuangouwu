@@ -39,12 +39,22 @@
     min-width: 0;
     min-height: 44px;
     padding: var(--space-8) var(--space-12);
-    border: 1px solid var(--line);
-    border-radius: var(--skin-control-radius);
-    background: var(--control-surface);
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
     color: var(--text);
     font-size: var(--type-input-size);
     line-height: var(--type-input-leading);
+}
+.shop-abuse-challenge .auth-input-shell {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    box-shadow: none;
+}
+.shop-abuse-challenge input:focus-visible {
+    outline: 0;
 }
 .shop-abuse-challenge p {
     margin: 0;
@@ -52,7 +62,7 @@
     font-size: var(--type-helper-size);
     line-height: var(--type-helper-leading);
 }
-.shop-abuse-challenge input:focus-visible,
+.shop-abuse-challenge .auth-input-shell:focus-within,
 .shop-abuse-challenge button:focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;

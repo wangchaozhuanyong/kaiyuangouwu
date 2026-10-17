@@ -231,25 +231,27 @@ export function ShopAbuseChallengeView({
                     {zh ? '换一张' : 'New image'}
                 </button>
             </div>
-            <input
-                id={id}
-                value={value.answer}
-                onChange={event => challenge.setAnswer(event.target.value)}
-                onKeyDown={event => {
-                    if (event.key === 'Enter' && onSubmit) {
-                        event.preventDefault();
-                        onSubmit(event.currentTarget.form);
-                    }
-                }}
-                type="text"
-                autoComplete="off"
-                spellCheck={false}
-                minLength={6}
-                maxLength={12}
-                disabled={value.loading || !value.challenge}
-                aria-describedby={`${id}-feedback`}
-                aria-invalid={Boolean(value.error)}
-            />
+            <div className="auth-input-shell">
+                <input
+                    id={id}
+                    value={value.answer}
+                    onChange={event => challenge.setAnswer(event.target.value)}
+                    onKeyDown={event => {
+                        if (event.key === 'Enter' && onSubmit) {
+                            event.preventDefault();
+                            onSubmit(event.currentTarget.form);
+                        }
+                    }}
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    minLength={6}
+                    maxLength={12}
+                    disabled={value.loading || !value.challenge}
+                    aria-describedby={`${id}-feedback`}
+                    aria-invalid={Boolean(value.error)}
+                />
+            </div>
             {feedback}
             {google && (
                 <p className="form-help">
