@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { syntheticPage } from './fixtures.mjs';
 import { startSeoFixtureServer } from './preview-server.mjs';
 
 // Real shared SSR + client components, synthetic anonymous data, localhost only.
@@ -22,7 +23,7 @@ const dev = process.argv.includes('--dev');
 const selected = new Set(
     (
         process.argv.find(value => value.startsWith('--cases='))?.split('=')[1] ??
-        'hydration,navigation,race,actions,departure,cold,scope,errors,filter,currency,cart,search,scroll'
+        'hydration,navigation,code-navigation,race,actions,departure,cold,scope,errors,filter,currency,cart,search,scroll'
     ).split(','),
 );
 const widths = (
@@ -448,7 +449,7 @@ async function readSince(page, label) {
         return window.__continuity.samples.filter(sample => sample.at >= at);
     }, label);
 }
-async function delayedProduct(page, id, delay) {
+async function delayedProduct(page, id, delay, releaseBarrier = Promise.resolve()) {
     const pending = [];
     await page.route('**/_storefront/page-data?**', async route => {
         const url = new URL(route.request().url());
@@ -458,6 +459,7 @@ async function delayedProduct(page, id, delay) {
             await mark(page, `request:${id}`).catch(() => undefined);
             const response = await route.fetch();
             await new Promise(resolve => setTimeout(resolve, delay));
+            await releaseBarrier;
             await mark(page, `release:${id}`).catch(() => undefined);
             await route.fulfill({ response }).catch(() => undefined);
         })();
@@ -664,7 +666,7 @@ try {
         }
     if (selected.has('navigation'))
         for (const width of widths.filter(value => value === 390 || value === 1440))
-            for (const delay of [180, 220]) {
+            for (const delay of [180, 220, 650]) {
                 await runCase(`product-identity-${width}-${delay}`, width, async page => {
                     await page.goto(origin + '/en/product?id=synthetic-a-product-1');
                     await ready(page);
@@ -695,6 +697,12 @@ try {
                         false,
                         'Same-store navigation replayed the initial brand',
                     );
+                    if (delay === 650) {
+                        assert.ok(
+                            frames.some(frame => frame.pending.length > 0),
+                            'A slow destination must show body loading feedback after 200ms',
+                        );
+                    }
                     return {
                         delay,
                         frameCount: frames.length,
@@ -703,6 +711,116 @@ try {
                     };
                 });
             }
+    if (selected.has('code-navigation'))
+        for (const width of widths.filter(value => value === 390 || value === 1440)) {
+            await runCase(`code-navigation-${width}`, width, async page => {
+                let releaseCode;
+                const codeReady = new Promise(resolve => (releaseCode = resolve));
+                const heldAssets = [];
+                const serviceDataReads = [];
+                await page.route('**/_storefront/page-data?**', route => {
+                    const url = new URL(route.request().url());
+                    if (url.searchParams.get('kind') !== 'page' || url.searchParams.get('id') !== 'services')
+                        return route.fallback();
+                    // The shared server accepts only the four base fixture kinds before
+                    // transformPage runs. Extend its home fixture through the same service transform.
+                    const fixture = syntheticPage('synthetic-a', 'en', 'home', {
+                        host: url.host,
+                        origin: url.origin,
+                    });
+                    transformPage(fixture, { url });
+                    serviceDataReads.push(url.href);
+                    return route.fulfill({ json: fixture });
+                });
+                // Hold the real inner page chunk, beyond the auto-split route wrapper.
+                await page.route(
+                    dev
+                        ? '**/src/pages/business-services-page.tsx*'
+                        : '**/assets/business-services-page-*.js',
+                    async route => {
+                        heldAssets.push(route.request().url());
+                        await codeReady;
+                        await route.continue().catch(() => undefined);
+                    },
+                );
+                try {
+                    await page.goto(origin + '/en/');
+                    await ready(page);
+                    assert.equal(heldAssets.length, 0, 'The destination page code must start cold');
+                    const navigation = page.locator(
+                        width < 1024 ? '.storefront-bottom-nav' : '.proto-nav-links',
+                    );
+                    const services = navigation.locator('a[href="/en/services"]').first();
+                    const home = navigation.locator('a[href="/en/"]').first();
+                    await expect(services).toBeVisible();
+                    await expect(home).toBeVisible();
+                    await page.evaluate(() => {
+                        window.__codeNavigationShell = document.querySelector('.storefront-app');
+                        window.__codeNavigationNav = document.querySelector(
+                            innerWidth < 1024 ? '.storefront-bottom-nav' : '.proto-nav-links',
+                        );
+                    });
+                    await mark(page, 'code-navigation');
+                    await services.click({ noWaitAfter: true });
+                    await expect.poll(() => heldAssets.length).toBe(1);
+                    await page.waitForTimeout(260);
+                    await expect(
+                        page.locator('#storefront-content [data-page-pending]').first(),
+                    ).toBeVisible();
+                    const waiting = await page.evaluate(() => ({
+                        ...window.__continuity.read(),
+                        shellRetained:
+                            window.__codeNavigationShell === document.querySelector('.storefront-app'),
+                        navigationRetained:
+                            window.__codeNavigationNav ===
+                            document.querySelector(
+                                innerWidth < 1024 ? '.storefront-bottom-nav' : '.proto-nav-links',
+                            ),
+                    }));
+                    assert.equal(waiting.shellRetained, true, 'Cold page code replaced the shared shell');
+                    assert.equal(
+                        waiting.navigationRetained,
+                        true,
+                        'Cold page code replaced the main navigation',
+                    );
+                    // Actually navigate away while the chunk is held; visibility alone is insufficient.
+                    await home.click({ noWaitAfter: true });
+                    await expect(page).toHaveURL(/\/en\/$/u);
+                    await expect(page.locator('.home-page')).toBeVisible();
+                    await ready(page);
+                    await services.click({ noWaitAfter: true });
+                    await page.waitForTimeout(260);
+                    await expect(
+                        page.locator('#storefront-content [data-page-pending]').first(),
+                    ).toBeVisible();
+                    releaseCode();
+                    await expect(page).toHaveURL(/\/en\/services$/u);
+                    await expect(page.locator('.business-services-page')).toBeVisible();
+                    await ready(page);
+                    const frames = await readSince(page, 'code-navigation');
+                    assert.equal(
+                        frames.some(frame => frame.brand || frame.bootPending || frame.bootVisible),
+                        false,
+                        'Cold page code replayed the initial document or brand waiting state',
+                    );
+                    assert.equal(
+                        frames.at(-1)?.route,
+                        'services',
+                        'The final visible page must match the target',
+                    );
+                    return {
+                        heldAssets,
+                        serviceDataReads,
+                        waiting,
+                        navigationWhilePending: 'home link committed before the code was released',
+                        frameCount: frames.length,
+                        pendingFrames: frames.filter(frame => frame.pending.length).length,
+                    };
+                } finally {
+                    releaseCode();
+                }
+            });
+        }
     if (selected.has('race'))
         for (const width of widths.filter(value => value === 390 || value === 1440)) {
             await runCase(`product-race-${width}`, width, async page => {
@@ -751,7 +869,15 @@ try {
                 await runCase(`product-action-${width}-${actionAfter}`, width, async page => {
                     await page.goto(origin + '/en/product?id=synthetic-a-product-1');
                     await ready(page);
-                    const settle = await delayedProduct(page, 'synthetic-a-product-2', 650);
+                    await page.getByRole('button', { name: 'Necessary only', exact: true }).click();
+                    await expect(page.locator('.traffic-consent-banner')).toHaveCount(0);
+                    // Bind this action to A before navigating. A locator may wait through the
+                    // pending boundary and then resolve to B's identically named button.
+                    const favorite = await page.locator('.detail-favorite-action').elementHandle();
+                    assert.ok(favorite, 'The original product must expose its favorite action');
+                    let releaseDestination;
+                    const actionFinished = new Promise(resolve => (releaseDestination = resolve));
+                    const settle = await delayedProduct(page, 'synthetic-a-product-2', 650, actionFinished);
                     await mark(page, 'action-navigation');
                     await page
                         .locator('a[href="/en/product?id=synthetic-a-product-2"]')
@@ -760,28 +886,46 @@ try {
                     await page.waitForTimeout(actionAfter);
                     await page.evaluate(() => window.scrollTo(0, 0));
                     const atAction = await page.evaluate(() => window.__continuity.read());
-                    const favorite = page.locator('.detail-favorite-action');
                     const available = await favorite.isVisible();
-                    if (available) {
-                        assert.equal(
-                            atAction.product,
-                            'synthetic-a Synthetic product 1',
-                            'An unresolved destination must not borrow a product-list summary',
-                        );
-                        await mark(page, 'favorite-old-page');
-                        await favorite.click({ noWaitAfter: true });
-                        await page.waitForFunction(() =>
-                            Object.entries(localStorage).some(
-                                ([key, value]) =>
-                                    key.startsWith('storefront-guest-favorite-product-ids') &&
-                                    value.includes('synthetic-a-product-1'),
-                            ),
-                        );
-                    } else
-                        assert.ok(
-                            atAction.pending.length > 0,
-                            'If the old action is gone, the destination must show a structural pending state',
-                        );
+                    let actionResult = 'already-pending';
+                    try {
+                        if (available) {
+                            assert.equal(
+                                atAction.product,
+                                'synthetic-a Synthetic product 1',
+                                'An unresolved destination must not borrow a product-list summary',
+                            );
+                            await mark(page, 'favorite-old-page');
+                            try {
+                                await favorite.click({ noWaitAfter: true, timeout: 120 });
+                                actionResult = 'saved-original';
+                            } catch (error) {
+                                if (
+                                    error.name !== 'TimeoutError' &&
+                                    !error.message.includes('Element is not attached to the DOM')
+                                )
+                                    throw error;
+                                const duringClick = await page.evaluate(() => window.__continuity.read());
+                                if ((await favorite.isVisible()) || !duringClick.pending.length) throw error;
+                                actionResult = 'removed-before-click';
+                            }
+                            if (actionResult === 'saved-original')
+                                await page.waitForFunction(() =>
+                                    Object.entries(localStorage).some(
+                                        ([key, value]) =>
+                                            key.startsWith('storefront-guest-favorite-product-ids') &&
+                                            value.includes('synthetic-a-product-1'),
+                                    ),
+                                );
+                        } else
+                            assert.ok(
+                                atAction.pending.length > 0,
+                                'If the old action is gone, the destination must show a structural pending state',
+                            );
+                    } finally {
+                        releaseDestination();
+                        await favorite.dispose();
+                    }
                     await expect(page).toHaveURL(/id=synthetic-a-product-2/u);
                     await expect(page.locator('.product-detail-page')).toContainText(
                         'synthetic-a Synthetic product 2',
@@ -814,6 +958,7 @@ try {
                         actionAfter,
                         atAction,
                         oldActionAvailable: available,
+                        actionResult,
                         favorites,
                         frameCount: frames.length,
                     };

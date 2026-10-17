@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient } from '@tanstack/react-query';
-import { act } from 'react';
+import { act, useSyncExternalStore } from 'react';
+import { flushSync } from 'react-dom';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -23,6 +24,7 @@ import {
     SafeImageMediaProvider,
     type SafeImageProps,
 } from './safe-image';
+import imageRuntimeSource from './safe-image.tsx?raw';
 import { seedPublicPage, type PublicPageData } from './storefront-page-data';
 import { ProductImagePlaceholder, ProductVariantImage, SafeImage } from './storefront-ui/product-display';
 
@@ -2415,13 +2417,55 @@ describe('SafeImage', () => {
     });
 });
 
-describe('optional image recovery resource', () => {
-    it('keeps the real image error and surrounding actions when the recovery module cannot load', async () => {
-        vi.resetModules();
-        vi.doMock('./image-recovery', () => {
-            throw new Error('Recovery chunk unavailable');
-        });
-        const { SafeImage: IsolatedSafeImage } = await import('./safe-image');
+describe('image recovery availability', () => {
+    it('preserves its online listener when an earlier listener synchronously updates the storefront', async () => {
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockReturnValue(visibleFrameRect());
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        let epoch = 0;
+        const subscribers = new Set<() => void>();
+        const subscribe = (notify: () => void) => {
+            subscribers.add(notify);
+            return () => subscribers.delete(notify);
+        };
+        const snapshot = () => epoch;
+        function OnlineAwareImage() {
+            const current = useSyncExternalStore(subscribe, snapshot, snapshot);
+            return <SafeImage src="/online-render.jpg" alt="Product" className={`render-${current}`} />;
+        }
+        const updateStorefront = () =>
+            flushSync(() => {
+                epoch++;
+                subscribers.forEach(notify => notify());
+            });
+        window.addEventListener('online', updateStorefront);
+        try {
+            act(() => root.render(<OnlineAwareImage />));
+            await failCandidate(requiredImage(host));
+            await act(async () => {
+                window.dispatchEvent(new Event('online'));
+                await Promise.resolve();
+            });
+            expect(host.querySelector('img.safe-image')).not.toBeNull();
+            expect(host.querySelector('[data-safe-image=loading]')).not.toBeNull();
+        } finally {
+            window.removeEventListener('online', updateStorefront);
+            act(() => root.unmount());
+            rect.mockRestore();
+        }
+    });
+
+    it('keeps local recovery in the loaded image runtime instead of another fallible network module', () => {
+        expect(imageRuntimeSource).toMatch(/from ['"]\.\/image-recovery['"]/u);
+        expect(imageRuntimeSource).not.toMatch(/import\(['"]\.\/image-recovery['"]\)/u);
+    });
+
+    it('retains local recovery and surrounding actions through an offline failure and one reconnect', async () => {
+        const rect = vi
+            .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+            .mockReturnValue(visibleFrameRect());
         const host = document.createElement('div');
         const root = createRoot(host);
         const navigate = vi.fn();
@@ -2429,7 +2473,7 @@ describe('optional image recovery resource', () => {
             act(() =>
                 root.render(
                     <div>
-                        <IsolatedSafeImage src="/optional-recovery-failure.jpg" alt="商品主图" />
+                        <SafeImage src="/offline-image.jpg" alt="商品主图" />
                         <button type="button" onClick={navigate}>
                             继续浏览
                         </button>
@@ -2439,13 +2483,24 @@ describe('optional image recovery resource', () => {
             await failCandidate(requiredImage(host));
             expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
             expect(host.querySelector('[data-image-state=error]')).not.toBeNull();
-            expect(host.querySelector('.safe-image-retry')).toBeNull();
-            act(() => requiredElement<HTMLButtonElement>(host, 'button').click());
+            const retry = requiredElement<HTMLButtonElement>(host, '.safe-image-retry');
+            expect(retry.hidden).toBe(false);
+            act(() => requiredElement<HTMLButtonElement>(host, 'div > button').click());
             expect(navigate).toHaveBeenCalledTimes(1);
+            await act(async () => {
+                window.dispatchEvent(new Event('online'));
+                await vi.dynamicImportSettled();
+            });
+            expect(host.querySelector('img.safe-image')).not.toBeNull();
+            await failCandidate(requiredImage(host));
+            await act(() => window.dispatchEvent(new Event('online')));
+            expect(host.querySelector('img.safe-image')).toBeNull();
+            expect(host.querySelector('[data-safe-image=error]')).not.toBeNull();
+            act(() => requiredElement<HTMLButtonElement>(host, '.safe-image-retry').click());
+            expect(host.querySelector('img.safe-image')).not.toBeNull();
         } finally {
             act(() => root.unmount());
-            vi.doUnmock('./image-recovery');
-            vi.resetModules();
+            rect.mockRestore();
         }
     });
 });
