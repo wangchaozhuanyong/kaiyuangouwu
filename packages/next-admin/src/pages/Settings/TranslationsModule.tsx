@@ -390,7 +390,12 @@ function TranslationAuditPage() {
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {states.map(item => (
-                                                <AuditRow key={item.id} item={item} onReview={setReviewId} />
+                                                <AuditRow
+                                                    key={item.id}
+                                                    item={item}
+                                                    onReview={setReviewId}
+                                                    onCompleted={writeCompleted}
+                                                />
                                             ))}
                                             {query.loading && !query.data && (
                                                 <tr>
@@ -468,12 +473,19 @@ function TranslationAuditPage() {
 function AuditRow({
     item,
     onReview,
+    onCompleted,
 }: {
     item: ContentTranslationStateRecord;
     onReview: (id: string) => void;
+    onCompleted: (message: string) => Promise<void>;
 }) {
-    const [retry, retryState] = useMutation(RETRY_CONTENT_TRANSLATIONS_MUTATION);
+    const [retry, retryState] = useMutation<{
+        retryCustomerContentTranslations: { queued: number };
+    }>(RETRY_CONTENT_TRANSLATIONS_MUTATION);
     const retryLock = useRef(false);
+    const [retryError, setRetryError] = useState('');
+    const [retryNotice, setRetryNotice] = useState('');
+    const isCurrentScope = useCurrentTranslationScope();
     return (
         <tr className="group h-[52px] hover:bg-slate-50">
             <td
@@ -543,27 +555,55 @@ function AuditRow({
                 data-label="操作"
                 className="sticky right-0 z-10 h-[52px] whitespace-nowrap border-l border-slate-100 bg-white px-3 py-0 group-hover:bg-slate-50"
             >
-                {!item.locked && ['PENDING', 'FAILED', 'NOTIFY_PENDING'].includes(item.status) && (
-                    <AdminButton
-                        type="button"
-                        disabled={retryState.loading}
-                        className="mr-3 text-blue-600 disabled:opacity-50"
-                        onClick={() => {
-                            if (retryState.loading || retryLock.current) return;
-                            retryLock.current = true;
-                            void retry({ variables: { ids: [item.id] } })
-                                .catch(() => undefined)
-                                .finally(() => {
-                                    retryLock.current = false;
-                                });
-                        }}
-                    >
-                        {retryState.loading ? '排队中' : '重试'}
-                    </AdminButton>
-                )}
-                {retryState.error && (
+                {!item.locked &&
+                    item.origin === 'AUTO' &&
+                    (['PENDING', 'FAILED', 'NOTIFY_PENDING'].includes(item.status) ||
+                        (item.status === 'CANCELLED' &&
+                            item.lastErrorCode === 'SOURCE_UNAVAILABLE' &&
+                            item.entityType === 'ProductVariant' &&
+                            item.fieldPath === 'name')) && (
+                        <AdminButton
+                            type="button"
+                            disabled={retryState.loading}
+                            className="mr-3 text-blue-600 disabled:opacity-50"
+                            onClick={() => {
+                                if (retryState.loading || retryLock.current) return;
+                                retryLock.current = true;
+                                setRetryError('');
+                                setRetryNotice('');
+                                void retry({ variables: { ids: [item.id] } })
+                                    .then(result => {
+                                        const queued = result.data?.retryCustomerContentTranslations?.queued;
+                                        if (queued == null) throw new Error('未取得重试受理结果，请刷新核对');
+                                        if (isCurrentScope())
+                                            setRetryNotice(
+                                                queued > 0 ? '已排队，待核对英文' : '未排队，请核对记录',
+                                            );
+                                        return onCompleted(
+                                            queued > 0
+                                                ? '已加入翻译队列，完成后请核对英文结果'
+                                                : '未加入翻译队列，请查看当前记录及人工锁定状态',
+                                        );
+                                    })
+                                    .catch(error => {
+                                        if (isCurrentScope()) setRetryError(toUserFacingError(error));
+                                    })
+                                    .finally(() => {
+                                        retryLock.current = false;
+                                    });
+                            }}
+                        >
+                            {retryState.loading ? '排队中' : '重试'}
+                        </AdminButton>
+                    )}
+                {(retryState.error || retryError) && (
                     <span role="alert" className="mr-2 text-rose-600">
-                        {toUserFacingError(retryState.error)}
+                        {retryState.error ? toUserFacingError(retryState.error) : retryError}
+                    </span>
+                )}
+                {retryNotice && (
+                    <span role="status" className="block whitespace-normal text-xs text-slate-600">
+                        {retryNotice}
                     </span>
                 )}
                 <AdminButton
