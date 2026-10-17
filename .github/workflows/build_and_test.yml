@@ -92,6 +92,7 @@ jobs:
                   python3 deploy/systemd/tests/file-backup.spec.py
                   python3 deploy/systemd/tests/disk-budget.spec.py
                   node --test deploy/icloud-relay-diagnostic.spec.mjs deploy/window-test-order-cleanup.spec.mjs
+                  node --test packages/dev-server/scripts/catalog-ownership-evidence.spec.mjs deploy/catalog-ownership-audit.spec.mjs
             - name: Build lint prerequisites
               if: needs.detect-changes.outputs.has_lint_packages == 'true'
               run: bun run build:core-common
