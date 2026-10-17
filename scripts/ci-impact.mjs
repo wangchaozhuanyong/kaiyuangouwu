@@ -67,6 +67,8 @@ export const isAutomationOnly = file =>
         'deploy/deploy-frontends-from-s3.sh',
         'deploy/production-operations.cjs',
         'deploy/catalog-ownership-audit.cjs',
+        'deploy/historical-asset-cleanup.cjs',
+        'deploy/historical-asset-cleanup-operations.cjs',
         'deploy/window-test-order-cleanup.cjs',
         'deploy/product-stock-ownership-receipt.cjs',
         'deploy/icloud-relay-diagnostic.mjs',

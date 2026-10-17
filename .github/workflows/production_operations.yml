@@ -78,6 +78,9 @@ on:
                     - prepare-notification-secret-transfer
                     - audit-store-isolation-data
                     - audit-catalog-ownership
+                    - prepare-historical-asset-cleanup
+                    - apply-historical-asset-cleanup-pilot-reviewed
+                    - apply-historical-asset-cleanup-remaining-reviewed
                     - plan-platform-store-governance
                     - audit-administrator-product-readiness
                     - plan-window-test-order-cleanup
@@ -163,13 +166,13 @@ jobs:
                   }
                   [[ "$OPS_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   case "$OPS_OPERATION" in
-                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-file-backup-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|inspect-icloud-relay|inspect-notification-config|enable-unified-notifications|prepare-notification-secret-transfer|audit-store-isolation-data|audit-catalog-ownership|plan-platform-store-governance|audit-administrator-product-readiness|plan-window-test-order-cleanup|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
+                    preflight-release|postflight-release|diagnose|backup-database|plan-deployment-cache-cleanup|plan-apt-archive-cleanup|plan-apt-metadata-cleanup|plan-apt-lists-cleanup|plan-snap-cache-cleanup|plan-archived-log-cleanup|plan-file-backup-cleanup|plan-offsite-file-backup-config|plan-two-factor-backup|verify-two-factor-backup|verify-security-dependencies|inspect-storefront-config|inspect-icloud-relay|inspect-notification-config|enable-unified-notifications|prepare-notification-secret-transfer|audit-store-isolation-data|audit-catalog-ownership|prepare-historical-asset-cleanup|plan-platform-store-governance|audit-administrator-product-readiness|plan-window-test-order-cleanup|plan-order-sales-ownership-backfill|plan-moyao-default-store-migration|verify-moyao-default-store-migration|plan-asset-webp-migration|verify-asset-webp-migration)
                       [[ -z "$OPS_EXPECTED_PLAN_SHA256" ]] || {
                         echo 'Operations without reviewed data changes must not include an expected plan' >&2
                         exit 1
                       }
                       ;;
-                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|apply-apt-archive-cleanup-reviewed|apply-apt-metadata-cleanup-reviewed|apply-apt-lists-cleanup-reviewed|apply-snap-cache-cleanup-reviewed|apply-archived-log-cleanup-reviewed|apply-file-backup-cleanup-reviewed|apply-offsite-file-backup-config-reviewed|backup-two-factor-reviewed|apply-window-test-order-cleanup-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed|apply-asset-webp-migration-reviewed)
+                    retain-reviewed|apply-deployment-cache-cleanup-reviewed|apply-apt-archive-cleanup-reviewed|apply-apt-metadata-cleanup-reviewed|apply-apt-lists-cleanup-reviewed|apply-snap-cache-cleanup-reviewed|apply-archived-log-cleanup-reviewed|apply-file-backup-cleanup-reviewed|apply-offsite-file-backup-config-reviewed|backup-two-factor-reviewed|apply-window-test-order-cleanup-reviewed|apply-order-sales-ownership-backfill-reviewed|apply-moyao-default-store-migration-reviewed|apply-asset-webp-migration-reviewed|apply-historical-asset-cleanup-pilot-reviewed|apply-historical-asset-cleanup-remaining-reviewed)
                       [[ "$OPS_EXPECTED_PLAN_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
                         echo 'Reviewed writes require the exact lowercase plan SHA-256' >&2
                         exit 1
@@ -193,7 +196,7 @@ jobs:
                     echo 'Only release validation accepts expected Channel codes' >&2
                     exit 1
                   fi
-                  if [[ "$OPS_OPERATION" == "plan-window-test-order-cleanup" || "$OPS_OPERATION" == "apply-window-test-order-cleanup-reviewed" || "$OPS_OPERATION" == "inspect-icloud-relay" || "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-catalog-ownership" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "prepare-historical-asset-cleanup" || "$OPS_OPERATION" == "apply-historical-asset-cleanup-pilot-reviewed" || "$OPS_OPERATION" == "apply-historical-asset-cleanup-remaining-reviewed" || "$OPS_OPERATION" == "plan-window-test-order-cleanup" || "$OPS_OPERATION" == "apply-window-test-order-cleanup-reviewed" || "$OPS_OPERATION" == "inspect-icloud-relay" || "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-catalog-ownership" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" || "$OPS_OPERATION" == "plan-asset-webp-migration" || "$OPS_OPERATION" == "apply-asset-webp-migration-reviewed" || "$OPS_OPERATION" == "verify-asset-webp-migration" ]]; then
                     [[ "$OPS_EXPECTED_RUNTIME_SHA" =~ ^[0-9a-f]{40}$ ]] || {
                       echo 'Pinned store-data operations require an exact expected runtime SHA' >&2
                       exit 1
@@ -229,7 +232,7 @@ jobs:
                   set -Eeuo pipefail
                   [[ "$(git rev-parse HEAD)" == "$OPS_SOURCE_SHA" ]]
                   test -z "$(git status --porcelain --untracked-files=no)"
-                  if [[ "$OPS_OPERATION" == "plan-window-test-order-cleanup" || "$OPS_OPERATION" == "apply-window-test-order-cleanup-reviewed" || "$OPS_OPERATION" == "inspect-icloud-relay" || "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-catalog-ownership" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
+                  if [[ "$OPS_OPERATION" == "prepare-historical-asset-cleanup" || "$OPS_OPERATION" == "apply-historical-asset-cleanup-pilot-reviewed" || "$OPS_OPERATION" == "apply-historical-asset-cleanup-remaining-reviewed" || "$OPS_OPERATION" == "plan-window-test-order-cleanup" || "$OPS_OPERATION" == "apply-window-test-order-cleanup-reviewed" || "$OPS_OPERATION" == "inspect-icloud-relay" || "$OPS_OPERATION" == "backup-database" || "$OPS_OPERATION" == "audit-store-isolation-data" || "$OPS_OPERATION" == "audit-catalog-ownership" || "$OPS_OPERATION" == "plan-platform-store-governance" || "$OPS_OPERATION" == "audit-administrator-product-readiness" || "$OPS_OPERATION" == "plan-order-sales-ownership-backfill" || "$OPS_OPERATION" == "apply-order-sales-ownership-backfill-reviewed" || "$OPS_OPERATION" == "plan-moyao-default-store-migration" || "$OPS_OPERATION" == "apply-moyao-default-store-migration-reviewed" || "$OPS_OPERATION" == "verify-moyao-default-store-migration" ]]; then
                     git cat-file -e "${OPS_EXPECTED_RUNTIME_SHA}^{commit}"
                     git merge-base --is-ancestor "$OPS_EXPECTED_RUNTIME_SHA" "$OPS_SOURCE_SHA"
                   fi
@@ -262,7 +265,7 @@ jobs:
                       'set -Eeuo pipefail',
                       'umask 077',
                       'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
-                      f"trap 'code=$?; if {{ [ {operation} != plan-platform-store-governance ] && [ {operation} != audit-catalog-ownership ]; }} || [ \"$code\" != 0 ]; then rm -rf -- \"$operations_dir\"; fi' EXIT",
+                      f"trap 'code=$?; if {{ [ {operation} != plan-platform-store-governance ] && [ {operation} != audit-catalog-ownership ] && [ {operation} != prepare-historical-asset-cleanup ]; }} || [ \"$code\" != 0 ]; then rm -rf -- \"$operations_dir\"; fi' EXIT",
                       'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts" "$operations_dir/repository/deploy"',
                   ]
                   bundle_index = len(lines)
@@ -325,6 +328,11 @@ jobs:
                       lines.extend([
                           transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),
                           transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
+                      ])
+                  if 'historical-asset-cleanup' in operation_name:
+                      lines.extend(transport(f'deploy/{name}', name) for name in [
+                          'historical-asset-cleanup.cjs', 'historical-asset-cleanup-operations.cjs',
+                          'governance-preflight-transport.cjs',
                       ])
                   if operation_name == 'audit-catalog-ownership':
                       lines.append(transport('deploy/production-storefronts.json', 'repository/deploy/production-storefronts.json'))
@@ -512,12 +520,12 @@ jobs:
                   fi
 
             - name: Save read-only governance plan
-              if: ${{ success() && (inputs.operation == 'plan-platform-store-governance' || inputs.operation == 'audit-catalog-ownership') }}
+              if: ${{ success() && (inputs.operation == 'plan-platform-store-governance' || inputs.operation == 'audit-catalog-ownership' || inputs.operation == 'prepare-historical-asset-cleanup') }}
               run: |
                   python3 deploy/collect-governance-preflight.py
 
             - name: Upload read-only governance plan
-              if: ${{ success() && (inputs.operation == 'plan-platform-store-governance' || inputs.operation == 'audit-catalog-ownership') }}
+              if: ${{ success() && (inputs.operation == 'plan-platform-store-governance' || inputs.operation == 'audit-catalog-ownership' || inputs.operation == 'prepare-historical-asset-cleanup') }}
               uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
               with:
                   name: platform-governance-data-plan
