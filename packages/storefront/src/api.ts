@@ -1,3 +1,4 @@
+import type { ConfirmLogout } from './api/auth-transition';
 import type { ShopApiContext } from './api/client-context';
 import type { ImageStudioApi } from './api/image-studio';
 import type { IcloudMailItem, IcloudQueryResult, MailQueryApi } from './api/mail-query';
@@ -47,7 +48,6 @@ import { CartCheckoutApi } from './api/cart-checkout';
 import { CatalogApi } from './api/catalog';
 import { ContentReviewsApi } from './api/content-reviews';
 import {
-    API_URL,
     assertNoShopApiError,
     authTokenStorageKey,
     calculateStorefrontRealtimeRetry,
@@ -55,13 +55,15 @@ import {
     ErrorResult,
     isStorefrontQuery,
     parseShopApiResponse,
-    SEND_CLIENT_CHANNEL_TOKEN,
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiError,
+    shopApiHeaders,
     ShopApiTimeoutError,
+    shopApiUrl,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
 import { lazyAccountApi, type AccountApi } from './api/lazy-account';
+import { sessionTransport } from './api/session-transport';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
 import { shopAbuseHeaders, type ShopAbuseClient, type ShopAbuseProof } from './shop-abuse';
@@ -76,7 +78,7 @@ export {
 export type { IcloudMailItem, IcloudQueryResult };
 
 export class ShopApi {
-    private readonly authTokens: AuthTokenState;
+    readonly #authTokens: AuthTokenState;
     private storefrontCatalogAvailable: boolean | null = null;
     readonly contentReviewsApi: ContentReviewsApi;
     private readonly catalogApi: CatalogApi;
@@ -92,15 +94,16 @@ export class ShopApi {
         private readonly market: MarketConfig,
         private readonly languageCode: VendureLanguageCode = market.defaultLanguageCode,
     ) {
-        this.authTokens = new AuthTokenState(authTokenStorageKey(market.code));
+        this.#authTokens = new AuthTokenState(authTokenStorageKey(market.code), market.code);
         const ctx: ShopApiContext = {
             market: this.market,
             languageCode: this.languageCode,
-            getAuthToken: () => this.authTokens.value,
-            createAuthTokenCapture: () => this.authTokens.createCapture(),
-            clearAuthToken: () => this.authTokens.clear(),
-            request: (q, v, s, t, r, c, p) => this.request(q, v, s, t, r, false, c, p),
-            authenticationRequest: (q, v, s, t, r, p) => this.request(q, v, s, t, r, true, undefined, p),
+            getAuthToken: () => this.#authTokens.value,
+            createAuthTokenCapture: () => this.#authTokens.createCapture(),
+            clearAuthToken: () => this.#authTokens.clear(),
+            request: (q, v, s, t, r, c, p, m) => this.request(q, v, s, t, r, false, c, p, m),
+            authenticationRequest: (q, v, s, t, r, p, d) =>
+                this.request(q, v, s, t, r, true, undefined, p, false, d),
             assertCart: res => this.assertCart(res),
             assertCheckoutSession: res => this.assertCheckoutSession(res),
             assertOrder: res => this.assertOrder(res),
@@ -430,10 +433,12 @@ export class ShopApi {
         this.publishCookieAuthenticationChange();
     };
 
-    async logout(): Promise<void> {
+    async logout(): Promise<ConfirmLogout | void> {
+        const assertCurrent = await this.accountApi.logout();
+        assertCurrent();
         this.cartCheckoutApi.controller?.reset();
-        await this.accountApi.logout();
         this.publishCookieAuthenticationChange();
+        return assertCurrent;
     }
 
     async createAddress(input: CustomerAddressInput): Promise<CustomerAddress> {
@@ -625,56 +630,60 @@ export class ShopApi {
         authenticates = false,
         readCurrencyCode?: string,
         proof?: ShopAbuseProof,
+        sessionManaged = false,
+        onDispatch?: () => void,
     ): Promise<T> {
-        const captureAuthToken = this.authTokens.createCapture(authenticates);
-        const headers: Record<string, string> = {
-            ...shopAbuseHeaders(proof),
-            'content-type': 'application/json',
-            'language-code': this.languageCode,
-        };
-        if (SEND_CLIENT_CHANNEL_TOKEN) {
-            headers['vendure-token'] = this.market.code;
-        }
-        if (this.authTokens.value) {
-            headers.authorization = `Bearer ${this.authTokens.value}`;
-        }
-        const languageSeparator = API_URL.includes('?') ? '&' : '?';
-        const requestUrl =
-            `${API_URL}${languageSeparator}languageCode=${encodeURIComponent(this.languageCode)}` +
-            `&currencyCode=${encodeURIComponent(readCurrencyCode ?? this.market.currencyCode)}`;
-        const effectiveTimeoutMs =
-            timeoutMs ?? (isStorefrontQuery(query) ? SHOP_API_QUERY_TIMEOUT_MS : undefined);
-        const timeout = createRequestSignal(signal, effectiveTimeoutMs);
-        let response: Response;
-        let rawBody: string;
-        try {
-            response = await fetch(requestUrl, {
+        const requestUrl = shopApiUrl(this.languageCode, readCurrencyCode ?? this.market.currencyCode);
+        const timeout = createRequestSignal(
+            signal,
+            timeoutMs ?? (isStorefrontQuery(query) ? SHOP_API_QUERY_TIMEOUT_MS : undefined),
+        );
+        const send = async () => {
+            // Capture the current identity only once the queued request actually starts.
+            const capture = this.#authTokens.createCapture(authenticates);
+            const headers: Record<string, string> = {
+                ...shopAbuseHeaders(proof),
+                'content-type': 'application/json',
+                ...shopApiHeaders(this.languageCode, this.market.code, this.#authTokens.value),
+            };
+            timeout.signal?.throwIfAborted();
+            const request = fetch(requestUrl, {
                 method: 'POST',
                 credentials: 'include',
                 headers,
                 body: JSON.stringify({ query, variables }),
                 signal: timeout.signal,
             });
-            captureAuthToken(response);
-            rawBody = await response.text();
+            onDispatch?.();
+            const response = await request;
+            capture(response);
+            return response;
+        };
+        const read = async (response: Response) =>
+            parseShopApiResponse<T>(await response.text(), response.status, response.ok);
+        try {
+            if (sessionManaged) return await read(await send());
+            if (authenticates)
+                return await sessionTransport(requestUrl, true, timeout.signal, async () =>
+                    read(await send()),
+                );
+            return await read(await sessionTransport(requestUrl, false, timeout.signal, send));
         } catch (error) {
-            if (timeout.didTimeout()) {
+            if (timeout.didTimeout())
                 throw new ShopApiTimeoutError(
                     resultUnknownOnTimeout
                         ? '请求超时，提交结果暂时无法确认，请勿更改参数后重复提交'
                         : '请求超时，请检查网络后重试',
                     resultUnknownOnTimeout,
                 );
-            }
             throw error;
         } finally {
             timeout.cleanup();
         }
-        return parseShopApiResponse<T>(rawBody, response.status, response.ok);
     }
 
     private publishCookieAuthenticationChange(): void {
-        if (this.authTokens.usesCookieAuthentication) publishAuthSessionChange(this.market.code);
+        if (this.#authTokens.usesCookieAuthentication) publishAuthSessionChange(this.market.code);
     }
 
     private assertCart(result: StorefrontCart & ErrorResult): StorefrontCart {

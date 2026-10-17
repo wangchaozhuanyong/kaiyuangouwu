@@ -2,6 +2,7 @@ import type { AccountApi } from './account';
 import type { ShopApiContext } from './client-context';
 
 import { CustomerIdentityApi } from './customer-identity';
+import { waitForRequest } from './request-wait';
 
 export type { AccountApi };
 type AccountModule = Pick<typeof import('./account'), 'AccountApi'>;
@@ -83,26 +84,6 @@ export function lazyAccountApi(
         }
         return domain;
     };
-    const wait = async (signal?: AbortSignal): Promise<AccountApi> => {
-        if (!signal) return load();
-        if (signal.aborted) throw signal.reason ?? new DOMException('Request aborted', 'AbortError');
-        let removeAbort: () => void = () => undefined;
-        try {
-            const account = await Promise.race([
-                load(),
-                new Promise<undefined>(resolve => {
-                    const abort = () => resolve(undefined);
-                    signal.addEventListener('abort', abort, { once: true });
-                    removeAbort = () => signal.removeEventListener('abort', abort);
-                    if (signal.aborted) abort();
-                }),
-            ]);
-            if (signal.aborted) throw signal.reason ?? new DOMException('Request aborted', 'AbortError');
-            return account ?? load();
-        } finally {
-            removeAbort();
-        }
-    };
     return new Proxy(target, {
         get(object, property, receiver) {
             if (property === 'customerIdentity') return Reflect.get(object, property, receiver);
@@ -112,7 +93,9 @@ export function lazyAccountApi(
             if (!method) {
                 method = async (...args) => {
                     const signal = args.find(accountSignal);
-                    const account = await wait(signal);
+                    if (signal?.aborted)
+                        throw signal.reason ?? new DOMException('Request aborted', 'AbortError');
+                    const account = await waitForRequest(load(), signal);
                     if (signal?.aborted)
                         throw signal.reason ?? new DOMException('Request aborted', 'AbortError');
                     return Reflect.apply(account[name].bind(account), account, args);

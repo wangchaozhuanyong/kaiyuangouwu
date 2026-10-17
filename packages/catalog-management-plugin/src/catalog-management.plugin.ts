@@ -6,7 +6,7 @@ import { CatalogChannelAssignmentsService } from './catalog-channel-assignments.
 import { CatalogFileParserService } from './catalog-file-parser.service';
 import { CatalogImportCategoryService } from './catalog-import-category.service';
 import { CatalogImportOptionsService } from './catalog-import-options.service';
-import { CatalogImportQueueService } from './catalog-import-queue.service';
+import { CatalogImportQueueService, reconcileCatalogImportsTask } from './catalog-import-queue.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogManagementAdminResolver } from './catalog-management.resolver';
 import { CatalogOperationsService } from './catalog-operations.service';
@@ -99,7 +99,7 @@ import './types';
     exports: [InventoryControlService, CatalogOperationsService, CatalogSyncService],
     configuration: config => {
         config.catalogOptions.collectionFilters.push(catalogSyncCollectionFilter);
-        config.schedulerOptions.tasks.push(reconcileCatalogSyncTask);
+        config.schedulerOptions.tasks.push(reconcileCatalogSyncTask, reconcileCatalogImportsTask);
         config.authOptions.customPermissions.push(
             manageCatalogImportPermission,
             manageCatalogOperationsPermission,

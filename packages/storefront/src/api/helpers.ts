@@ -19,6 +19,23 @@ export const SEND_CLIENT_CHANNEL_TOKEN =
     import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
 
+/** Both JSON and multipart requests target the same language/currency endpoint. */
+export function shopApiUrl(language: string, currency: string): string {
+    return `${API_URL}${API_URL.includes('?') ? '&' : '?'}languageCode=${encodeURIComponent(language)}&currencyCode=${encodeURIComponent(currency)}`;
+}
+
+export function shopApiHeaders(
+    language: string | undefined,
+    market: string,
+    token: string | null,
+): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (language) headers['language-code'] = language;
+    if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = market;
+    if (token) headers.authorization = `Bearer ${token}`;
+    return headers;
+}
+
 export function isStorefrontQuery(document: string): boolean {
     return /^\s*(?:query\b|\{)/u.test(document);
 }

@@ -24,6 +24,7 @@ import '../../src/styles/locale-preferences.css';
 import '../../src/styles/subpage-content.css';
 import '../../src/styles/visual-presets.css';
 import { applyStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
+import { LogoutFixture } from './logout-fixture';
 /* eslint-enable import/order */
 
 // This fixture mounts the production component; every action uses the local Shop API.
@@ -122,7 +123,7 @@ function Fixture() {
 }
 
 const router = createRouter({
-    routeTree: createRootRoute({ component: Fixture }),
+    routeTree: createRootRoute({ component: params.has('qaLogout') ? LogoutFixture : Fixture }),
     history: createMemoryHistory({ initialEntries: ['/'] }),
 });
 const rootElement = document.getElementById('root');

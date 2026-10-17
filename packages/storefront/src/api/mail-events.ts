@@ -9,6 +9,7 @@ import {
     StorefrontRealtimeConnectionError,
     storefrontRealtimeUrl,
 } from './helpers';
+import { sessionTransport } from './session-transport';
 
 export type MailStreamStatus = 'connecting' | 'live' | 'reconnecting' | 'paused' | 'unavailable' | 'denied';
 export interface MailStreamCallbacks {
@@ -25,7 +26,7 @@ class MailStreamStopped extends Error {
 /** Mailbox capability stays in the POST body, never in URLs or shared caches. */
 export async function watchMailEvents(
     queryCode: string,
-    headers: Record<string, string>,
+    headers: Record<string, string> | (() => Record<string, string>),
     callbacks: MailStreamCallbacks,
     signal: AbortSignal,
 ): Promise<void> {
@@ -58,14 +59,20 @@ export async function watchMailEvents(
             const request = createRequestSignal(connection.signal, 10_000);
             let response: Response;
             try {
-                response = await fetch(url.toString(), {
-                    method: 'POST',
-                    credentials: 'include',
-                    cache: 'no-store',
-                    headers: { ...headers, accept: 'text/event-stream', 'content-type': 'application/json' },
-                    body: JSON.stringify({ queryCode, cursor }),
-                    signal: request.signal,
-                });
+                response = await sessionTransport(url.toString(), false, request.signal, () =>
+                    fetch(url.toString(), {
+                        method: 'POST',
+                        credentials: 'include',
+                        cache: 'no-store',
+                        headers: {
+                            ...(typeof headers === 'function' ? headers() : headers),
+                            accept: 'text/event-stream',
+                            'content-type': 'application/json',
+                        },
+                        body: JSON.stringify({ queryCode, cursor }),
+                        signal: request.signal,
+                    }),
+                );
             } finally {
                 request.cleanup();
             }

@@ -4,6 +4,7 @@ import { ID } from '@vendure/common/lib/shared-types';
 import {
     FacetService,
     FacetValueService,
+    Logger,
     Permission,
     Product,
     ProductService,
@@ -34,6 +35,11 @@ import {
     shouldClear,
     validateImportSource,
 } from './catalog-import-helpers';
+import {
+    CATALOG_IMPORT_HEARTBEAT_MS,
+    CatalogImportLease,
+    CatalogImportLeaseLostError,
+} from './catalog-import-lease';
 import { CatalogImportOptionsService } from './catalog-import-options.service';
 import {
     type PlannedRow,
@@ -82,6 +88,7 @@ export class CatalogImportService {
     private readonly preview: CatalogImportPreview;
     private readonly writer: CatalogImportWriter;
     private readonly rollbackExecutor: CatalogImportRollback;
+    private readonly executionLease: CatalogImportLease;
 
     private enqueue?: (jobId: ID) => Promise<void>;
 
@@ -98,6 +105,7 @@ export class CatalogImportService {
         private readonly searchService: SearchService,
         private readonly suppliers: CatalogSupplierService,
     ) {
+        this.executionLease = new CatalogImportLease(this.connection);
         this.preview = new CatalogImportPreview(this.connection, this.suppliers, this.operations);
         this.writer = new CatalogImportWriter(
             this.connection,
@@ -686,104 +694,218 @@ export class CatalogImportService {
             where: { jobId: id, action: In(['CONFLICT', 'WARNING', 'ERROR']) },
         });
         if (unresolved > 0) throw new UserInputError(`还有 ${unresolved} 行冲突、警告或错误未处理`);
-        job.state = 'QUEUED';
-        job.errorMessage = null;
-        job.progress = 0;
-        job.completedAt = null;
-        // Execute as the administrator authorizing this attempt, including when a
-        // different administrator retries a job whose previous actor lost access.
-        job.actorId = String(ctx.activeUserId);
-        await this.connection.getRepository(ctx, CatalogImportJob).save(job);
+        const queued = await this.connection.getRepository(ctx, CatalogImportJob).update(
+            { id, channelId: ctx.channelId, state: job.state, version: job.version },
+            {
+                state: 'QUEUED',
+                errorMessage: null,
+                progress: 0,
+                completedAt: null,
+                executionToken: null,
+                leaseUntil: null,
+                // A retry is owned by the administrator authorizing this attempt.
+                actorId: String(ctx.activeUserId),
+            },
+        );
+        if (queued.affected !== 1) throw new UserInputError('导入任务已变化，请刷新后重试');
         if (!this.enqueue) throw new UserInputError('导入队列尚未就绪，请稍后重试');
         await this.enqueue(job.id);
         return this.findJob(ctx, job.id);
     }
 
-    async executeJob(ctx: RequestContext, id: ID, onProgress: (progress: number) => void): Promise<void> {
+    async executeJob(
+        ctx: RequestContext,
+        id: ID,
+        onProgress: (progress: number) => void | Promise<void>,
+    ): Promise<void> {
         this.assertExecutionPermission(ctx);
-        const repository = this.connection.getRepository(ctx, CatalogImportJob);
-        const claimed = await repository.update(
-            { id, state: 'QUEUED', channelId: ctx.channelId },
-            {
-                state: 'RUNNING',
-                startedAt: new Date(),
-                errorMessage: null,
-            },
-        );
-        if (claimed.affected !== 1) return;
-        const job = await this.findJob(ctx, id);
-        const rows = await this.findRows(ctx, id);
-        const stockLocations = await this.operations.stockLocations(ctx);
-        const productByKey = new Map<string, ID>();
-        const variantByKey = new Map<string, ID>();
-        const productSourceKeys = new Map<string, Set<string>>();
-        for (const row of rows.filter(item => item.action !== 'SKIP_UNCHANGED')) {
-            const keys = productSourceKeys.get(row.productKey) ?? new Set<string>();
-            keys.add(row.sourceKey);
-            productSourceKeys.set(row.productKey, keys);
-        }
-        const multiVariantProductKeys = new Set(
-            [...productSourceKeys.entries()].filter(([, keys]) => keys.size > 1).map(([key]) => key),
-        );
-        for (const applied of rows.filter(row => row.appliedAt && row.targetProductId)) {
-            productByKey.set(applied.productKey, applied.targetProductId as ID);
-            if (applied.targetVariantId) {
-                variantByKey.set(variantExecutionKey(applied.normalizedData), applied.targetVariantId);
+        const token = await this.executionLease.claim(ctx, id);
+        if (!token) return;
+        let leaseFailure: unknown;
+        const throwIfLeaseFailed = () => {
+            if (leaseFailure)
+                throw leaseFailure instanceof Error
+                    ? leaseFailure
+                    : Object.assign(new Error(safeMessage(leaseFailure)), { cause: leaseFailure });
+        };
+        let heartbeatPending: Promise<void> | undefined;
+        const heartbeat = setInterval(() => {
+            if (heartbeatPending) return;
+            heartbeatPending = this.executionLease
+                .owned(ctx, id, token, () => Promise.resolve(undefined))
+                .catch(error => {
+                    leaseFailure = error;
+                })
+                .finally(() => {
+                    heartbeatPending = undefined;
+                });
+        }, CATALOG_IMPORT_HEARTBEAT_MS);
+        heartbeat.unref?.();
+        let lastProgress = -1;
+        const publish = async (progress: number) => {
+            if (progress === lastProgress) return;
+            lastProgress = progress;
+            try {
+                await onProgress(progress);
+            } catch {
+                Logger.warn(
+                    'Import progress notification failed; persisted progress is retained',
+                    'CatalogImport',
+                );
             }
-        }
-        await this.categories.withDeferredFilters(ctx, async () => {
-            let processed = 0;
-            let lastProgress = -1;
-            for (const row of rows) {
-                const previousRowState = { ...row };
-                try {
-                    if (row.appliedAt || row.action === 'SKIP_UNCHANGED' || row.action === 'ERROR') {
-                        processed++;
-                        continue;
-                    }
-                    if (row.action !== 'CREATE' && row.action !== 'UPDATE') {
-                        throw new UserInputError('存在未解决的冲突或警告');
-                    }
-                    await this.connection.withTransaction(ctx, async txCtx => {
-                        await this.applyRow(
-                            txCtx,
-                            job,
-                            row,
-                            productByKey,
-                            variantByKey,
-                            stockLocations,
-                            multiVariantProductKeys,
-                        );
-                    });
-                    if (row.targetProductId) productByKey.set(row.productKey, row.targetProductId);
+        };
+        try {
+            const rows = await this.findRows(ctx, id);
+            const stockLocations = await this.operations.stockLocations(ctx);
+            const productByKey = new Map<string, ID>();
+            const variantByKey = new Map<string, ID>();
+            const productSourceKeys = new Map<string, Set<string>>();
+            const done = (row: CatalogImportRow) =>
+                Boolean(row.appliedAt) || row.action === 'SKIP_UNCHANGED' || row.action === 'ERROR';
+            for (const row of rows.filter(item => item.action !== 'SKIP_UNCHANGED')) {
+                const keys = productSourceKeys.get(row.productKey) ?? new Set<string>();
+                keys.add(row.sourceKey);
+                productSourceKeys.set(row.productKey, keys);
+            }
+            const multiVariantProductKeys = new Set(
+                [...productSourceKeys.entries()].filter(([, keys]) => keys.size > 1).map(([key]) => key),
+            );
+            const remember = (row: CatalogImportRow) => {
+                if (row.appliedAt && row.targetProductId) {
+                    productByKey.set(row.productKey, row.targetProductId);
                     if (row.targetVariantId)
                         variantByKey.set(variantExecutionKey(row.normalizedData), row.targetVariantId);
-                } catch (error) {
-                    Object.assign(row, previousRowState);
-                    row.action = 'ERROR';
-                    row.message = safeMessage(error);
-                    await this.connection.getRepository(ctx, CatalogImportRow).save(row);
                 }
-                processed++;
-                const progress = Math.round((processed / Math.max(rows.length, 1)) * 100);
-                if (progress !== lastProgress) {
-                    await repository.update(id, { progress });
-                    onProgress(progress);
-                    lastProgress = progress;
+            };
+            rows.forEach(remember);
+            let processed = rows.filter(done).length;
+            const progress = () => Math.round((processed / Math.max(rows.length, 1)) * 100);
+            await publish(progress());
+            await this.categories.withDeferredFilters(ctx, async () => {
+                for (const original of rows) {
+                    throwIfLeaseFailed();
+                    if (done(original)) continue;
+                    const nextProgress = Math.round(((processed + 1) / Math.max(rows.length, 1)) * 100);
+                    let committed: CatalogImportRow;
+                    try {
+                        committed = await this.executionLease.owned(ctx, id, token, async (txCtx, job) => {
+                            const row = await this.connection
+                                .getRepository(txCtx, CatalogImportRow)
+                                .findOneByOrFail({ id: original.id, jobId: id });
+                            if (!done(row)) {
+                                if (row.action !== 'CREATE' && row.action !== 'UPDATE')
+                                    throw new UserInputError('存在未解决的冲突或警告');
+                                await this.applyRow(
+                                    txCtx,
+                                    job,
+                                    row,
+                                    productByKey,
+                                    variantByKey,
+                                    stockLocations,
+                                    multiVariantProductKeys,
+                                );
+                            }
+                            await this.connection
+                                .getRepository(txCtx, CatalogImportJob)
+                                .update(
+                                    { id, executionToken: token, state: 'RUNNING' },
+                                    { progress: nextProgress },
+                                );
+                            return row;
+                        });
+                    } catch (error) {
+                        if (error instanceof CatalogImportLeaseLostError) throw error;
+                        // Re-read under the same fence: a lost commit acknowledgement
+                        // must never replace an already committed row with ERROR.
+                        committed = await this.executionLease.owned(ctx, id, token, async txCtx => {
+                            const repository = this.connection.getRepository(txCtx, CatalogImportRow);
+                            const row = await repository.findOneByOrFail({ id: original.id, jobId: id });
+                            if (!done(row)) {
+                                row.action = 'ERROR';
+                                row.message = safeMessage(error);
+                                await repository.save(row);
+                            }
+                            await this.connection
+                                .getRepository(txCtx, CatalogImportJob)
+                                .update(
+                                    { id, executionToken: token, state: 'RUNNING' },
+                                    { progress: nextProgress },
+                                );
+                            return row;
+                        });
+                    }
+                    Object.assign(original, committed);
+                    remember(committed);
+                    processed++;
+                    await publish(progress());
+                }
+            });
+            throwIfLeaseFailed();
+            await this.executionLease.owned(
+                ctx,
+                id,
+                token,
+                async txCtx => {
+                    const finalRows = await this.connection
+                        .getRepository(txCtx, CatalogImportRow)
+                        .find({ where: { jobId: id } });
+                    const count = (action: CatalogImportAction) =>
+                        finalRows.filter(row => row.action === action).length;
+                    const errorCount = finalRows.filter(row =>
+                        ['ERROR', 'CONFLICT', 'WARNING'].includes(row.action),
+                    ).length;
+                    await this.searchService.reindex(txCtx);
+                    await this.connection.getRepository(txCtx, CatalogImportJob).update(
+                        { id, state: 'RUNNING', executionToken: token },
+                        {
+                            state: errorCount > 0 ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
+                            totalRows: finalRows.length,
+                            createdCount: count('CREATE'),
+                            updatedCount: count('UPDATE'),
+                            skippedCount: count('SKIP_UNCHANGED'),
+                            conflictCount: count('CONFLICT'),
+                            warningCount: count('WARNING'),
+                            errorCount: count('ERROR'),
+                            progress: 100,
+                            completedAt: new Date(),
+                            errorMessage: errorCount > 0 ? errorCount + ' 行未执行，请查看报告' : null,
+                        },
+                    );
+                },
+                true,
+            );
+        } catch (error) {
+            if (!(error instanceof CatalogImportLeaseLostError)) {
+                try {
+                    await this.executionLease.owned(
+                        ctx,
+                        id,
+                        token,
+                        async txCtx => {
+                            await this.connection.getRepository(txCtx, CatalogImportJob).update(
+                                { id, state: 'RUNNING', executionToken: token },
+                                {
+                                    state: 'FAILED',
+                                    errorMessage: safeMessage(error),
+                                    completedAt: new Date(),
+                                },
+                            );
+                        },
+                        true,
+                    );
+                } catch (ownershipError) {
+                    if (!(ownershipError instanceof CatalogImportLeaseLostError))
+                        Logger.warn(
+                            'Import failure status could not be confirmed; lease recovery will retry',
+                            'CatalogImport',
+                        );
                 }
             }
-        });
-        const errorCount = await this.connection.getRepository(ctx, CatalogImportRow).count({
-            where: { jobId: id, action: In(['ERROR', 'CONFLICT', 'WARNING']) },
-        });
-        await this.refreshCounts(ctx, id);
-        await this.searchService.reindex(ctx);
-        await repository.update(id, {
-            state: errorCount > 0 ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
-            progress: 100,
-            completedAt: new Date(),
-            errorMessage: errorCount > 0 ? `${errorCount} 行未执行，请查看报告` : null,
-        });
+            throw error;
+        } finally {
+            clearInterval(heartbeat);
+            await heartbeatPending;
+        }
     }
 
     private assertExecutionPermission(ctx: RequestContext): void {

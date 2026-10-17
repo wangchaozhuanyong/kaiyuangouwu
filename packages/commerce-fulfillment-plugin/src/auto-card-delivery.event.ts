@@ -8,3 +8,13 @@ export class AutoCardDeliveryReadyEvent extends VendureEvent {
         super();
     }
 }
+
+/** Non-blocking subscribers receive this only after the maintenance transaction commits. */
+export class AutoCardPoolEnabledEvent extends VendureEvent {
+    constructor(
+        public readonly ctx: RequestContext,
+        public readonly productVariantId: string,
+    ) {
+        super();
+    }
+}

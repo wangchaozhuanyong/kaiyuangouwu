@@ -12,7 +12,7 @@ import {
 } from '../../../config';
 import { manualFulfillmentHandler } from '../../../config/fulfillment/manual-fulfillment-handler';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
-import { Channel, Collection, FacetValue, TaxCategory, User } from '../../../entity';
+import { Channel, Collection, FacetValue, User } from '../../../entity';
 import {
     CollectionService,
     FacetValueService,
@@ -290,25 +290,30 @@ export class Populator {
         ctx: RequestContext,
         shippingMethods: Array<{ name: string; price: number; taxRate?: number }>,
     ) {
-        for (const method of shippingMethods) {
-            await this.shippingMethodService.create(ctx, {
-                fulfillmentHandler: manualFulfillmentHandler.code,
-                checker: {
-                    code: defaultShippingEligibilityChecker.code,
-                    arguments: [{ name: 'orderMinimum', value: '0' }],
-                },
-                calculator: {
-                    code: defaultShippingCalculator.code,
-                    arguments: [
-                        { name: 'rate', value: method.price.toString() },
-                        { name: 'taxRate', value: method.taxRate ? method.taxRate.toString() : '0' },
-                        { name: 'includesTax', value: 'auto' },
-                    ],
-                },
-                code: normalizeString(method.name, '-'),
-                translations: [{ languageCode: ctx.languageCode, name: method.name, description: '' }],
-            });
-        }
+        if (!shippingMethods.length) return;
+        // This entry point is also called outside the GraphQL transaction interceptor.
+        // Keep scoped shipping configuration locks and their writes in the same transaction.
+        await this.connection.withTransaction(ctx, async tx => {
+            for (const method of shippingMethods) {
+                await this.shippingMethodService.create(tx, {
+                    fulfillmentHandler: manualFulfillmentHandler.code,
+                    checker: {
+                        code: defaultShippingEligibilityChecker.code,
+                        arguments: [{ name: 'orderMinimum', value: '0' }],
+                    },
+                    calculator: {
+                        code: defaultShippingCalculator.code,
+                        arguments: [
+                            { name: 'rate', value: method.price.toString() },
+                            { name: 'taxRate', value: method.taxRate ? method.taxRate.toString() : '0' },
+                            { name: 'includesTax', value: 'auto' },
+                        ],
+                    },
+                    code: normalizeString(method.name, '-'),
+                    translations: [{ languageCode: ctx.languageCode, name: method.name, description: '' }],
+                });
+            }
+        });
     }
 
     private async populatePaymentMethods(ctx: RequestContext, paymentMethods: InitialData['paymentMethods']) {

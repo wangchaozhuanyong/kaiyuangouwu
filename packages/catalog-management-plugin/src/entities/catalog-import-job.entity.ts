@@ -10,6 +10,7 @@ import { CatalogImportRow } from './catalog-import-row.entity';
 @Entity({ name: 'catalog_import_job' })
 @Index('IDX_catalog_import_job_context_hash', ['channelId', 'stockLocationId', 'currencyCode', 'fileHash'])
 @Index('IDX_catalog_import_job_state_created', ['state', 'createdAt'])
+@Index('IDX_catalog_import_job_state_lease', ['state', 'leaseUntil'])
 export class CatalogImportJob extends VendureEntity {
     constructor(input?: DeepPartial<CatalogImportJob>) {
         super(input);
@@ -91,6 +92,13 @@ export class CatalogImportJob extends VendureEntity {
 
     @Column({ type: 'varchar', length: 500, nullable: true })
     errorMessage: string | null;
+
+    /** Internal fencing token: never exposed through the public import contract. */
+    @Column({ type: 'varchar', length: 36, nullable: true })
+    executionToken: string | null;
+
+    @Column({ type: Date, nullable: true, precision: 6 })
+    leaseUntil: Date | null;
 
     @Column({ type: Date, nullable: true })
     startedAt: Date | null;

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Package, UserRound } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { checkoutAddress } from '../checkout-address';
 import { languageCodeFor } from '../i18n';
@@ -12,6 +12,7 @@ import {
     LazyOrdersPage,
 } from '../lazy-storefront-pages';
 import { offlineLoadError } from '../loading-state';
+import { useRouteCustomerLogout } from '../logout';
 import { orderStatusRefreshInterval } from '../order-refresh';
 import { PUBLIC_QUERY_GC_TIME, storefrontQueryKeys } from '../query-client';
 import { PageSkeleton } from '../route-loading';
@@ -340,10 +341,35 @@ export function AddressesRoutePage() {
 
 export function AccountSecurityRoutePage() {
     const runtime = useRuntime();
-    return <AccountSecurityRouteContent key={runtime.customer?.id ?? 'guest'} runtime={runtime} />;
+    const logout = useRouteCustomerLogout(runtime);
+    const routeMounted = useRef(true);
+    useEffect(() => {
+        routeMounted.current = true;
+        return () => {
+            routeMounted.current = false;
+        };
+    }, []);
+    return (
+        <AccountSecurityRouteContent
+            key={runtime.customer?.id ?? 'guest'}
+            runtime={runtime}
+            logout={logout}
+            onConfirmedLogout={() => {
+                if (routeMounted.current) runtime.navigate({ name: 'account' }, true);
+            }}
+        />
+    );
 }
 
-function AccountSecurityRouteContent({ runtime }: { runtime: ReturnType<typeof useRuntime> }) {
+function AccountSecurityRouteContent({
+    runtime,
+    logout,
+    onConfirmedLogout,
+}: {
+    runtime: ReturnType<typeof useRuntime>;
+    logout: ReturnType<typeof useRouteCustomerLogout>;
+    onConfirmedLogout: () => void;
+}) {
     const queryClient = useQueryClient();
     const isZh = runtime.language === 'zh';
     const customerScope = storefrontQueryKeys.customerScope(
@@ -455,13 +481,11 @@ function AccountSecurityRouteContent({ runtime }: { runtime: ReturnType<typeof u
                             });
                         }}
                         onLogout={() => {
-                            void runtime.api.logout().then(() => {
-                                runtime.clearPrivateQueryCache();
-                                runtime.setCustomer(null);
-                                runtime.notify(isZh ? '已退出登录' : 'Signed out');
-                                runtime.navigate({ name: 'account' }, true);
+                            void logout.logoutCustomer().then(confirmed => {
+                                if (confirmed) onConfirmedLogout();
                             });
                         }}
+                        logoutPending={logout.logoutPending}
                     />
                 )}
             </AuthPageBoundary>
