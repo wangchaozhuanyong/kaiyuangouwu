@@ -364,6 +364,62 @@ describe('public page inline artwork', () => {
         expect(h.authorize).not.toHaveBeenCalled();
         expect(h.content).toHaveBeenCalledOnce();
     });
+    it('completes a missing configured header preview even when the original eight assets are warm', async () => {
+        const h = artworkHarness(
+            false,
+            Array.from({ length: 9 }, (_, index) => `hero-${index}.webp`),
+        );
+        h.config.mockResolvedValue({
+            code: 'a',
+            logoUrl: '/assets/preview/header.webp?v=current',
+            logoOnLightUrl: '/assets/preview/light.webp',
+            logoOnDarkUrl: '/assets/preview/dark.webp',
+        });
+        h.read.mockImplementation(path =>
+            Promise.resolve(path === 'preview/header.webp' ? undefined : 'data:image/webp;base64,AAAA'),
+        );
+        const shared = await h.service.read(h.ctx, 'a.test');
+        expect(h.read).toHaveBeenCalledTimes(9);
+        expect(shared.media.slice(0, 8).every(item => item.placeholder)).toBe(true);
+        expect(shared.media.find(item => item.identity.includes('header.webp'))?.placeholder).toBeUndefined();
+        const original = JSON.stringify(shared);
+        h.read.mockClear().mockResolvedValue('data:image/webp;base64,BBBB');
+        h.authorize.mockClear();
+        const document = await h.service.readForDocument(h.ctx, 'a.test');
+        expect(h.read.mock.calls.map(call => call[0])).toEqual(['preview/header.webp']);
+        expect(h.authorize).toHaveBeenCalledTimes(9);
+        expect(
+            document.media
+                .slice(0, 8)
+                .every(item => item.placeholder?.inlineData === 'data:image/webp;base64,AAAA'),
+        ).toBe(true);
+        expect(document.media.find(item => item.identity.includes('header.webp'))).toMatchObject({
+            version: 'current',
+            placeholder: { inlineData: 'data:image/webp;base64,BBBB' },
+        });
+        expect(
+            document.media
+                .filter(item => /hero-8|light|dark/u.test(item.identity))
+                .every(item => !item.placeholder),
+        ).toBe(true);
+        expect(JSON.stringify(shared)).toBe(original);
+        expect(document).not.toBe(shared);
+        expect(h.content).toHaveBeenCalledOnce();
+    });
+    it('keeps a complete header and eight body previews on the existing warm document shortcut', async () => {
+        const h = artworkHarness(
+            false,
+            Array.from({ length: 9 }, (_, index) => `hero-${index}.webp`),
+        );
+        h.config.mockResolvedValue({ code: 'a', logoUrl: '/assets/preview/header.webp' });
+        const shared = await h.service.read(h.ctx, 'a.test');
+        expect(h.read).toHaveBeenCalledTimes(9);
+        h.read.mockClear();
+        h.authorize.mockClear();
+        expect(await h.service.readForDocument(h.ctx, 'a.test')).toBe(shared);
+        expect(h.read).not.toHaveBeenCalled();
+        expect(h.authorize).not.toHaveBeenCalled();
+    });
     it('does not borrow a preview across different versions of the same asset path', async () => {
         const h = artworkHarness(false, ['same.webp?v=old', 'same.webp?v=new']);
         h.read.mockResolvedValueOnce('data:image/webp;base64,AAAA').mockResolvedValueOnce(undefined);

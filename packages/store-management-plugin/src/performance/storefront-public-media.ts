@@ -143,16 +143,12 @@ export function preservePublicMediaPreviews(
     );
 }
 
-/** One bounded page assembly; late storage work cannot mutate the returned snapshot. */
-export async function publicMediaWithPreviews(
+/** Preserve the first eight assets; only the configured, already-projected header logo may join them. */
+export function publicMediaPreviewGroups(
     media: readonly MediaDescriptor[],
     host: string,
-    isPublic: (path: string) => Promise<boolean>,
-    readPreview: (path: string) => Promise<string | undefined>,
-    budgetMs = 250,
-    preparation?: { deferred: boolean },
-): Promise<MediaDescriptor[]> {
-    if (preparation) preparation.deferred = false;
+    logoUrl?: string | null,
+) {
     const groups = new Map<string, { path: string; indexes: number[] }>();
     media.forEach((item, index) => {
         const identity = publicMediaAssetIdentity(item, host);
@@ -161,6 +157,37 @@ export async function publicMediaWithPreviews(
         if (existing) existing.indexes.push(index);
         else if (groups.size < 8) groups.set(identity.key, { path: identity.path, indexes: [index] });
     });
+    const logo =
+        typeof logoUrl === 'string' && logoUrl.trim()
+            ? publicMediaAssetIdentity(mediaDescriptor(logoUrl.trim(), 'thumbnail'), host)
+            : undefined;
+    if (
+        logo &&
+        !groups.has(logo.key) &&
+        media.some(
+            item => item.kind === 'thumbnail' && publicMediaAssetIdentity(item, host)?.key === logo.key,
+        )
+    ) {
+        const indexes = media.flatMap((item, index) =>
+            publicMediaAssetIdentity(item, host)?.key === logo.key ? [index] : [],
+        );
+        groups.set(logo.key, { path: logo.path, indexes });
+    }
+    return groups;
+}
+
+/** One bounded page assembly; late storage work cannot mutate the returned snapshot. */
+export async function publicMediaWithPreviews(
+    media: readonly MediaDescriptor[],
+    host: string,
+    isPublic: (path: string) => Promise<boolean>,
+    readPreview: (path: string) => Promise<string | undefined>,
+    budgetMs = 250,
+    preparation?: { deferred: boolean },
+    logoUrl?: string | null,
+): Promise<MediaDescriptor[]> {
+    if (preparation) preparation.deferred = false;
+    const groups = publicMediaPreviewGroups(media, host, logoUrl);
     if (!groups.size) return boundedAssetPreviews(media, host);
     const pending = [...groups.values()];
     const resolved = new Map<number, string>();
