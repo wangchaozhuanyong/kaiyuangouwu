@@ -559,8 +559,14 @@ gh workflow run production_operations.yml --ref main -f operation=verify-securit
 This read-only operation requires the current runtime marker to equal the
 workflow source SHA. It loads the dependencies from that validated immutable
 runtime, rejects resolution outside the runtime, and checks the actual qs and
-Tiptap vulnerability behavior. The result contains only package versions and
-pass/fail evidence. It does not install dependencies or execute supplied code.
+applicable Tiptap vulnerability behavior. A complete, verified Next Admin runtime
+with no legacy Dashboard consumer or Tiptap dependency reports Tiptap as
+`NOT_APPLICABLE`, with an explicit reason in the receipt; this does not claim a
+Tiptap version or a passed behavior check. Missing or conflicting profile evidence
+cannot authorize `NOT_APPLICABLE`; the original dependency resolution, version and
+behavior checks remain required. The result contains only validated package
+versions and fixed check evidence. It does not install dependencies or execute
+supplied code.
 
 ## Bound completed Node core dumps
 
