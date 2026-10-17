@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { DataSource, Table } from 'typeorm';
+import { DataSource, In, Table } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { AddCatalogImportExecutionLease1792195200000 } from '../../dev-server/migrations/1792195200000-add-catalog-import-execution-lease';
@@ -188,20 +188,47 @@ describe.runIf(process.env.CATALOG_IMPORT_LEASE_MYSQL === '1')(
 
         it('recovers more than 100 expired jobs without truncating native microsecond cursors', async () => {
             await f.db.query('ALTER TABLE catalog_import_job MODIFY createdAt datetime(6) NOT NULL');
-            const saved = [];
-            for (let i = 0; i < 205; i++)
-                saved.push(
-                    await f.createJob({
-                        state: 'RUNNING',
-                        executionToken: randomUUID(),
-                        leaseUntil: new Date(0),
-                    }),
-                );
-            for (const [i, job] of saved.entries())
-                await f.db.query('UPDATE catalog_import_job SET createdAt=? WHERE id=?', [
-                    '2026-10-17 01:02:03.' + String(i + 1).padStart(6, '0'),
-                    job.id,
-                ]);
+            // Seed the backlog in one insert so the existing deadline measures
+            // recovery, rather than hundreds of unrelated fixture round trips.
+            const inserted = await f.jobRepository.insert(
+                Array.from({ length: 205 }, () => ({
+                    channelId: f.ctx.channelId,
+                    actorId: String(f.ctx.activeUserId),
+                    version: 1,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    progress: 0,
+                    state: 'RUNNING',
+                    executionToken: randomUUID(),
+                    leaseUntil: new Date(0),
+                })),
+            );
+            const ids = inserted.identifiers.map(item => item.id as number);
+            const saved = (await f.jobRepository.findBy({ id: In(ids) })).sort(
+                (a, b) => Number(a.id) - Number(b.id),
+            );
+            expect(saved).toHaveLength(205);
+            // Keep all 205 native datetime(6) values within the same millisecond;
+            // truncating a pagination cursor must still lose later records.
+            await f.db.query(
+                `UPDATE catalog_import_job SET createdAt = CASE id ${saved.map(() => 'WHEN ? THEN ?').join(' ')} END WHERE id IN (${saved.map(() => '?').join(',')})`,
+                [
+                    ...saved.flatMap((job, i) => [
+                        job.id,
+                        '2026-10-17 01:02:03.' + String(i + 1).padStart(6, '0'),
+                    ]),
+                    ...ids,
+                ],
+            );
+            const [precision] = await f.db.query(
+                `SELECT COUNT(DISTINCT createdAt) AS distinctValues,
+                        DATE_FORMAT(MIN(createdAt), '%f') AS firstMicros,
+                        DATE_FORMAT(MAX(createdAt), '%f') AS lastMicros
+                 FROM catalog_import_job WHERE id IN (${ids.map(() => '?').join(',')})`,
+                ids,
+            );
+            expect(Number(precision.distinctValues)).toBe(205);
+            expect(precision).toMatchObject({ firstMicros: '000001', lastMicros: '000205' });
             const strategy = {
                 findOne: vi.fn(),
                 findManyById: vi.fn(),
@@ -220,8 +247,12 @@ describe.runIf(process.env.CATALOG_IMPORT_LEASE_MYSQL === '1')(
             const result = await queue.recoverInterruptedJobs();
             expect(result).toMatchObject({ scanned: 205, recovered: 205, enqueued: 205, failed: 0 });
             expect(new Set(dispatch.mock.calls.map(([id]) => String(id))).size).toBe(205);
+            const persisted = new Map(
+                (await f.jobRepository.findBy({ id: In(ids) })).map(job => [String(job.id), job]),
+            );
+            expect(persisted.size).toBe(205);
             for (const job of saved)
-                expect(await f.jobRepository.findOneByOrFail({ id: job.id })).toMatchObject({
+                expect(persisted.get(String(job.id))).toMatchObject({
                     state: 'QUEUED',
                     executionToken: null,
                     leaseUntil: null,
