@@ -556,6 +556,42 @@ transport. Missing registrations remain `REVIEW_REQUIRED`; no owner is inferred
 or changed. URL-only media, dynamic collection filters and ordinary store
 authorization probes remain explicit coverage gaps.
 
+## Fixed historical image cleanup (2026-10-17)
+
+This task's 95 image IDs are fixed in `deploy/historical-asset-cleanup.cjs`.
+`prepare-historical-asset-cleanup` requires current main and an exact backend
+runtime SHA. It performs no business-data writes. It checks every Asset foreign
+key (excluding the Asset's own translation/tag/channel metadata), existing
+ownership registrations, shared file paths, and known storefront, profile,
+review, after-sales and customer-avatar media-bearing columns. SQL returns
+candidate IDs and aggregate reference counts, never raw business text.
+Both current filenames and pre-WebP-migration filename stems retain references;
+ambiguous matches are kept. An unreadable media surface makes all targets
+ineligible. Statements have a three-second limit and result/surface/file budgets.
+
+Only reference-free, unregistered regular catalog images enter the backup.
+Source/preview bytes, Asset records, translations, tags and all channel links are
+saved under the private project backup directory
+`/var/www/kaiyuangouwu/backups/historical-asset-cleanup/<plan-hash>`.
+Backup bytes and metadata are re-read and hashed before the plan is returned.
+No original file or business record is deleted by preparation.
+The existing hashed plan transport publishes an identifier-only review artifact.
+
+After separate approval of the actual ID list and plan hash,
+`apply-historical-asset-cleanup-pilot-reviewed` deletes up to ten reviewed
+images, and `apply-historical-asset-cleanup-remaining-reviewed` requires its
+complete pilot receipt. Both require the same source/runtime/plan and verified
+backup. Serializable rechecks refuse new references, changed rows/files/schema
+and partial unexpected batches. Deletions affect only the fixed Asset IDs and
+their translation/tag/channel link rows; tag definitions, products, variants,
+facets, decoration and their image bindings are never edited. Original/preview
+files are removed only after the database commit. A saved receipt permits
+completion of the same file list after a post-commit interruption.
+Backups are kept for operator restoration; this does not introduce a UI trash or
+an automatic backup-deletion schedule.
+
+The control-only changes do not rebuild, deploy or restart a storefront/backend.
+
 ## Verify repaired runtime dependencies
 
 After the new main SHA is deployed, run:
