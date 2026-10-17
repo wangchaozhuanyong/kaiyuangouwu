@@ -6,6 +6,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmDialogContext } from '../../components/confirm-dialog-context';
 import { UPDATE_ASSET } from '../../graphql/catalog-admin.graphql';
+import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
+import type { AdminPermission } from '../../utils/admin-permissions';
 import { AssetsModule, assetTranslationsWithSourceName, countUploadedAssets } from './AssetsModule';
 
 const mocks = vi.hoisted(() => ({
@@ -16,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     refetch: vi.fn(),
     requestConfirmation: vi.fn(),
     assets: [] as Array<Record<string, unknown>>,
+    permissions: [] as AdminPermission[],
 }));
 
 vi.mock('@apollo/client/react', () => ({
@@ -100,6 +103,7 @@ describe('asset classification editing', () => {
     beforeEach(() => {
         Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
         vi.clearAllMocks();
+        mocks.permissions = ['ReadAsset', 'CreateAsset', 'UpdateAsset', 'DeleteAsset'];
         mocks.updateAsset.mockResolvedValue({ data: { updateAsset: { id: 'asset-1' } } });
         mocks.refetch.mockResolvedValue({});
         mocks.assets = [
@@ -139,9 +143,17 @@ describe('asset classification editing', () => {
     const openEditor = async () => {
         await act(async () =>
             root.render(
-                <ConfirmDialogContext.Provider value={mocks.requestConfirmation}>
-                    <AssetsModule />
-                </ConfirmDialogContext.Provider>,
+                <AdminPermissionsContext.Provider
+                    value={{
+                        permissions: mocks.permissions,
+                        hasAnyPermission: required =>
+                            required.length === 0 || required.some(p => mocks.permissions.includes(p)),
+                    }}
+                >
+                    <ConfirmDialogContext.Provider value={mocks.requestConfirmation}>
+                        <AssetsModule />
+                    </ConfirmDialogContext.Provider>
+                </AdminPermissionsContext.Provider>,
             ),
         );
         await act(async () => button('商品封面.png800×8004 KB').click());
@@ -203,6 +215,66 @@ describe('asset classification editing', () => {
         expect(mocks.refetch).not.toHaveBeenCalled();
         await act(async () => button('商品封面.png800×8004 KB').click());
         expect(host.querySelector<HTMLSelectElement>('select[aria-label="素材分类"]')!.value).toBe('PRODUCT');
+        expect(mocks.updateAsset).not.toHaveBeenCalled();
+    });
+
+    const hasButton = (label: string) =>
+        Array.from(host.querySelectorAll('button')).some(
+            candidate =>
+                candidate.textContent?.trim() === label || candidate.getAttribute('aria-label') === label,
+        );
+
+    it('keeps asset details and copy available to a read-only employee without write controls', async () => {
+        mocks.permissions = ['ReadAsset'];
+        const category = await openEditor();
+        expect(category.disabled).toBe(true);
+        expect(
+            Array.from(host.querySelectorAll<HTMLInputElement>('input'))
+                .filter(input => input.value === '商品封面.png')
+                .every(input => input.readOnly),
+        ).toBe(true);
+        expect(host.querySelector('textarea')?.readOnly).toBe(true);
+        expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+        for (const label of ['上传新素材', '保存属性', '删除素材', '批量删除'])
+            expect(hasButton(label)).toBe(false);
+        expect(hasButton('复制素材地址')).toBe(true);
+        expect(mocks.updateAsset).not.toHaveBeenCalled();
+        expect(mocks.deleteAsset).not.toHaveBeenCalled();
+        expect(mocks.deleteAssets).not.toHaveBeenCalled();
+    });
+
+    it('allows metadata editing without exposing upload or deletion to an update-only role', async () => {
+        mocks.permissions = ['ReadAsset', 'UpdateAsset'];
+        const category = await openEditor();
+        expect(category.disabled).toBe(false);
+        expect(hasButton('保存属性')).toBe(true);
+        for (const label of ['上传新素材', '删除素材', '批量删除']) expect(hasButton(label)).toBe(false);
+        expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+        await act(async () => button('保存属性').click());
+        expect(mocks.updateAsset).toHaveBeenCalledTimes(1);
+    });
+
+    it('exposes deletion independently of metadata editing or uploading', async () => {
+        mocks.permissions = ['ReadAsset', 'DeleteAsset'];
+        const category = await openEditor();
+        expect(category.disabled).toBe(true);
+        expect(hasButton('删除素材')).toBe(true);
+        expect(hasButton('批量删除')).toBe(true);
+        expect(host.querySelector('input[type="checkbox"]')).not.toBeNull();
+        expect(hasButton('保存属性')).toBe(false);
+        expect(hasButton('上传新素材')).toBe(false);
+        expect(mocks.requestConfirmation).not.toHaveBeenCalled();
+    });
+
+    it('exposes uploading independently of editing and deletion', async () => {
+        mocks.permissions = ['ReadAsset', 'CreateAsset'];
+        const category = await openEditor();
+        expect(category.disabled).toBe(true);
+        expect(hasButton('上传新素材')).toBe(true);
+        for (const label of ['保存属性', '删除素材', '批量删除']) expect(hasButton(label)).toBe(false);
+        await act(async () => button('关闭素材属性').click());
+        await act(async () => button('上传新素材').click());
+        expect(host.querySelector('[role="dialog"]')?.textContent).toContain('上传');
         expect(mocks.updateAsset).not.toHaveBeenCalled();
     });
 });

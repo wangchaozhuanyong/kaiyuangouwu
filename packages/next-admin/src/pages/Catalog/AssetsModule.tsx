@@ -44,6 +44,7 @@ import {
     UPDATE_ASSET,
 } from '../../graphql/catalog-admin.graphql';
 import { GET_ASSETS } from '../../graphql/catalog.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { usePageSize } from '../../hooks/use-page-size';
 import { copyAdminText } from '../../utils/admin-clipboard';
@@ -133,6 +134,10 @@ const cleanupPreview = (file: PendingFile) => {
 };
 
 export function AssetsModule() {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canCreate = hasAnyPermission(['CreateAsset']);
+    const canUpdate = hasAnyPermission(['UpdateAsset']);
+    const canDelete = hasAnyPermission(['DeleteAsset']);
     const requestConfirmation = useConfirmDialog();
     const assetCustomFields = useCustomFieldDefinitions('Asset');
     const assetsDocument = useMemo(
@@ -195,6 +200,7 @@ export function AssetsModule() {
     };
 
     const openUploadModal = () => {
+        if (!canCreate) return;
         pendingFiles.forEach(cleanupPreview);
         setPendingFiles([]);
         setActionError('');
@@ -208,6 +214,7 @@ export function AssetsModule() {
     };
 
     const handleNativeFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+        if (!canCreate) return;
         const files = Array.from(event.target.files ?? []);
         if (files.length === 0) return;
         const stamp = Date.now();
@@ -238,6 +245,7 @@ export function AssetsModule() {
     };
 
     const handleConfirmUpload = async () => {
+        if (!canCreate) return;
         const ready = pendingFiles.filter(file => file.status === 'READY');
         if (ready.length === 0 || isUploading) return;
         setIsUploading(true);
@@ -308,7 +316,7 @@ export function AssetsModule() {
     };
 
     const handleSaveAsset = async () => {
-        if (!selectedAsset) return;
+        if (!canUpdate || !selectedAsset) return;
         const name = editName.trim();
         if (!name) {
             showError('素材名称不能为空');
@@ -362,6 +370,7 @@ export function AssetsModule() {
     };
 
     const handleDeleteAsset = async (asset: AssetItem) => {
+        if (!canDelete) return;
         const confirmation = await requestConfirmation({
             title: '删除素材？',
             description: `将从当前店铺移除《${asset.name}》，其他店铺关联仍会保留。如果该素材仍被商品引用，系统会阻止移除。`,
@@ -401,7 +410,7 @@ export function AssetsModule() {
     };
 
     const handleBulkDelete = async () => {
-        if (!selectedAssetIds.length) return;
+        if (!canDelete || !selectedAssetIds.length) return;
         const confirmation = await requestConfirmation({
             title: `批量删除 ${selectedAssetIds.length} 个素材？`,
             description:
@@ -462,14 +471,16 @@ export function AssetsModule() {
                         <RefreshCw className={'h-3.5 w-3.5 ' + (loading && !data ? 'animate-spin' : '')} />
                         刷新
                     </AdminButton>
-                    <AdminButton
-                        type="button"
-                        onClick={openUploadModal}
-                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
-                    >
-                        <UploadCloud className="h-4 w-4" />
-                        上传新素材
-                    </AdminButton>
+                    {canCreate && (
+                        <AdminButton
+                            type="button"
+                            onClick={openUploadModal}
+                            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
+                        >
+                            <UploadCloud className="h-4 w-4" />
+                            上传新素材
+                        </AdminButton>
+                    )}
                 </div>
             </div>
             <div
@@ -537,7 +548,7 @@ export function AssetsModule() {
                             />
                         </div>
                     </div>
-                    {assets.length > 0 && (
+                    {canDelete && assets.length > 0 && (
                         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
                             <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
                                 <AdminInput
@@ -590,20 +601,22 @@ export function AssetsModule() {
                                     key={asset.id}
                                     className="group relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-left hover:border-blue-400 hover:shadow-md"
                                 >
-                                    <label className="absolute left-2 top-2 z-10 rounded-md bg-white/90 p-1 shadow-sm">
-                                        <AdminInput
-                                            type="checkbox"
-                                            aria-label={`选择素材 ${asset.name}`}
-                                            checked={selectedAssetIds.includes(asset.id)}
-                                            onChange={event =>
-                                                setSelectedAssetIds(current =>
-                                                    event.target.checked
-                                                        ? [...current, asset.id]
-                                                        : current.filter(id => id !== asset.id),
-                                                )
-                                            }
-                                        />
-                                    </label>
+                                    {canDelete && (
+                                        <label className="absolute left-2 top-2 z-10 rounded-md bg-white/90 p-1 shadow-sm">
+                                            <AdminInput
+                                                type="checkbox"
+                                                aria-label={`选择素材 ${asset.name}`}
+                                                checked={selectedAssetIds.includes(asset.id)}
+                                                onChange={event =>
+                                                    setSelectedAssetIds(current =>
+                                                        event.target.checked
+                                                            ? [...current, asset.id]
+                                                            : current.filter(id => id !== asset.id),
+                                                    )
+                                                }
+                                            />
+                                        </label>
+                                    )}
                                     <AdminButton
                                         type="button"
                                         onClick={() => openAsset(asset)}
@@ -623,9 +636,11 @@ export function AssetsModule() {
                                             ) : (
                                                 <File className="h-9 w-9 text-slate-400" />
                                             )}
-                                            <span className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-600 opacity-100 shadow-sm md:opacity-0 md:group-hover:opacity-100">
-                                                <FileEdit className="h-3.5 w-3.5" />
-                                            </span>
+                                            {canUpdate && (
+                                                <span className="absolute right-1.5 top-1.5 rounded-lg bg-white/90 p-1.5 text-slate-600 opacity-100 shadow-sm md:opacity-0 md:group-hover:opacity-100">
+                                                    <FileEdit className="h-3.5 w-3.5" />
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="p-3">
                                             <div className="truncate font-bold text-slate-900">
@@ -681,7 +696,7 @@ export function AssetsModule() {
                 </div>
             </div>
 
-            {isUploadModalOpen && (
+            {canCreate && isUploadModalOpen && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs"
                     onClick={closeUploadModal}
@@ -870,6 +885,7 @@ export function AssetsModule() {
                             >
                                 <AdminInput
                                     value={editName}
+                                    readOnly={!canUpdate}
                                     onChange={event => setEditName(event.target.value)}
                                     className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
                                 />
@@ -893,6 +909,7 @@ export function AssetsModule() {
                             <AdminField label="素材分类">
                                 <AdminSelect
                                     aria-label="素材分类"
+                                    disabled={!canUpdate}
                                     value={editCategory}
                                     onChange={event =>
                                         setEditCategory(event.target.value as Exclude<AssetCategory, 'ALL'>)
@@ -917,6 +934,7 @@ export function AssetsModule() {
                                 </label>
                                 <AdminTextArea
                                     value={editTags}
+                                    readOnly={!canUpdate}
                                     onChange={event => setEditTags(event.target.value)}
                                     rows={3}
                                     className="w-full rounded-lg border border-slate-300 p-2.5 outline-none focus:ring-1 focus:ring-blue-500"
@@ -950,31 +968,39 @@ export function AssetsModule() {
                                 fields={assetCustomFields}
                                 values={customFieldValues}
                                 onChange={setCustomFieldValues}
-                                disabled={savingAsset}
+                                disabled={!canUpdate || savingAsset}
                             />
                             {actionError && (
                                 <div className="rounded-lg bg-rose-50 p-3 text-rose-700">{actionError}</div>
                             )}
-                            <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-                                <AdminButton
-                                    type="button"
-                                    onClick={() => handleDeleteAsset(selectedAsset)}
-                                    disabled={savingAsset}
-                                    className="flex items-center gap-1 rounded-lg px-3 py-2 font-bold text-rose-600 hover:bg-rose-50"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                    删除素材
-                                </AdminButton>
-                                <AdminButton
-                                    type="button"
-                                    onClick={handleSaveAsset}
-                                    disabled={savingAsset}
-                                    className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-50"
-                                >
-                                    {savingAsset && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-                                    保存属性
-                                </AdminButton>
-                            </div>
+                            {(canUpdate || canDelete) && (
+                                <div className="flex items-center justify-between border-t border-slate-100 pt-4">
+                                    {canDelete && (
+                                        <AdminButton
+                                            type="button"
+                                            onClick={() => handleDeleteAsset(selectedAsset)}
+                                            disabled={savingAsset}
+                                            className="flex items-center gap-1 rounded-lg px-3 py-2 font-bold text-rose-600 hover:bg-rose-50"
+                                        >
+                                            <Trash2 className="h-4 w-4" />
+                                            删除素材
+                                        </AdminButton>
+                                    )}
+                                    {canUpdate && (
+                                        <AdminButton
+                                            type="button"
+                                            onClick={handleSaveAsset}
+                                            disabled={savingAsset}
+                                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 font-bold text-white disabled:opacity-50"
+                                        >
+                                            {savingAsset && (
+                                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                            )}
+                                            保存属性
+                                        </AdminButton>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </AccessibleDialogSurface>
                 </div>
