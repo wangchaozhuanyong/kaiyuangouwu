@@ -20,6 +20,7 @@ import {
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import { StoreManagementPlugin } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import assert from 'node:assert/strict';
@@ -30,7 +31,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { createOperatingStoreFixture } from '../../../e2e-common/operating-store-fixture';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
-import { StoreManagementPlugin } from '../../store-management-plugin/src/store-management.plugin';
 import { AutoCardCipherService } from '../src/auto-card-cipher.service';
 import { AutoCardPoolEnabledEvent } from '../src/auto-card-delivery.event';
 import { AutoCardService } from '../src/auto-card.service';

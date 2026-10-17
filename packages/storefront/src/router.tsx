@@ -1,38 +1,37 @@
 // Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 
+import { PageBackButton } from './components/common/page-back-button';
+import { usePageLoadingState } from './page-readiness';
 import { publicRouteRewrite } from './public-route-rewrite';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import { registerStorefrontNavigationHistory } from './storefront-navigation-history';
 import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
 
-function parseStorefrontSearch(searchString: string): Record<string, string> {
-    return Object.fromEntries(new URLSearchParams(searchString.replace(/^\?/, '')));
-}
-
-function stringifyStorefrontSearch(search: Record<string, unknown>): string {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(search)) {
-        if (value == null || value === false || value === '') continue;
-        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-            params.set(key, String(value));
-        }
+if (typeof window !== 'undefined') {
+    const { history, location } = window;
+    if (/^#\//.test(location.hash)) {
+        history.replaceState(history.state, '', routeHref(routeFromHash(location.hash)));
     }
-    return params.size ? `?${params.toString()}` : '';
-}
-
-if (typeof window !== 'undefined' && /^#\//.test(window.location.hash)) {
-    const legacyRoute = routeFromHash(window.location.hash);
-    window.history.replaceState(window.history.state, '', routeHref(legacyRoute));
 }
 
 export const router = createRouter({
     routeTree,
     history: createBrowserHistory(),
     rewrite: publicRouteRewrite,
-    parseSearch: parseStorefrontSearch,
-    stringifySearch: stringifyStorefrontSearch,
+    parseSearch: search => Object.fromEntries(new URLSearchParams(search.replace(/^\?/, ''))),
+    stringifySearch: search => {
+        // URLSearchParams coerces the allowed primitives; omit false/empty and non-scalar values.
+        const params = new URLSearchParams(
+            Object.entries(search).filter(
+                ([, value]) =>
+                    value !== '' &&
+                    (typeof value === 'string' || typeof value === 'number' || value === true),
+            ) as Array<[string, string]>,
+        ).toString();
+        return params && '?' + params;
+    },
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
     // Keep the current route through short waits. A slow destination replaces only
@@ -49,8 +48,18 @@ registerStorefrontNavigationHistory(router);
 
 function StorefrontPendingPage() {
     const location = useRouterState({ select: s => s.matches.at(-1) ?? s.location });
-    const variant = pageSkeletonVariantForPathname(location.pathname);
-    return <PageSkeleton variant={variant} />;
+    const readiness = usePageLoadingState();
+    return (
+        <>
+            {readiness && (
+                <PageBackButton
+                    label={readiness.language === 'zh' ? '返回' : 'Back'}
+                    onClick={readiness.onBack}
+                />
+            )}
+            <PageSkeleton variant={pageSkeletonVariantForPathname(location.pathname)} />
+        </>
+    );
 }
 
 declare module '@tanstack/react-router' {

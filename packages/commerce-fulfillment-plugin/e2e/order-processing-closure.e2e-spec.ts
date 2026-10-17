@@ -32,6 +32,7 @@ import {
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import { StoreManagementPlugin, StoreProfile } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -42,8 +43,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
-import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
-import { StoreManagementPlugin } from '../../store-management-plugin/src/store-management.plugin';
 import { CommerceFulfillmentPlugin } from '../src/commerce-fulfillment.plugin';
 import { CommerceModeService } from '../src/commerce-mode.service';
 
