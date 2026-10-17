@@ -21,6 +21,7 @@ import {
     dummyPaymentHandler,
     EventBus,
     FacetService,
+    FacetValueService,
     LanguageCode,
     mergeConfig,
     Order,
@@ -39,6 +40,7 @@ import {
     SessionService,
     ShippingMethod,
     ShippingMethodService,
+    Tag,
     TagService,
     TransactionalConnection,
     User,
@@ -2050,6 +2052,339 @@ describe('platform governance real database and API boundaries', () => {
             for (const channel of originals) await channels.save(channel);
             adminClient.setChannelToken(platform.channel.token);
         }
+    });
+    it('isolates catalog list, detail and nested reads for a real read-only employee, including unregistered legacy resources', async () => {
+        // #772 follow-up: use the real Admin API and an authenticated ordinary role;
+        // all records below belong exclusively to this disposable local database.
+        const createSet = async (ctx: RequestContext, label: string) => {
+            const translations = (name: string) => [
+                { languageCode: LanguageCode.en, name },
+                { languageCode: LanguageCode.zh_Hans, name },
+            ];
+            const group = await server.app.get(ProductOptionGroupService).create(ctx, {
+                code: `read-boundary-${label}`,
+                translations: translations(`Group ${label}`),
+            });
+            const option = await server.app.get(ProductOptionService).create(ctx, group.id, {
+                productOptionGroupId: group.id,
+                code: `option-${label}`,
+                translations: translations(`Option ${label}`),
+            });
+            const facet = await server.app.get(FacetService).create(ctx, {
+                code: `facet-${label}`,
+                isPrivate: true,
+                translations: translations(`Facet ${label}`),
+            });
+            const value = await server.app.get(FacetValueService).create(ctx, facet, {
+                facetId: facet.id,
+                code: `value-${label}`,
+                translations: translations(`Value ${label}`),
+            });
+            const asset = await connection.rawConnection.getRepository(Asset).save(
+                new Asset({
+                    type: AssetType.IMAGE,
+                    mimeType: 'image/png',
+                    width: 1,
+                    height: 1,
+                    fileSize: 1,
+                    source: `read-boundary-${label}.png`,
+                    preview: `read-boundary-${label}.png`,
+                    channels: [ctx.channel],
+                    translations: translations(`Asset ${label}`).map(t => new AssetTranslation(t)),
+                }),
+            );
+            const tag = await server.app.get(TagService).create(ctx, { value: `Tag ${label}` });
+            return {
+                ProductOptionGroup: group.id,
+                ProductOption: option.id,
+                Facet: facet.id,
+                FacetValue: value.id,
+                Asset: asset.id,
+                Tag: tag.id,
+            };
+        };
+        const own = await createSet(a, 'owned');
+        const foreign = await createSet(b, 'foreign');
+        const legacy = await createSet(b, 'legacy');
+        const ownership = connection.rawConnection.getRepository(CatalogResourceOwnership);
+        for (const resources of [foreign, legacy]) {
+            for (const [type, id] of Object.entries(resources)) {
+                if (type !== 'Tag')
+                    await connection.rawConnection
+                        .createQueryBuilder()
+                        .relation(type, 'channels')
+                        .of(id)
+                        .add(a.channelId);
+            }
+        }
+        for (const [resourceType, resourceId] of Object.entries(legacy)) {
+            await ownership.delete({ resourceType: resourceType as any, resourceId });
+        }
+        await connection.rawConnection.getRepository(Tag).update(legacy.Tag, { ownerChannelId: null });
+        for (const resources of [foreign, legacy]) {
+            await connection.rawConnection
+                .getRepository('ProductOption')
+                .update(resources.ProductOption, { groupId: own.ProductOptionGroup });
+            await connection.rawConnection
+                .getRepository('FacetValue')
+                .update(resources.FacetValue, { facetId: own.Facet });
+        }
+        await connection.rawConnection
+            .createQueryBuilder()
+            .relation(Asset, 'tags')
+            .of(own.Asset)
+            .add([own.Tag, foreign.Tag, legacy.Tag]);
+        const role = await server.app.get(RoleService).create(platform, {
+            code: `catalog-readonly-${randomUUID()}`,
+            description: 'Local catalog API acceptance fixture',
+            channelIds: [a.channelId],
+            permissions: [
+                Permission.ReadProduct,
+                Permission.ReadCollection,
+                Permission.ReadFacet,
+                Permission.ReadAsset,
+                Permission.ReadTag,
+            ],
+        });
+        const password = randomUUID();
+        const emailAddress = `catalog-readonly-${randomUUID()}@fixture.test`;
+        const employee = await server.app.get(AdministratorService).create(platform, {
+            firstName: 'Local',
+            lastName: 'CatalogReadOnly',
+            emailAddress,
+            password,
+            roleIds: [role.id],
+        });
+        const profiles = connection.rawConnection.getRepository(AdministratorAccessProfile);
+        const existing = await profiles.findOneBy({ userId: employee.user.id });
+        await profiles.save({
+            ...existing,
+            administratorId: employee.id,
+            userId: employee.user.id,
+            scope: 'STORE',
+            authority: 'STAFF',
+            status: 'ACTIVE',
+            channelId: a.channelId,
+            mustChangePassword: false,
+            platformOwnerSlot: null,
+            storePrimarySlot: null,
+            createdByAdministratorId: null,
+        });
+        const client = new SimpleGraphQLClient(
+            serverConfig,
+            `http://localhost:${serverConfig.apiOptions.port}/admin-api`,
+        );
+        client.setChannelToken(a.channel.token);
+        await client.asUserWithCredentials(emailAddress, password);
+        const beforeCount = await ownership.count();
+        const documents = [
+            [
+                'ProductOptionGroup',
+                'productOptionGroups',
+                'productOptionGroup',
+                gql`
+                    query ($id: ID!) {
+                        productOptionGroup(id: $id) {
+                            id
+                            options {
+                                id
+                            }
+                        }
+                    }
+                `,
+            ],
+            [
+                'ProductOption',
+                'productOptions',
+                'productOption',
+                gql`
+                    query ($id: ID!) {
+                        productOption(id: $id) {
+                            id
+                        }
+                    }
+                `,
+            ],
+            [
+                'Facet',
+                'facets',
+                'facet',
+                gql`
+                    query ($id: ID!) {
+                        facet(id: $id) {
+                            id
+                            values {
+                                id
+                            }
+                        }
+                    }
+                `,
+            ],
+            [
+                'FacetValue',
+                'facetValues',
+                'facetValue',
+                gql`
+                    query ($id: ID!) {
+                        facetValue(id: $id) {
+                            id
+                        }
+                    }
+                `,
+            ],
+            [
+                'Asset',
+                'assets',
+                'asset',
+                gql`
+                    query ($id: ID!) {
+                        asset(id: $id) {
+                            id
+                            tags {
+                                id
+                            }
+                        }
+                    }
+                `,
+            ],
+        ] as const;
+        const listDocuments = {
+            productOptionGroups: gql`
+                query {
+                    productOptionGroups(options: { take: 100 }) {
+                        items {
+                            id
+                            options {
+                                id
+                            }
+                        }
+                    }
+                }
+            `,
+            productOptions: gql`
+                query {
+                    productOptions(options: { take: 100 }) {
+                        items {
+                            id
+                        }
+                    }
+                }
+            `,
+            facets: gql`
+                query {
+                    facets(options: { take: 100 }) {
+                        items {
+                            id
+                            values {
+                                id
+                            }
+                        }
+                    }
+                }
+            `,
+            facetValues: gql`
+                query {
+                    facetValues(options: { take: 100 }) {
+                        items {
+                            id
+                        }
+                    }
+                }
+            `,
+            assets: gql`
+                query {
+                    assets(options: { take: 100 }) {
+                        items {
+                            id
+                            tags {
+                                id
+                            }
+                        }
+                    }
+                }
+            `,
+        };
+        for (const [type, listField, detailField, document] of documents) {
+            const result = await client.query(document, { id: String(own[type]) });
+            expect(result[detailField]?.id, `${type} own detail`).toBe(String(own[type]));
+            if (type === 'ProductOptionGroup')
+                expect(result[detailField].options.map((r: any) => r.id)).toEqual([
+                    String(own.ProductOption),
+                ]);
+            if (type === 'Facet')
+                expect(result[detailField].values.map((r: any) => r.id)).toEqual([String(own.FacetValue)]);
+            if (type === 'Asset')
+                expect(result[detailField].tags.map((r: any) => r.id)).toEqual([String(own.Tag)]);
+            for (const resources of [foreign, legacy]) {
+                const hidden = await client.query(document, { id: String(resources[type]) });
+                expect(hidden[detailField], `${type} foreign/legacy detail`).toBeNull();
+            }
+            const listed = (await client.query(listDocuments[listField]))[listField].items;
+            expect(
+                listed.some((r: any) => r.id === String(own[type])),
+                `${type} own list`,
+            ).toBe(true);
+            if (type === 'Asset')
+                expect(
+                    listed.find((r: any) => r.id === String(own.Asset)).tags.map((r: any) => r.id),
+                ).toEqual([String(own.Tag)]);
+            for (const resources of [foreign, legacy])
+                expect(
+                    listed.some((r: any) => r.id === String(resources[type])),
+                    `${type} foreign/legacy list`,
+                ).toBe(false);
+        }
+        const tags = (
+            await client.query(gql`
+                query {
+                    tags(options: { take: 100 }) {
+                        items {
+                            id
+                        }
+                    }
+                }
+            `)
+        ).tags.items;
+        expect(tags.some((t: any) => t.id === String(own.Tag))).toBe(true);
+        expect(tags.some((t: any) => [String(foreign.Tag), String(legacy.Tag)].includes(t.id))).toBe(false);
+        // Corrupt historical child-parent links must not bypass parent ownership.
+        await connection.rawConnection
+            .getRepository('ProductOption')
+            .update(own.ProductOption, { groupId: foreign.ProductOptionGroup });
+        await connection.rawConnection
+            .getRepository('FacetValue')
+            .update(own.FacetValue, { facetId: foreign.Facet });
+        const reverse = await client
+            .query(
+                gql`
+                    query ($optionId: ID!, $valueId: ID!) {
+                        productOption(id: $optionId) {
+                            id
+                            group {
+                                id
+                            }
+                        }
+                        facetValue(id: $valueId) {
+                            id
+                            facet {
+                                id
+                            }
+                        }
+                    }
+                `,
+                { optionId: String(own.ProductOption), valueId: String(own.FacetValue) },
+            )
+            .catch(error => {
+                expect(
+                    error.response.errors.every((e: any) => ['group', 'facet'].includes(e.path?.at(-1))),
+                ).toBe(true);
+                return error.response.data;
+            });
+        expect(reverse?.productOption?.group ?? null).toBeNull();
+        expect(reverse?.facetValue?.facet ?? null).toBeNull();
+        expect(await ownership.count()).toBe(beforeCount);
+        for (const [resourceType, resourceId] of Object.entries(legacy))
+            expect(await ownership.findOneBy({ resourceType: resourceType as any, resourceId })).toBeNull();
     });
     it('lets a read-only employee inspect their store while rejecting writes and another store', async () => {
         const role = await server.app.get(RoleService).create(platform, {

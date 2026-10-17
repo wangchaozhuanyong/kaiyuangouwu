@@ -10,6 +10,7 @@ import { FeatureHelpProvider } from '../../components/FeatureHelp';
 import { ConfirmDialogContext } from '../../components/confirm-dialog-context';
 import { AdminPermissionsContext } from '../../hooks/use-admin-permissions';
 import { hasAdminDrafts, requestDiscardAdminDrafts } from '../../hooks/use-unsaved-changes-warning';
+import { hasAnyAdminPermission } from '../../utils/admin-permissions';
 import { CategoriesModule } from './CategoriesModule';
 
 const oldImage = { __typename: 'Asset', id: 'old-image', name: '原分类图', preview: '/old.png' };
@@ -53,6 +54,14 @@ interface TestLinkedProduct {
 
 interface RenderCategoriesOptions {
     canReadAssets?: boolean;
+    permissions?: string[];
+    templateLibrary?: Array<{ resourceType: string; resourceId: string; name: string }>;
+    facets?: Array<
+        Omit<TestOptionGroup, 'options' | 'productCount'> & {
+            isPrivate: boolean;
+            values: TestOptionGroup['options'];
+        }
+    >;
     assetError?: boolean;
     saveError?: boolean;
     readErrorAfterSave?: boolean;
@@ -91,6 +100,9 @@ afterEach(async () => {
 
 async function renderCategories({
     canReadAssets = true,
+    permissions,
+    facets = [],
+    templateLibrary = [],
     assetError = false,
     saveError = false,
     readErrorAfterSave = false,
@@ -114,7 +126,7 @@ async function renderCategories({
                 new Observable(observer => {
                     requests(operation.operationName, operation.variables);
                     if (operation.operationName === 'TemplateLibrary') {
-                        observer.next({ data: { catalogTemplateLibrary: [] } });
+                        observer.next({ data: { catalogTemplateLibrary: templateLibrary } });
                         observer.complete();
                         return;
                     }
@@ -185,7 +197,7 @@ async function renderCategories({
                                     totalItems: optionGroups.length,
                                     items: optionGroups,
                                 },
-                                facets: { totalItems: 0, items: [] },
+                                facets: { totalItems: facets.length, items: facets },
                                 activeChannel: { id: channelId, defaultLanguageCode: 'zh_Hans' },
                                 collectionFilters: (customCollections ?? []).flatMap(collection =>
                                     collection.filters.map(filter => ({
@@ -317,7 +329,19 @@ async function renderCategories({
                 <MemoryRouter initialEntries={[initialEntry]}>
                     <ConfirmDialogContext.Provider value={async () => confirmationResult}>
                         <AdminPermissionsContext.Provider
-                            value={{ permissions: [], hasAnyPermission: () => canReadAssets }}
+                            value={{
+                                permissions: permissions ?? [],
+                                hasAnyPermission: required =>
+                                    hasAnyAdminPermission(
+                                        permissions ?? [
+                                            'CreateCatalog',
+                                            'UpdateCatalog',
+                                            'DeleteCatalog',
+                                            ...(canReadAssets ? ['ReadAsset'] : []),
+                                        ],
+                                        required,
+                                    ),
+                            }}
                         >
                             <FeatureHelpProvider>
                                 <CategoriesModule />
@@ -1206,5 +1230,79 @@ describe('option group usage', () => {
 
             expect(container.textContent).toContain('分类排序调整失败，请稍后重试');
         });
+    });
+});
+
+describe('catalog taxonomy employee permissions', () => {
+    const group = {
+        id: 'group-1',
+        name: '时长',
+        code: 'duration',
+        productCount: 0,
+        translations: [{ id: 'tr-group', languageCode: 'zh_Hans', name: '时长' }],
+        options: [
+            {
+                id: 'option-1',
+                name: '1个月',
+                code: 'month',
+                translations: [{ id: 'tr-option', languageCode: 'zh_Hans', name: '1个月' }],
+            },
+        ],
+    };
+    const facet = {
+        id: 'facet-1',
+        name: '品牌',
+        code: 'brand',
+        isPrivate: false,
+        translations: [{ id: 'tr-facet', languageCode: 'zh_Hans', name: '品牌' }],
+        values: group.options,
+    };
+    it.each(['categories', 'options', 'facets'])(
+        'keeps %s readable without writes for the real read-only permission set',
+        async tab => {
+            const { container, requests, click } = await renderCategories({
+                initialEntry: `/catalog/categories?tab=${tab}`,
+                optionGroups: [group],
+                facets: [facet],
+                permissions: ['ReadProduct', 'ReadCollection', 'ReadFacet', 'ReadAsset', 'ReadTag'],
+                templateLibrary: [{ resourceType: 'Facet', resourceId: 'public-1', name: '公共品牌模板' }],
+            });
+            expect(container.textContent).toContain(
+                tab === 'categories' ? '茶叶' : tab === 'options' ? '时长' : '品牌',
+            );
+            expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+            expect(container.querySelector('[draggable="true"]')).toBeNull();
+            const buttons = Array.from(container.querySelectorAll('button')).map(
+                b => b.getAttribute('aria-label') || b.textContent?.trim() || '',
+            );
+            expect(buttons.some(label => /^(新增|编辑|删除|拖动|上移|下移|领取本店)/.test(label))).toBe(
+                false,
+            );
+            await click('刷新');
+            expect(
+                requests.mock.calls.some(([name]) => /^(Create|Update|Delete|Move|Claim)/.test(name)),
+            ).toBe(false);
+            if (tab === 'options') expect(buttons.includes('查看使用规格模板《时长》的 0 个商品')).toBe(true);
+        },
+    );
+    it('keeps update and delete permissions independent of creation', async () => {
+        const { container } = await renderCategories({
+            initialEntry: '/catalog/categories?tab=options',
+            optionGroups: [group],
+            permissions: ['ReadProduct', 'UpdateProduct'],
+        });
+        expect(container.querySelector('[aria-label="编辑规格模板：时长"]')).not.toBeNull();
+        expect(container.querySelector('[aria-label="删除规格模板：时长"]')).toBeNull();
+        expect(container.textContent).not.toContain('新增规格模板');
+    });
+    it('accepts the native Catalog permission aliases', async () => {
+        const { container } = await renderCategories({
+            initialEntry: '/catalog/categories?tab=facets',
+            facets: [facet],
+            permissions: ['ReadCatalog', 'CreateCatalog', 'UpdateCatalog', 'DeleteCatalog'],
+        });
+        expect(container.textContent).toContain('新增筛选属性');
+        expect(container.querySelector('[aria-label="编辑筛选属性：品牌"]')).not.toBeNull();
+        expect(container.querySelector('[aria-label="删除筛选属性：品牌"]')).not.toBeNull();
     });
 });

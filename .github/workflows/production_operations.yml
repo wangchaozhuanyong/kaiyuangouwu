@@ -263,7 +263,7 @@ jobs:
                       'umask 077',
                       'operations_dir="$(mktemp -d /tmp/vendure-production-operations.XXXXXX)"',
                       f"trap 'code=$?; if {{ [ {operation} != plan-platform-store-governance ] && [ {operation} != audit-catalog-ownership ]; }} || [ \"$code\" != 0 ]; then rm -rf -- \"$operations_dir\"; fi' EXIT",
-                      'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts"',
+                      'mkdir -p "$operations_dir/systemd" "$operations_dir/repository/packages/dev-server/migrations" "$operations_dir/repository/packages/dev-server/scripts" "$operations_dir/repository/deploy"',
                   ]
                   bundle_index = len(lines)
                   lines.extend([
@@ -327,6 +327,7 @@ jobs:
                           transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
                       ])
                   if operation_name == 'audit-catalog-ownership':
+                      lines.append(transport('deploy/production-storefronts.json', 'repository/deploy/production-storefronts.json'))
                       lines.extend(transport(f'deploy/{name}', name) for name in [
                           'catalog-ownership-audit.cjs', 'governance-preflight-transport.cjs',
                       ])

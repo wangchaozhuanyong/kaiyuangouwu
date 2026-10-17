@@ -1,5 +1,6 @@
 import { Parent, ResolveField, Resolver } from '@nestjs/graphql';
 
+import { RequestContextCacheService } from '../../../cache/request-context-cache.service';
 import { Asset } from '../../../entity/asset/asset.entity';
 import { Tag } from '../../../entity/tag/tag.entity';
 import { LocaleStringHydrator } from '../../../service/helpers/locale-string-hydrator/locale-string-hydrator';
@@ -12,6 +13,7 @@ export class AssetEntityResolver {
     constructor(
         private readonly tagService: TagService,
         private readonly localeStringHydrator: LocaleStringHydrator,
+        private readonly requestContextCache: RequestContextCacheService,
     ) {}
 
     @ResolveField()
@@ -33,15 +35,36 @@ export class AssetEntityResolver {
     }
 
     @ResolveField()
-    async translations(@Ctx() ctx: RequestContext, @Parent() asset: Asset): Promise<any[]> {
+    translations(@Ctx() ctx: RequestContext, @Parent() asset: Asset): any[] {
         // Return empty array for assets without translations (legacy data)
         return asset.translations ?? [];
     }
 
     @ResolveField()
     async tags(@Ctx() ctx: RequestContext, @Parent() asset: Asset): Promise<Tag[]> {
+        // Joined tags have not necessarily passed their own ownership filter.
         if (asset.tags) {
-            return asset.tags;
+            const tags = await Promise.all(
+                asset.tags.map(tag =>
+                    this.requestContextCache.load<Tag | undefined>(
+                        ctx,
+                        `AssetEntityResolver.tags(${ctx.channelId})`,
+                        tag.id,
+                        async ids => {
+                            const visible = new Map<string, Tag>();
+                            for (let offset = 0; offset < ids.length; offset += 100) {
+                                const result = await this.tagService.findAll(ctx, {
+                                    filter: { id: { in: ids.slice(offset, offset + 100) } },
+                                    take: 100,
+                                });
+                                result.items.forEach(item => visible.set(String(item.id), item));
+                            }
+                            return ids.map(id => visible.get(id));
+                        },
+                    ),
+                ),
+            );
+            return tags.filter((tag): tag is Tag => tag !== undefined);
         }
         return this.tagService.getTagsForEntity(ctx, Asset, asset.id);
     }

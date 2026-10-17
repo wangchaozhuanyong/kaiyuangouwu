@@ -69,6 +69,10 @@ test('fixed catalog operation requires exact runtime, accepts no write approval 
         new URL('../.github/workflows/production_operations.yml', import.meta.url),
         'utf8',
     );
+    assert.match(
+        workflow,
+        /transport\('deploy\/production-storefronts\.json', 'repository\/deploy\/production-storefronts\.json'\)/u,
+    );
     const validation = workflow.match(/case "\$OPS_OPERATION" in[^]*?\besac/u)[0];
     assert.equal(spawnSync('bash', ['-c', validation], { env, encoding: 'utf8' }).status, 0);
     assert.match(workflow, /operation_name == 'audit-catalog-ownership'/u);

@@ -6,6 +6,7 @@ import { gunzipSync } from 'node:zlib';
 import {
     CATALOG_TABLES,
     collectCatalogOwnershipEvidence,
+    collectSupplementaryCatalogReferences,
     encodeCatalogOwnershipEvidence,
 } from './catalog-ownership-evidence.mjs';
 
@@ -125,7 +126,7 @@ test('fixed snapshot preserves six resource, child, product, decoration and gran
     ])
         assert.deepEqual(plan.data[table], adapter.rows[table]);
     assert.ok(plan.coverage.excludes.includes('ORDINARY_STORE_AUTHORIZATION_PROBES'));
-    assert.equal(adapter.queries.length, 31);
+    assert.equal(adapter.queries.length, 36);
     const mobileQuery = adapter.queries.find(q => q.sql.includes('FROM `storefront_content_block`')).sql;
     assert.match(mobileQuery, /JSON_VALID\(settings\)/u);
     assert.match(mobileQuery, /\$\.mobileImageAssetId/u);
@@ -134,6 +135,104 @@ test('fixed snapshot preserves six resource, child, product, decoration and gran
     const decoded = gunzipSync(Buffer.from(encoded.compressedPlan, 'base64'));
     assert.equal(createHash('sha256').update(decoded).digest('hex'), encoded.snapshotHash);
     assert.deepEqual(JSON.parse(decoded), plan);
+});
+
+test('resolves known URL and nested filter references while excluding all raw content and URL values from the result', async () => {
+    const adapter = fixture({
+        asset: [
+            {
+                id: 3,
+                source: 'source/ab/sample.png',
+                preview: 'preview/ab/sample.png',
+                createdAt: '2020-01-01T00:00:00.000Z',
+            },
+        ],
+        storefront_content_block: [
+            {
+                id: 20,
+                channelId: 2,
+                imageAssetId: null,
+                legacyImageUrl:
+                    'https://console.moyaoai.com/assets/source/ab/sample.png?private=NEVER_EXPORT_URL_QUERY',
+            },
+        ],
+        storefront_content_item: [
+            { id: 21, blockId: 20, imageAssetId: null, mobileImageUrl: '/assets/preview/ab/sample.png' },
+        ],
+        product_translation: [
+            {
+                id: 30,
+                baseId: 7,
+                description: 'NEVER_EXPORT_DESCRIPTION <img src="/assets/source/ab/sample.png">',
+            },
+        ],
+        collection: [
+            {
+                id: 40,
+                featuredAssetId: null,
+                filters: JSON.stringify([
+                    { code: 'facet-value-filter', args: [{ name: 'facetValueIds', value: '[9,10]' }] },
+                ]),
+            },
+        ],
+        governance_audit_entry: [
+            {
+                id: 50,
+                channelId: 2,
+                resourceType: 'Asset',
+                resourceId: '3',
+                eventType: 'resource-created',
+                createdAt: '2020-01-01T00:00:00.000Z',
+            },
+        ],
+    });
+    const plan = await collectCatalogOwnershipEvidence(adapter);
+    assert.equal(plan.supplementaryReferences.mediaReferences.length, 3);
+    assert.ok(plan.supplementaryReferences.mediaReferences.every(r => r.assetId === '3'));
+    assert.deepEqual(plan.supplementaryReferences.dynamicFacetReferences, [
+        { collectionId: '40', resourceType: 'FacetValue', resourceId: '9' },
+        { collectionId: '40', resourceType: 'FacetValue', resourceId: '10' },
+    ]);
+    assert.equal(plan.supplementaryReferences.governanceLineageRows, 1);
+    assert.equal(plan.supplementaryReferences.ownershipInferred, false);
+    const encoded = JSON.stringify(plan);
+    assert.doesNotMatch(encoded, /NEVER_EXPORT|source\/ab|preview\/ab|https:\/\//u);
+    assert.equal(
+        plan.data.asset[0].sourcePathSha256,
+        createHash('sha256').update('source/ab/sample.png').digest('hex'),
+    );
+    assert.equal(adapter.rows.product_translation[0].description.includes('NEVER_EXPORT_DESCRIPTION'), true);
+    const lineage = adapter.queries.find(q => q.sql.includes('FROM `governance_audit_entry`'));
+    assert.ok(lineage.sql.includes('WHERE (resourceType, resourceId) IN'));
+    assert.ok(lineage.parameters.includes('Asset'));
+    assert.ok(lineage.parameters.includes('3'));
+});
+
+test('keeps ambiguous URLs, foreign origins and unsupported filter values unresolved without guessing', () => {
+    const rows = fixture().rows;
+    rows.asset = [
+        { id: 1, source: 'source/same.png' },
+        { id: 2, source: 'source/same.png' },
+    ];
+    rows.storefront_content_block = [
+        { id: 1, legacyImageUrl: '/assets/source/same.png' },
+        { id: 2, mobileImageUrl: 'https://foreign.invalid/assets/source/same.png' },
+    ];
+    rows.collection = [
+        {
+            id: 1,
+            filters: JSON.stringify([
+                { code: 'facet-value-filter', args: [{ name: 'facetValueIds', value: 'not-json' }] },
+            ]),
+        },
+    ];
+    const result = collectSupplementaryCatalogReferences(rows, ['console.moyaoai.com']);
+    assert.equal(result.evidence.mediaReferences.length, 0);
+    assert.deepEqual(
+        result.evidence.unresolvedReferences.map(r => r.reason),
+        ['AMBIGUOUS_ASSET_PATH', 'UNRESOLVED_OR_EXTERNAL_URL', 'INVALID_FACET_FILTER_IDS'],
+    );
+    assert.doesNotMatch(JSON.stringify(result), /foreign\.invalid|source\/same\.png|not-json/u);
 });
 
 test('missing schema, row overflow and candidate overflow stop the audit instead of reporting partial success', async () => {

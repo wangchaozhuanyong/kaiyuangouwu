@@ -524,9 +524,21 @@ runtime identity and health before and after the read, including failed reads.
 
 The audit covers ProductOptionGroup, ProductOption, Facet, FacetValue, Asset and
 Tag registrations, catalog channel links, product/variant references, sales
-authorization IDs and decoration image ID bindings (including mobile images).
-It excludes customer, order, payment, inventory, credential and content text
-fields. Each SELECT has a 3-second MySQL execution limit; the process limit is
+authorization IDs, decoration image ID/URL bindings (including mobile images),
+known HTML/CSS media references in product/collection/decoration translations,
+and dynamic collection facet-value filters. Media URLs and content text are
+read only within the process to resolve exact asset paths on the configured
+production hosts; they are removed before output. The artifact contains IDs,
+asset path hashes, unresolved-reference reasons and creation timestamps.
+Unknown hosts, ambiguous paths, oversized markup and unsupported filter
+arguments remain explicit gaps rather than inferred ownership.
+
+Creation-lineage reads select only audit IDs, store/resource IDs, event types
+and timestamps for the missing registrations in that same snapshot. No audit
+payload, actor details, reason text or credentials are selected. Customer,
+order, payment and inventory tables remain excluded. Translation fields are
+capped at 65,537 characters and 8 MiB total in-process input; truncated fields
+are marked incomplete. Each SELECT has a 3-second MySQL execution limit; the process limit is
 90 seconds. Reads stop above 10,000 rows per table, 50,000 total rows, 500 missing
 registration candidates or a 2 MiB JSON result. Missing columns stop the audit.
 
