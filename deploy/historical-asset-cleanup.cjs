@@ -150,8 +150,10 @@ async function references(connection, assets, schema) {
     }
     const surfaces = schema.columns.filter(row => mediaColumn(row.t, row.c, row.type));
     assert.ok(surfaces.length <= 160, 'ASSET_MEDIA_SURFACE_BUDGET');
-    const needles = assets.flatMap(asset => stems(asset).map(needle => [String(asset.id), needle]));
-    const derived = needles.map(() => 'SELECT ? AS assetId,? AS needle').join(' UNION ALL ');
+    // Keep each text/JSON cross join small without increasing the statement
+    // time budget or omitting any candidate or media field.
+    const batches = [];
+    for (let offset = 0; offset < assets.length; offset += 8) batches.push(assets.slice(offset, offset + 8));
     for (const surface of surfaces) {
         const column = 'd.' + quote(surface.c);
         const json = `CASE WHEN JSON_VALID(${column}) THEN ${column} ELSE '{}' END`;
@@ -169,28 +171,42 @@ async function references(connection, assets, schema) {
         ].map(key => `JSON_UNQUOTE(JSON_EXTRACT(${json}, '$.${key}'))=n.assetId`);
         const scalar = /(?:asset|image)id$/iu.test(surface.c) ? [`${column}=n.assetId`] : [];
         try {
-            const rows = await query(
-                connection,
-                `SELECT /*+ MAX_EXECUTION_TIME(3000) */ n.assetId,COUNT(*) AS n FROM ${quote(surface.t)} AS d INNER JOIN (${derived}) AS n ON (${[
-                    `LOCATE(CONVERT(n.needle USING utf8mb4) COLLATE utf8mb4_unicode_ci,CONVERT(${column} USING utf8mb4) COLLATE utf8mb4_unicode_ci)>0`,
-                    ...jsonIds,
-                    ...scalar,
-                ].join(' OR ')}) GROUP BY n.assetId`,
-                needles.flat(),
-                95,
-            );
-            for (const row of rows)
-                add(row.assetId, {
-                    kind: 'CURRENT_OR_LEGACY_MEDIA_REFERENCE',
-                    table: surface.t,
-                    column: surface.c,
-                    count: Number(row.n),
-                });
-        } catch {
+            for (const batch of batches) {
+                const needles = batch.flatMap(asset =>
+                    stems(asset).map(needle => [String(asset.id), needle]),
+                );
+                const derived = needles.map(() => 'SELECT ? AS assetId,? AS needle').join(' UNION ALL ');
+                const rows = await query(
+                    connection,
+                    `SELECT /*+ MAX_EXECUTION_TIME(3000) */ n.assetId,COUNT(*) AS n FROM ${quote(surface.t)} AS d INNER JOIN (${derived}) AS n ON (${[
+                        `LOCATE(CONVERT(n.needle USING utf8mb4) COLLATE utf8mb4_unicode_ci,CONVERT(${column} USING utf8mb4) COLLATE utf8mb4_unicode_ci)>0`,
+                        ...jsonIds,
+                        ...scalar,
+                    ].join(' OR ')}) GROUP BY n.assetId`,
+                    needles.flat(),
+                    batch.length,
+                );
+                for (const row of rows)
+                    add(row.assetId, {
+                        kind: 'CURRENT_OR_LEGACY_MEDIA_REFERENCE',
+                        table: surface.t,
+                        column: surface.c,
+                        count: Number(row.n),
+                    });
+            }
+        } catch (error) {
             // A timeout or unreadable surface makes every potentially affected
             // target ineligible; never turn incomplete evidence into deletion.
             for (const id of ids)
-                add(id, { kind: 'UNVERIFIABLE_MEDIA_SURFACE', table: surface.t, column: surface.c });
+                add(id, {
+                    kind: 'UNVERIFIABLE_MEDIA_SURFACE',
+                    table: surface.t,
+                    column: surface.c,
+                    failure:
+                        error.code === 'ER_QUERY_TIMEOUT' || error.errno === 3024
+                            ? 'STATEMENT_TIMEOUT'
+                            : 'QUERY_FAILED',
+                });
         }
     }
     const allPaths = await query(connection, 'SELECT id,source,preview FROM asset ORDER BY id', [], 10000);
@@ -540,4 +556,4 @@ if (require.main === module)
         );
         process.exitCode = 1;
     });
-module.exports = { TARGET_IDS, stems, mediaColumn, prepare, apply, loadPlan, digest, bytesAt };
+module.exports = { TARGET_IDS, stems, mediaColumn, references, prepare, apply, loadPlan, digest, bytesAt };
