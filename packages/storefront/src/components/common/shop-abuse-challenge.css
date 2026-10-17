@@ -67,3 +67,25 @@
     outline: 2px solid var(--focus);
     outline-offset: 2px;
 }
+.shop-abuse-challenge p.shop-abuse-challenge-error {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    padding: var(--space-12);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+    border-radius: var(--skin-control-radius);
+    color: var(--danger);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    overflow-wrap: anywhere;
+}
+.shop-abuse-challenge-error svg {
+    flex-shrink: 0;
+}
+.shop-abuse-challenge:has(.shop-abuse-challenge-error) .auth-input-shell:has(input[aria-invalid='true']) {
+    border-color: var(--danger);
+}
+.shop-abuse-challenge-error:focus-visible {
+    outline: 2px solid var(--danger);
+    outline-offset: 2px;
+}

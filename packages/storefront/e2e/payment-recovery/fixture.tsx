@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 
 import { ShopApi, ShopApiTimeoutError } from '../../src/api';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
-import { PaymentPage } from '../../src/payment-pages';
+import { OrderConfirmationPage, PaymentPage } from '../../src/payment-pages';
 import { createStorefrontQueryClient } from '../../src/query-client';
 import '../../src/styles.css';
 import '../../src/styles/control-surfaces.css';
@@ -18,7 +18,11 @@ import { MarketConfig, Order, StorefrontCart, StorefrontPaymentAttemptInput } fr
 import { applyStorefrontVisualPreset } from '../../src/use-storefront-visual-preset';
 
 // In-memory synthetic data. This fixture has no production API, funds or delivery access.
-const scenario = new URLSearchParams(location.search).get('scenario') ?? 'unknown';
+const params = new URLSearchParams(location.search);
+const scenario = params.get('scenario') ?? 'unknown';
+const language = params.get('language') === 'en' ? 'en' : 'zh';
+const preset = params.get('preset') === 'classic' ? 'classic' : 'neo-minimalist';
+const manual = scenario === 'manual-success' || scenario === 'no-active-order';
 const market: MarketConfig = {
     code: 'synthetic-payment',
     currencyCode: 'CNY',
@@ -49,13 +53,18 @@ const cart = {
 const method = {
     id: 'synthetic-method',
     code: 'synthetic-method',
-    name: '合成支付',
+    name: manual
+        ? language === 'zh'
+            ? '提交订单后联系客服支付'
+            : 'Submit order and contact support'
+        : '合成支付',
+    kind: manual ? 'OFFLINE_MANUAL' : undefined,
     description: '',
     isEligible: true,
     eligibilityMessage: null,
 };
 const client = createStorefrontQueryClient();
-applyStorefrontVisualPreset(document.documentElement, 'neo-minimalist');
+applyStorefrontVisualPreset(document.documentElement, preset);
 if (scenario === 'legacy' || scenario === 'guest-reload') {
     const marketScope = market.code;
     const marker = {
@@ -82,6 +91,7 @@ function Fixture() {
         ['legacy', 'guest-reload'].includes(scenario) ? null : original,
     );
     const [calls, setCalls] = useState({ payments: 0, reads: 0, fences: 0 });
+    const [completed, setCompleted] = useState(false);
     const [api] = useState(
         () =>
             ({
@@ -90,6 +100,19 @@ function Fixture() {
                     Promise.resolve({ token: 'synthetic-token-never-persisted' }),
                 addPaymentToOrder: () => {
                     setCalls(value => ({ ...value, payments: value.payments + 1 }));
+                    if (scenario === 'manual-success')
+                        return Promise.resolve({
+                            ...original,
+                            state: 'AwaitingManualPayment',
+                            payments: [
+                                {
+                                    id: 'synthetic-manual-payment',
+                                    method: method.code,
+                                    amount: 990,
+                                    state: 'PendingManual',
+                                },
+                            ],
+                        });
                     return Promise.reject(new ShopApiTimeoutError('Synthetic lost response', true));
                 },
                 paymentAttempt: (input: StorefrontPaymentAttemptInput, fence = false) => {
@@ -107,10 +130,10 @@ function Fixture() {
                                     : 'NOT_FOUND'
                                 : scenario === 'applied' || scenario === 'guest-reload'
                                   ? 'APPLIED'
-                                  : scenario === 'rejected'
+                                  : scenario === 'rejected' || scenario === 'no-active-order'
                                     ? 'REJECTED'
                                     : 'UNKNOWN',
-                        errorCode: null,
+                        errorCode: scenario === 'no-active-order' ? 'NO_ACTIVE_ORDER_ERROR' : null,
                         ...(scenario === 'guest-reload'
                             ? { order: { ...original, state: 'PaymentSettled' } }
                             : {}),
@@ -126,7 +149,11 @@ function Fixture() {
                     ),
                 orderByConfirmationToken: () =>
                     Promise.resolve(
-                        scenario === 'applied' ? { ...original, state: 'PaymentSettled' } : original,
+                        scenario === 'manual-success'
+                            ? { ...original, state: 'AwaitingManualPayment' }
+                            : scenario === 'applied'
+                              ? { ...original, state: 'PaymentSettled' }
+                              : original,
                     ),
             }) as unknown as ShopApi,
     );
@@ -137,22 +164,35 @@ function Fixture() {
                     本地合成验收：写请求 {calls.payments}，回执读取 {calls.reads}，封住未执行请求{' '}
                     {calls.fences}
                 </p>
-                <PaymentPage
-                    api={api}
-                    order={order}
-                    cart={cart}
-                    customer={null}
-                    market={market}
-                    displayCurrencyCode="CNY"
-                    locale="zh-CN"
-                    language="zh"
-                    onCancel={() => undefined}
-                    onOrderChange={setOrder}
-                    onComplete={latest => {
-                        setOrder(latest);
-                        return Promise.resolve();
-                    }}
-                />
+                {completed && scenario === 'manual-success' ? (
+                    <OrderConfirmationPage
+                        api={api}
+                        code={original.code}
+                        confirmationToken="synthetic-token-never-persisted"
+                        customer={null}
+                        market={market}
+                        locale={language === 'zh' ? 'zh-CN' : 'en-US'}
+                        language={language}
+                    />
+                ) : (
+                    <PaymentPage
+                        api={api}
+                        order={order}
+                        cart={cart}
+                        customer={null}
+                        market={market}
+                        displayCurrencyCode="CNY"
+                        locale="zh-CN"
+                        language={language}
+                        onCancel={() => undefined}
+                        onOrderChange={setOrder}
+                        onComplete={latest => {
+                            setOrder(latest);
+                            setCompleted(true);
+                            return Promise.resolve();
+                        }}
+                    />
+                )}
             </div>
         </DesktopLayoutContext.Provider>
     );

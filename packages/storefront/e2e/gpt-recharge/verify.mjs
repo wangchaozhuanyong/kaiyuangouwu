@@ -3,9 +3,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const output = fileURLToPath(
-    new URL('../../../../docs/local-validation/gpt-recharge-20261016/', import.meta.url),
-);
+const output = process.env.GPT_RECHARGE_VALIDATION_OUTPUT_DIR
+    ? path.resolve(process.env.GPT_RECHARGE_VALIDATION_OUTPUT_DIR)
+    : fileURLToPath(
+          new URL('../../../../docs/local-validation/gpt-recharge-feedback-20261017/', import.meta.url),
+      );
+const origin = process.env.GPT_RECHARGE_PREVIEW_ORIGIN || 'http://127.0.0.1:5186';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const results = [];
@@ -20,14 +23,14 @@ try {
         const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
-        await page.goto(`http://127.0.0.1:5184/e2e/gpt-recharge/?skin=${skin}`);
+        await page.goto(`${origin}/e2e/gpt-recharge/?skin=${skin}`);
         await page.getByText('ChatGPT自助充值', { exact: true }).waitFor();
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: path.join(output, `recharge-${width}-${skin}.png`), fullPage: true });
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
         if (overflow) throw new Error(`Horizontal overflow at ${width}/${skin}`);
         await page.getByRole('button', { name: '填入演示资料' }).click();
-        await page.getByRole('button', { name: '验证', exact: true }).click();
+        await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
         await page.getByText('已锁定 Plus').waitFor();
         if (!(await page.getByRole('button', { name: 'Pro200', exact: true }).isDisabled()))
             throw new Error('Plan is not locked');
@@ -36,7 +39,7 @@ try {
         if (await page.getByRole('button', { name: '充值提交', exact: true }).isEnabled())
             throw new Error('Invalid JSON can submit');
         await page.getByRole('button', { name: '填入演示资料' }).click();
-        await page.getByRole('button', { name: '验证', exact: true }).click();
+        await page.getByRole('button', { name: '验证兑换码', exact: true }).click();
         await page.getByRole('checkbox').check();
         await page.waitForFunction(() =>
             [...document.querySelectorAll('button')].some(

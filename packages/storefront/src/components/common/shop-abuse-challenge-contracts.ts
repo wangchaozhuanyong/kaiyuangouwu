@@ -29,4 +29,5 @@ export interface ShopAbuseChallengeControlProps {
     language: StorefrontLanguage;
     onSubmit?: (form: HTMLFormElement | null) => void;
     google?: boolean;
+    submitLabel?: string;
 }
