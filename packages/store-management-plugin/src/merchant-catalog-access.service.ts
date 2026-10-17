@@ -492,7 +492,14 @@ export class MerchantCatalogAccessService {
                     throw new UserInputError('此商品由来源店铺统一管理，不能修改本店库存或交付配置');
             }
             await this.assertCouponManagementEntry(ctx, fieldName, args);
-            if (crossStoreAssignmentMutations.has(fieldName)) {
+            // Removing an ordinary promotion link reduces its sales scope. The native
+            // resolver still checks UpdatePromotion and the target channel; coupon
+            // lifecycle protection above also applies. Assignment/sharing stays blocked.
+            const platformPromotionUnlink =
+                fieldName === 'removePromotionsFromChannel' &&
+                ctx.channel.code === DEFAULT_CHANNEL_CODE &&
+                ctx.userHasPermissions([Permission.SuperAdmin]);
+            if (crossStoreAssignmentMutations.has(fieldName) && !platformPromotionUnlink) {
                 throw new UserInputError('跨店销售授权请使用平台商品分配中心，私有经营配置不能直接共享');
             }
         }

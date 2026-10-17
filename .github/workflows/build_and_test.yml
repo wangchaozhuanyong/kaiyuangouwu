@@ -364,6 +364,13 @@ jobs:
             - name: Install browser for storefront configuration acceptance
               if: needs.detect-changes.outputs.storefrontIntegration == 'true'
               run: bunx playwright install --with-deps chromium
+            - name: Verify platform promotion unlink authorization through Admin API
+              if: contains(fromJSON(needs.detect-changes.outputs.packages), 'store-management-plugin')
+              env:
+                  PACKAGE: store-management-plugin
+                  DB: sqljs
+                  VENDURE_DISABLE_TELEMETRY: 'true'
+              run: bunx vitest run --config e2e-common/vitest.config.mts packages/store-management-plugin/e2e/promotion-channel-unlink.e2e-spec.ts
             - name: Verify saved configuration across stores and real homepage
               if: needs.detect-changes.outputs.storefrontIntegration == 'true'
               env:
