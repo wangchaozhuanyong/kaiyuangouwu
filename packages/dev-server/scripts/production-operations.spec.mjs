@@ -517,6 +517,12 @@ void test('release workflow ships the fixed live preflight inputs and migration 
             'packages/dev-server/scripts/asset-webp-migration.mjs',
         ],
         [...commonFiles, 'deploy/systemd/vendure-backup-s3-guard.py'],
+        [
+            ...commonFiles,
+            'deploy/historical-asset-cleanup.cjs',
+            'deploy/historical-asset-cleanup-operations.cjs',
+            'deploy/governance-preflight-transport.cjs',
+        ],
     ];
     const compression = spawnSync(
         'python3',

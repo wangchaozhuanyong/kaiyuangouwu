@@ -140,6 +140,9 @@ function validateRequest(environment) {
             'prepare-notification-secret-transfer',
             'audit-store-isolation-data',
             'audit-catalog-ownership',
+            'prepare-historical-asset-cleanup',
+            'apply-historical-asset-cleanup-pilot-reviewed',
+            'apply-historical-asset-cleanup-remaining-reviewed',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
             'plan-window-test-order-cleanup',
@@ -192,6 +195,8 @@ function validateRequest(environment) {
             'apply-order-sales-ownership-backfill-reviewed',
             'apply-moyao-default-store-migration-reviewed',
             'apply-asset-webp-migration-reviewed',
+            'apply-historical-asset-cleanup-pilot-reviewed',
+            'apply-historical-asset-cleanup-remaining-reviewed',
         ].includes(operation)
     ) {
         assert.match(expectedPlanSha256, /^[a-f0-9]{64}$/u, 'A reviewed plan SHA-256 is required');
@@ -233,6 +238,9 @@ function validateRequest(environment) {
             'plan-asset-webp-migration',
             'apply-asset-webp-migration-reviewed',
             'verify-asset-webp-migration',
+            'prepare-historical-asset-cleanup',
+            'apply-historical-asset-cleanup-pilot-reviewed',
+            'apply-historical-asset-cleanup-remaining-reviewed',
         ].includes(operation)
     ) {
         assert.match(expectedRuntimeSha, /^[a-f0-9]{40}$/u, 'An exact expected runtime SHA is required');
@@ -2865,6 +2873,18 @@ function runLocked(environment = process.env) {
         );
         process.stdout.write(`${JSON.stringify(result)}\n`);
         process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
+        return;
+    }
+    if (request.operation.includes('historical-asset-cleanup')) {
+        const result = require('./historical-asset-cleanup-operations.cjs').runHistoricalAssetCleanup(
+            request,
+            {
+                inspect: inspectProductionReleases,
+                health: stage => assertProductionHealthSnapshot(productionHealthSnapshot(), stage),
+            },
+        );
+        process.stdout.write(JSON.stringify(result) + '\n');
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=' + request.operation + '\n');
         return;
     }
     if (request.operation === 'audit-catalog-ownership') {

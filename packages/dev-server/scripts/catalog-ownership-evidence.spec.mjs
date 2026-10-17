@@ -6,6 +6,7 @@ import { gunzipSync } from 'node:zlib';
 import {
     CATALOG_TABLES,
     collectCatalogOwnershipEvidence,
+    collectImportResourceReferences,
     collectSupplementaryCatalogReferences,
     encodeCatalogOwnershipEvidence,
 } from './catalog-ownership-evidence.mjs';
@@ -126,7 +127,7 @@ test('fixed snapshot preserves six resource, child, product, decoration and gran
     ])
         assert.deepEqual(plan.data[table], adapter.rows[table]);
     assert.ok(plan.coverage.excludes.includes('ORDINARY_STORE_AUTHORIZATION_PROBES'));
-    assert.equal(adapter.queries.length, 36);
+    assert.equal(adapter.queries.length, 38);
     const mobileQuery = adapter.queries.find(q => q.sql.includes('FROM `storefront_content_block`')).sql;
     assert.match(mobileQuery, /JSON_VALID\(settings\)/u);
     assert.match(mobileQuery, /\$\.mobileImageAssetId/u);
@@ -135,6 +136,109 @@ test('fixed snapshot preserves six resource, child, product, decoration and gran
     const decoded = gunzipSync(Buffer.from(encoded.compressedPlan, 'base64'));
     assert.equal(createHash('sha256').update(decoded).digest('hex'), encoded.snapshotHash);
     assert.deepEqual(JSON.parse(decoded), plan);
+});
+
+function importRow(overrides = {}) {
+    return {
+        id: 101,
+        jobId: 100,
+        targetProductId: 7,
+        targetVariantId: 8,
+        appliedAt: '2020-01-01T00:00:00.000Z',
+        normalizedDataValid: 1,
+        beforeSnapshotValid: 1,
+        appliedSnapshotValid: 1,
+        resolvedFeaturedAssetId: '3',
+        beforeAssetIds: '["3","999"]',
+        beforeFacetValueIds: '[9]',
+        afterAssetIds: '[]',
+        afterFacetValueIds: '[]',
+        ...overrides,
+    };
+}
+
+test('import snapshots expose only candidate resource matches with task scope, never infer creation or ownership', async () => {
+    const row = importRow();
+    const adapter = fixture({
+        catalog_import_job: [{ id: 100, channelId: 2, state: 'COMPLETED', fileHash: 'a'.repeat(64) }],
+        catalog_import_row: [row],
+    });
+    const before = JSON.stringify(adapter.rows);
+    const plan = await collectCatalogOwnershipEvidence(adapter);
+    assert.equal(plan.importProvenance.jobsRead, 1);
+    assert.equal(plan.importProvenance.rowsRead, 1);
+    assert.equal(plan.importProvenance.matchedResourceCount, 2);
+    assert.deepEqual(
+        plan.importProvenance.references.map(r => [r.resourceType, r.resourceId, r.stage]),
+        [
+            ['Asset', '3', 'RESOLVED_INPUT'],
+            ['Asset', '3', 'BEFORE'],
+            ['FacetValue', '9', 'BEFORE'],
+        ],
+    );
+    assert.ok(plan.importProvenance.references.every(r => r.jobChannelId === '2' && r.rowId === '101'));
+    assert.equal(plan.importProvenance.ownershipInferred, false);
+    assert.equal(plan.importProvenance.creationOriginVerified, false);
+    assert.equal(plan.data.catalog_import_row, undefined);
+    assert.equal(plan.data.catalog_import_job, undefined);
+    assert.doesNotMatch(JSON.stringify(plan), /999|beforeAssetIds.*999/u);
+    assert.equal(JSON.stringify(adapter.rows), before);
+    const sql = adapter.queries.find(q => q.sql.includes('FROM `catalog_import_row`')).sql;
+    for (const column of ['normalizedData', 'beforeSnapshot', 'appliedSnapshot'])
+        assert.match(sql, new RegExp('JSON_VALID\\(\x60' + column + '\x60\\)'));
+    assert.match(sql, /\$\.afterSnapshot\.productFacetValueIds/u);
+    assert.match(sql, /LEFT\(JSON_UNQUOTE\(JSON_EXTRACT/u);
+    assert.doesNotMatch(
+        sql,
+        /productDescription|digital|cost|actor|plannedChanges|SELECT[^]*,\s*`beforeSnapshot`,/u,
+    );
+    assert.match(
+        sql,
+        /ORDER BY `id`, `jobId`, `createdAt`, `appliedAt`, `targetProductId`, `targetVariantId` LIMIT/u,
+    );
+});
+
+test('import references reject malformed JSON, truncated fields, unsafe IDs and orphan rows without exporting their values', () => {
+    const data = fixture({
+        catalog_import_job: [{ id: 100, channelId: 2 }],
+        catalog_import_row: [importRow()],
+    }).rows;
+    const candidates = [{ resourceType: 'Asset', resourceId: '3' }];
+    for (const change of [
+        { beforeSnapshotValid: 0 },
+        { beforeAssetIds: 'NEVER_EXPORT_PRIVATE_TEXT' },
+        { beforeAssetIds: 'x'.repeat(65537) },
+        { beforeAssetIds: '[9007199254740992]' },
+        { beforeAssetIds: '["not-an-id"]' },
+        { beforeAssetIds: Array(1001).fill('3') },
+        { jobId: 404 },
+    ]) {
+        assert.throws(
+            () =>
+                collectImportResourceReferences(
+                    { ...data, catalog_import_row: [importRow(change)] },
+                    candidates,
+                ),
+            error => {
+                assert.doesNotMatch(error.message, /NEVER_EXPORT_PRIVATE_TEXT|not-an-id/u);
+                return /Catalog import|catalog import/u.test(error.message);
+            },
+        );
+    }
+    const large = JSON.stringify(Array(1000).fill('12345678901234567890'));
+    assert.throws(
+        () =>
+            collectImportResourceReferences(
+                {
+                    ...data,
+                    catalog_import_row: Array.from({ length: 400 }, (_, index) =>
+                        importRow({ id: index + 1, beforeAssetIds: large }),
+                    ),
+                },
+                candidates,
+            ),
+        /byte budget/u,
+    );
 });
 
 test('resolves known URL and nested filter references while excluding all raw content and URL values from the result', async () => {
