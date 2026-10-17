@@ -2,6 +2,7 @@ import { gql } from '@apollo/client';
 import { useMutation } from '@apollo/client/react';
 import { useState } from 'react';
 import { AdminButton } from '../../components/AdminControls';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { toUserFacingError } from '../../utils/user-facing-error';
 
@@ -17,12 +18,15 @@ const CLAIM = gql`
 `;
 
 export function CatalogTemplateLibraryPanel({ onClaimed }: { onClaimed: () => void }) {
+    const { hasAnyPermission } = useAdminPermissions();
+    const canClaim = hasAnyPermission(['CreateCatalog', 'CreateFacet', 'CreateProduct']);
     const query = useQuery<{
         catalogTemplateLibrary: Array<{ resourceType: string; resourceId: string; name: string }>;
     }>(LIBRARY, {});
     const [claim, state] = useMutation(CLAIM);
     const [message, setMessage] = useState('');
     const receive = async (resourceType: string, resourceId: string) => {
+        if (!canClaim) return;
         try {
             await claim({ variables: { resourceType, resourceId } });
             setMessage('已领取为本店独立副本，可在本店模板或属性列表修改。');
@@ -49,13 +53,15 @@ export function CatalogTemplateLibraryPanel({ onClaimed }: { onClaimed: () => vo
                     <span>
                         {item.name} · {item.resourceType === 'Facet' ? '属性与标签' : '规格模板'}
                     </span>
-                    <AdminButton
-                        className="text-blue-600 disabled:opacity-50"
-                        disabled={state.loading}
-                        onClick={() => void receive(item.resourceType, item.resourceId)}
-                    >
-                        领取本店副本
-                    </AdminButton>
+                    {canClaim && (
+                        <AdminButton
+                            className="text-blue-600 disabled:opacity-50"
+                            disabled={state.loading}
+                            onClick={() => void receive(item.resourceType, item.resourceId)}
+                        >
+                            领取本店副本
+                        </AdminButton>
+                    )}
                 </div>
             ))}
             {message && (

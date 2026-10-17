@@ -3,7 +3,10 @@ import 'reflect-metadata';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ForbiddenError } from '../../../common/error/errors';
-import { ProductOptionGroupAdminEntityResolver } from '../entity/product-option-group-entity.resolver';
+import {
+    ProductOptionGroupAdminEntityResolver,
+    ProductOptionGroupEntityResolver,
+} from '../entity/product-option-group-entity.resolver';
 
 import { ProductOptionResolver } from './product-option.resolver';
 
@@ -49,5 +52,41 @@ describe('ProductOptionGroupAdminEntityResolver products', () => {
                 optionGroupId: { eq: '42' },
             },
         });
+    });
+});
+
+describe('ProductOptionGroupEntityResolver child ownership', () => {
+    it('filters preloaded children through the canonical scoped option reader', async () => {
+        const options = [{ id: 1 }, { id: 2 }, { id: 3, deletedAt: new Date() }];
+        const service = { findOne: vi.fn().mockResolvedValue({ options }) };
+        const connection = {
+            platformStoreGovernanceEnabled: true,
+            findByIdsInChannel: vi.fn().mockResolvedValue([{ id: 1 }]),
+        };
+        const resolver = new ProductOptionGroupEntityResolver(service as any, {} as any, connection as any);
+        const ctx = { channelId: 2 } as any;
+        expect(await resolver.options(ctx, { id: 4, options } as any)).toEqual([{ id: 1 }]);
+        expect(connection.findByIdsInChannel).toHaveBeenCalledWith(ctx, expect.any(Function), [1, 2], 2, {});
+    });
+    it('preserves the bounded authorized-product dependency path', async () => {
+        const option = { id: 8 };
+        const service = {
+            getOptionGroupsByProductId: vi.fn().mockResolvedValue([{ id: 4, options: [option] }]),
+        };
+        const connection = { platformStoreGovernanceEnabled: true, findByIdsInChannel: vi.fn() };
+        const resolver = new ProductOptionGroupEntityResolver(service as any, {} as any, connection as any);
+        expect(await resolver.options({} as any, { id: 4, authorizedProductId: 'product-1' } as any)).toEqual(
+            [option],
+        );
+        expect(service.getOptionGroupsByProductId).toHaveBeenCalledWith({}, 'product-1');
+        expect(connection.findByIdsInChannel).not.toHaveBeenCalled();
+    });
+    it('retains native behavior when platform governance is disabled', async () => {
+        const options = [{ id: 1 }];
+        const service = { findOne: vi.fn().mockResolvedValue({ options }) };
+        const connection = { platformStoreGovernanceEnabled: false, findByIdsInChannel: vi.fn() };
+        const resolver = new ProductOptionGroupEntityResolver(service as any, {} as any, connection as any);
+        expect(await resolver.options({} as any, { id: 4, options } as any)).toEqual(options);
+        expect(connection.findByIdsInChannel).not.toHaveBeenCalled();
     });
 });

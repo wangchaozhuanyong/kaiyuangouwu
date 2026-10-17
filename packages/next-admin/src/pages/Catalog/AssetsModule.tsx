@@ -135,9 +135,9 @@ const cleanupPreview = (file: PendingFile) => {
 
 export function AssetsModule() {
     const { hasAnyPermission } = useAdminPermissions();
-    const canCreate = hasAnyPermission(['CreateAsset']);
-    const canUpdate = hasAnyPermission(['UpdateAsset']);
-    const canDelete = hasAnyPermission(['DeleteAsset']);
+    const canCreate = hasAnyPermission(['CreateAsset', 'CreateCatalog']);
+    const canUpdate = hasAnyPermission(['UpdateAsset', 'UpdateCatalog']);
+    const canDelete = hasAnyPermission(['DeleteAsset', 'DeleteCatalog']);
     const requestConfirmation = useConfirmDialog();
     const assetCustomFields = useCustomFieldDefinitions('Asset');
     const assetsDocument = useMemo(

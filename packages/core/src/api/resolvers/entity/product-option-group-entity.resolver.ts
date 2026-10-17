@@ -6,6 +6,7 @@ import { PaginatedList } from '@vendure/common/lib/shared-types';
 
 import { Translated } from '../../../common/types/locale-types';
 import { idsAreEqual } from '../../../common/utils';
+import { TransactionalConnection } from '../../../connection/transactional-connection';
 import { Channel } from '../../../entity/channel/channel.entity';
 import { Product } from '../../../entity/product/product.entity';
 import { ProductOption } from '../../../entity/product-option/product-option.entity';
@@ -22,6 +23,7 @@ export class ProductOptionGroupEntityResolver {
     constructor(
         private productOptionGroupService: ProductOptionGroupService,
         private localeStringHydrator: LocaleStringHydrator,
+        private connection: TransactionalConnection,
     ) {}
 
     @ResolveField()
@@ -66,7 +68,19 @@ export class ProductOptionGroupEntityResolver {
         }
         const visible = await this.productOptionGroupService.findOne(ctx, optionGroup.id);
         const ids = new Set((visible?.options ?? []).map(o => String(o.id)));
-        return options.filter(o => !o.deletedAt && ids.has(String(o.id)));
+        const candidates = options.filter(o => !o.deletedAt && ids.has(String(o.id)));
+        if (!this.connection.platformStoreGovernanceEnabled || !candidates.length) return candidates;
+        // A readable parent does not grant access to every joined child. Apply the
+        // same channel and canonical ownership strategy as the option detail API.
+        const scopedOptions = await this.connection.findByIdsInChannel(
+            ctx,
+            ProductOption,
+            candidates.map(option => option.id),
+            ctx.channelId,
+            {},
+        );
+        const scopedIds = new Set(scopedOptions.map(option => String(option.id)));
+        return candidates.filter(option => scopedIds.has(String(option.id)));
     }
 }
 

@@ -277,4 +277,11 @@ describe('asset classification editing', () => {
         expect(host.querySelector('[role="dialog"]')?.textContent).toContain('上传');
         expect(mocks.updateAsset).not.toHaveBeenCalled();
     });
+    it('honors the native Catalog aliases for asset operations', async () => {
+        mocks.permissions = ['ReadCatalog', 'CreateCatalog', 'UpdateCatalog', 'DeleteCatalog'];
+        const category = await openEditor();
+        expect(category.disabled).toBe(false);
+        for (const label of ['上传新素材', '保存属性', '删除素材', '批量删除'])
+            expect(hasButton(label)).toBe(true);
+    });
 });

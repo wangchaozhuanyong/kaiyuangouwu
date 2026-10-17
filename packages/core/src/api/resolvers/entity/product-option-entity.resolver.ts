@@ -43,9 +43,7 @@ export class ProductOptionEntityResolver {
             const group = groups.find(g => g.options.some(o => String(o.id) === String(option.id)));
             if (group) return group;
         }
-        if (option.group) {
-            return option.group;
-        }
+        // A joined parent must pass the same scoped read as a direct lookup.
         return this.requestContextCache.get(ctx, `ProductOptionEntityResolver.group(${option.groupId})`, () =>
             assertFound(
                 this.productOptionGroupService.findOne(ctx, option.groupId, undefined, {

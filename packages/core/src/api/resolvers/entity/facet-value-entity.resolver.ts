@@ -1,3 +1,4 @@
+// organize-imports-ignore
 import { Parent, ResolveField, Resolver } from '@nestjs/graphql';
 
 import { RequestContextCacheService } from '../../../cache/request-context-cache.service';
@@ -28,9 +29,7 @@ export class FacetValueEntityResolver {
 
     @ResolveField()
     async facet(@Ctx() ctx: RequestContext, @Parent() facetValue: FacetValue): Promise<Facet | undefined> {
-        if (facetValue.facet) {
-            return facetValue.facet;
-        }
+        // A joined parent must pass the same scoped read as a direct lookup.
         return this.requestContextCache.get(ctx, `FacetValueEntityResolver.facet(${facetValue.id})`, () =>
             this.facetService.findByFacetValueId(ctx, facetValue.id),
         );

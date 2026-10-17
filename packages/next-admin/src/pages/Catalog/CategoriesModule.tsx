@@ -64,6 +64,7 @@ import type {
     OperationDefinition,
     OperationValue,
 } from '../../graphql/generic-promotions.graphql';
+import { useAdminPermissions } from '../../hooks/use-admin-permissions';
 import { useAdminLazyQuery as useLazyQuery, useAdminQuery as useQuery } from '../../hooks/use-admin-query';
 import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { useUnsavedChangesWarning } from '../../hooks/use-unsaved-changes-warning';
@@ -204,6 +205,12 @@ export function CategoriesModule() {
         [collectionCustomFields],
     );
     const [activeTab, setActiveTab] = useUrlTab<ActiveTab>(CATEGORY_TABS, 'categories');
+    const { hasAnyPermission } = useAdminPermissions();
+    const permissionResource =
+        activeTab === 'CATEGORIES' ? 'Collection' : activeTab === 'OPTION_TEMPLATES' ? 'Product' : 'Facet';
+    const canCreate = hasAnyPermission(['CreateCatalog', `Create${permissionResource}`]);
+    const canUpdate = hasAnyPermission(['UpdateCatalog', `Update${permissionResource}`]);
+    const canDelete = hasAnyPermission(['DeleteCatalog', `Delete${permissionResource}`]);
     const [notification, setNotification] = useState('');
     const noticeTimeout = useRef<number | undefined>(undefined);
     useEffect(() => () => window.clearTimeout(noticeTimeout.current), []);
@@ -474,7 +481,7 @@ export function CategoriesModule() {
         placement: Placement,
         siblings: CollectionTreeNode[],
     ) => {
-        if (sourceId === targetId || isReordering) return;
+        if (!canUpdate || sourceId === targetId || isReordering) return;
         const sourceNode = siblings.find(item => item.id === sourceId);
         if (!sourceNode) return;
 
@@ -525,6 +532,7 @@ export function CategoriesModule() {
     };
 
     const openEditor = (item: EditableItem | null = null) => {
+        if (item ? !canUpdate : !canCreate) return;
         setEditingItem(item);
         const sourceTranslation = item ? getSourceTranslation(item) : undefined;
         const englishTranslation =
@@ -671,6 +679,7 @@ export function CategoriesModule() {
     };
 
     const handleSave = async () => {
+        if (editingItem ? !canUpdate : !canCreate) return;
         if (categorySourceChanged) {
             showError('分类内容已更新或当前店铺已切换，请关闭编辑并重新打开后保存。');
             return;
@@ -706,6 +715,21 @@ export function CategoriesModule() {
             editingItem &&
             (('options' in editingItem && values.length < editingItem.options.length) ||
                 ('values' in editingItem && values.length < editingItem.values.length));
+        const previousValues =
+            editingItem &&
+            ('options' in editingItem
+                ? editingItem.options
+                : 'values' in editingItem
+                  ? editingItem.values
+                  : null);
+        if (
+            previousValues &&
+            ((values.length > previousValues.length && !canCreate) ||
+                (values.length < previousValues.length && !canDelete))
+        ) {
+            showError('当前岗位不能新增或删除规格、属性值，请保留原有数量或联系管理员。');
+            return;
+        }
         let sensitiveContext: ReturnType<typeof sensitiveActionContext> | undefined;
         if (removesExistingValues) {
             const confirmation = await requestConfirmation({
@@ -938,6 +962,7 @@ export function CategoriesModule() {
     };
 
     const handleDelete = async (item: EditableItem) => {
+        if (!canDelete) return;
         const detail =
             activeTab === 'CATEGORIES'
                 ? '删除分类会同时删除其所有子分类，请确认该分类不再使用。'
@@ -971,6 +996,7 @@ export function CategoriesModule() {
     };
 
     const toggleCollectionSelection = (collectionId: string) => {
+        if (!canDelete) return;
         setSelectedCollectionIds(current => {
             const next = new Set(current);
             if (next.has(collectionId)) next.delete(collectionId);
@@ -980,7 +1006,7 @@ export function CategoriesModule() {
     };
 
     const handleBulkDeleteCollections = async () => {
-        if (selectedCollectionIds.size === 0 || bulkDeletingCollections) return;
+        if (!canDelete || selectedCollectionIds.size === 0 || bulkDeletingCollections) return;
         const selected = collections.filter(collection => selectedCollectionIds.has(collection.id));
         const unsafe = selected.find(collection => {
             const hasChildren = collections.some(candidate => candidate.parentId === collection.id);
@@ -1041,7 +1067,7 @@ export function CategoriesModule() {
         const isTopLevel = depth === 0;
         const hasChildren = node.children.length > 0;
         const isExpanded = !isTopLevel || visibleExpandedCollectionIds.has(node.id);
-        const locked = isReordering || siblings.length < 2;
+        const locked = !canUpdate || isReordering || siblings.length < 2;
         const canBulkDelete = !hasChildren && node.productVariantCount === 0;
 
         return (
@@ -1097,57 +1123,69 @@ export function CategoriesModule() {
                     style={{ marginLeft: `calc(${Math.min(depth, 3)} * min(3vw, 20px))` }}
                 >
                     <div className="flex min-w-0 items-center gap-2">
-                        <AdminInput
-                            type="checkbox"
-                            checked={selectedCollectionIds.has(node.id)}
-                            disabled={!canBulkDelete || bulkDeletingCollections}
-                            onChange={() => toggleCollectionSelection(node.id)}
-                            aria-label={`选择分类 ${node.name}`}
-                            title={canBulkDelete ? '选择这个空分类' : '仅无子分类、无 SKU 的分类可批量选择'}
-                            className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-                        />
-                        <AdminButton
-                            type="button"
-                            draggable={!locked}
-                            disabled={locked}
-                            aria-label={`拖动分类 ${node.name} 排序`}
-                            aria-keyshortcuts="ArrowUp ArrowDown"
-                            title={locked ? '同级至少需要2个分类才可排序' : '拖拽排序，也可使用上下方向键'}
-                            className="hidden md:flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
-                            onDragStart={event => {
-                                if (locked) {
+                        {canDelete && (
+                            <AdminInput
+                                type="checkbox"
+                                checked={selectedCollectionIds.has(node.id)}
+                                disabled={!canBulkDelete || bulkDeletingCollections}
+                                onChange={() => toggleCollectionSelection(node.id)}
+                                aria-label={`选择分类 ${node.name}`}
+                                title={
+                                    canBulkDelete ? '选择这个空分类' : '仅无子分类、无 SKU 的分类可批量选择'
+                                }
+                                className="h-4 w-4 shrink-0 rounded border-slate-300 text-blue-600 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+                            />
+                        )}
+                        {canUpdate && (
+                            <AdminButton
+                                type="button"
+                                draggable={!locked}
+                                disabled={locked}
+                                aria-label={`拖动分类 ${node.name} 排序`}
+                                aria-keyshortcuts="ArrowUp ArrowDown"
+                                title={
+                                    locked ? '同级至少需要2个分类才可排序' : '拖拽排序，也可使用上下方向键'
+                                }
+                                className="hidden md:flex h-8 w-5 shrink-0 cursor-grab items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:outline-2 focus-visible:outline-blue-500 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-40"
+                                onDragStart={event => {
+                                    if (locked) {
+                                        event.preventDefault();
+                                        return;
+                                    }
+                                    dragSourceRef.current = { id: node.id, parentId: node.parentId ?? null };
+                                    setDraggingId(node.id);
+                                    event.dataTransfer.effectAllowed = 'move';
+                                    event.dataTransfer.setData('text/plain', node.id);
+                                    const element =
+                                        event.currentTarget.closest<HTMLElement>('[data-collection-id]');
+                                    if (element) {
+                                        event.dataTransfer.setDragImage(
+                                            element,
+                                            24,
+                                            element.clientHeight / 2,
+                                        );
+                                    }
+                                }}
+                                onDragEnd={clearDrag}
+                                onKeyDown={event => {
+                                    if (locked || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
                                     event.preventDefault();
-                                    return;
-                                }
-                                dragSourceRef.current = { id: node.id, parentId: node.parentId ?? null };
-                                setDraggingId(node.id);
-                                event.dataTransfer.effectAllowed = 'move';
-                                event.dataTransfer.setData('text/plain', node.id);
-                                const element =
-                                    event.currentTarget.closest<HTMLElement>('[data-collection-id]');
-                                if (element) {
-                                    event.dataTransfer.setDragImage(element, 24, element.clientHeight / 2);
-                                }
-                            }}
-                            onDragEnd={clearDrag}
-                            onKeyDown={event => {
-                                if (locked || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
-                                event.preventDefault();
-                                const direction = event.key === 'ArrowUp' ? -1 : 1;
-                                const adjacent = siblings[index + direction];
-                                if (adjacent) {
-                                    keyboardHandleRef.current = event.currentTarget;
-                                    void handleReorder(
-                                        node.id,
-                                        adjacent.id,
-                                        direction === -1 ? 'before' : 'after',
-                                        siblings,
-                                    );
-                                }
-                            }}
-                        >
-                            <GripVertical className="h-4 w-4" />
-                        </AdminButton>
+                                    const direction = event.key === 'ArrowUp' ? -1 : 1;
+                                    const adjacent = siblings[index + direction];
+                                    if (adjacent) {
+                                        keyboardHandleRef.current = event.currentTarget;
+                                        void handleReorder(
+                                            node.id,
+                                            adjacent.id,
+                                            direction === -1 ? 'before' : 'after',
+                                            siblings,
+                                        );
+                                    }
+                                }}
+                            >
+                                <GripVertical className="h-4 w-4" />
+                            </AdminButton>
+                        )}
                         {isTopLevel && hasChildren ? (
                             <AdminButton
                                 type="button"
@@ -1191,51 +1229,60 @@ export function CategoriesModule() {
                         </div>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
-                        <AdminButton
-                            type="button"
-                            className="md:hidden"
-                            disabled={locked || index === 0}
-                            aria-label={`上移分类 ${node.name}`}
-                            onClick={() => {
-                                const adjacent = siblings[index - 1];
-                                if (adjacent) void handleReorder(node.id, adjacent.id, 'before', siblings);
-                            }}
-                        >
-                            上移
-                        </AdminButton>
-                        <AdminButton
-                            type="button"
-                            className="md:hidden"
-                            disabled={locked || index === siblings.length - 1}
-                            aria-label={`下移分类 ${node.name}`}
-                            onClick={() => {
-                                const adjacent = siblings[index + 1];
-                                if (adjacent) void handleReorder(node.id, adjacent.id, 'after', siblings);
-                            }}
-                        >
-                            下移
-                        </AdminButton>
+                        {canUpdate && (
+                            <AdminButton
+                                type="button"
+                                className="md:hidden"
+                                disabled={locked || index === 0}
+                                aria-label={`上移分类 ${node.name}`}
+                                onClick={() => {
+                                    const adjacent = siblings[index - 1];
+                                    if (adjacent)
+                                        void handleReorder(node.id, adjacent.id, 'before', siblings);
+                                }}
+                            >
+                                上移
+                            </AdminButton>
+                        )}
+                        {canUpdate && (
+                            <AdminButton
+                                type="button"
+                                className="md:hidden"
+                                disabled={locked || index === siblings.length - 1}
+                                aria-label={`下移分类 ${node.name}`}
+                                onClick={() => {
+                                    const adjacent = siblings[index + 1];
+                                    if (adjacent) void handleReorder(node.id, adjacent.id, 'after', siblings);
+                                }}
+                            >
+                                下移
+                            </AdminButton>
+                        )}
                         <span className="text-xs text-slate-500">
                             <strong className="font-mono text-slate-800">{node.productVariantCount}</strong>{' '}
                             个 SKU
                         </span>
-                        <AdminButton
-                            type="button"
-                            onClick={() => openEditor(node)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600"
-                            aria-label={`编辑分类 ${node.name}`}
-                        >
-                            <Edit3 className="h-3.5 w-3.5" />
-                        </AdminButton>
+                        {canUpdate && (
+                            <AdminButton
+                                type="button"
+                                onClick={() => openEditor(node)}
+                                className="p-1.5 text-slate-400 hover:text-blue-600"
+                                aria-label={`编辑分类 ${node.name}`}
+                            >
+                                <Edit3 className="h-3.5 w-3.5" />
+                            </AdminButton>
+                        )}
                         <SeoEditorLink targetType="COLLECTION" targetId={node.id} name={node.name} />
-                        <AdminButton
-                            type="button"
-                            onClick={() => handleDelete(node)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600"
-                            aria-label={`删除分类 ${node.name}`}
-                        >
-                            <Trash2 className="h-3.5 w-3.5" />
-                        </AdminButton>
+                        {canDelete && (
+                            <AdminButton
+                                type="button"
+                                onClick={() => handleDelete(node)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600"
+                                aria-label={`删除分类 ${node.name}`}
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </AdminButton>
+                        )}
                     </div>
                 </div>
                 {hasChildren && isExpanded && (
@@ -1279,18 +1326,20 @@ export function CategoriesModule() {
                     >
                         <RefreshCw className={`h-3.5 w-3.5 ${loading && !data ? 'animate-spin' : ''}`} /> 刷新
                     </AdminButton>
-                    <AdminButton
-                        type="button"
-                        onClick={() => openEditor()}
-                        className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
-                    >
-                        <Plus className="h-4 w-4" />
-                        {activeTab === 'CATEGORIES'
-                            ? '新增分类'
-                            : activeTab === 'OPTION_TEMPLATES'
-                              ? '新增规格模板'
-                              : '新增筛选属性'}
-                    </AdminButton>
+                    {canCreate && (
+                        <AdminButton
+                            type="button"
+                            onClick={() => openEditor()}
+                            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700"
+                        >
+                            <Plus className="h-4 w-4" />
+                            {activeTab === 'CATEGORIES'
+                                ? '新增分类'
+                                : activeTab === 'OPTION_TEMPLATES'
+                                  ? '新增规格模板'
+                                  : '新增筛选属性'}
+                        </AdminButton>
+                    )}
                 </div>
             </div>
 
@@ -1374,7 +1423,9 @@ export function CategoriesModule() {
                     </div>
                 ) : tabCount === 0 ? (
                     <div className="rounded-xl border border-slate-200 bg-white p-16 text-center text-xs text-slate-400">
-                        当前渠道尚未配置此类数据，点击右上角开始创建。
+                        {canCreate
+                            ? '当前渠道尚未配置此类数据，点击右上角开始创建。'
+                            : '当前渠道尚未配置此类数据。'}
                     </div>
                 ) : activeTab === 'CATEGORIES' ? (
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xs">
@@ -1386,7 +1437,7 @@ export function CategoriesModule() {
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
-                                {selectedCollectionIds.size > 0 && (
+                                {canDelete && selectedCollectionIds.size > 0 && (
                                     <>
                                         <span className="text-[11px] font-bold text-slate-600">
                                             已选 {selectedCollectionIds.size} 个空分类
@@ -1495,28 +1546,32 @@ export function CategoriesModule() {
                                                 </AdminButton>
                                             </div>
                                             <div className="flex shrink-0 gap-1">
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => openEditor(group)}
-                                                    aria-label={`编辑规格模板：${group.name}`}
-                                                    className="p-1.5 text-slate-400 hover:text-blue-600"
-                                                >
-                                                    <Edit3 className="h-3.5 w-3.5" />
-                                                </AdminButton>
-                                                <AdminButton
-                                                    type="button"
-                                                    onClick={() => handleDelete(group)}
-                                                    disabled={group.productCount > 0}
-                                                    aria-label={`删除规格模板：${group.name}`}
-                                                    title={
-                                                        group.productCount > 0
-                                                            ? `正在被 ${group.productCount} 个商品使用，请先移除关联`
-                                                            : '删除规格模板'
-                                                    }
-                                                    className="p-1.5 text-slate-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-slate-400"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </AdminButton>
+                                                {canUpdate && (
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => openEditor(group)}
+                                                        aria-label={`编辑规格模板：${group.name}`}
+                                                        className="p-1.5 text-slate-400 hover:text-blue-600"
+                                                    >
+                                                        <Edit3 className="h-3.5 w-3.5" />
+                                                    </AdminButton>
+                                                )}
+                                                {canDelete && (
+                                                    <AdminButton
+                                                        type="button"
+                                                        onClick={() => handleDelete(group)}
+                                                        disabled={group.productCount > 0}
+                                                        aria-label={`删除规格模板：${group.name}`}
+                                                        title={
+                                                            group.productCount > 0
+                                                                ? `正在被 ${group.productCount} 个商品使用，请先移除关联`
+                                                                : '删除规格模板'
+                                                        }
+                                                        className="p-1.5 text-slate-400 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:text-slate-400"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </AdminButton>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2">
@@ -1591,22 +1646,26 @@ export function CategoriesModule() {
                                         </div>
                                     </div>
                                     <div className="flex gap-1">
-                                        <AdminButton
-                                            type="button"
-                                            onClick={() => openEditor(facet)}
-                                            aria-label={`编辑筛选属性：${facet.name}`}
-                                            className="p-1.5 text-slate-400 hover:text-blue-600"
-                                        >
-                                            <Edit3 className="h-3.5 w-3.5" />
-                                        </AdminButton>
-                                        <AdminButton
-                                            type="button"
-                                            onClick={() => handleDelete(facet)}
-                                            aria-label={`删除筛选属性：${facet.name}`}
-                                            className="p-1.5 text-slate-400 hover:text-rose-600"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </AdminButton>
+                                        {canUpdate && (
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => openEditor(facet)}
+                                                aria-label={`编辑筛选属性：${facet.name}`}
+                                                className="p-1.5 text-slate-400 hover:text-blue-600"
+                                            >
+                                                <Edit3 className="h-3.5 w-3.5" />
+                                            </AdminButton>
+                                        )}
+                                        {canDelete && (
+                                            <AdminButton
+                                                type="button"
+                                                onClick={() => handleDelete(facet)}
+                                                aria-label={`删除筛选属性：${facet.name}`}
+                                                className="p-1.5 text-slate-400 hover:text-rose-600"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </AdminButton>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
@@ -1629,7 +1688,7 @@ export function CategoriesModule() {
                 <OptionGroupProductsDialog group={usageGroup} onClose={() => setUsageGroup(null)} />
             )}
 
-            {isEditorOpen && (
+            {isEditorOpen && (editingItem ? canUpdate : canCreate) && (
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs"
                     onClick={closeEditor}
