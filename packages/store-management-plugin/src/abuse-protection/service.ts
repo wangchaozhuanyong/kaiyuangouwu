@@ -6,6 +6,7 @@ import { isIP } from 'node:net';
 import sharp from 'sharp';
 
 import { ShopAbuseError } from './error';
+import { renderShopAbuseChallengeSvg, shopAbuseAlphabet } from './glyph-renderer';
 import {
     AbuseOperation,
     cooldownMs,
@@ -26,7 +27,7 @@ export interface AbuseAdmission {
     globalHash: string;
     channelId: string;
 }
-const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const alphabet = shopAbuseAlphabet;
 const challengeTtl = 2 * minute;
 
 @Injectable()
@@ -250,26 +251,8 @@ export class ShopAbuseProtectionService {
             const id = randomBytes(24).toString('hex');
             const answer = Array.from({ length: 6 }, () => alphabet[randomInt(alphabet.length)]).join('');
             const expiresAt = new Date(now.getTime() + challengeTtl);
-            // The answer exists only in server memory. Rasterize before returning; SVG text leaks the answer.
-            const glyphs = [...answer]
-                .map(
-                    (letter, index) =>
-                        `<text x="${24 + index * 32}" y="${42 + randomInt(-5, 6)}" transform="rotate(${randomInt(-16, 17)} ${24 + index * 32} 35)">${letter}</text>`,
-                )
-                .join('');
-            const noise = Array.from(
-                { length: 6 },
-                () =>
-                    `<path d="M0 ${randomInt(60)} Q110 ${randomInt(60)} 232 ${randomInt(60)}" fill="none" stroke="#95a7b7" stroke-width="1"/>`,
-            ).join('');
-            const svg = [
-                '<svg xmlns="http://www.w3.org/2000/svg" width="232" height="64">',
-                '<rect width="232" height="64" fill="#f3f5f7"/>',
-                noise,
-                '<g font-family="sans-serif" font-size="30" font-weight="700" fill="#263b4c">',
-                glyphs,
-                '</g></svg>',
-            ].join('');
+            // Keep the answer and vector glyphs in server memory; only the PNG may leave this process.
+            const svg = renderShopAbuseChallengeSvg(answer);
             const png = await sharp(Buffer.from(svg)).png().toBuffer();
             await this.store.createChallenge({
                 publicId: id,

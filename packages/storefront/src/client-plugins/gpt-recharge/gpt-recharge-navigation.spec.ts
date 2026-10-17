@@ -91,6 +91,67 @@ describe('GPT recharge product category navigation', () => {
         expect(resolveGptRechargeProductsCollection([accounts])).toBe(accounts);
     });
 
+    it.each([
+        'GPT finished product',
+        'GPT finished products',
+        'ChatGPT finished product',
+        'ChatGPT finished products',
+    ])('resolves the English finished-product category name %s', name => {
+        const accounts = collection('current-finished-accounts', name, 'ready-memberships');
+        expect(
+            resolveGptRechargeProductsCollection([
+                collection('codex', 'Codex Subscription', 'gpt-subscription'),
+                collection('tools', 'GPT tools', 'gpt-tools'),
+                accounts,
+            ]),
+        ).toBe(accounts);
+    });
+
+    it('resolves the localized finished-product slug from the current public catalog', () => {
+        // Same taxonomy as the live bilingual readback; all IDs are synthetic and store-independent.
+        const accounts = collection(
+            'current-finished-accounts',
+            'Ready accounts',
+            'chatgpt-finished-product',
+        );
+        expect(
+            resolveGptRechargeProductsCollection([
+                collection('codex', 'Codex Subscription', 'gpt-subscription'),
+                accounts,
+            ]),
+        ).toBe(accounts);
+        const selected = collection('published-target', 'Memberships', 'memberships');
+        expect(
+            resolveGptRechargeProductsCollection(
+                [selected, accounts],
+                [block([target(selected.id, { label: 'GPT finished products' })])],
+            ),
+        ).toBe(selected);
+    });
+
+    it('retains ambiguity and stale-target protection for translated finished-product categories', () => {
+        const first = collection('local-first', 'GPT finished products', 'chatgpt-finished-product');
+        const second = collection('local-second', 'ChatGPT finished products', 'ready-memberships');
+        expect(resolveGptRechargeProductsCollection([first, second])).toBeNull();
+        expect(
+            resolveGptRechargeProductsCollection(
+                [first],
+                [block([target('outside-this-store', { label: 'GPT finished products' })])],
+            ),
+        ).toBeNull();
+        expect(
+            resolveGptRechargeProductsCollection(
+                [first, second],
+                [
+                    block([
+                        target(first.id, { label: 'GPT finished products' }),
+                        target(second.id, { label: 'ChatGPT finished products' }),
+                    ]),
+                ],
+            ),
+        ).toBeNull();
+    });
+
     it('finds a child category and prefers the exact ChatGPT slug over a broader named category', () => {
         const child = collection('actual-child', '订阅套餐', 'chatgpt');
         const parent = collection('parent', 'AI 服务', 'ai', [child]);

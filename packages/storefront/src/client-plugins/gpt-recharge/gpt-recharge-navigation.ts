@@ -10,6 +10,11 @@ const chatGptCategoryNames = new Set([
     'chatgptsubscriptions',
     'chatgptplans',
     'gpt成品',
+    // English equivalents of the shared finished-account category, including localized slugs.
+    'gptfinishedproduct',
+    'gptfinishedproducts',
+    'chatgptfinishedproduct',
+    'chatgptfinishedproducts',
     'chatgpt成品',
     'chatgpt成品号',
     'chatgpt成品账号',
