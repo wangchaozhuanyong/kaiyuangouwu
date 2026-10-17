@@ -440,30 +440,29 @@ export function setPublicPageNavigationScope(scope: typeof navigationScope) {
     navigationScope = scope;
 }
 
-/** Prepare required data and code together while the current body remains usable. */
-export async function storefrontRouteCodeLoader({
+/** Code waits belong to the leaf route so the shared shell remains interactive. */
+export function storefrontRouteCodeLoader({
     location,
 }: {
     location: { pathname: string; search: Record<string, unknown> };
 }): Promise<void> {
-    const route = routeFromRouterLocation(location.pathname, location.search);
-    await Promise.all([
-        prefetchPublicPage(storefrontQueryClient, routeHref(route)).catch(() => undefined),
-        preloadStorefrontRouteComponent(route.name),
-    ]);
+    return preloadStorefrontRouteComponent(routeFromRouterLocation(location.pathname, location.search).name);
 }
 
-/** Existing router waits use the same Query owner and leave error UI to its page. */
-export function publicPageRouteLoader({
+/** Prepare code and required data together under the Router's body-only pending boundary. */
+export async function publicPageRouteLoader({
     location,
     abortController,
 }: {
-    location: { publicHref: string };
+    location: { publicHref: string; pathname: string; search: Record<string, unknown> };
     abortController: AbortController;
-}) {
-    return prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
-        () => undefined,
-    );
+}): Promise<void> {
+    await Promise.all([
+        storefrontRouteCodeLoader({ location }),
+        prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
+            () => undefined,
+        ),
+    ]);
 }
 
 /** Navigation starts code and data together; the route query adopts this exact response. */

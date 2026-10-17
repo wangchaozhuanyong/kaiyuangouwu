@@ -193,3 +193,7 @@ export const preloadTwoFactorRoutePage = registerRoutePreload(TwoFactorRoutePage
 export const preloadMailQueryRoutePage = registerRoutePreload(MailQueryRoutePage, MailQueryPage);
 export const preloadReviewsRoutePage = registerRoutePreload(ReviewsRoutePage, ReviewCenterPage);
 export const preloadSupportRoutePage = registerRoutePreload(SupportRoutePage, SupportPage);
+
+export const preloadFlashSaleRoutePage = () => FlashSaleRoutePage.preload?.() ?? Promise.resolve();
+export const preloadRecommendationsRoutePage = () =>
+    RecommendationsRoutePage.preload?.() ?? Promise.resolve();

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { GptRechargeApi } from '../api/gpt-recharge';
 import { usePageRouteCommit } from '../page-readiness';
 
-import { useRouteRuntime as useRuntime } from './shared';
+import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
 const GptRechargePage = lazyRouteComponent(
     () => import('../client-plugins/gpt-recharge/gpt-recharge-page'),
@@ -56,3 +56,5 @@ export function GptRechargeRoutePage() {
         />
     );
 }
+
+export const preloadGptRechargeRoutePage = registerRoutePreload(GptRechargeRoutePage, GptRechargePage);

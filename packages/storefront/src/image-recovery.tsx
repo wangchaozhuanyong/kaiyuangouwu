@@ -9,8 +9,9 @@ import { StorefrontLanguage } from './types';
 import './image-recovery.css';
 
 const IMAGE_RETRY_COOLDOWN_MS = 1_000;
+const CLIPPED_OVERFLOW = /(hidden|clip|auto|scroll)/u;
 const IMAGE_INTERACTIVE_ANCESTOR =
-    'a[href], button, input, select, textarea, label, summary, [role="button"], [role="link"], [contenteditable="true"]';
+    'a[href],button,input,select,textarea,label,summary,[role="button"],[role="link"],[contenteditable="true"]';
 
 /** The visible part of a failed frame, including scroll containers and hidden slides. */
 function visibleImageFrame(frame: HTMLElement) {
@@ -23,17 +24,17 @@ function visibleImageFrame(frame: HTMLElement) {
     for (let node = frame.parentElement; node; node = node.parentElement) {
         const style = getComputedStyle(node);
         const clip = node.getBoundingClientRect();
-        if (/(hidden|clip|auto|scroll)/u.test(style.overflowX || style.overflow)) {
+        if (CLIPPED_OVERFLOW.test(style.overflowX || style.overflow)) {
             left = Math.max(left, clip.left);
             right = Math.min(right, clip.right);
         }
-        if (/(hidden|clip|auto|scroll)/u.test(style.overflowY || style.overflow)) {
+        if (CLIPPED_OVERFLOW.test(style.overflowY || style.overflow)) {
             top = Math.max(top, clip.top);
             bottom = Math.min(bottom, clip.bottom);
         }
     }
     return right > left && bottom > top
-        ? { left, top, right, bottom, width: right - left, height: bottom - top }
+        ? { left, bottom, width: right - left, height: bottom - top }
         : undefined;
 }
 
@@ -54,6 +55,12 @@ export default function ImageRecovery({
     const runtime = useContext(StorefrontContext);
     const frameLanguage = useContext(ImageLanguageContext);
     const isZh = (language ?? runtime?.language ?? frameLanguage ?? 'zh') === 'zh';
+    const retry = useRef(onRetry);
+    // An earlier online listener may synchronously commit a render. Keep our listener
+    // registered through that event, while using the latest committed retry callback.
+    useLayoutEffect(() => {
+        retry.current = onRetry;
+    });
     const [cooling, setCooling] = useState(() => Date.now() < state.nextManualAt);
     useLayoutEffect(() => {
         const remaining = state.nextManualAt - Date.now();
@@ -65,11 +72,11 @@ export default function ImageRecovery({
         const reconnect = () => {
             if (state.onlineRetried || !frame || !visibleImageFrame(frame)) return;
             state.onlineRetried = true;
-            onRetry();
+            retry.current();
         };
         window.addEventListener('online', reconnect);
         return () => window.removeEventListener('online', reconnect);
-    }, [frame, state, onRetry]);
+    }, [frame, state]);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const [placement, setPlacement] = useState<{ style?: CSSProperties; compact: boolean }>();
     let owner = frame?.parentElement?.closest<HTMLElement>(IMAGE_INTERACTIVE_ANCESTOR);

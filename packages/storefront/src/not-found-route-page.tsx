@@ -3,6 +3,8 @@ import { House, LayoutGrid, Navigation } from 'lucide-react';
 import { SubHeader } from './storefront-ui/page-shell';
 import { useStorefront } from './StorefrontContext';
 
+import './styles/not-found.css';
+
 export function NotFoundRoutePage() {
     const runtime = useStorefront();
     const isZh = runtime.language === 'zh';

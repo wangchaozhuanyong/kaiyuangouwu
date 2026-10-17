@@ -19,6 +19,7 @@ export function readStorefrontStylesheet(additionalStylePaths: string[] = []): s
         './styles/account-catalog-surfaces.css',
         './styles/account-security.css',
         './styles/subpage-content.css',
+        './styles/not-found.css',
         './styles/product-detail-surfaces.css',
         './styles/search-surfaces.css',
         './styles/checkout-payment-surfaces.css',

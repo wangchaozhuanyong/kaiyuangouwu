@@ -16,6 +16,7 @@ import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/resp
 import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { useStorefrontNavigation } from './hooks/useStorefrontNavigation';
+import { PageReadinessBoundary } from './page-readiness';
 import { PUBLIC_QUERY_STALE_TIME, storefrontQueryClient, storefrontQueryKeys } from './query-client';
 import { router as productionRouter } from './router';
 import { publicSeoQueryKey, setPublicPageNavigationScope } from './storefront-page-data';
@@ -29,26 +30,23 @@ vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: p
 // Keep the real Router options, public product loader, Query cache and navigation hook.
 // The page body is small so every intermediate commit can be checked independently of styling.
 vi.mock('./routeTree.gen', async () => {
-    const { createRootRoute, createRoute } = await import('@tanstack/react-router');
+    const { createRoute } = await import('@tanstack/react-router');
     const { Route } = await import('./routes/product');
     const { Route: CategoryRoute } = await import('./routes/category');
     const { Route: ServicesRoute } = await import('./routes/services');
     const { Route: SupportRoute } = await import('./routes/support');
     const { Route: HomeRoute } = await import('./routes/index');
-    const { storefrontRouteCodeLoader } = await import('./storefront-page-data');
-    const root = createRootRoute({
-        pendingMs: Infinity,
-        shouldReload: true,
-        preload: false,
-        loaderDeps: ({ search }: { search: Record<string, unknown> }) => [
-            search.__route,
-            search.__storefrontLanguage,
-        ],
-        loader: { handler: storefrontRouteCodeLoader, staleReloadMode: 'blocking' },
-        component: () => <NavigationHarness />,
-    });
+    const { Route: LegalRoute } = await import('./routes/legal');
+    const { Route: RootRoute } = await import('./routes/__root');
+    const root = RootRoute.update({ component: () => <NavigationHarness /> });
     return {
         routeTree: root.addChildren([
+            createRoute({
+                getParentRoute: () => root,
+                path: '/legal',
+                loader: LegalRoute.options.loader,
+                component: () => <article data-legal>Legal content</article>,
+            }),
             createRoute({
                 getParentRoute: () => root,
                 path: '/',
@@ -86,6 +84,7 @@ vi.mock('./routeTree.gen', async () => {
         ]),
     };
 });
+vi.mock('./App', () => ({ App: () => null }));
 vi.mock('./route-pages/catalog-route-pages', () => ({
     ProductRoutePage: () => null,
     preloadProductRoutePage: () => Promise.resolve(),
@@ -164,17 +163,31 @@ function NavigationHarness() {
     const [clicks, setClicks] = useState(0);
     return (
         <QueryClientProvider client={storefrontQueryClient}>
-            <header data-presented-route={navigation.route.name} data-presented-product={navigation.route.id}>
-                <button type="button" onClick={() => setClicks(value => value + 1)}>
-                    Shell action {clicks}
-                </button>
-                <button type="button" onClick={navigation.goBack}>
-                    Back
-                </button>
-            </header>
-            <main>
-                <Outlet />
-            </main>
+            <PageReadinessBoundary
+                initialScopeKey="store-a"
+                navigationKey={JSON.stringify(navigation.route)}
+                pending={false}
+                navigationPreparing={navigation.isNavigationPending}
+                online
+                language="en"
+                onRetry={() => undefined}
+                onBack={navigation.goBack}
+            >
+                <header
+                    data-presented-route={navigation.route.name}
+                    data-presented-product={navigation.route.id}
+                >
+                    <button type="button" onClick={() => setClicks(value => value + 1)}>
+                        Shell action {clicks}
+                    </button>
+                    <button type="button" onClick={navigation.goBack}>
+                        Back
+                    </button>
+                </header>
+                <main>
+                    <Outlet />
+                </main>
+            </PageReadinessBoundary>
         </QueryClientProvider>
     );
 }
@@ -349,7 +362,7 @@ describe('real storefront router continuity', () => {
         expect(pendingNodes).toEqual([]);
     });
 
-    it('keeps the cached article and interactive shell beyond 200ms until route code is ready without waiting for optional aggregate data', async () => {
+    it('shows body feedback for cold code without waiting for optional aggregate data', async () => {
         await start();
         expect(preloadRoute).toHaveBeenCalledWith('product');
         const code = deferred<void>();
@@ -388,9 +401,12 @@ describe('real storefront router continuity', () => {
         expect(host.querySelector('header')).toBe(header);
         expect(host.querySelector('article')).toBe(article);
         expect(article?.textContent).toBe('a');
-        expect(header?.dataset.presentedProduct).toBe('a');
+        expect(header?.dataset.presentedRoute).toBe('services');
+        if (!article) throw new Error('Expected the retained source article');
+        expect(getComputedStyle(article).display).toBe('none');
         expect(host.querySelector('[data-content]')).toBeNull();
-        expect(pendingNodes).toEqual([]);
+        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
         const action = host.querySelector('header button');
         if (!(action instanceof HTMLButtonElement)) throw new Error('Expected the retained shell action');
         act(() => action.click());
@@ -405,7 +421,8 @@ describe('real storefront router continuity', () => {
         expect(host.querySelector('[data-content]')?.textContent).toBe('Unbacked artwork');
         expect(storefrontQueryClient.getQueryData(mediaKey)).toBeUndefined();
         expect(fetch).toHaveBeenCalledOnce();
-        expect(pendingNodes).toEqual([]);
+        expect(host.querySelector('main [data-page-pending]')).toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
         await act(async () => {
             response.resolve(Response.json(page));
             await Promise.resolve();
@@ -454,7 +471,7 @@ describe('real storefront router continuity', () => {
         ['retained search', true],
         ['forged route search', { __route: '/services', __storefrontLanguage: 'en' }],
     ] as const)(
-        'keeps %s hover preloads out of the root code owner and binds the later navigation to its actual path',
+        'keeps %s hover preloads and the later navigation bound to their actual target paths',
         async (_label, search) => {
             await start();
             const services = { kind: 'page' as const, id: 'services' as const };
@@ -477,7 +494,7 @@ describe('real storefront router continuity', () => {
                 await router.preloadRoute({ to: '/support', search } as never);
             });
 
-            // Hover can warm the leaf's optional media without owning the blocking code flight.
+            // Hover warms the actual target's code and optional media without committing navigation.
             await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
             await vi.waitFor(() =>
                 expect(
@@ -486,29 +503,20 @@ describe('real storefront router continuity', () => {
                     ),
                 ).toEqual([]),
             );
-            expect(preloadRoute).not.toHaveBeenCalled();
+            expect(preloadRoute).toHaveBeenCalledWith('support');
+            expect(preloadRoute).not.toHaveBeenCalledWith('services');
+            preloadRoute.mockClear();
             expect(host.querySelector('header')?.dataset.presentedRoute).toBe('services');
-            const code = deferred<void>();
-            preloadRoute.mockImplementation(name => (name === 'support' ? code.promise : Promise.resolve()));
             const header = host.querySelector('header');
-            const article = host.querySelector('article');
             pendingNodes.length = 0;
-            let navigation: Promise<void> | undefined;
             await act(async () => {
-                navigation = router.navigate({ to: '/support', search } as never);
-                await Promise.resolve();
+                await router.navigate({ to: '/support', search } as never);
             });
             await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('support'));
-            // Intent preparation and the required root loader both use this facade.
+            // Intent preparation and the required leaf loader both use this facade.
             expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual(['support', 'support']);
             expect(host.querySelector('header')).toBe(header);
-            expect(header?.dataset.presentedRoute).toBe('services');
-            expect(host.querySelector('article')).toBe(article);
-            expect(pendingNodes).toEqual([]);
-            await act(async () => {
-                code.resolve();
-                await navigation;
-            });
+            // A completed hover preload is warm: do not manufacture another cold code wait.
             expect(header?.dataset.presentedRoute).toBe('support');
             expect(router.state.location.search.__route).toBe('/support');
             const publicUrl = new URL(router.state.location.publicHref, 'https://example.test');
@@ -581,7 +589,7 @@ describe('real storefront router continuity', () => {
         expect(pendingNodes).toEqual([]);
     });
 
-    it('keeps the current body and shell interactive until a cold destination is ready', async () => {
+    it('shows the cold destination body after 200ms while its shared shell stays interactive', async () => {
         await start();
         const cold = deferred<Product>();
         readProduct.mockImplementation(() => cold.promise);
@@ -598,10 +606,13 @@ describe('real storefront router continuity', () => {
         });
 
         expect(host.querySelector('header')).toBe(header);
-        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('a');
-        expect(host.querySelector('article')?.textContent).toBe('a');
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
-        expect(host.querySelector('.brand-loading')).toBeNull();
+        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('cold');
+        const article = host.querySelector('article');
+        if (!article) throw new Error('Expected the retained source article');
+        expect(getComputedStyle(article).display).toBe('none');
+        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-initial')).toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
         expect(host.querySelector('main main')).toBeNull();
         const button = host.querySelector('button');
         if (!button) throw new Error('Expected the retained shell action');
@@ -615,7 +626,36 @@ describe('real storefront router continuity', () => {
         expect(host.querySelector('article')?.textContent).toBe('cold');
     });
 
-    it('keeps service-shared content from publishing the first home before its product aggregate arrives', async () => {
+    it('keeps code-only leaf waits in the body and lets the user leave a slow target', async () => {
+        await start();
+        const code = deferred<void>();
+        preloadRoute.mockImplementation(name => (name === 'legal' ? code.promise : Promise.resolve()));
+        const header = host.querySelector('header');
+        let abandoned: Promise<void> | undefined;
+        await act(async () => {
+            abandoned = router.navigate({ to: '/legal' } as never);
+            await new Promise(resolve => setTimeout(resolve, 230));
+        });
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedRoute).toBe('legal');
+        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(host.querySelector('[data-legal]')).toBeNull();
+        await act(async () => {
+            await router.navigate({ to: '/product', search: { id: 'a' } } as never);
+        });
+        expect(host.querySelector('article')?.textContent).toBe('a');
+        expect(host.querySelector('header')).toBe(header);
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
+        await act(async () => {
+            code.resolve();
+            await abandoned;
+        });
+        expect(host.querySelector('article')?.textContent).toBe('a');
+        expect(header?.dataset.presentedProduct).toBe('a');
+    });
+
+    it('shows first-home body feedback while its required aggregate loads and preserves the shell', async () => {
         await start();
         const page = syntheticPage('synthetic-a', 'en', 'home');
         page.scope.host = window.location.host;
@@ -637,7 +677,10 @@ describe('real storefront router continuity', () => {
         });
         expect(host.querySelector('article')).toBe(article);
         expect(host.querySelector('[data-home]')).toBeNull();
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
+        if (!article) throw new Error('Expected the retained source article');
+        expect(getComputedStyle(article).display).toBe('none');
+        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
         const action = host.querySelector('button');
         if (!action) throw new Error('Expected retained shell action');
         act(() => action.click());
@@ -652,7 +695,7 @@ describe('real storefront router continuity', () => {
             page.products?.map(item => item.name).join(','),
         );
         expect(fetch).toHaveBeenCalledOnce();
-        expect(pendingNodes).toEqual([]);
+        expect(host.querySelector('main [data-page-pending]')).toBeNull();
     });
 
     it('keeps the last navigation intent and restores visited content on history return', async () => {

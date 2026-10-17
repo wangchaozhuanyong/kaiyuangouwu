@@ -3,9 +3,7 @@ import {
     createContext,
     CSSProperties,
     ImgHTMLAttributes,
-    lazy,
     ReactNode,
-    Suspense,
     useContext,
     useLayoutEffect,
     useMemo,
@@ -28,6 +26,7 @@ import {
     isFirstViewportElement,
     isImageCandidateComplete,
 } from './image-readiness';
+import ImageRecovery from './image-recovery';
 import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontLanguage } from './types';
@@ -203,7 +202,6 @@ type ImagePresentation = [
     raster: HTMLCanvasElement | undefined,
 ];
 const decodedImagePreviews = new Map<string, ImagePresentation>();
-const ImageRecovery = lazy(() => import('./image-recovery').catch(() => ({ default: () => <></> })));
 
 function copyRaster(source: CanvasImageSource, width: number, height: number, target?: HTMLCanvasElement) {
     if (!width || !height || typeof CanvasRenderingContext2D === 'undefined') return;
@@ -794,15 +792,13 @@ function SafeImageSource({
                 )}
             </span>
             {failed && imageProps['aria-hidden'] !== true && imageProps['aria-hidden'] !== 'true' && (
-                <Suspense fallback={null}>
-                    <ImageRecovery
-                        frame={frameRef.current}
-                        state={retryState.current}
-                        alt={alt}
-                        language={language}
-                        onRetry={retryImage}
-                    />
-                </Suspense>
+                <ImageRecovery
+                    frame={frameRef.current}
+                    state={retryState.current}
+                    alt={alt}
+                    language={language}
+                    onRetry={retryImage}
+                />
             )}
         </span>
     );

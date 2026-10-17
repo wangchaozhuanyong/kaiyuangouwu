@@ -266,7 +266,7 @@ export function PageReadinessBoundary({
                                 )}
                             </main>
                         )}
-                        {!initial && phase === 'preparing' && showProgress && (
+                        {!initial && !inlineLoadingRegions && phase === 'preparing' && showProgress && (
                             <div
                                 className={
                                     navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'
