@@ -22,6 +22,11 @@
     gap: var(--space-8, 8px);
     margin-inline-start: 0;
 }
+@media (max-width: 1023px) {
+    #storefront-content > .page-back-button {
+        margin-inline-start: 0;
+    }
+}
 .page-back-button > .page-back-icon {
     flex: none;
     width: 20px;
