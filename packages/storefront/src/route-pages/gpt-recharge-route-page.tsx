@@ -21,8 +21,8 @@ export function GptRechargeRoutePage() {
     const client = useMemo(
         () =>
             new GptRechargeApi({
-                request: (query, variables, signal, timeout, uncertain, currency) =>
-                    runtime.api.request(query, variables, signal, timeout, uncertain, false, currency),
+                request: (query, variables, signal, timeout, uncertain, currency, proof) =>
+                    runtime.api.request(query, variables, signal, timeout, uncertain, false, currency, proof),
             }),
         [runtime.api],
     );
@@ -41,6 +41,10 @@ export function GptRechargeRoutePage() {
                 onCurrencyChange: runtime.switchCurrency,
             }}
             onBack={runtime.goBack}
+            productCollections={runtime.collections}
+            productContentBlocks={runtime.contentBlocks}
+            onViewProducts={collectionId => runtime.openContentTarget('COLLECTION', collectionId)}
+            onContactSupport={() => runtime.navigate({ name: 'support' })}
             activeTab={tab}
             onTabChange={next =>
                 void navigate({

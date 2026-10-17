@@ -194,4 +194,5 @@ export {
 } from './offline-payment-proof';
 export { storefrontCdnPurgeConfiguration } from './performance/storefront-cdn-purge-config';
 
+export { ShopAbuseProtectionPlugin } from './abuse-protection/plugin.js';
 export { GptRechargePlugin } from './gpt-recharge/plugin.js';

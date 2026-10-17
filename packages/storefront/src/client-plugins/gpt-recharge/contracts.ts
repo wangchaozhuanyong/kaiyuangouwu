@@ -1,3 +1,4 @@
+import type { ShopAbuseClient, ShopAbuseProof } from '../../shop-abuse';
 import type { StorefrontLanguage } from '../../types';
 
 export const rechargePlans = [
@@ -20,11 +21,11 @@ export interface RechargeCode {
     status: 'available' | 'reserved' | 'used' | 'disabled';
     task?: RechargeTask | null;
 }
-export interface GptRechargeClient {
+export interface GptRechargeClient extends Partial<ShopAbuseClient> {
     config(signal?: AbortSignal): Promise<{ enabled: boolean; maintenance: boolean }>;
-    verify(code: string): Promise<RechargeCode>;
-    submit(code: string, session: string): Promise<RechargeTask>;
-    query(code: string): Promise<RechargeCode>;
+    verify(code: string, proof?: ShopAbuseProof): Promise<RechargeCode>;
+    submit(code: string, session: string, proof?: ShopAbuseProof): Promise<RechargeTask>;
+    query(code: string, proof?: ShopAbuseProof): Promise<RechargeCode>;
     task(id: string, credential: string, signal?: AbortSignal): Promise<RechargeTask>;
 }
 

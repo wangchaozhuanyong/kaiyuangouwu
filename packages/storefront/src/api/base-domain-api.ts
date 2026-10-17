@@ -1,3 +1,4 @@
+import type { ShopAbuseProof } from '../shop-abuse';
 import type {
     MarketConfig,
     Order,
@@ -45,8 +46,16 @@ export abstract class BaseDomainApi {
         signal?: AbortSignal,
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
+        proof?: ShopAbuseProof,
     ): Promise<T> {
-        return this.ctx.authenticationRequest<T>(query, variables, signal, timeoutMs, resultUnknownOnTimeout);
+        return this.ctx.authenticationRequest<T>(
+            query,
+            variables,
+            signal,
+            timeoutMs,
+            resultUnknownOnTimeout,
+            ...(proof ? [proof] : []),
+        );
     }
 
     protected request<T>(
@@ -56,6 +65,7 @@ export abstract class BaseDomainApi {
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
         readCurrencyCode?: string,
+        proof?: ShopAbuseProof,
     ): Promise<T> {
         return this.ctx.request<T>(
             query,
@@ -64,6 +74,7 @@ export abstract class BaseDomainApi {
             timeoutMs,
             resultUnknownOnTimeout,
             readCurrencyCode,
+            ...(proof ? [proof] : []),
         );
     }
 

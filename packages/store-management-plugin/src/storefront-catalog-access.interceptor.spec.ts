@@ -49,7 +49,12 @@ describe('public storefront browsing boundary', () => {
             expect(next.handle).toHaveBeenCalledTimes(1);
             expect(invoke(field, 'Mutation').run).toThrow();
         }
-        for (const field of ['verifyGptRechargeCode', 'queryGptRechargeCode', 'submitGptRecharge']) {
+        for (const field of [
+            'verifyGptRechargeCode',
+            'queryGptRechargeCode',
+            'submitGptRecharge',
+            'createShopAbuseChallenge',
+        ]) {
             const { run, next } = invoke(field, 'Mutation');
             expect(run).not.toThrow();
             expect(next.handle).toHaveBeenCalledTimes(1);

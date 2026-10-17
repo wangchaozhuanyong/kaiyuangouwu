@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApiError } from './api';
-import { ForgotPasswordPage, LoginPage, RegisterPage } from './auth-pages';
+import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyAccountPage } from './auth-pages';
 import { AuthPresentationContext } from './auth-presentation';
 
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
@@ -480,5 +480,240 @@ describe('storefront configurable authentication methods', () => {
         );
         expect(onSuccess).toHaveBeenCalledOnce();
         delete window.google;
+    });
+});
+
+describe('authentication security challenge recovery', () => {
+    it('retries the blocked registration stage directly without repeating login or reusing its proof', async () => {
+        const login = vi
+            .fn()
+            .mockRejectedValue(
+                new ShopApiError(
+                    'INVALID_CREDENTIALS_ERROR',
+                    'Invalid credentials',
+                    'STOREFRONT_INVALID_CREDENTIALS',
+                ),
+            );
+        const blocked = Object.assign(new Error('synthetic rejection'), {
+            errorCode: 'SHOP_ABUSE_CHALLENGE_REQUIRED',
+            action: 'REGISTER',
+        });
+        const registerCustomerAccount = vi.fn().mockRejectedValueOnce(blocked).mockResolvedValue(undefined);
+        const createShopAbuseChallenge = vi.fn().mockResolvedValue({
+            id: 'registration-proof',
+            imageDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+            expiresAt: new Date(Date.now() + 60000).toISOString(),
+        });
+        const api = { login, registerCustomerAccount, createShopAbuseChallenge };
+        await settle(() =>
+            root.render(
+                <LoginPage
+                    {...baseProps}
+                    api={api as never}
+                    onSuccess={vi.fn()}
+                    authSettings={{
+                        emailPasswordEnabled: true,
+                        emailAutoRegistrationEnabled: true,
+                        emailQuickRegistrationEnabled: false,
+                        googleEnabled: false,
+                        googleClientId: null,
+                    }}
+                />,
+            ),
+        );
+        requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'local@example.invalid';
+        requiredElement<HTMLInputElement>('input[name="password"]').value = 'synthetic-password';
+        acceptRegistrationConsent();
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        expect(login).toHaveBeenCalledTimes(1);
+        expect(registerCustomerAccount).toHaveBeenCalledTimes(1);
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(createShopAbuseChallenge).toHaveBeenCalledWith(
+            'REGISTER',
+            'local@example.invalid',
+            expect.any(AbortSignal),
+        );
+        const input = requiredElement<HTMLInputElement>('.shop-abuse-challenge input');
+        await settle(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, 'ABC234');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        expect(login).toHaveBeenCalledTimes(1);
+        expect(registerCustomerAccount).toHaveBeenCalledTimes(2);
+        expect(registerCustomerAccount.mock.calls[1][5]).toEqual({
+            id: 'registration-proof',
+            answer: 'ABC234',
+        });
+        expect(host.textContent).toContain('注册请求已提交');
+    });
+});
+
+describe('account verification challenge flow', () => {
+    const securityError = () =>
+        Object.assign(new Error('synthetic rejection'), {
+            errorCode: 'SHOP_ABUSE_CHALLENGE_REQUIRED',
+            action: 'PASSWORD_UPDATE',
+        });
+    const image = () => ({
+        id: 'verification-proof',
+        imageDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+    });
+    async function answerAndSubmit() {
+        const input = requiredElement<HTMLInputElement>('.shop-abuse-challenge input');
+        await settle(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, 'ABC234');
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await settle(() => submit(requiredElement<HTMLFormElement>('.auth-recovery-form')));
+    }
+    it('waits for manual submission after a preflight challenge before restoring the verified session', async () => {
+        const verifyCustomerAccount = vi
+            .fn()
+            .mockRejectedValueOnce(securityError())
+            .mockResolvedValue(undefined);
+        const createShopAbuseChallenge = vi.fn().mockResolvedValue(image());
+        const onSuccess = vi.fn().mockResolvedValue(undefined);
+        const api = { verifyCustomerAccount, createShopAbuseChallenge };
+        await settle(() =>
+            root.render(
+                <VerifyAccountPage
+                    {...baseProps}
+                    api={api as never}
+                    token="synthetic-verification"
+                    onSuccess={onSuccess}
+                />,
+            ),
+        );
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(verifyCustomerAccount).toHaveBeenCalledTimes(1);
+        expect(onSuccess).not.toHaveBeenCalled();
+        await answerAndSubmit();
+        expect(verifyCustomerAccount).toHaveBeenLastCalledWith(
+            'synthetic-verification',
+            undefined,
+            expect.any(AbortSignal),
+            { id: 'verification-proof', answer: 'ABC234' },
+        );
+        expect(onSuccess).toHaveBeenCalledOnce();
+        expect(host.textContent).toContain('邮箱已验证');
+    });
+    it('keeps the password stage and only resubmits its proof after another manual submit', async () => {
+        const verifyCustomerAccount = vi
+            .fn()
+            .mockRejectedValueOnce(new ShopApiError('MISSING_PASSWORD_ERROR', 'A password must be provided.'))
+            .mockRejectedValueOnce(securityError())
+            .mockResolvedValue(undefined);
+        const api = { verifyCustomerAccount, createShopAbuseChallenge: vi.fn().mockResolvedValue(image()) };
+        const onSuccess = vi.fn().mockResolvedValue(undefined);
+        await settle(() =>
+            root.render(
+                <VerifyAccountPage
+                    {...baseProps}
+                    api={api as never}
+                    token="synthetic-verification"
+                    onSuccess={onSuccess}
+                />,
+            ),
+        );
+        requiredElement<HTMLInputElement>('input[name="password"]').value = 'synthetic-password';
+        requiredElement<HTMLInputElement>('input[name="confirmPassword"]').value = 'synthetic-password';
+        await settle(() => submit(requiredElement<HTMLFormElement>('.auth-recovery-form')));
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        expect(verifyCustomerAccount).toHaveBeenCalledTimes(2);
+        expect(onSuccess).not.toHaveBeenCalled();
+        expect(requiredElement<HTMLInputElement>('input[name="password"]').value).toBe('synthetic-password');
+        await answerAndSubmit();
+        expect(verifyCustomerAccount).toHaveBeenLastCalledWith(
+            'synthetic-verification',
+            'synthetic-password',
+            expect.any(AbortSignal),
+            { id: 'verification-proof', answer: 'ABC234' },
+        );
+        expect(onSuccess).toHaveBeenCalledOnce();
+        expect(host.textContent).toContain('邮箱已验证');
+    });
+});
+
+describe('verification email challenge target recovery', () => {
+    it('keeps resend feedback and cooldown bound to the email submitted through Enter', async () => {
+        let finishResend!: () => void;
+        const refreshCustomerVerification = vi
+            .fn()
+            .mockRejectedValueOnce(
+                Object.assign(new Error('synthetic rejection'), {
+                    errorCode: 'SHOP_ABUSE_CHALLENGE_REQUIRED',
+                    action: 'REGISTER',
+                }),
+            )
+            .mockImplementationOnce(
+                () =>
+                    new Promise<void>(resolve => {
+                        finishResend = resolve;
+                    }),
+            );
+        const api = {
+            referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+            registerCustomerAccount: vi
+                .fn()
+                .mockRejectedValue(new ShopApiError('EMAIL_ADDRESS_CONFLICT_ERROR', 'synthetic conflict')),
+            refreshCustomerVerification,
+            createShopAbuseChallenge: vi.fn().mockResolvedValue({
+                id: 'synthetic-resend-proof',
+                imageDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
+                expiresAt: new Date(Date.now() + 60000).toISOString(),
+            }),
+        };
+        await settle(() => root.render(<RegisterPage {...baseProps} api={api as never} />));
+        requiredElement<HTMLInputElement>('input[name="fullName"]').value = 'Local Example';
+        requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'old@example.invalid';
+        acceptRegistrationConsent();
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        await settle(() =>
+            requiredElement<HTMLButtonElement>(
+                '.auth-existing-account__help button.auth-inline-link',
+            ).click(),
+        );
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
+        const answer = requiredElement<HTMLInputElement>('.shop-abuse-challenge input');
+        await settle(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(answer, 'ABC234');
+            answer.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await settle(() =>
+            answer.dispatchEvent(
+                new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+            ),
+        );
+        expect(refreshCustomerVerification).toHaveBeenCalledTimes(2);
+        expect(refreshCustomerVerification).toHaveBeenLastCalledWith(
+            'old@example.invalid',
+            expect.any(AbortSignal),
+            { id: 'synthetic-resend-proof', answer: 'ABC234' },
+        );
+        const email = requiredElement<HTMLInputElement>('input[name="emailAddress"]');
+        await settle(() => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+                email,
+                'new@example.invalid',
+            );
+            email.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        await settle(() => finishResend());
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        expect(host.textContent).not.toContain('重新发送请求已提交');
+        expect(
+            requiredElement<HTMLButtonElement>('.auth-existing-account__help button.auth-inline-link')
+                .disabled,
+        ).toBe(false);
     });
 });

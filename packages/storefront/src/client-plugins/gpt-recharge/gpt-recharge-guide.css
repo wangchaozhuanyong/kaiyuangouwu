@@ -1,0 +1,353 @@
+.gpt-recharge-guide-content {
+    display: grid;
+    gap: var(--space-32);
+    min-width: 0;
+    padding: var(--space-32);
+    color: var(--text);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.gpt-recharge-guide-content h2,
+.gpt-recharge-guide-content h3,
+.gpt-recharge-guide-content p,
+.gpt-recharge-guide-content ol,
+.gpt-recharge-guide-content dl,
+.gpt-recharge-guide-content figure {
+    margin: 0;
+}
+.gpt-recharge-guide-content h2,
+.gpt-recharge-guide-content h3 {
+    font-size: var(--type-section-compact-size);
+    line-height: var(--type-section-compact-leading);
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-recharge-guide-content p {
+    color: var(--muted);
+}
+.gpt-guide-intro,
+.gpt-guide-section,
+.gpt-guide-section-heading,
+.gpt-guide-url,
+.gpt-guide-safety > div,
+.gpt-guide-footer > div {
+    display: grid;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.gpt-guide-section {
+    gap: var(--space-24);
+}
+.gpt-guide-recharge-steps,
+.gpt-guide-session-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-24);
+    padding: 0;
+    list-style: none;
+}
+.gpt-guide-session-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.gpt-guide-recharge-steps li,
+.gpt-guide-session-steps li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    min-width: 0;
+}
+.gpt-guide-recharge-steps li > div,
+.gpt-guide-session-steps li > div {
+    display: grid;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.gpt-guide-step-number {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--skin-control-radius);
+    background: var(--selection-soft);
+    color: var(--selection);
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-guide-links,
+.gpt-guide-footer .gpt-guide-footer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+}
+.gpt-guide-links a,
+.gpt-guide-links button,
+.gpt-guide-footer-actions button,
+.gpt-guide-footer a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-8);
+    min-height: 44px;
+    padding: var(--space-8) var(--space-16);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    font-weight: var(--font-weight-semibold);
+    text-decoration: none;
+}
+.gpt-guide-links button:disabled {
+    cursor: wait;
+}
+.gpt-guide-url label {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-guide-url input {
+    min-width: 0;
+    width: 100%;
+    min-height: 44px;
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-family: var(--font-code);
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+}
+.gpt-guide-url input:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+.gpt-guide-helper,
+.gpt-guide-url p,
+.gpt-guide-illustration figcaption {
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    color: var(--muted);
+}
+.gpt-guide-illustrations {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-24);
+}
+.gpt-guide-illustration {
+    display: grid;
+    align-content: start;
+    gap: var(--space-8);
+    min-width: 0;
+}
+.gpt-guide-browser {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface);
+}
+.gpt-guide-browser-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-height: 40px;
+    padding: var(--space-8) var(--space-12);
+    background: var(--soft);
+}
+.gpt-guide-browser-dots {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--space-4);
+}
+.gpt-guide-browser-dots i {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+.gpt-guide-browser-address {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-width: 0;
+    color: var(--muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+    overflow-wrap: anywhere;
+}
+.gpt-guide-browser-body {
+    display: grid;
+    align-content: space-between;
+    gap: var(--space-16);
+    min-height: 288px;
+    padding: var(--space-16);
+}
+.gpt-guide-demo-label {
+    color: var(--muted);
+    font-size: var(--type-meta-size);
+    line-height: var(--type-meta-leading);
+}
+.gpt-guide-account {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-12);
+    background: var(--soft);
+    border-radius: var(--skin-control-radius);
+}
+.gpt-guide-account > div {
+    display: grid;
+    gap: var(--space-4);
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.gpt-guide-account > div > span {
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-guide-account strong {
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-guide-avatar {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    color: var(--selection);
+}
+.gpt-guide-account > svg {
+    flex-shrink: 0;
+    color: var(--selection);
+}
+.gpt-guide-account-lines {
+    display: grid;
+    gap: var(--space-12);
+    padding-inline: var(--space-12);
+}
+.gpt-guide-account-lines span {
+    height: 8px;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
+}
+.gpt-guide-account-lines span:nth-child(2) {
+    width: 72%;
+}
+.gpt-guide-account-lines span:nth-child(3) {
+    width: 48%;
+}
+.gpt-guide-json {
+    margin: 0;
+    padding: var(--space-8) var(--space-12);
+    background: var(--selection-soft);
+    color: var(--text);
+    font-family: var(--font-code);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.gpt-guide-diagram-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    color: var(--selection);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.gpt-guide-shortcuts {
+    display: grid;
+    gap: var(--space-12);
+    padding: var(--space-16);
+    background: var(--soft);
+    border-radius: var(--skin-control-radius);
+}
+.gpt-guide-shortcuts > div {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: var(--space-16);
+}
+.gpt-guide-shortcuts dt {
+    font-weight: var(--font-weight-semibold);
+}
+.gpt-guide-shortcuts dd {
+    margin: 0;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+.gpt-guide-shortcuts kbd,
+.gpt-guide-faq code {
+    font-family: var(--font-code);
+}
+.gpt-guide-safety {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    padding: var(--space-24);
+    background: var(--selection-soft);
+    border-radius: var(--skin-control-radius);
+}
+.gpt-guide-safety > svg {
+    flex-shrink: 0;
+    color: var(--selection);
+}
+.gpt-guide-faq {
+    gap: 0;
+}
+.gpt-guide-faq > h2 {
+    margin-bottom: var(--space-12);
+}
+.gpt-guide-faq summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding-block: var(--space-12);
+    cursor: pointer;
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.gpt-guide-faq summary::after {
+    content: '+';
+    margin-left: auto;
+    padding-left: var(--space-12);
+    color: var(--muted);
+}
+.gpt-guide-faq details[open] summary::after {
+    content: '−';
+}
+.gpt-guide-faq details p {
+    padding-bottom: var(--space-16);
+}
+.gpt-guide-footer {
+    display: grid;
+    gap: var(--space-24);
+    padding-top: var(--space-24);
+}
+.gpt-guide-footer a {
+    justify-self: start;
+    padding-inline: 0;
+    color: var(--selection);
+}
+@media (max-width: 1023px) {
+    .gpt-recharge-guide-content {
+        padding: var(--space-24) var(--space-16);
+    }
+    .gpt-guide-recharge-steps,
+    .gpt-guide-session-steps,
+    .gpt-guide-illustrations {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .gpt-guide-links a,
+    .gpt-guide-links button,
+    .gpt-guide-footer-actions button {
+        width: 100%;
+    }
+    .gpt-guide-browser-body {
+        min-height: 0;
+    }
+    .gpt-guide-shortcuts > div {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--space-4);
+    }
+}

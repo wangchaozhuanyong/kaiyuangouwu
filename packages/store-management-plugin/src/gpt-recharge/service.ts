@@ -6,8 +6,6 @@ import {
     TransactionalConnection,
     UserInputError,
 } from '@vendure/core';
-import { createHash } from 'node:crypto';
-import { isIP } from 'node:net';
 
 import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
 
@@ -27,7 +25,6 @@ import {
 type InternalCode = { plan: string; status: string; task?: unknown };
 @Injectable()
 export class GptRechargeService {
-    private readonly limits = new Map<string, { count: number; expires: number }>();
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly access: StorefrontClientPluginAccessService,
@@ -45,18 +42,6 @@ export class GptRechargeService {
         if (typeof value !== 'string' || !value.trim() || value.trim().length > 190)
             throw new UserInputError('兑换码格式无效');
         return value.trim();
-    }
-    private limit(ctx: RequestContext, operation: string, maximum: number) {
-        const ip = ctx.req?.ip?.replace(/^::ffff:/, '');
-        if (!ip || !isIP(ip)) throw new ForbiddenError();
-        const now = Date.now();
-        for (const [expiredKey, item] of this.limits) if (item.expires <= now) this.limits.delete(expiredKey);
-        const key = createHash('sha256').update(`${ctx.channelId}:${operation}:${ip}`).digest('hex');
-        const row = this.limits.get(key) ?? { count: 0, expires: now + 60000 };
-        if (++row.count > maximum || (this.limits.size >= 10000 && !this.limits.has(key)))
-            throw new UserInputError('请求频繁，请稍后重试');
-        this.limits.set(key, row);
-        return ip;
     }
     async adminConfig(ctx: RequestContext) {
         const row = await this.configs(ctx).findOne({ where: { channelId: ctx.channelId } });
@@ -160,7 +145,6 @@ export class GptRechargeService {
         }
     }
     async publicConfig(ctx: RequestContext) {
-        this.limit(ctx, 'config', 30);
         const configured = await this.configs(ctx).findOne({ where: { channelId: ctx.channelId } });
         if (!configured?.enabled || !(await this.access.isEnabled(ctx, 'gpt-recharge-entry')))
             return { enabled: false, maintenance: false };
@@ -176,7 +160,6 @@ export class GptRechargeService {
         return { plan: String(value.plan), status: String(value.status), task: value.task };
     }
     async verify(ctx: RequestContext, code: string) {
-        this.limit(ctx, 'verify', 10);
         const config = await this.connectionConfig(ctx, true);
         code = this.code(code);
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
@@ -277,7 +260,6 @@ export class GptRechargeService {
         );
     }
     async query(ctx: RequestContext, codeInput: string) {
-        this.limit(ctx, 'query', 20);
         const code = this.code(codeInput);
         const config = await this.connectionConfig(ctx, false);
         await this.assertCodeOwner(ctx, code, config.upstreamOrigin);
@@ -295,7 +277,6 @@ export class GptRechargeService {
         return { plan: result.plan, status: result.status, task: await this.capture(ctx, row, result.task) };
     }
     async submit(ctx: RequestContext, codeInput: string, session: string) {
-        this.limit(ctx, 'submit', 5);
         const code = this.code(codeInput);
         validateRechargeSession(session);
         const config = await this.connectionConfig(ctx, true);
@@ -332,7 +313,6 @@ export class GptRechargeService {
         }
     }
     async task(ctx: RequestContext, publicId: string, credential: string) {
-        this.limit(ctx, 'task', 60);
         const expected = rechargeFingerprint(publicId, `${this.context(ctx)}:task`);
         if (!rechargeCredentialMatches(expected, credential)) throw new ForbiddenError();
         const row = await this.receipts(ctx).findOne({ where: { publicId, channelId: ctx.channelId } });

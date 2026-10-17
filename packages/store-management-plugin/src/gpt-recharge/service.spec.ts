@@ -217,11 +217,10 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         expect(await service.publicConfig(ctx())).toEqual({ enabled: false, maintenance: false });
         expect(submits).toBe(0);
     });
-    it('requires published access and limits probing', async () => {
+    it('requires published access before contacting the executor', async () => {
         access.assertEnabled.mockRejectedValueOnce(new Error('disabled'));
         await expect(service.verify(ctx(), 'code')).rejects.toThrow();
-        for (let i = 0; i < 9; i++) await service.verify(ctx(), 'code');
-        await expect(service.verify(ctx(), 'code')).rejects.toThrow('请求频繁');
+        expect(fetch).not.toHaveBeenCalled();
     });
     it('sanitizes unexpected failures at GraphQL boundary', async () => {
         const resolver = new GptRechargeShopResolver({

@@ -1,3 +1,4 @@
+import type { ShopAbuseProof } from '../shop-abuse';
 import type { StorefrontPageViewInput } from '../storefront-traffic';
 import type {
     DataConsentRecord,
@@ -252,6 +253,7 @@ export class ReferralsApi extends BaseDomainApi {
         inviteCode?: string,
         source?: 'LINK' | 'POSTER' | 'CODE',
         signal?: AbortSignal,
+        proof?: ShopAbuseProof,
     ): Promise<void> {
         signal?.throwIfAborted();
         const result = await this.request<{ registerCustomerWithReferral: ErrorResult }>(
@@ -278,6 +280,8 @@ export class ReferralsApi extends BaseDomainApi {
             signal,
             SHOP_API_QUERY_TIMEOUT_MS,
             true,
+            undefined,
+            proof,
         );
         this.assertNoError(result.registerCustomerWithReferral);
     }

@@ -1724,3 +1724,86 @@ void test('Admin decoration preview CORS is limited to public Shop API and prese
     assert.doesNotMatch(consoleServer, /location = \/shop-api/u);
     assert.doesNotMatch(nginx, /proxy_set_header (?:Host|X-Forwarded-Host) \$http_vendure_token/u);
 });
+
+void test('Shop API client IP has one explicit verified XFF definition and no external include', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const locations = [...config.matchAll(/location = \/shop-api \{(?<body>[^{}]*)\}/gu)];
+    assert.equal(locations.length, 1);
+    const shop = locations[0].groups.body;
+    // Including proxy_params then adding the same header can emit two XFF values.
+    // Reject that configuration even when the final directive looks sanitized.
+    assert.doesNotMatch(shop, /^\s*include\s/mu);
+    const headers = [...shop.matchAll(/^\s*proxy_set_header\s+(\S+)\s+([^;]+);/gmu)];
+    for (const [name, expected] of [
+        ['Host', '$host'],
+        ['X-Real-IP', '$remote_addr'],
+        ['X-Forwarded-For', '$remote_addr'],
+        ['X-Forwarded-Proto', '$scheme'],
+        ['Forwarded', '""'],
+    ]) {
+        const values = headers.filter(match => match[1].toLowerCase() === name.toLowerCase());
+        assert.equal(values.length, 1, name + ' must have one definition');
+        assert.equal(values[0][2], expected, name);
+    }
+    assert.doesNotMatch(shop, /\$(?:proxy_add_x_forwarded_for|http_x_forwarded_for|http_forwarded)\b/u);
+    assert.match(shop, /limit_req zone=vendure_shop_api burst=40 nodelay;/u);
+    assert.match(shop, /proxy_pass http:\/\/vendure_backend;/u);
+});
+
+void test('Shop API client IP keeps Cloudflare realip provenance and blocks direct origin peers', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const sources = [...config.matchAll(/^set_real_ip_from ([^;]+);$/gmu)].map(match => match[1]);
+    const geo = config.match(/geo \$realip_remote_addr \$trusted_cloudflare_origin \{(?<body>[^{}]*)\}/u)
+        ?.groups?.body;
+    assert.ok(geo);
+    assert.match(geo, /default 0;/u);
+    assert.deepEqual(
+        [...geo.matchAll(/^\s+([^;\s]+) 1;$/gmu)].map(match => match[1]).sort(),
+        [...sources].sort(),
+    );
+    assert.match(config, /^real_ip_header CF-Connecting-IP;$/mu);
+    assert.match(config, /^real_ip_recursive on;$/mu);
+    assert.doesNotMatch(config, /^real_ip_header (?:X-Forwarded-For|Forwarded);$/mu);
+    const trust = createRequire(import.meta.url)('proxy-addr').compile(sources);
+    for (const peer of ['173.245.48.1', '2606:4700::1', '127.0.0.1', '::1']) {
+        assert.equal(trust(peer), true, peer);
+    }
+    for (const peer of ['203.0.113.99', '198.51.100.2', '10.0.0.3', '2001:db8::1']) {
+        assert.equal(trust(peer), false, peer);
+    }
+    const shopServer = config.split(/^server \{/mu).find(server => server.includes('location = /shop-api {'));
+    assert.ok(shopServer);
+    assert.match(shopServer, /if \(\$trusted_cloudflare_origin = 0\) \{ return 444; \}/u);
+    assert.match(config, /upstream vendure_backend \{\s*server 127\.0\.0\.1:3002;/u);
+});
+
+void test('Shop API client IP cannot rotate the application budget with forged XFF chains', async () => {
+    const config = await readFile(path.join(repositoryRoot, 'deploy/nginx/damatong.conf'), 'utf8');
+    const shop = config.match(/location = \/shop-api \{(?<body>[^{}]*)\}/u)?.groups?.body;
+    assert.ok(shop);
+    const expression = shop.match(/proxy_set_header X-Forwarded-For ([^;]+);/u)?.[1];
+    const proxyaddr = createRequire(import.meta.url)('proxy-addr');
+    const verifiedVisitor = '198.51.100.23';
+    // Exercise the actual Express address parser with the configured upstream
+    // header; this is a config/parser regression, not a running Nginx acceptance.
+    for (const forged of ['203.0.113.1', '203.0.113.2', '203.0.113.3, 192.0.2.8']) {
+        const request = {
+            socket: { remoteAddress: '127.0.0.1' },
+            headers: {
+                'x-forwarded-for': expression === '$remote_addr' ? verifiedVisitor : forged,
+                forwarded: 'for=203.0.113.4',
+                'cf-connecting-ip': '203.0.113.5',
+            },
+        };
+        assert.equal(
+            proxyaddr(request, () => true),
+            verifiedVisitor,
+        );
+        request.headers['x-forwarded-for'] = forged + ', ' + verifiedVisitor;
+        assert.notEqual(
+            proxyaddr(request, () => true),
+            verifiedVisitor,
+            'old append behavior is unsafe',
+        );
+    }
+});

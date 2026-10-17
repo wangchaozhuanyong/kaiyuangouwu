@@ -42,6 +42,7 @@ import {
 } from './auth-validation';
 import { authHeroCopyPosition, resolveAuthVisualMessage } from './auth-visual';
 import { PageBackButton } from './components/common/page-back-button';
+import { ShopAbuseChallengeControl, useShopAbuseChallenge } from './components/common/shop-abuse-challenge';
 import { useDesktopLayout } from './desktop-layout';
 import { GoogleAuthButton } from './google-auth-button';
 import {
@@ -347,6 +348,7 @@ function useAuthVerificationResend(
     requestScope: ReturnType<typeof useAuthRequestScope>,
     setSubmitting: (submitting: boolean) => void,
 ) {
+    const challenge = useShopAbuseChallenge(api, language);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [seconds, setSeconds] = useState(0);
@@ -368,7 +370,14 @@ function useAuthVerificationResend(
         setMessage('');
         setError('');
         try {
-            await api.refreshCustomerVerification(emailAddress, operation.signal);
+            const result = await challenge.execute('REGISTER', emailAddress, proof =>
+                api.refreshCustomerVerification(
+                    emailAddress,
+                    operation.signal,
+                    ...(proof ? ([proof] as const) : []),
+                ),
+            );
+            if (!result.executed) return;
             if (!operation.isCurrent() || !emailIsCurrent()) return;
             setMessage(
                 language === 'zh' ? '重新发送请求已提交' : 'Verification email resend request submitted',
@@ -382,7 +391,7 @@ function useAuthVerificationResend(
             if (operation.isCurrent()) setSubmitting(false);
         }
     };
-    return { message, error, seconds, setMessage, setError, setSeconds, resend };
+    return { message, error, seconds, setMessage, setError, setSeconds, resend, challenge };
 }
 
 function ExistingAccountNotice({
@@ -410,6 +419,14 @@ function ExistingAccountNotice({
             );
         }
         onNavigate(route, replace);
+    };
+    const resendFromForm = (form: HTMLFormElement | null) => {
+        if (!form) return;
+        const emailAddress = formString(new FormData(form), 'emailAddress').trim();
+        void recovery.resend(
+            emailAddress,
+            () => formString(new FormData(form), 'emailAddress').trim() === emailAddress,
+        );
     };
     return (
         <section className={`auth-existing-account${login ? ' auth-existing-account--login' : ''}`}>
@@ -463,15 +480,7 @@ function ExistingAccountNotice({
                         className="auth-inline-link"
                         type="button"
                         disabled={submitting || recovery.seconds > 0}
-                        onClick={event => {
-                            const form = event.currentTarget.form;
-                            if (!form) return;
-                            const emailAddress = formString(new FormData(form), 'emailAddress').trim();
-                            void recovery.resend(
-                                emailAddress,
-                                () => formString(new FormData(form), 'emailAddress').trim() === emailAddress,
-                            );
-                        }}
+                        onClick={event => resendFromForm(event.currentTarget.form)}
                     >
                         {recovery.seconds > 0
                             ? isZh
@@ -481,6 +490,11 @@ function ExistingAccountNotice({
                               ? '重新发送验证邮件'
                               : 'Resend verification email'}
                     </button>
+                    <ShopAbuseChallengeControl
+                        challenge={recovery.challenge}
+                        language={language}
+                        onSubmit={resendFromForm}
+                    />
                     {recovery.message && (
                         <small className="auth-success-message" role="status">
                             {recovery.message}
@@ -523,6 +537,9 @@ export function LoginPage({
     const existingAccountNoticeId = useId();
     const [rememberMe, setRememberMe] = useState(true);
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
+    const challenge = useShopAbuseChallenge(api, language);
+    const googleChallenge = useShopAbuseChallenge(api, language);
+    const [registerStage, setRegisterStage] = useState<string | null>(null);
     const requestScope = useAuthRequestScope(api);
     const verificationRecovery = useAuthVerificationResend(api, language, requestScope, setSubmitting);
     useEffect(() => {
@@ -530,6 +547,7 @@ export function LoginPage({
         setError('');
         setAutoRegistrationEmail('');
         setExistingAccount(false);
+        setRegisterStage(null);
     }, [requestScope.owner]);
     const submit = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -543,8 +561,34 @@ export function LoginPage({
         setSubmitting(true);
         setError('');
         setExistingAccount(false);
+        const register = async () => {
+            const result = await challenge.execute('REGISTER', emailAddress, proof =>
+                api.registerCustomerAccount(
+                    { emailAddress },
+                    registrationConsent(registrationConsentAccepted, language),
+                    undefined,
+                    undefined,
+                    operation.signal,
+                    ...(proof ? ([proof] as const) : []),
+                ),
+            );
+            if (!operation.isCurrent() || !emailIsCurrent()) return;
+            if (!result.executed) {
+                setRegisterStage(emailAddress);
+                return;
+            }
+            setRegisterStage(null);
+            setAutoRegistrationEmail(emailAddress);
+        };
         try {
-            await api.login(emailAddress, password, rememberMe);
+            if (registerStage === emailAddress && registrationConsentAccepted) {
+                await register();
+                return;
+            }
+            const result = await challenge.execute('LOGIN', emailAddress, proof =>
+                api.login(emailAddress, password, rememberMe, ...(proof ? ([proof] as const) : [])),
+            );
+            if (!result.executed) return;
             if (!operation.isCurrent() || !emailIsCurrent()) return;
             await onSuccess(() => operation.isCurrent() && emailIsCurrent());
         } catch (requestError) {
@@ -559,15 +603,7 @@ export function LoginPage({
                     return;
                 }
                 try {
-                    await api.registerCustomerAccount(
-                        { emailAddress },
-                        registrationConsent(registrationConsentAccepted, language),
-                        undefined,
-                        undefined,
-                        operation.signal,
-                    );
-                    if (!operation.isCurrent() || !emailIsCurrent()) return;
-                    setAutoRegistrationEmail(emailAddress);
+                    await register();
                 } catch (registrationError) {
                     if (operation.isCurrent() && emailIsCurrent()) {
                         setError(registerErrorMessage(registrationError, language));
@@ -593,12 +629,19 @@ export function LoginPage({
                 program && isReferralClientFeatureEnabled(program)
                     ? attributionWithinWindow(captured, program.attributionWindowDays)
                     : null;
-            await api.authenticateWithGoogle(
-                credential,
-                registrationConsent(registrationConsentAccepted, language),
-                { rememberMe, inviteCode: attribution?.code, referralSource: attribution?.source },
+            const result = await googleChallenge.execute('LOGIN', 'oauth:google', proof =>
+                api.authenticateWithGoogle(
+                    credential,
+                    registrationConsent(registrationConsentAccepted, language),
+                    {
+                        rememberMe,
+                        inviteCode: attribution?.code,
+                        referralSource: attribution?.source,
+                        ...(proof ? { proof } : {}),
+                    },
+                ),
             );
-            await onSuccess();
+            if (result.executed) await onSuccess();
         } catch (requestError) {
             throw new Error(googleAuthErrorMessage(requestError, language));
         } finally {
@@ -661,6 +704,8 @@ export function LoginPage({
                                 showLabel={false}
                                 describedBy={existingAccount ? existingAccountNoticeId : undefined}
                                 onChange={() => {
+                                    challenge.reset();
+                                    setRegisterStage(null);
                                     setError('');
                                     setExistingAccount(false);
                                     verificationRecovery.setMessage('');
@@ -686,6 +731,8 @@ export function LoginPage({
                                 invalid={existingAccount}
                                 describedBy={existingAccount ? existingAccountNoticeId : undefined}
                                 onChange={() => {
+                                    challenge.reset();
+                                    setRegisterStage(null);
                                     setError('');
                                     setExistingAccount(false);
                                 }}
@@ -727,6 +774,7 @@ export function LoginPage({
                                     onContentTarget={onContentTarget}
                                 />
                             )}
+                            <ShopAbuseChallengeControl challenge={challenge} language={language} />
                             <SubmitButton
                                 submitting={submitting}
                                 idle={isZh ? '登录账户' : 'Sign in'}
@@ -748,6 +796,11 @@ export function LoginPage({
                             {authSettings.emailPasswordEnabled ? (
                                 <AuthMethodDivider language={language} />
                             ) : null}
+                            <ShopAbuseChallengeControl
+                                challenge={googleChallenge}
+                                language={language}
+                                google
+                            />
                             <GoogleAuthButton
                                 clientId={googleClientId}
                                 language={language}
@@ -810,6 +863,8 @@ export function RegisterPage({
     const [inviteSource, setInviteSource] = useState<ReferralSource>('CODE');
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
     const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
+    const challenge = useShopAbuseChallenge(api, language);
+    const googleChallenge = useShopAbuseChallenge(api, language);
     const quickRegistration = authSettings.emailQuickRegistrationEnabled;
     const requestScope = useAuthRequestScope(api, registeredEmail);
     const verificationRecovery = useAuthVerificationResend(api, language, requestScope, setSubmitting);
@@ -895,18 +950,21 @@ export function RegisterPage({
                 setError(isZh ? '邀请码无效，请检查后重试' : 'This invitation code is invalid');
                 return;
             }
-            await api.registerCustomerAccount(
-                {
-                    emailAddress,
-                    ...(firstName ? { firstName } : {}),
-                    ...(lastName ? { lastName } : {}),
-                },
-                registrationConsent(registrationConsentAccepted, language),
-                submittedInviteCode || undefined,
-                submittedInviteCode ? inviteSource : undefined,
-                operation.signal,
+            const result = await challenge.execute('REGISTER', emailAddress, proof =>
+                api.registerCustomerAccount(
+                    {
+                        emailAddress,
+                        ...(firstName ? { firstName } : {}),
+                        ...(lastName ? { lastName } : {}),
+                    },
+                    registrationConsent(registrationConsentAccepted, language),
+                    submittedInviteCode || undefined,
+                    submittedInviteCode ? inviteSource : undefined,
+                    operation.signal,
+                    ...(proof ? ([proof] as const) : []),
+                ),
             );
-            if (!operation.isCurrent() || !emailIsCurrent()) return;
+            if (!result.executed || !operation.isCurrent() || !emailIsCurrent()) return;
             setRegisteredEmail(emailAddress);
             setResendSeconds(60);
         } catch (requestError) {
@@ -936,17 +994,20 @@ export function RegisterPage({
                 program && isReferralClientFeatureEnabled(program)
                     ? attributionWithinWindow(captured, program.attributionWindowDays)
                     : null;
-            await api.authenticateWithGoogle(
-                credential,
-                registrationConsent(registrationConsentAccepted, language),
-                {
-                    inviteCode: referralEnabled
-                        ? normalizeReferralCode(inviteCode) || undefined
-                        : attribution?.code,
-                    referralSource: referralEnabled ? inviteSource : attribution?.source,
-                },
+            const result = await googleChallenge.execute('LOGIN', 'oauth:google', proof =>
+                api.authenticateWithGoogle(
+                    credential,
+                    registrationConsent(registrationConsentAccepted, language),
+                    {
+                        inviteCode: referralEnabled
+                            ? normalizeReferralCode(inviteCode) || undefined
+                            : attribution?.code,
+                        referralSource: referralEnabled ? inviteSource : attribution?.source,
+                        ...(proof ? { proof } : {}),
+                    },
+                ),
             );
-            await onSuccess?.();
+            if (result.executed) await onSuccess?.();
         } catch (requestError) {
             throw new Error(googleAuthErrorMessage(requestError, language));
         } finally {
@@ -1032,6 +1093,10 @@ export function RegisterPage({
                               'If you already have an account, sign in or reset your password.'
                     }
                 >
+                    <ShopAbuseChallengeControl
+                        challenge={verificationRecovery.challenge}
+                        language={language}
+                    />
                     {resendMessage && (
                         <small className="auth-success-message" role="status">
                             {resendMessage}
@@ -1120,6 +1185,7 @@ export function RegisterPage({
                                 invalid={existingAccount}
                                 describedBy={existingAccount ? existingAccountNoticeId : undefined}
                                 onChange={() => {
+                                    challenge.reset();
                                     setError('');
                                     setExistingAccount(false);
                                     setResendMessage('');
@@ -1158,6 +1224,7 @@ export function RegisterPage({
                                 onChange={setRegistrationConsentAccepted}
                                 onContentTarget={onContentTarget}
                             />
+                            <ShopAbuseChallengeControl challenge={challenge} language={language} />
                             <SubmitButton
                                 submitting={submitting}
                                 disabled={existingAccount}
@@ -1189,6 +1256,11 @@ export function RegisterPage({
                             {authSettings.emailPasswordEnabled ? (
                                 <AuthMethodDivider language={language} />
                             ) : null}
+                            <ShopAbuseChallengeControl
+                                challenge={googleChallenge}
+                                language={language}
+                                google
+                            />
                             <GoogleAuthButton
                                 clientId={googleClientId}
                                 language={language}
@@ -1247,6 +1319,8 @@ export function VerifyAccountPage({
             }) as never,
         );
     const isZh = language === 'zh';
+    const challenge = useShopAbuseChallenge(api, language);
+    const resendChallenge = useShopAbuseChallenge(api, language);
     const [error, setError] = useState('');
     const [requiresPassword, setRequiresPassword] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -1296,32 +1370,33 @@ export function VerifyAccountPage({
         }
     };
 
-    const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+    const verifyAccount = async (password?: string) => {
         if (!token) return;
-        const data = new FormData(event.currentTarget);
-        const password = formString(data, 'password');
-        const passwordError = validateAccountPassword(
-            password,
-            formString(data, 'confirmPassword'),
-            language,
-        );
-        if (passwordError) {
-            setError(passwordError);
-            return;
-        }
         const operation = requestScope.begin();
         if (!operation) return;
         setSubmitting(true);
         setError('');
         try {
-            await api.verifyCustomerAccount(token, password, operation.signal);
+            const checked = await challenge.execute('PASSWORD_UPDATE', token, proof =>
+                api.verifyCustomerAccount(
+                    token,
+                    password,
+                    operation.signal,
+                    ...(proof ? ([proof] as const) : []),
+                ),
+            );
+            if (!checked.executed) return;
             if (!operation.isCurrent()) return;
             setVerified(true);
             setRequiresPassword(false);
             await restoreSession(operation);
         } catch (requestError) {
             if (!operation.isCurrent()) return;
+            if (password === undefined && verificationRequiresPassword(requestError)) {
+                setRequiresPassword(true);
+                setError('');
+                return;
+            }
             if (
                 requestError instanceof ShopApiError &&
                 (requestError.errorCode === 'VERIFICATION_TOKEN_EXPIRED_ERROR' ||
@@ -1336,6 +1411,22 @@ export function VerifyAccountPage({
         }
     };
 
+    const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        const password = formString(data, 'password');
+        const passwordError = validateAccountPassword(
+            password,
+            formString(data, 'confirmPassword'),
+            language,
+        );
+        if (passwordError) {
+            setError(passwordError);
+            return;
+        }
+        await verifyAccount(password);
+    };
+
     const resend = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         if (resendSeconds > 0) return;
@@ -1346,7 +1437,15 @@ export function VerifyAccountPage({
         setResendError('');
         setResendMessage('');
         try {
-            await api.refreshCustomerVerification(formString(data, 'emailAddress').trim(), operation.signal);
+            const email = formString(data, 'emailAddress').trim();
+            const checked = await resendChallenge.execute('REGISTER', email, proof =>
+                api.refreshCustomerVerification(
+                    email,
+                    operation.signal,
+                    ...(proof ? ([proof] as const) : []),
+                ),
+            );
+            if (!checked.executed) return;
             if (!operation.isCurrent()) return;
             setResendMessage(
                 isZh
@@ -1387,29 +1486,7 @@ export function VerifyAccountPage({
             setError(isZh ? '验证链接缺少令牌' : 'The verification link is missing its token');
             return;
         }
-        const operation = requestScope.begin();
-        if (!operation) return;
-        setSubmitting(true);
-        void api
-            .verifyCustomerAccount(token, undefined, operation.signal)
-            .then(async () => {
-                if (!operation.isCurrent()) return;
-                setVerified(true);
-                await restoreSession(operation);
-            })
-            .catch(requestError => {
-                if (!operation.isCurrent()) return;
-                if (verificationRequiresPassword(requestError)) {
-                    setRequiresPassword(true);
-                    setError('');
-                    return;
-                }
-                setError(verificationErrorMessage(requestError, language));
-            })
-            .finally(() => {
-                operation.finish();
-                if (operation.isCurrent()) setSubmitting(false);
-            });
+        void verifyAccount();
         return () => {
             if (attempted.current === owner) attempted.current = null;
         };
@@ -1445,9 +1522,13 @@ export function VerifyAccountPage({
                             ? isZh
                                 ? '无法完成验证'
                                 : 'Verification failed'
-                            : isZh
-                              ? '正在验证'
-                              : 'Verifying your email'
+                            : challenge.state || !submitting
+                              ? isZh
+                                  ? '请完成安全验证'
+                                  : 'Complete the security check'
+                              : isZh
+                                ? '正在验证'
+                                : 'Verifying your email'
                 }
                 detail={
                     verified
@@ -1463,11 +1544,31 @@ export function VerifyAccountPage({
                               ? '该账号尚未设置登录密码，请设置密码并完成邮箱验证。'
                               : 'This account does not have a sign-in password yet. Set one to finish email verification.'
                           : error ||
-                            (isZh
-                                ? '请稍候，完成后将自动登录'
-                                : 'Please wait. You will be signed in automatically.')
+                            (challenge.state || !submitting
+                                ? isZh
+                                    ? '请按提示完成验证后再次提交。'
+                                    : 'Complete the security check, then submit again.'
+                                : isZh
+                                  ? '请稍候，完成后将自动登录'
+                                  : 'Please wait. You will be signed in automatically.')
                 }
             >
+                {!verified && !requiresPassword && !submitting && !error && token && (
+                    <form
+                        className="auth-recovery-form"
+                        onSubmit={event => {
+                            event.preventDefault();
+                            void verifyAccount();
+                        }}
+                    >
+                        <ShopAbuseChallengeControl challenge={challenge} language={language} />
+                        <SubmitButton
+                            submitting={submitting}
+                            idle={isZh ? '再次验证' : 'Verify again'}
+                            busy={isZh ? '验证中' : 'Verifying'}
+                        />
+                    </form>
+                )}
                 {verified ? (
                     <>
                         {sessionError && (
@@ -1521,6 +1622,7 @@ export function VerifyAccountPage({
                                 {error}
                             </small>
                         )}
+                        <ShopAbuseChallengeControl challenge={challenge} language={language} />
                         <SubmitButton
                             submitting={submitting}
                             idle={isZh ? '设置密码并完成验证' : 'Set password and verify'}
@@ -1537,6 +1639,7 @@ export function VerifyAccountPage({
                                 autoComplete="email"
                                 icon={<Mail />}
                             />
+                            <ShopAbuseChallengeControl challenge={resendChallenge} language={language} />
                             {resendMessage && (
                                 <small className="auth-success-message" role="status">
                                     {resendMessage}
@@ -1592,6 +1695,7 @@ export function ForgotPasswordPage({
     const isZh = language === 'zh';
     const [submitting, setSubmitting] = useState(false);
     useAuthSubmittingState(submitting);
+    const challenge = useShopAbuseChallenge(api, language);
     const [requested, setRequested] = useState(false);
     const [error, setError] = useState('');
     const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1600,7 +1704,11 @@ export function ForgotPasswordPage({
         setSubmitting(true);
         setError('');
         try {
-            await api.requestPasswordReset(formString(data, 'emailAddress').trim());
+            const email = formString(data, 'emailAddress').trim();
+            const result = await challenge.execute('PASSWORD_RESET', email, proof =>
+                api.requestPasswordReset(email, ...(proof ? ([proof] as const) : [])),
+            );
+            if (!result.executed) return;
             setRequested(true);
         } catch (requestError) {
             setError(
@@ -1663,6 +1771,7 @@ export function ForgotPasswordPage({
                                 {error}
                             </small>
                         )}
+                        <ShopAbuseChallengeControl challenge={challenge} language={language} />
                         <SubmitButton
                             submitting={submitting}
                             idle={isZh ? '发送重置邮件' : 'Send reset email'}
@@ -1709,6 +1818,7 @@ export function ResetPasswordPage({
             }) as never,
         );
     const isZh = language === 'zh';
+    const challenge = useShopAbuseChallenge(api, language);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(
         token ? '' : isZh ? '重置链接缺少令牌' : 'The reset link is missing its token',
@@ -1730,7 +1840,10 @@ export function ResetPasswordPage({
         setSubmitting(true);
         setError('');
         try {
-            await api.resetPassword(token, password);
+            const result = await challenge.execute('PASSWORD_UPDATE', token, proof =>
+                api.resetPassword(token, password, ...(proof ? ([proof] as const) : [])),
+            );
+            if (!result.executed) return;
             await onSuccess();
         } catch (requestError) {
             setError(
@@ -1781,6 +1894,7 @@ export function ResetPasswordPage({
                             {error}
                         </small>
                     )}
+                    <ShopAbuseChallengeControl challenge={challenge} language={language} />
                     <SubmitButton
                         submitting={submitting}
                         idle={isZh ? '更新密码' : 'Update password'}

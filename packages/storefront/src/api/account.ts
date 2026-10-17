@@ -1,5 +1,6 @@
 import type { DigitalReceiptContent, DigitalReceiptStatus } from '../digital-receipt-panel';
 import type { OrderAdditionalPaymentQuote } from '../order-additional-payment-panel';
+import type { ShopAbuseProof } from '../shop-abuse';
 import type {
     ActiveCustomer,
     Asset,
@@ -675,7 +676,12 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
         return result.confirmMyFulfillmentDelivery;
     }
 
-    async login(emailAddress: string, password: string, rememberMe = true): Promise<void> {
+    async login(
+        emailAddress: string,
+        password: string,
+        rememberMe = true,
+        proof?: ShopAbuseProof,
+    ): Promise<void> {
         const result = await this.authenticationRequest<{ login: ErrorResult }>(
             `
                 mutation StorefrontLogin($emailAddress: String!, $password: String!, $rememberMe: Boolean!) {
@@ -688,6 +694,10 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
                 }
             `,
             { emailAddress, password, rememberMe },
+            undefined,
+            undefined,
+            undefined,
+            proof,
         );
         this.assertNoError(result.login);
     }
@@ -695,7 +705,12 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
     async authenticateWithGoogle(
         credential: string,
         consent: StorefrontRegistrationConsentInput,
-        options: { rememberMe?: boolean; inviteCode?: string; referralSource?: string } = {},
+        options: {
+            rememberMe?: boolean;
+            inviteCode?: string;
+            referralSource?: string;
+            proof?: ShopAbuseProof;
+        } = {},
     ): Promise<void> {
         const result = await this.authenticationRequest<{ authenticate: ErrorResult }>(
             `
@@ -735,11 +750,19 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
                 inviteCode: options.inviteCode,
                 referralSource: options.referralSource,
             },
+            undefined,
+            undefined,
+            undefined,
+            options.proof,
         );
         this.assertNoError(result.authenticate);
     }
 
-    async refreshCustomerVerification(emailAddress: string, signal?: AbortSignal): Promise<void> {
+    async refreshCustomerVerification(
+        emailAddress: string,
+        signal?: AbortSignal,
+        proof?: ShopAbuseProof,
+    ): Promise<void> {
         signal?.throwIfAborted();
         const result = await this.request<{ refreshCustomerVerification: ErrorResult }>(
             `
@@ -755,11 +778,18 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
             signal,
             SHOP_API_QUERY_TIMEOUT_MS,
             true,
+            undefined,
+            proof,
         );
         this.assertNoError(result.refreshCustomerVerification);
     }
 
-    async verifyCustomerAccount(token: string, password?: string, signal?: AbortSignal): Promise<void> {
+    async verifyCustomerAccount(
+        token: string,
+        password?: string,
+        signal?: AbortSignal,
+        proof?: ShopAbuseProof,
+    ): Promise<void> {
         signal?.throwIfAborted();
         const result = await this.authenticationRequest<{ verifyCustomerAccount: ErrorResult }>(
             `
@@ -775,11 +805,12 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
             signal,
             SHOP_API_QUERY_TIMEOUT_MS,
             true,
+            ...(proof ? [proof] : []),
         );
         this.assertNoError(result.verifyCustomerAccount);
     }
 
-    async requestPasswordReset(emailAddress: string): Promise<void> {
+    async requestPasswordReset(emailAddress: string, proof?: ShopAbuseProof): Promise<void> {
         const result = await this.request<{ requestPasswordReset: ErrorResult | null }>(
             `
                 mutation RequestStorefrontPasswordReset($emailAddress: String!) {
@@ -791,13 +822,18 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
                 }
             `,
             { emailAddress },
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            proof,
         );
         if (result.requestPasswordReset) {
             this.assertNoError(result.requestPasswordReset);
         }
     }
 
-    async resetPassword(token: string, password: string): Promise<void> {
+    async resetPassword(token: string, password: string, proof?: ShopAbuseProof): Promise<void> {
         const result = await this.authenticationRequest<{ resetPassword: ErrorResult }>(
             `
                 mutation ResetStorefrontPassword($token: String!, $password: String!) {
@@ -809,6 +845,10 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
                 }
             `,
             { token, password },
+            undefined,
+            undefined,
+            undefined,
+            proof,
         );
         this.assertNoError(result.resetPassword);
     }
