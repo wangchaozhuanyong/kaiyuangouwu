@@ -879,6 +879,175 @@ describe('bounded public inline image assembly', () => {
         expect(result.map(item => item.version)).toEqual(['1', '2', null, null, null, null]);
         expect(media.every(item => !item.placeholder)).toBe(true);
     });
+    it('adds only the configured header logo after the original eight assets and covers duplicate uses', async () => {
+        const body = Array.from({ length: 9 }, (_, index) =>
+            mediaDescriptor(`/assets/preview/body-${index}.webp`, 'hero'),
+        );
+        const logoUrl = '/assets/preview/header.webp?v=current';
+        const media = [
+            ...body,
+            mediaDescriptor('/assets/preview/light.webp', 'thumbnail'),
+            mediaDescriptor('/assets/preview/dark.webp', 'thumbnail'),
+            mediaDescriptor(logoUrl, 'thumbnail'),
+            mediaDescriptor('/assets/preview/body-0.webp', 'card'),
+            mediaDescriptor(logoUrl, 'icon'),
+        ];
+        const read = vi.fn().mockResolvedValue('data:image/webp;base64,AAAA');
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+            250,
+            undefined,
+            logoUrl,
+        );
+        expect(read.mock.calls.map(call => call[0])).toEqual([
+            ...Array.from({ length: 8 }, (_, index) => `preview/body-${index}.webp`),
+            'preview/header.webp',
+        ]);
+        expect(result.map(item => Boolean(item.placeholder))).toEqual([
+            ...Array(8).fill(true),
+            false,
+            false,
+            false,
+            true,
+            true,
+            true,
+        ]);
+        expect(result[11].version).toBe('current');
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+        expect(media.every(item => !item.placeholder)).toBe(true);
+    });
+    it('keeps the original eight previews when the additional logo would exceed the existing wire budget', async () => {
+        const logoUrl = '/assets/preview/header.webp';
+        const media = [
+            ...Array.from({ length: 8 }, (_, index) =>
+                mediaDescriptor(`/assets/preview/body-${index}.webp`, 'hero'),
+            ),
+            mediaDescriptor(logoUrl, 'thumbnail'),
+        ];
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+            250,
+            undefined,
+            logoUrl,
+        );
+        expect(read).toHaveBeenCalledTimes(9);
+        expect(result.slice(0, 8).every(item => item.placeholder?.inlineData === preview)).toBe(true);
+        expect(result[8].placeholder).toBeUndefined();
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+    });
+    it.each([
+        {
+            label: 'missing',
+            configured: undefined,
+            projected: '/assets/preview/header.webp',
+            kind: 'thumbnail',
+        },
+        {
+            label: 'foreign',
+            configured: 'https://other.test/assets/preview/header.webp',
+            projected: 'https://other.test/assets/preview/header.webp',
+            kind: 'thumbnail',
+        },
+        {
+            label: 'private',
+            configured: '/assets/cache/header.webp',
+            projected: '/assets/cache/header.webp',
+            kind: 'thumbnail',
+        },
+        {
+            label: 'unprojected',
+            configured: '/assets/preview/missing.webp',
+            projected: '/assets/preview/header.webp',
+            kind: 'thumbnail',
+        },
+        {
+            label: 'different version',
+            configured: '/assets/preview/header.webp?v=new',
+            projected: '/assets/preview/header.webp?v=old',
+            kind: 'thumbnail',
+        },
+        {
+            label: 'different purpose',
+            configured: '/assets/preview/header.webp',
+            projected: '/assets/preview/header.webp',
+            kind: 'card',
+        },
+    ] as const)('does not add a $label header candidate', async ({ configured, projected, kind }) => {
+        const media = [
+            ...Array.from({ length: 9 }, (_, index) =>
+                mediaDescriptor(`/assets/preview/body-${index}.webp`, 'hero'),
+            ),
+            mediaDescriptor(projected, kind),
+        ];
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+            250,
+            undefined,
+            configured,
+        );
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(result.slice(8).every(item => !item.placeholder)).toBe(true);
+    });
+    it('does not add another asset when the configured header logo is already among the first eight', async () => {
+        const logoUrl = '/assets/preview/header.webp';
+        const media = [
+            mediaDescriptor(logoUrl, 'thumbnail'),
+            ...Array.from({ length: 9 }, (_, index) =>
+                mediaDescriptor(`/assets/preview/body-${index}.webp`, 'hero'),
+            ),
+        ];
+        const read = vi.fn().mockResolvedValue(preview);
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            () => Promise.resolve(true),
+            read,
+            250,
+            undefined,
+            logoUrl,
+        );
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(result.slice(8).every(item => !item.placeholder)).toBe(true);
+    });
+    it('requires the existing public manifest authorization for the additional header asset', async () => {
+        const logoUrl = '/assets/preview/header.webp';
+        const media = [
+            ...Array.from({ length: 8 }, (_, index) =>
+                mediaDescriptor(`/assets/preview/body-${index}.webp`, 'hero'),
+            ),
+            mediaDescriptor(logoUrl, 'thumbnail'),
+        ];
+        const read = vi.fn().mockResolvedValue(preview);
+        const authorize = vi.fn((path: string) => Promise.resolve(path !== 'preview/header.webp'));
+        const result = await publicMediaWithPreviews(
+            media,
+            'shop.example',
+            authorize,
+            read,
+            250,
+            undefined,
+            logoUrl,
+        );
+        expect(authorize).toHaveBeenCalledWith('preview/header.webp');
+        expect(read).toHaveBeenCalledTimes(8);
+        expect(result.slice(0, 8).every(item => item.placeholder)).toBe(true);
+        expect(result[8].placeholder).toBeUndefined();
+    });
     it('limits a page to eight distinct identities, two concurrent reads and the existing wire budget', async () => {
         let active = 0;
         let peak = 0;

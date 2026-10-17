@@ -44,6 +44,7 @@ import { StorefrontPublicCacheService } from './performance/storefront-public-ca
 import {
     preservePublicMediaPreviews,
     publicMediaAssetIdentity,
+    publicMediaPreviewGroups,
     publicMediaWithPreviews,
     publicPageMedia,
 } from './performance/storefront-public-media';
@@ -656,14 +657,13 @@ export class StorefrontPublicPageService {
         ];
         const available = new Map<string, string>();
         const documentPaths = new Set<string>();
+        const logoUrl = (page.config as { logoUrl?: string | null }).logoUrl;
         if (document) {
-            const firstAssets = new Map<string, MediaDescriptor>();
+            const firstAssets = publicMediaPreviewGroups(ordered, host, logoUrl);
             const versionsByPath = new Map<string, Set<string>>();
             for (const item of ordered) {
                 const identity = publicMediaAssetIdentity(item, host);
                 if (!identity) continue;
-                if (!firstAssets.has(identity.key) && firstAssets.size < 8)
-                    firstAssets.set(identity.key, item);
                 const versions = versionsByPath.get(identity.path) ?? new Set<string>();
                 versions.add(identity.key);
                 versionsByPath.set(identity.path, versions);
@@ -671,13 +671,12 @@ export class StorefrontPublicPageService {
                     available.set(identity.path, item.placeholder.inlineData);
             }
             if (
-                [...firstAssets.values()].every(item => validInlineImagePreview(item.placeholder?.inlineData))
+                [...firstAssets.values()].every(group =>
+                    validInlineImagePreview(ordered[group.indexes[0]]?.placeholder?.inlineData),
+                )
             )
                 return media;
-            for (const item of firstAssets.values()) {
-                const identity = publicMediaAssetIdentity(item, host);
-                if (identity) documentPaths.add(identity.path);
-            }
+            for (const group of firstAssets.values()) documentPaths.add(group.path);
             // The path-only derivative reader cannot select between multiple descriptor versions.
             // Never borrow one version's inline pixels for another version of that path.
             for (const [path, versions] of versionsByPath) if (versions.size !== 1) available.delete(path);
@@ -708,6 +707,7 @@ export class StorefrontPublicPageService {
                 // The HTML response has its own bounded continuation; SSI remains cache-only.
                 document ? Math.max(0, document.deadline - Date.now()) : prepare ? 2_000 : 250,
                 preparation,
+                logoUrl,
             );
             const result = [
                 ...populated,
