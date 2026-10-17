@@ -125,6 +125,56 @@ test('catalog files reject traversal, redirected parents, symlinks and hard link
     }
 });
 
+test('media probes bound each SQL statement and retain all candidates after any partial-batch failure', async () => {
+    const assets = cleanup.TARGET_IDS.map(id => ({
+        id,
+        source: `source/a/asset-${id}.webp`,
+        preview: `preview/a/asset-${id}.webp`,
+    }));
+    const schema = {
+        columns: [{ t: 'product_translation', c: 'description', type: 'text' }],
+        foreignKeys: [],
+    };
+    const seen = new Set();
+    const connection = {
+        query: async (sql, values = []) => {
+            if (!sql.includes('LOCATE')) return [sql.includes('SELECT id,source,preview') ? assets : []];
+            assert.match(sql, /MAX_EXECUTION_TIME\(3000\)/u);
+            const ids = values.filter((_, index) => index % 2 === 0);
+            assert.ok(new Set(ids).size <= 8);
+            for (const id of ids) seen.add(id);
+            return [ids.includes('517') ? [{ assetId: '517', n: 1 }] : []];
+        },
+    };
+    const result = await cleanup.references(connection, assets, schema);
+    assert.deepEqual([...seen].sort(), [...cleanup.TARGET_IDS].sort());
+    assert.equal(result.reasons.get('517')[0].kind, 'CURRENT_OR_LEGACY_MEDIA_REFERENCE');
+    assert.equal(result.reasons.get('68').length, 0);
+    const failed = await cleanup.references(
+        {
+            query: async (sql, values = []) => {
+                if (sql.includes('LOCATE') && values.includes('517')) {
+                    const error = new Error('NEVER_EXPORT_DATABASE_DETAIL');
+                    error.errno = 3024;
+                    throw error;
+                }
+                return connection.query(sql, values);
+            },
+        },
+        assets,
+        schema,
+    );
+    assert.ok(
+        [...failed.reasons.values()].every(reasons =>
+            reasons.some(
+                reason =>
+                    reason.kind === 'UNVERIFIABLE_MEDIA_SURFACE' && reason.failure === 'STATEMENT_TIMEOUT',
+            ),
+        ),
+    );
+    assert.doesNotMatch(JSON.stringify([...failed.reasons]), /NEVER_EXPORT/u);
+});
+
 test('native wrapper checks health and runtime after success or failure, preserves only safe output and rejects arbitrary keys', () => {
     let stages = [];
     const deps = {
@@ -233,9 +283,16 @@ test(
                     'FOREIGN KEY(imageAssetId) REFERENCES asset(id) ON DELETE SET NULL)',
                 'CREATE TABLE image_generation_output(id INT PRIMARY KEY,catalogAssetId INT,FOREIGN KEY(catalogAssetId) REFERENCES asset(id) ON DELETE SET NULL)',
                 'CREATE TABLE product_asset(id INT PRIMARY KEY,assetId INT,FOREIGN KEY(assetId) REFERENCES asset(id))',
+                'CREATE TABLE product_translation(id INT PRIMARY KEY,description TEXT)',
             ])
                 await conn.query(sql);
             await conn.query("INSERT INTO tag VALUES(33,'retained-tag')");
+            // Representative long HTML descriptions exercise the bounded cross join.
+            const descriptions = Array.from({ length: 600 }, (_, index) => [
+                index + 1,
+                '<p>' + 'catalog description '.repeat(100) + '</p>',
+            ]);
+            await conn.query('INSERT INTO product_translation VALUES ?', [descriptions]);
             for (const id of cleanup.TARGET_IDS) {
                 const source = `source/a/asset-${id}__webp_migrated_${id}.webp`;
                 const preview = `preview/a/asset-${id}__webp_migrated_${id}.webp`;
