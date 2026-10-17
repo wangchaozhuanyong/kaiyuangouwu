@@ -23,6 +23,7 @@ import {
     DELETE_GENERIC_PROMOTION_MUTATION,
     GENERIC_PROMOTION_DETAIL_QUERY,
     GENERIC_PROMOTIONS_QUERY,
+    REMOVE_GENERIC_PROMOTION_FROM_CHANNEL_MUTATION,
     UPDATE_GENERIC_PROMOTION_MUTATION,
     type GenericPromotionDetailData,
     type GenericPromotionListRecord,
@@ -84,11 +85,49 @@ export function GenericPromotionsPanel() {
     if (management && page >= totalPages) setPage(totalPages - 1);
     const [editingId, setEditingId] = useState<string | 'new' | null>(null);
     const [deleting, setDeleting] = useState<GenericPromotionListRecord | null>(null);
+    const [unlinking, setUnlinking] = useState<GenericPromotionManagementRecord | null>(null);
+    const [unlinkChannelId, setUnlinkChannelId] = useState('');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [deletePromotion, deleteState] = useMutation<{
         deletePromotion: { result: string; message?: string | null };
     }>(DELETE_GENERIC_PROMOTION_MUTATION);
+    const [unlinkPromotion, unlinkState] = useMutation<{
+        removePromotionsFromChannel: Array<{ id: string }>;
+    }>(REMOVE_GENERIC_PROMOTION_FROM_CHANNEL_MUTATION);
+    const canManageStores = query.data?.activeChannel.code === '__default_channel__';
+    const closeUnlink = () => {
+        if (unlinkState.loading) return;
+        setUnlinking(null);
+        setUnlinkChannelId('');
+        setError('');
+    };
+    const unlink = async () => {
+        const target = unlinking?.stores.find(store => store.id === unlinkChannelId);
+        if (
+            !canManageStores ||
+            !unlinking?.ownershipKnown ||
+            unlinking.stores.length < 2 ||
+            !target ||
+            target.code === '__default_channel__' ||
+            unlinkState.loading
+        )
+            return;
+        setError('');
+        try {
+            const response = await unlinkPromotion({
+                variables: { input: { promotionIds: [unlinking.promotion.id], channelId: target.id } },
+            });
+            if (!response.data?.removePromotionsFromChannel.some(item => item.id === unlinking.promotion.id))
+                throw new Error('后端未确认活动关联变更，请刷新核对后再操作');
+            setNotice(`已移除「${unlinking.promotion.name}」与「${promotionStoreName(target)}」的关联`);
+            setUnlinking(null);
+            setUnlinkChannelId('');
+            await refreshAfterAdminWrite(() => query.refetch());
+        } catch (cause) {
+            setError(toUserFacingError(cause, '活动关联变更失败'));
+        }
+    };
     const remove = async (password: string) => {
         if (!deleting) return;
         setError('');
@@ -112,7 +151,7 @@ export function GenericPromotionsPanel() {
     return (
         <div className="space-y-4">
             {notice && <Notice tone="success" message={notice} />}
-            {error && !deleting && <Notice tone="error" message={error} />}
+            {error && !deleting && !unlinking && <Notice tone="error" message={error} />}
             <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -245,6 +284,21 @@ export function GenericPromotionsPanel() {
                                                     <Edit3 className="h-3.5 w-3.5" />
                                                     编辑
                                                 </AdminButton>
+                                                {canManageStores &&
+                                                    record.ownershipKnown &&
+                                                    record.stores.length > 1 && (
+                                                        <AdminButton
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setError('');
+                                                                setUnlinkChannelId('');
+                                                                setUnlinking(record);
+                                                            }}
+                                                            className="inline-flex items-center gap-1 font-bold text-blue-600"
+                                                        >
+                                                            调整关联
+                                                        </AdminButton>
+                                                    )}
                                                 <AdminButton
                                                     type="button"
                                                     onClick={() => setDeleting(item)}
@@ -276,6 +330,65 @@ export function GenericPromotionsPanel() {
                     />
                 </div>
             </section>
+            {unlinking && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+                    <AccessibleDialogSurface
+                        accessibleName="调整活动关联店铺"
+                        onRequestClose={closeUnlink}
+                        className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"
+                    >
+                        <h3 className="flex items-center gap-2 font-bold text-slate-900">
+                            调整活动关联店铺
+                            <FeatureHelpButton
+                                topic="marketing.generic-promotions"
+                                title="调整活动关联店铺"
+                                description="仅平台可调整多店活动的关联。选择移除的店铺后确认；保留其余店铺及活动规则。如提示无权限，请联系有促销修改权限的管理员。"
+                            />
+                        </h3>
+                        <p className="mt-3 text-sm text-slate-600">
+                            移除「{unlinking.promotion.name}
+                            」与所选店铺的关联。其他店铺及活动规则保留，活动不会被删除。
+                        </p>
+                        <AdminField label="移除关联的店铺" className="mt-4 text-sm">
+                            <AdminSelect
+                                aria-label="移除关联的店铺"
+                                value={unlinkChannelId}
+                                disabled={unlinkState.loading}
+                                onChange={event => setUnlinkChannelId(event.target.value)}
+                                className={inputClass}
+                            >
+                                <option value="">请选择店铺</option>
+                                {unlinking.stores
+                                    .filter(store => store.code !== '__default_channel__')
+                                    .map(store => (
+                                        <option key={store.id} value={store.id}>
+                                            {promotionStoreName(store)}
+                                        </option>
+                                    ))}
+                            </AdminSelect>
+                        </AdminField>
+                        {error && <Notice tone="error" message={error} />}
+                        <div className="mt-5 flex justify-end gap-2">
+                            <AdminButton
+                                type="button"
+                                className={secondaryButton}
+                                disabled={unlinkState.loading}
+                                onClick={closeUnlink}
+                            >
+                                取消
+                            </AdminButton>
+                            <AdminButton
+                                type="button"
+                                className={primaryButton}
+                                disabled={!unlinkChannelId || unlinkState.loading}
+                                onClick={() => void unlink()}
+                            >
+                                {unlinkState.loading ? '正在移除…' : '确认移除关联'}
+                            </AdminButton>
+                        </div>
+                    </AccessibleDialogSurface>
+                </div>
+            )}
             {editingId && (
                 <PromotionEditor
                     id={editingId}

@@ -139,6 +139,7 @@ function validateRequest(environment) {
             'enable-unified-notifications',
             'prepare-notification-secret-transfer',
             'audit-store-isolation-data',
+            'audit-catalog-ownership',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
             'plan-window-test-order-cleanup',
@@ -218,6 +219,7 @@ function validateRequest(environment) {
         [
             'backup-database',
             'audit-store-isolation-data',
+            'audit-catalog-ownership',
             'inspect-icloud-relay',
             'plan-platform-store-governance',
             'audit-administrator-product-readiness',
@@ -2863,6 +2865,15 @@ function runLocked(environment = process.env) {
         );
         process.stdout.write(`${JSON.stringify(result)}\n`);
         process.stdout.write(`PRODUCTION_OPERATIONS_COMPLETE operation=${request.operation}\n`);
+        return;
+    }
+    if (request.operation === 'audit-catalog-ownership') {
+        const result = require('./catalog-ownership-audit.cjs').runCatalogOwnershipAudit(request, {
+            inspect: inspectProductionReleases,
+            health: stage => assertProductionHealthSnapshot(productionHealthSnapshot(), stage),
+        });
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=audit-catalog-ownership\n');
         return;
     }
     if (request.operation === 'plan-platform-store-governance') {

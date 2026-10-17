@@ -146,6 +146,14 @@ export const DELETE_GENERIC_PROMOTION_MUTATION = gql`
     }
 `;
 
+export const REMOVE_GENERIC_PROMOTION_FROM_CHANNEL_MUTATION = gql`
+    mutation NextAdminRemovePromotionFromChannel($input: RemovePromotionsFromChannelInput!) {
+        removePromotionsFromChannel(input: $input) {
+            id
+        }
+    }
+`;
+
 export interface OperationArgDefinition {
     name: string;
     type: string;

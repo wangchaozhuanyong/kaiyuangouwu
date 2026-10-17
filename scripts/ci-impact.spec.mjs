@@ -175,6 +175,26 @@ test('fixed read-only product inventory audit requires controls without a servin
         assert.equal(classifyChanges([...files, runtimeFile], inventory).lane, 'runtime', runtimeFile);
     }
 });
+
+test('bounded catalog ownership evidence and promotion controls only require Admin and automation checks', () => {
+    const plan = classifyChanges(
+        [
+            'packages/dev-server/scripts/catalog-ownership-evidence.mjs',
+            'packages/dev-server/scripts/catalog-ownership-evidence.spec.mjs',
+            'deploy/catalog-ownership-audit.cjs',
+            'deploy/catalog-ownership-audit.spec.mjs',
+            'deploy/production-operations.cjs',
+            '.github/workflows/production_operations.yml',
+            'packages/next-admin/src/pages/Marketing/GenericPromotionsPanel.tsx',
+        ],
+        inventory,
+    );
+    assert.equal(plan.controls, true);
+    assert.equal(plan.lane, 'frontend');
+    assert.deepEqual(plan.frontends, ['next-admin']);
+    assert.deepEqual(plan.packages, []);
+    assert.deepEqual(plan.databases, []);
+});
 test('storefront runtime source updates Admin preview, while client tests and isolated tool do not', () => {
     assert.deepEqual(
         classifyChanges(['packages/storefront/src/styles/home-showcase.css'], inventory).frontends,

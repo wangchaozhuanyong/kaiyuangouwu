@@ -514,6 +514,28 @@ and retain the existing key values.
 Linux memfd avoids application-created plaintext disk files; operating-system
 memory and swap protections remain the existing host's responsibility.
 
+## Bounded catalog ownership evidence
+
+`audit-catalog-ownership` is a fixed read-only operation. Supply the current main
+`source_sha` and the exact observed backend `expected_runtime_sha`. It accepts no
+write approval, resource ID, arbitrary query or store override. It holds the
+existing production lock, uses a consistent read-only MySQL snapshot and checks
+runtime identity and health before and after the read, including failed reads.
+
+The audit covers ProductOptionGroup, ProductOption, Facet, FacetValue, Asset and
+Tag registrations, catalog channel links, product/variant references, sales
+authorization IDs and decoration image ID bindings (including mobile images).
+It excludes customer, order, payment, inventory, credential and content text
+fields. Each SELECT has a 3-second MySQL execution limit; the process limit is
+90 seconds. Reads stop above 10,000 rows per table, 50,000 total rows, 500 missing
+registration candidates or a 2 MiB JSON result. Missing columns stop the audit.
+
+The existing hashed, chunked transport uploads the identifier-only snapshot as
+the `platform-governance-data-plan` artifact and removes its temporary server
+transport. Missing registrations remain `REVIEW_REQUIRED`; no owner is inferred
+or changed. URL-only media, dynamic collection filters and ordinary store
+authorization probes remain explicit coverage gaps.
+
 ## Verify repaired runtime dependencies
 
 After the new main SHA is deployed, run:

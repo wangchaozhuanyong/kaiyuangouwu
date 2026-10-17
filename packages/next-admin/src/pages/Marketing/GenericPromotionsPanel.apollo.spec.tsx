@@ -72,6 +72,11 @@ let root: Root;
 let client: ApolloClient;
 let requests: ReadRequest[];
 let deletions: { id: string; respond: (result: string) => void }[];
+let unlinks: {
+    input: { promotionIds: string[]; channelId: string };
+    respond: () => void;
+    fail: () => void;
+}[];
 
 function item(name: string, overrides: Partial<ManagementItem> = {}): ManagementItem {
     return {
@@ -177,6 +182,7 @@ beforeEach(() => {
     scope.value = 'synthetic-platform:zh_Hans';
     requests = [];
     deletions = [];
+    unlinks = [];
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
@@ -186,6 +192,24 @@ beforeEach(() => {
         link: new ApolloLink(
             operation =>
                 new Observable(observer => {
+                    if (operation.operationName === 'NextAdminRemovePromotionFromChannel') {
+                        const input = structuredClone(
+                            operation.variables.input,
+                        ) as (typeof unlinks)[number]['input'];
+                        unlinks.push({
+                            input,
+                            respond: () => {
+                                observer.next({
+                                    data: {
+                                        removePromotionsFromChannel: input.promotionIds.map(id => ({ id })),
+                                    },
+                                });
+                                observer.complete();
+                            },
+                            fail: () => observer.error(new Error('合成关联权限拒绝')),
+                        });
+                        return;
+                    }
                     if (operation.operationName === 'NextAdminDeleteGenericPromotion') {
                         deletions.push({
                             id: operation.variables.id as string,
@@ -226,6 +250,67 @@ afterEach(async () => {
 });
 
 describe('real Apollo generic promotion management', () => {
+    it('unlinks only the chosen store and retries only the read after an accepted write', async () => {
+        await render();
+        const shared = item('合成多店活动', { stores, shared: true });
+        await respond(requests[0], data([shared]));
+        await click('调整关联');
+        expect(button('确认移除关联').disabled).toBe(true);
+        const select = host.querySelector<HTMLSelectElement>('select[aria-label="移除关联的店铺"]')!;
+        await act(async () => {
+            select.value = stores[1].id;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await click('确认移除关联');
+        expect(unlinks).toHaveLength(1);
+        expect(unlinks[0].input).toEqual({ promotionIds: [shared.promotion.id], channelId: stores[1].id });
+        expect(host.querySelector('[aria-label="调整活动关联店铺"]')).not.toBeNull();
+        await act(async () => {
+            unlinks[0].respond();
+            await settle();
+        });
+        expect(host.querySelector('[aria-label="调整活动关联店铺"]')).toBeNull();
+        expect(host.textContent).toContain('已移除「合成多店活动」与「合成乙店」的关联');
+        expect(deletions).toHaveLength(0);
+        await act(async () => {
+            requests[1].fail();
+            await settle();
+        });
+        expect(host.textContent).toContain('操作已完成，但最新数据读取失败');
+        await click('重试本页');
+        await respond(requests[2], data([{ ...shared, stores: [stores[0]], shared: false }]));
+        expect(row('合成多店活动').textContent).not.toContain('合成乙店');
+        expect(unlinks).toHaveLength(1);
+    });
+
+    it('keeps rejected association changes visible and hides unlink controls in a store context', async () => {
+        await render();
+        const shared = item('合成多店活动', { stores, shared: true });
+        await respond(requests[0], data([shared]));
+        await click('调整关联');
+        const select = host.querySelector<HTMLSelectElement>('select[aria-label="移除关联的店铺"]')!;
+        await act(async () => {
+            select.value = stores[0].id;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        await click('确认移除关联');
+        await act(async () => {
+            unlinks[0].fail();
+            await settle();
+        });
+        expect(host.querySelector('[aria-label="调整活动关联店铺"]')).not.toBeNull();
+        expect(host.textContent).toContain('合成关联权限拒绝');
+        expect(host.textContent).not.toContain('已移除');
+        expect(requests).toHaveLength(1);
+        await click('取消');
+        scope.value = 'synthetic-a:zh_Hans';
+        await render(stores[0].id);
+        await respond(requests.at(-1)!, data([shared], 1, stores[0].id));
+        expect([...host.querySelectorAll('button')].some(node => node.textContent === '调整关联')).toBe(
+            false,
+        );
+    });
+
     it('preserves accepted deletion feedback when readback fails and retries only the read', async () => {
         await render();
         const promotion = item('合成待删除活动');
