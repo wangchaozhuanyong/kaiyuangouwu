@@ -536,7 +536,15 @@ arguments remain explicit gaps rather than inferred ownership.
 Creation-lineage reads select only audit IDs, store/resource IDs, event types
 and timestamps for the missing registrations in that same snapshot. No audit
 payload, actor details, reason text or credentials are selected. Customer,
-order, payment and inventory tables remain excluded. Translation fields are
+order, payment and inventory tables remain excluded. Import provenance reads
+only task IDs, channel IDs, state, timestamps, file hashes and whitelisted
+resource ID paths from normalized input and before/after snapshots. Whole import
+JSON, descriptions, prices and digital fulfillment data are never selected.
+Only matches to the missing registrations are returned; a historical reference
+proves use in a task, not original creation or ownership. Invalid JSON, malformed
+IDs, oversized arrays and truncated ID fields stop the audit. Import ID fields
+are capped at 65,537 characters, 1,000 IDs each and 8 MiB total in-process input.
+Translation fields are
 capped at 65,537 characters and 8 MiB total in-process input; truncated fields
 are marked incomplete. Each SELECT has a 3-second MySQL execution limit; the process limit is
 90 seconds. Reads stop above 10,000 rows per table, 50,000 total rows, 500 missing
