@@ -170,6 +170,83 @@ test('static deployment runs target control files while preserving the active ba
     assert.equal(git('rev-parse', 'HEAD'), active);
 });
 
+test('missing frontend artifacts build their prerequisites without rebuilding restored apps', t => {
+    const workflow = readFileSync(
+        new URL('../.github/workflows/deploy_frontends.yml', import.meta.url),
+        'utf8',
+    );
+    const step = workflow
+        .split('            - name: Reuse checked frontend artifacts or build only missing artifacts\n')[1]
+        ?.split('\n            - name:')[0];
+    const script = step?.split('              run: |\n')[1];
+    assert.ok(script, 'Missing frontend artifact restoration/build step');
+    const temporaryRoot = fileURLToPath(new URL('../.local-validation/frontend-controls/', import.meta.url));
+    mkdirSync(temporaryRoot, { recursive: true });
+    const root = realpathSync(mkdtempSync(join(temporaryRoot, 'build-')));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const command = `set -Eeuo pipefail
+node() {
+    printf '%s:%s\\n' "$2" "$3" >> "$BUILD_EVENTS"
+    if [[ "$2" == restore ]]; then
+        case ",$RESTORED_APPS," in
+            *,"$3",*) printf 'restored=true\\n' ;;
+            *) printf 'restored=false\\n' ;;
+        esac
+    fi
+}
+bun() { printf 'bun %s\\n' "$*" >> "$BUILD_EVENTS"; }
+git() { return 0; }
+${script.replaceAll(/^                  /gmu, '')}`;
+    const scenarios = [
+        {
+            components: 'next-admin,storefront',
+            restored: '',
+            events: [
+                'restore:next-admin',
+                'bun install --frozen-lockfile --linker=hoisted',
+                'bun run build:core-common',
+                'bun run --cwd packages/next-admin build',
+                'stage:next-admin',
+                'restore:storefront',
+                'bun run --cwd packages/storefront build',
+                'stage:storefront',
+            ],
+        },
+        {
+            components: 'next-admin,storefront',
+            restored: 'next-admin,storefront',
+            events: ['restore:next-admin', 'stage:next-admin', 'restore:storefront', 'stage:storefront'],
+        },
+        {
+            components: 'storefront',
+            restored: '',
+            events: [
+                'restore:storefront',
+                'bun install --frozen-lockfile --linker=hoisted',
+                'bun run --cwd packages/storefront build',
+                'stage:storefront',
+            ],
+        },
+    ];
+    for (const [index, scenario] of scenarios.entries()) {
+        const events = join(root, `events-${index}.txt`);
+        const result = spawnSync('bash', ['-c', command], {
+            encoding: 'utf8',
+            cwd: root,
+            env: {
+                ...process.env,
+                RUNNER_TEMP: root,
+                COMPONENTS: scenario.components,
+                RESTORED_APPS: scenario.restored,
+                BUILD_EVENTS: events,
+                CI_RUN_ID: '123',
+            },
+        });
+        assert.equal(result.status, 0, result.stderr);
+        assert.deepEqual(readFileSync(events, 'utf8').trim().split('\n'), scenario.events);
+    }
+});
+
 const sha = value => createHash('sha256').update(value).digest('hex');
 function fixture(t) {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'frontend-release-')));
