@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
     ArrowRight,
-    ArrowUpRight,
     BookOpen,
     Check,
     CheckCircle2,
@@ -9,18 +8,26 @@ import {
     CircleAlert,
     CircleHelp,
     Clock3,
+    Headphones,
     LockKeyhole,
     Search,
     ShieldCheck,
+    ShoppingBag,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { LocalePreferencesSheet, LocalePreferencesTrigger } from '../../components/common/locale-preferences';
+import {
+    ShopAbuseChallengeControl,
+    useShopAbuseChallenge,
+} from '../../components/common/shop-abuse-challenge';
 import { storefrontQueryPresentation } from '../../loading-state';
 import { usePageReadiness } from '../../page-readiness';
 import { storefrontQueryKeys } from '../../query-client';
+import { shopAbuseFailure } from '../../shop-abuse-failure';
+import { storefrontErrorMessage } from '../../storefront-errors';
 import { SubHeader, SubpageBody } from '../../storefront-ui/page-shell';
-import { type StorefrontLanguage } from '../../types';
+import { type CollectionSummary, type StorefrontContentBlock, type StorefrontLanguage } from '../../types';
 
 import {
     type GptRechargeClient,
@@ -31,7 +38,9 @@ import {
     rechargePlans,
     type RechargeTask,
 } from './contracts';
-import { rechargeCopy, rechargeFaq, rechargeStateCopy } from './copy';
+import { rechargeCopy, rechargeStateCopy } from './copy';
+import { GptRechargeGuide } from './gpt-recharge-guide';
+import { resolveGptRechargeProductsCollection } from './gpt-recharge-navigation';
 import './gpt-recharge.css';
 
 interface RechargeLocalePreferences {
@@ -53,6 +62,10 @@ export function GptRechargePage({
     activeTab,
     onTabChange,
     localePreferences,
+    onViewProducts,
+    onContactSupport,
+    productCollections = [],
+    productContentBlocks = [],
 }: {
     client: GptRechargeClient;
     marketKey: string;
@@ -62,8 +75,17 @@ export function GptRechargePage({
     onBack: () => void;
     initialTab?: RechargeTab;
     localePreferences?: RechargeLocalePreferences;
+    onViewProducts?: (collectionId: string) => void;
+    onContactSupport?: () => void;
+    productCollections?: readonly CollectionSummary[];
+    productContentBlocks?: readonly StorefrontContentBlock[];
 }) {
     const t = rechargeCopy(language);
+    const codeChallenge = useShopAbuseChallenge(client, language);
+    const queryChallenge = useShopAbuseChallenge(client, language);
+    const submitChallenge = useShopAbuseChallenge(client, language);
+    const productsCollection = resolveGptRechargeProductsCollection(productCollections, productContentBlocks);
+    const canViewProducts = Boolean(productsCollection && onViewProducts);
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const [localTab, setLocalTab] = useState(initialTab);
     const tab = activeTab ?? localTab;
@@ -160,6 +182,8 @@ export function GptRechargePage({
         }
     }
     function changeCode(value: string) {
+        codeChallenge.reset();
+        submitChallenge.reset();
         requestVersion.current++;
         setCode(value);
         setVerified(null);
@@ -169,15 +193,21 @@ export function GptRechargePage({
     async function verify() {
         const version = requestVersion.current;
         await run('verify', async () => {
-            const result = await client.verify(code.trim());
+            const checked = await codeChallenge.execute('RECHARGE_CODE', code.trim(), proof =>
+                client.verify(code.trim(), ...(proof ? ([proof] as const) : [])),
+            );
+            if (!checked.executed) return;
+            const result = checked.value;
             if (!mounted.current || version !== requestVersion.current) return;
             setVerified(result);
             setPlan(result.plan);
             if (result.status !== 'available') {
                 setQueryCode(code);
                 setTab('query');
-                const current = await client.query(code.trim());
-                if (mounted.current) setQueryResult(current);
+                const current = await queryChallenge.execute('RECHARGE_CODE', code.trim(), proof =>
+                    client.query(code.trim(), ...(proof ? ([proof] as const) : [])),
+                );
+                if (mounted.current && current.executed) setQueryResult(current.value);
             }
         });
     }
@@ -195,13 +225,21 @@ export function GptRechargePage({
             return;
         await run('submit', async () => {
             try {
-                const next = await client.submit(code.trim(), session);
+                const accepted = await submitChallenge.execute('RECHARGE_SUBMIT', code.trim(), proof =>
+                    client.submit(code.trim(), session, ...(proof ? ([proof] as const) : [])),
+                );
+                if (!accepted.executed) return;
+                const next = accepted.value;
                 if (mounted.current) {
                     setTask(next);
                     setSession('');
                     setConfirmed(false);
                 }
             } catch (reason) {
+                if (shopAbuseFailure(reason)) {
+                    if (mounted.current) setError(storefrontErrorMessage(reason, language));
+                    return;
+                }
                 if (
                     mounted.current &&
                     (reason as { errorCode?: string })?.errorCode === 'GPT_RECHARGE_NOT_ACCEPTED'
@@ -231,14 +269,16 @@ export function GptRechargePage({
     }
     const query = () =>
         run('query', async () => {
-            const next = await client.query(queryCode.trim());
-            if (mounted.current) setQueryResult(next);
+            const next = await queryChallenge.execute('RECHARGE_CODE', queryCode.trim(), proof =>
+                client.query(queryCode.trim(), ...(proof ? ([proof] as const) : [])),
+            );
+            if (mounted.current && next.executed) setQueryResult(next.value);
         });
     const isLocked = Boolean(verified || busy || task || uncertain);
     return (
         <main className="page subpage gpt-recharge-page">
             <SubHeader
-                title={t('GPT自助充值', 'GPT Recharge')}
+                title={t('ChatGPT自助充值', 'ChatGPT Recharge')}
                 language={language}
                 onBack={onBack}
                 actionVisibility="mobile"
@@ -254,6 +294,50 @@ export function GptRechargePage({
                 }
             />
             <SubpageBody>
+                <div className="gpt-recharge-intro">
+                    <ul className="gpt-recharge-trust" aria-label={t('服务特点', 'Service features')}>
+                        {[
+                            { Icon: ShieldCheck, label: t('安全加密', 'Encrypted') },
+                            { Icon: CheckCircle2, label: t('自动处理', 'Automated') },
+                            { Icon: Clock3, label: t('进度可查', 'Track progress') },
+                            { Icon: LockKeyhole, label: t('套餐锁定', 'Plan protected') },
+                        ].map(({ Icon, label }) => (
+                            <li key={label}>
+                                <Icon size={16} aria-hidden="true" />
+                                <span>{label}</span>
+                            </li>
+                        ))}
+                    </ul>
+                    <div className="gpt-recharge-quick-links">
+                        <button
+                            type="button"
+                            className="secondary-action"
+                            onClick={() => productsCollection && onViewProducts?.(productsCollection.id)}
+                            disabled={!canViewProducts}
+                            title={
+                                canViewProducts
+                                    ? undefined
+                                    : t(
+                                          '商品分类暂不可用，请稍后重试',
+                                          'Product category is temporarily unavailable',
+                                      )
+                            }
+                        >
+                            <ShoppingBag size={17} aria-hidden="true" />
+                            {t('查看商品', 'View products')}
+                            <ChevronRight size={15} aria-hidden="true" />
+                        </button>
+                        <button
+                            type="button"
+                            className="tertiary-action"
+                            onClick={onContactSupport}
+                            disabled={!onContactSupport}
+                        >
+                            <Headphones size={17} aria-hidden="true" />
+                            {t('联系客服', 'Contact support')}
+                        </button>
+                    </div>
+                </div>
                 <section className="gpt-recharge-surface">
                     <nav className="gpt-recharge-tabs" aria-label={t('充值功能', 'Recharge sections')}>
                         {(['recharge', 'query', 'guide'] as const).map((key, index) => (
@@ -415,6 +499,10 @@ export function GptRechargePage({
                                                     : t('验证', 'Verify')}
                                             </button>
                                         </div>
+                                        <ShopAbuseChallengeControl
+                                            challenge={codeChallenge}
+                                            language={language}
+                                        />
                                     </form>
                                     {verified && (
                                         <p className="gpt-recharge-valid" role="status">
@@ -495,6 +583,11 @@ export function GptRechargePage({
                                             {t('我已核对账号与套餐', 'I have checked the account and plan')}
                                         </span>
                                     </label>
+                                    <ShopAbuseChallengeControl
+                                        challenge={submitChallenge}
+                                        language={language}
+                                        onSubmit={() => void submit()}
+                                    />
                                     <button
                                         className="primary-action gpt-recharge-submit"
                                         type="button"
@@ -525,8 +618,10 @@ export function GptRechargePage({
                         ))}
                     {tab === 'query' && (
                         <div className="gpt-recharge-query">
-                            <Search size={26} />
-                            <h2>{t('兑换码查询', 'Code lookup')}</h2>
+                            <h2 className="gpt-recharge-query-title">
+                                <Search size={20} aria-hidden="true" />
+                                {t('兑换码查询', 'Code lookup')}
+                            </h2>
                             <p>
                                 {t(
                                     '输入原兑换码，查看套餐与充值进度。',
@@ -545,6 +640,7 @@ export function GptRechargePage({
                                         id="gpt-query"
                                         value={queryCode}
                                         onChange={event => {
+                                            queryChallenge.reset();
                                             setQueryCode(event.target.value);
                                             setQueryResult(null);
                                         }}
@@ -554,6 +650,7 @@ export function GptRechargePage({
                                         placeholder={t('输入需要查询的兑换码', 'Enter the code to look up')}
                                     />
                                 </label>
+                                <ShopAbuseChallengeControl challenge={queryChallenge} language={language} />
                                 <button
                                     className="primary-action"
                                     disabled={!queryCode.trim() || Boolean(busy)}
@@ -586,97 +683,11 @@ export function GptRechargePage({
                         </div>
                     )}
                     {tab === 'guide' && (
-                        <div className="gpt-recharge-guide">
-                            <h2>{t('使用说明', 'How it works')}</h2>
-                            <ol className="gpt-recharge-guide-steps">
-                                {[
-                                    [
-                                        t('准备兑换码', 'Prepare your code'),
-                                        t(
-                                            '在充值页填写购买后收到的兑换码，点击验证。',
-                                            'Enter your purchased redemption code and select Verify.',
-                                        ),
-                                    ],
-                                    [
-                                        t('登录目标账号', 'Sign in to the target account'),
-                                        <>
-                                            {t('打开 ', 'Open ')}
-                                            <a
-                                                href="https://chatgpt.com/"
-                                                target="_blank"
-                                                rel="noreferrer noopener"
-                                            >
-                                                ChatGPT <ArrowUpRight size={14} />
-                                            </a>
-                                            {t(
-                                                '，确认当前登录的是需要充值的账号。',
-                                                ' and check that you are signed in to the account you want to recharge.',
-                                            )}
-                                        </>,
-                                    ],
-                                    [
-                                        t('复制完整账号资料', 'Copy the complete account data'),
-                                        <>
-                                            {t('在同一浏览器打开', 'In the same browser, open the ')}
-                                            <a
-                                                href="https://chatgpt.com/api/auth/session"
-                                                target="_blank"
-                                                rel="noreferrer noopener"
-                                            >
-                                                {t('账号资料页面', 'session page')} <ArrowUpRight size={14} />
-                                            </a>
-                                            {t(
-                                                '，全选并复制完整 JSON。手机可长按文本后全选。',
-                                                ' and copy the complete JSON. On mobile, long-press the text and select all.',
-                                            )}
-                                        </>,
-                                    ],
-                                    [
-                                        t('粘贴并核对', 'Paste and check'),
-                                        t(
-                                            '粘贴到账号资料输入框，核对识别的账号与套餐，勾选确认。',
-                                            'Paste the data, check the account and plan, then tick the confirmation box.',
-                                        ),
-                                    ],
-                                    [
-                                        t('提交充值', 'Submit recharge'),
-                                        t(
-                                            '点击“充值提交”，等待处理。处理中或待核对时不要重复提交。',
-                                            'Select Submit recharge and wait. Do not resubmit while processing or awaiting review.',
-                                        ),
-                                    ],
-                                    [
-                                        t('查询结果', 'Check the result'),
-                                        t(
-                                            '用原兑换码随时查询。成功后前往 ChatGPT 确认订阅状态。',
-                                            'Use the original code to check progress. After completion, confirm your subscription in ChatGPT.',
-                                        ),
-                                    ],
-                                ].map(([title, body], index) => (
-                                    <li key={index}>
-                                        <span className="gpt-recharge-step">{index + 1}</span>
-                                        <div>
-                                            <h3>{title}</h3>
-                                            <p>{body}</p>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ol>
-                            <p className="gpt-recharge-alert">
-                                <ShieldCheck size={18} />
-                                {t(
-                                    '账号资料含访问凭据，请勿截图、转发或发给客服。',
-                                    'Account data contains access credentials. Do not take screenshots, share it or send it to support.',
-                                )}
-                            </p>
-                            <h2 className="gpt-recharge-faq-title">{t('常见问题', 'Common questions')}</h2>
-                            {rechargeFaq(language).map(([title, body]) => (
-                                <details key={title}>
-                                    <summary>{title}</summary>
-                                    <p>{body}</p>
-                                </details>
-                            ))}
-                        </div>
+                        <GptRechargeGuide
+                            language={language}
+                            onRecharge={() => setTab('recharge')}
+                            onQuery={() => setTab('query')}
+                        />
                     )}
                 </section>
                 {tab === 'recharge' && (

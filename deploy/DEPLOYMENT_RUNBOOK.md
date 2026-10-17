@@ -109,6 +109,10 @@ Cloudflare DNS 和 EC2 实例详情才是当前源站地址的准确信息来源
 
 Nginx 会按 Cloudflare 官方 IPv4/IPv6 网段恢复 `CF-Connecting-IP`，按真实访客 IP 限流，并拒绝非 Cloudflare 来源直接访问 HTTPS 源站（仅放行本机回环健康检查）。每次发布 Nginx 配置前，必须对照 `https://www.cloudflare.com/ips-v4` 与 `https://www.cloudflare.com/ips-v6` 更新 `deploy/nginx/damatong.conf`，执行 `nginx -t` 后再 reload。AWS 安全组仍应把 `443/tcp` 限制到相同 Cloudflare 网段，形成网络层和 Nginx 双重限制。
 
+Shop API 的共享安全预算使用应用的 `req.ip`。`location = /shop-api` 必须只发送一个 `X-Forwarded-For: $remote_addr`，同时设置 `X-Real-IP` 并清除 `Forwarded`；这里的 `$remote_addr` 已由上面的可信 realip 规则恢复。此 location 明确声明四个代理头，不加载发行版 `proxy_params`：不能先 include 可能含 `$proxy_add_x_forwarded_for` 的文件再追加同名指令，同层重复定义会产生重复头，不能视为后者覆盖前者。定向回归：`node --test --test-name-pattern='Shop API client IP' packages/dev-server/scripts/deployment-security.spec.mjs`。
+
+发布时仍须只读确认应用监听 `127.0.0.1:3002`、该端口不对公网开放、生产 `VENDURE_TRUST_PROXY` 与实际一跳 Nginx 拓扑匹配，并使用上面的隔离候选验证器检查配置后才 reload。本机回环被允许注入测试用 `CF-Connecting-IP`，因此主机上的其他进程属于可信边界；新增反向代理或负载均衡必须重新审核可信网段与转发头链。仓库定向测试不等于线上配置、Cloudflare 网段和安全组已经验收；本修改也不改变开发环境的 `trustProxy` 设置。
+
 ### Cloudflare 店铺域名自动化
 
 后台一键绑定使用 Cloudflare for SaaS。上线前需要在 Cloudflare 完成一次性平台配置：

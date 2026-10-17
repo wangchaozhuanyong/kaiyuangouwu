@@ -66,6 +66,8 @@ const publicQueries = new Set([
     'orderAdditionalPaymentQuote',
 ]);
 const publicMutations = new Set([
+    // Rate-limited, short-lived and bound to source, action, target and store.
+    'createShopAbuseChallenge',
     // Code-bound recharge admission, ownership and rate limits remain in its service.
     'verifyGptRechargeCode',
     'queryGptRechargeCode',

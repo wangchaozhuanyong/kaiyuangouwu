@@ -1,3 +1,4 @@
+import type { ShopAbuseProof } from '../shop-abuse';
 import type {
     MarketConfig,
     Order,
@@ -19,6 +20,7 @@ export interface ShopApiContext {
         signal?: AbortSignal,
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
+        proof?: ShopAbuseProof,
     ) => Promise<T>;
     request: <T>(
         query: string,
@@ -27,6 +29,7 @@ export interface ShopApiContext {
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
         readCurrencyCode?: string,
+        proof?: ShopAbuseProof,
     ) => Promise<T>;
     assertCart: (result: StorefrontCart & ErrorResult) => StorefrontCart;
     assertCheckoutSession: (result: StorefrontCheckoutSession & ErrorResult) => StorefrontCheckoutSession;

@@ -1,0 +1,59 @@
+.shop-abuse-challenge {
+    display: grid;
+    gap: var(--space-8);
+    margin-block: var(--space-12);
+    min-width: 0;
+    color: var(--text);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.shop-abuse-challenge label {
+    font-size: var(--type-label-size);
+    line-height: var(--type-label-leading);
+    font-weight: var(--font-weight-medium);
+}
+.shop-abuse-challenge-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-12);
+}
+.shop-abuse-challenge-row img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--line-subtle);
+    border-radius: var(--skin-control-radius);
+}
+.shop-abuse-challenge button {
+    min-height: 44px;
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+}
+.shop-abuse-challenge input {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: var(--space-8) var(--space-12);
+    border: 1px solid var(--line);
+    border-radius: var(--skin-control-radius);
+    background: var(--control-surface);
+    color: var(--text);
+    font-size: var(--type-input-size);
+    line-height: var(--type-input-leading);
+}
+.shop-abuse-challenge p {
+    margin: 0;
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.shop-abuse-challenge input:focus-visible,
+.shop-abuse-challenge button:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}

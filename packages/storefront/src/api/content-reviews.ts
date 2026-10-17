@@ -293,65 +293,20 @@ export class ContentReviewsApi extends BaseDomainApi {
         };
         const loadConfig = (includeProvinces: boolean) =>
             this.request<StorefrontConfigResponse>(
-                `
-            query StorefrontConfig {
-                activeChannel {
-                    code
-                    defaultLanguageCode
-                    defaultCurrencyCode
-                    customFields {
-                        storefrontNameZh
-                        storefrontNameEn
-                    }
-                }
-                availableCountries {
-                    code
-                    name
-                }
-                ${
-                    includeProvinces
-                        ? `availableStorefrontProvinces {
-                    code
-                    name
-                    countryCode
-                }`
-                        : ''
-                }
-                storefrontBranding {
-                    accessMode
-                    logoUrl
-                    logoOnLightUrl
-                    logoOnDarkUrl
-                    description
-                    tagline
-                    backgroundColor
-                    primaryColor
-                    accentColor
-                    highlightColor
-                    legalEntityName
-                    legalRegistrationCountry
-                    legalRegistrationNumber
-                    legalContactAddress
-                    supportEmail
-                    privacyEmail
-                }
-                storefrontCurrencyConfiguration {
-                    defaultCurrencyCode
-                    availableCurrencyCodes
-                    selectorEnabled
-                    cnyToMyrRate
-                    rateUpdatedAt
-                    usdtDisplayEnabled
-                    usdtMarkupPercent
-                    cnyPerUsdtRate
-                    myrPerUsdtRate
-                    usdtRateSource
-                    usdtRateUpdatedAt
-                    usdtRateAvailable
-                    usdtPaymentConfigured
-                }
-            }
-        `,
+                // Keep the always-loaded bootstrap query compact; the modern/fallback selections are unchanged.
+                `query StorefrontConfig {
+activeChannel { code defaultLanguageCode defaultCurrencyCode customFields { storefrontNameZh storefrontNameEn } }
+availableCountries { code name }
+${includeProvinces ? 'availableStorefrontProvinces { code name countryCode }' : ''}
+storefrontBranding {
+accessMode logoUrl logoOnLightUrl logoOnDarkUrl description tagline backgroundColor primaryColor accentColor highlightColor
+legalEntityName legalRegistrationCountry legalRegistrationNumber legalContactAddress supportEmail privacyEmail
+}
+storefrontCurrencyConfiguration {
+defaultCurrencyCode availableCurrencyCodes selectorEnabled cnyToMyrRate rateUpdatedAt usdtDisplayEnabled usdtMarkupPercent
+cnyPerUsdtRate myrPerUsdtRate usdtRateSource usdtRateUpdatedAt usdtRateAvailable usdtPaymentConfigured
+}
+}`,
                 undefined,
                 signal,
             );
@@ -389,15 +344,15 @@ export class ContentReviewsApi extends BaseDomainApi {
     async storefrontAccountContent(signal?: AbortSignal): Promise<StorefrontContentResponse> {
         const result = await this.request<Pick<StorefrontContentQueryResult, 'storefrontContent'>>(
             `query StorefrontAccountContent {
-                storefrontContent {
-                    id code type layoutVariant enabled position startsAt endsAt
-                    title subtitle body ctaLabel imageUrl backgroundColor textColor
-                    targetType targetValue settings
-                    items {
-                        id enabled position imageUrl targetType targetValue settings label description
-                    }
-                }
-            }`,
+storefrontContent {
+id code type layoutVariant enabled position startsAt endsAt
+title subtitle body ctaLabel imageUrl backgroundColor textColor
+targetType targetValue settings
+items {
+id enabled position imageUrl targetType targetValue settings label description
+}
+}
+}`,
             undefined,
             signal,
         );
@@ -510,41 +465,39 @@ description
                     throw fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError));
                 }
                 return this.request<StorefrontContentQueryResult>(
-                    `
-                query StorefrontContentLegacy {
-                    storefrontContentSettings {
-                        heroAutoplayIntervalSeconds
-                    }
-                    storefrontContent {
-                        id
-                        code
-                        type
-                        enabled
-                        position
-                        startsAt
-                        endsAt
-                        imageUrl
-                        backgroundColor
-                        textColor
-                        targetType
-                        targetValue
-                        title
-                        subtitle
-                        body
-                        ctaLabel
-                        items {
-                            id
-                            enabled
-                            position
-                            imageUrl
-                            targetType
-                            targetValue
-                            label
-                            description
-                        }
-                    }
-                }
-            `,
+                    `query StorefrontContentLegacy {
+storefrontContentSettings {
+heroAutoplayIntervalSeconds
+}
+storefrontContent {
+id
+code
+type
+enabled
+position
+startsAt
+endsAt
+imageUrl
+backgroundColor
+textColor
+targetType
+targetValue
+title
+subtitle
+body
+ctaLabel
+items {
+id
+enabled
+position
+imageUrl
+targetType
+targetValue
+label
+description
+}
+}
+}`,
                     undefined,
                     signal,
                 );

@@ -51,6 +51,7 @@ export function isOperationalStorefront(input: OperationalStorefrontInput): bool
 }
 
 const legacyDefaultChannelFields = new Set([
+    'createShopAbuseChallenge',
     'me',
     'activeCustomer',
     'myCustomerAvatar',

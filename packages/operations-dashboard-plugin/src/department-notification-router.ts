@@ -75,6 +75,7 @@ const routeDefinitions: readonly DepartmentRouteDefinition[] = [
     route('ai.access.unavailable', 'P1', 'TECH', ['DATA_FINANCE'], true, 60),
     route('ai.service.unavailable', 'P0', 'TECH', ['SALES'], true, 0),
     route('security.login.failures', 'P1', 'GOVERNANCE', ['TECH'], true, 60),
+    route('security.storefront.abuse', 'P1', 'GOVERNANCE', ['TECH'], true, 60),
     route('security.admin.changed', 'P2', 'GOVERNANCE', ['TECH'], false, null),
     route('security.factor.changed', 'P1', 'GOVERNANCE', ['TECH'], true, 60),
     route('security.api_key.changed', 'P2', 'GOVERNANCE', ['TECH'], false, null),

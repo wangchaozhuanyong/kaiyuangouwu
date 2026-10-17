@@ -34,7 +34,6 @@ import type {
     StorefrontConfig,
     StorefrontContentResponse,
     StorefrontCouponCampaign,
-    StorefrontRegistrationConsentInput,
     StorefrontUsdtCheckoutQuote,
     SubmitAfterSalesReturnShipmentInput,
     SubmitStorefrontReviewInput,
@@ -49,6 +48,7 @@ import { CatalogApi } from './api/catalog';
 import { ContentReviewsApi } from './api/content-reviews';
 import {
     API_URL,
+    assertNoShopApiError,
     authTokenStorageKey,
     calculateStorefrontRealtimeRetry,
     createRequestSignal,
@@ -61,9 +61,10 @@ import {
     ShopApiTimeoutError,
     StorefrontRealtimeConnectionError,
 } from './api/helpers';
-import { type AccountApi, lazyAccountApi } from './api/lazy-account';
+import { lazyAccountApi, type AccountApi } from './api/lazy-account';
 import { publishAuthSessionChange } from './auth-session-sync';
 import { StorefrontRealtimeEvent } from './realtime-updates';
+import { shopAbuseHeaders, type ShopAbuseClient, type ShopAbuseProof } from './shop-abuse';
 
 export {
     calculateStorefrontRealtimeRetry,
@@ -98,8 +99,8 @@ export class ShopApi {
             getAuthToken: () => this.authTokens.value,
             createAuthTokenCapture: () => this.authTokens.createCapture(),
             clearAuthToken: () => this.authTokens.clear(),
-            request: (q, v, s, t, r, c) => this.request(q, v, s, t, r, false, c),
-            authenticationRequest: (q, v, s, t, r) => this.request(q, v, s, t, r, true),
+            request: (q, v, s, t, r, c, p) => this.request(q, v, s, t, r, false, c, p),
+            authenticationRequest: (q, v, s, t, r, p) => this.request(q, v, s, t, r, true, undefined, p),
             assertCart: res => this.assertCart(res),
             assertCheckoutSession: res => this.assertCheckoutSession(res),
             assertOrder: res => this.assertOrder(res),
@@ -323,19 +324,15 @@ export class ShopApi {
 
     submitReview = (input: SubmitStorefrontReviewInput) => this.contentReviewsApi.submitReview(input);
 
-    async login(emailAddress: string, password: string, rememberMe = true): Promise<void> {
-        await this.accountApi.login(emailAddress, password, rememberMe);
+    login: AccountApi['login'] = async (...args) => {
+        await this.accountApi.login(...args);
         this.publishCookieAuthenticationChange();
-    }
+    };
 
-    async authenticateWithGoogle(
-        credential: string,
-        consent: StorefrontRegistrationConsentInput,
-        options: { rememberMe?: boolean; inviteCode?: string; referralSource?: string } = {},
-    ): Promise<void> {
-        await this.accountApi.authenticateWithGoogle(credential, consent, options);
+    authenticateWithGoogle: AccountApi['authenticateWithGoogle'] = async (...args) => {
+        await this.accountApi.authenticateWithGoogle(...args);
         this.publishCookieAuthenticationChange();
-    }
+    };
 
     async referralProgram(signal?: AbortSignal): Promise<ReferralProgram> {
         return (await this.createReferralsApi()).referralProgram(signal);
@@ -417,23 +414,21 @@ export class ShopApi {
         return (await this.createReferralsApi()).recordAnalyticsConsent(input);
     }
 
-    async refreshCustomerVerification(emailAddress: string, signal?: AbortSignal): Promise<void> {
-        return this.accountApi.refreshCustomerVerification(emailAddress, signal);
-    }
+    refreshCustomerVerification: AccountApi['refreshCustomerVerification'] = (...args) =>
+        this.accountApi.refreshCustomerVerification(...args);
 
-    async verifyCustomerAccount(token: string, password?: string, signal?: AbortSignal): Promise<void> {
-        await this.accountApi.verifyCustomerAccount(token, password, signal);
+    verifyCustomerAccount: AccountApi['verifyCustomerAccount'] = async (...args) => {
+        await this.accountApi.verifyCustomerAccount(...args);
         this.publishCookieAuthenticationChange();
-    }
+    };
 
-    async requestPasswordReset(emailAddress: string): Promise<void> {
-        return this.accountApi.requestPasswordReset(emailAddress);
-    }
+    requestPasswordReset: AccountApi['requestPasswordReset'] = (...args) =>
+        this.accountApi.requestPasswordReset(...args);
 
-    async resetPassword(token: string, password: string): Promise<void> {
-        await this.accountApi.resetPassword(token, password);
+    resetPassword: AccountApi['resetPassword'] = async (...args) => {
+        await this.accountApi.resetPassword(...args);
         this.publishCookieAuthenticationChange();
-    }
+    };
 
     async logout(): Promise<void> {
         this.cartCheckoutApi.controller?.reset();
@@ -629,9 +624,11 @@ export class ShopApi {
         resultUnknownOnTimeout = false,
         authenticates = false,
         readCurrencyCode?: string,
+        proof?: ShopAbuseProof,
     ): Promise<T> {
         const captureAuthToken = this.authTokens.createCapture(authenticates);
         const headers: Record<string, string> = {
+            ...shopAbuseHeaders(proof),
             'content-type': 'application/json',
             'language-code': this.languageCode,
         };
@@ -703,13 +700,9 @@ export class ShopApi {
         return mail.queryMails(code, signal);
     }
 
-    private assertNoError(result: ErrorResult): void {
-        if (result.errorCode) {
-            throw new ShopApiError(
-                result.causeCode ?? result.errorCode,
-                result.message ?? result.errorCode,
-                result.authenticationError,
-            );
-        }
-    }
+    private assertNoError = assertNoShopApiError;
+    createShopAbuseChallenge: ShopAbuseClient['createShopAbuseChallenge'] = async (...args) => {
+        const { requestShopAbuseChallenge } = await import('./api/shop-abuse');
+        return requestShopAbuseChallenge(this, ...args);
+    };
 }

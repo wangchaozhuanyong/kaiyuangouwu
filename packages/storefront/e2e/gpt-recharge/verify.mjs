@@ -21,7 +21,7 @@ try {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await page.goto(`http://127.0.0.1:5184/e2e/gpt-recharge/?skin=${skin}`);
-        await page.getByText('GPT自助充值', { exact: true }).waitFor();
+        await page.getByText('ChatGPT自助充值', { exact: true }).waitFor();
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: path.join(output, `recharge-${width}-${skin}.png`), fullPage: true });
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
@@ -68,7 +68,7 @@ try {
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: path.join(output, `query-${width}-${skin}.png`), fullPage: true });
         await page.getByRole('button', { name: '使用说明', exact: true }).click();
-        await page.getByRole('heading', { name: '使用说明', exact: true }).waitFor();
+        await page.getByRole('heading', { name: '充值使用说明', exact: true }).waitFor();
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: path.join(output, `guide-${width}-${skin}.png`), fullPage: true });
         if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth))

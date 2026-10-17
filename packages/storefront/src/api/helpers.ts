@@ -1,3 +1,4 @@
+import { shopAbuseMetadata, type ShopAbuseAction } from '../shop-abuse';
 import { ShopApiGraphQlError } from '../shop-api-errors';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import {
@@ -37,7 +38,10 @@ export interface StorefrontContentQueryResult {
 
 export interface GraphQlResponse<T> {
     data?: T;
-    errors?: Array<{ message: string; extensions?: { code?: string } }>;
+    errors?: Array<{
+        message: string;
+        extensions?: { code?: string; action?: unknown; retryAfterSeconds?: unknown };
+    }>;
 }
 
 export interface ErrorResult {
@@ -46,6 +50,8 @@ export interface ErrorResult {
     message?: string;
     authenticationError?: string;
     causeCode?: string;
+    action?: unknown;
+    retryAfterSeconds?: unknown;
 }
 
 export function authTokenStorageKey(marketCode: string): string | null {
@@ -66,13 +72,17 @@ export function readSessionAuthToken(storageKey: string | null): string | null {
 }
 
 export class ShopApiError extends Error {
+    readonly action?: ShopAbuseAction;
+    readonly retryAfterSeconds?: number;
     constructor(
         public readonly errorCode: string,
         message: string,
         public readonly authenticationError?: string,
+        metadata?: unknown,
     ) {
         super(message);
         this.name = 'ShopApiError';
+        Object.assign(this, shopAbuseMetadata(metadata));
     }
 }
 
@@ -252,10 +262,21 @@ export function parseShopApiResponse<T>(rawBody: string, status: number, ok: boo
                         error.extensions?.code ?? '',
                     ),
                 ),
+            body.errors[0].extensions,
         );
     }
     if (!ok || !body.data) {
         throw new ShopApiGraphQlError([`Shop API request failed (${status})`], status);
     }
     return body.data;
+}
+
+export function assertNoShopApiError(result: ErrorResult): void {
+    if (result.errorCode)
+        throw new ShopApiError(
+            result.causeCode ?? result.errorCode,
+            result.message ?? result.errorCode,
+            result.authenticationError,
+            result,
+        );
 }

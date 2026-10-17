@@ -11,6 +11,7 @@ import {
 } from '@vendure/core';
 import { StorefrontContentPlugin } from '@vendure/storefront-content-plugin';
 
+import { ShopAbuseProtectionPlugin } from '../abuse-protection/plugin';
 import { StorefrontClientPluginAccessService } from '../storefront-client-plugin-access.service';
 
 import { adminSchema, shopSchema } from './api-extensions';
@@ -84,7 +85,7 @@ export class GptRechargeAdminResolver {
 }
 
 @VendurePlugin({
-    imports: [PluginCommonModule, StorefrontContentPlugin],
+    imports: [PluginCommonModule, StorefrontContentPlugin, ShopAbuseProtectionPlugin],
     entities: [GptRechargeConfig, GptRechargeReceipt],
     providers: [GptRechargeService, StorefrontClientPluginAccessService],
     shopApiExtensions: { schema: shopSchema, resolvers: [GptRechargeShopResolver] },

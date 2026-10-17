@@ -156,6 +156,7 @@ import { AddStorefrontPaymentAttempts1791763200000 } from './1791763200000-add-s
 import { AddReferralPosterDesign1791849600000 } from './1791849600000-add-referral-poster-design';
 import { AddCatalogContinuousSync1792022400000 } from './1792022400000-add-catalog-continuous-sync';
 import { AddGptRecharge1792152000000 } from './1792152000000-add-gpt-recharge';
+import { AddShopAbuseProtection1792180800000 } from './1792180800000-add-shop-abuse-protection';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -316,4 +317,5 @@ export const devServerMigrations = [
     AddReferralPosterDesign1791849600000,
     AddCatalogContinuousSync1792022400000,
     AddGptRecharge1792152000000,
+    AddShopAbuseProtection1792180800000,
 ];

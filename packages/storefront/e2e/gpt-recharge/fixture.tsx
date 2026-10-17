@@ -1,4 +1,5 @@
 // organize-imports-ignore -- Keep the production stylesheet cascade.
+import type { ShopAbuseAction, ShopAbuseProof } from '../../src/shop-abuse';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
@@ -22,6 +23,8 @@ import {
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { createStorefrontQueryClient } from '../../src/query-client';
 import { StorefrontQueryFeedback } from '../../src/StorefrontQueryFeedback';
+
+import demoChallengeImage from './assets/abuse-demo.png?inline';
 
 import '../../src/storefront-styles';
 import '../../src/commerce-styles';
@@ -50,6 +53,8 @@ function Fixture() {
     const [language, setLanguage] = useState<'zh' | 'en'>(params.get('language') === 'en' ? 'en' : 'zh');
     const [currency, setCurrency] = useState('CNY');
     const [preferencesOpen, setPreferencesOpen] = useState(false);
+    const [previewDestination, setPreviewDestination] = useState('');
+    const [demoCalls, setDemoCalls] = useState(0);
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
     const localePreferences = {
         storefrontName: '店铺预览',
@@ -63,6 +68,38 @@ function Fixture() {
     const [key, setKey] = useState(0);
     const client = useMemo<GptRechargeClient>(() => {
         let lastPlan: RechargePlan = 'plus';
+        let challengeSequence = 0;
+        const spent = new Set<string>();
+        const issued = new Map<string, { action: string; target: string }>();
+        const limited = new Set<string>();
+        function admit(action: ShopAbuseAction, target: string, proof?: ShopAbuseProof) {
+            setDemoCalls(value => value + 1);
+            if (!params.get('abuse')) return;
+            const mode = params.get('abuse');
+            const reject = (errorCode: string, retryAfterSeconds = 0) => {
+                throw Object.assign(new Error('Synthetic security preflight rejection'), {
+                    errorCode,
+                    action,
+                    retryAfterSeconds,
+                });
+            };
+            if (mode === 'rate' || mode === 'unavailable') {
+                if (!limited.has(action)) {
+                    limited.add(action);
+                    reject(
+                        mode === 'rate' ? 'SHOP_ABUSE_RATE_LIMITED' : 'SHOP_ABUSE_UNAVAILABLE',
+                        mode === 'rate' ? 1 : 0,
+                    );
+                }
+                return;
+            }
+            if (!proof) reject('SHOP_ABUSE_CHALLENGE_REQUIRED');
+            if (!proof) return;
+            const binding = issued.get(proof.id);
+            const valid = binding?.action === action && binding.target === target && !spent.has(proof.id);
+            spent.add(proof.id);
+            if (!valid || proof.answer !== 'ABC234') reject('SHOP_ABUSE_CHALLENGE_INVALID');
+        }
         const task = () => ({
             id: 'DEMO-20261016-001',
             credential: 'preview-only',
@@ -72,18 +109,33 @@ function Fixture() {
         });
         return {
             config: () => Promise.resolve({ enabled: true, maintenance: false }),
-            verify: code => {
+            createShopAbuseChallenge: (action, target) => {
+                const id = (++challengeSequence).toString(16).padStart(48, '0');
+                issued.set(id, { action, target });
+                return Promise.resolve({
+                    id,
+                    imageDataUrl: demoChallengeImage,
+                    expiresAt: new Date(Date.now() + 120000).toISOString(),
+                });
+            },
+            verify: async (code, proof) => {
+                admit('RECHARGE_CODE', code, proof);
                 if (!code.startsWith('DEMO-')) return Promise.reject(new Error('Only demo codes'));
                 lastPlan = code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus';
                 return Promise.resolve({ plan: lastPlan, status: 'available' });
             },
-            submit: () => Promise.resolve(task()),
-            query: code =>
-                Promise.resolve({
+            submit: (code, _session, proof) => {
+                admit('RECHARGE_SUBMIT', code, proof);
+                return Promise.resolve(task());
+            },
+            query: (code, proof) => {
+                admit('RECHARGE_CODE', code, proof);
+                return Promise.resolve({
                     plan: code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus',
                     status: status === 'succeeded' ? 'used' : 'reserved',
                     task: task(),
-                }),
+                });
+            },
             task: () => Promise.resolve(task()),
         };
     }, [status, key]);
@@ -113,6 +165,11 @@ function Fixture() {
             >
                 <div className="gpt-preview-toolbar" hidden={params.get('presentation') === '1'}>
                     <span>设计预览 · 演示数据</span>
+                    {params.get('abuse') ? (
+                        <output data-demo-abuse-calls={demoCalls}>
+                            安全验证演示 · 答案 ABC234 · 已请求 {demoCalls} 次
+                        </output>
+                    ) : null}
                     <button onClick={() => void fill()}>填入演示资料</button>
                     <label>
                         结果演示
@@ -149,13 +206,43 @@ function Fixture() {
                         key={key}
                         marketKey={`preview:${currency}`}
                         language={language}
+                        initialTab={
+                            params.get('tab') === 'guide'
+                                ? 'guide'
+                                : params.get('tab') === 'query'
+                                  ? 'query'
+                                  : 'recharge'
+                        }
                         localePreferences={localePreferences}
                         client={client}
+                        productCollections={[
+                            {
+                                id: 'preview-chatgpt-category',
+                                name: 'GPT成品',
+                                slug: 'chatgpt',
+                                description: '',
+                                position: 0,
+                                parentId: 'preview-root',
+                                featuredAsset: null,
+                            },
+                        ]}
                         onBack={() => setKey(value => value + 1)}
+                        onViewProducts={() =>
+                            setPreviewDestination(
+                                t('演示：打开 ChatGPT 商品分类', 'Demo: open the ChatGPT product category'),
+                            )
+                        }
+                        onContactSupport={() =>
+                            setPreviewDestination(t('演示：打开本站客服页面', 'Demo: open store support'))
+                        }
                     />
                 </div>
-                <p className="gpt-preview-caption">
-                    {t('方案二 · 真实页面组件 · 演示数据', 'Concept 2 · Actual page component · Demo data')}
+                <p className="gpt-preview-caption" role="status">
+                    {previewDestination ||
+                        t(
+                            '方案二 · 真实页面组件 · 演示数据',
+                            'Concept 2 · Actual page component · Demo data',
+                        )}
                 </p>
                 {preferencesOpen && (
                     <LocalePreferencesSheet
