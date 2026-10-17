@@ -51,6 +51,35 @@ export const CATALOG_TABLES = {
     storefront_content_block_translation: ['id', 'baseId', 'body'],
     storefront_content_item_translation: ['id', 'baseId', 'description'],
     governance_audit_entry: ['id', 'channelId', 'resourceType', 'resourceId', 'eventType', 'createdAt'],
+    catalog_import_job: ['id', 'channelId', 'createdAt', 'state', 'fileHash'],
+    catalog_import_row: [
+        'id',
+        'jobId',
+        'createdAt',
+        'appliedAt',
+        'targetProductId',
+        'targetVariantId',
+        'normalizedData',
+        'beforeSnapshot',
+        'appliedSnapshot',
+    ],
+};
+// Whitelisted JSON paths only: never read whole import snapshots, which include
+// descriptions, prices and digital fulfillment data unrelated to this audit.
+const IMPORT_ID_FIELDS = {
+    normalizedData: [
+        ['resolvedFeaturedAssetId', '$.resolvedFeaturedAssetId', 'Asset', 'RESOLVED_INPUT', false],
+    ],
+    beforeSnapshot: [
+        ['beforeFeaturedAssetId', '$.productFeaturedAssetId', 'Asset', 'BEFORE', false],
+        ['beforeAssetIds', '$.productAssetIds', 'Asset', 'BEFORE', true],
+        ['beforeFacetValueIds', '$.productFacetValueIds', 'FacetValue', 'BEFORE', true],
+    ],
+    appliedSnapshot: [
+        ['afterFeaturedAssetId', '$.afterSnapshot.productFeaturedAssetId', 'Asset', 'AFTER', false],
+        ['afterAssetIds', '$.afterSnapshot.productAssetIds', 'Asset', 'AFTER', true],
+        ['afterFacetValueIds', '$.afterSnapshot.productFacetValueIds', 'FacetValue', 'AFTER', true],
+    ],
 };
 const RESOURCE_TYPES = {
     ProductOptionGroup: ['product_option_group', 'productOptionGroupId'],
@@ -112,6 +141,16 @@ export async function collectCatalogOwnershipEvidence(adapter) {
     for (const [table, columns] of Object.entries(CATALOG_TABLES)) {
         const selected = columns.map(column => {
             if (column === 'deletedAt') return `(${quote(column)} IS NOT NULL) AS deleted`;
+            if (table === 'catalog_import_row' && Object.hasOwn(IMPORT_ID_FIELDS, column))
+                return [
+                    `(${quote(column)} IS NULL OR JSON_VALID(${quote(column)})) AS ${quote(column + 'Valid')}`,
+                    ...IMPORT_ID_FIELDS[column].map(
+                        ([alias, jsonPath]) =>
+                            `LEFT(JSON_UNQUOTE(JSON_EXTRACT(
+                        CASE WHEN JSON_VALID(${quote(column)}) THEN ${quote(column)} ELSE '{}' END,
+                        '${jsonPath}')), 65537) AS ${quote(alias)}`,
+                    ),
+                ].join(', ');
             // Select only known mobile media fields, never the full settings payload.
             if (column === 'settings')
                 return `JSON_UNQUOTE(JSON_EXTRACT(
@@ -162,6 +201,9 @@ export async function collectCatalogOwnershipEvidence(adapter) {
                             '`body`',
                             '`source`',
                             '`preview`',
+                            '`normalizedData`',
+                            '`beforeSnapshot`',
+                            '`appliedSnapshot`',
                         ].includes(c),
                 )
                 .join(', ')}`,
@@ -221,6 +263,7 @@ export async function collectCatalogOwnershipEvidence(adapter) {
         resourceSummary[type] = summary;
     }
     assert.ok(missingRegistrations.length <= 500, 'Catalog candidate budget exceeded');
+    const importProvenance = collectImportResourceReferences(data, missingRegistrations);
     return {
         schema: 'vendure-catalog-ownership-evidence-v1',
         mode: 'READ_ONLY',
@@ -250,6 +293,75 @@ export async function collectCatalogOwnershipEvidence(adapter) {
         // Identifier-only evidence permits an independent offline reference/grant review without another DB read.
         data: supplementary.data,
         supplementaryReferences: supplementary.evidence,
+        importProvenance,
+    };
+}
+
+export function collectImportResourceReferences(data, candidates) {
+    const missing = new Set(candidates.map(r => r.resourceType + ':' + r.resourceId));
+    const jobs = new Map(data.catalog_import_job.map(job => [String(job.id), job]));
+    const references = [];
+    let scannedBytes = 0;
+    for (const row of data.catalog_import_row) {
+        const job = jobs.get(String(row.jobId));
+        assert.ok(job, 'Catalog import row has no task in the same snapshot');
+        for (const [column, fields] of Object.entries(IMPORT_ID_FIELDS)) {
+            assert.ok(Number(row[column + 'Valid']) === 1, 'Invalid catalog import snapshot JSON');
+            for (const [field, , resourceType, stage, array] of fields) {
+                const raw = row[field];
+                if (raw == null || raw === 'null') continue;
+                const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+                scannedBytes += Buffer.byteLength(text);
+                assert.ok(scannedBytes <= 8 * 1024 * 1024, 'Catalog import reference byte budget exceeded');
+                assert.ok(text.length <= 65536, 'Catalog import reference field was truncated');
+                let values = raw;
+                if (array && typeof raw === 'string') {
+                    try {
+                        values = JSON.parse(raw);
+                    } catch {
+                        values = null;
+                    }
+                }
+                if (!array) values = [values];
+                assert.ok(
+                    Array.isArray(values) &&
+                        values.length <= 1000 &&
+                        values.every(
+                            value =>
+                                (typeof value === 'string' || Number.isSafeInteger(value)) &&
+                                /^[1-9][0-9]{0,19}$/u.test(String(value)),
+                        ),
+                    'Invalid catalog import resource identifiers',
+                );
+                for (const resourceId of ids(values)) {
+                    if (!missing.has(resourceType + ':' + resourceId)) continue;
+                    references.push({
+                        resourceType,
+                        resourceId,
+                        jobId: String(job.id),
+                        rowId: String(row.id),
+                        jobChannelId: String(job.channelId),
+                        stage,
+                        field,
+                        targetProductId: row.targetProductId == null ? null : String(row.targetProductId),
+                        targetVariantId: row.targetVariantId == null ? null : String(row.targetVariantId),
+                        appliedAt: row.appliedAt ?? null,
+                    });
+                    assert.ok(references.length <= 10000, 'Catalog import reference result budget exceeded');
+                }
+            }
+        }
+    }
+    const matchedJobs = new Set(references.map(r => r.jobId));
+    return {
+        coverage: 'WHITELISTED_IMPORT_INPUT_BEFORE_AND_AFTER_RESOURCE_IDS',
+        jobsRead: jobs.size,
+        rowsRead: data.catalog_import_row.length,
+        matchedResourceCount: new Set(references.map(r => r.resourceType + ':' + r.resourceId)).size,
+        jobs: data.catalog_import_job.filter(job => matchedJobs.has(String(job.id))),
+        references,
+        ownershipInferred: false,
+        creationOriginVerified: false,
     };
 }
 
@@ -259,6 +371,10 @@ export function collectSupplementaryCatalogReferences(input, allowedHosts) {
     const data = Object.fromEntries(
         Object.entries(input).map(([table, rows]) => [table, rows.map(r => ({ ...r }))]),
     );
+    // Only the candidate matches above may leave the process; do not persist
+    // unrelated import rows or intermediate JSON-derived identifier arrays.
+    delete data.catalog_import_job;
+    delete data.catalog_import_row;
     const paths = new Map();
     const references = [];
     const unresolved = [];
