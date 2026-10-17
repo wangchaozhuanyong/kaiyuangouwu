@@ -294,6 +294,7 @@ async function renderPayment(
         methods?: Array<Record<string, unknown>>;
         marketCode?: string;
         customer?: { id: string } | null;
+        language?: 'zh' | 'en';
     } = {},
 ) {
     mocks.methods = options.methods ?? [syntheticMethod];
@@ -310,7 +311,7 @@ async function renderPayment(
         market: { code: options.marketCode ?? 'synthetic', currencyCode: 'CNY' },
         displayCurrencyCode: 'CNY',
         locale: 'zh-CN',
-        language: 'zh',
+        language: options.language ?? 'zh',
         onCancel: vi.fn(),
         onComplete,
         onOrderChange,
@@ -909,6 +910,41 @@ describe('payment response recovery', () => {
 });
 
 describe('canonical payment request recovery', () => {
+    it.each([
+        ['NO_ACTIVE_ORDER_ERROR', 'zh', '未能关联当前结算订单，订单已保留'],
+        ['NO_ACTIVE_ORDER_ERROR', 'en', 'This checkout could not be linked to your order'],
+        ['ORDER_PAYMENT_STATE_ERROR', 'zh', '订单状态或结算信息已变化，本次付款未执行'],
+        ['PAYMENT_REQUEST_SCOPE_CHANGED', 'en', 'The order status or checkout details changed'],
+        ['INELIGIBLE_PAYMENT_METHOD_ERROR', 'zh', '此支付方式暂时不可用'],
+        ['unreviewed server detail', 'zh', '原付款请求已明确结束且未成功'],
+    ] as const)(
+        'explains a rejected %s receipt in %s without replaying payment',
+        async (errorCode, language, message) => {
+            const api = syntheticApi({
+                paymentAttempt: vi.fn((input: { requestId: string }) =>
+                    Promise.resolve({ requestId: input.requestId, status: 'REJECTED', errorCode }),
+                ),
+            });
+            const view = await renderPayment(api, { language });
+            try {
+                await act(async () => {
+                    view.submit();
+                    await Promise.resolve();
+                });
+                expect(view.host.textContent).toContain(message);
+                expect(view.host.textContent).not.toContain('unreviewed server detail');
+                expect(view.onOrderChange).toHaveBeenCalledWith(syntheticOrder);
+                expect(view.onComplete).not.toHaveBeenCalled();
+                expect(sessionStorage.length).toBe(0);
+                await view.render();
+                expect(api.addPaymentToOrder).toHaveBeenCalledTimes(1);
+                expect(api.paymentAttempt).toHaveBeenCalledTimes(1);
+            } finally {
+                await view.unmount();
+            }
+        },
+    );
+
     it('keeps an acknowledged payment pending while the original order is still processing', async () => {
         const api = syntheticApi({
             addPaymentToOrder: vi.fn().mockResolvedValue(syntheticOrder),

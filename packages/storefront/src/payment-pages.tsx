@@ -590,12 +590,28 @@ export function PaymentPage({
                         throw new Error('Order scope changed');
                     onOrderChange(refreshedOrder);
                     forgetAttempt(attempt);
-                    if (isCurrentAttempt(attempt))
-                        setPaymentError(
-                            isZh
-                                ? '原付款请求已明确结束且未成功。请核对订单后重新选择付款方式。'
-                                : 'The original payment request has ended without a successful payment. Review the order before trying again.',
-                        );
+                    if (isCurrentAttempt(attempt)) {
+                        const endedMessage = isZh
+                            ? '原付款请求已明确结束且未成功。请核对订单后重新选择付款方式。'
+                            : 'The original payment request has ended without a successful payment. Review the order before trying again.';
+                        const rejectionMessage =
+                            receipt.errorCode === 'NO_ACTIVE_ORDER_ERROR'
+                                ? isZh
+                                    ? '未能关联当前结算订单，订单已保留。请返回核对原订单，或联系客服。'
+                                    : 'This checkout could not be linked to your order. Your order is preserved. Go back to review it or contact support.'
+                                : ['ORDER_PAYMENT_STATE_ERROR', 'PAYMENT_REQUEST_SCOPE_CHANGED'].includes(
+                                        receipt.errorCode ?? '',
+                                    )
+                                  ? isZh
+                                      ? '订单状态或结算信息已变化，本次付款未执行。请核对原订单后再操作。'
+                                      : 'The order status or checkout details changed. This payment was not executed. Review the original order before continuing.'
+                                  : storefrontErrorMessage(
+                                        { errorCode: receipt.errorCode ?? undefined },
+                                        language,
+                                        endedMessage,
+                                    );
+                        setPaymentError(receipt.status === 'REJECTED' ? rejectionMessage : endedMessage);
+                    }
                     return true;
                 }
             }

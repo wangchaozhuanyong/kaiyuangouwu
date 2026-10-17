@@ -489,28 +489,24 @@ export class ShopOrderResolver {
         @Args() args: MutationAddPaymentToOrderArgs & ActiveOrderArgs,
     ): Promise<ErrorResultUnion<AddPaymentToOrderResult, Order>> {
         return this.orderService.withOrderMutationTransaction(ctx, async txCtx => {
-            if (txCtx.authorizedAsOwnerOnly) {
-                const sessionOrder = await this.activeOrderService.getActiveOrder(
-                    txCtx,
-                    args[ACTIVE_ORDER_INPUT_FIELD_NAME],
-                );
-                if (sessionOrder) {
-                    const order = await this.orderService.addPaymentToOrder(
-                        txCtx,
-                        sessionOrder.id,
-                        args.input,
-                    );
-                    if (isGraphQlErrorResult(order)) {
-                        return order;
-                    }
-                    if (order.active === false) {
-                        await this.customerService.createAddressesForNewCustomer(txCtx, order);
-                    }
-                    if (order.active === false && txCtx.session?.activeOrderId === sessionOrder.id) {
-                        await this.sessionService.unsetActiveOrder(txCtx, txCtx.session);
-                    }
+            // Management permissions must not exclude a customer's own Shop API checkout.
+            // ActiveOrderService still checks the active order's sales channel and member ownership.
+            const sessionOrder = await this.activeOrderService.getActiveOrder(
+                txCtx,
+                args[ACTIVE_ORDER_INPUT_FIELD_NAME],
+            );
+            if (sessionOrder) {
+                const order = await this.orderService.addPaymentToOrder(txCtx, sessionOrder.id, args.input);
+                if (isGraphQlErrorResult(order)) {
                     return order;
                 }
+                if (order.active === false) {
+                    await this.customerService.createAddressesForNewCustomer(txCtx, order);
+                }
+                if (order.active === false && txCtx.session?.activeOrderId === sessionOrder.id) {
+                    await this.sessionService.unsetActiveOrder(txCtx, txCtx.session);
+                }
+                return order;
             }
             return new NoActiveOrderError();
         });

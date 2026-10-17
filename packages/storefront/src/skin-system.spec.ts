@@ -550,6 +550,8 @@ describe('storefront skin system', () => {
                             '.category-subcat-sidebar .subcat-side-item.is-active::before',
                             // Desktop selection indicator; hidden on unselected category rows.
                             '.desktop-subcategory-sidebar nav > a::before',
+                            // Current primary category marker is emitted only for aria-current=page.
+                            ".desktop-category-entry > a[aria-current='page']::before",
                         ]).has(selector.trim())
                     ) {
                         findings.push(`${file}: ${selector.trim()} draws a thin background divider`);

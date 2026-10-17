@@ -1,5 +1,6 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { CurrencyCode, GlobalFlag, LanguageCode } from '@vendure/common/lib/generated-types';
+import { SUPER_ADMIN_ROLE_CODE } from '@vendure/common/lib/shared-constants';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     ChannelService,
@@ -21,6 +22,7 @@ import {
     RequestContext,
     RequestContextService,
     Role,
+    SessionService,
     StockLocationService,
     TransactionalConnection,
     User,
@@ -48,10 +50,9 @@ import { OfflinePaymentService } from '../src/offline-payment.service';
 import { closureDatabase } from './order-closure-db';
 
 // Fresh, owned synthetic MySQL; no SMTP, payment provider, real customer or production database.
-const directory = path.resolve(
-    __dirname,
-    '../../../docs/local-validation/experience-offline-20261013/payment',
-);
+const directory = process.env.OFFLINE_PAYMENT_E2E_OUTPUT_DIR
+    ? path.resolve(process.env.OFFLINE_PAYMENT_E2E_OUTPUT_DIR)
+    : path.resolve(__dirname, '../../../docs/local-validation/experience-offline-20261013/payment');
 const config = mergeConfig(testConfig(), {
     apiOptions: { port: 37396, hostname: '127.0.0.1' },
     dbConnectionOptions: closureDatabase(directory),
@@ -90,7 +91,7 @@ const config = mergeConfig(testConfig(), {
         }),
     ],
 });
-const { server, adminClient } = createTestEnvironment(config);
+const { server, adminClient, shopClient } = createTestEnvironment(config);
 const entityIdStrategy = requireFixture(config.entityOptions.entityIdStrategy);
 const superadminCredentials = requireFixture(config.authOptions.superadminCredentials);
 const encode = (id: string | number) => entityIdStrategy.encodeId(id);
@@ -381,6 +382,81 @@ async function sourceLegacy() {
     return { order: created, payment };
 }
 describe('formal offline payment HTTP and owned MySQL', () => {
+    it('accepts an administrator-customer own Shop checkout as a real pending manual payment', async () => {
+        const password = 'synthetic-offline-customer-fixture';
+        const buyer = check(
+            await server.app.get(CustomerService).create(
+                own,
+                {
+                    emailAddress: `offline-owner-${randomUUID()}@example.invalid`,
+                    firstName: 'Synthetic',
+                    lastName: 'Administrator customer',
+                },
+                password,
+            ),
+        );
+        await connection.getRepository(own, Customer).update(buyer.id, {
+            createdAt: new Date(Date.now() - 3 * 86_400_000),
+        });
+        const user = await connection.getRepository(own, User).findOneOrFail({
+            where: { id: requireFixture(buyer.user).id },
+            relations: ['roles'],
+        });
+        user.roles.push(
+            await connection.getRepository(own, Role).findOneByOrFail({ code: SUPER_ADMIN_ROLE_CODE }),
+        );
+        await connection.getRepository(own, User).save(user);
+        shopClient.setChannelToken(ownToken);
+        const login = await shopClient.asUserWithCredentials(buyer.emailAddress, password);
+        expect(login).not.toHaveProperty('errorCode');
+        const sessions = server.app.get(SessionService);
+        const session = requireFixture(await sessions.getSessionFromToken(shopClient.getAuthToken()));
+        const permissions = requireFixture(session.user).channelPermissions.find(
+            channel => String(channel.id) === String(own.channelId),
+        );
+        expect(requireFixture(permissions).permissions).toContain('UpdateOrder');
+        const orders = server.app.get(OrderService);
+        const created = await orders.create(own, user.id);
+        check(await orders.addItemToOrder(own, created.id, digitalId, 1));
+        await orders.updateCustomFields(own, created.id, {
+            deliveryEmail: buyer.emailAddress,
+            customerNote: 'Synthetic administrator customer checkout',
+        });
+        const prepared = await orders.withOrderMutationTransaction(own, async tx =>
+            check(await orders.transitionToState(tx, created.id, 'ArrangingPayment')),
+        );
+        await sessions.setActiveOrder(own, session, prepared);
+        const result = await shopClient.query(gql`
+            mutation {
+                addPaymentToOrder(input: { method: "offline-manual-local", metadata: {} }) {
+                    ... on Order {
+                        id
+                        state
+                        active
+                        payments {
+                            state
+                            kind
+                        }
+                    }
+                    ... on ErrorResult {
+                        errorCode
+                        message
+                    }
+                }
+            }
+        `);
+        expect(result.addPaymentToOrder).toMatchObject({
+            id: encode(prepared.id),
+            state: 'AwaitingManualPayment',
+            active: false,
+            payments: [{ state: 'PendingManual', kind: 'OFFLINE_MANUAL' }],
+        });
+        expect(result.addPaymentToOrder).not.toHaveProperty('errorCode');
+        const persisted = requireFixture(await orders.findOne(own, prepared.id));
+        expect(persisted.orderPlacedAt).toBeTruthy();
+        expect(await orders.getOrderFulfillments(own, persisted)).toHaveLength(0);
+    });
+
     it('places a real pending order and excludes forged client receipts', async () => {
         const fixture = await submitted();
         expect(fixture.order).toMatchObject({ state: 'AwaitingManualPayment', active: false });

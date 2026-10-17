@@ -184,20 +184,45 @@ export function ShopAbuseChallengeView({
     language,
     onSubmit,
     google,
+    submitLabel,
 }: ShopAbuseChallengeControlProps) {
     const id = useId();
     const value = challenge.state;
     if (!value) return null;
     const zh = language === 'zh';
     const feedback = (
-        <p id={`${id}-feedback`} role="status">
-            {value.error ||
-                (zh ? '完成验证后，请再次点击提交。' : 'After completing verification, select submit again.')}
-            {value.retryAfterSeconds
-                ? zh
-                    ? ` 请等待 ${value.retryAfterSeconds} 秒后重试。`
-                    : ` Try again after ${value.retryAfterSeconds} seconds.`
-                : ''}
+        <p
+            id={`${id}-feedback`}
+            className={submitLabel && value.error ? 'shop-abuse-challenge-error' : undefined}
+            role={submitLabel && value.error ? 'alert' : 'status'}
+            tabIndex={submitLabel && value.error ? -1 : undefined}
+        >
+            {submitLabel && value.error && (
+                <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
+                >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v4m0 4h.01" />
+                </svg>
+            )}
+            <span>
+                {value.error ||
+                    (!submitLabel &&
+                        (zh
+                            ? '完成验证后，请再次点击提交。'
+                            : 'After completing verification, select submit again.'))}
+                {value.retryAfterSeconds
+                    ? zh
+                        ? ` 请等待 ${value.retryAfterSeconds} 秒后重试。`
+                        : ` Try again after ${value.retryAfterSeconds} seconds.`
+                    : ''}
+            </span>
         </p>
     );
     if (value.feedbackOnly) return <div className="shop-abuse-challenge">{feedback}</div>;
@@ -248,11 +273,23 @@ export function ShopAbuseChallengeView({
                     minLength={6}
                     maxLength={12}
                     disabled={value.loading || !value.challenge}
-                    aria-describedby={`${id}-feedback`}
+                    aria-describedby={[
+                        value.error || !submitLabel ? `${id}-feedback` : '',
+                        submitLabel ? `${id}-instruction` : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' ')}
                     aria-invalid={Boolean(value.error)}
                 />
             </div>
-            {feedback}
+            {value.error || !submitLabel ? feedback : null}
+            {submitLabel && (
+                <p id={`${id}-instruction`}>
+                    {zh
+                        ? `输入图片中的字符，然后点击“${submitLabel}”。`
+                        : `Enter the characters shown, then select “${submitLabel}”.`}
+                </p>
+            )}
             {google && (
                 <p className="form-help">
                     {zh

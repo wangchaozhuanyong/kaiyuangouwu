@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShopApi } from './api';
 import { GptRechargeApi } from './api/gpt-recharge';
 import { parseShopApiResponse } from './api/helpers';
+import { type GptRechargeClient } from './client-plugins/gpt-recharge/contracts';
 import { GptRechargePage } from './client-plugins/gpt-recharge/gpt-recharge-page';
 import { ShopAbuseChallengeControl, useShopAbuseChallenge } from './components/common/shop-abuse-challenge';
 import { type ShopAbuseAction, type ShopAbuseClient, shopAbuseMetadata } from './shop-abuse';
@@ -25,6 +26,7 @@ const denied = (errorCode = 'SHOP_ABUSE_CHALLENGE_REQUIRED', action: ShopAbuseAc
 let host: HTMLDivElement;
 let root: Root;
 let hook: ReturnType<typeof useShopAbuseChallenge>;
+const rechargeCaches = new Set<QueryClient>();
 function Harness({
     client,
     language = 'zh',
@@ -53,6 +55,8 @@ beforeEach(() => {
 });
 afterEach(() => {
     act(() => root.unmount());
+    for (const cache of rechargeCaches) cache.clear();
+    rechargeCaches.clear();
     host.remove();
     vi.unstubAllGlobals();
 });
@@ -321,4 +325,213 @@ it('keeps recharge session and confirmation after a challenge rejection and neve
     expect(host.textContent).not.toContain('正在确认提交结果');
     expect(host.textContent).toContain('请输入图片验证码');
     cache.clear();
+});
+
+function rechargeClient() {
+    return {
+        config: vi.fn().mockResolvedValue({ enabled: true, maintenance: false }),
+        verify: vi.fn().mockResolvedValue({ plan: 'plus', status: 'available' }),
+        query: vi.fn().mockResolvedValue({ plan: 'plus', status: 'available' }),
+        submit: vi.fn().mockResolvedValue({
+            id: 'synthetic-task',
+            credential: 'synthetic-task-credential',
+            plan: 'plus',
+            status: 'queued',
+            updatedAt: '2026-10-17T00:00:00Z',
+        }),
+        task: vi.fn(),
+        createShopAbuseChallenge: vi.fn().mockResolvedValue(image()),
+    };
+}
+
+async function renderRecharge(client: GptRechargeClient, language: StorefrontLanguage = 'zh') {
+    const cache = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    rechargeCaches.add(cache);
+    await settle(() =>
+        root.render(
+            <QueryClientProvider client={cache}>
+                <GptRechargePage client={client} language={language} marketKey="synthetic" onBack={vi.fn()} />
+            </QueryClientProvider>,
+        ),
+    );
+}
+
+async function verifyRecharge() {
+    await settle(() => setInput(host.querySelector('#gpt-code') as HTMLInputElement, 'synthetic-code'));
+    await settle(() =>
+        host.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+    );
+}
+
+async function prepareRechargeSubmission() {
+    await verifyRecharge();
+    await settle(() =>
+        setInput(
+            host.querySelector('#gpt-session') as HTMLTextAreaElement,
+            JSON.stringify({
+                user: { id: 'synthetic-user', email: 'local@example.invalid' },
+                accessToken: 'synthetic-not-a-real-credential',
+            }),
+        ),
+    );
+    await settle(() => (host.querySelector('.gpt-recharge-confirm input') as HTMLInputElement).click());
+}
+
+describe('recharge feedback follows the action that failed', () => {
+    it.each(['zh', 'en'] as const)(
+        'validates an empty code locally and explains the next step in %s',
+        async language => {
+            const client = rechargeClient();
+            await renderRecharge(client, language);
+            const button = host.querySelector(
+                '.gpt-recharge-code-section button[type="submit"]',
+            ) as HTMLButtonElement;
+            expect(button.textContent).toBe(language === 'zh' ? '验证兑换码' : 'Verify code');
+            expect(button.disabled).toBe(false);
+            await vi.waitFor(async () => {
+                await settle(() => Promise.resolve());
+                expect(host.querySelector('#gpt-submit-help')?.textContent).toMatch(
+                    language === 'zh' ? /验证兑换码/ : /verify.*code/i,
+                );
+            });
+            await settle(() => button.click());
+            const input = host.querySelector('#gpt-code');
+            expect(client.verify).not.toHaveBeenCalled();
+            expect(client.createShopAbuseChallenge).not.toHaveBeenCalled();
+            expect(input?.getAttribute('aria-invalid')).toBe('true');
+            expect(input?.getAttribute('aria-describedby')).toContain('gpt-code-error');
+            expect(host.querySelector('#gpt-code-error')?.textContent).toBeTruthy();
+            expect(document.activeElement).toBe(input);
+        },
+    );
+
+    it.each([
+        new Error('Synthetic private provider detail'),
+        Object.assign(new Error('Synthetic private provider detail'), { errorCode: 'USER_INPUT_ERROR' }),
+    ])(
+        'keeps an ambiguous verification failure by its button without blaming the code field (%#)',
+        async reason => {
+            const client = rechargeClient();
+            client.verify.mockRejectedValue(reason);
+            await renderRecharge(client);
+            await verifyRecharge();
+            const feedback = host.querySelector('#gpt-verify-error');
+            expect(feedback?.closest('.gpt-recharge-code-section')).not.toBeNull();
+            expect(feedback?.getAttribute('role')).toBe('alert');
+            expect(document.activeElement).toBe(feedback);
+            expect(host.querySelector('#gpt-code')?.getAttribute('aria-invalid')).not.toBe('true');
+            expect(host.querySelector('.gpt-recharge-notices')?.textContent ?? '').not.toContain(
+                feedback?.textContent,
+            );
+            expect(host.textContent).not.toContain('Synthetic private');
+            expect(feedback?.textContent).not.toContain('提交的信息有误');
+        },
+    );
+
+    it('uses the same explicit button below an on-demand challenge and never replays verification', async () => {
+        const client = rechargeClient();
+        client.verify.mockRejectedValueOnce(denied('SHOP_ABUSE_CHALLENGE_REQUIRED', 'RECHARGE_CODE'));
+        await renderRecharge(client);
+        expect(client.createShopAbuseChallenge).not.toHaveBeenCalled();
+        await verifyRecharge();
+        await vi.waitFor(async () => {
+            await settle(() => Promise.resolve());
+            expect(host.querySelector('.shop-abuse-challenge input')).not.toBeNull();
+        });
+        const control = host.querySelector('.shop-abuse-challenge') as HTMLElement;
+        expect(control.querySelector('input')?.closest('.auth-input-shell')).not.toBeNull();
+        const button = host.querySelector(
+            '.gpt-recharge-code-section button[type="submit"]',
+        ) as HTMLButtonElement;
+        expect(control.compareDocumentPosition(button)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        expect(control.textContent).toContain('验证兑换码');
+        expect(client.verify).toHaveBeenCalledTimes(1);
+        await settle(() => button.click());
+        expect(client.verify).toHaveBeenCalledTimes(1);
+        const feedback = control.querySelector('.shop-abuse-challenge-error');
+        expect(feedback?.getAttribute('role')).toBe('alert');
+        await settle(() => setInput(control.querySelector('input') as HTMLInputElement, 'ABC'));
+        await settle(() => button.click());
+        expect(client.verify).toHaveBeenCalledTimes(1);
+        expect(control.querySelector('input')?.getAttribute('aria-invalid')).toBe('true');
+        expect(document.activeElement).toBe(control.querySelector('input'));
+        await settle(() => setInput(control.querySelector('input') as HTMLInputElement, 'ABC234'));
+        await settle(() => button.click());
+        expect(client.verify).toHaveBeenCalledTimes(2);
+        expect(client.verify).toHaveBeenLastCalledWith('synthetic-code', {
+            id: 'synthetic-challenge',
+            answer: 'ABC234',
+        });
+        expect(host.querySelector('.shop-abuse-challenge')).toBeNull();
+    });
+
+    it('places lookup errors inside the lookup action instead of the recharge form', async () => {
+        const client = rechargeClient();
+        client.query.mockRejectedValue(new Error('Synthetic private lookup detail'));
+        await renderRecharge(client);
+        await settle(() =>
+            [...host.querySelectorAll<HTMLButtonElement>('nav button')]
+                .find(button => button.textContent === '兑换码查询')
+                ?.click(),
+        );
+        await settle(() => setInput(host.querySelector('#gpt-query') as HTMLInputElement, 'synthetic-code'));
+        await settle(() =>
+            host
+                .querySelector('.gpt-recharge-query form')
+                ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })),
+        );
+        const feedback = host.querySelector('#gpt-query-error');
+        expect(client.query).toHaveBeenCalledTimes(1);
+        expect(feedback?.closest('.gpt-recharge-query')).not.toBeNull();
+        expect(document.activeElement).toBe(feedback);
+        expect(host.querySelector('#gpt-verify-error')).toBeNull();
+        expect(host.textContent).not.toContain('Synthetic private');
+    });
+
+    it('shows proven non-acceptance at the submit action and requires fresh account confirmation', async () => {
+        const client = rechargeClient();
+        client.submit.mockRejectedValue(
+            Object.assign(new Error('Synthetic rejection'), {
+                errorCode: 'GPT_RECHARGE_NOT_ACCEPTED',
+            }),
+        );
+        await renderRecharge(client);
+        await prepareRechargeSubmission();
+        await settle(() => (host.querySelector('.gpt-recharge-submit') as HTMLButtonElement).click());
+        const feedback = host.querySelector('#gpt-submit-error');
+        expect(feedback?.closest('.gpt-recharge-account-section')).not.toBeNull();
+        expect(feedback?.textContent).toContain('未受理');
+        expect(document.activeElement).toBe(feedback);
+        expect((host.querySelector('#gpt-session') as HTMLTextAreaElement).value).toBe('');
+        expect((host.querySelector('.gpt-recharge-confirm input') as HTMLInputElement).checked).toBe(false);
+        expect((host.querySelector('.gpt-recharge-submit') as HTMLButtonElement).disabled).toBe(true);
+        expect(host.textContent).not.toContain('正在确认提交结果');
+        expect(client.submit).toHaveBeenCalledTimes(1);
+    });
+
+    it('locks an unknown submission and routes recovery to the original code without another write', async () => {
+        const client = rechargeClient();
+        client.submit.mockRejectedValue(new Error('Synthetic lost response'));
+        await renderRecharge(client);
+        await prepareRechargeSubmission();
+        await settle(() => (host.querySelector('.gpt-recharge-submit') as HTMLButtonElement).click());
+        expect(host.textContent).toContain('正在确认提交结果');
+        expect(host.querySelector('.gpt-recharge-submit')).toBeNull();
+        expect(host.querySelector('#gpt-session')).toBeNull();
+        expect(client.submit).toHaveBeenCalledTimes(1);
+        await settle(() =>
+            [...host.querySelectorAll<HTMLButtonElement>('button')]
+                .find(button => button.textContent === '查询原任务')
+                ?.click(),
+        );
+        expect((host.querySelector('#gpt-query') as HTMLInputElement).value).toBe('synthetic-code');
+        expect(client.submit).toHaveBeenCalledTimes(1);
+        await settle(() =>
+            [...host.querySelectorAll<HTMLButtonElement>('nav button')]
+                .find(button => button.textContent === '自助充值')
+                ?.click(),
+        );
+        expect(host.querySelector('.gpt-recharge-submit')).toBeNull();
+        expect(client.submit).toHaveBeenCalledTimes(1);
+    });
 });

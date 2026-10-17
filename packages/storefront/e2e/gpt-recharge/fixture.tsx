@@ -55,6 +55,7 @@ function Fixture() {
     const [preferencesOpen, setPreferencesOpen] = useState(false);
     const [previewDestination, setPreviewDestination] = useState('');
     const [demoCalls, setDemoCalls] = useState(0);
+    const [operationCalls, setOperationCalls] = useState({ verify: 0, query: 0, submit: 0 });
     const t = (zh: string, en: string) => (language === 'zh' ? zh : en);
     const localePreferences = {
         storefrontName: '店铺预览',
@@ -119,17 +120,30 @@ function Fixture() {
                 });
             },
             verify: async (code, proof) => {
+                setOperationCalls(value => ({ ...value, verify: value.verify + 1 }));
                 admit('RECHARGE_CODE', code, proof);
+                if (params.get('error') === 'verify')
+                    throw new Error('Synthetic private verification provider detail');
                 if (!code.startsWith('DEMO-')) return Promise.reject(new Error('Only demo codes'));
                 lastPlan = code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus';
                 return Promise.resolve({ plan: lastPlan, status: 'available' });
             },
-            submit: (code, _session, proof) => {
+            submit: async (code, _session, proof) => {
+                setOperationCalls(value => ({ ...value, submit: value.submit + 1 }));
                 admit('RECHARGE_SUBMIT', code, proof);
+                if (params.get('error') === 'submit-rejected')
+                    throw Object.assign(new Error('Synthetic proven pre-acceptance rejection'), {
+                        errorCode: 'GPT_RECHARGE_NOT_ACCEPTED',
+                    });
+                if (params.get('error') === 'submit-unknown')
+                    throw new Error('Synthetic lost response after submission');
                 return Promise.resolve(task());
             },
-            query: (code, proof) => {
+            query: async (code, proof) => {
+                setOperationCalls(value => ({ ...value, query: value.query + 1 }));
                 admit('RECHARGE_CODE', code, proof);
+                if (params.get('error') === 'query')
+                    throw new Error('Synthetic private lookup provider detail');
                 return Promise.resolve({
                     plan: code.includes('200') ? 'pro_20x' : code.includes('100') ? 'pro_5x' : 'plus',
                     status: status === 'succeeded' ? 'used' : 'reserved',
@@ -163,6 +177,12 @@ function Fixture() {
                 className={`storefront-app${desktop ? ' desktop-store-layout' : ''}`}
                 data-route="gpt-recharge"
             >
+                <output
+                    hidden
+                    data-demo-verify-calls={operationCalls.verify}
+                    data-demo-query-calls={operationCalls.query}
+                    data-demo-submit-calls={operationCalls.submit}
+                />
                 <div className="gpt-preview-toolbar" hidden={params.get('presentation') === '1'}>
                     <span>设计预览 · 演示数据</span>
                     {params.get('abuse') ? (
