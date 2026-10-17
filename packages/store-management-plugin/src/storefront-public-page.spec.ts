@@ -556,7 +556,7 @@ describe('public page inline artwork', () => {
             expect(vi.getTimerCount()).toBe(0);
         },
     );
-    it.each(['revision', 'PREVIEW', 'CLOSED', 'currency'])(
+    it.each(['revision', 'PREVIEW', 'CLOSED', 'currency'] as const)(
         'rejects a document when %s changes during its additional preparation',
         async change => {
             vi.useFakeTimers();

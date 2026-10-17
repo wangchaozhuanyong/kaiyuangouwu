@@ -1,7 +1,5 @@
-import { mediaDescriptor } from '@vendure/storefront-content-plugin';
+import { buildBestSellerProducts, mediaDescriptor } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
-
-import { buildBestSellerProducts } from '../../../storefront/src/home-merchandising';
 
 import {
     preservePublicMediaPreviews,
@@ -345,7 +343,7 @@ describe('bounded public inline image assembly', () => {
         expect(result.map(({ placeholder: _placeholder, ...item }) => item)).toEqual(media);
         expect(media.every(item => !item.placeholder)).toBe(true);
     });
-    it.each([
+    it.each<{ name: string; sales: Record<string, number> }>([
         { name: 'sales-ranked b3 before b2', sales: { b0: 0, b1: 0, b2: 20, b3: 30 } },
         { name: 'daily stable shuffle with no sales', sales: {} },
     ])('prioritizes the actual $name display order rather than raw catalog order', async ({ sales }) => {
