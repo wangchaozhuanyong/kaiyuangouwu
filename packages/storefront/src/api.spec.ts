@@ -281,16 +281,18 @@ describe('ShopApi session response ordering', () => {
         await expectNextToken(api, fetchMock, 'fresh-guest');
     });
 
-    it('does not restore an in-flight login response after logout', async () => {
+    it('waits for in-flight login before logout so the last sign-out intent wins', async () => {
         const earlier = pending();
         const fetchMock = installFetch()
             .mockReturnValueOnce(earlier.promise)
             .mockResolvedValueOnce(response({ logout: { success: true } }));
         const api = new ShopApi(market);
         const login = api.login('fixture@example.test', 'mock-only');
-        await api.logout();
+        const logout = api.logout();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
         earlier.resolve(response({ login: { __typename: 'CurrentUser', id: '1' } }, 'old-login'));
         await login;
+        await logout;
         await expectNextToken(api, fetchMock);
     });
 
@@ -315,6 +317,256 @@ describe('ShopApi session response ordering', () => {
         await expectNextToken(api, fetchMock, 'second-session');
     });
 
+    it.each(authCases)(
+        'waits for old logout before starting newer $name authentication',
+        async ({ field, run }) => {
+            const oldLogout = pending();
+            const fetchMock = installFetch()
+                .mockResolvedValueOnce(
+                    response({ login: { __typename: 'CurrentUser', id: '1' } }, 'first-session'),
+                )
+                .mockReturnValueOnce(oldLogout.promise)
+                .mockResolvedValueOnce(
+                    response({ [field]: { __typename: 'CurrentUser', id: '2' } }, 'second-session'),
+                );
+            const api = new ShopApi(market);
+            const controller = new RecoveryCartController();
+            api.enableCartCommands(controller);
+            const reset = vi.spyOn(controller, 'reset');
+            await api.login('first@example.test', 'mock-only');
+            const logout = api.logout();
+            const rejected = expect(logout).rejects.toThrow('Sign-out belongs to an earlier session');
+            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+            const authentication = run(api);
+            await vi.dynamicImportSettled();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            oldLogout.resolve(response({ logout: { success: true } }, 'stale-guest'));
+            await rejected;
+            await authentication;
+            expect(reset).not.toHaveBeenCalled();
+            await expectNextToken(api, fetchMock, 'second-session');
+        },
+    );
+
+    it('does not fence a later login still waiting when the older logout returns', async () => {
+        const oldLogout = pending();
+        const newLogin = pending();
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'first-session'),
+            )
+            .mockReturnValueOnce(oldLogout.promise)
+            .mockReturnValueOnce(newLogin.promise);
+        const api = new ShopApi(market);
+        await api.login('first@example.test', 'mock-only');
+        const logout = api.logout();
+        const rejected = expect(logout).rejects.toThrow('Sign-out belongs to an earlier session');
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        const login = api.login('second@example.test', 'mock-only');
+        await vi.dynamicImportSettled();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        oldLogout.resolve(response({ logout: { success: true } }));
+        await rejected;
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+        newLogin.resolve(response({ login: { __typename: 'CurrentUser', id: '2' } }, 'second-session'));
+        await login;
+        await expectNextToken(api, fetchMock, 'second-session');
+    });
+
+    it.each(
+        [
+            ...authCases,
+            {
+                name: 'Google',
+                field: 'authenticate',
+                run: (api: ShopApi) =>
+                    api.authenticateWithGoogle('synthetic-google-credential', {
+                        termsAccepted: true,
+                        privacyAcknowledged: true,
+                        locale: 'en',
+                    }),
+            },
+        ].flatMap(auth => [
+            { ...auth, mode: 'cookie', apiUrl: '/shop-api', tokenKey: null },
+            {
+                ...auth,
+                mode: 'bearer',
+                apiUrl: 'https://api.synthetic.test/shop-api',
+                tokenKey: 'vendure-shop-auth-token:https://api.synthetic.test/shop-api:cn-mainland',
+            },
+        ]),
+    )(
+        'keeps same-customer $name $mode authentication after rebuilding the API during logout',
+        async ({ apiUrl, tokenKey, field, run }) => {
+            vi.stubEnv('VITE_SHOP_API_URL', apiUrl);
+            const storage = new Map<string, string>();
+            vi.stubGlobal('window', {
+                location: new URL('https://shop.synthetic.test/'),
+                setTimeout,
+                clearTimeout,
+            });
+            vi.stubGlobal('sessionStorage', {
+                getItem: (key: string) => storage.get(key) ?? null,
+                setItem: (key: string, value: string) => storage.set(key, value),
+                removeItem: (key: string) => storage.delete(key),
+            });
+            vi.resetModules();
+            const { ShopApi: RebuiltShopApi } = await import('./api');
+            const oldLogout = pending();
+            const fetchMock = installFetch()
+                .mockResolvedValueOnce(
+                    response({ login: { __typename: 'CurrentUser', id: '1' } }, 'first-session'),
+                )
+                .mockReturnValueOnce(oldLogout.promise)
+                .mockResolvedValueOnce(
+                    response(
+                        { [field]: { __typename: 'CurrentUser', id: '1' } },
+                        'new-same-customer-session',
+                    ),
+                );
+            const firstApi = new RebuiltShopApi(market);
+            await firstApi.login('fixture@example.test', 'mock-only');
+            const logout = firstApi.logout().catch(error => error);
+            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+            const nextApi = new RebuiltShopApi({ ...market, currencyCode: 'USD' }, 'en');
+            const authentication = run(nextApi);
+            await vi.dynamicImportSettled();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            oldLogout.resolve(response({ logout: { success: true } }, 'stale-guest'));
+            const acknowledgement = await logout;
+            await authentication;
+            if (typeof acknowledgement === 'function')
+                expect(acknowledgement).toThrow('Sign-out belongs to an earlier session');
+            else expect(acknowledgement).toMatchObject({ message: 'Sign-out belongs to an earlier session' });
+            await expectNextToken(nextApi, fetchMock, 'new-same-customer-session');
+            if (tokenKey) expect(storage.get(tokenKey)).toBe('new-same-customer-session');
+        },
+    );
+
+    it('keeps a later same-customer login in flight across API instances when old logout completes', async () => {
+        vi.stubGlobal('window', { location: new URL('http://127.0.0.1/'), setTimeout, clearTimeout });
+        const oldLogout = pending();
+        const newLogin = pending();
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'first-session'),
+            )
+            .mockReturnValueOnce(oldLogout.promise)
+            .mockReturnValueOnce(newLogin.promise);
+        const firstApi = new ShopApi(market);
+        await firstApi.login('fixture@example.test', 'mock-only');
+        const logout = firstApi.logout().catch(error => error);
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        const nextApi = new ShopApi(market, 'en');
+        const login = nextApi.login('fixture@example.test', 'mock-only');
+        await vi.dynamicImportSettled();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        oldLogout.resolve(response({ logout: { success: true } }));
+        const acknowledgement = await logout;
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+        if (typeof acknowledgement === 'function')
+            expect(acknowledgement).toThrow('Sign-out belongs to an earlier session');
+        else expect(acknowledgement).toMatchObject({ message: 'Sign-out belongs to an earlier session' });
+        newLogin.resolve(
+            response({ login: { __typename: 'CurrentUser', id: '1' } }, 'new-same-customer-session'),
+        );
+        await login;
+        await expectNextToken(nextApi, fetchMock, 'new-same-customer-session');
+    });
+
+    it('does not share a browser session between different store channels', async () => {
+        vi.stubGlobal('window', { location: new URL('http://127.0.0.1/'), setTimeout, clearTimeout });
+        const oldLogout = pending();
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(response({ login: { __typename: 'CurrentUser', id: '1' } }, 'store-a'))
+            .mockReturnValueOnce(oldLogout.promise)
+            .mockResolvedValueOnce(response({ login: { __typename: 'CurrentUser', id: '1' } }, 'store-b'));
+        const firstApi = new ShopApi(market);
+        await firstApi.login('fixture@example.test', 'mock-only');
+        const logout = firstApi.logout().catch(error => error);
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        const otherApi = new ShopApi({ ...market, code: 'synthetic-other' });
+        const authentication = otherApi.login('fixture@example.test', 'mock-only');
+        await vi.dynamicImportSettled();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        oldLogout.resolve(response({ logout: { success: true } }));
+        const acknowledgement = await logout;
+        await authentication;
+        if (typeof acknowledgement === 'function')
+            expect(acknowledgement).toThrow('Sign-out belongs to an earlier session');
+        else expect(acknowledgement).toMatchObject({ message: 'Sign-out belongs to an earlier session' });
+        // Its own acknowledged logout clears A; the different channel B keeps its session.
+        await expectNextToken(firstApi, fetchMock);
+        await expectNextToken(otherApi, fetchMock, 'store-b');
+    });
+
+    it('keeps browser bearer states on different API origins separate for the same store', async () => {
+        vi.stubGlobal('window', {
+            location: new URL('https://shop.synthetic.test/'),
+            setTimeout,
+            clearTimeout,
+        });
+        const { AuthTokenState } = await import('./api/auth-token-state');
+        const first = new AuthTokenState(
+            'vendure-shop-auth-token:https://first.synthetic.test/shop-api:cn-mainland',
+            market.code,
+        );
+        const other = new AuthTokenState(
+            'vendure-shop-auth-token:https://other.synthetic.test/shop-api:cn-mainland',
+            market.code,
+        );
+        first.createCapture(true)(response({}, 'first-api-session'));
+        other.createCapture(true)(response({}, 'other-api-session'));
+        other.clear();
+        expect(first.value).toBe('first-api-session');
+        expect(other.value).toBeNull();
+    });
+
+    it('keeps server-side API instances independent even for the same store', async () => {
+        const fetchMock = installFetch().mockResolvedValueOnce(
+            response({ login: { __typename: 'CurrentUser', id: '1' } }, 'request-a-session'),
+        );
+        const firstApi = new ShopApi(market);
+        await firstApi.login('fixture@example.test', 'mock-only');
+        const nextApi = new ShopApi(market);
+        await expectNextToken(nextApi, fetchMock);
+        await expectNextToken(firstApi, fetchMock, 'request-a-session');
+    });
+
+    it('keeps a login scheduled on logout completion before outer cleanup microtasks', async () => {
+        const oldLogout = pending();
+        const newLogin = pending();
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'first-session'),
+            )
+            .mockReturnValueOnce(oldLogout.promise)
+            .mockReturnValueOnce(newLogin.promise);
+        const api = new ShopApi(market);
+        const controller = new RecoveryCartController();
+        api.enableCartCommands(controller);
+        const reset = vi.spyOn(controller, 'reset');
+        await api.login('fixture@example.test', 'mock-only');
+        const logout = api.logout();
+        const oldOutcome = logout.catch(error => error);
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+        let login!: Promise<void>;
+        oldLogout.resolve(response({ logout: { success: true } }));
+        queueMicrotask(() => {
+            login = api.login('fixture@example.test', 'mock-only');
+        });
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+        newLogin.resolve(
+            response({ login: { __typename: 'CurrentUser', id: '1' } }, 'new-microtask-session'),
+        );
+        await login;
+        const outcome = await oldOutcome;
+        if (outcome instanceof Error) expect(outcome.message).toBe('Sign-out belongs to an earlier session');
+        // A valid clear can happen before the new intent; no late clear may invalidate its token.
+        expect(reset.mock.calls.length).toBeLessThanOrEqual(1);
+        await expectNextToken(api, fetchMock, 'new-microtask-session');
+    });
+
     it('keeps the existing token on failed login and failed logout without a replacement token', async () => {
         const fetchMock = installFetch()
             .mockResolvedValueOnce(
@@ -336,6 +588,18 @@ describe('ShopApi session response ordering', () => {
         await api.login('fixture@example.test', 'mock-only');
         await expect(api.login('fixture@example.test', 'mock-invalid')).rejects.toThrow('Invalid');
         await expect(api.logout()).rejects.toThrow('Network unavailable');
+        await expectNextToken(api, fetchMock, 'existing-session');
+    });
+
+    it.each([false, undefined])('keeps the session when logout success is %s', async success => {
+        const fetchMock = installFetch()
+            .mockResolvedValueOnce(
+                response({ login: { __typename: 'CurrentUser', id: '1' } }, 'existing-session'),
+            )
+            .mockResolvedValueOnce(response({ logout: success === undefined ? null : { success } }));
+        const api = new ShopApi(market);
+        await api.login('fixture@example.test', 'mock-only');
+        await expect(api.logout()).rejects.toThrow('Sign-out was not confirmed');
         await expectNextToken(api, fetchMock, 'existing-session');
     });
 
@@ -405,6 +669,7 @@ describe('ShopApi session response ordering', () => {
 afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
 });
 
 describe('ShopApi storefront config', () => {

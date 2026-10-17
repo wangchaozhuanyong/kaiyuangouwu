@@ -21,6 +21,7 @@ export interface ShopApiContext {
         timeoutMs?: number,
         resultUnknownOnTimeout?: boolean,
         proof?: ShopAbuseProof,
+        onDispatch?: () => void,
     ) => Promise<T>;
     request: <T>(
         query: string,
@@ -30,6 +31,7 @@ export interface ShopApiContext {
         resultUnknownOnTimeout?: boolean,
         readCurrencyCode?: string,
         proof?: ShopAbuseProof,
+        sessionManaged?: boolean,
     ) => Promise<T>;
     assertCart: (result: StorefrontCart & ErrorResult) => StorefrontCart;
     assertCheckoutSession: (result: StorefrontCheckoutSession & ErrorResult) => StorefrontCheckoutSession;

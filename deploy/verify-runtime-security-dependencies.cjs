@@ -1,7 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { existsSync, readFileSync, realpathSync, statSync } = require('node:fs');
+const { createHash } = require('node:crypto');
+const { existsSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync } = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
 
@@ -80,6 +81,189 @@ function assertPatchedTiptap(tiptap, version) {
     assert.equal('onerror' in attributes, false);
 }
 
+function hasVerifiedNextAdminWithoutTiptap(runtimeRoot) {
+    try {
+        // An absent old consumer alone never authorizes N/A. Reconcile the real
+        // artifact structure and package manifests before trusting its inventory.
+        const files = new Set();
+        const links = [];
+        const forbidden =
+            /(?:^|\/)node_modules\/(?:@tiptap(?:\/|$)|@vendure\/dashboard(?:\/|$))|^packages\/dashboard(?:\/|$)/u;
+        function walk(relative = '') {
+            for (const entry of readdirSync(path.join(runtimeRoot, relative), { withFileTypes: true })) {
+                const child = relative ? `${relative}/${entry.name}` : entry.name;
+                assert.ok(!forbidden.test(child));
+                assert.ok(files.size + links.length < 100_000);
+                if (entry.isSymbolicLink()) {
+                    const target = realpathSync(path.join(runtimeRoot, child));
+                    const within = path.relative(runtimeRoot, target);
+                    assert.ok(within && within !== '..' && !within.startsWith(`..${path.sep}`));
+                    assert.ok(!path.isAbsolute(within));
+                    links.push({ path: child, target: readlinkSync(path.join(runtimeRoot, child)) });
+                } else if (entry.isDirectory()) {
+                    walk(child);
+                } else {
+                    assert.ok(entry.isFile());
+                    files.add(child);
+                }
+            }
+        }
+        walk();
+        assert.ok(files.has('SHA256SUMS'));
+        const checksumFile = runtimeFile(runtimeRoot, path.join(runtimeRoot, 'SHA256SUMS'));
+        assert.ok(statSync(checksumFile).size <= 16 * 1024 * 1024);
+        const checksums = new Map();
+        for (const line of readFileSync(checksumFile, 'utf8').trimEnd().split('\n')) {
+            const match = /^([a-f0-9]{64})  (.+)$/u.exec(line);
+            assert.ok(match);
+            const relative = match[2];
+            assert.ok(!relative.includes('\\') && !path.posix.isAbsolute(relative));
+            assert.ok(relative.split('/').every(part => part && part !== '.' && part !== '..'));
+            assert.ok(!checksums.has(relative));
+            checksums.set(relative, match[1]);
+        }
+        assert.deepEqual(
+            [...checksums.keys()].sort(),
+            [...files].filter(file => file !== 'SHA256SUMS').sort(),
+        );
+        function checkedFile(relative, maxBytes = 64 * 1024) {
+            assert.ok(files.has(relative) && checksums.has(relative));
+            const file = runtimeFile(runtimeRoot, path.join(runtimeRoot, relative));
+            assert.ok(statSync(file).size <= maxBytes);
+            const bytes = readFileSync(file);
+            assert.equal(createHash('sha256').update(bytes).digest('hex'), checksums.get(relative));
+            return bytes.toString('utf8');
+        }
+        const metadata = JSON.parse(checkedFile('RUNTIME-METADATA.json'));
+        assert.equal(metadata.artifactFormat, 1);
+        assert.match(metadata.gitSha, /^[a-f0-9]{40}$/u);
+        assert.equal(metadata.sourceDirty, false);
+        assert.equal(metadata.platform, 'linux/x64');
+        assert.deepEqual(metadata.startCommands, {
+            server: 'node packages/dev-server/dist/index.js',
+            worker: 'node packages/dev-server/dist/index-worker.js',
+        });
+        const inventory = JSON.parse(checkedFile('RUNTIME-PACKAGES.json', 4 * 1024 * 1024));
+        assert.ok(Array.isArray(inventory) && inventory.length > 0 && inventory.length < 10_000);
+        const symlinks = JSON.parse(checkedFile('RUNTIME-SYMLINKS.json', 1024 * 1024));
+        assert.deepEqual(
+            links.sort((a, b) => a.path.localeCompare(b.path)),
+            symlinks,
+        );
+        const actualInventory = [];
+        const manifests = new Map();
+        for (const file of files) {
+            const segments = file.split('/');
+            const nodeModulesIndex = segments.lastIndexOf('node_modules');
+            const packageLength = segments.length - nodeModulesIndex - 1;
+            // Match the original runtime collector's installed-manifest definition.
+            const installed =
+                segments.at(-1) === 'package.json' &&
+                (segments.length === 1 ||
+                    (segments.length === 3 && segments[0] === 'packages') ||
+                    (nodeModulesIndex >= 0 &&
+                        (packageLength === 2 ||
+                            (packageLength === 3 && segments[nodeModulesIndex + 1].startsWith('@')))));
+            if (!installed) continue;
+            // Installed manifests can be larger than consumer metadata (for
+            // example date-fns' export map). Keep this inventory read bounded.
+            const manifest = JSON.parse(checkedFile(file, 1024 * 1024));
+            assert.ok(manifest && typeof manifest === 'object' && !Array.isArray(manifest));
+            assert.ok(typeof manifest.name === 'string' && typeof manifest.version === 'string');
+            assert.ok(manifest.name !== '@vendure/dashboard' && !manifest.name.startsWith('@tiptap/'));
+            for (const section of [
+                'dependencies',
+                'devDependencies',
+                'optionalDependencies',
+                'peerDependencies',
+            ]) {
+                if (manifest[section] === undefined) continue;
+                assert.ok(
+                    manifest[section] &&
+                        typeof manifest[section] === 'object' &&
+                        !Array.isArray(manifest[section]),
+                );
+                for (const [name, value] of Object.entries(manifest[section])) {
+                    assert.equal(typeof value, 'string');
+                    assert.ok(name !== '@vendure/dashboard' && !name.startsWith('@tiptap/'));
+                    assert.ok(!/(?:@tiptap\/|@vendure\/dashboard(?:@|$))/u.test(value));
+                }
+            }
+            const packagePath = file === 'package.json' ? '' : file.slice(0, -'/package.json'.length);
+            actualInventory.push({ name: manifest.name, path: packagePath, version: manifest.version });
+            manifests.set(packagePath, manifest);
+            // Resolve from every actual installed consumer, including nested and
+            // hoisted contexts. An unexpected outside fallback also forbids N/A.
+            const fromConsumer = Module.createRequire(path.join(runtimeRoot, file));
+            for (const dependency of ['@tiptap/core', '@vendure/dashboard']) {
+                let missing = false;
+                try {
+                    fromConsumer.resolve(dependency);
+                } catch (error) {
+                    assert.equal(error.code, 'MODULE_NOT_FOUND');
+                    missing = true;
+                }
+                assert.ok(missing);
+            }
+        }
+        assert.deepEqual(
+            actualInventory.sort((a, b) => a.path.localeCompare(b.path)),
+            inventory,
+        );
+        assert.equal(manifests.get('')?.name, 'vendure-production-runtime');
+        for (const [directory, name] of [
+            ['dev-server', 'dev-server'],
+            ['core', '@vendure/core'],
+            ['next-admin', 'next-admin'],
+            ['next-admin-plugin', '@vendure/next-admin-plugin'],
+        ]) {
+            assert.equal(manifests.get(`packages/${directory}`)?.name, name);
+        }
+        assert.equal(
+            typeof manifests.get('packages/dev-server').dependencies?.['@vendure/next-admin-plugin'],
+            'string',
+        );
+        const fromServer = Module.createRequire(path.join(runtimeRoot, 'packages/dev-server/package.json'));
+        assert.equal(
+            runtimeFile(runtimeRoot, fromServer.resolve('@vendure/next-admin-plugin')),
+            runtimeFile(runtimeRoot, path.join(runtimeRoot, 'packages/next-admin-plugin/dist/index.js')),
+        );
+        const release = JSON.parse(checkedFile('packages/next-admin/dist/frontend-release.json'));
+        assert.deepEqual(release, {
+            sourceSha: metadata.gitSha,
+            backendSha: metadata.gitSha,
+            component: 'next-admin',
+            releaseLane: 'runtime',
+        });
+        for (const file of [
+            'packages/dev-server/dist/index.js',
+            'packages/dev-server/dist/index-worker.js',
+            'packages/dev-server/dist/run-migrations.js',
+            'packages/next-admin-plugin/dist/index.js',
+            'packages/next-admin-plugin/dist/next-admin.plugin.js',
+            'packages/next-admin-plugin/dist/static-server.js',
+        ]) {
+            assert.ok(checkedFile(file, 16 * 1024 * 1024).length > 0);
+        }
+        for (const file of files) {
+            if (file.startsWith('packages/next-admin/dist/')) checkedFile(file, 16 * 1024 * 1024);
+        }
+        const index = checkedFile('packages/next-admin/dist/index.html');
+        const assets = [
+            ...index.matchAll(/(?:src|href)=["']\/dashboard\/assets\/([^"'?#]+\.(?:js|css))["']/gu),
+        ];
+        assert.ok(assets.some(asset => asset[1].endsWith('.js')));
+        assert.ok(assets.some(asset => asset[1].endsWith('.css')));
+        for (const asset of assets) {
+            assert.ok(asset[1].split('/').every(part => part && part !== '.' && part !== '..'));
+            checkedFile(`packages/next-admin/dist/assets/${asset[1]}`, 16 * 1024 * 1024);
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function inspectRuntimeSecurityDependencies(runtimeDirectory) {
     let runtimeRoot;
     try {
@@ -99,6 +283,10 @@ function inspectRuntimeSecurityDependencies(runtimeDirectory) {
     for (const name of ['express-qs', 'tiptap']) {
         let phase = 'consumer';
         try {
+            if (name === 'tiptap' && hasVerifiedNextAdminWithoutTiptap(runtimeRoot)) {
+                checks.push({ name, status: 'NOT_APPLICABLE', reason: 'NEXT_ADMIN_WITHOUT_TIPTAP_CONSUMER' });
+                continue;
+            }
             const owner = name === 'express-qs' ? 'core' : 'dashboard';
             const ownerManifest = path.join(runtimeRoot, 'packages', owner, 'package.json');
             const manifest = runtimeFile(
@@ -136,7 +324,11 @@ function inspectRuntimeSecurityDependencies(runtimeDirectory) {
             checks.push({ name, status: 'FAIL', phase });
         }
     }
-    return { status: checks.every(check => check.status === 'PASS') ? 'PASS' : 'FAIL', packages, checks };
+    return {
+        status: checks.every(check => ['PASS', 'NOT_APPLICABLE'].includes(check.status)) ? 'PASS' : 'FAIL',
+        packages,
+        checks,
+    };
 }
 
 function verifyRuntimeSecurityDependencies(runtimeDirectory) {
@@ -148,7 +340,11 @@ function verifyRuntimeSecurityDependencies(runtimeDirectory) {
             .join(',');
         throw new Error(`Runtime dependency security verification failed [${phases}]`);
     }
-    return { status: 'PASS', packages: result.packages };
+    return {
+        status: 'PASS',
+        packages: result.packages,
+        ...(result.checks.some(check => check.status === 'NOT_APPLICABLE') ? { checks: result.checks } : {}),
+    };
 }
 
 module.exports = { inspectRuntimeSecurityDependencies, verifyRuntimeSecurityDependencies };

@@ -22,6 +22,7 @@ import { randomUUID } from 'node:crypto';
 import { In, IsNull, ObjectLiteral, ObjectType, Repository } from 'typeorm';
 
 import { autoCardDisplayStock } from './auto-card-display-stock';
+import { usablePoolItems } from './auto-card-pool-integrity';
 import { DigitalDeliveryMode } from './auto-card.constants';
 import {
     digitalStockPolicy,
@@ -483,11 +484,7 @@ export class DigitalProductService implements OnApplicationBootstrap {
                     },
                 });
                 if (!cards) throw new UserInputError('该规格尚未启用自动发卡');
-                const items = await this.connection.getRepository(ctx, AutoCardPoolItem).find({
-                    where: { configId: cards.id, state: 'AVAILABLE' },
-                    order: { sequence: 'ASC' },
-                    take: quantity,
-                });
+                const items = await usablePoolItems(ctx, this.connection, cards.id, quantity);
                 if (items.length !== quantity) throw new UserInputError('可用卡密不足，请调整购买数量');
                 const changed = await this.connection
                     .getRepository(ctx, AutoCardPoolItem)
@@ -495,6 +492,9 @@ export class DigitalProductService implements OnApplicationBootstrap {
                     .update()
                     .set({ state: 'RESERVED' })
                     .where('id IN (:...ids)', { ids: items.map(item => item.id) })
+                    .andWhere('configId = :poolConfigId', { poolConfigId: cards.id })
+                    .andWhere('deliveryId IS NULL')
+                    .andWhere('assignedAt IS NULL')
                     .andWhere('state = :state', { state: 'AVAILABLE' })
                     .execute();
                 if (changed.affected !== quantity) throw new UserInputError('卡密被其他订单占用，请重新结算');

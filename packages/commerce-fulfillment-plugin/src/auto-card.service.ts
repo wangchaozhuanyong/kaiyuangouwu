@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
 import { ContentTranslationService, isUsableEnglishTranslation } from '@vendure/content-translation-plugin';
 import {
@@ -30,10 +30,11 @@ import {
     StorefrontDataChangedEvent,
 } from '@vendure/store-management-plugin';
 import { randomUUID } from 'node:crypto';
+import { Subscription } from 'rxjs';
 import { In, IsNull, LessThan, LessThanOrEqual, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
-import { AutoCardDeliveryReadyEvent } from './auto-card-delivery.event';
+import { AutoCardDeliveryReadyEvent, AutoCardPoolEnabledEvent } from './auto-card-delivery.event';
 import { autoCardDisplayStock } from './auto-card-display-stock';
 import {
     AutoCardFieldDefinition,
@@ -45,6 +46,7 @@ import {
     validateAutoCardFields,
 } from './auto-card-format';
 import { autoCardFulfillmentHandler } from './auto-card-fulfillment-handler';
+import { inconsistentPoolReservationIds, usablePoolItems } from './auto-card-pool-integrity';
 import { AutoCardSupplyService } from './auto-card-supply.service';
 import {
     AUTO_CARD_MAX_INSTRUCTIONS_LENGTH,
@@ -117,7 +119,8 @@ export interface AutoCardEmailPayload {
 }
 
 @Injectable()
-export class AutoCardService {
+export class AutoCardService implements OnApplicationBootstrap, OnModuleDestroy {
+    private poolEnabledSubscription?: Subscription;
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly cipher: AutoCardCipherService,
@@ -133,6 +136,22 @@ export class AutoCardService {
         private readonly receiptTokens: OrderConfirmationTokenService,
         private readonly requestCache: RequestContextCacheService = new RequestContextCacheService(),
     ) {}
+
+    onApplicationBootstrap(): void {
+        this.poolEnabledSubscription = this.eventBus.ofType(AutoCardPoolEnabledEvent).subscribe(event => {
+            // Do not hold a pool-item lock while acquiring delivery locks. Periodic
+            // reconciliation remains the durable fallback if this process stops.
+            void this.connection
+                .withTransaction(event.ctx, tx => this.reconcileVariant(tx, event.productVariantId))
+                .catch(error =>
+                    Logger.error(error instanceof Error ? error.message : String(error), loggerCtx),
+                );
+        });
+    }
+
+    onModuleDestroy(): void {
+        this.poolEnabledSubscription?.unsubscribe();
+    }
 
     async configForVariant(ctx: RequestContext, productVariantId: ID): Promise<AutoCardConfigView | null> {
         const config = await this.findConfig(ctx, productVariantId);
@@ -468,16 +487,44 @@ export class AutoCardService {
         reason = '',
     ): Promise<AutoCardPoolItemView> {
         const item = await this.ownedPoolItemOrThrow(ctx, id);
-        if (['ASSIGNED', 'RESERVED'].includes(item.state)) {
+        if (
+            ['ASSIGNED', 'RESERVED'].includes(item.state) ||
+            item.deliveryId != null ||
+            item.assignedAt != null
+        ) {
             throw new UserInputError('已分配或结算占用的卡密不能恢复或停用');
         }
-        item.state = enabled ? 'AVAILABLE' : 'DISABLED';
-        item.disabledReason = enabled ? null : reason.trim().slice(0, 2_000) || '管理员停用';
-        const saved = await this.connection.getRepository(ctx, AutoCardPoolItem).save(item);
-        if (enabled) {
-            await this.reconcileVariant(ctx, item.config.productVariantId);
+        const blocked = await inconsistentPoolReservationIds(ctx, this.connection, item.configId, [item.id]);
+        if (blocked.has(String(item.id)))
+            throw new UserInputError('卡密仍有未核清的订单占用，请先核对原订单');
+        const repository = this.connection.getRepository(ctx, AutoCardPoolItem);
+        const state = enabled ? 'AVAILABLE' : 'DISABLED';
+        const changed = await repository
+            .createQueryBuilder()
+            .update(AutoCardPoolItem)
+            .set({ state, disabledReason: enabled ? null : reason.trim().slice(0, 2_000) || '管理员停用' })
+            .where('id = :id AND configId = :configId', { id: item.id, configId: item.configId })
+            .andWhere('state = :previousState', { previousState: enabled ? 'DISABLED' : 'AVAILABLE' })
+            .andWhere('deliveryId IS NULL')
+            .andWhere('assignedAt IS NULL')
+            .execute();
+        // MySQL REPEATABLE READ requires a current read after the conditional write.
+        // SQLite serializes writes and does not support row-level lock clauses.
+        const saved = await repository.findOne({
+            where: { id: item.id, configId: item.configId },
+            ...(['mysql', 'mariadb'].includes(this.connection.rawConnection.options.type)
+                ? { lock: { mode: 'pessimistic_write' as const } }
+                : {}),
+        });
+        if (!saved || saved.state !== state || saved.deliveryId != null || saved.assignedAt != null)
+            throw new UserInputError('卡密状态已变化，已分配或结算占用的卡密不能恢复或停用');
+        if (changed.affected === 1) {
+            if (enabled)
+                await this.eventBus.publish(
+                    new AutoCardPoolEnabledEvent(ctx, String(item.config.productVariantId)),
+                );
+            await this.publishSupplyStockChange(ctx, item.configId, item.config.productVariantId);
         }
-        await this.publishSupplyStockChange(ctx, item.configId, item.config.productVariantId);
         const fields = parseAutoCardFieldsJson(item.config.fieldsJson);
         return Object.assign(saved, {
             maskedFields: maskAutoCardValues(this.cipher.decrypt(saved.encryptedPayload), fields),
@@ -1037,32 +1084,28 @@ export class AutoCardService {
         let candidates: AutoCardPoolItem[];
         if (reservation?.state === 'HELD' && reservation.stockPolicy === 'pool_derived') {
             const reservedIds = JSON.parse(reservation.poolItemIdsJson) as ID[];
-            candidates = reservedIds.length
-                ? await repository.find({
-                      where: { id: In(reservedIds), state: 'RESERVED' },
-                      order: { sequence: 'ASC' },
-                      take: remainingQuantity,
-                  })
-                : [];
-        } else
-            try {
-                candidates = await repository
-                    .createQueryBuilder('item')
-                    .setLock('pessimistic_write')
-                    .where('item.configId = :configId', { configId: delivery.configId })
-                    .andWhere('item.state = :state', { state: 'AVAILABLE' })
-                    .orderBy('item.sequence', 'ASC')
-                    .addOrderBy('item.id', 'ASC')
-                    .take(remainingQuantity)
-                    .getMany();
-            } catch (error) {
-                if (!isLockNotSupportedError(error)) throw error;
-                candidates = await repository.find({
-                    where: { configId: delivery.configId, state: 'AVAILABLE' },
-                    order: { sequence: 'ASC', id: 'ASC' },
-                    take: remainingQuantity,
-                });
-            }
+            candidates = await usablePoolItems(
+                ctx,
+                this.connection,
+                delivery.configId,
+                remainingQuantity,
+                'RESERVED',
+                reservedIds,
+                reservation.id,
+                true,
+            );
+        } else {
+            candidates = await usablePoolItems(
+                ctx,
+                this.connection,
+                delivery.configId,
+                remainingQuantity,
+                'AVAILABLE',
+                undefined,
+                undefined,
+                true,
+            );
+        }
         if (candidates.length < remainingQuantity) {
             delivery.state = 'WAITING_STOCK';
             delivery.lastError = `号池还需要 ${remainingQuantity} 份，当前可用 ${candidates.length} 份`;
@@ -1080,6 +1123,9 @@ export class AutoCardService {
             .update(AutoCardPoolItem)
             .set({ state: 'ASSIGNED', assignedAt: new Date(), deliveryId: delivery.id })
             .whereInIds(ids)
+            .andWhere('configId = :configId', { configId: delivery.configId })
+            .andWhere('deliveryId IS NULL')
+            .andWhere('assignedAt IS NULL')
             .andWhere('state = :available', {
                 available: reservation?.state === 'HELD' ? 'RESERVED' : 'AVAILABLE',
             })

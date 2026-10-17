@@ -24,6 +24,36 @@ const riskCase = {
     appeals: [],
 } as unknown as FraudRiskCase;
 
+it.each(['zh', 'en'] as const)('disables logout and announces its pending state in %s', language => {
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    const logout = vi.fn();
+    try {
+        act(() =>
+            root.render(
+                <AccountSecurityPage
+                    customer={customer}
+                    language={language}
+                    storefrontName="Fixture"
+                    onBack={vi.fn()}
+                    onAvatarChange={vi.fn()}
+                    onLogout={logout}
+                    logoutPending
+                />,
+            ),
+        );
+        const button = host.querySelector<HTMLButtonElement>('.security-logout-button');
+        if (!button) throw new Error('Expected the logout action');
+        expect(button.disabled).toBe(true);
+        expect(button.getAttribute('aria-busy')).toBe('true');
+        expect(button.textContent).toContain(language === 'zh' ? '正在退出' : 'Signing out');
+        act(() => button.click());
+        expect(logout).not.toHaveBeenCalled();
+    } finally {
+        act(() => root.unmount());
+    }
+});
+
 it('never inserts an empty risk card while checking an account without cases', () => {
     const host = document.createElement('div');
     const root = createRoot(host);

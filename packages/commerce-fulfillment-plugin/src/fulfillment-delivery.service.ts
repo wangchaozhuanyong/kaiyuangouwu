@@ -203,19 +203,21 @@ export class FulfillmentDeliveryService {
                 0,
                 Math.min(line.quantity, (line.orderPlacedQuantity || line.quantity) - refunded),
             );
-            const dispatchedLines = (owner.fulfillments ?? [])
+            // Created -> Pending already records a Sale in the core fulfillment process. Other
+            // Pending packages therefore own units just like Shipped/Delivered packages do.
+            const committedLines = (owner.fulfillments ?? [])
                 .filter(
                     item =>
                         String(item.id) !== String(current.id) &&
-                        ['Shipped', 'Delivered'].includes(item.state),
+                        ['Pending', 'Shipped', 'Delivered'].includes(item.state),
                 )
                 .flatMap(item => item.lines ?? [])
                 .filter(item => String(item.orderLineId) === lineId);
-            if (dispatchedLines.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 0))
-                return '已发货份数记录异常，请核对后再发货';
-            const dispatched = dispatchedLines.reduce((sum, item) => sum + item.quantity, 0);
-            if (quantity > Math.max(0, valid - dispatched)) {
-                return '包裹份数超过当前可发数量，请核对退款和已发货记录';
+            if (committedLines.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 0))
+                return '已准备出库或发货的份数记录异常，请核对后再发货';
+            const committed = committedLines.reduce((sum, item) => sum + item.quantity, 0);
+            if (quantity > Math.max(0, valid - committed)) {
+                return '包裹份数超过当前可发数量，请核对退款、准备出库和已发货记录';
             }
         }
         if (

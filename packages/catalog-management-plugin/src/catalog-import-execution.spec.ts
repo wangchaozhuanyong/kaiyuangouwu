@@ -1,12 +1,114 @@
 import type { RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { CATALOG_IMPORT_HEARTBEAT_MS, CatalogImportLeaseLostError } from './catalog-import-lease';
 import { CatalogImportQueueService } from './catalog-import-queue.service';
 import { CatalogImportService } from './catalog-import.service';
 import { CatalogImportJob } from './entities/catalog-import-job.entity';
 import { CatalogImportRow } from './entities/catalog-import-row.entity';
 
 describe('catalog import execution progress', () => {
+    it.each(
+        ['before-row', 'before-completion'].flatMap(phase =>
+            ['error', 'lease-lost', 'unknown'].map(kind => ({ phase, kind })),
+        ),
+    )('preserves $kind heartbeat failure $phase', async ({ phase, kind }) => {
+        vi.useFakeTimers();
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => {
+            release = resolve;
+        });
+        let entered!: () => void;
+        const ready = new Promise<void>(resolve => {
+            entered = resolve;
+        });
+        const pause = () => {
+            entered();
+            return gate;
+        };
+        const originalCause = { synthetic: 'original-cause' };
+        const failure =
+            kind === 'error'
+                ? Object.assign(new Error('synthetic heartbeat failure'), { cause: originalCause })
+                : kind === 'lease-lost'
+                  ? new CatalogImportLeaseLostError()
+                  : { synthetic: 'unknown-heartbeat-failure' };
+        const context = {
+            activeUserId: 'actor',
+            userHasPermissions: () => true,
+        } as unknown as RequestContext;
+        const jobRepository = { update: vi.fn().mockResolvedValue({ affected: 1 }) };
+        const categories = {
+            withDeferredFilters: async (_ctx: RequestContext, work: () => Promise<void>) => {
+                await work();
+                if (phase === 'before-completion') await pause();
+            },
+        };
+        const service = new CatalogImportService(
+            { getRepository: () => jobRepository } as never,
+            undefined as never,
+            { stockLocations: () => Promise.resolve([]) } as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            categories as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+        );
+        const owned = vi
+            .fn()
+            .mockRejectedValueOnce(failure)
+            .mockImplementation(
+                (
+                    _ctx: RequestContext,
+                    _id: unknown,
+                    _token: string,
+                    work: (ctx: RequestContext) => Promise<unknown>,
+                ) => work(context),
+            );
+        Reflect.set(service, 'executionLease', {
+            claim: vi.fn().mockResolvedValue('owned-attempt'),
+            owned,
+        });
+        vi.spyOn(service, 'findRows').mockResolvedValue(
+            phase === 'before-row'
+                ? [{ action: 'CREATE', productKey: 'synthetic', sourceKey: 'synthetic' } as CatalogImportRow]
+                : [],
+        );
+        try {
+            const execution = service
+                .executeJob(context, 'job', () => (phase === 'before-row' ? pause() : Promise.resolve()))
+                .catch((caught: unknown) => caught);
+            await ready;
+            await vi.advanceTimersByTimeAsync(CATALOG_IMPORT_HEARTBEAT_MS);
+            expect(owned).toHaveBeenCalledOnce();
+            release();
+            const error = await execution;
+            expect(error).toBeInstanceOf(Error);
+            if (!(error instanceof Error)) throw new Error('Expected an error heartbeat result');
+            if (failure instanceof Error) {
+                expect(error).toBe(failure);
+                if (kind === 'error') expect(Reflect.get(error, 'cause')).toBe(originalCause);
+            } else {
+                expect(error.message).toBe('[object Object]');
+                expect(Reflect.get(error, 'cause')).toBe(failure);
+            }
+            if (kind === 'lease-lost') {
+                expect(jobRepository.update).not.toHaveBeenCalled();
+            } else {
+                expect(jobRepository.update).toHaveBeenCalledWith(
+                    { id: 'job', state: 'RUNNING', executionToken: 'owned-attempt' },
+                    expect.objectContaining({ state: 'FAILED', errorMessage: error.message }),
+                );
+            }
+        } finally {
+            release();
+            vi.useRealTimers();
+        }
+    });
+
     it('marks preview preparation failures and saves a readable error on the job', async () => {
         const job = {
             id: 'job',
@@ -61,7 +163,7 @@ describe('catalog import execution progress', () => {
         );
     });
 
-    it('persists progress once per percentage and commits cache entries only after a successful transaction', async () => {
+    it('notifies once per percentage and commits cache entries only after a successful transaction', async () => {
         const rows = Array.from({ length: 4074 }, (_, index) => ({
             id: index,
             rowNumber: index + 2,
@@ -76,19 +178,24 @@ describe('catalog import execution progress', () => {
         })) as unknown as CatalogImportRow[];
         const jobRepository = { update: vi.fn().mockResolvedValue({ affected: 1 }) };
         const rowRepository = {
-            save: vi.fn().mockResolvedValue(undefined),
-            count: vi.fn().mockResolvedValue(1),
+            findOneByOrFail: vi.fn(({ id }: { id: number }) => Promise.resolve({ ...rows[id] })),
+            find: vi.fn(() => Promise.resolve(rows)),
+            save: vi.fn((row: CatalogImportRow) => {
+                Object.assign(rows[Number(row.id)], row);
+                return Promise.resolve(row);
+            }),
         };
         let first = true;
         const connection = {
             getRepository: (_ctx: RequestContext, entity: unknown) =>
                 entity === CatalogImportJob ? jobRepository : rowRepository,
-            withTransaction: async (ctx: RequestContext, work: (ctx: RequestContext) => Promise<void>) => {
-                await work(ctx);
+            withTransaction: async <T>(ctx: RequestContext, work: (ctx: RequestContext) => Promise<T>) => {
+                const result = await work(ctx);
                 if (first) {
                     first = false;
                     throw new Error('commit failed');
                 }
+                return result;
             },
         };
         const categories = {
@@ -114,6 +221,15 @@ describe('catalog import execution progress', () => {
             { reindex: () => Promise.resolve() } as never,
             undefined as never,
         );
+        Reflect.set(service, 'executionLease', {
+            claim: vi.fn().mockResolvedValue('owned-attempt'),
+            owned: (
+                ctx: RequestContext,
+                _id: string,
+                _token: string,
+                work: (ctx: RequestContext, job: CatalogImportJob) => Promise<unknown>,
+            ) => connection.withTransaction(ctx, () => work(ctx, { id: 'job' } as CatalogImportJob)),
+        });
         vi.spyOn(service, 'findJob').mockResolvedValue({ id: 'job' } as CatalogImportJob);
         vi.spyOn(service, 'findRows').mockResolvedValue(rows);
         Reflect.set(service, 'refreshCounts', () => Promise.resolve());
@@ -153,14 +269,14 @@ describe('catalog import execution progress', () => {
         });
         expect(rowRepository.save).toHaveBeenCalledTimes(1);
         expect(jobRepository.update).toHaveBeenLastCalledWith(
-            'job',
+            { id: 'job', state: 'RUNNING', executionToken: 'owned-attempt' },
             expect.objectContaining({
                 state: 'COMPLETED_WITH_ERRORS',
                 progress: 100,
             }),
         );
     });
-    it('marks infrastructure failures retryable instead of leaving an import running forever', async () => {
+    it('does not let a queue failure overwrite a different execution owner', async () => {
         const repository = {
             findOne: vi.fn().mockResolvedValue({ id: 'job', actorId: 'actor', state: 'QUEUED', channel: {} }),
             update: vi.fn().mockResolvedValue({ affected: 1 }),
@@ -174,13 +290,7 @@ describe('catalog import execution progress', () => {
         await expect(
             Reflect.get(queue, 'process').call(queue, { data: { importJobId: 'job' } }),
         ).rejects.toThrow('category queue unavailable');
-        expect(repository.update).toHaveBeenCalledWith(
-            { id: 'job', state: 'RUNNING' },
-            {
-                state: 'FAILED',
-                errorMessage: 'category queue unavailable',
-            },
-        );
+        expect(repository.update).not.toHaveBeenCalled();
     });
 
     it('rejects direct execution and enqueue before any database access without import permission', async () => {
@@ -205,9 +315,12 @@ describe('catalog import execution progress', () => {
     });
 
     it('records the administrator authorizing a retry before dispatching it', async () => {
-        const job = { id: 'job', state: 'FAILED', actorId: 'revoked-actor' } as CatalogImportJob;
-        const saved = vi.fn().mockResolvedValue(job);
-        const connection = { getRepository: () => ({ count: () => Promise.resolve(0), save: saved }) };
+        const job = { id: 'job', state: 'FAILED', actorId: 'revoked-actor', version: 7 } as CatalogImportJob;
+        const saved = vi.fn((_criteria, patch) => {
+            Object.assign(job, patch);
+            return Promise.resolve({ affected: 1 });
+        });
+        const connection = { getRepository: () => ({ count: () => Promise.resolve(0), update: saved }) };
         const service = new CatalogImportService(
             connection as never,
             undefined as never,
@@ -223,7 +336,15 @@ describe('catalog import execution progress', () => {
         );
         vi.spyOn(service, 'findJob').mockResolvedValue(job);
         const dispatch = vi.fn().mockImplementation(() => {
-            expect(saved).toHaveBeenCalled();
+            expect(saved).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 'job', state: 'FAILED', version: 7 }),
+                expect.objectContaining({
+                    actorId: 'authorized-retry-actor',
+                    state: 'QUEUED',
+                    executionToken: null,
+                    leaseUntil: null,
+                }),
+            );
             expect(job.actorId).toBe('authorized-retry-actor');
             return Promise.resolve();
         });

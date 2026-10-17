@@ -388,8 +388,8 @@ describe('physical shipment eligibility', () => {
         await expect(guard(test)).resolves.toBeUndefined();
     });
 
-    it.each(['Shipped', 'Delivered'])(
-        'counts other %s units but does not count Created packages as already sent',
+    it.each(['Pending', 'Shipped', 'Delivered'])(
+        'counts other %s units but does not count Created packages as committed',
         async state => {
             const test = shipmentHarness();
             test.order.fulfillments.push(
@@ -401,6 +401,21 @@ describe('physical shipment eligibility', () => {
             await expect(guard(test)).resolves.toContain('超过当前可发数量');
         },
     );
+
+    it('releases committed units when a sibling Pending package is cancelled', async () => {
+        const test = shipmentHarness();
+        test.order.lines[0].quantity = 1;
+        test.order.lines[0].orderPlacedQuantity = 1;
+        const other = {
+            id: 'other-package',
+            state: 'Pending',
+            lines: [{ orderLineId: 'line-1', quantity: 1 }],
+        };
+        test.order.fulfillments.push(other);
+        await expect(guard(test, 'Pending')).resolves.toContain('超过当前可发数量');
+        other.state = 'Cancelled';
+        await expect(guard(test, 'Pending')).resolves.toBeUndefined();
+    });
 
     it('aggregates duplicate package lines before comparing the remaining valid quantity', async () => {
         const test = shipmentHarness();
@@ -566,51 +581,54 @@ describe('physical shipment eligibility', () => {
         expect(test.orderService.lockOrderForRefund).toHaveBeenCalledTimes(4);
     });
 
-    it('serializes two Created packages against one remaining unit and rejects the second dispatch', async () => {
-        const test = shipmentHarness();
-        test.order.lines[0].quantity = 1;
-        test.order.lines[0].orderPlacedQuantity = 1;
-        const first = { ...test.fulfillment, id: 'first', state: 'Created' };
-        const second = { ...test.fulfillment, id: 'second', state: 'Created' };
-        test.order.fulfillments = [first, second];
-        const packages = new Map([
-            ['first', first],
-            ['second', second],
-        ]);
-        let id = '';
-        test.fulfillmentQueryBuilder.where.mockImplementation((_sql, params) => {
-            id = params.fulfillmentId;
-            return test.fulfillmentQueryBuilder;
-        });
-        test.fulfillmentQueryBuilder.getOne.mockImplementation(() => Promise.resolve(packages.get(id)));
-        let previous = Promise.resolve();
-        const releases = new Map<object, () => void>();
-        test.orderService.lockOrderForRefund.mockImplementation(async (ctx: object) => {
-            const pending = previous;
-            previous = new Promise<void>(resolve => releases.set(ctx, resolve));
-            await pending;
-        });
-        const dispatch = async (value: any) => {
-            const ctx = { ...test.ctx };
-            try {
-                const result = await test.service.guardPhysicalFulfillmentPayment(
-                    ctx,
-                    value,
-                    [test.order],
-                    'Shipped',
-                );
-                if (result === undefined) value.state = 'Shipped';
-                return result;
-            } finally {
-                releases.get(ctx)?.();
-            }
-        };
-        const results = await Promise.all([dispatch(first), dispatch(second)]);
-        expect(results[0]).toBeUndefined();
-        expect(results[1]).toContain('超过当前可发数量');
-        expect(first.state).toBe('Shipped');
-        expect(second.state).toBe('Created');
-    });
+    it.each(['Pending', 'Shipped'] as const)(
+        'serializes two Created packages against one remaining unit and rejects the second %s transition',
+        async toState => {
+            const test = shipmentHarness();
+            test.order.lines[0].quantity = 1;
+            test.order.lines[0].orderPlacedQuantity = 1;
+            const first = { ...test.fulfillment, id: 'first', state: 'Created' };
+            const second = { ...test.fulfillment, id: 'second', state: 'Created' };
+            test.order.fulfillments = [first, second];
+            const packages = new Map([
+                ['first', first],
+                ['second', second],
+            ]);
+            let id = '';
+            test.fulfillmentQueryBuilder.where.mockImplementation((_sql, params) => {
+                id = params.fulfillmentId;
+                return test.fulfillmentQueryBuilder;
+            });
+            test.fulfillmentQueryBuilder.getOne.mockImplementation(() => Promise.resolve(packages.get(id)));
+            let previous = Promise.resolve();
+            const releases = new Map<object, () => void>();
+            test.orderService.lockOrderForRefund.mockImplementation(async (ctx: object) => {
+                const pending = previous;
+                previous = new Promise<void>(resolve => releases.set(ctx, resolve));
+                await pending;
+            });
+            const dispatch = async (value: any) => {
+                const ctx = { ...test.ctx };
+                try {
+                    const result = await test.service.guardPhysicalFulfillmentPayment(
+                        ctx,
+                        value,
+                        [test.order],
+                        toState,
+                    );
+                    if (result === undefined) value.state = toState;
+                    return result;
+                } finally {
+                    releases.get(ctx)?.();
+                }
+            };
+            const results = await Promise.all([dispatch(first), dispatch(second)]);
+            expect(results[0]).toBeUndefined();
+            expect(results[1]).toContain('超过当前可发数量');
+            expect(first.state).toBe(toState);
+            expect(second.state).toBe('Created');
+        },
+    );
 });
 
 describe('FulfillmentDeliveryService', () => {
