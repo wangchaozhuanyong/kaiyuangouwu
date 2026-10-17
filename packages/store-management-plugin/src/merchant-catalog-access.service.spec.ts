@@ -539,6 +539,58 @@ describe('MerchantCatalogAccessService', () => {
     });
 
     it.each([
+        ['__default_channel__', true, true],
+        ['__default_channel__', false, false],
+        ['store-a', true, false],
+        ['store-a', false, false],
+    ])(
+        'limits ordinary promotion unlinking to the platform SuperAdmin (%s, %s)',
+        async (code, superAdmin, allowed) => {
+            const { service } = createService({ merchant: false });
+            const ctx = {
+                ...merchantContext,
+                channel: { code },
+                userHasPermissions: (permissions: Permission[]) =>
+                    superAdmin && permissions.includes(Permission.SuperAdmin),
+            };
+            const result = service.assertRootFieldAccess(ctx, 'Mutation', 'removePromotionsFromChannel', {
+                input: { promotionIds: ['ordinary-promotion'], channelId: 'store-b' },
+            });
+            if (allowed) await expect(result).resolves.toBeUndefined();
+            else await expect(result).rejects.toThrow('平台商品分配中心');
+        },
+    );
+
+    it('retains the managed coupon guard and all other sharing blocks for platform SuperAdmin', async () => {
+        const ctx = {
+            ...merchantContext,
+            channel: { code: '__default_channel__' },
+            userHasPermissions: () => true,
+        };
+        const coupon = createService({
+            merchant: false,
+            couponConfigs: [{ promotionId: 'coupon-1', channelId: 'store-a' }],
+        });
+        await expect(
+            coupon.service.assertRootFieldAccess(ctx, 'Mutation', 'removePromotionsFromChannel', {
+                input: { promotionIds: ['coupon-1'], channelId: 'store-a' },
+            }),
+        ).rejects.toThrow('优惠券');
+        const ordinary = createService({ merchant: false });
+        for (const field of [
+            'assignPromotionsToChannel',
+            'removeProductsFromChannel',
+            'removeFacetsFromChannel',
+            'removePaymentMethodsFromChannel',
+        ])
+            await expect(
+                ordinary.service.assertRootFieldAccess(ctx, 'Mutation', field, {
+                    input: { promotionIds: ['ordinary-promotion'], channelId: 'store-b' },
+                }),
+            ).rejects.toThrow('平台商品分配中心');
+    });
+
+    it.each([
         'createPromotion',
         'updatePromotion',
         'deletePromotion',
