@@ -326,6 +326,203 @@ describe('public page inline artwork', () => {
         });
         return { ...h, read, authorize };
     }
+    it('completes document artwork after joining the shorter API read without mutating its response', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        let complete!: (value: string) => void;
+        const derivative = new Promise<string>(resolve => {
+            complete = resolve;
+        });
+        h.read.mockReturnValue(derivative);
+        const api = h.service.read(h.ctx, 'a.test');
+        const document = h.service.readForDocument(h.ctx, 'a.test');
+        await vi.advanceTimersByTimeAsync(251);
+        const partial = await api;
+        const original = JSON.stringify(partial);
+        expect(partial.media[0].placeholder).toBeUndefined();
+        complete('data:image/webp;base64,AAAA');
+        const ready = await document;
+        expect(ready.media[0].placeholder?.inlineData).toBe('data:image/webp;base64,AAAA');
+        expect(JSON.stringify(partial)).toBe(original);
+        expect(ready).not.toBe(partial);
+        expect(ready.version).not.toBe(partial.version);
+        expect(h.content).toHaveBeenCalledOnce();
+        expect(h.config).toHaveBeenCalledOnce();
+    });
+    it('does not prepare warm document artwork again when its eight asset slots are complete', async () => {
+        const h = artworkHarness(
+            false,
+            Array.from({ length: 9 }, (_, index) => `hero-${index}.webp`),
+        );
+        const shared = await h.service.read(h.ctx, 'a.test');
+        expect(shared.media.some(item => !item.placeholder)).toBe(true);
+        expect(h.read).toHaveBeenCalledTimes(8);
+        h.read.mockClear();
+        h.authorize.mockClear();
+        expect(await h.service.readForDocument(h.ctx, 'a.test')).toBe(shared);
+        expect(h.read).not.toHaveBeenCalled();
+        expect(h.authorize).not.toHaveBeenCalled();
+        expect(h.content).toHaveBeenCalledOnce();
+    });
+    it('does not borrow a preview across different versions of the same asset path', async () => {
+        const h = artworkHarness(false, ['same.webp?v=old', 'same.webp?v=new']);
+        h.read.mockResolvedValueOnce('data:image/webp;base64,AAAA').mockResolvedValueOnce(undefined);
+        const shared = await h.service.read(h.ctx, 'a.test');
+        expect(shared.media.some(item => item.placeholder)).toBe(true);
+        expect(shared.media.some(item => !item.placeholder)).toBe(true);
+        h.read.mockClear().mockResolvedValue('data:image/webp;base64,BBBB');
+        const document = await h.service.readForDocument(h.ctx, 'a.test');
+        expect(h.read).toHaveBeenCalledTimes(2);
+        expect(
+            document.media.every(item => item.placeholder?.inlineData === 'data:image/webp;base64,BBBB'),
+        ).toBe(true);
+        expect(shared.media.find(item => item.placeholder)?.placeholder?.inlineData).toBe(
+            'data:image/webp;base64,AAAA',
+        );
+    });
+    it('keeps preview documents on the existing uncached path without shared revision reads', async () => {
+        const h = artworkHarness();
+        h.state.mode = 'PREVIEW';
+        const revision = vi.spyOn(h.cache, 'revision');
+        const document = await h.service.readForDocument(h.ctx, 'a.test');
+        expect(document.config).toMatchObject({ accessMode: 'PREVIEW' });
+        expect(revision).not.toHaveBeenCalled();
+        expect(h.content).toHaveBeenCalledOnce();
+    });
+    it('keeps the existing short public fallback when shared revisions are unavailable', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        vi.spyOn(h.cache, 'revision').mockResolvedValue(undefined);
+        h.read.mockReturnValue(new Promise(() => undefined));
+        const pending = h.service.readForDocument(h.ctx, 'a.test');
+        await vi.advanceTimersByTimeAsync(251);
+        const document = await pending;
+        expect(document.content).toBeDefined();
+        expect(document.media.every(item => !item.placeholder)).toBe(true);
+        expect(h.read).toHaveBeenCalledOnce();
+    });
+    it('ends document-only preparation after an additional 500ms and retains usable content', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        h.read.mockReturnValue(new Promise(() => undefined));
+        let settled = false;
+        const pending = h.service.readForDocument(h.ctx, 'a.test').then(snapshot => {
+            settled = true;
+            return snapshot;
+        });
+        await vi.advanceTimersByTimeAsync(251);
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(498);
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(2);
+        const page = await pending;
+        expect(settled).toBe(true);
+        expect(page.content).toBeDefined();
+        expect(page.media[0].placeholder).toBeUndefined();
+        expect(h.content).toHaveBeenCalledOnce();
+    });
+    it('removes newly denied retained pixels from only the document response', async () => {
+        const h = artworkHarness(false, ['retained.webp', 'missing.webp']);
+        h.read.mockImplementation(path =>
+            Promise.resolve(path.includes('retained') ? 'data:image/webp;base64,AAAA' : undefined),
+        );
+        const shared = await h.service.read(h.ctx, 'a.test');
+        expect(shared.media[0].placeholder).toBeDefined();
+        h.authorize.mockImplementation(path => Promise.resolve(!path.includes('retained')));
+        const document = await h.service.readForDocument(h.ctx, 'a.test');
+        expect(document.media.every(item => !item.placeholder)).toBe(true);
+        expect(shared.media[0].placeholder).toBeDefined();
+        expect(document).not.toBe(shared);
+    });
+    it('shares additional document preparation through the existing in-flight owner', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        h.read.mockResolvedValue(undefined);
+        await h.service.read(h.ctx, 'a.test');
+        let complete!: (value: string) => void;
+        h.read.mockClear().mockReturnValue(new Promise(resolve => (complete = resolve)));
+        const documents = Array.from({ length: 3 }, () => h.service.readForDocument(h.ctx, 'a.test'));
+        await vi.advanceTimersByTimeAsync(1);
+        expect(h.read).toHaveBeenCalledOnce();
+        complete('data:image/webp;base64,AAAA');
+        const pages = await Promise.all(documents);
+        expect(
+            pages.every(page => page.media[0].placeholder?.inlineData === 'data:image/webp;base64,AAAA'),
+        ).toBe(true);
+    });
+    it('returns document content within its budget while saturated origin slots defer preparation', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness();
+        h.read.mockResolvedValue(undefined);
+        await h.service.read(h.ctx, 'a.test');
+        h.read.mockClear();
+        let release!: () => void;
+        const gate = new Promise<void>(resolve => (release = resolve));
+        const owners = Array.from({ length: 4 }, (_, index) =>
+            h.cache.readThrough(h.ctx, `occupied-${index}`, 1, () => gate),
+        );
+        await vi.advanceTimersByTimeAsync(1);
+        const pending = h.service.readForDocument(h.ctx, 'a.test');
+        await vi.advanceTimersByTimeAsync(501);
+        expect((await pending).content).toBeDefined();
+        expect(h.read).not.toHaveBeenCalled();
+        release();
+        await Promise.all(owners);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(h.read).not.toHaveBeenCalled();
+    });
+    it('does not inherit retained pixels when their renewed authorization is still pending at the deadline', async () => {
+        vi.useFakeTimers();
+        const h = artworkHarness(false, ['retained.webp', 'missing.webp']);
+        h.read.mockImplementation(path =>
+            Promise.resolve(path.includes('retained') ? 'data:image/webp;base64,AAAA' : undefined),
+        );
+        const shared = await h.service.read(h.ctx, 'a.test');
+        h.authorize.mockImplementation(path =>
+            path.includes('retained') ? new Promise<boolean>(() => undefined) : Promise.resolve(true),
+        );
+        const pending = h.service.readForDocument(h.ctx, 'a.test');
+        await vi.advanceTimersByTimeAsync(501);
+        expect((await pending).media.every(item => !item.placeholder)).toBe(true);
+        expect(shared.media[0].placeholder).toBeDefined();
+    });
+    it.each(['missing', 'storage-error'])(
+        'keeps terminal %s document artwork local without waiting out its deadline',
+        async outcome => {
+            vi.useFakeTimers();
+            const h = artworkHarness();
+            if (outcome === 'missing') h.read.mockResolvedValue(undefined);
+            else h.read.mockRejectedValue(new Error('storage unavailable'));
+            const document = await h.service.readForDocument(h.ctx, 'a.test');
+            expect(document.content).toBeDefined();
+            expect(document.media.every(item => !item.placeholder)).toBe(true);
+            expect(h.content).toHaveBeenCalledOnce();
+            expect(vi.getTimerCount()).toBe(0);
+        },
+    );
+    it.each(['revision', 'PREVIEW', 'CLOSED', 'currency'])(
+        'rejects a document when %s changes during its additional preparation',
+        async change => {
+            vi.useFakeTimers();
+            const h = artworkHarness();
+            h.read.mockResolvedValue(undefined);
+            const shared = await h.service.read(h.ctx, 'a.test');
+            let complete!: (value: string) => void;
+            h.read.mockReturnValue(new Promise(resolve => (complete = resolve)));
+            const pending = h.service.readForDocument(h.ctx, 'a.test');
+            const rejected = expect(pending).rejects.toBeInstanceOf(
+                change === 'CLOSED' ? StorefrontClosedError : ServiceUnavailableException,
+            );
+            await vi.advanceTimersByTimeAsync(1);
+            if (change === 'revision') await h.cache.invalidate('a');
+            else if (change === 'currency') (h.ctx as { currencyCode: string }).currencyCode = 'CNY';
+            else h.state.mode = change;
+            complete('data:image/webp;base64,AAAA');
+            await rejected;
+            expect(shared.media.every(item => !item.placeholder)).toBe(true);
+            expect(h.content).toHaveBeenCalledOnce();
+        },
+    );
     it('keeps API and worker caches separate and never freezes unfinished cold metadata across consecutive TTL cycles', async () => {
         vi.useFakeTimers();
         const api = artworkHarness();

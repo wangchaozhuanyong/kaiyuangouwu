@@ -55,7 +55,10 @@ function fixture() {
         resolveRequest: vi.fn().mockResolvedValue({ ctx, host: 'synthetic-store.invalid' }),
     };
     const contexts = { create: vi.fn().mockResolvedValue(ctx) };
-    const pages = { read: vi.fn().mockResolvedValue(page) };
+    const pages = {
+        read: vi.fn().mockResolvedValue(page),
+        readForDocument: vi.fn().mockResolvedValue(page),
+    };
     const publicSeo = {
         primaryHost: vi.fn().mockResolvedValue('synthetic-store.invalid'),
         enrich: vi.fn().mockResolvedValue(page),
@@ -86,6 +89,27 @@ function fixture() {
 }
 
 describe('StorefrontSeoController public document and legacy redirects', () => {
+    it('renders the document media result instead of the short public API result', async () => {
+        const test = fixture();
+        const preparedPage = { ...test.page, version: 'prepared-document' };
+        test.pages.read.mockResolvedValue({ ...test.page, version: 'short-api-result' });
+        test.pages.readForDocument.mockResolvedValue(preparedPage);
+        test.publicSeo.enrich.mockImplementation(
+            (_ctx: RequestContext, _host: string, page: StorefrontPageData) => Promise.resolve(page),
+        );
+        const response = responseMock();
+
+        await test.controller.document(test.req('/en/product?id=product-1'), response as unknown as Response);
+
+        expect(test.pages.readForDocument).toHaveBeenCalledWith(test.ctx, 'synthetic-store.invalid', {
+            kind: 'product',
+            id: 'product-1',
+        });
+        expect(test.pages.read).not.toHaveBeenCalled();
+        expect(test.html.render).toHaveBeenCalledWith(preparedPage);
+        expect(response.status).toHaveBeenCalledWith(200);
+    });
+
     it.each(['document', 'legacyRedirect'] as const)(
         '%s handles a published unknown old slug before parsing or reading page content',
         async method => {
@@ -100,7 +124,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
             await test.controller[method](test.req('/old-buyer-guide'), response as unknown as Response);
 
             expect(response.redirect).toHaveBeenCalledWith(301, '/en/guides/buyer-guide');
-            expect(test.pages.read).not.toHaveBeenCalled();
+            expect(test.pages.readForDocument).not.toHaveBeenCalled();
             expect(test.html.render).not.toHaveBeenCalled();
             expect(test.contexts.create).not.toHaveBeenCalled();
         },
@@ -139,7 +163,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
                 301,
                 '/en/guides/buyer-guide?utm_source=synthetic&utm_campaign=october&gclid=synthetic-click',
             );
-            expect(test.pages.read).not.toHaveBeenCalled();
+            expect(test.pages.readForDocument).not.toHaveBeenCalled();
         },
     );
 
@@ -174,7 +198,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
             301,
             'https://primary-synthetic.invalid/en/product?id=product-1&utm_source=synthetic',
         );
-        expect(test.pages.read).not.toHaveBeenCalled();
+        expect(test.pages.readForDocument).not.toHaveBeenCalled();
     });
 
     it('ignores an untrusted original-uri header and uses the explicit query path', async () => {
@@ -191,7 +215,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         await test.controller.document(request, response as unknown as Response);
 
         expect(response.redirect).not.toHaveBeenCalled();
-        expect(test.pages.read).toHaveBeenCalledWith(test.ctx, 'synthetic-store.invalid', {
+        expect(test.pages.readForDocument).toHaveBeenCalledWith(test.ctx, 'synthetic-store.invalid', {
             kind: 'product',
             id: 'product-1',
         });
