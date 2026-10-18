@@ -1,6 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import sanitizeHtml from 'sanitize-html';
 
+// Apply on read too: historical sanitized mail must not load sender-owned images or CSS.
+// A srcdoc sandbox without scripts still allows network subresources under the parent policy.
+export function mailPreviewHtml(html: string | null | undefined): string | null {
+    if (!html) return html ?? null;
+    return (
+        '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +
+        "img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\">" +
+        html
+    );
+}
+
 @Injectable()
 export class IcloudMailSanitizerService {
     sanitize(html: string | null | undefined): string {

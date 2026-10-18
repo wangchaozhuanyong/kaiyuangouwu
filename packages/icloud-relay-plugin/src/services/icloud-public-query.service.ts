@@ -15,6 +15,7 @@ import {
 } from '../types';
 
 import { IcloudAccessCodeService } from './icloud-access-code.service';
+import { mailPreviewHtml } from './icloud-mail-sanitizer.service';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
 const MAX_FAILED_IP_RECORDS = 10_000;
@@ -314,7 +315,7 @@ export class IcloudPublicQueryService {
             // Recompute on read so historical extraction errors do not reach the copy button.
             extractedCode: this.otpExtractor.extractCode(mail.subject, mail.bodyText || ''),
             bodyText: mail.bodyText,
-            bodyHtml: mail.bodyHtml,
+            bodyHtml: mailPreviewHtml(mail.bodyHtml),
             targetEmail: this.maskEmail(targetEmail),
         };
     }

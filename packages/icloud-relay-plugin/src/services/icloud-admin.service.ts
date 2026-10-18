@@ -22,6 +22,7 @@ import { IcloudCipherService } from './icloud-cipher.service';
 import { IcloudIdleService } from './icloud-idle.service';
 import { IcloudImapSyncService, SyncAccountResult, TestConnectionResult } from './icloud-imap-sync.service';
 import { IcloudMailHistoryService } from './icloud-mail-history.service';
+import { mailPreviewHtml } from './icloud-mail-sanitizer.service';
 import { lockMailAccount, refreshMailCounts } from './icloud-mail-storage';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 import { updateIcloudRecord } from './icloud-record-update';
@@ -483,6 +484,9 @@ export class IcloudAdminService {
             limit?: number;
         },
     ): Promise<IcloudReceivedMail[]> {
+        if (options.limit != null && (!Number.isInteger(options.limit) || options.limit <= 0)) {
+            throw new UserInputError('邮件查询数量必须是正整数');
+        }
         const repo = this.connection.getRepository(ctx, IcloudReceivedMail);
         const query = repo.createQueryBuilder('mail');
 
@@ -494,22 +498,30 @@ export class IcloudAdminService {
             query.where('mail.primaryAccountId = :pId', { pId: options.primaryAccountId });
         }
 
-        query.orderBy('mail.receivedAt', 'DESC').take(options.limit || 50);
+        query.orderBy('mail.receivedAt', 'DESC').take(Math.min(options.limit ?? 50, 200));
         const mails = await query.getMany();
         // Admin consumers (including the recharge app) need the same corrected historical codes.
-        return mails.map(
-            mail =>
-                new IcloudReceivedMail({
-                    ...mail,
-                    extractedCode: this.otpExtractor.extractCode(mail.subject, mail.bodyText || ''),
-                }),
+        return mails.map(mail =>
+            this.toReceivedMailView(mail, this.otpExtractor.extractCode(mail.subject, mail.bodyText || '')),
         );
     }
 
+    private toReceivedMailView(
+        mail: IcloudReceivedMail,
+        extractedCode: string | null = mail.extractedCode,
+    ): IcloudReceivedMail {
+        return new IcloudReceivedMail({
+            ...mail,
+            bodyHtml: mailPreviewHtml(mail.bodyHtml),
+            extractedCode,
+        });
+    }
+
     async reassignMail(ctx: RequestContext, mailId: ID, virtualEmailId: ID): Promise<IcloudReceivedMail> {
-        return this.connection.withTransaction(ctx, transactionCtx =>
+        const mail = await this.connection.withTransaction(ctx, transactionCtx =>
             this.reassignMailInTransaction(transactionCtx, mailId, virtualEmailId),
         );
+        return this.toReceivedMailView(mail);
     }
 
     private async reassignMailInTransaction(

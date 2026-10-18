@@ -10,12 +10,40 @@ import { GptRechargeShopResolver } from './plugin';
 import {
     allowedRechargeOrigin,
     openRechargeSecret,
+    readRechargeResponse,
     rechargeCredentialMatches,
     sealRechargeSecret,
     validateRechargeSession,
 } from './security';
 import { GptRechargeService } from './service';
 const source = 'https://executor.example.test';
+describe('bounded recharge response bytes', () => {
+    it('preserves Fetch UTF-8 decoding when a JSON response starts with a byte order mark', async () => {
+        const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('{"status":"queued"}')]);
+        const expected = await new Response(bytes).text();
+        expect(await readRechargeResponse(new Response(bytes))).toBe(expected);
+        expect(JSON.parse(expected)).toEqual({ status: 'queued' });
+    });
+    it('accepts normal UTF-8 content and the exact byte boundary', async () => {
+        const text = JSON.stringify({ text: '界'.repeat(12_000) });
+        expect(await readRechargeResponse(new Response(text))).toBe(text);
+        const boundary = ' '.repeat(65_536);
+        expect(await readRechargeResponse(new Response(boundary))).toBe(boundary);
+    });
+    it('rejects oversized UTF-8 bytes even when the character count is below the limit', async () => {
+        const text = JSON.stringify({ text: '界'.repeat(30_000) });
+        expect(text.length).toBeLessThan(65_536);
+        await expect(readRechargeResponse(new Response(text))).rejects.toThrow('size limit');
+    });
+    it('cancels an oversized declared body without consuming it', async () => {
+        const cancel = vi.fn();
+        const body = new ReadableStream<Uint8Array>({ cancel });
+        await expect(
+            readRechargeResponse(new Response(body, { headers: { 'content-length': '65537' } })),
+        ).rejects.toThrow('size limit');
+        expect(cancel).toHaveBeenCalledOnce();
+    });
+});
 const key = 'synthetic-service-credential-for-test-only';
 const session = JSON.stringify({
     user: { id: 'demo', email: 'demo@example.test' },
@@ -120,6 +148,24 @@ describe('GPT recharge real SQL migration and service boundary', () => {
         await db?.destroy();
         vi.unstubAllEnvs();
         vi.unstubAllGlobals();
+    });
+    it('cancels an oversized streamed upstream response before reading the rest', async () => {
+        let pulls = 0;
+        let cancelled = false;
+        const body = new ReadableStream<Uint8Array>({
+            pull(controller) {
+                pulls++;
+                if (pulls > 8) controller.close();
+                else controller.enqueue(new Uint8Array(32_768).fill(32));
+            },
+            cancel() {
+                cancelled = true;
+            },
+        });
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+        await expect(service.verify(ctx(), 'oversized-response')).rejects.toThrow('充值服务暂时无法确认请求');
+        expect(cancelled).toBe(true);
+        expect(pulls).toBeLessThanOrEqual(4);
     });
     it.each(['plus', 'pro_5x', 'pro_20x'])(
         'uses code-bound %s and stores no plaintext credentials',

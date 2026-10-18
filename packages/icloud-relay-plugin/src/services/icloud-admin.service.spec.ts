@@ -154,6 +154,43 @@ function mutationService(options: {
 }
 
 describe('admin received mail verification codes', () => {
+    it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+        'rejects invalid page size %s without querying',
+        async limit => {
+            const getRepository = vi.fn();
+            const service = new IcloudAdminService(
+                { getRepository } as unknown as TransactionalConnection,
+                {} as IcloudCipherService,
+                new IcloudAccessCodeService(),
+                {} as IcloudImapSyncService,
+                {} as IcloudMailHistoryService,
+                new IcloudOtpExtractorService(),
+            );
+            await expect(service.findReceivedMails({} as RequestContext, { limit })).rejects.toBeInstanceOf(
+                UserInputError,
+            );
+            expect(getRepository).not.toHaveBeenCalled();
+        },
+    );
+    it('caps explicit mailbox pages before reading full message bodies', async () => {
+        const query = {
+            orderBy: vi.fn().mockReturnThis(),
+            take: vi.fn().mockReturnThis(),
+            getMany: vi.fn().mockResolvedValue([]),
+        };
+        const service = new IcloudAdminService(
+            {
+                getRepository: () => ({ createQueryBuilder: () => query }),
+            } as unknown as TransactionalConnection,
+            {} as IcloudCipherService,
+            new IcloudAccessCodeService(),
+            {} as IcloudImapSyncService,
+            {} as IcloudMailHistoryService,
+            new IcloudOtpExtractorService(),
+        );
+        await service.findReceivedMails({} as RequestContext, { limit: 2_147_483_647 });
+        expect(query.take).toHaveBeenCalledWith(200);
+    });
     it('returns corrected historical codes to recharge consumers without rewriting stored mail', async () => {
         const subject = 'Your temporary ChatGPT verification code';
         const mails = [
@@ -163,6 +200,7 @@ describe('admin received mail verification codes', () => {
                 virtualEmailId: 'alias-1',
                 subject,
                 bodyText: 'ChatGPT\nEnter this temporary verification code to continue:\n482913',
+                bodyHtml: '<p>Historical mail</p>',
                 extractedCode: 'ChatGPT',
             }),
             new IcloudReceivedMail({ id: 'mail-2', subject, bodyText: 'ChatGPT', extractedCode: 'ChatGPT' }),
@@ -195,6 +233,8 @@ describe('admin received mail verification codes', () => {
             virtualEmailId: 'alias-1',
         });
         expect(result[0]).not.toBe(mails[0]);
+        expect(result[0].bodyHtml).toContain("default-src 'none'");
+        expect(mails[0].bodyHtml).toBe('<p>Historical mail</p>');
         expect(mails.map(mail => mail.extractedCode)).toEqual(['ChatGPT', 'ChatGPT']);
         expect(query.where).toHaveBeenCalledWith('mail.virtualEmailId = :vId', { vId: 'alias-1' });
         expect(query.take).toHaveBeenCalledWith(5);

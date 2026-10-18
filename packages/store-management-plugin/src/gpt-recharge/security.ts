@@ -1,6 +1,34 @@
 import { UserInputError } from '@vendure/core';
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
+/** Limit decoded bytes while reading; a timeout or a character-count check cannot bound allocation. */
+export async function readRechargeResponse(response: Response): Promise<string> {
+    const maximumBytes = 65_536;
+    if (Number(response.headers.get('content-length') ?? 0) > maximumBytes) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new Error('Recharge response exceeds the size limit');
+    }
+    if (!response.body) return '';
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            bytes += value.byteLength;
+            if (bytes > maximumBytes) {
+                await reader.cancel().catch(() => undefined);
+                throw new Error('Recharge response exceeds the size limit');
+            }
+            chunks.push(value);
+        }
+        return new TextDecoder().decode(Buffer.concat(chunks, bytes));
+    } finally {
+        reader.releaseLock();
+    }
+}
+
 export function rechargeKey(): Buffer {
     const key = process.env.GPT_RECHARGE_ENCRYPTION_KEY ?? '';
     if (!/^[0-9a-f]{64}$/i.test(key)) throw new Error('Recharge credential storage is not configured');
