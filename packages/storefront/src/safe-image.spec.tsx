@@ -21,6 +21,7 @@ import {
     clearDecodedImageCache,
     ImagePlaceholder,
     isImageAlreadyDecoded,
+    markImageDecoded,
     SafeImageMediaProvider,
     type SafeImageProps,
 } from './safe-image';
@@ -100,6 +101,69 @@ function visibleFrameRect(top = 10, size = 180): DOMRect {
 }
 
 describe('SafeImage public presentation reuse', () => {
+    it.each([
+        { name: 'visible first-screen image', top: 0, expected: false },
+        { name: 'new offscreen image', top: 2000, expected: true },
+        { name: 'decoded offscreen image', top: 2000, cached: true, expected: false },
+        { name: 'complete native image', top: 2000, complete: true, expected: false },
+        { name: 'reduced motion', top: 2000, reduced: true, expected: false },
+    ])(
+        'only softly reveals new offscreen media: $name',
+        async ({ top, cached, complete, reduced, expected }) => {
+            clearDecodedImageCache();
+            const host = document.createElement('div');
+            const root = createRoot(host);
+            const src = '/reveal-admission.webp';
+            vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(visibleFrameRect(top));
+            if (complete) {
+                vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
+                vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(640);
+            }
+            vi.stubGlobal('matchMedia', (query: string) => ({
+                matches: query === '(prefers-reduced-motion: reduce)' && Boolean(reduced),
+                addEventListener: vi.fn(),
+                removeEventListener: vi.fn(),
+            }));
+            if (cached) markImageDecoded(new URL(src, location.href).href);
+            try {
+                act(() => root.render(<SafeImage src={src} loading="lazy" alt="Product" />));
+                expect(Boolean(host.querySelector('.is-soft-reveal'))).toBe(expected);
+                await loadCandidate(requiredImage(host));
+                expect(host.querySelector('.is-loaded')).not.toBeNull();
+                // A completed image must never be re-admitted to a fresh animation on rerender.
+                act(() => root.render(<SafeImage src={src} loading="lazy" alt="Updated copy" />));
+                expect(Boolean(host.querySelector('.is-soft-reveal'))).toBe(expected);
+            } finally {
+                act(() => root.unmount());
+                vi.restoreAllMocks();
+                vi.unstubAllGlobals();
+                clearDecodedImageCache();
+            }
+        },
+    );
+    it('retains the last usable pixels when a same-owner replacement fails', async () => {
+        clearDecodedImageCache();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const render = (src: string) => (
+            <SafeImage src={src} retainedOwnerKey="gallery-product" alt="Gallery" />
+        );
+        try {
+            act(() => root.render(render('/available-gallery.webp')));
+            await loadCandidate(requiredImage(host));
+            act(() => root.render(render('/failed-gallery.webp')));
+            expect(host.querySelector('.is-soft-reveal')).not.toBeNull();
+            await failCandidate(requiredImage(host));
+            expect(host.querySelector<HTMLElement>('.safe-image-fallback')?.style.backgroundImage).toContain(
+                '/available-gallery.webp',
+            );
+            expect(host.querySelector('[data-safe-image="error"]')).not.toBeNull();
+            expect(host.querySelector('.image-placeholder, .product-image-placeholder-copy')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            clearDecodedImageCache();
+        }
+    });
     it('reuses borrowed catalog backing only within its admitted generation and never replaces primary hints', async () => {
         clearDecodedImageCache();
         const host = document.createElement('div');

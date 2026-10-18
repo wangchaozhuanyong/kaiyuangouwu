@@ -91,59 +91,65 @@ function RouteSkeletonContent({
     variant: RouteSkeletonVariant;
     compact?: boolean;
 }) {
-    if (compact) {
-        return (
-            <div className="route-static-skeleton" aria-hidden="true">
-                <span className="skeleton-block skeleton-heading" />
-                <span className="skeleton-block skeleton-row" />
-            </div>
-        );
-    }
-    if (variant === 'catalog' || variant === 'home') {
-        return (
-            <div className="route-static-skeleton" aria-hidden="true">
-                <span
-                    className={`skeleton-block ${variant === 'home' ? 'skeleton-banner' : 'skeleton-heading'}`}
-                />
-                <div className="route-skeleton-products">
-                    <ProductSkeletonItems count={variant === 'home' ? 6 : 12} layout="products" />
-                </div>
-            </div>
-        );
-    }
-    if (variant === 'detail') {
-        return (
-            <div className="route-static-skeleton route-detail-skeleton" aria-hidden="true">
-                <span className="skeleton-block skeleton-media" />
-                <div className="route-static-skeleton route-detail-skeleton-copy">
-                    <span className="skeleton-block skeleton-heading" />
-                    <span className="skeleton-block skeleton-text" />
-                    <span className="skeleton-block skeleton-price" />
-                    <span className="skeleton-block skeleton-row" />
-                    <span className="skeleton-block skeleton-action" />
-                </div>
-            </div>
-        );
-    }
+    const blocks = (names: string) =>
+        names
+            .split(' ')
+            .map((name, index) => <span className={`skeleton-block skeleton-${name}`} key={index} />);
+    const catalog = !compact && variant === 'catalog';
+    const detail = !compact && variant === 'detail';
+    const products = (
+        <ProductSkeletonItems count={catalog ? 12 : 6} layout="products" responsiveRow={catalog} />
+    );
+    const baseClass = 'route-static-skeleton';
     return (
-        <div className="route-static-skeleton" aria-hidden="true">
-            <span className="skeleton-block skeleton-heading" />
-            {variant === 'checkout' ? (
-                <div className="product-list">
-                    <ProductSkeletonItems count={3} layout="rows" />
-                </div>
+        <div
+            className={`${baseClass}${catalog ? ' skeleton-catalog' : detail ? ' route-detail-skeleton' : ''}`}
+            aria-hidden="true"
+        >
+            {compact ? (
+                blocks('heading row')
+            ) : catalog ? (
+                <>
+                    <div className="route-catalog-sidebar">
+                        {blocks('search')}
+                        <div className="skeleton-cats">{blocks('box box box box')}</div>
+                    </div>
+                    <div className="route-catalog-results">
+                        {blocks('sort')}
+                        <div className="skeleton-grid">{products}</div>
+                    </div>
+                </>
+            ) : variant === 'home' ? (
+                <>
+                    {blocks('banner')}
+                    <div className="route-skeleton-products">{products}</div>
+                </>
+            ) : detail ? (
+                <>
+                    {blocks('media')}
+                    <div className={`${baseClass} route-detail-skeleton-copy`}>
+                        {blocks('heading text price row action')}
+                    </div>
+                </>
             ) : (
-                <div
-                    className={
-                        variant === 'services' || variant === 'studio'
-                            ? 'route-skeleton-panels'
-                            : 'route-static-skeleton'
-                    }
-                >
-                    <span className="skeleton-block skeleton-row" />
-                    <span className="skeleton-block skeleton-row" />
-                    <span className="skeleton-block skeleton-row" />
-                </div>
+                <>
+                    {blocks('heading')}
+                    {variant === 'checkout' ? (
+                        <div className="product-list">
+                            <ProductSkeletonItems count={3} layout="rows" />
+                        </div>
+                    ) : (
+                        <div
+                            className={
+                                variant === 'services' || variant === 'studio'
+                                    ? 'route-skeleton-panels'
+                                    : baseClass
+                            }
+                        >
+                            {blocks('row row row')}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

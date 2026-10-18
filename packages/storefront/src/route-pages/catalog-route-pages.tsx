@@ -74,6 +74,12 @@ export function HomeRoutePage() {
                 coupons: runtime.activeCoupons,
                 couponCampaignsLoading: runtime.couponCampaignsLoading,
                 couponCampaignsError: runtime.couponCampaignsError,
+                couponCustomerStatus:
+                    runtime.customerQuery.data === undefined
+                        ? 'pending'
+                        : runtime.customerQuery.data
+                          ? 'signed-in'
+                          : 'guest',
                 flashSales: runtime.activeFlashSales,
                 systemAnnouncements: runtime.systemAnnouncements,
                 bestSellerProducts: runtime.bestSellerProducts,

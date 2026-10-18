@@ -226,12 +226,19 @@ describe('HomePage carousel pointer interactions', () => {
         desktop = false,
         contentBlocks = heroes,
         language: HomePageProps['language'] = 'zh',
+        overrides: Partial<HomePageProps> = {},
     ) {
         await interact(() =>
             root.render(
                 <DesktopLayoutContext.Provider value={desktop}>
                     <HomePageContext.Provider
-                        value={{ ...baseProps, contentBlocks, language, onContentTarget: target }}
+                        value={{
+                            ...baseProps,
+                            contentBlocks,
+                            language,
+                            onContentTarget: target,
+                            ...overrides,
+                        }}
                     >
                         <HomePage />
                     </HomePageContext.Provider>
@@ -760,13 +767,40 @@ describe('HomePage carousel pointer interactions', () => {
             expect(requiredElement(host, '.hero').textContent).not.toContain('自动轮播已停止');
         },
     );
-    it('preserves numbered selection and recovers when decoding a slide fails', async () => {
+    it('keeps the available slide after decode failure and allows a successful retry', async () => {
         await render(true);
         vi.mocked(productDisplay.decodeStorefrontImage).mockRejectedValue(new Error('Image unavailable'));
         await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
         await advance();
+        expect(activeSlide().textContent).toContain('First slide');
+        expect(host.querySelector('.is-neighbor')).toBeNull();
+        expect(host.querySelector('.hero-media-error')?.textContent).toContain('图片暂时无法加载');
+        vi.mocked(productDisplay.decodeStorefrontImage).mockResolvedValue(undefined);
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await advance();
         expect(activeSlide().textContent).toContain('Second slide');
+        expect(host.querySelector('.hero-media-error')).toBeNull();
         expect(target).not.toHaveBeenCalled();
+    });
+    it('keeps the published coupon region mounted across identity, empty and failed reads', async () => {
+        const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        const blocks = [...heroes, offers];
+        await render(false, blocks);
+        const region = requiredElement(host, '.coupon-hub-section');
+        expect(region.querySelector('[data-coupon-state="loading"]')).not.toBeNull();
+        for (const [props, state] of [
+            [{ couponCustomerStatus: 'guest' }, 'guest'],
+            [{ couponCustomerStatus: 'signed-in', couponCampaignsLoading: true }, 'loading'],
+            [{ couponCustomerStatus: 'signed-in' }, 'empty'],
+            [{ couponCustomerStatus: 'signed-in', couponCampaignsError: 'Local read failed' }, 'error'],
+        ] as const) {
+            await render(false, blocks, 'en', props);
+            expect(requiredElement(host, '.coupon-hub-section')).toBe(region);
+            expect(region.querySelector(`[data-coupon-state="${state}"]`)).not.toBeNull();
+            expect(region.querySelector('.page-skeleton')).toBeNull();
+        }
+        await render(false, [...heroes, { ...offers, enabled: false }]);
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
     });
     it('honors reduced motion while allowing deliberate manual navigation', async () => {
         reducedMotion = true;

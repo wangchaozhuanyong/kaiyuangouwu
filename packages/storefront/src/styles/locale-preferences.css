@@ -253,6 +253,7 @@
 
 /* Keep the shared language control horizontal inside compact page headers. */
 .subpage-header-actions > .locale-preferences-trigger {
+    min-height: var(--experience-control-min);
     width: auto;
     display: inline-flex;
     padding-inline: var(--space-8);

@@ -422,6 +422,7 @@ function SafeImageSource({
               : undefined;
     const [presentedCandidate, setPresentedCandidate] = useState('');
     const [paintedCandidate, setPaintedCandidate] = useState('');
+    const [softReveal, setSoftReveal] = useState<boolean>();
     const handoffFrames = useRef<number[]>([]);
     const imageRef = useRef<HTMLImageElement>(null);
     const notifiedCandidate = useRef('');
@@ -587,6 +588,20 @@ function SafeImageSource({
         active.current = true;
         retrying.current = false;
         const image = imageRef.current;
+        // Decide once, before this node paints. Visible/complete/native SSR images
+        // never become transparent; only unseen offscreen media and true replacements fade.
+        if (image && softReveal === undefined) {
+            const rect = image.getBoundingClientRect();
+            const unseenBelowFold =
+                loading === 'lazy' && fetchPriority !== 'high' && rect.top >= window.innerHeight;
+            const cached = isImageAlreadyDecoded(image.currentSrc || image.src);
+            setSoftReveal(
+                !image.complete &&
+                    !cached &&
+                    !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches &&
+                    (Boolean(replacementPresentation) || unseenBelowFold),
+            );
+        }
         if (
             image &&
             fetchPriority !== 'low' &&
@@ -671,6 +686,7 @@ function SafeImageSource({
         loaded && 'is-loaded',
         presented && 'is-presented',
         painted && 'is-painted',
+        softReveal && 'is-soft-reveal',
         fetchPriority === 'high' && !exceededBudget.current && 'is-priority',
         hasPreview && 'has-placeholder',
         hasInlinePreview && 'has-inline-preview',
@@ -719,7 +735,7 @@ function SafeImageSource({
                 className="safe-image-fallback"
                 aria-hidden={failed ? undefined : true}
                 style={
-                    !failed && retainedPreview
+                    retainedPreview && (!failed || replacementPresentation)
                         ? {
                               backgroundImage: [retainedSource, artworkInlinePreview]
                                   .filter(Boolean)
@@ -731,23 +747,26 @@ function SafeImageSource({
                         : undefined
                 }
             >
-                {!failed && !painted && retainedRaster && rasterFit && (
-                    <canvas
-                        ref={canvas => {
-                            // An evicted source must not resize this mount's already drawn copy.
-                            if (canvas)
-                                copyRaster(
-                                    retainedRaster,
-                                    retainedRaster.width,
-                                    retainedRaster.height,
-                                    canvas,
-                                );
-                        }}
-                        className="safe-image-preview is-ready"
-                        aria-hidden="true"
-                        style={previewStyle(rasterFit, effectivePosition)}
-                    />
-                )}
+                {(!failed || replacementPresentation) &&
+                    (!painted || softReveal) &&
+                    retainedRaster &&
+                    rasterFit && (
+                        <canvas
+                            ref={canvas => {
+                                // An evicted source must not resize this mount's already drawn copy.
+                                if (canvas)
+                                    copyRaster(
+                                        retainedRaster,
+                                        retainedRaster.width,
+                                        retainedRaster.height,
+                                        canvas,
+                                    );
+                            }}
+                            className="safe-image-preview is-ready"
+                            aria-hidden="true"
+                            style={previewStyle(rasterFit, effectivePosition)}
+                        />
+                    )}
                 {!failed && loadingFallback && !hasPreview ? (
                     loadingFallback
                 ) : !failed && hasPreview && !retainedPreview ? (
@@ -772,7 +791,7 @@ function SafeImageSource({
                             />
                         </SafeImageElement>
                     </>
-                ) : failed && errorFallback != null ? (
+                ) : failed && replacementPresentation ? null : failed && errorFallback != null ? (
                     errorFallback
                 ) : failed && fallbackLabel ? (
                     <span className="product-image-placeholder-copy">

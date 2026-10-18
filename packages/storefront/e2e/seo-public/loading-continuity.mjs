@@ -1283,6 +1283,10 @@ try {
                 await page.setViewportSize({ width, height: 560 });
                 await page.goto(origin + '/en/category?collectionId=synthetic-a-collection');
                 await ready(page);
+                // A fresh profile's consent banner covers product links in a short viewport.
+                // Use the normal choice before testing a real, unobstructed pointer click.
+                await page.getByRole('button', { name: 'Necessary only', exact: true }).click();
+                await expect(page.locator('.traffic-consent-banner')).toHaveCount(0);
                 const categoryUrl = page.url();
                 await page.mouse.move(Math.round(width * 0.65), 400);
                 await page.mouse.wheel(0, width === 1440 ? 420 : 320);

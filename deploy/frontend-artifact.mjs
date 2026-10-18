@@ -84,6 +84,9 @@ export function validateFrontendArtifact(metadata, expected, archive) {
     }
     assert.equal(metadata.archiveSha256, hash(archive), 'Frontend archive checksum differs');
     assert.match(metadata.sourceSha, /^[a-f0-9]{40}$/u);
+    // Valid bytes from another revision must use the existing fresh-build path.
+    if (expected.sourceSha) assert.match(expected.sourceSha, /^[a-f0-9]{40}$/u);
+    return !expected.sourceSha || metadata.sourceSha === expected.sourceSha;
 }
 function inputs(component) {
     assert.ok(STATIC_APPS.includes(component));
@@ -102,6 +105,7 @@ function inputs(component) {
     return {
         component,
         tree,
+        sourceSha: git('rev-parse', 'HEAD'),
         sourceHash,
         fingerprint,
         ...(component === 'storefront' ? { outputs: storefrontOutputs } : {}),
@@ -182,7 +186,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                 );
                 const metadata = JSON.parse(readFileSync(resolve(download, 'metadata.json'), 'utf8'));
                 const archive = resolve(download, 'frontend.tar.gz');
-                validateFrontendArtifact(metadata, expected, readFileSync(archive));
+                if (!validateFrontendArtifact(metadata, expected, readFileSync(archive))) continue;
                 rmSync(resolve('packages', component, 'dist'), { recursive: true, force: true });
                 execFileSync('python3', [
                     '-c',

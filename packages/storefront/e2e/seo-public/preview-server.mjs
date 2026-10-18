@@ -10,7 +10,9 @@ import { fixtureData } from '../visual-presets/fixtures.mjs';
 import { syntheticPage } from './fixtures.mjs';
 
 // Uses the actual completed production artifacts; this script never builds or contacts a backend.
-const dist = path.resolve(fileURLToPath(new URL('../../dist/', import.meta.url)));
+const dist = path.resolve(
+    process.env.STOREFRONT_QA_DIST ?? fileURLToPath(new URL('../../dist/', import.meta.url)),
+);
 const require = createRequire(import.meta.url);
 const renderPublicPage = page =>
     require(path.join(dist, '.server/public-page-renderer.cjs')).renderPublicPage(page);
@@ -164,7 +166,14 @@ function assembleFixtureHtml(page, body, htmlTemplate) {
 
 export async function startSeoFixtureServer(
     port = 0,
-    { transformPage, renderPage = renderPublicPage, transformHtml, serveAssets, listenHost = '::' } = {},
+    {
+        transformPage,
+        renderPage = renderPublicPage,
+        transformHtml,
+        transformGraphQlData,
+        serveAssets,
+        listenHost = '::',
+    } = {},
 ) {
     const pageFor = (...args) => {
         const page = dataFor(...args);
@@ -190,7 +199,9 @@ export async function startSeoFixtureServer(
                 const graphQlPage = pageFor(referrer, host);
                 requests.at(-1).operation =
                     /(?:query|mutation)\s+(\w+)/u.exec(operation.query ?? '')?.[1] ?? 'unknown';
-                return json(response, { data: graphQlData(graphQlPage) });
+                const data = graphQlData(graphQlPage);
+                await transformGraphQlData?.(data, { operation, referrer });
+                return json(response, { data });
             }
             if (url.pathname.includes('storefront-realtime')) {
                 response.writeHead(204);
