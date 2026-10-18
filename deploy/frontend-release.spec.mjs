@@ -840,7 +840,7 @@ test('reusable compiled metadata rejects changed inputs, partial outputs, profil
     assert.throws(() => validateBuildArtifact(metadata, expected, archive, { tests: true }));
 });
 
-test('frontend metadata reuses a component across revisions only with identical build inputs and archive bytes', () => {
+test('frontend reuse requires the selected revision as well as identical build inputs and archive bytes', () => {
     const archive = Buffer.from('frontend');
     const expected = {
         component: 'storefront',
@@ -849,6 +849,7 @@ test('frontend metadata reuses a component across revisions only with identical 
         node: '24',
         bun: '1',
         platform: 'linux/x64',
+        sourceSha: 'd'.repeat(40),
     };
     expected.fingerprint = frontendFingerprint(expected);
     const metadata = {
@@ -858,7 +859,12 @@ test('frontend metadata reuses a component across revisions only with identical 
         sourceSha: 'd'.repeat(40),
         archiveSha256: sha(archive),
     };
-    assert.doesNotThrow(() => validateFrontendArtifact(metadata, expected, archive));
+    assert.equal(validateFrontendArtifact(metadata, expected, archive), true);
+    assert.equal(
+        validateFrontendArtifact({ ...metadata, sourceSha: 'f'.repeat(40) }, expected, archive),
+        false,
+        'Verified bytes from another PR revision must fall back to a fresh target build',
+    );
     for (const patch of [
         { sourceHash: 'e'.repeat(64) },
         { component: 'next-admin' },

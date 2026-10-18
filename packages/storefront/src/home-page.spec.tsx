@@ -894,19 +894,22 @@ describe('HomePage localized trust bar layout', () => {
 });
 
 describe('HomePage account-aware coupon campaigns', () => {
-    it('hides a sold-out campaign that the current account did not claim', () => {
+    it('keeps the published region empty when a campaign is sold out', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
+            couponCustomerStatus: 'signed-in',
             coupons: [{ ...couponCampaign, remainingIssueCount: 0, claimable: false }],
         });
 
         expect(markup).not.toContain('满100减10');
-        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).toContain('coupon-hub-section');
+        expect(markup).toContain('data-coupon-state="empty"');
     });
 
-    it('hides the module when the current account already claimed the last visible campaign', () => {
+    it('keeps the published region empty after the last campaign is claimed', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
+            couponCustomerStatus: 'signed-in',
             coupons: [
                 {
                     ...couponCampaign,
@@ -918,7 +921,8 @@ describe('HomePage account-aware coupon campaigns', () => {
         });
 
         expect(markup).not.toContain('满100减10');
-        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).toContain('coupon-hub-section');
+        expect(markup).toContain('data-coupon-state="empty"');
     });
 
     it('removes a claimed campaign but keeps the module while another campaign is claimable', () => {

@@ -2,7 +2,7 @@ export const DEFAULT_HERO_AUTOPLAY_INTERVAL_SECONDS = 5;
 export const MIN_HERO_AUTOPLAY_INTERVAL_SECONDS = 3;
 export const MAX_HERO_AUTOPLAY_INTERVAL_SECONDS = 30;
 export const HERO_SWIPE_THRESHOLD = 40;
-export const HERO_TRANSITION_MS = 520;
+export const HERO_TRANSITION_MS = 180;
 export const HERO_HEIGHT_TRANSITION_MS = 220;
 
 export function heroSwipeAxis(deltaX: number, deltaY: number): 'pending' | 'horizontal' | 'vertical' {

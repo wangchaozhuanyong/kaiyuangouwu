@@ -492,6 +492,14 @@ describe('catalog rendering boundary', () => {
             language: 'en',
             isZh: false,
             displayedRoute: { name: 'home', publicLanguage: 'en' },
+            storefrontContextValue: { ...runtime, storefrontCode: '' },
+        });
+        expect(document.querySelector('[name=retained-auth-draft]')).toBe(input);
+        expect(closeAuthOverlay).not.toHaveBeenCalled();
+        render({
+            language: 'en',
+            isZh: false,
+            displayedRoute: { name: 'home', publicLanguage: 'en' },
             storefrontContextValue: runtime,
         });
         expect(document.querySelector('[name=retained-auth-draft]')).toBe(input);

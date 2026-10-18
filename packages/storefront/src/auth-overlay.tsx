@@ -65,7 +65,7 @@ export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest
     // still release it through the shared host. No password is persisted by this host.
     const owner = JSON.stringify([
         'auth',
-        runtime.storefrontCode,
+        runtime.storefrontCode || runtime.market.code,
         runtime.market.code,
         runtime.market.currencyCode,
         openingCustomer.current,

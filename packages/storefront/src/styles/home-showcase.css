@@ -801,6 +801,15 @@
     color: var(--text);
 }
 
+.hero-media-error {
+    position: absolute;
+    inset: auto var(--space-12) var(--space-12);
+    padding: var(--space-8);
+    border-radius: var(--skin-control-radius);
+    background: var(--surface-elevated);
+    color: var(--muted);
+}
+
 .coupon-hub-scroll {
     display: grid;
     align-items: start;
@@ -827,6 +836,22 @@
 }
 .coupon-hub-scroll > .desktop-coupon-ticket {
     scroll-snap-align: start;
+}
+.coupon-hub-body {
+    min-height: 120px; /* Ticket face, its 2px border, and two 6px rail gutters. */
+    display: grid;
+    align-items: center;
+}
+.coupon-hub-query-state {
+    color: var(--muted);
+}
+.coupon-hub-query-state > p {
+    margin: 0;
+}
+.coupon-hub-placeholder {
+    height: 108px;
+    border-radius: var(--skin-control-radius);
+    background: var(--soft);
 }
 .coupon-hub-scroll:focus-visible {
     outline: 2px solid var(--focus);

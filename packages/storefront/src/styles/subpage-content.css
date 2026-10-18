@@ -461,3 +461,13 @@
         margin-left: auto;
     }
 }
+
+/* Shared locale menus need their intrinsic width in compact subpage headers. */
+@media (max-width: 1023px) {
+    .subpage-header:has(.locale-preferences-trigger) {
+        grid-template-columns: var(--experience-control-min) 1fr auto;
+    }
+    .subpage-header:has(.locale-preferences-trigger) > strong {
+        text-align: left;
+    }
+}

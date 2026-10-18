@@ -90,6 +90,10 @@ describe('route loading skeletons', () => {
         const host = document.createElement('div');
         host.innerHTML = renderToStaticMarkup(<PageSkeleton variant="catalog" language="en" />);
         expect(host.querySelectorAll('.product-card-skeleton')).toHaveLength(12);
+        expect(host.querySelectorAll('.product-card-skeleton.is-responsive-row')).toHaveLength(12);
+        expect(host.querySelector('.skeleton-search')).not.toBeNull();
+        expect(host.querySelector('.skeleton-sort')).not.toBeNull();
+        expect(host.querySelectorAll('.skeleton-cats > span')).toHaveLength(4);
         expect(host.querySelector('.brand-loading, header, nav, button, a')).toBeNull();
         expect(host.querySelector('[role="status"]')?.getAttribute('aria-label')).toBe('Loading page');
         host.innerHTML = renderToStaticMarkup(<PageSkeleton variant="detail" />);

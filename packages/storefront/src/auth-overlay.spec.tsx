@@ -99,7 +99,7 @@ describe('authentication overlay lifecycle', () => {
                 <StorefrontContext.Provider value={runtime}>
                     <OverlayHost ownerKey={`background:${runtime.language}:${runtime.customer?.id ?? ''}`}>
                         <OverlayHost
-                            ownerKey={`authentication:${runtime.storefrontCode}:${runtime.market.code}:${runtime.market.currencyCode}`}
+                            ownerKey={`authentication:${runtime.storefrontCode || runtime.market.code}:${runtime.market.code}:${runtime.market.currencyCode}`}
                         >
                             {shown && <AuthenticationOverlay request={request} />}
                         </OverlayHost>
@@ -158,7 +158,11 @@ describe('authentication overlay lifecycle', () => {
     });
 
     it('completes the retained form after its localized background changes language', async () => {
-        runtime = { ...runtime, route: { ...runtime.route, publicLanguage: 'zh' } };
+        runtime = {
+            ...runtime,
+            storefrontCode: runtime.market.code,
+            route: { ...runtime.route, publicLanguage: 'zh' },
+        };
         request = { mode: 'login', target: { name: 'account' } };
         await render();
         const email = document.querySelector<HTMLInputElement>('[name=email]');
@@ -166,7 +170,12 @@ describe('authentication overlay lifecycle', () => {
         if (!email || !password) throw new Error('Missing fixture authentication fields');
         email.value = 'fixture@example.invalid';
         password.value = 'local-fixture-value';
-        runtime = { ...runtime, language: 'en', route: { ...runtime.route, publicLanguage: 'en' } };
+        runtime = {
+            ...runtime,
+            storefrontCode: '',
+            language: 'en',
+            route: { ...runtime.route, publicLanguage: 'en' },
+        };
         await render();
         expect(document.querySelector('[name=email]')).toBe(email);
         expect(email.value).toBe('fixture@example.invalid');
@@ -260,13 +269,26 @@ describe('authentication overlay lifecycle', () => {
         expect(runtime.closeAuthOverlay).not.toHaveBeenCalled();
     });
 
-    it('releases the dialog on a store change', async () => {
-        await render();
-        runtime = { ...runtime, storefrontCode: 'another-local-store' };
-        await render();
-        expect(document.querySelector('[role=dialog]')).toBeNull();
-        expect(runtime.closeAuthOverlay).toHaveBeenCalledOnce();
-    });
+    it.each(['storefront', 'market', 'currency'] as const)(
+        'releases the dialog on a %s change',
+        async scope => {
+            await render();
+            runtime = {
+                ...runtime,
+                ...(scope === 'storefront'
+                    ? { storefrontCode: 'another-local-store' }
+                    : {
+                          market: {
+                              ...runtime.market,
+                              ...(scope === 'market' ? { code: 'OTHER' } : { currencyCode: 'USD' }),
+                          },
+                      }),
+            };
+            await render();
+            expect(document.querySelector('[role=dialog]')).toBeNull();
+            expect(runtime.closeAuthOverlay).toHaveBeenCalledOnce();
+        },
+    );
 
     it('restores focus and ignores late authentication completion after closing', async () => {
         await render();

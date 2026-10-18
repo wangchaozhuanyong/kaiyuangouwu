@@ -116,6 +116,7 @@ interface HomepageCouponHubProps {
     loading: boolean;
     queryLoading: boolean;
     queryError: string;
+    customerStatus: 'pending' | 'guest' | 'signed-in';
     onClaim: (campaignId: string) => Promise<string | null>;
     onRetry: () => void;
     onToast?: (message: string) => void;
@@ -250,12 +251,15 @@ function HomepageCouponHub({
     loading,
     queryLoading,
     queryError,
+    customerStatus,
     onClaim,
     onRetry,
     onToast,
 }: HomepageCouponHubProps) {
     const navigate = useNavigate();
     const isZh = language === 'zh';
+    const pending = !queryError && (queryLoading || customerStatus === 'pending');
+    const state = queryError ? 'error' : pending ? 'loading' : customerStatus === 'guest' ? 'guest' : 'empty';
     const [claimingId, setClaimingId] = useState<string | null>(null);
     const handleClaim = async (coupon: StorefrontCouponCard) => {
         if (!coupon.claimable || claimingId) return;
@@ -290,61 +294,86 @@ function HomepageCouponHub({
                 </button>
             </div>
 
-            {queryError ? (
-                <div className="coupon-hub-query-state">
-                    <InlineError message={queryError} action={isZh ? '重试' : 'Retry'} onAction={onRetry} />
-                </div>
-            ) : null}
-            {queryLoading && coupons.length === 0 ? (
-                <div className="coupon-hub-query-state">
-                    <PageSkeleton compact label={isZh ? '正在加载优惠活动' : 'Loading coupon offers'} />
-                </div>
-            ) : (
-                <HomepageCouponRail isZh={isZh}>
-                    {coupons.map(coupon => {
-                        const canClaim = coupon.claimable && !coupon.claimed;
-                        const claimAction = (
-                            <button
-                                type="button"
-                                className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
-                                onClick={() => void handleClaim(coupon)}
-                                disabled={!canClaim || loading || claimingId !== null}
-                                aria-label={
-                                    !canClaim
-                                        ? isZh
-                                            ? `已领取 ${coupon.title}`
-                                            : `Claimed ${coupon.title}`
-                                        : isZh
-                                          ? `领取 ${coupon.title}`
-                                          : `Claim ${coupon.title}`
-                                }
-                            >
-                                <span className="coupon-btn-text-wrap">
-                                    {claimingId === coupon.id ? (
-                                        <span>{isZh ? '领取中' : 'Claiming'}</span>
-                                    ) : !canClaim ? (
-                                        <>
-                                            <span>{isZh ? '已领取' : 'Claimed'}</span>
-                                            <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                                        </>
-                                    ) : (
-                                        <span>{isZh ? '领取' : 'Claim'}</span>
-                                    )}
-                                </span>
-                            </button>
-                        );
-                        return (
-                            <DesktopCouponTicket
-                                key={coupon.id}
-                                card={coupon}
-                                variant="compact"
-                                role="listitem"
-                                action={claimAction}
+            <div className="coupon-hub-body">
+                {coupons.length === 0 ? (
+                    <div
+                        className="coupon-hub-query-state"
+                        data-coupon-state={state}
+                        role={pending ? 'status' : undefined}
+                        aria-label={pending ? (isZh ? '正在加载优惠活动' : 'Loading offers') : undefined}
+                        aria-busy={pending || undefined}
+                    >
+                        {queryError ? (
+                            <InlineError
+                                message={queryError}
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={onRetry}
                             />
-                        );
-                    })}
-                </HomepageCouponRail>
-            )}
+                        ) : pending ? (
+                            <div className="coupon-hub-scroll" aria-hidden="true">
+                                {[0, 1, 2].map(index => (
+                                    <span className="coupon-hub-placeholder" key={index} />
+                                ))}
+                            </div>
+                        ) : (
+                            <p>
+                                {customerStatus === 'guest'
+                                    ? isZh
+                                        ? '登录后查看专属优惠'
+                                        : 'Sign in to see your offers'
+                                    : isZh
+                                      ? '暂无可领取的优惠'
+                                      : 'No offers available'}
+                            </p>
+                        )}
+                    </div>
+                ) : (
+                    <HomepageCouponRail isZh={isZh}>
+                        {coupons.map(coupon => {
+                            const canClaim = coupon.claimable && !coupon.claimed;
+                            const claimAction = (
+                                <button
+                                    type="button"
+                                    className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
+                                    onClick={() => void handleClaim(coupon)}
+                                    disabled={!canClaim || loading || claimingId !== null}
+                                    aria-label={
+                                        !canClaim
+                                            ? isZh
+                                                ? `已领取 ${coupon.title}`
+                                                : `Claimed ${coupon.title}`
+                                            : isZh
+                                              ? `领取 ${coupon.title}`
+                                              : `Claim ${coupon.title}`
+                                    }
+                                >
+                                    <span className="coupon-btn-text-wrap">
+                                        {claimingId === coupon.id ? (
+                                            <span>{isZh ? '领取中' : 'Claiming'}</span>
+                                        ) : !canClaim ? (
+                                            <>
+                                                <span>{isZh ? '已领取' : 'Claimed'}</span>
+                                                <Check size={12} strokeWidth={2.4} aria-hidden="true" />
+                                            </>
+                                        ) : (
+                                            <span>{isZh ? '领取' : 'Claim'}</span>
+                                        )}
+                                    </span>
+                                </button>
+                            );
+                            return (
+                                <DesktopCouponTicket
+                                    key={coupon.id}
+                                    card={coupon}
+                                    variant="compact"
+                                    role="listitem"
+                                    action={claimAction}
+                                />
+                            );
+                        })}
+                    </HomepageCouponRail>
+                )}
+            </div>
         </section>
     );
 }
@@ -365,6 +394,8 @@ export interface HomePageProps {
     coupons: StorefrontCouponCampaign[];
     couponCampaignsLoading: boolean;
     couponCampaignsError: string;
+    /** Anonymous HTML and the first client frame both begin with an unresolved identity. */
+    couponCustomerStatus?: 'pending' | 'guest' | 'signed-in';
     flashSales: StorefrontFlashSale[];
     systemAnnouncements: StorefrontSystemAnnouncement[];
     /** Shared snapshot time keeps server and browser first renders identical. */
@@ -442,6 +473,7 @@ export function HomePage() {
         coupons,
         couponCampaignsLoading,
         couponCampaignsError,
+        couponCustomerStatus = 'pending',
         flashSales,
         systemAnnouncements,
         initialRenderTime,
@@ -531,6 +563,7 @@ export function HomePage() {
     );
     const [heroIndex, setHeroIndex] = useState(0);
     const [readyHeroImage, setReadyHeroImage] = useState('');
+    const [heroMediaError, setHeroMediaError] = useState(false);
     const [quickPage, setQuickPage] = useState(0);
     const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
@@ -541,6 +574,7 @@ export function HomePage() {
         offset: number;
         phase: 'dragging' | 'prepared' | 'settling';
         completed: boolean;
+        crossfade?: boolean;
     } | null>(null);
     const heroMotionRef = useRef(heroMotion);
     const heroMotionTimerRef = useRef<number | null>(null);
@@ -653,10 +687,16 @@ export function HomePage() {
             clearHeroMotionSchedule();
             if (nextIndex === heroIndex) return;
             const nextImage = nextHero.imageUrl ?? '';
+            setHeroMediaError(false);
             try {
                 await decodeStorefrontImage(nextImage, 'hero');
             } catch {
-                // SafeImage shows an unavailable-image placeholder when the saved image fails.
+                if (heroTransitionRef.current !== transitionId) return;
+                setHeroMediaError(true);
+                setHeroAutoplayStopped(true);
+                const current = heroMotionRef.current;
+                if (current) settleHeroMotion({ ...current, completed: false });
+                return;
             }
             if (heroTransitionRef.current !== transitionId) return;
             const dragging = heroMotionRef.current?.phase === 'dragging';
@@ -667,6 +707,7 @@ export function HomePage() {
                 offset: dragging ? (heroMotionRef.current?.offset ?? 0) : 0,
                 phase: 'prepared',
                 completed: true,
+                crossfade: !dragging,
             };
             if (reducedMotionRef.current) {
                 settleHeroMotion(motion);
@@ -1250,7 +1291,14 @@ export function HomePage() {
                                                             key={slide.id}
                                                             className={`hero-carousel-slide${neighbor ? ' is-neighbor' : ''}`}
                                                             style={{
-                                                                transform: `translate3d(${translation}, 0, 0)`,
+                                                                transform: heroMotion?.crossfade
+                                                                    ? 'none'
+                                                                    : `translate3d(${translation}, 0, 0)`,
+                                                                opacity: heroMotion?.crossfade
+                                                                    ? inactive
+                                                                        ? 0
+                                                                        : 1
+                                                                    : undefined,
                                                             }}
                                                             aria-hidden={inactive || undefined}
                                                             inert={inactive || undefined}
@@ -1386,6 +1434,13 @@ export function HomePage() {
                                                 },
                                             )}
                                         </div>
+                                        {heroMediaError && (
+                                            <span className="hero-media-error" role="status">
+                                                {isZh
+                                                    ? '图片暂时无法加载，请重试'
+                                                    : 'Image unavailable. Please retry.'}
+                                            </span>
+                                        )}
                                         <span
                                             className="visually-hidden"
                                             aria-live={heroAutoplayStopped ? 'polite' : 'off'}
@@ -1523,25 +1578,25 @@ export function HomePage() {
 
                         {trustBar}
 
-                        {hasHomepageModule('COUPONS') &&
-                            (couponCards.length > 0 || couponCampaignsLoading || couponCampaignsError) && (
-                                <div
-                                    className={homepageSectionShellClassName}
-                                    style={{ order: homepageModuleOrder('COUPONS') }}
-                                >
-                                    <HomepageCouponHub
-                                        block={couponBlock}
-                                        coupons={couponCards}
-                                        language={language}
-                                        loading={couponLoading}
-                                        queryLoading={couponCampaignsLoading}
-                                        queryError={couponCampaignsError}
-                                        onClaim={onClaimCoupon}
-                                        onRetry={onCouponCampaignsRetry}
-                                        onToast={onToast}
-                                    />
-                                </div>
-                            )}
+                        {couponBlock?.enabled && hasHomepageModule('COUPONS') && (
+                            <div
+                                className={homepageSectionShellClassName}
+                                style={{ order: homepageModuleOrder('COUPONS') }}
+                            >
+                                <HomepageCouponHub
+                                    block={couponBlock}
+                                    coupons={couponCards}
+                                    language={language}
+                                    loading={couponLoading}
+                                    queryLoading={couponCampaignsLoading}
+                                    queryError={couponCampaignsError}
+                                    customerStatus={couponCustomerStatus}
+                                    onClaim={onClaimCoupon}
+                                    onRetry={onCouponCampaignsRetry}
+                                    onToast={onToast}
+                                />
+                            </div>
+                        )}
 
                         {coreCategoriesBlock ? (
                             <div

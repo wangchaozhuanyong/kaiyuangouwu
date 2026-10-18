@@ -345,6 +345,18 @@ img {
     opacity: 0;
     pointer-events: none;
 }
+@media (prefers-reduced-motion: no-preference) {
+    .safe-image-frame.is-soft-reveal .safe-image {
+        transition: opacity var(--experience-motion-standard) var(--experience-ease-standard);
+    }
+    .is-soft-reveal .safe-image:not(.is-loaded) {
+        opacity: 0;
+    }
+    /* Keep the previous image under the new one throughout the crossfade. */
+    .is-soft-reveal.is-painted > .safe-image-fallback {
+        transition-delay: var(--experience-motion-standard);
+    }
+}
 .safe-image-fallback > svg {
     width: 28px;
     height: 28px;

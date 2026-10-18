@@ -63,6 +63,7 @@ describe('home selection read boundaries', () => {
                     recommendationProducts: [],
                     configQuery: {},
                     contentQuery: { data: {} },
+                    customerQuery: { data: null },
                     productsQuery: { data: [] },
                     managedContentLoading: false,
                     managedContentProductsQuery: {

@@ -396,7 +396,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                         <OverlayHost
                             ownerKey={JSON.stringify([
                                 'auth',
-                                storefrontContextValue.storefrontCode,
+                                storefrontContextValue.storefrontCode || storefrontContextValue.market.code,
                                 storefrontContextValue.market.code,
                                 storefrontContextValue.market.currencyCode,
                                 routeHref({ ...displayedRoute, publicLanguage: 'en' }),

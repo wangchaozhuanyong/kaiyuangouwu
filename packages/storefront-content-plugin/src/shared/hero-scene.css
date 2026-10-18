@@ -63,7 +63,9 @@
 }
 
 .hero-carousel-stage.is-settling > .hero-carousel-slide {
-    transition: transform 520ms cubic-bezier(0.22, 0.68, 0, 1);
+    transition-property: transform, opacity;
+    transition-duration: var(--experience-motion-standard, 180ms);
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {
