@@ -54,7 +54,8 @@ interface RechargeLocalePreferences {
 
 type RechargeTab = 'recharge' | 'query' | 'guide';
 type RechargeOperation = 'verify' | 'submit' | 'query' | 'refresh';
-type RechargeFeedback = { scope: RechargeOperation; message: string; field?: 'code' | 'query' };
+// Reviewed localized display copy, populated through the shared error formatter.
+type RechargeFeedback = { scope: RechargeOperation; text: string; field?: 'code' | 'query' };
 export function GptRechargePage({
     client,
     language = 'zh',
@@ -207,7 +208,7 @@ export function GptRechargePage({
                     scope,
                     // The service currently uses the same input-error envelope for invalid codes
                     // and upstream failures. Do not mark the code as invalid without that evidence.
-                    message:
+                    text:
                         storefrontErrorCode(reason) === 'USER_INPUT_ERROR'
                             ? fallback
                             : storefrontErrorMessage(reason, language, fallback),
@@ -236,7 +237,7 @@ export function GptRechargePage({
             setError({
                 scope: 'verify',
                 field: 'code',
-                message: t('请输入兑换码。', 'Enter your redemption code.'),
+                text: t('请输入兑换码。', 'Enter your redemption code.'),
             });
             setFeedbackAttempt('verify');
             return;
@@ -289,7 +290,7 @@ export function GptRechargePage({
             } catch (reason) {
                 if (shopAbuseFailure(reason)) {
                     if (mounted.current)
-                        setError({ scope: 'submit', message: storefrontErrorMessage(reason, language) });
+                        setError({ scope: 'submit', text: storefrontErrorMessage(reason, language) });
                     return;
                 }
                 if (
@@ -300,7 +301,7 @@ export function GptRechargePage({
                     setConfirmed(false);
                     setError({
                         scope: 'submit',
-                        message: t(
+                        text: t(
                             '本次提交未受理。请重新获取账号资料；如仍无法提交，请稍后再试。',
                             'Your submission was not accepted. Get fresh account data and try again later if needed.',
                         ),
@@ -312,7 +313,7 @@ export function GptRechargePage({
                     setSession('');
                     setError({
                         scope: 'submit',
-                        message: t(
+                        text: t(
                             '提交结果暂时无法确认，请用原兑换码查询，避免重复充值。',
                             'The submission result is uncertain. Look up the original code to avoid a duplicate recharge.',
                         ),
@@ -326,7 +327,7 @@ export function GptRechargePage({
             setError({
                 scope: 'query',
                 field: 'query',
-                message: t('请输入需要查询的兑换码。', 'Enter the code to look up.'),
+                text: t('请输入需要查询的兑换码。', 'Enter the code to look up.'),
             });
             setFeedbackAttempt('query');
             return;
@@ -490,7 +491,7 @@ export function GptRechargePage({
                                     })
                                 }
                                 busy={Boolean(busy)}
-                                feedback={error?.scope === 'refresh' ? error.message : undefined}
+                                feedback={error?.scope === 'refresh' ? error.text : undefined}
                             />
                         ) : uncertain ? (
                             <div className="gpt-recharge-result">
@@ -503,7 +504,7 @@ export function GptRechargePage({
                                     )}
                                 </p>
                                 {error?.scope === 'submit' && (
-                                    <RechargeError id="gpt-submit-error" message={error.message} />
+                                    <RechargeError id="gpt-submit-error" message={error.text} />
                                 )}
                                 <button
                                     className="primary-action"
@@ -587,11 +588,7 @@ export function GptRechargePage({
                                             />
                                         </div>
                                         {error?.scope === 'verify' && error.field === 'code' && (
-                                            <RechargeError
-                                                id="gpt-code-error"
-                                                message={error.message}
-                                                field
-                                            />
+                                            <RechargeError id="gpt-code-error" message={error.text} field />
                                         )}
                                         <div data-gpt-challenge="verify">
                                             <ShopAbuseChallengeControl
@@ -601,7 +598,7 @@ export function GptRechargePage({
                                             />
                                         </div>
                                         {error?.scope === 'verify' && !error.field && (
-                                            <RechargeError id="gpt-verify-error" message={error.message} />
+                                            <RechargeError id="gpt-verify-error" message={error.text} />
                                         )}
                                         <button
                                             type="submit"
@@ -701,7 +698,7 @@ export function GptRechargePage({
                                         />
                                     </div>
                                     {error?.scope === 'submit' && (
-                                        <RechargeError id="gpt-submit-error" message={error.message} />
+                                        <RechargeError id="gpt-submit-error" message={error.text} />
                                     )}
                                     {submitHelp && (
                                         <p id="gpt-submit-help" className="gpt-recharge-helper" role="status">
@@ -792,7 +789,7 @@ export function GptRechargePage({
                                     />
                                 </label>
                                 {error?.scope === 'query' && error.field && (
-                                    <RechargeError id="gpt-query-error" message={error.message} field />
+                                    <RechargeError id="gpt-query-error" message={error.text} field />
                                 )}
                                 <div data-gpt-challenge="query">
                                     <ShopAbuseChallengeControl
@@ -802,7 +799,7 @@ export function GptRechargePage({
                                     />
                                 </div>
                                 {error?.scope === 'query' && !error.field && (
-                                    <RechargeError id="gpt-query-error" message={error.message} />
+                                    <RechargeError id="gpt-query-error" message={error.text} />
                                 )}
                                 <button
                                     className="primary-action"

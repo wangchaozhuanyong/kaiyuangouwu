@@ -4,7 +4,9 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+import { Feedback } from './Feedback';
 import { AccountSecurityRoutePage } from './route-pages/order-route-pages';
+import { type StorefrontContextValue } from './StorefrontContext';
 
 const testState = vi.hoisted(() => ({ runtime: null as Record<string, unknown> | null }));
 
@@ -19,8 +21,12 @@ vi.mock('./lazy-storefront-pages', () => ({
         loadError?: string;
         onRetry?: () => void;
         onAppealFraudRiskCase: (id: string, reason: string) => Promise<void>;
+        onLogout: () => void;
     }) => (
         <div data-security-page>
+            <button data-security-logout onClick={props.onLogout}>
+                Logout
+            </button>
             {JSON.stringify({
                 customer: props.customer?.id,
                 exportEnabled: Boolean(props.onDataExport),
@@ -85,17 +91,20 @@ function testApi() {
         fraudRiskCases: vi.fn().mockResolvedValue([]),
         appealFraudRiskCase: vi.fn().mockResolvedValue(undefined),
         exportPersonalData: vi.fn(),
+        logout: vi.fn().mockResolvedValue(undefined),
     };
 }
 
 let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 let client: QueryClient;
+let coordinator: boolean;
 
 function render(visible = true) {
     act(() => {
         root.render(
             <QueryClientProvider client={client}>
+                {coordinator && <Feedback runtime={runtime() as unknown as StorefrontContextValue} />}
                 {visible && <AccountSecurityRoutePage />}
             </QueryClientProvider>,
         );
@@ -132,10 +141,15 @@ beforeEach(() => {
     client = new QueryClient({
         defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchOnWindowFocus: false } },
     });
+    coordinator = false;
     testState.runtime = {
         language: 'zh',
         market: { code: 'store-a', currencyCode: 'MYR' },
         customer: { id: 'customer-a' },
+        customerLoadState: 'ready',
+        clearPrivateQueryCache: vi.fn(),
+        setCustomer: vi.fn(),
+        navigate: vi.fn(),
         api: testApi(),
         goBack: vi.fn(),
         notify: vi.fn(),
@@ -151,6 +165,30 @@ afterEach(() => {
     host.remove();
     testState.runtime = null;
 });
+
+it.each([false, true])(
+    'only navigates after confirmed logout while its route remains mounted (leave=%s)',
+    async leave => {
+        const pending = deferred<void>();
+        const api = testApi();
+        api.logout.mockReturnValue(pending.promise);
+        runtime().api = api;
+        coordinator = true;
+        render();
+        await expectEventually(() => expect(page()).not.toBeNull());
+        act(() => button('[data-security-logout]').click());
+        expect(api.logout).toHaveBeenCalledTimes(1);
+        if (leave) render(false);
+        await act(async () => {
+            pending.resolve();
+            await pending.promise;
+        });
+        await expectEventually(() => expect(runtime().clearPrivateQueryCache).toHaveBeenCalledTimes(1));
+        expect(runtime().setCustomer).toHaveBeenCalledWith(null);
+        if (leave) expect(runtime().navigate).not.toHaveBeenCalled();
+        else expect(runtime().navigate).toHaveBeenCalledExactlyOnceWith({ name: 'account' }, true);
+    },
+);
 
 it('waits for both initial security reads rather than briefly rendering an empty account card', async () => {
     const requests = deferred<TestRecord[]>();

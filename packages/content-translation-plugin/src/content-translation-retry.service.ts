@@ -236,11 +236,29 @@ export class ContentTranslationRetryService {
                 throw new UserInputError('翻译字段不存在、不属于此店铺或已人工锁定');
             let queued = 0;
             for (const state of states) {
-                if (!['FAILED', 'PENDING', 'NOTIFY_PENDING'].includes(state.status)) continue;
-                const snapshot = await this.adapter.load(repository.manager, state).catch(() => undefined);
+                const recoverMissingVariant =
+                    state.status === 'CANCELLED' &&
+                    state.lastErrorCode === 'SOURCE_UNAVAILABLE' &&
+                    state.entityType === 'ProductVariant' &&
+                    state.fieldPath === 'name' &&
+                    !state.leaseToken &&
+                    !state.leaseUntil;
+                if (!['FAILED', 'PENDING', 'NOTIFY_PENDING'].includes(state.status) && !recoverMissingVariant)
+                    continue;
+                const snapshot = await this.adapter
+                    .load(repository.manager, state, true)
+                    .catch(() => undefined);
                 if (!snapshot) continue;
+                if (recoverMissingVariant && isUsableEnglishTranslation(snapshot.target)) continue;
                 const updated = await repository.update(
-                    { id: state.id, revision: state.revision },
+                    {
+                        id: state.id,
+                        revision: state.revision,
+                        status: state.status,
+                        origin: 'AUTO',
+                        locked: false,
+                        ...(recoverMissingVariant ? { leaseToken: IsNull(), leaseUntil: IsNull() } : {}),
+                    },
                     {
                         revision: state.revision + 1,
                         sourceHash: contentTranslationInternals.hash(snapshot.source),

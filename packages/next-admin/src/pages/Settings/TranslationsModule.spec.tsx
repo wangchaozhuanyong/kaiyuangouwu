@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
     ContentTranslationAuditResult,
     ContentTranslationReviewRecord,
+    ContentTranslationStateRecord,
 } from '../../graphql/plugins.graphql';
 import { TranslationsModule } from './TranslationsModule';
 
@@ -158,6 +159,130 @@ function batch(scanned: number, queued: number, nextOffset: number, hasMore: boo
 }
 
 describe('translation audit repair', () => {
+    function showRecoverableVariant(overrides: Partial<ContentTranslationStateRecord> = {}) {
+        mocks.query.mockReturnValue({
+            data: {
+                ...audit,
+                contentTranslationAudit: {
+                    ...audit.contentTranslationAudit,
+                    states: [
+                        {
+                            ...record,
+                            entityType: 'ProductVariant',
+                            fieldPath: 'name',
+                            status: 'CANCELLED',
+                            lastErrorCode: 'SOURCE_UNAVAILABLE',
+                            origin: 'AUTO',
+                            locked: false,
+                            ...overrides,
+                        },
+                    ],
+                },
+            },
+            loading: false,
+            refetch: mocks.refetch,
+        });
+    }
+
+    it('requeues only the selected recoverable variant once and preserves accepted-write feedback on failed readback', async () => {
+        showRecoverableVariant();
+        let finish!: (value: unknown) => void;
+        mocks.retry.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+        );
+        mocks.refetch.mockRejectedValue(new Error('模拟读取失败'));
+        await render();
+        await act(async () => {
+            button('重试').click();
+            button('重试').click();
+        });
+        expect(mocks.retry).toHaveBeenCalledExactlyOnceWith({ variables: { ids: ['state-87'] } });
+        await act(async () => finish({ data: { retryCustomerContentTranslations: { queued: 1 } } }));
+        expect(host.textContent).toContain('已加入翻译队列，完成后请核对英文结果');
+        expect(host.querySelector('td[data-label="操作"] [role="status"]')?.textContent).toBe(
+            '已排队，待核对英文',
+        );
+        expect(host.textContent).toContain('操作已完成，但最新记录读取失败');
+        await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="刷新"]')!.click());
+        expect(mocks.retry).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not report a skipped recovery as queued', async () => {
+        showRecoverableVariant();
+        mocks.retry.mockResolvedValue({ data: { retryCustomerContentTranslations: { queued: 0 } } });
+        await render();
+        await act(async () => button('重试').click());
+        expect(host.textContent).toContain('未加入翻译队列，请查看当前记录及人工锁定状态');
+        expect(host.querySelector('td[data-label="操作"] [role="status"]')?.textContent).toBe(
+            '未排队，请核对记录',
+        );
+        expect(host.textContent).not.toContain('已加入翻译队列');
+    });
+
+    it.each(['rejected', 'missing-result'])('retains a visible failure when retry is %s', async kind => {
+        showRecoverableVariant();
+        if (kind === 'rejected') mocks.retry.mockRejectedValue(new Error('模拟拒绝受理'));
+        else mocks.retry.mockResolvedValue({ data: null });
+        await render();
+        await act(async () => button('重试').click());
+        expect(host.querySelector('[role="alert"]')?.textContent).toBeTruthy();
+        expect(host.textContent).not.toContain('已加入翻译队列');
+        expect(mocks.refetch).not.toHaveBeenCalled();
+    });
+
+    it('records an accepted retry without reading a hidden page', async () => {
+        showRecoverableVariant();
+        let finish!: (value: unknown) => void;
+        mocks.retry.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+        );
+        await render();
+        await act(async () => button('重试').click());
+        mocks.active = false;
+        await render();
+        await act(async () => finish({ data: { retryCustomerContentTranslations: { queued: 1 } } }));
+        expect(host.textContent).toContain('已加入翻译队列，完成后请核对英文结果');
+        expect(mocks.refetch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        { locked: true },
+        { origin: 'MANUAL' },
+        { lastErrorCode: 'MANUAL_REVIEW' },
+        { entityType: 'Product' },
+        { fieldPath: 'description' },
+        { status: 'AUTO_TRANSLATED' },
+    ])('does not expose recovery for an ineligible cancelled row: %j', async overrides => {
+        showRecoverableVariant(overrides);
+        await render();
+        expect([...host.querySelectorAll('button')].some(item => item.textContent === '重试')).toBe(false);
+        expect(mocks.retry).not.toHaveBeenCalled();
+    });
+
+    it('ignores a late retry response after switching store', async () => {
+        showRecoverableVariant();
+        let finish!: (value: unknown) => void;
+        mocks.retry.mockImplementation(
+            () =>
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+        );
+        await render();
+        await act(async () => button('重试').click());
+        mocks.scope = 'test-store-b';
+        await render();
+        await act(async () => finish({ data: { retryCustomerContentTranslations: { queued: 1 } } }));
+        expect(mocks.refetch).not.toHaveBeenCalled();
+        expect(host.textContent).not.toContain('已加入翻译队列');
+    });
+
     it('counts manual review separately and uses clickable exact status filters', async () => {
         await render();
         const filter = host.querySelector<HTMLButtonElement>('[aria-label="筛选待人工复核"]')!;

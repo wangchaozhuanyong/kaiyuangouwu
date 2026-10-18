@@ -17,10 +17,15 @@ import {
 import { IcloudAccessCodeService } from './icloud-access-code.service';
 import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
+const MAX_FAILED_IP_RECORDS = 10_000;
+const FAILED_IP_CLEANUP_INTERVAL_MS = 60_000;
+const rateLimitMessage = '查询过于频繁，请 15 分钟后再试。';
+
 @Injectable()
 export class IcloudPublicQueryService {
     /** In-memory failed attempt tracker (IP -> { count, lastAttemptAt }) */
     private failedAttempts = new Map<string, { count: number; lastAttemptAt: number }>();
+    private nextFailedAttemptCleanupAt = 0;
 
     constructor(
         private readonly connection: TransactionalConnection,
@@ -161,7 +166,7 @@ export class IcloudPublicQueryService {
                 userAgent ?? null,
                 IcloudAuditResult.RATE_LIMITED,
             );
-            return { error: '查询过于频繁，请 15 分钟后再试。' };
+            return { error: rateLimitMessage };
         }
         const virtual = await this.connection.getRepository(ctx, IcloudVirtualEmail).findOne({
             where: { buyerQueryCode: code },
@@ -174,7 +179,8 @@ export class IcloudPublicQueryService {
                   .findOne({ where: { masterQueryCode: code } })) ?? undefined);
         const match = virtual ?? primary;
         if (!match) {
-            this.recordFailedAttempt(clientIp);
+            // Other requests can fill the tracker or lock this source while the lookups are pending.
+            const recorded = this.recordFailedAttempt(clientIp);
             await this.recordAudit(
                 auditRepo,
                 code,
@@ -182,9 +188,9 @@ export class IcloudPublicQueryService {
                 null,
                 clientIp,
                 userAgent ?? null,
-                IcloudAuditResult.INVALID_CODE,
+                recorded ? IcloudAuditResult.INVALID_CODE : IcloudAuditResult.RATE_LIMITED,
             );
-            return { error: '无效的查询码，请检查后重试。' };
+            return { error: recorded ? '无效的查询码，请检查后重试。' : rateLimitMessage };
         }
         const type = virtual ? IcloudQueryTargetType.VIRTUAL : IcloudQueryTargetType.PRIMARY;
         if (
@@ -227,26 +233,45 @@ export class IcloudPublicQueryService {
     // ==========================================
 
     private checkRateLimit(ip: string): boolean {
-        const record = this.failedAttempts.get(ip);
-        if (!record) return false;
-
-        if (record.count >= RATE_LIMIT_MAX_FAILED_ATTEMPTS) {
-            const elapsed = Date.now() - record.lastAttemptAt;
-            if (elapsed < RATE_LIMIT_LOCKOUT_MS) {
-                return true; // Still locked out
-            }
-            // Lockout expired, reset
-            this.failedAttempts.delete(ip);
-            return false;
-        }
-        return false;
+        const now = Date.now();
+        this.pruneFailedAttempts(now);
+        const record = this.currentFailedAttempt(ip, now);
+        // At capacity, fail closed for untracked sources rather than evicting an effective lockout.
+        return record
+            ? record.count >= RATE_LIMIT_MAX_FAILED_ATTEMPTS
+            : this.failedAttempts.size >= MAX_FAILED_IP_RECORDS;
     }
 
-    private recordFailedAttempt(ip: string): void {
-        const record = this.failedAttempts.get(ip) || { count: 0, lastAttemptAt: 0 };
-        record.count += 1;
-        record.lastAttemptAt = Date.now();
-        this.failedAttempts.set(ip, record);
+    private recordFailedAttempt(ip: string): boolean {
+        const now = Date.now();
+        this.pruneFailedAttempts(now);
+        const record = this.currentFailedAttempt(ip, now);
+        if (
+            (record && record.count >= RATE_LIMIT_MAX_FAILED_ATTEMPTS) ||
+            (!record && this.failedAttempts.size >= MAX_FAILED_IP_RECORDS)
+        ) {
+            return false;
+        }
+        this.failedAttempts.set(ip, { count: (record?.count ?? 0) + 1, lastAttemptAt: now });
+        return true;
+    }
+
+    private currentFailedAttempt(ip: string, now: number) {
+        const record = this.failedAttempts.get(ip);
+        if (record && now - record.lastAttemptAt >= RATE_LIMIT_LOCKOUT_MS) {
+            this.failedAttempts.delete(ip);
+            return undefined;
+        }
+        return record;
+    }
+
+    private pruneFailedAttempts(now: number): void {
+        if (now < this.nextFailedAttemptCleanupAt) return;
+        this.nextFailedAttemptCleanupAt = now + FAILED_IP_CLEANUP_INTERVAL_MS;
+        // Both the scan frequency and its maximum work are bounded; no per-IP timers are retained.
+        for (const [ip, record] of this.failedAttempts) {
+            if (now - record.lastAttemptAt >= RATE_LIMIT_LOCKOUT_MS) this.failedAttempts.delete(ip);
+        }
     }
 
     // ==========================================

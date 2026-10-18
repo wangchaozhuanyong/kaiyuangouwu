@@ -10,12 +10,13 @@ import type { ShopApiContext } from './client-context';
 import type { ErrorResult } from './helpers';
 
 import {
-    API_URL,
-    SEND_CLIENT_CHANNEL_TOKEN,
-    ShopApiTimeoutError,
     createRequestSignal,
+    shopApiHeaders,
+    ShopApiTimeoutError,
+    shopApiUrl,
     type GraphQlResponse,
 } from './helpers';
+import { sessionTransport } from './session-transport';
 
 export abstract class BaseDomainApi {
     constructor(protected readonly ctx: ShopApiContext) {}
@@ -117,27 +118,25 @@ export abstract class BaseDomainApi {
             ),
         );
         files.forEach((file, index) => form.set(String(index), file, file.name));
-        const headers: Record<string, string> = {
-            'language-code': this.languageCode,
-            'Apollo-Require-Preflight': 'true',
-        };
-        if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
-        if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
-        const separator = API_URL.includes('?') ? '&' : '?';
+        const url = shopApiUrl(this.languageCode, this.market.currencyCode);
         const timeout = createRequestSignal(undefined, 60_000);
-        const captureAuthToken = this.createAuthTokenCapture();
         try {
-            const response = await fetch(
-                `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
-                {
+            const response = await sessionTransport(url, false, timeout.signal, async () => {
+                const headers: Record<string, string> = {
+                    ...shopApiHeaders(this.languageCode, this.market.code, this.authToken),
+                    'Apollo-Require-Preflight': 'true',
+                };
+                const capture = this.createAuthTokenCapture();
+                const uploaded = await fetch(url, {
                     method: 'POST',
                     credentials: 'include',
                     headers,
                     body: form,
                     signal: timeout.signal,
-                },
-            );
-            captureAuthToken(response);
+                });
+                capture(uploaded);
+                return uploaded;
+            });
             const body = (await response.json()) as GraphQlResponse<T>;
             if (!response.ok || body.errors?.length || !body.data)
                 throw new Error(body.errors?.[0]?.message ?? `Image upload failed (${response.status})`);

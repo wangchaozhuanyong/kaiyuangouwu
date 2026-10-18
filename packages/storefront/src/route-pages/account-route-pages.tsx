@@ -1,5 +1,7 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
 
+import '../commerce-styles';
+import { useRouteCustomerLogout } from '../logout';
 import {
     AccountPageContext,
     BrowsingHistoryPageContext,
@@ -9,9 +11,9 @@ import {
     ReferralPageContext,
 } from '../storefront-page-contexts';
 
-import '../commerce-styles';
 import '../styles/account-catalog-surfaces.css';
 import '../styles/account-identity.css';
+
 import { registerRoutePreload, RouteGate, useRouteRuntime as useRuntime } from './shared';
 
 const AccountPage = lazyRouteComponent(() => import('../pages/account-page'), 'AccountPage');
@@ -32,6 +34,7 @@ const ReferralPage = lazyRouteComponent(() => import('../pages/referral-page'), 
 
 export function AccountRoutePage() {
     const runtime = useRuntime();
+    const { logoutCustomer } = useRouteCustomerLogout(runtime);
     return (
         <RouteGate name="account">
             <AccountPageContext.Provider
@@ -62,11 +65,7 @@ export function AccountRoutePage() {
                     onCurrencyChange: runtime.switchCurrency,
                     onContentTarget: runtime.openContentTarget,
                     onLogout: () => {
-                        void runtime.api.logout().then(() => {
-                            runtime.clearPrivateQueryCache();
-                            runtime.setCustomer(null);
-                            runtime.notify(runtime.language === 'zh' ? '已退出登录' : 'Signed out');
-                        });
+                        void logoutCustomer();
                     },
                 }}
             >

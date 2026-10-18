@@ -177,6 +177,189 @@ const english = async () =>
     (await db.getRepository(ItemTranslation).findOneByOrFail({ id: target.id })).label;
 
 describe('durable translation outbox with an isolated SQL database', () => {
+    async function missingVariantTarget() {
+        await db.getRepository(ContentTranslationState).update(state.id, { status: 'CANCELLED' });
+        const channel = await db.getRepository(Channel).save({ id: 1 });
+        const variant = await db.getRepository(ProductVariant).save({ channels: [channel] });
+        const original = await db.getRepository(ProductVariantTranslation).save({
+            base: variant,
+            languageCode: 'zh_Hans',
+            name: '历史规格',
+        });
+        const cancelled = await service.recordState(ctx, {
+            channelId: channel.id,
+            entityType: 'ProductVariant',
+            entityId: variant.id,
+            fieldPath: 'name',
+            sourceText: original.name,
+            translatedText: '',
+            status: 'CANCELLED',
+            origin: 'AUTO',
+            locked: false,
+        });
+        await db.getRepository(ContentTranslationState).update(cancelled.id, {
+            attempts: 30,
+            lastErrorCode: 'SOURCE_UNAVAILABLE',
+        });
+        const targetRows = () =>
+            db.getRepository(ProductVariantTranslation).find({
+                where: { base: { id: variant.id }, languageCode: 'en' },
+            });
+        return { variant, original, cancelled, targetRows };
+    }
+
+    it('recovers one cancelled owned variant with a missing English row through the fenced worker', async () => {
+        const { cancelled, original, targetRows } = await missingVariantTarget();
+        expect(await retry.requestRetry(ctx, [String(cancelled.id)])).toEqual({ queued: 1 });
+        expect(await targetRows()).toEqual([]);
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
+        expect(await targetRows()).toMatchObject([{ languageCode: 'en', name: 'Business services' }]);
+        expect(
+            await db.getRepository(ProductVariantTranslation).findOneByOrFail({ id: original.id }),
+        ).toMatchObject({
+            languageCode: 'zh_Hans',
+            name: '历史规格',
+        });
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: cancelled.id }),
+        ).toMatchObject({
+            status: 'AUTO_TRANSLATED',
+            attempts: 0,
+            lastErrorCode: null,
+        });
+        expect(await retry.requestRetry(ctx, [String(cancelled.id)])).toEqual({ queued: 0 });
+        expect(translate).toHaveBeenCalledTimes(1);
+    });
+
+    it('creates a missing English row for a new pending variant and retries indexing without translating again', async () => {
+        const { cancelled, targetRows } = await missingVariantTarget();
+        await db.getRepository(ContentTranslationState).update(cancelled.id, {
+            status: 'PENDING',
+            attempts: 0,
+            lastErrorCode: null,
+        });
+        const notify = vi.spyOn(adapter, 'notify').mockRejectedValueOnce(new Error('index offline'));
+        // The business translation is committed; notification completion has its own durable status.
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
+        expect(await targetRows()).toMatchObject([{ name: 'Business services' }]);
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: cancelled.id }),
+        ).toMatchObject({
+            status: 'NOTIFY_PENDING',
+            lastErrorCode: 'NOTIFICATION_FAILED',
+        });
+        advance(60_001);
+        notify.mockResolvedValue(undefined);
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 1, deferred: 0 });
+        expect(await targetRows()).toHaveLength(1);
+        expect(translate).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        'foreign-store',
+        'unassigned',
+        'missing-source',
+        'empty-source',
+        'existing-english',
+        'different-cancellation',
+        'leased',
+    ])('does not recover a missing variant target for %s', async mode => {
+        const { variant, original, cancelled, targetRows } = await missingVariantTarget();
+        if (mode === 'unassigned')
+            await db.createQueryBuilder().relation(ProductVariant, 'channels').of(variant).remove(1);
+        if (mode === 'missing-source') await db.getRepository(ProductVariantTranslation).delete(original.id);
+        if (mode === 'empty-source')
+            await db.getRepository(ProductVariantTranslation).update(original.id, { name: ' ' });
+        if (mode === 'existing-english')
+            await db
+                .getRepository(ProductVariantTranslation)
+                .save({ base: variant, languageCode: 'en', name: 'Already translated' });
+        if (mode === 'different-cancellation')
+            await db
+                .getRepository(ContentTranslationState)
+                .update(cancelled.id, { lastErrorCode: 'MANUAL_REVIEW' });
+        if (mode === 'leased')
+            await db.getRepository(ContentTranslationState).update(cancelled.id, {
+                leaseToken: 'owned-by-another-worker',
+                leaseUntil: new Date(Date.now() + 60_000),
+            });
+        if (mode === 'foreign-store')
+            await expect(
+                retry.requestRetry({ channelId: '2' } as any, [String(cancelled.id)]),
+            ).rejects.toThrow('店铺');
+        else expect(await retry.requestRetry(ctx, [String(cancelled.id)])).toEqual({ queued: 0 });
+        if (mode === 'existing-english')
+            expect(await targetRows()).toMatchObject([{ name: 'Already translated' }]);
+        else expect(await targetRows()).toEqual([]);
+        expect(translate).not.toHaveBeenCalled();
+    });
+
+    it('keeps another owning store manual lock when the English variant row is missing', async () => {
+        const { variant, cancelled, targetRows } = await missingVariantTarget();
+        const other = await db.getRepository(Channel).save({ id: 2 });
+        await db.createQueryBuilder().relation(ProductVariant, 'channels').of(variant).add(other);
+        await service.recordState({ channelId: '2' } as any, {
+            channelId: 2,
+            entityType: 'ProductVariant',
+            entityId: variant.id,
+            fieldPath: 'name',
+            sourceText: '历史规格',
+            translatedText: 'Reviewed original',
+            status: 'MANUAL_LOCKED',
+            origin: 'MANUAL',
+            locked: true,
+        });
+        expect(await retry.requestRetry(ctx, [String(cancelled.id)])).toEqual({ queued: 0 });
+        expect(await targetRows()).toEqual([]);
+        expect(translate).not.toHaveBeenCalled();
+    });
+
+    it('preserves provider backoff without creating an empty English row', async () => {
+        const { cancelled, targetRows } = await missingVariantTarget();
+        expect(await retry.requestRetry(ctx, [String(cancelled.id)])).toEqual({ queued: 1 });
+        translate.mockRejectedValueOnce(new TranslationProviderError('RATE_LIMIT', 180_000));
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
+        expect(await targetRows()).toEqual([]);
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: cancelled.id }),
+        ).toMatchObject({
+            status: 'PENDING',
+            attempts: 1,
+            lastErrorCode: 'RATE_LIMIT',
+        });
+    });
+
+    it('does not overwrite an English row created by an editor during translation', async () => {
+        const { variant, cancelled, targetRows } = await missingVariantTarget();
+        await retry.requestRetry(ctx, [String(cancelled.id)]);
+        translate.mockImplementationOnce(async request => {
+            await db
+                .getRepository(ProductVariantTranslation)
+                .save({ base: variant, languageCode: 'en', name: 'New reviewed name' });
+            await service.recordState(ctx, {
+                channelId: 1,
+                entityType: 'ProductVariant',
+                entityId: variant.id,
+                fieldPath: 'name',
+                sourceText: '历史规格',
+                translatedText: 'New reviewed name',
+                status: 'MANUAL_LOCKED',
+                origin: 'MANUAL',
+                locked: true,
+            });
+            return { translations: [{ key: request.segments[0].key, text: 'Stale provider result' }] };
+        });
+        expect(await retry.retryPending()).toEqual({ scanned: 1, translated: 0, deferred: 1 });
+        expect(await targetRows()).toMatchObject([{ name: 'New reviewed name' }]);
+        expect(
+            await db.getRepository(ContentTranslationState).findOneByOrFail({ id: cancelled.id }),
+        ).toMatchObject({
+            status: 'MANUAL_LOCKED',
+            origin: 'MANUAL',
+            locked: true,
+        });
+    });
+
     it('applies cached fields while retaining provider Retry-After for uncached fields', async () => {
         const cache = new TranslationResultCacheService(connection);
         await cache.translate(

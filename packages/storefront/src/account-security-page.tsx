@@ -79,6 +79,7 @@ export function AccountSecurityPage({
     onCancelAccountClosure,
     onAppealFraudRiskCase,
     onLogout,
+    logoutPending = false,
 }: {
     customer: ActiveCustomer | null;
     language: StorefrontLanguage;
@@ -107,6 +108,7 @@ export function AccountSecurityPage({
     onCancelAccountClosure?: () => Promise<void>;
     onAppealFraudRiskCase?: (id: string, reason: string) => Promise<void>;
     onLogout: () => void;
+    logoutPending?: boolean;
 }) {
     const navigate = useNavigate();
     const navigateTo = (route: AccountRoute) => void navigate(routeNavigateOptions(route) as never);
@@ -718,9 +720,23 @@ export function AccountSecurityPage({
 
                 {/* 4. 退出登录 */}
                 <div className="security-action-group">
-                    <button className="security-logout-button" type="button" onClick={onLogout}>
+                    <button
+                        className="security-logout-button"
+                        type="button"
+                        onClick={onLogout}
+                        disabled={logoutPending}
+                        aria-busy={logoutPending}
+                    >
                         <LogOut size={16} aria-hidden="true" />
-                        <span>{isZh ? '退出当前登录账号' : 'Sign Out of Account'}</span>
+                        <span>
+                            {logoutPending
+                                ? isZh
+                                    ? '正在退出…'
+                                    : 'Signing out…'
+                                : isZh
+                                  ? '退出当前登录账号'
+                                  : 'Sign Out of Account'}
+                        </span>
                     </button>
                 </div>
             </SubpageBody>

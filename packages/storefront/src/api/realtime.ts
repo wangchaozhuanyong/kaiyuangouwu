@@ -6,11 +6,12 @@ import {
     calculateStorefrontRealtimeRetry,
     cancelStorefrontRealtimeBody,
     createRequestSignal,
-    SEND_CLIENT_CHANNEL_TOKEN,
+    shopApiHeaders,
     STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS,
     StorefrontRealtimeConnectionError,
     storefrontRealtimeUrl,
 } from './helpers';
+import { sessionTransport } from './session-transport';
 
 const STOREFRONT_REALTIME_RESPONSE_TIMEOUT_MS = 10_000;
 
@@ -25,18 +26,22 @@ export class RealtimeApi extends BaseDomainApi {
         let retryDelayMs = STOREFRONT_REALTIME_INITIAL_RETRY_DELAY_MS;
         while (!signal.aborted) {
             try {
-                const headers: Record<string, string> = { accept: 'text/event-stream' };
-                if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
-                if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
                 const request = createRequestSignal(signal, STOREFRONT_REALTIME_RESPONSE_TIMEOUT_MS);
                 let response: Response;
                 try {
-                    response = await fetch(storefrontRealtimeUrl(), {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers,
-                        cache: 'no-store',
-                        signal: request.signal,
+                    const url = storefrontRealtimeUrl();
+                    response = await sessionTransport(url, false, request.signal, () => {
+                        const headers = {
+                            ...shopApiHeaders(undefined, this.market.code, this.authToken),
+                            accept: 'text/event-stream',
+                        };
+                        return fetch(url, {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers,
+                            cache: 'no-store',
+                            signal: request.signal,
+                        });
                     });
                 } catch (error) {
                     if (request.didTimeout()) throw new Error('Storefront realtime response timed out');

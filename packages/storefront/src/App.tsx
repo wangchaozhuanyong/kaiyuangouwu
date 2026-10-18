@@ -2,17 +2,12 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { useStorefrontAppState } from './hooks/useStorefrontAppState';
-import { languageCodeFor } from './i18n';
-import { storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { StorefrontShell } from './StorefrontShell';
 
 export { HomeDualCategoryShowcase } from './storefront-ui/content-ui';
 
-const StorefrontQueryFeedback = lazyRouteComponent(
-    () => import('./StorefrontQueryFeedback'),
-    'StorefrontQueryFeedback',
-);
+const Feedback = lazyRouteComponent(() => import('./Feedback'), 'Feedback');
 const StorefrontDesignPreview = lazyRouteComponent(
     () => import('./storefront-design-preview'),
     'StorefrontDesignPreview',
@@ -35,14 +30,7 @@ function StorefrontRuntime() {
             <StorefrontShell state={state} />
             {!state.storefrontUnavailable && (
                 <Suspense fallback={null}>
-                    <StorefrontQueryFeedback
-                        language={state.language}
-                        scope={{
-                            marketCode: storefrontQueryKeys.market(state.storefrontContextValue.market),
-                            languageCode: languageCodeFor(state.language),
-                            includePrivate: true,
-                        }}
-                    />
+                    <Feedback runtime={state.storefrontContextValue} />
                 </Suspense>
             )}
         </>

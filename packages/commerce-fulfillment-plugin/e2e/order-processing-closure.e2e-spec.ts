@@ -1,5 +1,6 @@
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import { CurrencyCode, GlobalFlag, LanguageCode } from '@vendure/common/lib/generated-types';
+import { normalizeString } from '@vendure/common/lib/normalize-string';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
     ChannelService,
@@ -22,12 +23,16 @@ import {
     RequestContext,
     RequestContextService,
     Role,
+    Sale,
+    ShippingMethod,
     StockLocationService,
+    StockMovementService,
     TransactionalConnection,
     User,
 } from '@vendure/core';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
+import { StoreManagementPlugin, StoreProfile } from '@vendure/store-management-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { createTestEnvironment } from '@vendure/testing';
 import gql from 'graphql-tag';
@@ -38,8 +43,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
-import { StoreProfile } from '../../store-management-plugin/src/entities/store-profile.entity';
-import { StoreManagementPlugin } from '../../store-management-plugin/src/store-management.plugin';
 import { CommerceFulfillmentPlugin } from '../src/commerce-fulfillment.plugin';
 import { CommerceModeService } from '../src/commerce-mode.service';
 
@@ -275,6 +278,15 @@ beforeAll(async () => {
         relations: ['roles', 'roles.channels'],
     });
     const platform = await contexts.create({ apiType: 'admin', user });
+    // Populator historically logged a missing-transaction error and continued.
+    // Require its real seed writes before executing the dependent order scenarios.
+    for (const method of initialData.shippingMethods) {
+        expect(
+            await connection
+                .getRepository(platform, ShippingMethod)
+                .findOneBy({ code: normalizeString(method.name, '-') }),
+        ).not.toBeNull();
+    }
     await server.app.get(CommerceModeService).updateActiveMode(platform, 'HYBRID');
     for (const handler of [automatic, pendingProvider, manual, retryProvider, splitRetryProvider]) {
         await server.app.get(PaymentMethodService).create(platform, {
@@ -428,6 +440,14 @@ async function placed(
     });
     syntheticPayment.metadata = { refundBudget: { shippingWithTax: 0 } };
     const payment = await connection.getRepository(own, Payment).save(syntheticPayment);
+    if (options.kind !== 'digital' && options.state !== 'Cancelled') {
+        // Synthetic payment states do not run the standard order transition hooks.
+        // Use the real allocation service so Pending consumes legitimate warehouse stock.
+        await connection.withTransaction(own, async tx => {
+            const funded = requireFixture(await orders.findOne(tx, order.id));
+            await server.app.get(StockMovementService).createAllocationsForOrder(tx, funded);
+        });
+    }
     return { order, line, payment, total };
 }
 describe('local SQLjs order closure API', () => {
@@ -1141,7 +1161,7 @@ describe('local SQLjs order closure API', () => {
             adminClient.setChannelToken(ownToken);
         }
     });
-    it('runs actual SQLjs transactions for two packages competing for one unit', async () => {
+    it('runs actual transactions for two packages competing for one allocated unit', async () => {
         const fixture = await placed({ quantity: 1, code: 'CLOSURE-SQLJS-CONCURRENT' });
         const first = await createPackage(fixture);
         const second = await createPackage(fixture);
@@ -1153,29 +1173,32 @@ describe('local SQLjs order closure API', () => {
                     trackingCode: 'LOCAL-RACE-' + item.id,
                 },
             });
-            const pending = (
-                await adminClient.query(transitionFulfillment, { id: encode(item.id), state: 'Pending' })
-            ).transitionFulfillmentToState;
-            expect(pending.state, JSON.stringify(pending)).toBe('Pending');
         }
-        const results = await Promise.all(
+        // Created -> Pending records the Sale. Compete at that boundary rather than
+        // consuming one allocation twice before testing the later shipping transition.
+        const outcomes = await Promise.all(
             [first, second].map(item =>
                 adminClient.query(transitionFulfillment, {
                     id: encode(item.id),
-                    state: 'Shipped',
+                    state: 'Pending',
                 }),
             ),
         );
-        expect(
-            results.filter(result => result.transitionFulfillmentToState.state === 'Shipped'),
-            JSON.stringify(results),
-        ).toHaveLength(1);
-        expect(
-            results.filter(
-                result =>
-                    result.transitionFulfillmentToState.errorCode === 'FULFILLMENT_STATE_TRANSITION_ERROR',
-            ),
-        ).toHaveLength(1);
+        const results = outcomes.map(outcome => outcome.transitionFulfillmentToState);
+        const successful = results.filter(result => result.state === 'Pending');
+        expect(successful, JSON.stringify(outcomes)).toHaveLength(1);
+        const rejected = results.filter(result => !successful.includes(result));
+        expect(rejected).toHaveLength(1);
+        expect(rejected[0].errorCode).toBe('FULFILLMENT_STATE_TRANSITION_ERROR');
+        const sales = await connection
+            .getRepository(own, Sale)
+            .find({ where: { orderLine: { id: fixture.line.id } } });
+        expect(sales).toHaveLength(1);
+        expect(sales.reduce((sum, sale) => sum + Math.abs(sale.quantity), 0)).toBe(1);
+        const winner = successful[0];
+        const shipped = (await adminClient.query(transitionFulfillment, { id: winner.id, state: 'Shipped' }))
+            .transitionFulfillmentToState;
+        expect(shipped.state, JSON.stringify(shipped)).toBe('Shipped');
         const persisted = await connection
             .getRepository(own, Fulfillment)
             .find({ where: { orders: { id: fixture.order.id } } });

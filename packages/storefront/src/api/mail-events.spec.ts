@@ -43,6 +43,7 @@ describe('private mailbox transport', () => {
             { onChange, onStatus },
             f.controller.signal,
         );
+        await vi.dynamicImportSettled();
         await vi.advanceTimersByTimeAsync(0);
         f.ready();
         await vi.advanceTimersByTimeAsync(0);

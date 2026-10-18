@@ -17,7 +17,7 @@ import { AutoCardDeliveryEvent } from './entities/auto-card-delivery-event.entit
 import { AutoCardDelivery } from './entities/auto-card-delivery.entity';
 import { AutoCardPoolItem } from './entities/auto-card-pool-item.entity';
 import { AutoCardSupplyGrant } from './entities/auto-card-supply-grant.entity';
-import { DigitalVariantConfig } from './entities/digital-product.entity';
+import { DigitalOrderReservation, DigitalVariantConfig } from './entities/digital-product.entity';
 
 function todoSummaryHarness(size = 1) {
     type Row = Record<string, any>;
@@ -331,6 +331,7 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         { id: 'pool-2', sequence: 2, state: 'AVAILABLE' },
     ];
     const poolBuilder = {
+        clone: vi.fn().mockReturnThis(),
         setLock: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
@@ -370,6 +371,19 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
         withTransaction: (transactionCtx: any, work: any) => Promise.resolve(work(transactionCtx)),
         rawConnection: { options: { type: 'sqljs' } },
         getRepository: vi.fn((_ctx: any, entity: any) => {
+            if (entity === DigitalOrderReservation) {
+                const claims = {
+                    subQuery: vi.fn().mockReturnThis(),
+                    select: vi.fn().mockReturnThis(),
+                    from: vi.fn().mockReturnThis(),
+                    getQuery: vi.fn(() => '(SELECT config)'),
+                    innerJoin: vi.fn().mockReturnThis(),
+                    where: vi.fn().mockReturnThis(),
+                    andWhere: vi.fn().mockReturnThis(),
+                    getMany: vi.fn().mockResolvedValue([]),
+                };
+                return { createQueryBuilder: () => claims };
+            }
             if (entity === AutoCardConfig)
                 return {
                     findOneOrFail: vi

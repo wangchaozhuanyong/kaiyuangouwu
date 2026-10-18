@@ -23,19 +23,58 @@ import type {
     StorefrontUsdtCheckoutQuote,
 } from '../types';
 
+import { AuthTransition, browserAuthTransition, type ConfirmLogout } from './auth-transition';
 import { CustomerIdentityApi } from './customer-identity';
 import { orderFields, orderSummaryFields } from './fragments';
 import {
     API_URL,
+    createRequestSignal,
     ErrorResult,
-    GraphQlResponse,
-    SEND_CLIENT_CHANNEL_TOKEN,
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiTimeoutError,
-    createRequestSignal,
 } from './helpers';
+import { sessionTransport } from './session-transport';
 
 export class AccountApi extends CustomerIdentityApi {
+    private readonly authTransition =
+        typeof window === 'undefined' ? new AuthTransition() : browserAuthTransition;
+
+    protected override authenticationRequest = async <T>(
+        ...args: Parameters<CustomerIdentityApi['ctx']['authenticationRequest']>
+    ): Promise<T> => {
+        const [query, variables, signal, timeoutMs, resultUnknown, proof] = args;
+        const deadline = createRequestSignal(signal, timeoutMs);
+        try {
+            return await this.authTransition.authenticate(
+                dispatch =>
+                    this.ctx.authenticationRequest<T>(
+                        query,
+                        variables,
+                        deadline.signal,
+                        timeoutMs,
+                        resultUnknown,
+                        proof,
+                        dispatch,
+                    ),
+                this.languageCode === 'zh_Hans'
+                    ? '退出状态未确认，请先核对原会话；本页暂不能开始新的登录'
+                    : 'Sign-out is unconfirmed. Check the original session before signing in again.',
+                deadline.signal,
+                true,
+            );
+        } catch (error) {
+            if (deadline.didTimeout())
+                throw new ShopApiTimeoutError(
+                    resultUnknown
+                        ? '请求超时，提交结果暂时无法确认，请勿更改参数后重复提交'
+                        : '请求超时，请检查网络后重试',
+                    resultUnknown,
+                );
+            throw error;
+        } finally {
+            deadline.cleanup();
+        }
+    };
     async customerAddresses(signal?: AbortSignal): Promise<CustomerAddress[] | null> {
         const result = await this.request<{
             activeCustomer: { addresses: CustomerAddress[] } | null;
@@ -110,44 +149,13 @@ export class AccountApi extends CustomerIdentityApi {
     }
 
     async uploadCustomerAvatar(file: File): Promise<Asset> {
-        const operations = {
-            query: `mutation SetCustomerAvatar($file: Upload!) {
-                setCustomerAvatar(file: $file) { id preview }
-            }`,
-            variables: { file: null },
-        };
-        const form = new FormData();
-        form.set('operations', JSON.stringify(operations));
-        form.set('map', JSON.stringify({ 0: ['variables.file'] }));
-        form.set('0', file, file.name);
-        const headers: Record<string, string> = {
-            'language-code': this.languageCode,
-            'Apollo-Require-Preflight': 'true',
-        };
-        if (SEND_CLIENT_CHANNEL_TOKEN) headers['vendure-token'] = this.market.code;
-        if (this.authToken) headers.authorization = `Bearer ${this.authToken}`;
-        const separator = API_URL.includes('?') ? '&' : '?';
-        const timeout = createRequestSignal(undefined, 60_000);
-        const captureAuthToken = this.createAuthTokenCapture();
-        let response: Response;
-        let body: GraphQlResponse<{ setCustomerAvatar: Asset }>;
-        try {
-            response = await fetch(
-                `${API_URL}${separator}languageCode=${encodeURIComponent(this.languageCode)}&currencyCode=${encodeURIComponent(this.market.currencyCode)}`,
-                { method: 'POST', credentials: 'include', headers, body: form, signal: timeout.signal },
-            );
-            captureAuthToken(response);
-            body = (await response.json()) as GraphQlResponse<{ setCustomerAvatar: Asset }>;
-        } catch (error) {
-            if (timeout.didTimeout()) throw new ShopApiTimeoutError('头像上传超时，请检查网络后重试');
-            throw error;
-        } finally {
-            timeout.cleanup();
-        }
-        if (!response.ok || body.errors?.length || !body.data) {
-            throw new Error(body.errors?.[0]?.message ?? `Avatar upload failed (${response.status})`);
-        }
-        return body.data.setCustomerAvatar;
+        const result = await this.upload<{ setCustomerAvatar: Asset }>(
+            `mutation SetCustomerAvatar($file: Upload!) { setCustomerAvatar(file: $file) { id preview } }`,
+            {},
+            file,
+            '头像上传超时，请检查网络后重试',
+        );
+        return result.setCustomerAvatar;
     }
 
     async customerAvatarHistory(signal?: AbortSignal): Promise<CustomerAvatarHistoryEntry[]> {
@@ -853,11 +861,28 @@ mutation ($input: ModifiedOrderUsdtQuoteInput!) {
         this.assertNoError(result.resetPassword);
     }
 
-    async logout(): Promise<void> {
-        await this.request<{ logout: { success: boolean } }>(`
-            mutation StorefrontLogout { logout { success } }
-        `);
-        this.clearAuthToken();
+    async logout(): Promise<ConfirmLogout> {
+        const receipt = await this.authTransition.logout(
+            () =>
+                this.ctx.request<{ logout: { success: boolean } }>(
+                    `
+                mutation StorefrontLogout { logout { success } }
+            `,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    true,
+                ),
+            result => {
+                if (result.logout?.success !== true) throw new Error('Sign-out was not confirmed');
+                this.clearAuthToken();
+            },
+            operation => sessionTransport(API_URL, true, undefined, operation),
+        );
+        return receipt.confirm;
     }
 
     async createAddress(input: CustomerAddressInput): Promise<CustomerAddress> {

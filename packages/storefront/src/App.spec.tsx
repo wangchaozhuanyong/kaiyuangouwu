@@ -10,16 +10,15 @@ import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client
 const state = vi.hoisted(() => ({
     storefrontUnavailable: true,
     language: 'zh',
-    storefrontContextValue: { market: { code: 'fixture', currencyCode: 'CNY' } },
+    storefrontContextValue: { market: { code: 'fixture', currencyCode: 'CNY' }, language: 'zh' },
 }));
 vi.mock('./hooks/useStorefrontAppState', () => ({ useStorefrontAppState: () => state }));
 vi.mock('./StorefrontShell', () => ({ StorefrontShell: () => <main>STORE_SHELL</main> }));
 vi.mock('./storefront-ui/content-ui', () => ({ HomeDualCategoryShowcase: () => null }));
 vi.mock('@tanstack/react-router', async () => {
-    const { StorefrontQueryFeedback } = await import('./StorefrontQueryFeedback');
+    const { Feedback } = await import('./Feedback');
     return {
-        lazyRouteComponent: (_loader: unknown, name: string) =>
-            name === 'StorefrontQueryFeedback' ? StorefrontQueryFeedback : () => null,
+        lazyRouteComponent: (_loader: unknown, name: string) => (name === 'Feedback' ? Feedback : () => null),
     };
 });
 

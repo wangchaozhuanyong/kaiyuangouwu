@@ -254,10 +254,16 @@ export class TranslationContentAdapter {
                 where: { base: { id: entity.id }, languageCode: 'en' },
                 ...lockOptions,
             });
-            if (!source || !target) return;
+            if (!source) return;
+            // Historical variants can retain their Chinese row after the English row was never
+            // created. Reading remains side-effect free; the fenced worker creates it on writeback.
+            const missingVariantTarget =
+                !target && state.entityType === 'ProductVariant' && state.fieldPath === 'name';
+            if (!target && !missingVariantTarget) return;
+            if (missingVariantTarget && !String(source[state.fieldPath] ?? '').trim()) return;
             // Native translation rows are shared across Channels. Respect a review made in any owning Channel.
             const targetHash = createHash('sha256')
-                .update(String(target[state.fieldPath] ?? ''))
+                .update(String(target?.[state.fieldPath] ?? ''))
                 .digest('hex');
             const sourceHash = createHash('sha256')
                 .update(String(source[state.fieldPath] ?? ''))
@@ -275,7 +281,10 @@ export class TranslationContentAdapter {
                     : [];
             if (
                 !forReview &&
-                siblingStates.some(sibling => sibling.locked && sibling.translatedHash === targetHash)
+                siblingStates.some(
+                    sibling =>
+                        sibling.locked && (missingVariantTarget || sibling.translatedHash === targetHash),
+                )
             ) {
                 throw new TranslationProviderError('MANUAL_REVIEW');
             }
@@ -301,25 +310,32 @@ export class TranslationContentAdapter {
             return {
                 reusableTarget,
                 source: String(source[state.fieldPath] ?? ''),
-                target: String(target[state.fieldPath] ?? ''),
+                target: String(target?.[state.fieldPath] ?? ''),
                 derivedTarget:
                     field.format === 'SLUG'
                         ? String(
-                              normalizeString(target.name ?? '', '-') ||
+                              normalizeString(target?.name ?? '', '-') ||
                                   `${state.entityType.toLowerCase()}-${entity.id}`,
                           )
                         : undefined,
                 maxTargetLength:
                     Number(table.metadata.findColumnWithPropertyName(state.fieldPath)?.length) || undefined,
                 format: field.format === 'HTML' ? 'HTML' : 'TEXT',
-                save: async value =>
-                    table.update(target.id, {
+                save: async value => {
+                    if (!target) {
+                        return table.save(
+                            table.create({ languageCode: 'en', base: { id: entity.id }, name: value }),
+                            { reload: false },
+                        );
+                    }
+                    return table.update(target.id, {
                         [state.fieldPath]:
                             field.format === 'SLUG'
                                 ? normalizeString(value, '-') ||
                                   `${state.entityType.toLowerCase()}-${entity.id}`
                                 : value,
-                    }),
+                    });
+                },
             };
         }
         if (state.entityType === 'StoreProfile' && state.fieldPath === 'storefrontName') {

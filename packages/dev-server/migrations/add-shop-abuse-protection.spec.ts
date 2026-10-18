@@ -146,6 +146,8 @@ describe('shop abuse protection migration', () => {
         expect(registry).toContain(
             "import { AddShopAbuseProtection1792180800000 } from './1792180800000-add-shop-abuse-protection';",
         );
-        expect(registry).toMatch(/AddGptRecharge1792152000000,\s+AddShopAbuseProtection1792180800000,\s*\];/);
+        const registrations = registry.match(/export const devServerMigrations = \[([\s\S]*?)\];/)?.[1] ?? '';
+        expect(registrations).toMatch(/AddGptRecharge1792152000000,\s+AddShopAbuseProtection1792180800000,/);
+        expect(registrations.match(/\bAddShopAbuseProtection1792180800000\b/g)).toHaveLength(1);
     });
 });
