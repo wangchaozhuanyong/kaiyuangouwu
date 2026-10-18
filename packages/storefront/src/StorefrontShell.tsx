@@ -395,11 +395,11 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             store/currency/background changes still release the shared overlay. */}
                         <OverlayHost
                             ownerKey={JSON.stringify([
-                                'authentication',
+                                'auth',
                                 storefrontContextValue.storefrontCode,
                                 storefrontContextValue.market.code,
                                 storefrontContextValue.market.currencyCode,
-                                routeHref(displayedRoute),
+                                routeHref({ ...displayedRoute, publicLanguage: 'en' }),
                             ])}
                         >
                             {storefrontContextValue.authOverlay && (

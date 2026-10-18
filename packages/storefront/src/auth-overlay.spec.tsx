@@ -10,6 +10,17 @@ import { OverlayHost } from './overlay-host';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 
 const state = vi.hoisted(() => ({ complete: undefined as undefined | (() => Promise<void>) }));
+const navigation = vi.hoisted(() => ({
+    navigate: vi.fn(),
+    router: { state: { location: { pathname: '/zh/product', search: {} } } },
+}));
+vi.mock('@tanstack/react-router', () => ({
+    useNavigate: () => navigation.navigate,
+    useRouter: () => navigation.router,
+}));
+vi.mock('./route-component-preload', () => ({
+    preloadStorefrontRouteComponent: vi.fn(() => Promise.resolve()),
+}));
 vi.mock('./lazy-storefront-pages', async () => {
     const { useContext } = await import('react');
     const { AuthPresentationContext } = await import('./auth-presentation');
@@ -46,6 +57,8 @@ describe('authentication overlay lifecycle', () => {
     let trigger: HTMLButtonElement;
 
     beforeEach(() => {
+        navigation.navigate.mockReset();
+        navigation.router.state.location.search = {};
         vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
             window.setTimeout(() => callback(0), 0),
         );
@@ -143,6 +156,72 @@ describe('authentication overlay lifecycle', () => {
         escape();
         expect(runtime.closeAuthOverlay).toHaveBeenCalledOnce();
     });
+
+    it('completes the retained form after its localized background changes language', async () => {
+        runtime = { ...runtime, route: { ...runtime.route, publicLanguage: 'zh' } };
+        request = { mode: 'login', target: { name: 'account' } };
+        await render();
+        const email = document.querySelector<HTMLInputElement>('[name=email]');
+        const password = document.querySelector<HTMLInputElement>('[name=password]');
+        if (!email || !password) throw new Error('Missing fixture authentication fields');
+        email.value = 'fixture@example.invalid';
+        password.value = 'local-fixture-value';
+        runtime = { ...runtime, language: 'en', route: { ...runtime.route, publicLanguage: 'en' } };
+        await render();
+        expect(document.querySelector('[name=email]')).toBe(email);
+        expect(email.value).toBe('fixture@example.invalid');
+        expect(password.value).toBe('local-fixture-value');
+        await act(async () => {
+            button('Complete').click();
+            await Promise.resolve();
+        });
+        expect(runtime.completeAuthentication).toHaveBeenCalledWith(
+            { name: 'login' },
+            { name: 'account' },
+            expect.any(Function),
+        );
+        expect(vi.mocked(runtime.completeAuthentication).mock.calls[0][2]?.()).toBe(true);
+    });
+
+    it.each(['login', 'register', 'forgot-password'] as const)(
+        'switches the localized %s form without dropping its validated destination',
+        async mode => {
+            runtime = { ...runtime, route: { ...runtime.route, publicLanguage: 'zh' } };
+            request = { mode, target: { name: 'purchase', id: 'variant-local', quantity: 3 } };
+            navigation.router.state.location.search = {
+                auth: mode,
+                authTarget: '/purchase?id=variant-local&quantity=3',
+            };
+            await render();
+            const select = document.querySelector<HTMLSelectElement>('.auth-overlay-language');
+            if (!select) throw new Error('Missing language selector');
+            act(() => {
+                select.value = 'en';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            expect(navigation.navigate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    search: expect.objectContaining({
+                        id: 'local-product',
+                        __storefrontLanguage: 'en',
+                        auth: mode,
+                        authTarget: '/purchase?id=variant-local&quantity=3',
+                    }),
+                    replace: true,
+                    resetScroll: false,
+                }),
+            );
+            const options = navigation.navigate.mock.calls[0][0] as {
+                state(previous: Record<string, unknown>): Record<string, unknown>;
+            };
+            expect(options.state({ storefrontAuthPushed: true, other: 'retained' })).toEqual({
+                storefrontAuthPushed: false,
+                other: 'retained',
+            });
+            expect(runtime.toggleLanguage).not.toHaveBeenCalled();
+            expect(runtime.closeAuthOverlay).not.toHaveBeenCalled();
+        },
+    );
 
     it('passes the selected product and quantity to existing checkout completion', async () => {
         request = { mode: 'login', target: { name: 'purchase', id: 'variant-local', quantity: 3 } };

@@ -106,7 +106,6 @@ function legalBlock(language: StorefrontLanguage): StorefrontContentBlock {
 
 function Fixture() {
     const desktop = useDesktopViewport();
-    const [language, setLanguage] = useState<StorefrontLanguage>(params.get('lang') === 'en' ? 'en' : 'zh');
     const [preset, setPreset] = useState<'classic' | 'neo-minimalist'>(
         params.get('skin') === 'neo-minimalist' ? 'neo-minimalist' : 'classic',
     );
@@ -114,6 +113,7 @@ function Fixture() {
     const [events, setEvents] = useState<string[]>([]);
     const contentBlocks = useMemo(() => [authBlock('AUTH_LOGIN'), authBlock('AUTH_REGISTER')], []);
     const navigation = useStorefrontNavigation({ collections: [], contentBlocks, authenticated });
+    const language = navigation.route.publicLanguage ?? (params.get('lang') === 'en' ? 'en' : 'zh');
     const isZh = language === 'zh';
 
     useEffect(() => {
@@ -168,7 +168,8 @@ function Fixture() {
             googleClientId: null,
         },
         legalContent: legalBlock(language),
-        toggleLanguage: () => setLanguage(current => (current === 'zh' ? 'en' : 'zh')),
+        toggleLanguage: () =>
+            navigation.navigate({ ...navigation.route, publicLanguage: language === 'zh' ? 'en' : 'zh' }),
         completeAuthentication: (_login: unknown, destination: StorefrontContextValue['route']) => {
             setAuthenticated(true);
             navigation.navigateAfterAuthentication(destination ?? navigation.route, true);
@@ -350,7 +351,7 @@ function Fixture() {
                         runtime.storefrontCode,
                         market.code,
                         market.currencyCode,
-                        routeHref(navigation.displayedRoute),
+                        routeHref({ ...navigation.displayedRoute, publicLanguage: 'en' }),
                     ])}
                 >
                     {navigation.authOverlay && <AuthenticationOverlay request={navigation.authOverlay} />}
@@ -371,7 +372,9 @@ const routeTree = rootRoute.addChildren(
 const router = createRouter({
     routeTree,
     history: createMemoryHistory({
-        initialEntries: [isAuthOverlayMode(initialMode) ? `/?auth=${initialMode}` : '/'],
+        initialEntries: [
+            `/?__storefrontLanguage=${params.get('lang') === 'en' ? 'en' : 'zh'}${isAuthOverlayMode(initialMode) ? `&auth=${initialMode}` : ''}`,
+        ],
     }),
 });
 // Test-only access to the real memory-history adapter, including while the background is inert.

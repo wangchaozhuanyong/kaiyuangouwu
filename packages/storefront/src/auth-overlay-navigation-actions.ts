@@ -2,7 +2,7 @@ import type { useNavigate, useRouter } from '@tanstack/react-router';
 
 import { readAuthOverlay, type AuthOverlayRequest } from './auth-overlay-navigation';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
-import { isCheckoutRoute, routeHref, type RouteState } from './storefront-router';
+import { isCheckoutRoute, routeHref, routeNavigateOptions, type RouteState } from './storefront-router';
 
 export function withoutAuthOverlay(search: Record<string, unknown>): Record<string, unknown> {
     const { auth: _auth, authTarget: _target, ...background } = search;
@@ -30,14 +30,18 @@ export function applyAuthOverlayNavigation(
     navigate: ReturnType<typeof useNavigate>,
     request: AuthOverlayRequest | null,
     replace = false,
+    background?: RouteState,
 ) {
     const location = router.state.location;
     const existing = readAuthOverlay(location.search);
     if (request) {
         void preloadStorefrontRouteComponent(request.mode);
+        const options = background
+            ? routeNavigateOptions(background)
+            : { to: location.pathname, search: location.search };
         void navigate({
-            to: location.pathname,
-            search: withAuthOverlay(location.search, {
+            ...options,
+            search: withAuthOverlay(options.search, {
                 ...request,
                 target: request.target ?? existing?.target,
             }),
@@ -45,7 +49,12 @@ export function applyAuthOverlayNavigation(
             resetScroll: false,
             state: (previous: Record<string, unknown>) => ({
                 ...previous,
-                storefrontAuthPushed: existing ? previous.storefrontAuthPushed : !replace,
+                // Locale replacement must close in the chosen language rather than go back.
+                storefrontAuthPushed: background
+                    ? false
+                    : existing
+                      ? previous.storefrontAuthPushed
+                      : !replace,
             }),
         } as never);
         return;

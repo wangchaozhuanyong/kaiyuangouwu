@@ -12,7 +12,10 @@ if (!['127.0.0.1', 'localhost'].includes(parsedUrl.hostname))
 if (parsedUrl.port === '5296')
     throw new Error('The older carousel preview is outside this verification scope.');
 const project = fileURLToPath(new URL('../../../../', import.meta.url));
-const output = path.resolve(project, 'tmp/auth-overlay-20261009/browser');
+const output = path.resolve(
+    project,
+    process.env.AUTH_OVERLAY_OUTPUT_DIR || 'tmp/auth-overlay-20261009/browser',
+);
 await mkdir(output, { recursive: true });
 const report = [];
 const interactions = [];
@@ -59,7 +62,8 @@ try {
                         'forgot-password': lang === 'zh' ? '忘记密码' : 'Forgot password',
                     }[mode];
                     // Wait for the requested form, rather than measuring the previous form during navigation.
-                    await expect(dialog.locator('.auth-page')).toHaveAttribute('aria-label', pageLabel);
+                    await expect(dialog.locator(`.auth-page[aria-label="${pageLabel}"]`)).toBeVisible();
+                    await expect(dialog.locator('.auth-page')).toHaveCount(1);
                     await expect(dialog.locator('.auth-form-heading h1')).toBeVisible();
                     const geometry = await dialog.evaluate(element => {
                         const body = element.querySelector('.auth-dialog-body');
@@ -118,6 +122,23 @@ try {
                         path: path.join(output, `${skin}-${lang}-${width}-${mode}.png`),
                     });
                     report.push({ skin, lang, width, mode, ...geometry });
+                    const email = dialog.locator('input[name="emailAddress"]');
+                    await email.fill('preview@example.invalid');
+                    const password = dialog.locator('input[name="password"]');
+                    if (await password.count()) await password.fill('Synthetic-test-input');
+                    for (const nextLanguage of [lang === 'zh' ? 'en' : 'zh', lang]) {
+                        await dialog.locator('.auth-overlay-language').selectOption(nextLanguage);
+                        await expect(dialog).toBeVisible();
+                        await expect(email).toHaveValue('preview@example.invalid');
+                        if (await password.count())
+                            await expect(password).toHaveValue('Synthetic-test-input');
+                        await expect(page.locator('html')).toHaveAttribute(
+                            'lang',
+                            nextLanguage === 'zh' ? 'zh-CN' : 'en',
+                        );
+                        await expect(page.getByTestId('preview-status')).toContainText(mode);
+                    }
+                    report.at(-1).localizedFormRetained = true;
                 }
                 await page.keyboard.press('Escape');
                 await expect(dialog).toHaveCount(0);
@@ -154,8 +175,10 @@ try {
                 await page.goto(url.href);
                 await dialog.locator('input[name="fullName"]').fill('Local Example');
                 await dialog.locator('input[name="emailAddress"]').fill('preview@example.invalid');
-                await dialog.locator('input[name="password"]').fill('Synthetic-test-input');
-                await dialog.locator('input[name="confirmPassword"]').fill('Synthetic-test-input');
+                // Registration now sets its password only after email verification.
+                await expect(
+                    dialog.locator('input[name="password"],input[name="confirmPassword"]'),
+                ).toHaveCount(0);
                 await dialog.locator('button[type="submit"]').click();
                 await expect(dialog.locator('[role="alert"]')).toBeVisible();
                 await page.screenshot({

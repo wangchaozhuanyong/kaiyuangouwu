@@ -1,12 +1,13 @@
 // organize-imports-ignore -- Preserve ESLint type groups and CSS side-effect order.
 import type { AuthOverlayRequest } from './auth-overlay-navigation';
 import type { StorefrontContentTargetType } from './types';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import { X } from 'lucide-react';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { authVisualStyle } from '../../storefront-content-plugin/src/shared/auth-visual';
 
-import { authOverlayLoginRoute } from './auth-overlay-navigation-actions';
+import { applyAuthOverlayNavigation, authOverlayLoginRoute } from './auth-overlay-navigation-actions';
 import { AuthOverlayLoading } from './auth-overlay-surface';
 import { AuthPresentationContext } from './auth-presentation';
 import { findAuthVisualContent } from './auth-visual-content';
@@ -20,6 +21,8 @@ import './styles/auth-overlay.css';
 /** The background route stays mounted; only the authentication form changes. */
 export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest }) {
     const runtime = useStorefront();
+    const router = useRouter();
+    const navigate = useNavigate();
     const [emailDraft, setEmailDraft] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const completing = useRef(false);
@@ -61,12 +64,12 @@ export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest
     // without losing an in-memory form. Store, market, currency and background changes
     // still release it through the shared host. No password is persisted by this host.
     const owner = JSON.stringify([
-        'authentication',
+        'auth',
         runtime.storefrontCode,
         runtime.market.code,
         runtime.market.currencyCode,
         openingCustomer.current,
-        routeHref(runtime.route),
+        routeHref({ ...runtime.route, publicLanguage: 'en' }),
     ]);
     const openingOwner = useRef(owner);
     const currentOwner = useRef(owner);
@@ -132,7 +135,13 @@ export function AuthenticationOverlay({ request }: { request: AuthOverlayRequest
                         value={runtime.language}
                         disabled={submitting}
                         onChange={event => {
-                            if (event.target.value !== runtime.language) runtime.toggleLanguage();
+                            if (event.target.value === runtime.language) return;
+                            if (runtime.route.publicLanguage) {
+                                applyAuthOverlayNavigation(router, navigate, request, true, {
+                                    ...runtime.route,
+                                    publicLanguage: runtime.language === 'zh' ? 'en' : 'zh',
+                                });
+                            } else runtime.toggleLanguage();
                         }}
                     >
                         <option value="zh">{isZh ? '中文' : 'ZH'}</option>

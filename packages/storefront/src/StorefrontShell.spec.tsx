@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthEmailDraftContext } from './auth-presentation';
+import { Overlay } from './overlay-host';
 import { StorefrontContext } from './StorefrontContext';
 import { mountStorefrontEnhancements, StorefrontShell } from './StorefrontShell';
 
@@ -73,7 +74,21 @@ vi.mock('@tanstack/react-router', () => ({
         );
     },
     lazyRouteComponent: (_loader: unknown, name: string) =>
-        name === 'LoginRoutePage' ? () => <div>SIGN_IN_FORM</div> : () => <div>LAZY_SHELL_CONTENT</div>,
+        name === 'AuthenticationOverlay'
+            ? function FixtureAuthenticationOverlay() {
+                  const runtime = useContext(StorefrontContext);
+                  if (!runtime) throw new Error('Missing fixture storefront context');
+                  return (
+                      <Overlay onClose={runtime.closeAuthOverlay}>
+                          <div role="dialog">
+                              <input name="retained-auth-draft" />
+                          </div>
+                      </Overlay>
+                  );
+              }
+            : name === 'LoginRoutePage'
+              ? () => <div>SIGN_IN_FORM</div>
+              : () => <div>LAZY_SHELL_CONTENT</div>,
 }));
 vi.mock('./components/common/bottom-navigation', async importOriginal => ({
     ...(await importOriginal<typeof import('./components/common/bottom-navigation')>()),
@@ -93,6 +108,13 @@ describe('catalog rendering boundary', () => {
     let root: ReturnType<typeof createRoot>;
     let enhancementsStarted: Promise<void>;
     beforeEach(() => {
+        // Each case owns idle delivery; a slow prior case must not preload the
+        // deferred modules before the explicit readiness/idle assertions below.
+        vi.stubGlobal(
+            'requestIdleCallback',
+            vi.fn(() => 1),
+        );
+        vi.stubGlobal('cancelIdleCallback', vi.fn());
         enhancements.start.mockClear();
         enhancements.dispose.mockClear();
         enhancementsStarted = new Promise(resolve => {
@@ -453,6 +475,36 @@ describe('catalog rendering boundary', () => {
             );
         });
         expect(navigate).toHaveBeenCalledWith({ name: 'account', id: undefined, tab: undefined }, true);
+    });
+    it('retains the actual authentication host on locale changes and releases it on background changes', () => {
+        vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+            window.setTimeout(() => callback(0), 0),
+        );
+        vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id));
+        const closeAuthOverlay = vi.fn();
+        const runtime = { authOverlay: { mode: 'login' }, closeAuthOverlay };
+        render({ displayedRoute: { name: 'home', publicLanguage: 'zh' }, storefrontContextValue: runtime });
+        const input = document.querySelector<HTMLInputElement>('[name=retained-auth-draft]');
+        expect(input).not.toBeNull();
+        if (!input) throw new Error('Missing fixture authentication input');
+        input.value = 'fixture@example.invalid';
+        render({
+            language: 'en',
+            isZh: false,
+            displayedRoute: { name: 'home', publicLanguage: 'en' },
+            storefrontContextValue: runtime,
+        });
+        expect(document.querySelector('[name=retained-auth-draft]')).toBe(input);
+        expect(input.value).toBe('fixture@example.invalid');
+        expect(closeAuthOverlay).not.toHaveBeenCalled();
+        render({
+            language: 'en',
+            isZh: false,
+            displayedRoute: { name: 'services', publicLanguage: 'en' },
+            storefrontContextValue: runtime,
+        });
+        expect(document.querySelector('[name=retained-auth-draft]')).toBeNull();
+        expect(closeAuthOverlay).toHaveBeenCalledOnce();
     });
 });
 
