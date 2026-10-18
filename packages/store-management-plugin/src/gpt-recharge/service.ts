@@ -14,6 +14,7 @@ import {
     allowedRechargeOrigin,
     GptRechargeNotAcceptedError,
     openRechargeSecret,
+    readRechargeResponse,
     rechargeAllowedPlans,
     rechargeCredentialMatches,
     rechargeFingerprint,
@@ -136,8 +137,7 @@ export class GptRechargeService {
             if (response.status === 400 && ['verify', 'query'].includes(action))
                 throw new UserInputError('兑换码无效或已停用，请核对后重试');
             if (!response.ok) throw new Error('Upstream request rejected');
-            const raw = await response.text();
-            if (raw.length > 65536) throw new Error('Response too large');
+            const raw = await readRechargeResponse(response);
             return JSON.parse(raw) as Record<string, unknown>;
         } catch (error) {
             if (error instanceof UserInputError) throw error;

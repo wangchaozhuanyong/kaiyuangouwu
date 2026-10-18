@@ -141,8 +141,10 @@ export class IcloudImapSyncService {
                 });
                 const range = account.lastSyncedUid > 0 ? `${account.lastSyncedUid + 1}:*` : '1:*';
 
-                const messagesToProcess: Array<{ uid: number; source: Buffer }> = [];
-                for await (const message of client.fetch(
+                let maxUid = account.lastSyncedUid;
+                // Parse and persist before pulling the next source. Keep IMAP commands outside
+                // this loop; only local parsing and database work are safe during a fetch.
+                for await (const item of client.fetch(
                     range,
                     {
                         source: true,
@@ -150,17 +152,9 @@ export class IcloudImapSyncService {
                     },
                     { uid: true },
                 )) {
-                    if (message.uid <= account.lastSyncedUid) {
+                    if (item.uid <= account.lastSyncedUid || !item.source) {
                         continue;
                     }
-                    if (message.source) {
-                        messagesToProcess.push({ uid: message.uid, source: message.source });
-                    }
-                }
-
-                let maxUid = account.lastSyncedUid;
-
-                for (const item of messagesToProcess) {
                     maxUid = Math.max(maxUid, item.uid);
                     try {
                         const parsed = await simpleParser(item.source);

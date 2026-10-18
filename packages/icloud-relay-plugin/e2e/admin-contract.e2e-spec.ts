@@ -272,6 +272,42 @@ describe('iCloud admin contract persistence', () => {
         return { ctx, admin, primary, alias, masterCode };
     }
 
+    it('restricts historical mail previews through both GraphQL APIs without changing stored mail', async () => {
+        const f = await publicFixture('isolated-preview');
+        const repository = server.app.get(TransactionalConnection).getRepository(f.ctx, IcloudReceivedMail);
+        const html = '<p style="color:red">Historical text</p><img src="https://sender.invalid/probe">';
+        await repository.update({ primaryAccountId: f.primary.id }, { bodyHtml: html });
+        const publicResult = await shopClient.query(
+            gql`
+                query ($code: String!) {
+                    icloudQueryMails(queryCode: $code) {
+                        success
+                        items {
+                            bodyHtml
+                        }
+                    }
+                }
+            `,
+            { code: f.masterCode },
+        );
+        const adminResult = await adminClient.query(
+            gql`
+                query ($id: ID!) {
+                    icloudReceivedMails(primaryAccountId: $id, limit: 2147483647) {
+                        bodyHtml
+                    }
+                }
+            `,
+            { id: f.primary.id },
+        );
+        const preview = publicResult.icloudQueryMails.items[0].bodyHtml;
+        expect(publicResult.icloudQueryMails.success).toBe(true);
+        expect(preview).toContain("default-src 'none'");
+        expect(preview).toContain(html);
+        expect(adminResult.icloudReceivedMails[0].bodyHtml).toBe(preview);
+        expect((await repository.findOneByOrFail({ primaryAccountId: f.primary.id })).bodyHtml).toBe(html);
+    });
+
     // Shared-plugin decision: storefront Channels select an entry, not separate mailbox ownership.
     it('shares code-authorized mail across Channels while retaining mailbox boundaries and admin protection', async () => {
         const { createChannel } = await adminClient.query(gql`

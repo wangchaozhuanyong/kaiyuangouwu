@@ -14,7 +14,7 @@ describe('public mail recipient mapping', () => {
             { id: 'v2', aliasEmail: 'alias-two@example.com' },
         ];
         const mails = [
-            { id: 'm1', virtualEmailId: 'v1' },
+            { id: 'm1', virtualEmailId: 'v1', bodyHtml: '<p>Historical public mail</p>' },
             { id: 'm2', virtualEmailId: 'v2' },
             { id: 'm3', virtualEmailId: null },
         ];
@@ -43,6 +43,9 @@ describe('public mail recipient mapping', () => {
             [null, 'own***@example.com'],
         ]);
         expect(result.virtualEmailsList?.map(item => item.id)).toEqual(['v1', 'v2']);
+        expect(result.items[0].bodyHtml).toContain("default-src 'none'");
+        expect(result.items[0].bodyHtml).toContain('<p>Historical public mail</p>');
+        expect(mails[0].bodyHtml).toBe('<p>Historical public mail</p>');
     });
 });
 
