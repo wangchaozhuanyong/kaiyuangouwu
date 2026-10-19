@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import {
     isStorefrontVisualPresetId,
     renderPublicSeoHead,
@@ -15,6 +15,8 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 import { renderStorefrontIconLinks } from '../storefront-lcp-preload.service';
+
+import { PublicHtmlRenderError, type PublicHtmlRenderStage } from './public-render-diagnostics';
 
 type Renderer = { renderPublicPage(page: StorefrontPageData): Promise<string> };
 const loadRenderer = createRequire(__filename);
@@ -137,14 +139,18 @@ export class StorefrontSeoHtmlService {
     }
 
     async render(page: StorefrontPageData): Promise<string> {
+        let stage: PublicHtmlRenderStage = 'artifact-root';
         try {
             const root = this.artifactRoot();
+            stage = 'renderer-load';
             const rendererPath = realpathSync(resolve(root, '.server/public-page-renderer.cjs'));
             if (this.lastRendererPath && this.lastRendererPath !== rendererPath)
                 delete loadRenderer.cache[this.lastRendererPath];
             const renderer = loadRenderer(rendererPath) as Renderer;
             this.lastRendererPath = rendererPath;
+            stage = 'template-read';
             const template = await readFile(resolve(root, 'index.html'), 'utf8');
+            stage = 'route-styles';
             const prefixes =
                 page.request?.kind === 'product'
                     ? ['product-detail-page-']
@@ -160,12 +166,14 @@ export class StorefrontSeoHtmlService {
             );
             if (prefixes.some(prefix => !styles.some(file => file.startsWith(prefix))))
                 throw new Error('Missing public route stylesheet');
+            stage = 'body-render';
             const body = await renderer.renderPublicPage(page);
             if (!body.trim()) throw new Error('Public renderer produced empty HTML');
+            stage = 'html-assemble';
             return assemblePublicHtml(template, page, body, styles);
-        } catch {
+        } catch (error) {
             // A broken/missing render artifact is temporary, never an indexable empty 200 page.
-            throw new ServiceUnavailableException('Public storefront rendering is temporarily unavailable');
+            throw new PublicHtmlRenderError(stage, error);
         }
     }
 }

@@ -1,13 +1,14 @@
 import 'reflect-metadata';
 
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import type { RequestContext } from '@vendure/core';
+import { Logger, type RequestContext } from '@vendure/core';
 import type { StorefrontPageData } from '@vendure/storefront-content-plugin';
 import type { Request, Response } from 'express';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StorefrontClosedError } from '../storefront-activation.service';
 
+import { PublicHtmlRenderError } from './public-render-diagnostics';
 import { defaultStorefrontSeoSettings } from './storefront-seo.contract';
 import {
     normalizedPublicRedirectPath,
@@ -89,6 +90,13 @@ function fixture() {
 }
 
 describe('StorefrontSeoController public document and legacy redirects', () => {
+    const errorLog = vi.fn<(message: string, context?: string, trace?: string) => void>();
+    beforeEach(() => {
+        errorLog.mockClear();
+        vi.spyOn(Logger, 'error').mockImplementation(errorLog);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
     it('renders the document media result instead of the short public API result', async () => {
         const test = fixture();
         const preparedPage = { ...test.page, version: 'prepared-document' };
@@ -246,7 +254,91 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         expect(response.setHeader).toHaveBeenCalledWith('X-Robots-Tag', 'index, follow');
         expect(response.status).toHaveBeenCalledWith(200);
         expect(response.send).toHaveBeenCalledWith('<html>synthetic public body</html>');
+        expect(errorLog).not.toHaveBeenCalled();
     });
+
+    it.each(['read-page', 'resolve-seo', 'render-html', 'verify-publication'] as const)(
+        'records the failed %s stage and correlates the generic 503 with its response and origin log',
+        async stage => {
+            const test = fixture();
+            const error = new ServiceUnavailableException('Public data is temporarily unavailable');
+            if (stage === 'read-page') test.pages.readForDocument.mockRejectedValue(error);
+            if (stage === 'resolve-seo') test.publicSeo.enrich.mockRejectedValue(error);
+            if (stage === 'render-html') test.html.render.mockRejectedValue(error);
+            if (stage === 'verify-publication') test.publicSeo.assertOutput.mockRejectedValue(error);
+            const request = test.req('/en/product?id=product-1&token=private-query');
+            request.headers['cf-ray'] = 'a4cff3ac4c6fedce-MXP';
+            const response = responseMock();
+
+            await test.controller.document(request, response as unknown as Response);
+
+            expect(errorLog).toHaveBeenCalledTimes(1);
+            const [message, context] = errorLog.mock.calls[0];
+            const details = JSON.parse(message);
+            expect(context).toBe('StorefrontPublicHtml');
+            expect(details).toMatchObject({
+                event: 'storefront.public-document.unavailable',
+                cfRay: 'a4cff3ac4c6fedce-MXP',
+                kind: 'product',
+                language: 'en',
+                stage,
+                reason: 'public-cache-unavailable',
+            });
+            expect(details.requestId).toMatch(/^[a-f0-9-]{36}$/u);
+            expect(details.durationMs).toBeGreaterThanOrEqual(0);
+            expect(response.setHeader).toHaveBeenCalledWith('X-Request-Id', details.requestId);
+            expect(response.send).toHaveBeenCalledWith('Public page temporarily unavailable');
+            expect(message).not.toMatch(/private-query|synthetic-only-cookie|synthetic-only-authorization/u);
+        },
+    );
+
+    it('retains safe renderer causes and locations without logging raw messages, SQL or private paths', async () => {
+        const test = fixture();
+        const cause = Object.assign(new TypeError('SELECT secret-column WHERE token=private-error'), {
+            code: 'PRIVATE_CODE',
+            stack: [
+                'TypeError: SELECT secret-column WHERE token=private-error',
+                '    at privateFunction (private-release/packages/storefront/dist/.server/renderer.cjs:25:7)',
+                '    at https://private-host.invalid/?token=private-stack:10:2',
+            ].join('\n'),
+        });
+        test.html.render.mockRejectedValue(new PublicHtmlRenderError('body-render', cause));
+        const response = responseMock();
+
+        await test.controller.document(test.req('/en/product?id=product-1'), response as unknown as Response);
+
+        const [message] = errorLog.mock.calls[0];
+        expect(JSON.parse(message)).toMatchObject({
+            stage: 'render-html',
+            renderStage: 'body-render',
+            reason: 'public-html-render-failed',
+            errorName: 'TypeError',
+            frames: ['packages/storefront/dist/.server/renderer.cjs:25:7'],
+        });
+        expect(message).not.toMatch(/SELECT|secret-column|private-|privateFunction|PRIVATE_CODE/u);
+        expect(response.send).toHaveBeenCalledWith('Public page temporarily unavailable');
+    });
+
+    it.each([
+        { trusted: false, ray: 'a4cff3ac4c6fedce-MXP' },
+        { trusted: true, ray: 'private-header\nforged-line' },
+        { trusted: true, ray: ['a4cff3ac4c6fedce-MXP'] },
+    ])(
+        'omits an untrusted, malformed or repeated edge identifier: $trusted / $ray',
+        async ({ trusted, ray }) => {
+            const test = fixture();
+            test.pages.readForDocument.mockRejectedValue(new ServiceUnavailableException('private-message'));
+            const request = test.req('/en/product?id=product-1', trusted);
+            request.query.path = '/en/product?id=product-1';
+            request.headers['cf-ray'] = ray;
+
+            await test.controller.document(request, responseMock() as unknown as Response);
+
+            const [message] = errorLog.mock.calls[0];
+            expect(JSON.parse(message)).not.toHaveProperty('cfRay');
+            expect(message).not.toContain('private-message');
+        },
+    );
 
     it.each([
         { error: new ServiceUnavailableException('Authority changed during rendering'), status: 503 },
@@ -296,6 +388,10 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         expect(test.html.render).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(503);
         expect(response.status).not.toHaveBeenCalledWith(200);
+        expect(JSON.parse(errorLog.mock.calls[0][0])).toMatchObject({
+            stage: 'required-content',
+            reason: 'required-content-unavailable',
+        });
     });
 
     it('returns 404 for an unknown old slug without a published mapping', async () => {

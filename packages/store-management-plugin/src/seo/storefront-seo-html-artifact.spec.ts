@@ -15,6 +15,30 @@ import {
 
 import { StorefrontSeoHtmlService } from './storefront-seo-html.service';
 
+describe('public HTML renderer failure diagnostics', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('retains the original filesystem failure and stage for the controller without exposing it in the response', async () => {
+        const cause = Object.assign(new Error('private-filesystem-path'), { code: 'ENOENT' });
+        const service = new StorefrontSeoHtmlService();
+        vi.spyOn(service as unknown as { artifactRoot(): string }, 'artifactRoot').mockImplementation(() => {
+            throw cause;
+        });
+
+        await expect(service.render({} as never)).rejects.toMatchObject({
+            status: 503,
+            renderStage: 'artifact-root',
+            cause,
+        });
+        await expect(service.render({} as never)).rejects.toMatchObject({
+            response: {
+                statusCode: 503,
+                message: 'Public storefront rendering is temporarily unavailable',
+            },
+        });
+    });
+});
+
 // Explicit opt-in: consumes the current matching built artifact without rebuilding or opening a browser.
 describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
     'public HTML service with the actual storefront build',
