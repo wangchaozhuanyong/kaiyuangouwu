@@ -27,22 +27,6 @@ export interface StorefrontCouponCard {
     claimable: boolean;
 }
 
-export interface ProductCouponPrice {
-    campaignId: string;
-    campaignName: string;
-    priceWithTax: number;
-    savedAmount: number;
-}
-
-interface ProductCouponPriceInput {
-    campaigns: StorefrontCouponCampaign[];
-    customerCoupons: StoreCustomerCoupon[];
-    collectionIds: string[];
-    productVariantId: string;
-    priceWithTax: number;
-    currencyCode: string;
-}
-
 export function appliedCouponLabel(
     coupons: StoreCustomerCoupon[],
     orderId: string,
@@ -75,103 +59,6 @@ function couponTheme(
     return configured === 'rose' || configured === 'gold' || configured === 'blue' || configured === 'emerald'
         ? configured
         : couponThemeByKind[kind];
-}
-
-export function bestProductCouponPrice({
-    campaigns,
-    customerCoupons,
-    collectionIds,
-    productVariantId,
-    priceWithTax,
-    currencyCode,
-}: ProductCouponPriceInput): ProductCouponPrice | null {
-    if (!Number.isFinite(priceWithTax) || priceWithTax <= 0) return null;
-
-    const now = Date.now();
-    const usableCoupons = customerCoupons.filter(
-        coupon =>
-            coupon.usable &&
-            Date.parse(coupon.validFrom) <= now &&
-            (!coupon.validUntil || Date.parse(coupon.validUntil) > now),
-    );
-    const usableCampaignIds = new Set(usableCoupons.map(coupon => coupon.campaignId));
-    const candidates = new Map(campaigns.map(campaign => [campaign.id, campaign]));
-    // Issuance may have ended while this customer's entitlement is still valid.
-    for (const coupon of usableCoupons) {
-        candidates.set(coupon.campaignId, {
-            ...candidates.get(coupon.campaignId),
-            id: coupon.campaignId,
-            name: coupon.campaignName,
-            kind: coupon.campaignKind,
-            customerEligibility: coupon.customerEligibility,
-            minimumSpend: coupon.minimumSpend,
-            currencyCode: coupon.currencyCode ?? currencyCode,
-            discountAmount: coupon.discountAmount,
-            discountRate: coupon.discountRate,
-            collectionIds: coupon.collectionIds ?? [],
-            productVariantIds: coupon.productVariantIds ?? [],
-            startsAt: coupon.validFrom,
-            endsAt: coupon.validUntil,
-            claimStartsAt: null,
-            claimEndsAt: null,
-            validityDays: null,
-            remainingIssueCount: null,
-            claimed: true,
-            claimable: false,
-        });
-    }
-    const collectionIdSet = new Set(collectionIds);
-    let best: ProductCouponPrice | null = null;
-
-    for (const campaign of candidates.values()) {
-        // Eligibility can change after claiming. Only the server may quote restricted customer prices.
-        if (campaign.customerEligibility && campaign.customerEligibility !== 'ALL') continue;
-        const owned = usableCampaignIds.has(campaign.id);
-        const claimableNow =
-            campaign.claimable &&
-            (!campaign.claimStartsAt || Date.parse(campaign.claimStartsAt) <= now) &&
-            (!campaign.claimEndsAt || Date.parse(campaign.claimEndsAt) > now);
-        if (!claimableNow && !owned) continue;
-        if (campaign.currencyCode && campaign.currencyCode !== currencyCode) continue;
-        if (campaign.minimumSpend > priceWithTax) continue;
-        if (!couponMatchesProduct(campaign, collectionIdSet, productVariantId)) continue;
-
-        const discountedPrice = couponDiscountedPrice(campaign, priceWithTax);
-        if (discountedPrice == null || discountedPrice >= priceWithTax) continue;
-        if (best && best.priceWithTax <= discountedPrice) continue;
-
-        best = {
-            campaignId: campaign.id,
-            campaignName: campaign.name,
-            priceWithTax: discountedPrice,
-            savedAmount: priceWithTax - discountedPrice,
-        };
-    }
-
-    return best;
-}
-
-function couponMatchesProduct(
-    campaign: StorefrontCouponCampaign,
-    collectionIds: Set<string>,
-    productVariantId: string,
-): boolean {
-    const matchesCollection =
-        !campaign.collectionIds?.length || campaign.collectionIds.some(id => collectionIds.has(id));
-    const matchesVariant =
-        !campaign.productVariantIds?.length || campaign.productVariantIds.includes(productVariantId);
-    return matchesCollection && matchesVariant;
-}
-
-function couponDiscountedPrice(campaign: StorefrontCouponCampaign, priceWithTax: number): number | null {
-    if (campaign.kind === 'ORDER_FIXED') {
-        if (campaign.discountAmount == null || campaign.discountAmount <= 0) return null;
-        return Math.max(0, priceWithTax - campaign.discountAmount);
-    }
-    if (campaign.discountRate == null || campaign.discountRate <= 0 || campaign.discountRate >= 10) {
-        return null;
-    }
-    return Math.max(0, Math.round((priceWithTax * campaign.discountRate) / 10));
 }
 
 export function couponCardsFromBlock(
@@ -243,7 +130,11 @@ export function couponCardsFromCampaigns(
             title: coupon.name,
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
-            scope: couponScopeLabel(coupon.kind, language, coupon),
+            scope: scopedFixed
+                ? isZh
+                    ? '指定商品'
+                    : 'Selected items'
+                : couponScopeLabel(coupon.kind, language),
             theme: couponTheme(coupon.appearanceTheme, coupon.kind),
             claimed: coupon.claimed,
             claimable: coupon.claimable && !coupon.claimed,
@@ -292,7 +183,11 @@ export function couponCardFromCustomerCoupon(
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(coupon.campaignKind, language),
-        scope: couponScopeLabel(coupon.campaignKind, language, coupon),
+        scope: scopedFixed
+            ? isZh
+                ? '指定商品'
+                : 'Selected items'
+            : couponScopeLabel(coupon.campaignKind, language),
         theme: couponTheme(coupon.appearanceTheme, coupon.campaignKind),
         claimed: true,
         claimable: false,
@@ -376,7 +271,6 @@ export function couponCardFromUsageRecord(
 export function couponScopeLabel(
     kind: StorefrontCouponCampaign['kind'],
     language: StorefrontLanguage,
-    rule?: Pick<StorefrontCouponCampaign, 'collectionIds' | 'productVariantIds' | 'customerEligibility'>,
 ): string {
     const labels =
         language === 'zh'
@@ -392,26 +286,7 @@ export function couponScopeLabel(
                   COLLECTION_PERCENTAGE: 'Selected categories',
                   PRODUCT_PERCENTAGE: 'Selected products',
               };
-    const scope = rule?.productVariantIds?.length
-        ? labels.PRODUCT_PERCENTAGE
-        : rule?.collectionIds?.length
-          ? labels.COLLECTION_PERCENTAGE
-          : kind === 'ORDER_FIXED' && !rule
-            ? language === 'zh'
-                ? '订单满减'
-                : 'Order discount'
-            : labels[kind];
-    const audience =
-        rule?.customerEligibility === 'NEW'
-            ? language === 'zh'
-                ? '新客首单'
-                : 'First purchase'
-            : rule?.customerEligibility === 'RETURNING'
-              ? language === 'zh'
-                  ? '老客专享'
-                  : 'Returning customers'
-              : '';
-    return audience ? `${audience} · ${scope}` : scope;
+    return labels[kind];
 }
 
 function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {

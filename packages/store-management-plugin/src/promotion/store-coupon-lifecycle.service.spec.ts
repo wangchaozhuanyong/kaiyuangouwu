@@ -44,16 +44,18 @@ describe('StoreCouponLifecycleService', () => {
         );
         expect(harness.customerCouponSave).not.toHaveBeenCalled();
         expect(harness.ledgerSave).not.toHaveBeenCalled();
-        expect(harness.orderHistoryFindOne).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: expect.objectContaining({
-                    customerId: 'customer-1',
-                    salesChannelId: 'channel-1',
-                    active: false,
-                    payments: { state: 'Settled' },
+        const matchingOrderHistoryQuery = expect.objectContaining({
+            where: expect.objectContaining({
+                customerId: 'customer-1',
+                salesChannelId: 'channel-1',
+                orderPlacedAt: expect.objectContaining({
+                    _type: 'not',
+                    _value: expect.objectContaining({ _type: 'isNull' }),
                 }),
             }),
-        );
+        });
+        expect(harness.orderHistoryFindOne).toHaveBeenNthCalledWith(1, matchingOrderHistoryQuery);
+        expect(harness.orderHistoryFindOne).toHaveBeenNthCalledWith(2, matchingOrderHistoryQuery);
     });
 
     it('issues a same-currency percentage coupon with a genuine zero minimum without a rate', async () => {

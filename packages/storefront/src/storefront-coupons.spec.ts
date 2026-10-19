@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { configureMoneyDisplay, resetMoneyDisplay } from './money-display';
+import { bestProductCouponPrice } from './product-coupon-pricing';
 import {
-    bestProductCouponPrice,
     couponCardFromCustomerCoupon,
     couponCardFromUsageRecord,
     couponCardsFromBlock,
@@ -461,7 +461,7 @@ describe('storefront coupons', () => {
         expect(bestProductCouponPrice({ ...input, collectionIds: ['category-b'] })).toBeNull();
     });
 
-    it('labels fixed coupon cards with the audience, item scope, and scoped minimum', () => {
+    it('labels fixed coupon cards with the selected item scope and scoped minimum', () => {
         const [card] = couponCardsFromCampaigns(
             [
                 couponCampaign({
@@ -478,7 +478,7 @@ describe('storefront coupons', () => {
         );
 
         expect(card.description).toContain('指定商品合计满');
-        expect(card.scope).toBe('新客首单 · 指定分类商品');
+        expect(card.scope).toBe('指定商品');
     });
 
     it('does not preview customer restricted coupon prices on product pages', () => {
