@@ -103,6 +103,7 @@ export function bestProductCouponPrice({
             id: coupon.campaignId,
             name: coupon.campaignName,
             kind: coupon.campaignKind,
+            customerEligibility: coupon.customerEligibility,
             minimumSpend: coupon.minimumSpend,
             currencyCode: coupon.currencyCode ?? currencyCode,
             discountAmount: coupon.discountAmount,
@@ -123,6 +124,8 @@ export function bestProductCouponPrice({
     let best: ProductCouponPrice | null = null;
 
     for (const campaign of candidates.values()) {
+        // Eligibility can change after claiming. Only the server may quote restricted customer prices.
+        if (campaign.customerEligibility && campaign.customerEligibility !== 'ALL') continue;
         const owned = usableCampaignIds.has(campaign.id);
         const claimableNow =
             campaign.claimable &&
@@ -153,13 +156,11 @@ function couponMatchesProduct(
     collectionIds: Set<string>,
     productVariantId: string,
 ): boolean {
-    if (campaign.kind === 'COLLECTION_PERCENTAGE') {
-        return Boolean(campaign.collectionIds?.some(id => collectionIds.has(id)));
-    }
-    if (campaign.kind === 'PRODUCT_PERCENTAGE') {
-        return Boolean(campaign.productVariantIds?.includes(productVariantId));
-    }
-    return true;
+    const matchesCollection =
+        !campaign.collectionIds?.length || campaign.collectionIds.some(id => collectionIds.has(id));
+    const matchesVariant =
+        !campaign.productVariantIds?.length || campaign.productVariantIds.includes(productVariantId);
+    return matchesCollection && matchesVariant;
 }
 
 function couponDiscountedPrice(campaign: StorefrontCouponCampaign, priceWithTax: number): number | null {
@@ -222,10 +223,13 @@ export function couponCardsFromCampaigns(
             language,
         );
         const value = isFixed ? discountMoney.value : formatDiscountRate(coupon.discountRate, language);
+        const scopedFixed =
+            coupon.kind === 'ORDER_FIXED' &&
+            Boolean(coupon.collectionIds?.length || coupon.productVariantIds?.length);
         const threshold = coupon.minimumSpend
             ? isZh
-                ? `满 ${money.unit}${money.value} 可用`
-                : `Spend ${money.unit}${money.value}`
+                ? `${scopedFixed ? '指定商品合计' : ''}满 ${money.unit}${money.value} 可用`
+                : `${scopedFixed ? 'Eligible items total ' : 'Spend '}${money.unit}${money.value}`
             : isZh
               ? '无门槛'
               : 'No minimum';
@@ -239,7 +243,7 @@ export function couponCardsFromCampaigns(
             title: coupon.name,
             description: threshold,
             tag: campaignKindLabel(coupon.kind, language),
-            scope: couponScopeLabel(coupon.kind, language),
+            scope: couponScopeLabel(coupon.kind, language, coupon),
             theme: couponTheme(coupon.appearanceTheme, coupon.kind),
             claimed: coupon.claimed,
             claimable: coupon.claimable && !coupon.claimed,
@@ -269,6 +273,9 @@ export function couponCardFromCustomerCoupon(
         language,
     );
     const isFixed = coupon.campaignKind === 'ORDER_FIXED';
+    const scopedFixed =
+        coupon.campaignKind === 'ORDER_FIXED' &&
+        Boolean(coupon.collectionIds?.length || coupon.productVariantIds?.length);
     return {
         id: coupon.id,
         campaignId: coupon.campaignId,
@@ -279,13 +286,13 @@ export function couponCardFromCustomerCoupon(
         title: coupon.campaignName,
         description: coupon.minimumSpend
             ? isZh
-                ? `满 ${minimumMoney.unit}${minimumMoney.value} 可用`
-                : `Spend ${minimumMoney.unit}${minimumMoney.value}`
+                ? `${scopedFixed ? '指定商品合计' : ''}满 ${minimumMoney.unit}${minimumMoney.value} 可用`
+                : `${scopedFixed ? 'Eligible items total ' : 'Spend '}${minimumMoney.unit}${minimumMoney.value}`
             : isZh
               ? '无门槛'
               : 'No minimum',
         tag: campaignKindLabel(coupon.campaignKind, language),
-        scope: couponScopeLabel(coupon.campaignKind, language),
+        scope: couponScopeLabel(coupon.campaignKind, language, coupon),
         theme: couponTheme(coupon.appearanceTheme, coupon.campaignKind),
         claimed: true,
         claimable: false,
@@ -369,6 +376,7 @@ export function couponCardFromUsageRecord(
 export function couponScopeLabel(
     kind: StorefrontCouponCampaign['kind'],
     language: StorefrontLanguage,
+    rule?: Pick<StorefrontCouponCampaign, 'collectionIds' | 'productVariantIds' | 'customerEligibility'>,
 ): string {
     const labels =
         language === 'zh'
@@ -384,7 +392,26 @@ export function couponScopeLabel(
                   COLLECTION_PERCENTAGE: 'Selected categories',
                   PRODUCT_PERCENTAGE: 'Selected products',
               };
-    return labels[kind];
+    const scope = rule?.productVariantIds?.length
+        ? labels.PRODUCT_PERCENTAGE
+        : rule?.collectionIds?.length
+          ? labels.COLLECTION_PERCENTAGE
+          : kind === 'ORDER_FIXED' && !rule
+            ? language === 'zh'
+                ? '订单满减'
+                : 'Order discount'
+            : labels[kind];
+    const audience =
+        rule?.customerEligibility === 'NEW'
+            ? language === 'zh'
+                ? '新客首单'
+                : 'First purchase'
+            : rule?.customerEligibility === 'RETURNING'
+              ? language === 'zh'
+                  ? '老客专享'
+                  : 'Returning customers'
+              : '';
+    return audience ? `${audience} · ${scope}` : scope;
 }
 
 function isDisplayableCampaign(coupon: StorefrontCouponCampaign): boolean {

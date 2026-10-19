@@ -22,6 +22,8 @@ export type CampaignDetail =
 export type CouponVisibility = 'CURRENT' | 'ACTIVE' | 'ENDED' | 'ARCHIVED' | 'ALL';
 
 export interface CouponDraft {
+    customerEligibility: 'ALL' | 'NEW' | 'RETURNING';
+    fixedScope: 'ALL' | 'COLLECTION_PERCENTAGE' | 'PRODUCT_PERCENTAGE';
     name: string;
     kind: StoreCouponKind;
     appearanceTheme: StoreCouponAppearanceTheme | null;
@@ -96,6 +98,8 @@ export function newCouponDraft(): CouponDraft {
     const range = defaultDateRange();
     return {
         name: '',
+        customerEligibility: 'ALL',
+        fixedScope: 'ALL',
         kind: 'ORDER_FIXED',
         appearanceTheme: null,
         minimumSpend: '0',
@@ -188,9 +192,18 @@ export function couponDraftError(draft: CouponDraft) {
         return '有效天数必须为正整数';
     if (Date.parse(draft.claimStartsAt) >= Date.parse(draft.claimEndsAt))
         return '领取结束时间必须晚于开始时间';
-    if (draft.kind === 'COLLECTION_PERCENTAGE' && !draft.collectionIds.length)
+    if (
+        (draft.kind === 'COLLECTION_PERCENTAGE' ||
+            (draft.kind === 'ORDER_FIXED' && draft.fixedScope === 'COLLECTION_PERCENTAGE')) &&
+        !draft.collectionIds.length
+    )
         return '请选择至少一个适用分类';
-    if (draft.kind === 'PRODUCT_PERCENTAGE' && !draft.productIds.length) return '请选择至少一个适用商品';
+    if (
+        (draft.kind === 'PRODUCT_PERCENTAGE' ||
+            (draft.kind === 'ORDER_FIXED' && draft.fixedScope === 'PRODUCT_PERCENTAGE')) &&
+        !draft.productIds.length
+    )
+        return '请选择至少一个适用商品';
     return '';
 }
 

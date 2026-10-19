@@ -326,7 +326,7 @@ export function CouponCenterPage() {
                                                         language={language}
                                                     />
                                                 }
-                                                scope={couponScopeSummary(campaign.kind, language)}
+                                                scope={couponScopeSummary(campaign.kind, language, campaign)}
                                             />
                                         );
                                     })}
@@ -359,6 +359,7 @@ export function CouponCenterPage() {
                                             displayCurrencyCode,
                                         );
                                         const locked = isLockedCoupon(coupon);
+                                        const scopeNotice = scopedFixedCouponNotice(coupon, language);
                                         return (
                                             <CouponTicket
                                                 key={coupon.id}
@@ -397,10 +398,24 @@ export function CouponCenterPage() {
                                                                       ] as [string, string],
                                                                   ]
                                                                 : []),
+                                                            ...(scopeNotice
+                                                                ? [
+                                                                      [
+                                                                          isZh
+                                                                              ? '适用商品'
+                                                                              : 'Eligible items',
+                                                                          scopeNotice,
+                                                                      ] as [string, string],
+                                                                  ]
+                                                                : []),
                                                         ]}
                                                     />
                                                 }
-                                                scope={couponScopeSummary(coupon.campaignKind, language)}
+                                                scope={couponScopeSummary(
+                                                    coupon.campaignKind,
+                                                    language,
+                                                    coupon,
+                                                )}
                                             />
                                         );
                                     })}
@@ -620,8 +635,12 @@ function CouponTicket({
     );
 }
 
-function couponScopeSummary(kind: StorefrontCouponCampaign['kind'], language: StorefrontLanguage): string {
-    return `${language === 'zh' ? '适用范围：' : 'Applies to: '}${couponScopeLabel(kind, language)}`;
+function couponScopeSummary(
+    kind: StorefrontCouponCampaign['kind'],
+    language: StorefrontLanguage,
+    rule?: Pick<StorefrontCouponCampaign, 'collectionIds' | 'productVariantIds' | 'customerEligibility'>,
+): string {
+    return `${language === 'zh' ? '适用范围：' : 'Applies to: '}${couponScopeLabel(kind, language, rule)}`;
 }
 
 function CouponDetails({ title, rows }: { title: string; rows: Array<[string, string]> }) {
@@ -662,7 +681,23 @@ function CampaignDetails({
         rows.push([isZh ? '领取时间' : 'Claim period', window]);
     }
     rows.push([isZh ? '有效期' : 'Validity', campaignValidity(campaign, language)]);
+    const scopedNotice = scopedFixedCouponNotice(campaign, language);
+    if (scopedNotice) rows.push([isZh ? '适用商品' : 'Eligible items', scopedNotice]);
     return <CouponDetails title={isZh ? '活动规则' : 'Offer rules'} rows={rows} />;
+}
+
+function scopedFixedCouponNotice(
+    coupon:
+        | Pick<StorefrontCouponCampaign, 'kind' | 'collectionIds' | 'productVariantIds'>
+        | Pick<StoreCustomerCoupon, 'campaignKind' | 'collectionIds' | 'productVariantIds'>,
+    language: StorefrontLanguage,
+): string | null {
+    const kind = 'campaignKind' in coupon ? coupon.campaignKind : coupon.kind;
+    if (kind !== 'ORDER_FIXED' || (!coupon.collectionIds?.length && !coupon.productVariantIds?.length))
+        return null;
+    return language === 'zh'
+        ? '其他商品优惠已减价的商品不计入满额门槛，也不参与本券减免。'
+        : 'Items with another product discount do not count toward the minimum or receive this coupon discount.';
 }
 
 function CouponUsageDetails({

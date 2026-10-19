@@ -39,6 +39,12 @@ const commonTypes = gql`
         MARKDOWN
     }
 
+    enum StoreCouponCustomerEligibility {
+        ALL
+        NEW
+        RETURNING
+    }
+
     enum StoreCouponCampaignKind {
         ORDER_FIXED
         ORDER_PERCENTAGE
@@ -518,6 +524,7 @@ export const adminApiExtensions = gql`
     }
 
     type StoreCouponCampaign {
+        customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
         createdAt: DateTime!
         updatedAt: DateTime!
@@ -567,6 +574,7 @@ export const adminApiExtensions = gql`
     }
 
     input CreateStoreCouponCampaignInput {
+        customerEligibility: StoreCouponCustomerEligibility
         name: String!
         kind: StoreCouponCampaignKind!
         appearanceTheme: StoreCouponAppearanceTheme
@@ -1194,6 +1202,7 @@ export const shopApiExtensions = gql`
     }
 
     type StorefrontCoupon {
+        customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
         name: String!
         kind: StoreCouponCampaignKind!

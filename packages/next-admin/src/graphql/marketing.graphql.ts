@@ -152,6 +152,7 @@ export const MARKETING_OVERVIEW_QUERY = gql`
             minimumSpend
             discountAmount
             discountRate
+            customerEligibility
             collectionIds
             productVariantIds
             usageLimit
@@ -856,6 +857,7 @@ export type StoreCouponKind =
 export type StoreCouponAppearanceTheme = 'rose' | 'gold' | 'blue' | 'emerald';
 
 export interface StoreCouponRecord {
+    customerEligibility?: 'ALL' | 'NEW' | 'RETURNING';
     id: string;
     createdAt: string;
     updatedAt: string;

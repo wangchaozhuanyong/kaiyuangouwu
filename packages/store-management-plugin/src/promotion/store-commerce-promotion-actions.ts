@@ -1,9 +1,11 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import {
+    AdjustmentType,
     CurrencyCode,
     idsAreEqual,
     PromotionCondition,
     PromotionItemAction,
+    PromotionLineAction,
     PromotionOrderAction,
     RequestContextCacheService,
     TransactionalConnection,
@@ -13,9 +15,139 @@ import { CustomerCoupon } from '../entities/customer-coupon.entity';
 import { convertChannelAmount } from '../store-currency-price-selection-strategy';
 
 import { couponCollectionsForVariant } from './store-coupon-collections';
+import { CouponAudience, couponCustomerEligible } from './store-coupon-eligibility';
 
 let connection: TransactionalConnection;
 let requestCache: RequestContextCacheService;
+
+export const customerOrderHistory = new PromotionCondition({
+    code: 'store_customer_order_history',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '按本店历史订单限制领券和用券客户' },
+        { languageCode: LanguageCode.en, value: 'Restrict coupons by store order history' },
+    ],
+    args: { audience: { type: 'string' } },
+    init(injector) {
+        connection = injector.get(TransactionalConnection);
+    },
+    check(ctx, order, args) {
+        return couponCustomerEligible(
+            ctx,
+            connection,
+            args.audience as CouponAudience,
+            order.customerId,
+            order,
+        );
+    },
+});
+
+export const scopedCouponMinimum = new PromotionCondition({
+    code: 'store_scoped_coupon_minimum',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '仅未享受其他商品优惠的指定商品金额计入满减门槛' },
+        {
+            languageCode: LanguageCode.en,
+            value: 'Count only eligible merchandise without other item discounts toward the minimum',
+        },
+    ],
+    args: {
+        amount: { type: 'int' },
+        currencyCode: { type: 'string' },
+        collectionIds: { type: 'ID', list: true },
+        productVariantIds: { type: 'ID', list: true },
+    },
+    init(injector) {
+        connection = injector.get(TransactionalConnection);
+        requestCache = injector.get(RequestContextCacheService);
+    },
+    async check(ctx, order, args, promotion) {
+        const minimum = convertChannelAmount(
+            ctx,
+            args.amount,
+            args.currencyCode as CurrencyCode,
+            ctx.currencyCode,
+        );
+        const collectionIds = Array.isArray(args.collectionIds) ? args.collectionIds : [];
+        const productVariantIds = Array.isArray(args.productVariantIds) ? args.productVariantIds : [];
+        if (minimum == null || (!collectionIds.length && !productVariantIds.length)) return false;
+        const lines: Array<{ id: string; amount: number }> = [];
+        let threshold = 0;
+        for (const line of order.lines) {
+            if (
+                productVariantIds.length &&
+                !productVariantIds.some(id => idsAreEqual(id, line.productVariant.id))
+            )
+                continue;
+            if (collectionIds.length) {
+                const memberships = await couponCollectionsForVariant(
+                    ctx,
+                    line.productVariant.id,
+                    connection,
+                    requestCache,
+                );
+                if (!collectionIds.some(id => memberships.includes(String(id)))) continue;
+            }
+            const ownSource = promotion.getSourceId();
+            if (
+                line.adjustments?.some(
+                    adjustment =>
+                        adjustment.type === AdjustmentType.PROMOTION &&
+                        adjustment.adjustmentSource !== ownSource,
+                )
+            )
+                continue;
+            // Vendure re-tests a promotion for every line as earlier lines are adjusted.
+            // Add this coupon's own previous line adjustments back so its minimum and
+            // proportional allocation stay based on the same pre-coupon merchandise total.
+            const quantity = line.quantity ?? 0;
+            const proratedOverQuantity = Math.max(line.orderPlacedQuantity ?? quantity, quantity);
+            const currentQuantityRatio = proratedOverQuantity === 0 ? 0 : quantity / proratedOverQuantity;
+            const ownDiscount = (line.adjustments ?? [])
+                .filter(adjustment => adjustment.adjustmentSource === ownSource)
+                .reduce((sum, adjustment) => sum + adjustment.amount * currentQuantityRatio, 0);
+            const ownDiscountWithTax =
+                line.discounts.find(discount => discount.adjustmentSource === ownSource)?.amountWithTax ?? 0;
+            const thresholdAmount = line.discountedLinePriceWithTax - ownDiscountWithTax;
+            threshold += thresholdAmount;
+            const amount = ctx.channel.pricesIncludeTax
+                ? thresholdAmount
+                : line.discountedLinePrice - ownDiscount;
+            if (amount > 0) lines.push({ id: String(line.id), amount });
+        }
+        return threshold >= minimum && lines.length ? { lines } : false;
+    },
+    priorityValue: 10,
+});
+
+export const scopedCouponFixedDiscount = new PromotionLineAction({
+    code: 'store_scoped_coupon_fixed_discount',
+    description: [
+        { languageCode: LanguageCode.zh_Hans, value: '仅向适用商品分摊固定满减金额' },
+        { languageCode: LanguageCode.en, value: 'Allocate the fixed discount only to eligible merchandise' },
+    ],
+    args: { discount: { type: 'int' }, currencyCode: { type: 'string' } },
+    conditions: [scopedCouponMinimum],
+    execute(ctx, line, args, state) {
+        const discount = convertChannelAmount(
+            ctx,
+            args.discount,
+            args.currencyCode as CurrencyCode,
+            ctx.currencyCode,
+        );
+        const lines = state.store_scoped_coupon_minimum?.lines;
+        if (discount == null || !lines?.length) return 0;
+        const total = lines.reduce((sum, item) => sum + item.amount, 0);
+        const cap = Math.min(Math.max(0, discount), total);
+        // Cumulative rounding preserves the exact face value, including multi-quantity lines and cents.
+        let consumed = 0;
+        for (const item of lines) {
+            const before = Math.round((cap * consumed) / total);
+            consumed += item.amount;
+            if (item.id === String(line.id)) return -(Math.round((cap * consumed) / total) - before);
+        }
+        return 0;
+    },
+});
 
 export const customerCouponEntitlement = new PromotionCondition({
     code: 'store_customer_coupon_entitlement',

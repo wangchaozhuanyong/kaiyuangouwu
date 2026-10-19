@@ -1,5 +1,5 @@
 import { CreatePromotionInput, SortOrder } from '@vendure/common/lib/generated-types';
-import { Product, ProductVariant } from '@vendure/core';
+import { Collection, Product, ProductVariant } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
@@ -17,6 +17,41 @@ const ctx = {
 } as any;
 
 describe('StorePromotionCampaignService', () => {
+    it('does not show audience-specific coupons to visitors without a customer account', async () => {
+        const base = couponPromotion();
+        const harness = createHarness({
+            promotions: [
+                { ...base, id: 'all-coupon', couponCode: 'ALL' },
+                {
+                    ...base,
+                    id: 'new-coupon',
+                    couponCode: 'NEW',
+                    conditions: [
+                        {
+                            code: 'store_customer_order_history',
+                            args: [{ name: 'audience', value: 'NEW' }],
+                        },
+                    ],
+                },
+                {
+                    ...base,
+                    id: 'returning-coupon',
+                    couponCode: 'RETURNING',
+                    conditions: [
+                        {
+                            code: 'store_customer_order_history',
+                            args: [{ name: 'audience', value: 'RETURNING' }],
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const campaigns = await harness.service.findActiveCoupons(ctx);
+
+        expect(campaigns.map(campaign => campaign.id)).toEqual(['all-coupon']);
+    });
+
     it.each(['MYR', 'USD'])(
         'keeps an unconvertible percentage coupon editable in source currency but inactive in %s',
         async currencyCode => {
@@ -167,6 +202,64 @@ describe('StorePromotionCampaignService', () => {
                 discountAmount: 2_000,
             }),
         );
+    });
+
+    it('creates a new-customer fixed coupon scoped to both selected categories and products', async () => {
+        const harness = createHarness({ variants: [productVariant('variant-1', 50_000)] });
+        const findRecords = harness.connection.findByIdsInChannel.getMockImplementation();
+        if (!findRecords) throw new Error('Expected findByIdsInChannel mock implementation');
+        harness.connection.findByIdsInChannel.mockImplementation(((
+            _ctx: any,
+            entity: any,
+            ids: string[],
+            channelId: string,
+        ) => {
+            if (entity === Collection && channelId === ctx.channelId && ids.includes('collection-1')) {
+                return [{ id: 'collection-1' }];
+            }
+            return findRecords(_ctx, entity, ids, channelId);
+        }) as any);
+
+        const coupon = await harness.service.createCoupon(ctx, {
+            name: '闪铸新客精选券',
+            kind: 'ORDER_FIXED',
+            appearanceTheme: 'blue',
+            minimumSpend: 3_000,
+            discountAmount: 450,
+            customerEligibility: 'NEW',
+            collectionIds: ['collection-1'],
+            productIds: ['product-1'],
+        });
+
+        expect(harness.createPromotion).toHaveBeenCalledWith(
+            ctx,
+            expect.objectContaining({
+                conditions: [
+                    operationInput('store_customer_coupon_entitlement', {}),
+                    operationInput('store_customer_order_history', { audience: 'NEW' }),
+                    operationInput('store_scoped_coupon_minimum', {
+                        amount: '3000',
+                        currencyCode: 'CNY',
+                        collectionIds: '["collection-1"]',
+                        productVariantIds: '["variant-1"]',
+                    }),
+                ],
+                actions: [
+                    operationInput('store_scoped_coupon_fixed_discount', {
+                        discount: '450',
+                        currencyCode: 'CNY',
+                    }),
+                ],
+            }),
+        );
+        expect(coupon).toMatchObject({
+            kind: 'ORDER_FIXED',
+            minimumSpend: 3_000,
+            discountAmount: 450,
+            customerEligibility: 'NEW',
+            collectionIds: ['collection-1'],
+            productVariantIds: ['variant-1'],
+        });
     });
 
     it('creates flash-sale rules for every selected variant and exposes the real sale price', async () => {

@@ -554,6 +554,7 @@ description
                         currencyCode
                         discountAmount
                         discountRate
+                        customerEligibility
                         collectionIds
                         productVariantIds
                         remainingIssueCount

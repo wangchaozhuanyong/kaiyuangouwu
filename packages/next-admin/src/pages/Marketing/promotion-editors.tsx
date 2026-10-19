@@ -83,7 +83,8 @@ export function CouponEditor({
     const [topLevelOnly, setTopLevelOnly] = useState(true);
     const [collectionPage, setCollectionPage] = useState(0);
     const deferredSearch = useDeferredValue(selectorSearch.trim());
-    const hasScope = draft.kind === 'COLLECTION_PERCENTAGE' || draft.kind === 'PRODUCT_PERCENTAGE';
+    const selectionKind = draft.kind === 'ORDER_FIXED' ? draft.fixedScope : draft.kind;
+    const hasScope = selectionKind === 'COLLECTION_PERCENTAGE' || selectionKind === 'PRODUCT_PERCENTAGE';
     const catalog = useQuery<{
         collections: {
             totalItems: number;
@@ -93,21 +94,21 @@ export function CouponEditor({
     }>(MARKETING_CATALOG_LOOKUP_QUERY, {
         variables: {
             collectionOptions: {
-                take: draft.kind === 'COLLECTION_PERCENTAGE' ? 30 : 1,
-                skip: draft.kind === 'COLLECTION_PERCENTAGE' ? collectionPage * 30 : 0,
+                take: selectionKind === 'COLLECTION_PERCENTAGE' ? 30 : 1,
+                skip: selectionKind === 'COLLECTION_PERCENTAGE' ? collectionPage * 30 : 0,
                 topLevelOnly,
                 sort: dataTableSortPolicy.alphabeticalName,
                 filter:
-                    draft.kind === 'COLLECTION_PERCENTAGE' && deferredSearch
+                    selectionKind === 'COLLECTION_PERCENTAGE' && deferredSearch
                         ? { name: { contains: deferredSearch } }
                         : {},
             },
             productOptions: {
-                take: draft.kind === 'PRODUCT_PERCENTAGE' ? 30 : 1,
+                take: selectionKind === 'PRODUCT_PERCENTAGE' ? 30 : 1,
                 sort: dataTableSortPolicy.alphabeticalName,
                 filter: {
                     enabled: { eq: true },
-                    ...(draft.kind === 'PRODUCT_PERCENTAGE' && deferredSearch
+                    ...(selectionKind === 'PRODUCT_PERCENTAGE' && deferredSearch
                         ? { name: { contains: deferredSearch } }
                         : {}),
                 },
@@ -119,11 +120,11 @@ export function CouponEditor({
     const selectedReferences = useCatalogReferences(
         draft.productIds,
         'products',
-        draft.kind === 'PRODUCT_PERCENTAGE',
+        selectionKind === 'PRODUCT_PERCENTAGE',
     );
     const validation =
         couponDraftError(draft) ||
-        (draft.kind === 'PRODUCT_PERCENTAGE' &&
+        (selectionKind === 'PRODUCT_PERCENTAGE' &&
         (selectedReferences.unavailable.length || selectedReferences.unknown.length)
             ? '已选商品暂不可用或待核对，原选择已保留，请核对后提交'
             : '');
@@ -131,7 +132,7 @@ export function CouponEditor({
         if (validation) return onError(validation);
         try {
             if (
-                draft.kind === 'PRODUCT_PERCENTAGE' &&
+                selectionKind === 'PRODUCT_PERCENTAGE' &&
                 (await selectedReferences.recheck()).some(reference => reference.state !== 'available')
             )
                 throw new Error('已选商品资格变化，请核对后提交');
@@ -145,13 +146,14 @@ export function CouponEditor({
                 variables: {
                     input: {
                         name: draft.name.trim(),
+                        customerEligibility: draft.customerEligibility,
                         kind: draft.kind,
                         appearanceTheme: draft.appearanceTheme,
                         minimumSpend,
                         discountAmount,
                         discountRate: draft.kind === 'ORDER_FIXED' ? null : Number(draft.discountValue),
-                        collectionIds: draft.kind === 'COLLECTION_PERCENTAGE' ? draft.collectionIds : [],
-                        productIds: draft.kind === 'PRODUCT_PERCENTAGE' ? draft.productIds : [],
+                        collectionIds: selectionKind === 'COLLECTION_PERCENTAGE' ? draft.collectionIds : [],
+                        productIds: selectionKind === 'PRODUCT_PERCENTAGE' ? draft.productIds : [],
                         claimStartsAt: dateInput(draft.claimStartsAt),
                         claimEndsAt: dateInput(draft.claimEndsAt),
                         validityDays: optionalInt(draft.validityDays),
@@ -169,7 +171,7 @@ export function CouponEditor({
         }
     };
     const scopedItems: Array<{ id: string; name: string; label?: string }> =
-        draft.kind === 'COLLECTION_PERCENTAGE'
+        selectionKind === 'COLLECTION_PERCENTAGE'
             ? (catalog.data?.collections.items.map(collection => ({
                   ...collection,
                   label:
@@ -180,13 +182,13 @@ export function CouponEditor({
               })) ?? [])
             : (catalog.data?.products.items ?? []);
     const scopedTotal =
-        draft.kind === 'COLLECTION_PERCENTAGE'
+        selectionKind === 'COLLECTION_PERCENTAGE'
             ? (catalog.data?.collections.totalItems ?? 0)
             : (catalog.data?.products.totalItems ?? 0);
-    const selectedIds = draft.kind === 'COLLECTION_PERCENTAGE' ? draft.collectionIds : draft.productIds;
+    const selectedIds = selectionKind === 'COLLECTION_PERCENTAGE' ? draft.collectionIds : draft.productIds;
     const updateSelected = (ids: string[]) =>
         setDraft(
-            draft.kind === 'COLLECTION_PERCENTAGE'
+            selectionKind === 'COLLECTION_PERCENTAGE'
                 ? { ...draft, collectionIds: ids }
                 : { ...draft, productIds: ids },
         );
@@ -219,6 +221,42 @@ export function CouponEditor({
                     }}
                     options={Object.entries(couponKindLabels)}
                 />
+                <FormSelect
+                    label="客户资格"
+                    value={draft.customerEligibility}
+                    onChange={value =>
+                        setDraft({
+                            ...draft,
+                            customerEligibility: value as CouponDraft['customerEligibility'],
+                        })
+                    }
+                    options={[
+                        ['ALL', '全部客户'],
+                        ['NEW', '新客（本店无已提交订单）'],
+                        ['RETURNING', '老客（本店有已提交订单）'],
+                    ]}
+                />
+                {draft.kind === 'ORDER_FIXED' && (
+                    <FormSelect
+                        label="满减适用范围"
+                        value={draft.fixedScope}
+                        onChange={value => {
+                            setSelectorSearch('');
+                            setCollectionPage(0);
+                            setDraft({
+                                ...draft,
+                                fixedScope: value as CouponDraft['fixedScope'],
+                                collectionIds: [],
+                                productIds: [],
+                            });
+                        }}
+                        options={[
+                            ['ALL', '全场商品'],
+                            ['COLLECTION_PERCENTAGE', '指定分类正价商品（仅适用商品计入门槛）'],
+                            ['PRODUCT_PERCENTAGE', '指定正价商品（仅适用商品计入门槛）'],
+                        ]}
+                    />
+                )}
                 <FormSelect
                     label="券面配色（仅影响展示）"
                     value={draft.appearanceTheme ?? 'default'}
@@ -285,7 +323,7 @@ export function CouponEditor({
                     ]}
                 />
             </div>
-            {draft.kind === 'COLLECTION_PERCENTAGE' && (
+            {selectionKind === 'COLLECTION_PERCENTAGE' && (
                 <div className="mt-4">
                     <FormSelect
                         label="分类层级"
@@ -301,39 +339,50 @@ export function CouponEditor({
                         ]}
                     />
                     <p className="mt-2 text-[11px] text-slate-500">
-                        选择分类后，该分类及全部下级分类中的商品均可使用优惠券。已选{' '}
+                        选择分类后，该分类及全部下级分类中的正价商品可用；已有其他商品优惠的商品不计门槛，也不参与本券减免。已选{' '}
                         {draft.collectionIds.length} 个分类。
                     </p>
                 </div>
             )}
-            {(draft.kind === 'COLLECTION_PERCENTAGE' || draft.kind === 'PRODUCT_PERCENTAGE') && (
-                <MultiSelector
-                    title={draft.kind === 'COLLECTION_PERCENTAGE' ? '适用分类 *' : '适用商品 *'}
-                    items={scopedItems}
-                    totalItems={scopedTotal}
-                    loading={catalog.loading}
-                    error={
-                        catalog.error
-                            ? toUserFacingError(
-                                  catalog.error,
-                                  draft.kind === 'COLLECTION_PERCENTAGE'
-                                      ? '促销适用分类读取失败'
-                                      : '促销适用商品读取失败',
-                              )
-                            : undefined
-                    }
-                    selectedIds={selectedIds}
-                    search={selectorSearch}
-                    setSearch={value => {
-                        setSelectorSearch(value);
-                        setCollectionPage(0);
-                    }}
-                    page={draft.kind === 'COLLECTION_PERCENTAGE' ? collectionPage : undefined}
-                    onPageChange={draft.kind === 'COLLECTION_PERCENTAGE' ? setCollectionPage : undefined}
-                    onChange={updateSelected}
-                />
+            {(selectionKind === 'COLLECTION_PERCENTAGE' || selectionKind === 'PRODUCT_PERCENTAGE') && (
+                <>
+                    {selectionKind === 'PRODUCT_PERCENTAGE' && (
+                        <p className="mt-4 text-[11px] text-slate-500">
+                            已有其他商品优惠的商品不计入门槛，也不参与本券减免。
+                        </p>
+                    )}
+                    <MultiSelector
+                        title={selectionKind === 'COLLECTION_PERCENTAGE' ? '适用分类 *' : '适用商品 *'}
+                        items={scopedItems}
+                        totalItems={scopedTotal}
+                        loading={catalog.loading}
+                        error={
+                            catalog.error
+                                ? toUserFacingError(
+                                      catalog.error,
+                                      selectionKind === 'COLLECTION_PERCENTAGE'
+                                          ? '促销适用分类读取失败'
+                                          : '促销适用商品读取失败',
+                                  )
+                                : undefined
+                        }
+                        selectedIds={selectedIds}
+                        search={selectorSearch}
+                        setSearch={value => {
+                            setSelectorSearch(value);
+                            setCollectionPage(0);
+                        }}
+                        page={selectionKind === 'COLLECTION_PERCENTAGE' ? collectionPage : undefined}
+                        onPageChange={
+                            selectionKind === 'COLLECTION_PERCENTAGE' ? setCollectionPage : undefined
+                        }
+                        onChange={updateSelected}
+                    />
+                </>
             )}
-            {draft.kind === 'PRODUCT_PERCENTAGE' && <SelectedProductStatus references={selectedReferences} />}
+            {selectionKind === 'PRODUCT_PERCENTAGE' && (
+                <SelectedProductStatus references={selectedReferences} />
+            )}
             <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-xs">
                 <label className="flex items-center justify-between gap-3">
                     <span>

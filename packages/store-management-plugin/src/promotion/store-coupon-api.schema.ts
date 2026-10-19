@@ -17,6 +17,7 @@ export const storeCustomerCouponSchema = gql`
     }
 
     type StoreCustomerCoupon {
+        customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
         campaignId: ID!
         campaignName: String!

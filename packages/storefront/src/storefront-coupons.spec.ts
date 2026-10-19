@@ -439,6 +439,67 @@ describe('storefront coupons', () => {
         ).toBeNull();
     });
 
+    it('requires both the selected category and variant for a scoped fixed coupon', () => {
+        const campaign = couponCampaign({
+            kind: 'ORDER_FIXED',
+            discountAmount: 200,
+            discountRate: null,
+            collectionIds: ['category-a'],
+            productVariantIds: ['variant-a'],
+        });
+        const input = {
+            campaigns: [campaign],
+            customerCoupons: [],
+            collectionIds: ['category-a'],
+            productVariantId: 'variant-a',
+            priceWithTax: 2_400,
+            currencyCode: 'CNY',
+        };
+
+        expect(bestProductCouponPrice(input)?.savedAmount).toBe(200);
+        expect(bestProductCouponPrice({ ...input, productVariantId: 'variant-b' })).toBeNull();
+        expect(bestProductCouponPrice({ ...input, collectionIds: ['category-b'] })).toBeNull();
+    });
+
+    it('labels fixed coupon cards with the audience, item scope, and scoped minimum', () => {
+        const [card] = couponCardsFromCampaigns(
+            [
+                couponCampaign({
+                    kind: 'ORDER_FIXED',
+                    minimumSpend: 50_000,
+                    discountAmount: 5_000,
+                    discountRate: null,
+                    collectionIds: ['living-room'],
+                    customerEligibility: 'NEW',
+                }),
+            ],
+            'zh',
+            'MYR',
+        );
+
+        expect(card.description).toContain('指定商品合计满');
+        expect(card.scope).toBe('新客首单 · 指定分类商品');
+    });
+
+    it('does not preview customer restricted coupon prices on product pages', () => {
+        const restricted = couponCampaign({
+            kind: 'ORDER_FIXED',
+            discountAmount: 200,
+            discountRate: null,
+            customerEligibility: 'NEW',
+        });
+        expect(
+            bestProductCouponPrice({
+                campaigns: [restricted],
+                customerCoupons: [],
+                collectionIds: [],
+                productVariantId: 'variant-a',
+                priceWithTax: 2_400,
+                currencyCode: 'CNY',
+            }),
+        ).toBeNull();
+    });
+
     it('keeps the regular price when no coupon matches the product', () => {
         expect(
             bestProductCouponPrice({

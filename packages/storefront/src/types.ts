@@ -1043,6 +1043,7 @@ export type StorefrontCouponCampaignKind =
 export type StorefrontCouponAppearanceTheme = 'rose' | 'gold' | 'blue' | 'emerald';
 
 export interface StorefrontCouponCampaign {
+    customerEligibility?: 'ALL' | 'NEW' | 'RETURNING';
     id: string;
     name: string;
     kind: StorefrontCouponCampaignKind;
@@ -1066,6 +1067,7 @@ export interface StorefrontCouponCampaign {
 export type StoreCustomerCouponStatus = 'AVAILABLE' | 'LOCKED' | 'USED' | 'RETURNED' | 'EXPIRED' | 'REVOKED';
 
 export interface StoreCustomerCoupon {
+    customerEligibility?: 'ALL' | 'NEW' | 'RETURNING';
     id: string;
     campaignId: string;
     campaignName: string;

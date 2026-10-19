@@ -156,7 +156,10 @@ import {
     currencyMinimumOrderAmount,
     currencyOrderFixedDiscount,
     customerCouponEntitlement,
+    customerOrderHistory,
     flashSalePriceAction,
+    scopedCouponFixedDiscount,
+    scopedCouponMinimum,
 } from './promotion/store-commerce-promotion-actions';
 import { StoreCouponClosureRepairService } from './promotion/store-coupon-closure-repair.service';
 import { StoreCouponLifecycleService } from './promotion/store-coupon-lifecycle.service';
@@ -510,7 +513,12 @@ import {
         ) {
             config.paymentOptions.paymentMethodHandlers.push(usdtTrc20PaymentHandler);
         }
-        for (const condition of [customerCouponEntitlement, currencyMinimumOrderAmount]) {
+        for (const condition of [
+            customerCouponEntitlement,
+            currencyMinimumOrderAmount,
+            customerOrderHistory,
+            scopedCouponMinimum,
+        ]) {
             if (
                 !config.promotionOptions.promotionConditions.some(
                     candidate => candidate.code === condition.code,
@@ -523,6 +531,7 @@ import {
             collectionPercentageDiscount,
             flashSalePriceAction,
             currencyOrderFixedDiscount,
+            scopedCouponFixedDiscount,
         ]) {
             if (!config.promotionOptions.promotionActions.some(candidate => candidate.code === action.code)) {
                 config.promotionOptions.promotionActions.push(action);

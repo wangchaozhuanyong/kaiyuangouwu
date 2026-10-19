@@ -99,6 +99,7 @@ export type StoreCouponLedgerEventType =
     | 'CORRECTED';
 
 export interface CreateStoreCouponCampaignInput {
+    customerEligibility?: 'ALL' | 'NEW' | 'RETURNING' | null;
     name: string;
     kind: StoreCouponCampaignKind;
     appearanceTheme?: StoreCouponAppearanceTheme | null;
@@ -143,6 +144,7 @@ export interface StoreCouponFinancialTotal {
 }
 
 export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
+    customerEligibility?: 'ALL' | 'NEW' | 'RETURNING';
     id: ID;
     createdAt: Date;
     updatedAt: Date;
@@ -176,6 +178,7 @@ export interface StoreCouponCampaignView extends StoreCouponCampaignStats {
 }
 
 export interface StoreCustomerCouponView {
+    customerEligibility?: 'ALL' | 'NEW' | 'RETURNING';
     id: ID;
     campaignId: ID;
     campaignName: string;

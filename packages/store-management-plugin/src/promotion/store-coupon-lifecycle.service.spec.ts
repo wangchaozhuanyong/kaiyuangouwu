@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await -- Repository mocks preserve async database APIs. */
+import { Order } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CouponLedgerEntry } from '../entities/coupon-ledger-entry.entity';
@@ -27,6 +28,33 @@ describe('StoreCouponLifecycleService', () => {
             expect(harness.ledgerSave).not.toHaveBeenCalled();
         },
     );
+
+    it('rejects a new-customer coupon for an existing buyer, including admin grants', async () => {
+        const harness = createIssueHarness();
+        harness.promotion.conditions = [
+            { code: 'store_customer_order_history', args: [{ name: 'audience', value: 'NEW' }] },
+        ];
+        harness.orderHistoryFindOne.mockResolvedValue({ id: 'previous-order' });
+
+        await expect(harness.service.claim(ctx, 'promotion-1')).rejects.toThrow(
+            '不符合该优惠券的新客或老客资格',
+        );
+        await expect(harness.service.grant(ctx, 'promotion-1', 'customer-1')).rejects.toThrow(
+            '不符合该优惠券的新客或老客资格',
+        );
+        expect(harness.customerCouponSave).not.toHaveBeenCalled();
+        expect(harness.ledgerSave).not.toHaveBeenCalled();
+        expect(harness.orderHistoryFindOne).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: expect.objectContaining({
+                    customerId: 'customer-1',
+                    salesChannelId: 'channel-1',
+                    active: false,
+                    payments: { state: 'Settled' },
+                }),
+            }),
+        );
+    });
 
     it('issues a same-currency percentage coupon with a genuine zero minimum without a rate', async () => {
         const harness = createIssueHarness();
@@ -998,6 +1026,7 @@ function createIssueHarness({
         return coupon;
     });
     const ledgerSave = vi.fn(async (entry: CouponLedgerEntry) => entry);
+    const orderHistoryFindOne = vi.fn(async () => undefined as { id: string } | undefined);
     const lockQueryBuilder = chainQueryBuilder({ getOne: async () => config });
     const repositories = new Map<any, any>([
         [
@@ -1021,10 +1050,15 @@ function createIssueHarness({
                 save: ledgerSave,
             },
         ],
+        [Order, { findOne: orderHistoryFindOne }],
     ]);
+    const customerService = {
+        findOneByUserId: vi.fn(async () => customer),
+        findOne: vi.fn(async () => customer),
+    };
     const service = new StoreCouponLifecycleService(
         { getRepository: (_ctx: unknown, entity: any) => repositories.get(entity) } as any,
-        { findOneByUserId: vi.fn(async () => customer) } as any,
+        customerService as any,
         { findOne: vi.fn(async () => promotion) } as any,
         {} as any,
         { publish: vi.fn(async () => undefined) } as any,
@@ -1036,6 +1070,7 @@ function createIssueHarness({
         promotion,
         customerCouponSave,
         ledgerSave,
+        orderHistoryFindOne,
         get savedCoupon() {
             if (!savedCoupon) throw new Error('Expected the coupon to have been saved');
             return savedCoupon;
