@@ -156,6 +156,7 @@ export const customerCouponFields = `
     campaignId
     campaignName
     campaignKind
+    customerEligibility
     appearanceTheme
     status
     minimumSpend

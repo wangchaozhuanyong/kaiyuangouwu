@@ -50,6 +50,7 @@ import {
 import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 import { parseFlashSaleVariantRules } from './store-commerce-promotion-actions';
 import { lockCouponCampaign } from './store-coupon-campaign-lock';
+import { couponAudience, couponCustomerEligible } from './store-coupon-eligibility';
 
 @Injectable()
 export class StorePromotionCampaignService {
@@ -91,6 +92,15 @@ export class StorePromotionCampaignService {
                   .groupBy('coupon.promotionId')
                   .getRawMany<{ promotionId: string; count: string }>()
             : [];
+        const customerEligibility = new Map<string, boolean>();
+        for (const { promotion } of couponPromotions) {
+            const audience = couponAudience(promotion);
+            if (activeCustomer && !customerEligibility.has(audience))
+                customerEligibility.set(
+                    audience,
+                    await couponCustomerEligible(ctx, this.connection, audience, activeCustomer.id),
+                );
+        }
         const configsByPromotion = new Map(configs.map(config => [String(config.promotionId), config]));
         const customerCounts = new Map(customerRows.map(row => [String(row.promotionId), Number(row.count)]));
         const statsByCurrency = new Map([
@@ -134,6 +144,8 @@ export class StorePromotionCampaignService {
                     claimed: customerClaimedCount > 0,
                     claimable:
                         view.claimable &&
+                        (!activeCustomer ||
+                            customerEligibility.get(view.customerEligibility ?? 'ALL') === true) &&
                         !config?.archivedAt &&
                         customerClaimedCount === 0 &&
                         (remainingIssueCount == null || remainingIssueCount > 0),
@@ -146,6 +158,9 @@ export class StorePromotionCampaignService {
         return (await this.findCoupons(ctx))
             .filter(
                 coupon =>
+                    // Audience-specific campaigns need a customer account so order history
+                    // can be checked before deciding which offers to show.
+                    ((coupon.customerEligibility ?? 'ALL') === 'ALL' || Boolean(ctx.activeUserId)) &&
                     !coupon.archivedAt &&
                     coupon.enabled &&
                     (!coupon.endsAt || coupon.endsAt > now) &&
@@ -616,7 +631,38 @@ export class StorePromotionCampaignService {
             throw new UserInputError('最低消费金额必须是大于或等于 0 的金额');
         }
         const conditions = [operation('store_customer_coupon_entitlement', {})];
-        if (minimumSpend) {
+        const audience = input.customerEligibility ?? 'ALL';
+        if (!['ALL', 'NEW', 'RETURNING'].includes(audience))
+            throw new UserInputError('客户资格必须为全部客户、新客或老客');
+        if (audience !== 'ALL') conditions.push(operation('store_customer_order_history', { audience }));
+        const collectionIds = uniqueIds(input.collectionIds ?? []);
+        const productIds = uniqueIds(input.productIds ?? []);
+        const scopedFixed =
+            input.kind === 'ORDER_FIXED' && (collectionIds.length > 0 || productIds.length > 0);
+        if (scopedFixed) {
+            if (collectionIds.length) {
+                const collections = await this.connection.findByIdsInChannel(
+                    ctx,
+                    Collection,
+                    collectionIds,
+                    ctx.channelId,
+                    {},
+                );
+                if (collections.length !== collectionIds.length)
+                    throw new UserInputError('请选择当前店铺中的有效商品分类');
+            }
+            if (productIds.length > 100) throw new UserInputError('一张满减券最多适用 100 个商品');
+            const variants = productIds.length ? await this.variantsForProducts(ctx, productIds) : [];
+            conditions.push(
+                operation('store_scoped_coupon_minimum', {
+                    amount: minimumSpend,
+                    currencyCode: sourceCurrencyCode,
+                    collectionIds,
+                    productVariantIds: variants.map(variant => String(variant.id)),
+                }),
+            );
+        }
+        if (minimumSpend && !scopedFixed) {
             conditions.push(
                 operation('store_currency_minimum_order_amount', {
                     amount: minimumSpend,
@@ -632,31 +678,39 @@ export class StorePromotionCampaignService {
                 throw new UserInputError('满减券的减免金额必须大于 0');
             }
             actions.push(
-                operation('store_currency_order_fixed_discount', {
-                    discount: amount,
-                    currencyCode: sourceCurrencyCode,
-                }),
+                operation(
+                    scopedFixed
+                        ? 'store_scoped_coupon_fixed_discount'
+                        : 'store_currency_order_fixed_discount',
+                    {
+                        discount: amount,
+                        currencyCode: sourceCurrencyCode,
+                    },
+                ),
             );
         } else {
             const percentageOff = discountRateToPercentageOff(input.discountRate);
             if (input.kind === 'ORDER_PERCENTAGE') {
                 actions.push(operation('order_percentage_discount', { discount: percentageOff }));
             } else if (input.kind === 'COLLECTION_PERCENTAGE') {
-                const collectionIds = uniqueIds(input.collectionIds ?? []);
+                const percentageCollectionIds = uniqueIds(input.collectionIds ?? []);
                 const collections = await this.connection.findByIdsInChannel(
                     ctx,
                     Collection,
-                    collectionIds,
+                    percentageCollectionIds,
                     ctx.channelId,
                     {},
                 );
-                if (!collectionIds.length || collections.length !== collectionIds.length) {
+                if (
+                    !percentageCollectionIds.length ||
+                    collections.length !== percentageCollectionIds.length
+                ) {
                     throw new UserInputError('请选择当前店铺中的有效商品分类');
                 }
                 actions.push(
                     operation('store_collection_percentage_discount', {
                         discount: percentageOff,
-                        collectionIds,
+                        collectionIds: percentageCollectionIds,
                     }),
                 );
             } else if (input.kind === 'PRODUCT_PERCENTAGE') {
@@ -705,6 +759,7 @@ export class StorePromotionCampaignService {
         if (!action || !kind) return null;
         const minimumCondition = promotion.conditions.find(
             condition =>
+                condition.code === 'store_scoped_coupon_minimum' ||
                 condition.code === 'store_currency_minimum_order_amount' ||
                 condition.code === 'minimum_order_amount',
         );
@@ -729,6 +784,7 @@ export class StorePromotionCampaignService {
             name: promotion.name,
             couponCode: promotion.couponCode,
             kind,
+            customerEligibility: couponAudience(promotion),
             appearanceTheme: null,
             enabled: promotion.enabled && convertible,
             startsAt: promotion.startsAt,
@@ -738,8 +794,14 @@ export class StorePromotionCampaignService {
             discountAmount:
                 kind === 'ORDER_FIXED' ? (convertible ? fixedDiscount : numberArg(action, 'discount')) : null,
             discountRate: kind === 'ORDER_FIXED' ? null : percentageOffToDiscountRate(percentageOff),
-            collectionIds: idListArg(action, 'collectionIds'),
-            productVariantIds: idListArg(action, 'productVariantIds'),
+            collectionIds: idListArg(
+                action.code === 'store_scoped_coupon_fixed_discount' ? minimumCondition : action,
+                'collectionIds',
+            ),
+            productVariantIds: idListArg(
+                action.code === 'store_scoped_coupon_fixed_discount' ? minimumCondition : action,
+                'productVariantIds',
+            ),
             usageLimit: promotion.usageLimit,
             perCustomerUsageLimit: promotion.perCustomerUsageLimit,
             ...emptyCampaignStats(),
@@ -1160,7 +1222,11 @@ function percentageOffToDiscountRate(value: number): number {
 }
 
 function couponKindForAction(code: string): StoreCouponCampaignKind | null {
-    if (code === 'order_fixed_discount' || code === 'store_currency_order_fixed_discount')
+    if (
+        code === 'order_fixed_discount' ||
+        code === 'store_currency_order_fixed_discount' ||
+        code === 'store_scoped_coupon_fixed_discount'
+    )
         return 'ORDER_FIXED';
     if (code === 'order_percentage_discount') return 'ORDER_PERCENTAGE';
     if (code === 'store_collection_percentage_discount') return 'COLLECTION_PERCENTAGE';

@@ -16,7 +16,7 @@ import {
     storeNotificationShopSchema,
 } from './notifications/store-notification.schema';
 import { adminPromotionManagementSchema } from './promotion/admin-promotion-management.schema';
-import { storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
+import { storeCouponCommonSchema, storeCustomerCouponSchema } from './promotion/store-coupon-api.schema';
 import { referralPosterFields } from './referral/referral-poster-fields';
 import { storefrontSeoAdminSchema } from './seo/storefront-seo.schema';
 import { storePaymentApiSchema } from './store-payment-api.schema';
@@ -39,33 +39,7 @@ const commonTypes = gql`
         MARKDOWN
     }
 
-    enum StoreCouponCampaignKind {
-        ORDER_FIXED
-        ORDER_PERCENTAGE
-        COLLECTION_PERCENTAGE
-        PRODUCT_PERCENTAGE
-    }
-
-    enum StoreCouponAppearanceTheme {
-        rose
-        gold
-        blue
-        emerald
-    }
-
-    enum StoreCouponStackPolicy {
-        EXCLUSIVE
-        STACKABLE
-    }
-
-    enum StoreCustomerCouponStatus {
-        AVAILABLE
-        LOCKED
-        USED
-        RETURNED
-        EXPIRED
-        REVOKED
-    }
+    ${storeCouponCommonSchema}
 
     enum StoreCurrencyRateMode {
         AUTO
@@ -518,6 +492,7 @@ export const adminApiExtensions = gql`
     }
 
     type StoreCouponCampaign {
+        customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
         createdAt: DateTime!
         updatedAt: DateTime!
@@ -567,6 +542,7 @@ export const adminApiExtensions = gql`
     }
 
     input CreateStoreCouponCampaignInput {
+        customerEligibility: StoreCouponCustomerEligibility
         name: String!
         kind: StoreCouponCampaignKind!
         appearanceTheme: StoreCouponAppearanceTheme
@@ -1194,6 +1170,7 @@ export const shopApiExtensions = gql`
     }
 
     type StorefrontCoupon {
+        customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
         name: String!
         kind: StoreCouponCampaignKind!

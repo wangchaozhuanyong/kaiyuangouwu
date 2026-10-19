@@ -326,7 +326,7 @@ export function CouponCenterPage() {
                                                         language={language}
                                                     />
                                                 }
-                                                scope={couponScopeSummary(campaign.kind, language)}
+                                                scope={couponScopeSummary(campaign.kind, language, campaign)}
                                             />
                                         );
                                     })}
@@ -400,7 +400,11 @@ export function CouponCenterPage() {
                                                         ]}
                                                     />
                                                 }
-                                                scope={couponScopeSummary(coupon.campaignKind, language)}
+                                                scope={couponScopeSummary(
+                                                    coupon.campaignKind,
+                                                    language,
+                                                    coupon,
+                                                )}
                                             />
                                         );
                                     })}
@@ -620,8 +624,19 @@ function CouponTicket({
     );
 }
 
-function couponScopeSummary(kind: StorefrontCouponCampaign['kind'], language: StorefrontLanguage): string {
-    return `${language === 'zh' ? '适用范围：' : 'Applies to: '}${couponScopeLabel(kind, language)}`;
+function couponScopeSummary(
+    kind: StorefrontCouponCampaign['kind'],
+    language: StorefrontLanguage,
+    rule?: Pick<StorefrontCouponCampaign, 'collectionIds' | 'productVariantIds'>,
+): string {
+    const isZh = language === 'zh';
+    const scope =
+        kind === 'ORDER_FIXED' && (rule?.collectionIds?.length || rule?.productVariantIds?.length)
+            ? isZh
+                ? '指定商品'
+                : 'Selected items'
+            : couponScopeLabel(kind, language);
+    return `${isZh ? '适用范围：' : 'Applies to: '}${scope}`;
 }
 
 function CouponDetails({ title, rows }: { title: string; rows: Array<[string, string]> }) {

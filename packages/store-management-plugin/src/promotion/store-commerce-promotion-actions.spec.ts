@@ -1,5 +1,6 @@
 import { ConfigArg, LanguageCode } from '@vendure/common/lib/generated-types';
 import {
+    AdjustmentType,
     Collection,
     ProductVariant,
     RequestContextCacheService,
@@ -16,6 +17,8 @@ import {
     customerCouponEntitlement,
     flashSalePriceAction,
     parseFlashSaleVariantRules,
+    scopedCouponFixedDiscount,
+    scopedCouponMinimum,
 } from './store-commerce-promotion-actions';
 
 describe('store commerce promotion actions', () => {
@@ -144,6 +147,125 @@ describe('store commerce promotion actions', () => {
                 { id: 'promotion-1' } as any,
             ),
         ).resolves.toBe(false);
+    });
+
+    it('keeps a scoped fixed-coupon minimum stable as its own line discounts are applied', async () => {
+        const requestCache = {} as RequestContextCacheService;
+        const connection = {} as TransactionalConnection;
+        await scopedCouponMinimum.init({
+            get: (token: unknown) => (token === TransactionalConnection ? connection : requestCache),
+        } as any);
+        const ctx = {
+            channelId: 'channel-1',
+            currencyCode: 'MYR',
+            channel: { pricesIncludeTax: true, defaultCurrencyCode: 'MYR', customFields: {} },
+        } as any;
+        const ownSource = 'PROMOTION:coupon-1';
+        const eligibleLine = {
+            id: 'line-1',
+            quantity: 2,
+            orderPlacedQuantity: 4,
+            productVariant: { id: 'variant-a' },
+            discountedLinePriceWithTax: 1_250,
+            discountedLinePrice: 1_250,
+            adjustments: [{ adjustmentSource: ownSource, amount: -500 }],
+            discounts: [{ adjustmentSource: ownSource, amountWithTax: -250 }],
+        } as any;
+        const unrelatedLine = {
+            id: 'line-2',
+            quantity: 1,
+            orderPlacedQuantity: 1,
+            productVariant: { id: 'variant-b' },
+            discountedLinePriceWithTax: 10_000,
+            discountedLinePrice: 10_000,
+            adjustments: [],
+            discounts: [],
+        } as any;
+        const alreadyDiscountedLine = {
+            id: 'line-sale',
+            quantity: 1,
+            orderPlacedQuantity: 1,
+            productVariant: { id: 'variant-a' },
+            discountedLinePriceWithTax: 1_200,
+            discountedLinePrice: 1_200,
+            adjustments: [
+                {
+                    adjustmentSource: 'PROMOTION:sale-1',
+                    amount: -300,
+                    type: AdjustmentType.PROMOTION,
+                },
+            ],
+            discounts: [{ adjustmentSource: 'PROMOTION:sale-1', amountWithTax: -300 }],
+        } as any;
+
+        await expect(
+            scopedCouponMinimum.check(
+                ctx,
+                { lines: [eligibleLine, unrelatedLine, alreadyDiscountedLine] } as any,
+                actionArgs({
+                    amount: 1_500,
+                    currencyCode: 'MYR',
+                    collectionIds: [],
+                    productVariantIds: ['variant-a'],
+                }),
+                { getSourceId: () => ownSource } as any,
+            ),
+        ).resolves.toEqual({ lines: [{ id: 'line-1', amount: 1_500 }] });
+
+        await expect(
+            scopedCouponMinimum.check(
+                ctx,
+                { lines: [eligibleLine, unrelatedLine, alreadyDiscountedLine] } as any,
+                actionArgs({
+                    amount: 1_501,
+                    currencyCode: 'MYR',
+                    collectionIds: [],
+                    productVariantIds: ['variant-a'],
+                }),
+                { getSourceId: () => ownSource } as any,
+            ),
+        ).resolves.toBe(false);
+    });
+
+    it('allocates the fixed face value only across eligible lines and caps it at their total', async () => {
+        const ctx = {
+            currencyCode: 'MYR',
+            channel: { defaultCurrencyCode: 'MYR', customFields: {} },
+        } as any;
+        const state = {
+            store_scoped_coupon_minimum: {
+                lines: [
+                    { id: 'line-1', amount: 1_000 },
+                    { id: 'line-2', amount: 3_000 },
+                ],
+            },
+        } as any;
+        const apply = (lineId: string, discount = 450) =>
+            scopedCouponFixedDiscount.execute(
+                ctx,
+                { id: lineId } as any,
+                actionArgs({ discount, currencyCode: 'MYR' }),
+                state,
+                {} as any,
+            );
+
+        const first = await apply('line-1');
+        const second = await apply('line-2');
+        expect(first + second).toBe(-450);
+        expect(await apply('out-of-scope')).toBe(0);
+
+        const smallState = {
+            store_scoped_coupon_minimum: { lines: [{ id: 'line-1', amount: 120 }] },
+        } as any;
+        expect(
+            await scopedCouponFixedDiscount.execute(
+                ctx,
+                { id: 'line-1' } as any,
+                actionArgs({ discount: 450, currencyCode: 'MYR' }),
+                smallState,
+                {} as any,
+            ),
+        ).toBe(-120);
     });
 
     it('parses only valid flash-sale variant rules', () => {

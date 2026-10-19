@@ -116,6 +116,16 @@ export function CampaignDetailDialog({
                     <DetailValue label="活动名称" value={coupon.name} />
                     <DetailValue label="活动类型" value={couponKindLabels[coupon.kind]} />
                     <DetailValue
+                        label="客户资格"
+                        value={
+                            coupon.customerEligibility === 'NEW'
+                                ? '新客（本店无已提交订单）'
+                                : coupon.customerEligibility === 'RETURNING'
+                                  ? '老客（本店有已提交订单）'
+                                  : '全部客户'
+                        }
+                    />
+                    <DetailValue
                         label="当前状态"
                         value={
                             coupon.archivedAt

@@ -70,6 +70,7 @@ import {
 } from './coupon-lifecycle.constants';
 import { idListArg, numberArg, stringArg } from './promotion-operation-args';
 import { lockCouponCampaign } from './store-coupon-campaign-lock';
+import { couponAudience, couponCustomerEligible } from './store-coupon-eligibility';
 
 @Injectable()
 export class StoreCouponLifecycleService implements OnApplicationBootstrap {
@@ -1009,6 +1010,9 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             throw new UserInputError('优惠券尚未开始领取');
         if (config.claimEndsAt && config.claimEndsAt <= now) throw new UserInputError('优惠券领取已结束');
 
+        if (!(await couponCustomerEligible(ctx, this.connection, couponAudience(promotion), customer.id)))
+            throw new UserInputError('不符合该优惠券的新客或老客资格');
+
         const repository = this.connection.getRepository(ctx, CustomerCoupon);
         const [issuedCount, customerClaimedCount] = await Promise.all([
             repository.count({ where: { channelId: ctx.channelId, promotionId: promotion.id } }),
@@ -1149,6 +1153,16 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             else if (coupon.validFrom > paidAt || this.isExpired(coupon, paidAt))
                 reason = '付款成功时间不在优惠券有效期内';
             else if (!promotion.enabled || promotion.deletedAt) reason = '优惠券活动已停用';
+            else if (
+                !(await couponCustomerEligible(
+                    ctx,
+                    this.connection,
+                    couponAudience(promotion),
+                    order.customerId,
+                    order,
+                ))
+            )
+                reason = '不符合该优惠券的新客或老客资格';
             else if (discountSnapshot(order, promotion.id).amountWithTax <= 0)
                 reason = '优惠券未产生实际优惠';
             if (reason) issues.push({ coupon: coupon ?? undefined, code, reason });
@@ -1836,6 +1850,7 @@ export class StoreCouponLifecycleService implements OnApplicationBootstrap {
             campaignId: coupon.promotionId,
             campaignName: coupon.campaignName,
             campaignKind: coupon.campaignKind,
+            customerEligibility: coupon.promotion ? couponAudience(coupon.promotion) : 'ALL',
             appearanceTheme: coupon.campaignConfig?.appearanceTheme ?? null,
             status: coupon.status,
             minimumSpend: convertible ? minimumSpend : coupon.minimumSpend,
@@ -1969,14 +1984,21 @@ function couponRuleSnapshot(promotion: Promotion) {
     if (!action || !kind) return null;
     const minimumCondition = promotion.conditions.find(
         candidate =>
+            candidate.code === 'store_scoped_coupon_minimum' ||
             candidate.code === 'store_currency_minimum_order_amount' ||
             candidate.code === 'minimum_order_amount',
     );
     const percentageOff = numberArg(action, 'discount');
     return {
         kind,
-        collectionIds: kind === 'COLLECTION_PERCENTAGE' ? idListArg(action, 'collectionIds') : [],
-        productVariantIds: kind === 'PRODUCT_PERCENTAGE' ? idListArg(action, 'productVariantIds') : [],
+        collectionIds: idListArg(
+            action.code === 'store_scoped_coupon_fixed_discount' ? minimumCondition : action,
+            'collectionIds',
+        ),
+        productVariantIds: idListArg(
+            action.code === 'store_scoped_coupon_fixed_discount' ? minimumCondition : action,
+            'productVariantIds',
+        ),
         minimumSpend: numberArg(minimumCondition, 'amount'),
         currencyCode: (stringArg(minimumCondition, 'currencyCode') || stringArg(action, 'currencyCode')) as
             CurrencyCode | undefined,
@@ -1986,7 +2008,11 @@ function couponRuleSnapshot(promotion: Promotion) {
 }
 
 function couponKindForAction(code: string) {
-    if (code === 'order_fixed_discount' || code === 'store_currency_order_fixed_discount') {
+    if (
+        code === 'order_fixed_discount' ||
+        code === 'store_currency_order_fixed_discount' ||
+        code === 'store_scoped_coupon_fixed_discount'
+    ) {
         return 'ORDER_FIXED' as const;
     }
     if (code === 'order_percentage_discount') return 'ORDER_PERCENTAGE' as const;

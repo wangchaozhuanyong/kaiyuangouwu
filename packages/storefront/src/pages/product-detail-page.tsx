@@ -27,11 +27,11 @@ import {
     productAvailabilityLabel,
     variantCanIncreaseQuantity,
 } from '../product-availability';
+import { bestProductCouponPrice } from '../product-coupon-pricing';
 import { lowestPricedProductVariant } from '../product-pricing';
 import { ProductReviewsSection } from '../review-pages';
 import { sanitizeProductDescription } from '../rich-text';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { bestProductCouponPrice } from '../storefront-coupons';
 import { goBackInStorefront } from '../storefront-navigation-history';
 import { ProductDetailPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';

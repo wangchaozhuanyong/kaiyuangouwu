@@ -1,5 +1,41 @@
 import { gql } from 'graphql-tag';
 
+export const storeCouponCommonSchema = gql`
+    enum StoreCouponCustomerEligibility {
+        ALL
+        NEW
+        RETURNING
+    }
+
+    enum StoreCouponCampaignKind {
+        ORDER_FIXED
+        ORDER_PERCENTAGE
+        COLLECTION_PERCENTAGE
+        PRODUCT_PERCENTAGE
+    }
+
+    enum StoreCouponAppearanceTheme {
+        rose
+        gold
+        blue
+        emerald
+    }
+
+    enum StoreCouponStackPolicy {
+        EXCLUSIVE
+        STACKABLE
+    }
+
+    enum StoreCustomerCouponStatus {
+        AVAILABLE
+        LOCKED
+        USED
+        RETURNED
+        EXPIRED
+        REVOKED
+    }
+`;
+
 export const storeCustomerCouponSchema = gql`
     input StoreCouponPageOptions {
         skip: Int
@@ -17,6 +53,7 @@ export const storeCustomerCouponSchema = gql`
     }
 
     type StoreCustomerCoupon {
+        customerEligibility: StoreCouponCustomerEligibility!
         id: ID!
         campaignId: ID!
         campaignName: String!
