@@ -7,15 +7,17 @@ import {
     ServiceUnavailableException,
     UseFilters,
 } from '@nestjs/common';
-import { LanguageCode, RequestContextService } from '@vendure/core';
+import { LanguageCode, Logger, RequestContextService } from '@vendure/core';
 import { publicPageRequestFromUrl, publicPageRouteHref } from '@vendure/storefront-content-plugin';
 import type { Request, Response } from 'express';
+import { randomUUID } from 'node:crypto';
 
 import { StorefrontPromotionAccessService } from '../promotion/storefront-promotion-access.service';
 import { StorefrontClosedHttpFilter } from '../storefront-closed-http.filter';
 import { StorefrontPublicPageService } from '../storefront-public-page.service';
 import { publicPagePreferences, trustedPublicPageHeaders } from '../storefront-public-request';
 
+import { publicRenderFailureDetails, type PublicDocumentStage } from './public-render-diagnostics';
 import { StorefrontPublicSeoService } from './storefront-public-seo.service';
 import { StorefrontSeoHtmlService } from './storefront-seo-html.service';
 import { StorefrontSeoService } from './storefront-seo.service';
@@ -129,16 +131,20 @@ export class StorefrontSeoController {
                 get: (name: string) => (name.toLowerCase() === 'host' ? verified.host : undefined),
             } as unknown as Request,
         });
+        const startedAt = Date.now();
+        let stage: PublicDocumentStage = 'read-page';
         try {
-            const page = await this.publicSeo.enrich(
-                ctx,
-                verified.host,
-                await this.pages.readForDocument(ctx, verified.host, request),
-            );
+            const data = await this.pages.readForDocument(ctx, verified.host, request);
+            stage = 'resolve-seo';
+            const page = await this.publicSeo.enrich(ctx, verified.host, data);
+            stage = 'required-content';
             if (page.failures.includes('content'))
                 throw new ServiceUnavailableException('Public content is unavailable');
+            stage = 'render-html';
             const rendered = await this.html.render(page);
+            stage = 'verify-publication';
             await this.publicSeo.assertOutput(ctx, page);
+            stage = 'resolved-seo';
             if (!page.seo) throw new ServiceUnavailableException('Public SEO resolution is unavailable');
             res.setHeader('X-Robots-Tag', page.seo.robots);
             res.status(200).type('html').send(rendered);
@@ -146,9 +152,29 @@ export class StorefrontSeoController {
             res.setHeader('X-Robots-Tag', 'noindex, follow');
             if (error instanceof NotFoundException)
                 res.status(404).type('text/plain').send('Public page not found');
-            else if (error instanceof ServiceUnavailableException)
+            else if (error instanceof ServiceUnavailableException) {
+                const requestId = randomUUID();
+                const ray = trustedPublicPageHeaders(req) ? req.headers['cf-ray'] : undefined;
+                res.setHeader('X-Request-Id', requestId);
+                Logger.error(
+                    JSON.stringify({
+                        event: 'storefront.public-document.unavailable',
+                        requestId,
+                        cfRay:
+                            typeof ray === 'string' && /^[a-fA-F0-9]{16}-[A-Za-z]{3}$/u.test(ray)
+                                ? ray
+                                : undefined,
+                        channelId: String(ctx.channelId),
+                        kind: request.kind,
+                        language: code,
+                        stage,
+                        durationMs: Date.now() - startedAt,
+                        ...publicRenderFailureDetails(error),
+                    }),
+                    'StorefrontPublicHtml',
+                );
                 res.status(503).type('text/plain').send('Public page temporarily unavailable');
-            else throw error;
+            } else throw error;
         }
     }
 
