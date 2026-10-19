@@ -861,7 +861,7 @@ export function AppShell() {
                             return (
                                 <NavLink
                                     key={section}
-                                    to={items[0].path}
+                                    to={tabs.find(tab => tab.path === items[0].path)?.href ?? items[0].path}
                                     aria-label={labelText}
                                     title={!isSidebarOpen ? labelText : undefined}
                                     className={`admin-sidebar-nav-item flex min-h-10 items-center ${isSidebarOpen ? 'px-3' : 'mx-auto w-12 justify-center'}`}
@@ -906,7 +906,10 @@ export function AppShell() {
                                         {items.map(item => (
                                             <NavLink
                                                 key={item.path}
-                                                to={item.path}
+                                                to={
+                                                    tabs.find(tab => tab.path === item.path)?.href ??
+                                                    item.path
+                                                }
                                                 className="admin-sidebar-nav-item block px-3 py-2 text-xs"
                                             >
                                                 {item.title}

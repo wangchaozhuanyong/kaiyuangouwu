@@ -1,13 +1,11 @@
 import { QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { markCouponCampaignClaimed } from '../coupon-center-state';
-import { claimAndVerifyCoupon } from '../coupon-claim-verification';
 import { uiCopy } from '../i18n';
 import { storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { RouteName, RouteState } from '../storefront-router';
-import { ActiveCustomer, StoreCustomerCoupon, StorefrontCart, StorefrontCouponCampaign } from '../types';
+import { ActiveCustomer, StoreCustomerCoupon, StorefrontCart } from '../types';
 
 import {
     automaticCouponInputKey,
@@ -73,13 +71,24 @@ export function useStorefrontCoupons({
     const queryClient = useQueryClient();
     const text = uiCopy[language];
     const isZh = language === 'zh';
-    const couponOwnerRef = useRef({ api, customerId: customer?.id, marketCode: market.code });
-    if (
-        couponOwnerRef.current.api !== api ||
-        couponOwnerRef.current.customerId !== customer?.id ||
-        couponOwnerRef.current.marketCode !== market.code
-    )
-        couponOwnerRef.current = { api, customerId: customer?.id, marketCode: market.code };
+    const scopeKey = JSON.stringify([market.code, market.currencyCode, vendureLanguageCode, customer?.id]);
+    const createClaimOwner = () => ({
+        api,
+        scopeKey,
+        pending: new Map<string, StoreCustomerCoupon | null>(),
+        flight: null as Promise<string | null> | null,
+    });
+    const couponOwnerRef = useRef(createClaimOwner());
+    if (couponOwnerRef.current.api !== api || couponOwnerRef.current.scopeKey !== scopeKey)
+        couponOwnerRef.current = createClaimOwner();
+    const couponOwner = couponOwnerRef.current;
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
 
     const couponAutoSelectionScope =
         cart?.checkoutOrder && customer ? `${customer.id}:${cart.id}:${cart.checkoutOrder.id}` : '';
@@ -138,28 +147,18 @@ export function useStorefrontCoupons({
     );
 
     const claimCoupon = useCallback(
-        async (campaignId: string): Promise<string | null> => {
+        (campaignId: string): Promise<string | null> => {
+            const isCurrent = () => mounted.current && couponOwnerRef.current === couponOwner;
+            if (!isCurrent()) return Promise.resolve(null);
             if (!customer) {
                 navigate({ name: 'login' });
-                return isZh ? '请先登录后领取优惠券' : 'Sign in to claim coupons';
+                return Promise.resolve(isZh ? '请先登录后领取优惠券' : 'Sign in to claim coupons');
             }
+            if (couponOwner.flight) return couponOwner.flight;
             setCartLoading(true);
             setCartError(null);
-            try {
-                const result = await claimAndVerifyCoupon(api, campaignId);
-                if (result.status !== 'lookup-failed') {
-                    queryClient.setQueryData<StoreCustomerCoupon[]>(customerCouponQueryKey, result.coupons);
-                } else {
-                    void queryClient.invalidateQueries({ queryKey: customerCouponQueryKey });
-                }
-                if (result.status === 'verified') {
-                    queryClient.setQueryData<StorefrontCouponCampaign[]>(
-                        couponCampaignsQueryKey,
-                        campaigns =>
-                            campaigns ? markCouponCampaignClaimed(campaigns, campaignId) : campaigns,
-                    );
-                }
-                await Promise.all([
+            const refresh = () =>
+                Promise.all([
                     queryClient.invalidateQueries({ queryKey: customerCouponQueryKey }),
                     queryClient.invalidateQueries({ queryKey: couponCampaignsQueryKey }),
                     queryClient.invalidateQueries({
@@ -170,35 +169,36 @@ export function useStorefrontCoupons({
                         ),
                     }),
                 ]);
-                if (result.status === 'lookup-failed') {
-                    return isZh
-                        ? '领取请求已完成，但当前账号权益核验失败。请刷新后查看，若仍未显示请联系客服。'
-                        : [
-                              'The claim request completed, but account ownership could not be verified.',
-                              'Refresh and contact support if it is still missing.',
-                          ].join(' ');
+            const run = async (): Promise<string | null> => {
+                try {
+                    const { completeCouponClaim } = await import('../coupon-claim-verification');
+                    if (!isCurrent()) return null;
+                    return await completeCouponClaim({
+                        api,
+                        campaignId,
+                        pending: couponOwner.pending,
+                        isCurrent,
+                        queryClient,
+                        customerCouponQueryKey,
+                        couponCampaignsQueryKey,
+                        refresh,
+                        language,
+                        notify,
+                    });
+                } catch (error) {
+                    return isCurrent() ? storefrontErrorMessage(error, language) : null;
+                } finally {
+                    couponOwner.flight = null;
+                    if (isCurrent()) setCartLoading(false);
                 }
-                if (result.status === 'missing') {
-                    return isZh
-                        ? '领取请求已完成，但未在当前账号查到该优惠券。请勿重复领取，刷新后仍未显示请联系客服。'
-                        : [
-                              'The claim request completed, but the coupon was not found on this account.',
-                              'Do not claim again; refresh and contact support if it is still missing.',
-                          ].join(' ');
-                }
-                notify(isZh ? '优惠券领取成功' : 'Coupon claimed');
-                return null;
-            } catch (requestError) {
-                return requestError instanceof Error
-                    ? storefrontErrorMessage(requestError, language)
-                    : text.loadError;
-            } finally {
-                setCartLoading(false);
-            }
+            };
+            couponOwner.flight = run();
+            return couponOwner.flight;
         },
         [
             api,
             customer,
+            couponOwner,
             customerCouponQueryKey,
             couponCampaignsQueryKey,
             isZh,

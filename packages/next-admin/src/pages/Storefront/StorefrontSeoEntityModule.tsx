@@ -51,7 +51,13 @@ export function StorefrontSeoEntityModule() {
             ? `/catalog/products/${encodeURIComponent(id)}`
             : '/catalog/categories/categories';
     return (
-        <div className="space-y-4 p-4 sm:p-6">
+        <div
+            className="custom-scrollbar h-full min-h-0 space-y-4 overflow-y-auto p-4 sm:p-6"
+            data-storefront-seo-entity
+            role="region"
+            aria-label={targetType === 'PRODUCT' ? '商品搜索优化' : '分类搜索优化'}
+            tabIndex={0}
+        >
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                     <AdminButton

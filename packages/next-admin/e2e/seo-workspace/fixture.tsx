@@ -1,8 +1,13 @@
 import { ApolloClient, ApolloLink, InMemoryCache, Observable } from '@apollo/client';
 import { ApolloProvider } from '@apollo/client/react';
-import React, { useState } from 'react';
+import { getOperationAST } from 'graphql';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import {
+    ADMIN_CAPABILITY_DEFINITIONS,
+    adminCapabilityScopeAllows,
+} from '../../../common/src/admin-capabilities';
 import {
     defaultStorefrontSeoDocument,
     defaultStorefrontSeoSettings,
@@ -14,11 +19,16 @@ import { FeatureHelpProvider } from '../../src/components/FeatureHelp';
 import type { StorefrontSeoRecord } from '../../src/graphql/storefront-seo.graphql';
 import { AdminPermissionsContext } from '../../src/hooks/use-admin-permissions';
 import '../../src/index.css';
+import { AppShell } from '../../src/layouts/AppShell';
 import { StorefrontSeoEntityModule } from '../../src/pages/Storefront/StorefrontSeoEntityModule';
 import { StorefrontSeoModule } from '../../src/pages/Storefront/StorefrontSeoModule';
+import { ThemeProvider } from '../../src/theme/ThemeProvider';
 
 // Actual component, Apollo cache, managed query runtime and page refresh. No real accounts or data.
 const records = new Map<string, StorefrontSeoRecord>();
+const params = new URLSearchParams(location.search);
+const shell = params.has('shell');
+const large = params.has('large');
 const fixture = { channelId: 'synthetic-a', failReads: false, operations: [] as string[], writes: 0 };
 Object.assign(window, { seoFixture: fixture });
 const key = (input: { targetType: string; targetId: string; languageCode: string }) =>
@@ -52,6 +62,47 @@ const withType = (value: StorefrontSeoRecord) => ({
     __typename: 'StorefrontSeoRecord',
 });
 const settingsIdentity = { targetType: 'SETTINGS' as const, targetId: 'store', languageCode: 'und' };
+const permissions = [
+    'ReadStorefrontContent',
+    'UpdateStorefrontContent',
+    'ReadProduct',
+    'UpdateProduct',
+    'ReadCollection',
+    'UpdateCollection',
+    'ReadStoreDomain',
+];
+const channel = () => ({
+    __typename: 'Channel',
+    id: fixture.channelId,
+    code: fixture.channelId,
+    token: `token-${fixture.channelId}`,
+    defaultCurrencyCode: 'MYR',
+    defaultLanguageCode: 'zh_Hans',
+    customFields: { storefrontNameZh: '本地验收店铺', storefrontNameEn: 'Local test store' },
+});
+if (large) {
+    const settings = defaultStorefrontSeoSettings();
+    settings.redirects = Array.from({ length: 30 }, (_, index) => ({
+        from: `/local-old-${index}`,
+        to: `/local-new-${index}`,
+        status: 301,
+    }));
+    record(settingsIdentity).draft = settings;
+    for (const [targetType, count] of [
+        ['PRODUCT', 616],
+        ['COLLECTION', 80],
+        ['ARTICLE', 80],
+    ] as const)
+        for (let index = 0; index < count; index++) {
+            const value = record({
+                targetType,
+                targetId: targetType === 'ARTICLE' ? `local-guide-${index}` : String(5909 + index),
+                languageCode: 'zh_Hans',
+            });
+            value.draft = { ...defaultStorefrontSeoDocument(targetType), title: `本地测试 ${index + 1}` };
+        }
+    record({ targetType: 'PRODUCT', targetId: '5909', languageCode: 'en' });
+}
 const client = new ApolloClient({
     cache: new InMemoryCache(),
     link: new ApolloLink(
@@ -73,7 +124,69 @@ const client = new ApolloClient({
                         observer.error(new Error('合成场景：读取暂时失败'));
                         return;
                     }
-                    if (operation.operationName === 'NextAdminStorefrontSeoWorkspace')
+                    if (operation.operationName === 'NextAdminAppShellBootstrap')
+                        send({
+                            activeChannel: channel(),
+                            manageableChannels: [channel()],
+                            me: {
+                                id: 'synthetic-admin',
+                                identifier: 'local@example.invalid',
+                                channels: [{ ...channel(), permissions }],
+                            },
+                            activeAdministrator: {
+                                id: 'synthetic-admin',
+                                firstName: '本地',
+                                lastName: '验收',
+                                emailAddress: 'local@example.invalid',
+                                createdAt: '2026-10-19T00:00:00Z',
+                                updatedAt: '2026-10-19T00:00:00Z',
+                                user: {
+                                    id: 'synthetic-user',
+                                    identifier: 'local@example.invalid',
+                                    verified: true,
+                                    lastLogin: null,
+                                    authenticationMethods: [],
+                                    roles: [],
+                                },
+                            },
+                            currentAdminCapabilities: {
+                                channelId: fixture.channelId,
+                                channelCode: fixture.channelId,
+                                scope: 'STORE',
+                                commerceMode: 'HYBRID',
+                                capabilities: ADMIN_CAPABILITY_DEFINITIONS.map(definition => {
+                                    const supported = adminCapabilityScopeAllows(
+                                        definition,
+                                        'STORE',
+                                        'HYBRID',
+                                    );
+                                    const canRead =
+                                        supported &&
+                                        (!definition.readPermissions.length ||
+                                            definition.readPermissions.some(p => permissions.includes(p))) &&
+                                        (definition.readAllPermissions ?? []).every(p =>
+                                            permissions.includes(p),
+                                        );
+                                    return {
+                                        id: definition.id,
+                                        state: !supported ? 'UNSUPPORTED' : canRead ? 'READY' : 'FORBIDDEN',
+                                        canRead,
+                                        canWrite:
+                                            canRead &&
+                                            definition.writePermissions.some(p => permissions.includes(p)),
+                                        canConfigure: false,
+                                    };
+                                }),
+                            },
+                        });
+                    else if (operation.operationName === 'NextAdminCustomFieldServerConfig')
+                        send({
+                            globalSettings: {
+                                availableLanguages: ['zh_Hans', 'en'],
+                                serverConfig: { entityCustomFields: [] },
+                            },
+                        });
+                    else if (operation.operationName === 'NextAdminStorefrontSeoWorkspace')
                         send({
                             activeChannel: {
                                 __typename: 'Channel',
@@ -93,7 +206,16 @@ const client = new ApolloClient({
                                             item.targetType !== 'SETTINGS',
                                     )
                                     .map(withType),
-                                diagnostics: [],
+                                diagnostics: large
+                                    ? Array.from({ length: 40 }, (_, index) => ({
+                                          code: `LOCAL_${index}`,
+                                          severity: 'WARNING',
+                                          message: `本地测试诊断 ${index + 1}`,
+                                          targetType: 'PRODUCT',
+                                          targetId: String(5909 + index),
+                                          languageCode: 'zh_Hans',
+                                      }))
+                                    : [],
                             },
                         });
                     else if (operation.operationName === 'NextAdminStorefrontSeoEntityRecord')
@@ -113,6 +235,15 @@ const client = new ApolloClient({
                     else if (operation.operationName === 'NextAdminStorefrontPreviewDomains')
                         send({ storeDomains: [] });
                     else {
+                        if (
+                            getOperationAST(operation.query)?.operation !== 'mutation' ||
+                            !/NextAdmin(?:SaveStorefrontSeoDraft|PublishStorefrontSeoRecord|UnpublishStorefrontSeoRecord|RestoreStorefrontSeoRevision)$/u.test(
+                                operation.operationName,
+                            )
+                        ) {
+                            observer.error(new Error(`Unmocked local operation: ${operation.operationName}`));
+                            return;
+                        }
                         const input = operation.variables.input;
                         const previous = record(input);
                         if (input.expectedVersion !== previous.version) {
@@ -167,8 +298,8 @@ export function Workspace() {
               'ReadStoreDomain',
           ];
     return (
-        <>
-            <nav className="flex flex-wrap gap-3 p-4 bg-slate-100" aria-label="合成验收导航">
+        <div className="flex h-screen flex-col overflow-hidden">
+            <nav className="flex shrink-0 flex-wrap gap-3 p-4 bg-slate-100" aria-label="合成验收导航">
                 {[
                     ['overview', '收录设置'],
                     ['pages', '页面 SEO'],
@@ -201,34 +332,56 @@ export function Workspace() {
                     切换合成读取失败
                 </button>
             </nav>
-            <AdminPermissionsContext.Provider
-                value={{
-                    permissions,
-                    hasAnyPermission: required =>
-                        required.some(permission => permissions.includes(permission)),
-                }}
-            >
-                <AdminPageWorkspace key={scope} page={location.pathname} active>
-                    {nativeOnly ? (
-                        <Routes>
-                            <Route path="/catalog/products/:id/seo" element={<StorefrontSeoEntityModule />} />
-                        </Routes>
-                    ) : (
-                        <StorefrontSeoModule />
-                    )}
-                </AdminPageWorkspace>
-            </AdminPermissionsContext.Provider>
-        </>
+            <div className="min-h-0 flex-1">
+                <AdminPermissionsContext.Provider
+                    value={{
+                        permissions,
+                        hasAnyPermission: required =>
+                            required.some(permission => permissions.includes(permission)),
+                    }}
+                >
+                    <AdminPageWorkspace key={scope} page={location.pathname} active>
+                        {nativeOnly ? (
+                            <Routes>
+                                <Route
+                                    path="/catalog/products/:id/seo"
+                                    element={<StorefrontSeoEntityModule />}
+                                />
+                            </Routes>
+                        ) : (
+                            <StorefrontSeoModule />
+                        )}
+                    </AdminPageWorkspace>
+                </AdminPermissionsContext.Provider>
+            </div>
+        </div>
+    );
+}
+function ShellRoutes() {
+    const navigate = useNavigate();
+    useEffect(() => {
+        Object.assign(fixture, { navigate });
+    }, [navigate]);
+    return (
+        <Routes>
+            <Route element={<AppShell />}>
+                <Route path="/storefront/seo/:section" element={<StorefrontSeoModule />} />
+                <Route path="/catalog/products/:id/seo" element={<StorefrontSeoEntityModule />} />
+                <Route path="/catalog/collections/:id/seo" element={<StorefrontSeoEntityModule />} />
+            </Route>
+        </Routes>
     );
 }
 createRoot(document.getElementById('root')!).render(
     React.createElement(
         ApolloProvider,
         { client },
-        <FeatureHelpProvider>
-            <MemoryRouter initialEntries={['/storefront/seo/overview']}>
-                <Workspace />
-            </MemoryRouter>
-        </FeatureHelpProvider>,
+        <ThemeProvider>
+            <FeatureHelpProvider>
+                <MemoryRouter initialEntries={[params.get('path') ?? '/storefront/seo/overview']}>
+                    {shell ? <ShellRoutes /> : <Workspace />}
+                </MemoryRouter>
+            </FeatureHelpProvider>
+        </ThemeProvider>,
     ),
 );

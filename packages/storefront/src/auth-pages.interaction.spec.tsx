@@ -42,6 +42,32 @@ async function settle(action: () => void) {
     });
 }
 
+const googleOnly = {
+    emailPasswordEnabled: false,
+    emailAutoRegistrationEnabled: false,
+    emailQuickRegistrationEnabled: false,
+    googleEnabled: true,
+    googleClientId: 'fixture.apps.googleusercontent.com',
+};
+
+function googleFixture() {
+    let callback: ((response: { credential?: string; state?: string }) => void) | undefined;
+    let state = '';
+    window.google = {
+        accounts: {
+            id: {
+                initialize: options => {
+                    callback = options.callback;
+                },
+                renderButton: (_parent, options) => {
+                    state = options.state;
+                },
+            },
+        },
+    };
+    return () => callback?.({ credential: 'fixture-id-token', state });
+}
+
 beforeEach(() => {
     host = document.createElement('div');
     document.body.append(host);
@@ -52,9 +78,64 @@ afterEach(() => {
     act(() => root.unmount());
     host.remove();
     vi.clearAllMocks();
+    delete window.google;
 });
 
 describe('storefront authentication overlay presentation', () => {
+    it.each([
+        { name: 'login', Page: LoginPage },
+        { name: 'register', Page: RegisterPage },
+    ])('invalidates a pending Google completion when its $name form closes', async ({ Page }) => {
+        const respond = googleFixture();
+        let finish!: () => void;
+        const api = {
+            referralProgram: vi.fn().mockResolvedValue({ enabled: false }),
+            authenticateWithGoogle: vi.fn(
+                () =>
+                    new Promise<void>(resolve => {
+                        finish = resolve;
+                    }),
+            ),
+        };
+        const onSuccess = vi.fn().mockResolvedValue(undefined);
+        await settle(() =>
+            root.render(
+                <Page {...baseProps} api={api as never} authSettings={googleOnly} onSuccess={onSuccess} />,
+            ),
+        );
+        if (Page === RegisterPage) acceptRegistrationConsent();
+        await act(async () => {
+            respond();
+            await vi.waitFor(() => expect(api.authenticateWithGoogle).toHaveBeenCalledOnce());
+        });
+        await settle(() => root.render(null));
+        await settle(() => finish());
+        expect(onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('reports post-authorization session failures separately and passes an owner guard', async () => {
+        const respond = googleFixture();
+        const onSuccess = vi.fn().mockRejectedValue(new Error('Fixture session read failed'));
+        const api = { authenticateWithGoogle: vi.fn().mockResolvedValue(undefined) };
+        await settle(() =>
+            root.render(
+                <LoginPage
+                    {...baseProps}
+                    api={api as never}
+                    authSettings={googleOnly}
+                    onSuccess={onSuccess}
+                />,
+            ),
+        );
+        await settle(respond);
+        expect(onSuccess).toHaveBeenCalledWith(expect.any(Function));
+        expect(onSuccess.mock.calls[0][0]()).toBe(true);
+        expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+            'Google 授权已完成，但登录状态读取失败',
+        );
+        await settle(() => root.render(null));
+        expect(onSuccess.mock.calls[0][0]()).toBe(false);
+    });
     it('uses managed form copy and persistent labels without loading the standalone artwork', async () => {
         const navigate = vi.fn();
         const onEmailDraftChange = vi.fn();
@@ -436,14 +517,17 @@ describe('storefront configurable authentication methods', () => {
     });
 
     it('supports consent and completion when Google is the only registration method', async () => {
-        let credentialCallback: ((response: { credential?: string }) => void) | undefined;
+        let credentialCallback: ((response: { credential?: string; state?: string }) => void) | undefined;
+        let state = '';
         window.google = {
             accounts: {
                 id: {
                     initialize: options => {
                         credentialCallback = options.callback;
                     },
-                    renderButton: vi.fn(),
+                    renderButton: (_parent, options) => {
+                        state = options.state;
+                    },
                 },
             },
         };
@@ -469,10 +553,13 @@ describe('storefront configurable authentication methods', () => {
             ),
         );
         expect(requiredElement<HTMLInputElement>('.auth-registration-consent input').checked).toBe(false);
-        await settle(() => credentialCallback?.({ credential: 'qa-id-token' }));
+        expect(host.querySelector('.google-auth-button > [inert]')).not.toBeNull();
+        expect(host.textContent).toContain('请先勾选同意条款与隐私政策，再使用 Google 继续');
+        await settle(() => credentialCallback?.({ credential: 'qa-id-token', state }));
         expect(api.authenticateWithGoogle).not.toHaveBeenCalled();
         acceptRegistrationConsent();
-        await settle(() => credentialCallback?.({ credential: 'qa-id-token' }));
+        expect(host.querySelector('.google-auth-button > [inert]')).toBeNull();
+        await settle(() => credentialCallback?.({ credential: 'qa-id-token', state }));
         expect(api.authenticateWithGoogle).toHaveBeenCalledWith(
             'qa-id-token',
             { termsAccepted: true, privacyAcknowledged: true, locale: 'zh' },

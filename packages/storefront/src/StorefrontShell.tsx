@@ -138,7 +138,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const protectedRoute = !isPublicStorefrontRoute(displayedRoute.name);
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
-    const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || Boolean(customer);
+    const authRoute = ['login', 'register', 'forgot-password'].includes(displayedRoute.name);
+    const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || (!!customer && !authRoute);
     const readinessIdentity = JSON.stringify([
         storefrontContextValue.storefrontCode,
         storefrontContextValue.market.code,
@@ -275,7 +276,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                     />
                                 ) : undefined
                             }
-                            accountNavigation={desktop && customer ? <DesktopAccountNavigation /> : undefined}
+                            accountNavigation={
+                                desktop && customer && !authRoute ? <DesktopAccountNavigation /> : undefined
+                            }
                             deferred={
                                 !previewEmbedded &&
                                 deferredUiReady &&
@@ -293,15 +296,11 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             }
                         >
                             <AuthEmailDraftBoundary
-                                active={
-                                    !customer &&
-                                    ['login', 'register', 'forgot-password'].includes(displayedRoute.name)
-                                }
+                                active={!customer && authRoute}
                                 ownerKey={JSON.stringify([
                                     storefrontContextValue.storefrontCode,
                                     storefrontContextValue.market.code,
                                     storefrontContextValue.market.currencyCode,
-                                    customer?.id ?? null,
                                 ])}
                             >
                                 <Suspense

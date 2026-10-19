@@ -28,6 +28,18 @@ function coupon(id: string, campaignId = 'campaign-1'): StoreCustomerCoupon {
 }
 
 describe('claimAndVerifyCoupon', () => {
+    it.each([null, coupon('coupon-1')])(
+        'verifies an earlier write without claiming again: %s',
+        async receipt => {
+            const owned = coupon('coupon-1');
+            const api = { claimCoupon: vi.fn(), myCoupons: vi.fn().mockResolvedValue([owned]) };
+            await expect(claimAndVerifyCoupon(api, 'campaign-1', receipt)).resolves.toMatchObject({
+                status: 'verified',
+                claimedCoupon: owned,
+            });
+            expect(api.claimCoupon).not.toHaveBeenCalled();
+        },
+    );
     it('reports success only when the claimed coupon is returned by the current-account query', async () => {
         const claimedCoupon = coupon('coupon-1');
         const api = {

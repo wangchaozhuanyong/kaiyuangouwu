@@ -748,3 +748,7 @@
         padding-top: 26px;
     }
 }
+
+.auth-invitation-slot {
+    min-height: 36px;
+}

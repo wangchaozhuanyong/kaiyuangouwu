@@ -27,13 +27,18 @@ export function AuthEmailDraftBoundary({
     ownerKey: string;
     children: ReactNode;
 }) {
-    return active ? <AuthEmailDraftScope key={ownerKey}>{children}</AuthEmailDraftScope> : children;
+    return (
+        <AuthEmailDraftScope key={ownerKey} active={active}>
+            {children}
+        </AuthEmailDraftScope>
+    );
 }
 
-function AuthEmailDraftScope({ children }: { children: ReactNode }) {
+function AuthEmailDraftScope({ active, children }: { active: boolean; children: ReactNode }) {
     const [emailDraft, onEmailDraftChange] = useState('');
+    if (!active && emailDraft) onEmailDraftChange('');
     return (
-        <AuthEmailDraftContext.Provider value={{ emailDraft, onEmailDraftChange }}>
+        <AuthEmailDraftContext.Provider value={active ? { emailDraft, onEmailDraftChange } : null}>
             {children}
         </AuthEmailDraftContext.Provider>
     );

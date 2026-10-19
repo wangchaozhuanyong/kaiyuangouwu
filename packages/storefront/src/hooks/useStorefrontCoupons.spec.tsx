@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
 import { enabledMarkets } from '../i18n';
+import { ShopApiGraphQlError } from '../shop-api-errors';
 import {
     ActiveCustomer,
     Order,
@@ -130,8 +131,97 @@ describe('storefront coupon coordination', () => {
         expect(client.getQueryData(options.couponCampaignsQueryKey)).toEqual([
             { ...campaign, claimed: true, claimable: false },
         ]);
-        expect(options.notify).toHaveBeenCalledWith('优惠券领取成功');
+        expect(options.notify).toHaveBeenCalledExactlyOnceWith('优惠券领取成功');
         expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
+    });
+
+    it('deduplicates overlapping claims before React can disable a button', async () => {
+        let resolve!: (value: StoreCustomerCoupon) => void;
+        api.claimCoupon.mockReturnValue(
+            new Promise<StoreCustomerCoupon>(done => {
+                resolve = done;
+            }),
+        );
+        await render();
+        const first = value.claimCoupon(campaign.id);
+        const second = value.claimCoupon(campaign.id);
+        await vi.waitFor(() => expect(api.claimCoupon).toHaveBeenCalledOnce());
+        resolve(coupon);
+        expect(await first).toBeNull();
+        expect(await second).toBeNull();
+        expect(options.notify).toHaveBeenCalledOnce();
+    });
+
+    it('rechecks an acknowledged claim after lookup failure without another write', async () => {
+        api.myCoupons.mockRejectedValueOnce(new Error('Lookup unavailable'));
+        await render();
+        expect(await value.claimCoupon(campaign.id)).toContain('领取结果待核验');
+        expect(await value.claimCoupon(campaign.id)).toBeNull();
+        expect(api.claimCoupon).toHaveBeenCalledOnce();
+        expect(options.notify).toHaveBeenCalledExactlyOnceWith('优惠券领取成功');
+    });
+
+    it('checks ownership after an unknown transport result and never replays the claim', async () => {
+        api.claimCoupon.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+        api.myCoupons.mockResolvedValueOnce([]);
+        await render();
+        expect(await value.claimCoupon(campaign.id)).toContain('未在当前账号查到');
+        expect(await value.claimCoupon(campaign.id)).toBeNull();
+        expect(api.claimCoupon).toHaveBeenCalledOnce();
+        expect(api.myCoupons).toHaveBeenCalledTimes(2);
+    });
+
+    it('refreshes eligibility after a definite sold-out rejection without claiming again', async () => {
+        api.claimCoupon.mockRejectedValue(new ShopApiGraphQlError(['优惠券已领完'], 200, 'USER_INPUT_ERROR'));
+        const invalidate = vi.spyOn(client, 'invalidateQueries');
+        await render();
+        expect(await value.claimCoupon(campaign.id)).not.toBeNull();
+        expect(invalidate).toHaveBeenCalledWith({ queryKey: options.couponCampaignsQueryKey });
+        expect(api.myCoupons).not.toHaveBeenCalled();
+        expect(options.notify).not.toHaveBeenCalled();
+    });
+
+    it.each(['customer', 'store', 'currency', 'unmount'] as const)(
+        'ignores late claim responses after changing %s',
+        async change => {
+            let resolve!: (value: StoreCustomerCoupon) => void;
+            api.claimCoupon.mockReturnValue(
+                new Promise<StoreCustomerCoupon>(done => {
+                    resolve = done;
+                }),
+            );
+            await render();
+            const pending = value.claimCoupon(campaign.id);
+            await vi.waitFor(() => expect(api.claimCoupon).toHaveBeenCalledOnce());
+            const originalCampaignKey = options.couponCampaignsQueryKey;
+            if (change === 'unmount') await remount();
+            else {
+                if (change === 'customer') options.customer = { id: 'buyer-b' } as ActiveCustomer;
+                if (change === 'store') options.market = { ...options.market, code: 'other-store' };
+                if (change === 'currency')
+                    options.market = {
+                        ...options.market,
+                        currencyCode: options.market.currencyCode === 'CNY' ? 'MYR' : 'CNY',
+                    };
+                await render();
+            }
+            resolve(coupon);
+            expect(await pending).toBeNull();
+            expect(client.getQueryData(originalCampaignKey)).toEqual([campaign]);
+            expect(options.notify).not.toHaveBeenCalled();
+            expect(options.setCartLoading).not.toHaveBeenCalledWith(false);
+        },
+    );
+
+    it('keeps an acknowledged claim distinct from a failed refresh', async () => {
+        await render();
+        vi.spyOn(client, 'invalidateQueries').mockRejectedValue(new Error('Refresh unavailable'));
+        expect(await value.claimCoupon(campaign.id)).toContain('优惠券已领取，但数据更新暂未完成');
+        expect(client.getQueryData(options.couponCampaignsQueryKey)).toEqual([
+            { ...campaign, claimed: true, claimable: false },
+        ]);
+        expect(api.claimCoupon).toHaveBeenCalledOnce();
+        expect(options.notify).not.toHaveBeenCalled();
     });
 
     it('reports a missing owned coupon without marking the campaign as claimed', async () => {
@@ -147,7 +237,7 @@ describe('storefront coupon coordination', () => {
         api.myCoupons.mockRejectedValue(new Error('Lookup unavailable'));
         client.setQueryData(options.customerCouponQueryKey, [coupon]);
         await render();
-        expect(await value.claimCoupon(campaign.id)).toContain('权益核验失败');
+        expect(await value.claimCoupon(campaign.id)).toContain('领取结果待核验');
         expect(client.getQueryData(options.customerCouponQueryKey)).toEqual([coupon]);
         expect(client.getQueryData(options.couponCampaignsQueryKey)).toEqual([campaign]);
         expect(options.notify).not.toHaveBeenCalled();

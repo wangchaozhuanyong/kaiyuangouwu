@@ -109,6 +109,33 @@ describe('on-demand authentication completion', () => {
         await completeStorefrontAuthentication(context, { name: 'login' });
         expect(context.navigate).toHaveBeenCalledExactlyOnceWith({ name: 'account' }, true);
     });
+    it.each([undefined, 'checkout', 'purchase'] as const)(
+        'keeps a confirmed login when cart loading fails (returnTo: %s)',
+        async returnTo => {
+            const context = completionDependencies();
+            context.api.cart.mockRejectedValue(new Error('Fixture cart read failed'));
+            await completeStorefrontAuthentication(context, { name: 'login', returnTo, id: 'variant' });
+            expect(context.setCustomer).toHaveBeenCalledExactlyOnceWith(context.customer);
+            expect(context.setCart).not.toHaveBeenCalled();
+            expect(context.setCheckoutOrder).toHaveBeenCalledExactlyOnceWith(null);
+            expect(context.setCartError).toHaveBeenCalledWith('已登录，购物车暂时无法加载，请稍后重试。');
+            expect(context.navigate).toHaveBeenCalledExactlyOnceWith(
+                { name: returnTo ? 'cart' : 'account' },
+                true,
+            );
+            expect(context.api.beginCheckout).not.toHaveBeenCalled();
+            expect(context.cartController.execute).not.toHaveBeenCalled();
+        },
+    );
+    it('does not navigate on a failed customer confirmation even when cart reads succeed', async () => {
+        const context = completionDependencies();
+        context.api.activeCustomer.mockRejectedValue(new Error('Fixture identity read failed'));
+        await expect(completeStorefrontAuthentication(context, { name: 'login' })).rejects.toThrow(
+            'Fixture identity read failed',
+        );
+        expect(context.setCustomer).not.toHaveBeenCalled();
+        expect(context.navigate).not.toHaveBeenCalled();
+    });
 
     it('continues the existing Buy now flow using the selected variant and quantity', async () => {
         const context = completionDependencies();

@@ -2357,23 +2357,6 @@
     content: none;
 }
 
-.google-auth-button > div:first-child {
-    width: 100%;
-    min-height: 44px;
-    display: flex;
-    justify-content: center;
-}
-
-.google-auth-button-disabled {
-    opacity: 0.62;
-    pointer-events: none;
-}
-
-.google-auth-button .form-error {
-    margin-top: 10px;
-    text-align: center;
-}
-
 .auth-methods-unavailable {
     margin: 8px 0 0;
     padding: 14px;

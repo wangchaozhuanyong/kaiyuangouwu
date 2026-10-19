@@ -399,7 +399,7 @@ export function GptRechargePage({
                     <div className="gpt-recharge-quick-links">
                         <button
                             type="button"
-                            className="secondary-action"
+                            className="primary-action"
                             onClick={() => productsCollection && onViewProducts?.(productsCollection.id)}
                             disabled={!canViewProducts}
                             title={
@@ -413,11 +413,10 @@ export function GptRechargePage({
                         >
                             <ShoppingBag size={17} aria-hidden="true" />
                             {t('查看商品', 'View products')}
-                            <ChevronRight size={15} aria-hidden="true" />
                         </button>
                         <button
                             type="button"
-                            className="tertiary-action"
+                            className="primary-action"
                             onClick={onContactSupport}
                             disabled={!onContactSupport}
                         >

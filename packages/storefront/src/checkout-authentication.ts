@@ -48,12 +48,33 @@ export async function completeStorefrontAuthentication(
     } = context;
     cartController.reset();
     clearPrivateQueryCache();
-    const [nextCustomer, nextCart] = await Promise.all([api.activeCustomer(), api.cart()]);
+    const [customerResult, cartResult] = await Promise.allSettled([api.activeCustomer(), api.cart()]);
     if (!isCurrent()) return;
+    if (customerResult.status === 'rejected') throw customerResult.reason;
+    const nextCustomer = customerResult.value;
     if (!nextCustomer) {
         throw new Error(isZh ? '登录状态尚未确认，请重新登录' : 'Sign-in could not be confirmed. Try again.');
     }
     setCustomer(nextCustomer);
+    if (cartResult.status === 'rejected') {
+        const message = isZh
+            ? '已登录，购物车暂时无法加载，请稍后重试。'
+            : 'Signed in. Your cart could not load. Please try again shortly.';
+        setCartError(message);
+        setCheckoutOrder(null);
+        notify(message);
+        navigate(
+            destination ??
+                (intent.returnTo
+                    ? { name: 'cart' }
+                    : isPublicStorefrontRoute(intent.name)
+                      ? { name: 'account' }
+                      : intent),
+            true,
+        );
+        return;
+    }
+    const nextCart = cartResult.value;
     setCart(nextCart);
     setCartError(null);
     setCheckoutOrder(nextCart.checkoutOrder);

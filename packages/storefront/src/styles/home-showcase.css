@@ -3529,6 +3529,24 @@ html[lang='en'] .primary-category-image {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
+.category-navigation-viewport {
+    display: contents;
+}
+
+@media (max-width: 1023px) {
+    .category-navigation-viewport {
+        display: block;
+        flex-shrink: 0;
+        overflow: clip;
+    }
+
+    .category-navigation-viewport.is-menu-open {
+        position: relative;
+        z-index: 10;
+        overflow: visible;
+    }
+}
+
 .category-navigation-shell > .category-topbar {
     position: relative;
     z-index: 1;

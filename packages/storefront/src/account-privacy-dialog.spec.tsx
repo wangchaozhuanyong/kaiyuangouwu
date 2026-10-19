@@ -73,14 +73,16 @@ afterEach(() => {
 it.each(['export', 'closure'] as const)(
     'requires a separate confirmation after Google identity for %s',
     async action => {
-        let credentialCallback: ((response: { credential?: string }) => void) | undefined;
+        let credentialCallback: ((response: { credential?: string; state?: string }) => void) | undefined;
+        let state = '';
         window.google = {
             accounts: {
                 id: {
                     initialize: options => {
                         credentialCallback = options.callback;
                     },
-                    renderButton: parent => {
+                    renderButton: (parent, options) => {
+                        state = options.state;
                         parent.append(document.createElement('button'));
                     },
                 },
@@ -114,7 +116,7 @@ it.each(['export', 'closure'] as const)(
         expect(dialog.querySelector('input[type="password"]')).toBeNull();
         expect(confirm.disabled).toBe(true);
         await act(async () => {
-            credentialCallback?.({ credential: 'fixture-signed-proof' });
+            credentialCallback?.({ credential: 'fixture-signed-proof', state });
             await Promise.resolve();
         });
         expect(callback).not.toHaveBeenCalled();
