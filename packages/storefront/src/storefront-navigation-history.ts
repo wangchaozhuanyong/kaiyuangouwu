@@ -9,7 +9,12 @@ import {
 } from './storefront-router';
 
 type NavigationRouter = Pick<AnyRouter, 'navigate'> & { history: RouterHistory };
-type Entry = { href: string; page: string };
+type Entry = {
+    href: string;
+    page: string;
+    key?: string;
+    categoryNavigation?: { scope: string; collapsed: boolean };
+};
 type NavigationHistory = { entries: Map<number, Entry>; pending?: object };
 
 const histories = new WeakMap<RouterHistory, NavigationHistory>();
@@ -25,10 +30,10 @@ function entryFor(history: RouterHistory): Entry {
         location.pathname,
         Object.fromEntries(new URLSearchParams(location.search)),
     );
-    return { href: routeKey(route), page: routePageIdentity(route) };
+    return { href: routeKey(route), page: routePageIdentity(route), key: location.state.__TSR_key };
 }
 
-function navigationHistory(router: NavigationRouter): NavigationHistory {
+function navigationHistory(router: Pick<NavigationRouter, 'history'>): NavigationHistory {
     const history = router.history;
     const existing = histories.get(history);
     if (existing) return existing;
@@ -43,7 +48,11 @@ function navigationHistory(router: NavigationRouter): NavigationHistory {
                 if (recorded >= index) tracker.entries.delete(recorded);
             }
         }
-        tracker.entries.set(index, entryFor(history));
+        const previous = tracker.entries.get(index);
+        const entry = entryFor(history);
+        if (previous?.key === entry.key && previous?.href === entry.href)
+            entry.categoryNavigation = previous.categoryNavigation;
+        tracker.entries.set(index, entry);
         tracker.pending = undefined;
     });
     return tracker;
@@ -53,6 +62,13 @@ function navigationHistory(router: NavigationRouter): NavigationHistory {
 // Only entries observed in this document can be used as a trusted return path.
 export function registerStorefrontNavigationHistory(router: NavigationRouter): void {
     navigationHistory(router);
+}
+
+/** UI-only history metadata never replaces browser state or starts a router navigation. */
+export function getStorefrontNavigationEntryPresentation(
+    history: RouterHistory,
+): Pick<Entry, 'categoryNavigation'> | undefined {
+    return navigationHistory({ history }).entries.get(history.location.state.__TSR_index);
 }
 
 function returnToIndex(router: NavigationRouter, tracker: NavigationHistory, index: number): void {

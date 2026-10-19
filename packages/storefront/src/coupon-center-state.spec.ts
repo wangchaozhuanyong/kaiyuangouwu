@@ -52,6 +52,19 @@ const coupon = (status: StoreCustomerCoupon['status']): StoreCustomerCoupon => (
 });
 
 describe('coupon center state', () => {
+    it('excludes exhausted and out-of-window offers even if a stale response says claimable', () => {
+        const now = Date.parse('2026-10-19T00:00:00Z');
+        const offer = campaign(false, true);
+        const variants = [
+            offer,
+            { ...offer, remainingIssueCount: 0 },
+            { ...offer, startsAt: '2026-10-20T00:00:00Z' },
+            { ...offer, claimStartsAt: '2026-10-20T00:00:00Z' },
+            { ...offer, endsAt: '2026-10-19T00:00:00Z' },
+            { ...offer, claimEndsAt: '2026-10-19T00:00:00Z' },
+        ];
+        expect(claimableCouponCampaigns(variants, now)).toEqual([offer]);
+    });
     it('separates unclaimed activities from already claimed or sold-out activities', () => {
         const campaigns = [campaign(false, true), campaign(true, true), campaign(false, false)];
         expect(claimableCouponCampaigns(campaigns)).toHaveLength(1);

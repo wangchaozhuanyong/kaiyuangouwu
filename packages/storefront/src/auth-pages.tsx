@@ -212,25 +212,11 @@ function isRegisteredEmailConflict(error: unknown): boolean {
     return error instanceof ShopApiError && error.errorCode === 'EMAIL_ADDRESS_CONFLICT_ERROR';
 }
 
-function googleAuthErrorMessage(error: unknown, language: StorefrontLanguage): string {
-    if (error instanceof ShopApiError && error.authenticationError === 'STOREFRONT_GOOGLE_AUTH_UNAVAILABLE') {
-        return language === 'zh' ? 'Google 登录尚未配置' : 'Google sign-in is not configured';
-    }
-    if (error instanceof ShopApiError) {
-        if (error.authenticationError === 'STOREFRONT_GOOGLE_CONSENT_REQUIRED')
-            return language === 'zh'
-                ? '首次使用 Google 注册，请先勾选同意条款与隐私政策'
-                : 'To create your account with Google, accept the terms and privacy policy first';
-        if (error.authenticationError === 'STOREFRONT_GOOGLE_EMAIL_VERIFICATION_REQUIRED')
-            return language === 'zh'
-                ? '请使用 Gmail 或 Google Workspace 账号，其他邮箱请使用邮箱注册或登录'
-                : 'Use a Gmail or Google Workspace account, or register or sign in with your email';
-        if (error.authenticationError === 'STOREFRONT_GOOGLE_INVITE_INVALID')
-            return language === 'zh'
-                ? '邀请码无效，请修改或清空后重试'
-                : 'The invitation code is invalid. Change or remove it and try again';
-    }
-    return language === 'zh' ? 'Google 登录失败，请重试' : 'Google sign-in failed. Try again';
+async function authenticateGoogle(
+    options: Parameters<typeof import('./google-authentication').authenticateGoogle>[0],
+) {
+    const module = await import('./google-authentication');
+    return module.authenticateGoogle(options);
 }
 
 function AuthMethodDivider({ language }: { language: StorefrontLanguage }) {
@@ -310,30 +296,33 @@ interface AuthRequestOperation {
 
 /** Each form owns one request; an old scope may finish remotely but cannot update this presentation. */
 function useAuthRequestScope(api: ShopApi, identity = '') {
-    const ownerRef = useRef({ api, identity });
+    const ownerRef = useRef({ api, identity, active: true });
     if (ownerRef.current.api !== api || ownerRef.current.identity !== identity)
-        ownerRef.current = { api, identity };
+        ownerRef.current = { api, identity, active: true };
     const owner = ownerRef.current;
     const pending = useRef<{ owner: typeof owner; controller: AbortController } | null>(null);
-    useEffect(
-        () => () => {
+    useEffect(() => {
+        owner.active = true;
+        return () => {
+            owner.active = false;
             if (pending.current?.owner === owner) {
                 pending.current.controller.abort();
                 pending.current = null;
             }
-        },
-        [owner],
-    );
+        };
+    }, [owner]);
     return {
         owner,
         begin(): AuthRequestOperation | null {
+            if (!owner.active || ownerRef.current !== owner) return null;
             if (pending.current?.owner === owner) return null;
             pending.current?.controller.abort();
             const request = { owner, controller: new AbortController() };
             pending.current = request;
             return {
                 signal: request.controller.signal,
-                isCurrent: () => ownerRef.current === owner && !request.controller.signal.aborted,
+                isCurrent: () =>
+                    owner.active && ownerRef.current === owner && !request.controller.signal.aborted,
                 finish: () => {
                     if (pending.current === request) pending.current = null;
                 },
@@ -619,35 +608,19 @@ export function LoginPage({
         }
     };
 
-    const authenticateWithGoogle = async (credential: string) => {
-        setSubmitting(true);
-        setError('');
-        try {
-            const captured = captureReferralAttribution();
-            const program = captured ? await api.referralProgram() : null;
-            const attribution =
-                program && isReferralClientFeatureEnabled(program)
-                    ? attributionWithinWindow(captured, program.attributionWindowDays)
-                    : null;
-            const result = await googleChallenge.execute('LOGIN', 'oauth:google', proof =>
-                api.authenticateWithGoogle(
-                    credential,
-                    registrationConsent(registrationConsentAccepted, language),
-                    {
-                        rememberMe,
-                        inviteCode: attribution?.code,
-                        referralSource: attribution?.source,
-                        ...(proof ? { proof } : {}),
-                    },
-                ),
-            );
-            if (result.executed) await onSuccess();
-        } catch (requestError) {
-            throw new Error(googleAuthErrorMessage(requestError, language));
-        } finally {
-            setSubmitting(false);
-        }
-    };
+    const authenticateWithGoogle = (credential: string) =>
+        authenticateGoogle({
+            api,
+            credential,
+            language,
+            requestScope,
+            challenge: googleChallenge,
+            onSuccess,
+            accepted: registrationConsentAccepted,
+            setSubmitting,
+            setError,
+            options: { rememberMe },
+        });
 
     const googleClientId = authSettings.googleEnabled ? authSettings.googleClientId : null;
     const googleAvailable = Boolean(googleClientId);
@@ -803,6 +776,7 @@ export function LoginPage({
                             />
                             <GoogleAuthButton
                                 clientId={googleClientId}
+                                scope={api}
                                 language={language}
                                 disabled={submitting}
                                 onCredential={authenticateWithGoogle}
@@ -978,42 +952,25 @@ export function RegisterPage({
         }
     };
 
-    const authenticateWithGoogle = async (credential: string) => {
-        if (!registrationConsentAccepted) {
-            throw new Error(
-                isZh ? '请先同意使用条款并确认隐私政策' : 'Accept the terms and privacy policy first',
-            );
-        }
-        setSubmitting(true);
-        setError('');
-        try {
-            // Resolve URL attribution even if the initial program request is still loading.
-            const captured = !referralEnabled ? captureReferralAttribution() : null;
-            const program = captured ? await api.referralProgram() : null;
-            const attribution =
-                program && isReferralClientFeatureEnabled(program)
-                    ? attributionWithinWindow(captured, program.attributionWindowDays)
-                    : null;
-            const result = await googleChallenge.execute('LOGIN', 'oauth:google', proof =>
-                api.authenticateWithGoogle(
-                    credential,
-                    registrationConsent(registrationConsentAccepted, language),
-                    {
-                        inviteCode: referralEnabled
-                            ? normalizeReferralCode(inviteCode) || undefined
-                            : attribution?.code,
-                        referralSource: referralEnabled ? inviteSource : attribution?.source,
-                        ...(proof ? { proof } : {}),
-                    },
-                ),
-            );
-            if (result.executed) await onSuccess?.();
-        } catch (requestError) {
-            throw new Error(googleAuthErrorMessage(requestError, language));
-        } finally {
-            setSubmitting(false);
-        }
-    };
+    const authenticateWithGoogle = (credential: string) =>
+        authenticateGoogle({
+            api,
+            credential,
+            language,
+            requestScope,
+            challenge: googleChallenge,
+            onSuccess,
+            accepted: registrationConsentAccepted,
+            setSubmitting,
+            setError,
+            requireConsent: true,
+            referral: referralEnabled
+                ? {
+                      inviteCode: normalizeReferralCode(inviteCode) || undefined,
+                      referralSource: inviteSource,
+                  }
+                : undefined,
+        });
 
     const invitationControl = referralEnabled ? (
         <details
@@ -1211,7 +1168,7 @@ export function RegisterPage({
                                           : 'Set your sign-in password using the email verification link'}
                                 </small>
                             )}
-                            {invitationControl}
+                            <div className="auth-invitation-slot">{invitationControl}</div>
                             {error && !existingAccount && (
                                 <small className="form-error" role="alert">
                                     {error}
@@ -1241,7 +1198,9 @@ export function RegisterPage({
                             />
                         </form>
                     ) : null}
-                    {!authSettings.emailPasswordEnabled && googleAvailable && invitationControl}
+                    {!authSettings.emailPasswordEnabled && googleAvailable && (
+                        <div className="auth-invitation-slot">{invitationControl}</div>
+                    )}
                     {!authSettings.emailPasswordEnabled && googleAvailable && (
                         <RegistrationConsentControl
                             accepted={registrationConsentAccepted}
@@ -1263,8 +1222,16 @@ export function RegisterPage({
                             />
                             <GoogleAuthButton
                                 clientId={googleClientId}
+                                scope={api}
                                 language={language}
-                                disabled={submitting}
+                                disabled={submitting || !registrationConsentAccepted}
+                                disabledReason={
+                                    !registrationConsentAccepted
+                                        ? isZh
+                                            ? '请先勾选同意条款与隐私政策，再使用 Google 继续'
+                                            : 'Accept the terms and privacy policy above to continue with Google'
+                                        : undefined
+                                }
                                 onCredential={authenticateWithGoogle}
                             />
                         </>

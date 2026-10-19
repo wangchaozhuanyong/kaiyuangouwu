@@ -14,6 +14,36 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
 }));
 
 describe('customer query boundaries', () => {
+    it('keeps a verified owned coupon hidden even if the activity refresh is stale', () => {
+        customer = { id: 'buyer-a' } as ActiveCustomer;
+        mocks.useQuery.mockImplementation(options => ({
+            data: options.queryKey.includes('coupon-campaigns')
+                ? [{ id: 'offer-a', claimed: false, claimable: true }]
+                : options.queryKey.at(-1) === 'coupons'
+                  ? [{ id: 'owned-a', campaignId: 'offer-a' }]
+                  : undefined,
+            isPending: false,
+            isError: false,
+            isPaused: false,
+        }));
+        const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
+        expect(result.activeCoupons).toEqual([{ id: 'offer-a', claimed: true, claimable: false }]);
+    });
+    it.each([undefined, null, { id: 'buyer-a' } as ActiveCustomer])(
+        'does not expose preloaded offers until identity is resolved: %s',
+        identity => {
+            customer = identity;
+            const offers = [{ id: 'campaign-a', claimed: false, claimable: true }];
+            mocks.useQuery.mockImplementation(options => ({
+                data: options.queryKey.includes('coupon-campaigns') ? offers : undefined,
+                isPending: false,
+                isError: false,
+                isPaused: false,
+            }));
+            const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
+            expect(result.activeCoupons).toEqual(identity === undefined ? [] : offers);
+        },
+    );
     let customer: ActiveCustomer | null | undefined;
     let identityError: Error | null;
     beforeEach(() => {
@@ -28,8 +58,16 @@ describe('customer query boundaries', () => {
             error: null,
         }));
     });
-    const read = (currencyCode = 'CNY', storefrontContextResolved = true) =>
+    const read = (
+        currencyCode = 'CNY',
+        storefrontContextResolved = true,
+        options: Pick<
+            Parameters<typeof useStorefrontCustomerData>[0],
+            'activeRoute' | 'homepageCoupons'
+        > = {},
+    ) =>
         useStorefrontCustomerData({
+            ...options,
             api: {} as ShopApi,
             market: { ...enabledMarkets[0], currencyCode },
             language: 'zh',
@@ -65,6 +103,41 @@ describe('customer query boundaries', () => {
         expect(guestOptions.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(false);
         expect(guestOptions.find(input => input.queryKey.at(-1) === 'cart').enabled).toBe(false);
         expect(guestOptions.find(input => input.queryKey.at(-1) === 'coupons').enabled).toBe(false);
+    });
+
+    it.each([undefined, null])(
+        'loads homepage offers with identity %s without reading private coupons',
+        identity => {
+            customer = identity;
+            const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
+            const options = mocks.useQuery.mock.calls.map(([input]) => input);
+            expect(options.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(true);
+            expect(options.find(input => input.queryKey.at(-1) === 'coupons').enabled).toBe(false);
+            expect(options.find(input => input.queryKey.includes('coupon-usage-records')).enabled).toBe(
+                false,
+            );
+            expect(options.find(input => input.queryKey.at(-1) === 'cart').enabled).toBe(false);
+            expect(result.couponCampaignsLoading).toBe(true);
+        },
+    );
+
+    it('does not request homepage offers before store resolution or without a published coupon module', () => {
+        for (const [resolved, homepageCoupons] of [
+            [false, true],
+            [true, false],
+        ]) {
+            mocks.useQuery.mockClear();
+            read('CNY', resolved, { activeRoute: 'home', homepageCoupons });
+            const options = mocks.useQuery.mock.calls.map(([input]) => input);
+            expect(options.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(false);
+        }
+    });
+
+    it('does not turn an identity failure into a public offer failure', () => {
+        identityError = new Error('Account unavailable');
+        const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
+        expect(result.couponCampaignsError).toBe('');
+        expect(result.couponCampaignsLoading).toBe(true);
     });
 
     it('isolates coupon cache keys when the account or settlement currency changes', () => {

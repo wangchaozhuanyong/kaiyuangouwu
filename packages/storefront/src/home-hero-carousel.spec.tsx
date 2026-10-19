@@ -98,6 +98,24 @@ const baseProps: HomePageProps = {
     onRetry: vi.fn(),
 };
 
+const homepageOffer: HomePageProps['coupons'][number] = {
+    id: 'offer-a',
+    name: '本地优惠 A',
+    kind: 'ORDER_FIXED',
+    currencyCode: 'MYR',
+    minimumSpend: 0,
+    discountAmount: 500,
+    discountRate: null,
+    startsAt: null,
+    endsAt: null,
+    claimStartsAt: null,
+    claimEndsAt: null,
+    validityDays: null,
+    remainingIssueCount: 10,
+    claimed: false,
+    claimable: true,
+};
+
 // Exercise actual React pointer handlers rather than only the swipe threshold helper.
 describe('HomePage carousel pointer interactions', () => {
     it('keeps client-rendered home CSS before the common desktop overrides', async () => {
@@ -782,24 +800,75 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.hero-media-error')).toBeNull();
         expect(target).not.toHaveBeenCalled();
     });
-    it('keeps the published coupon region mounted across identity, empty and failed reads', async () => {
+    it('never mounts a coupon wrapper for loading, empty or failed reads', async () => {
         const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         const blocks = [...heroes, offers];
-        await render(false, blocks);
-        const region = requiredElement(host, '.coupon-hub-section');
-        expect(region.querySelector('[data-coupon-state="loading"]')).not.toBeNull();
-        for (const [props, state] of [
-            [{ couponCustomerStatus: 'guest' }, 'guest'],
-            [{ couponCustomerStatus: 'signed-in', couponCampaignsLoading: true }, 'loading'],
-            [{ couponCustomerStatus: 'signed-in' }, 'empty'],
-            [{ couponCustomerStatus: 'signed-in', couponCampaignsError: 'Local read failed' }, 'error'],
+        await render(false, blocks, 'en', { couponCampaignsLoading: true });
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        for (const props of [
+            {},
+            { couponCampaignsLoading: true },
+            { couponCampaignsError: 'Local read failed' },
         ] as const) {
             await render(false, blocks, 'en', props);
-            expect(requiredElement(host, '.coupon-hub-section')).toBe(region);
-            expect(region.querySelector(`[data-coupon-state="${state}"]`)).not.toBeNull();
-            expect(region.querySelector('.page-skeleton')).toBeNull();
+            expect(host.querySelector('.coupon-hub-section')).toBeNull();
         }
         await render(false, [...heroes, { ...offers, enabled: false }]);
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+    });
+
+    it('removes each claimed card and its wrapper after the last claim, then accepts a new offer', async () => {
+        const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        const second = { ...homepageOffer, id: 'offer-b', name: '本地优惠 B' };
+        const blocks = [...heroes, block];
+        await render(false, blocks, 'zh', { coupons: [homepageOffer, second] });
+        const wrapper = requiredElement(host, '.coupon-hub-section').parentElement;
+        await render(false, blocks, 'zh', {
+            coupons: [{ ...homepageOffer, claimed: true, claimable: false }, second],
+        });
+        expect(host.querySelector('[aria-label="领取 本地优惠 A"]')).toBeNull();
+        expect(requiredElement(host, '.coupon-hub-section').parentElement).toBe(wrapper);
+        await render(false, blocks, 'zh', {
+            coupons: [homepageOffer, second].map(coupon => ({ ...coupon, claimed: true, claimable: false })),
+        });
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        expect(wrapper?.isConnected).toBe(false);
+        await render(false, blocks, 'zh', { coupons: [second] });
+        expect(host.querySelector('[aria-label="领取 本地优惠 B"]')).not.toBeNull();
+    });
+
+    it('blocks rapid duplicate clicks and leaves success notifications to the shared claim flow', async () => {
+        const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        let resolve!: (error: string | null) => void;
+        const claim = vi.fn(
+            () =>
+                new Promise<string | null>(done => {
+                    resolve = done;
+                }),
+        );
+        const toast = vi.fn();
+        await render(false, [...heroes, block], 'zh', {
+            coupons: [homepageOffer],
+            onClaimCoupon: claim,
+            onToast: toast,
+        });
+        const button = requiredElement<HTMLButtonElement>(host, '[aria-label="领取 本地优惠 A"]');
+        await interact(() => {
+            button.click();
+            button.click();
+        });
+        expect(claim).toHaveBeenCalledExactlyOnceWith(homepageOffer.id);
+        expect(button.disabled).toBe(true);
+        await interact(() => resolve(null));
+        expect(toast).not.toHaveBeenCalled();
+    });
+
+    it('collapses an expired offer at its eligibility boundary without another request', async () => {
+        const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        const offer = { ...homepageOffer, claimEndsAt: new Date(Date.now() + 1000).toISOString() };
+        await render(false, [...heroes, block], 'zh', { coupons: [offer] });
+        expect(host.querySelector('.coupon-hub-section')).not.toBeNull();
+        await advance(1000);
         expect(host.querySelector('.coupon-hub-section')).toBeNull();
     });
     it('honors reduced motion while allowing deliberate manual navigation', async () => {

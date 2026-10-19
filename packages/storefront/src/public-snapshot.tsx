@@ -337,7 +337,9 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
                     ),
                     configuredBlockTypes: page.content?.settings?.configuredBlockTypes ?? [],
                     coupons: [],
-                    couponCampaignsLoading: false,
+                    couponCampaignsLoading: contentBlocks.some(
+                        block => block.type === 'COUPONS' && block.enabled,
+                    ),
                     couponCampaignsError: '',
                     flashSales: (page.flashSales as StorefrontFlashSale[]) ?? [],
                     systemAnnouncements: page.content?.systemAnnouncements ?? [],

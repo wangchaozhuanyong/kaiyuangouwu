@@ -39,6 +39,7 @@ import { useStandaloneAdminPage } from '../../hooks/use-standalone-admin-page';
 import { refreshAfterAdminWrite } from '../../utils/admin-write-readback';
 import { toUserFacingError } from '../../utils/user-facing-error';
 import { SeoDocumentRecordEditor } from './SeoDocumentRecordEditor';
+import { SeoRecordPicker } from './SeoRecordPicker';
 import {
     lines,
     normalizeSeoDraft,
@@ -315,7 +316,13 @@ export function StorefrontSeoModule() {
     const settings = (state?.settings.draft ?? defaultStorefrontSeoSettings()) as StorefrontSeoSettings;
     const evidence = seoEvidenceSummary(settings);
     return (
-        <div className="space-y-5 p-4 sm:p-6" data-storefront-seo-workspace>
+        <div
+            className="custom-scrollbar h-full min-h-0 space-y-5 overflow-y-auto p-4 sm:p-6"
+            data-storefront-seo-workspace
+            role="region"
+            aria-label={page?.title ?? 'SEO / GEO'}
+            tabIndex={0}
+        >
             <header className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold">{page?.title ?? 'SEO / GEO'}</h1>
@@ -434,31 +441,18 @@ export function StorefrontSeoModule() {
                         </div>
                     )}
                     {isDocument && (
-                        <div className="flex flex-wrap gap-2">
-                            {state.documents
-                                .filter(item =>
-                                    section === 'geo'
-                                        ? item.targetType === 'ARTICLE'
-                                        : item.targetType !== 'ARTICLE',
-                                )
-                                .map(item => (
-                                    <AdminButton
-                                        key={seoIdentityKey(item as StorefrontSeoIdentity)}
-                                        className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium disabled:opacity-50 text-slate-600"
-                                        onClick={() =>
-                                            select({
-                                                targetType: item.targetType,
-                                                targetId: item.targetId,
-                                                languageCode: item.languageCode,
-                                            })
-                                        }
-                                    >
-                                        {SEO_TARGET_LABELS[item.targetType]} · {item.targetId} ·{' '}
-                                        {item.languageCode}
-                                        {item.published ? ' · 已发布' : ' · 草稿'}
-                                    </AdminButton>
-                                ))}
-                        </div>
+                        <SeoRecordPicker
+                            key={`${getAdminQueryScope()}:${section}:${targetType}:${languageCode}`}
+                            records={state.documents}
+                            identity={identity}
+                            onSelect={item =>
+                                select({
+                                    targetType: item.targetType,
+                                    targetId: item.targetId,
+                                    languageCode: item.languageCode,
+                                })
+                            }
+                        />
                     )}
                     {isDocument && !entityReadable && (
                         <div role="alert" className="admin-page-status" data-failed>

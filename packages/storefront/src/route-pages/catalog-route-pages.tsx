@@ -74,12 +74,6 @@ export function HomeRoutePage() {
                 coupons: runtime.activeCoupons,
                 couponCampaignsLoading: runtime.couponCampaignsLoading,
                 couponCampaignsError: runtime.couponCampaignsError,
-                couponCustomerStatus:
-                    runtime.customerQuery.data === undefined
-                        ? 'pending'
-                        : runtime.customerQuery.data
-                          ? 'signed-in'
-                          : 'guest',
                 flashSales: runtime.activeFlashSales,
                 systemAnnouncements: runtime.systemAnnouncements,
                 bestSellerProducts: runtime.bestSellerProducts,
@@ -121,14 +115,8 @@ export function HomeRoutePage() {
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,
-                onCouponCampaignsRetry: () => {
-                    if (runtime.customerLoadState !== 'ready') {
-                        // Recover the account first; its resolved customer key enables the coupon read.
-                        void runtime.retryAccount();
-                    } else {
-                        void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false });
-                    }
-                },
+                onCouponCampaignsRetry: () =>
+                    void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false }),
                 onContentTarget: runtime.openContentTarget,
                 onContentRetry: () => void runtime.contentQuery?.refetch?.({ cancelRefetch: false }),
                 onRetry: () => void runtime.refetchStorefront(),

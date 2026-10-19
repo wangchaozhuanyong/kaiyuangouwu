@@ -36,18 +36,24 @@
 }
 .gpt-recharge-quick-links {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: var(--space-12);
 }
-.gpt-recharge-quick-links button {
+.gpt-recharge-page .gpt-recharge-quick-links button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: var(--space-8);
+    min-height: 48px;
+    min-width: 0;
+    padding: var(--space-12) var(--space-16);
+    border: 0;
+    font-size: var(--type-action-size);
+    line-height: var(--type-action-leading);
+    white-space: nowrap;
 }
-.gpt-recharge-quick-links button:disabled {
+.gpt-recharge-page .gpt-recharge-quick-links button:disabled {
     color: var(--muted);
-    border-color: var(--line);
     cursor: not-allowed;
 }
 .gpt-recharge-surface {
@@ -456,8 +462,9 @@
         padding: var(--space-8) var(--space-4);
         text-align: center;
     }
-    .gpt-recharge-quick-links > button {
-        flex: 1;
+    .gpt-recharge-page .gpt-recharge-quick-links > button {
+        flex: 1 1 0;
+        padding-inline: var(--space-8);
     }
     .gpt-recharge-tabs {
         gap: 0;

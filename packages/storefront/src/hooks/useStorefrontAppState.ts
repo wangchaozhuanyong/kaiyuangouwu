@@ -229,7 +229,7 @@ export function useStorefrontAppState() {
         ...queryContext,
         configQuery,
         activeRoute: displayedRoute.name,
-        homepageCoupons: contentBlocks.some(block => block.type === 'COUPONS'),
+        homepageCoupons: contentBlocks.some(block => block.type === 'COUPONS' && block.enabled),
         homepageRecommendations: contentBlocks.some(block => block.type === 'RECOMMENDATIONS'),
     });
 
@@ -422,7 +422,8 @@ export function useStorefrontAppState() {
                 query.queryKey[0] === 'storefront' &&
                 typeof query.queryKey[1] === 'string' &&
                 query.queryKey[1].startsWith(`${market.code}:`) &&
-                query.queryKey[3] !== 'config',
+                query.queryKey[3] !== 'config' &&
+                query.meta?.persistPublic !== true,
         });
     }, [market.code, queryClient]);
     const invalidateCustomerRouteQueries = useCallback(async () => {

@@ -1,0 +1,41 @@
+.google-auth-button {
+    position: relative;
+}
+
+.google-auth-button > div:first-child {
+    width: 100%;
+    height: 44px;
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.google-auth-loading {
+    position: absolute;
+    inset: 0 0 auto;
+    display: grid;
+    place-items: center;
+    height: 44px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+
+.google-auth-hint {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+
+.google-auth-button-disabled {
+    opacity: 0.62;
+    pointer-events: none;
+}
+
+.google-auth-button .form-error {
+    margin-top: 10px;
+    text-align: center;
+}

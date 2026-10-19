@@ -1,8 +1,12 @@
 import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const output = fileURLToPath(new URL('./artifacts/', import.meta.url));
+const output =
+    path.resolve(
+        process.env.SEO_ADMIN_OUTPUT_DIR ?? fileURLToPath(new URL('./artifacts/', import.meta.url)),
+    ) + path.sep;
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });

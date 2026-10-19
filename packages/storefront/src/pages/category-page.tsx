@@ -22,6 +22,7 @@ import { CatalogFilterSheet } from '../components/common/catalog-filter-sheet';
 import { CategoryPaginationStatus } from '../components/common/category-pagination-status';
 import { DesktopCategoryNavigation } from '../components/common/desktop-category-navigation';
 import { ProductCard } from '../components/common/product-card';
+import { useCategoryNavigationCollapse } from '../hooks/useCategoryNavigationCollapse';
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
@@ -228,6 +229,12 @@ export function CategoryPage() {
         },
     });
     const catalogQuery = pagination.query;
+    const navigationCollapse = useCategoryNavigationCollapse(
+        pagination.resultsRef,
+        JSON.stringify([market.code, market.currencyCode, language, catalogInput]),
+        filterOpen,
+        allCategoriesOpen,
+    );
     const desktopNavigationContext = {
         route: {
             name: 'category',
@@ -348,117 +355,62 @@ export function CategoryPage() {
             aria-label={isZh ? '商品' : 'Products'}
         >
             <CommercePageStyles />
-            <div className="category-navigation-shell">
-                <header className="topbar category-topbar">
-                    <button
-                        className="search-trigger"
-                        type="button"
-                        aria-label={isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'}
-                        onClick={() => navigateTo({ name: 'search' })}
-                    >
-                        <span className="search-trigger-icon" aria-hidden="true">
-                            <Search />
-                        </span>
-                        <span className="search-trigger-placeholder">
-                            {isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'}
-                        </span>
-                    </button>
-                </header>
-
-                <div className="desktop-catalog-header-extras">
-                    <CategoryClientPluginSlot
-                        block={clientPluginBlock}
-                        placement="AFTER_HEADER"
-                        categoryContext={clientPluginCategoryContext}
-                        language={language}
-                        onNavigate={navigateTo}
-                    />
-                </div>
-
-                <section
-                    ref={allCategoriesRef}
-                    className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
-                    aria-label={isZh ? '商品分类切换' : 'Category switcher'}
+            <div
+                className={`category-navigation-viewport${allCategoriesOpen ? ' is-menu-open' : ''}`}
+                ref={navigationCollapse.viewportRef}
+                data-collapsed={navigationCollapse.collapsed || undefined}
+            >
+                <div
+                    className="category-navigation-shell"
+                    ref={navigationCollapse.navigationRef}
+                    inert={navigationCollapse.collapsed || undefined}
+                    aria-hidden={navigationCollapse.collapsed || undefined}
                 >
-                    <div
-                        className="primary-category-strip"
-                        aria-hidden={allCategoriesOpen || undefined}
-                        inert={allCategoriesOpen}
-                    >
-                        <nav
-                            ref={primaryCategoriesRef}
-                            className="primary-categories"
-                            aria-label={isZh ? '一级分类' : 'Main categories'}
-                            onPointerDown={stopPrimaryScroll}
-                            onTouchStart={stopPrimaryScroll}
-                            onWheel={stopPrimaryScroll}
-                        >
-                            {primaryCollections.map((collection, index) => {
-                                const image = primaryCollectionImage(collection);
-                                return (
-                                    <button
-                                        type="button"
-                                        key={collection.id}
-                                        title={collection.name}
-                                        aria-label={collection.name}
-                                        className={
-                                            collection.id === activeCollectionId ? 'is-active' : undefined
-                                        }
-                                        aria-pressed={collection.id === activeCollectionId}
-                                        onClick={() => {
-                                            centerClickedCategory(collection.id, index);
-                                            onCollectionChange(
-                                                collection.id,
-                                                collection.children?.[0]?.id ?? collection.id,
-                                            );
-                                        }}
-                                    >
-                                        <span className="primary-category-image">
-                                            {image ? (
-                                                <SafeImage
-                                                    src={image}
-                                                    alt=""
-                                                    imageKind="thumbnail"
-                                                    sizes={STOREFRONT_IMAGE_SIZES.categoryNavigation}
-                                                    loading={index < 6 ? 'eager' : 'lazy'}
-                                                    showFallbackIcon={false}
-                                                    errorFallback={<LayoutGrid aria-hidden="true" />}
-                                                />
-                                            ) : (
-                                                <span className="primary-category-placeholder">
-                                                    <LayoutGrid aria-hidden="true" />
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span className="primary-category-label">{collection.name}</span>
-                                    </button>
-                                );
-                            })}
-                        </nav>
+                    <header className="topbar category-topbar">
                         <button
+                            className="search-trigger"
                             type="button"
-                            className="primary-categories-all"
-                            ref={allCategoriesTriggerRef}
-                            aria-expanded={allCategoriesOpen}
-                            aria-controls="all-primary-categories"
-                            aria-label={isZh ? '全部分类' : 'All categories'}
-                            onClick={() => setAllCategoriesOpen(open => !open)}
+                            aria-label={
+                                isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'
+                            }
+                            onClick={() => navigateTo({ name: 'search' })}
                         >
-                            <span className="primary-categories-all-label">{isZh ? '全部' : 'All'}</span>
-                            {allCategoriesOpen ? (
-                                <ChevronUp aria-hidden="true" />
-                            ) : (
-                                <ChevronDown aria-hidden="true" />
-                            )}
+                            <span className="search-trigger-icon" aria-hidden="true">
+                                <Search />
+                            </span>
+                            <span className="search-trigger-placeholder">
+                                {isZh ? '搜索商品、品牌或分类' : 'Search products, brands, or categories'}
+                            </span>
                         </button>
+                    </header>
+
+                    <div className="desktop-catalog-header-extras">
+                        <CategoryClientPluginSlot
+                            block={clientPluginBlock}
+                            placement="AFTER_HEADER"
+                            categoryContext={clientPluginCategoryContext}
+                            language={language}
+                            onNavigate={navigateTo}
+                        />
                     </div>
-                    {allCategoriesOpen && (
-                        <div className="all-primary-categories" id="all-primary-categories">
-                            <h2>{isZh ? '全部分类' : 'All categories'}</h2>
+
+                    <section
+                        ref={allCategoriesRef}
+                        className={`primary-category-switcher ${allCategoriesOpen ? 'is-expanded' : ''}`}
+                        aria-label={isZh ? '商品分类切换' : 'Category switcher'}
+                    >
+                        <div
+                            className="primary-category-strip"
+                            aria-hidden={allCategoriesOpen || undefined}
+                            inert={allCategoriesOpen}
+                        >
                             <nav
-                                ref={allCategoriesGridRef}
-                                className="all-primary-category-grid"
-                                aria-label={isZh ? '全部分类' : 'All categories'}
+                                ref={primaryCategoriesRef}
+                                className="primary-categories"
+                                aria-label={isZh ? '一级分类' : 'Main categories'}
+                                onPointerDown={stopPrimaryScroll}
+                                onTouchStart={stopPrimaryScroll}
+                                onWheel={stopPrimaryScroll}
                             >
                                 {primaryCollections.map((collection, index) => {
                                     const image = primaryCollectionImage(collection);
@@ -467,6 +419,7 @@ export function CategoryPage() {
                                             type="button"
                                             key={collection.id}
                                             title={collection.name}
+                                            aria-label={collection.name}
                                             className={
                                                 collection.id === activeCollectionId ? 'is-active' : undefined
                                             }
@@ -477,17 +430,16 @@ export function CategoryPage() {
                                                     collection.id,
                                                     collection.children?.[0]?.id ?? collection.id,
                                                 );
-                                                closeAllCategories();
                                             }}
                                         >
-                                            <span className="all-primary-category-image">
+                                            <span className="primary-category-image">
                                                 {image ? (
                                                     <SafeImage
                                                         src={image}
                                                         alt=""
                                                         imageKind="thumbnail"
                                                         sizes={STOREFRONT_IMAGE_SIZES.categoryNavigation}
-                                                        loading="lazy"
+                                                        loading={index < 6 ? 'eager' : 'lazy'}
                                                         showFallbackIcon={false}
                                                         errorFallback={<LayoutGrid aria-hidden="true" />}
                                                     />
@@ -497,47 +449,116 @@ export function CategoryPage() {
                                                     </span>
                                                 )}
                                             </span>
-                                            <span>{collection.name}</span>
+                                            <span className="primary-category-label">{collection.name}</span>
                                         </button>
                                     );
                                 })}
                             </nav>
                             <button
                                 type="button"
-                                className="all-primary-categories-collapse"
-                                onClick={closeAllCategories}
+                                className="primary-categories-all"
+                                ref={allCategoriesTriggerRef}
+                                aria-expanded={allCategoriesOpen}
+                                aria-controls="all-primary-categories"
+                                aria-label={isZh ? '全部分类' : 'All categories'}
+                                onClick={() => setAllCategoriesOpen(open => !open)}
                             >
-                                <span>{isZh ? '点击收起' : 'Collapse'}</span>
-                                <ChevronUp aria-hidden="true" />
+                                <span className="primary-categories-all-label">{isZh ? '全部' : 'All'}</span>
+                                {allCategoriesOpen ? (
+                                    <ChevronUp aria-hidden="true" />
+                                ) : (
+                                    <ChevronDown aria-hidden="true" />
+                                )}
                             </button>
                         </div>
-                    )}
-                </section>
-                <aside className="desktop-catalog-sidebar category-responsive-sidebar">
-                    <div className="category-desktop-only">
-                        <DesktopCategoryNavigation expandChildren context={desktopNavigationContext} />
-                    </div>
-                    <CategoryClientPluginSlot
-                        block={clientPluginBlock}
-                        placement="AFTER_CATEGORY_NAVIGATION"
-                        categoryContext={clientPluginCategoryContext}
-                        language={language}
-                        onNavigate={navigateTo}
-                    />
-                    <section className="desktop-catalog-help category-desktop-only">
-                        <h2>{isZh ? '需要帮助？' : 'Need help?'}</h2>
-                        <p>
-                            {isZh
-                                ? '咨询商品、订单与售后问题'
-                                : 'Get help with products, orders and after-sales'}
-                        </p>
-                        <button type="button" onClick={() => navigateTo({ name: 'support' })}>
-                            {isZh ? '联系客服' : 'Contact support'}
-                        </button>
+                        {allCategoriesOpen && (
+                            <div className="all-primary-categories" id="all-primary-categories">
+                                <h2>{isZh ? '全部分类' : 'All categories'}</h2>
+                                <nav
+                                    ref={allCategoriesGridRef}
+                                    className="all-primary-category-grid"
+                                    aria-label={isZh ? '全部分类' : 'All categories'}
+                                >
+                                    {primaryCollections.map((collection, index) => {
+                                        const image = primaryCollectionImage(collection);
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={collection.id}
+                                                title={collection.name}
+                                                className={
+                                                    collection.id === activeCollectionId
+                                                        ? 'is-active'
+                                                        : undefined
+                                                }
+                                                aria-pressed={collection.id === activeCollectionId}
+                                                onClick={() => {
+                                                    centerClickedCategory(collection.id, index);
+                                                    onCollectionChange(
+                                                        collection.id,
+                                                        collection.children?.[0]?.id ?? collection.id,
+                                                    );
+                                                    closeAllCategories();
+                                                }}
+                                            >
+                                                <span className="all-primary-category-image">
+                                                    {image ? (
+                                                        <SafeImage
+                                                            src={image}
+                                                            alt=""
+                                                            imageKind="thumbnail"
+                                                            sizes={STOREFRONT_IMAGE_SIZES.categoryNavigation}
+                                                            loading="lazy"
+                                                            showFallbackIcon={false}
+                                                            errorFallback={<LayoutGrid aria-hidden="true" />}
+                                                        />
+                                                    ) : (
+                                                        <span className="primary-category-placeholder">
+                                                            <LayoutGrid aria-hidden="true" />
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span>{collection.name}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </nav>
+                                <button
+                                    type="button"
+                                    className="all-primary-categories-collapse"
+                                    onClick={closeAllCategories}
+                                >
+                                    <span>{isZh ? '点击收起' : 'Collapse'}</span>
+                                    <ChevronUp aria-hidden="true" />
+                                </button>
+                            </div>
+                        )}
                     </section>
-                </aside>
+                    <aside className="desktop-catalog-sidebar category-responsive-sidebar">
+                        <div className="category-desktop-only">
+                            <DesktopCategoryNavigation expandChildren context={desktopNavigationContext} />
+                        </div>
+                        <CategoryClientPluginSlot
+                            block={clientPluginBlock}
+                            placement="AFTER_CATEGORY_NAVIGATION"
+                            categoryContext={clientPluginCategoryContext}
+                            language={language}
+                            onNavigate={navigateTo}
+                        />
+                        <section className="desktop-catalog-help category-desktop-only">
+                            <h2>{isZh ? '需要帮助？' : 'Need help?'}</h2>
+                            <p>
+                                {isZh
+                                    ? '咨询商品、订单与售后问题'
+                                    : 'Get help with products, orders and after-sales'}
+                            </p>
+                            <button type="button" onClick={() => navigateTo({ name: 'support' })}>
+                                {isZh ? '联系客服' : 'Contact support'}
+                            </button>
+                        </section>
+                    </aside>
+                </div>
             </div>
-
             <div className={`category-layout${hasChildCategories ? ' has-sidebar' : ' is-full-width'}`}>
                 {hasChildCategories && (
                     <aside

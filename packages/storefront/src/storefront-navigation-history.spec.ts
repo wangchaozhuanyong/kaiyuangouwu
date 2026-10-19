@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+    getStorefrontNavigationEntryPresentation,
     goBackInStorefront,
     registerStorefrontNavigationHistory,
     returnToStorefrontRoute,
@@ -65,6 +66,32 @@ afterEach(() => {
 });
 
 describe('shared storefront return history', () => {
+    it('retains catalog presentation on back without emitting a navigation to save it', () => {
+        const flow = harness(['/category?collectionId=a']);
+        const notify = vi.fn();
+        const unsubscribe = flow.history.subscribe(notify);
+        const entry = getStorefrontNavigationEntryPresentation(flow.history);
+        if (!entry) throw new Error('Missing navigation entry');
+        entry.categoryNavigation = { scope: 'store-a:category-a', collapsed: true };
+        expect(notify).not.toHaveBeenCalled();
+        flow.push({ name: 'product', id: 'a' });
+        expect(getStorefrontNavigationEntryPresentation(flow.history)?.categoryNavigation).toBeUndefined();
+        flow.actualGo(-1);
+        expect(getStorefrontNavigationEntryPresentation(flow.history)?.categoryNavigation).toEqual({
+            scope: 'store-a:category-a',
+            collapsed: true,
+        });
+        unsubscribe();
+    });
+
+    it('does not carry presentation into a replaced category entry', () => {
+        const flow = harness(['/category?collectionId=a']);
+        const entry = getStorefrontNavigationEntryPresentation(flow.history);
+        if (!entry) throw new Error('Missing navigation entry');
+        entry.categoryNavigation = { scope: 'store-a:category-a', collapsed: true };
+        flow.history.replace('/category?collectionId=b');
+        expect(getStorefrontNavigationEntryPresentation(flow.history)?.categoryNavigation).toBeUndefined();
+    });
     it.each(['home', 'account'] as const)(
         'returns detail → existing list → %s without pushing a return loop',
         source => {

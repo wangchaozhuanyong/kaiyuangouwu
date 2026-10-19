@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import { couponCampaignsForCustomer } from '../coupon-center-state';
 import { uiCopy } from '../i18n';
 import { offlineLoadError, resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';
@@ -127,7 +128,11 @@ export function useStorefrontCustomerData({
         'payment',
         'account',
     ];
-    const needsCoupons = couponRoutes.includes(activeRoute) || (activeRoute === 'home' && homepageCoupons);
+    const publicHomepageCoupons = activeRoute === 'home' && homepageCoupons;
+    const needsCoupons = couponRoutes.includes(activeRoute) || publicHomepageCoupons;
+    const couponCampaignsEnabled = publicHomepageCoupons
+        ? storefrontContextResolved
+        : Boolean(customer) && needsCoupons;
 
     const couponCampaignsQueryKey = storefrontQueryKeys.couponCampaigns(
         storefrontQueryKeys.market(market),
@@ -138,11 +143,17 @@ export function useStorefrontCustomerData({
     const couponCampaignsQuery = useQuery({
         queryKey: couponCampaignsQueryKey,
         queryFn: ({ signal }) => api.activeCouponCampaigns(signal),
-        enabled: Boolean(customer) && needsCoupons,
+        enabled: couponCampaignsEnabled,
         staleTime: 0,
     });
 
-    const activeCoupons = couponCampaignsQuery.data ?? [];
+    // Public requests may run alongside identity bootstrap, but an unresolved account
+    // must not flash guest offers which that customer has already claimed.
+    const activeCoupons =
+        publicHomepageCoupons &&
+        (!storefrontContextResolved || customerQuery.data === undefined || (identity && confirmedMissing))
+            ? []
+            : (couponCampaignsQuery.data ?? []);
 
     const customerCouponQueryKey = storefrontQueryKeys.customerCoupons(
         storefrontQueryKeys.market(market),
@@ -204,14 +215,10 @@ export function useStorefrontCustomerData({
               ? storefrontErrorMessage(customerReadQuery.error, language)
               : text.loadError;
 
-    const couponCampaignsLoading =
-        Boolean(customer) &&
-        needsCoupons &&
-        couponCampaignsQuery.isPending &&
-        couponCampaignsQuery.data === undefined;
+    const couponCampaignsLoading = couponCampaignsEnabled && couponCampaignsQuery.isPending;
 
     const couponCampaignsError =
-        customerQuery.data === undefined && customerQuery.isError
+        !publicHomepageCoupons && customerQuery.data === undefined && customerQuery.isError
             ? customerLoadError
             : storefrontInitialQueryError(couponCampaignsQuery, language);
 
@@ -234,7 +241,7 @@ export function useStorefrontCustomerData({
             !customerRecentOrdersQuery.isError,
         couponCampaignsQueryKey,
         couponCampaignsQuery,
-        activeCoupons,
+        activeCoupons: customer ? couponCampaignsForCustomer(activeCoupons, myCoupons) : activeCoupons,
         customerCouponQueryKey,
         customerCouponsQuery,
         myCoupons,

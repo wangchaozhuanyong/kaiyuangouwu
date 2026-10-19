@@ -893,23 +893,41 @@ describe('HomePage localized trust bar layout', () => {
     });
 });
 
-describe('HomePage account-aware coupon campaigns', () => {
-    it('keeps the published region empty when a campaign is sold out', () => {
+describe('HomePage public coupon campaigns', () => {
+    it.each([false, true])('shows public offers without an account on desktop=%s', desktop => {
+        const markup = renderHome({ contentBlocks: [couponBlock], coupons: [couponCampaign] }, desktop);
+        expect(markup).toContain('满100减10');
+        expect(markup).toContain('领取 满100减10');
+        expect(markup).not.toContain('登录后查看专属优惠');
+    });
+
+    it.each([false, true])('omits the whole coupon module when no offers exist on desktop=%s', desktop => {
+        const markup = renderHome({ contentBlocks: [couponBlock] }, desktop);
+        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).not.toContain('专享特惠专区');
+        expect(markup).not.toContain('全部优惠');
+        expect(markup).not.toContain('暂无可领取的优惠');
+    });
+
+    it('does not reserve a coupon region before offers are confirmed', () => {
+        const markup = renderHome({ contentBlocks: [couponBlock], couponCampaignsLoading: true });
+        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).not.toContain('暂无可领取的优惠');
+    });
+
+    it('omits the whole module when a campaign is sold out', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
-            couponCustomerStatus: 'signed-in',
             coupons: [{ ...couponCampaign, remainingIssueCount: 0, claimable: false }],
         });
 
         expect(markup).not.toContain('满100减10');
-        expect(markup).toContain('coupon-hub-section');
-        expect(markup).toContain('data-coupon-state="empty"');
+        expect(markup).not.toContain('coupon-hub-section');
     });
 
-    it('keeps the published region empty after the last campaign is claimed', () => {
+    it('omits the whole module after the last campaign is claimed', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
-            couponCustomerStatus: 'signed-in',
             coupons: [
                 {
                     ...couponCampaign,
@@ -921,8 +939,7 @@ describe('HomePage account-aware coupon campaigns', () => {
         });
 
         expect(markup).not.toContain('满100减10');
-        expect(markup).toContain('coupon-hub-section');
-        expect(markup).toContain('data-coupon-state="empty"');
+        expect(markup).not.toContain('coupon-hub-section');
     });
 
     it('removes a claimed campaign but keeps the module while another campaign is claimable', () => {
@@ -945,7 +962,7 @@ describe('HomePage account-aware coupon campaigns', () => {
         expect(markup).toContain('coupon-hub-section');
     });
 
-    it.each([false, true])('shows campaign errors and retry on desktop=%s', desktop => {
+    it.each([false, true])('keeps an initial offer failure out of the home module on desktop=%s', desktop => {
         const markup = renderHome(
             {
                 contentBlocks: [couponBlock],
@@ -954,10 +971,34 @@ describe('HomePage account-aware coupon campaigns', () => {
             desktop,
         );
 
-        expect(markup).toContain('优惠活动读取失败');
-        expect(markup).toContain('重试');
-        expect(markup).toContain('coupon-hub-section');
+        expect(markup).not.toContain('优惠活动读取失败');
+        expect(markup).not.toContain('coupon-hub-section');
     });
+
+    it.each([false, true])(
+        'retains valid offers while refreshing or after a background error on desktop=%s',
+        desktop => {
+            for (const state of [{ couponCampaignsLoading: true }, { couponCampaignsError: '更新失败' }]) {
+                const markup = renderHome(
+                    { contentBlocks: [couponBlock], coupons: [couponCampaign], ...state },
+                    desktop,
+                );
+                expect(markup).toContain('coupon-hub-section');
+                expect(markup).toContain('满100减10');
+            }
+        },
+    );
+
+    it.each([false, true])(
+        'keeps an unpublished coupon module hidden even with offers on desktop=%s',
+        desktop => {
+            const markup = renderHome(
+                { contentBlocks: [{ ...couponBlock, enabled: false }], coupons: [couponCampaign] },
+                desktop,
+            );
+            expect(markup).not.toContain('coupon-hub-section');
+        },
+    );
 });
 
 describe('HomePage flash-sale product count', () => {

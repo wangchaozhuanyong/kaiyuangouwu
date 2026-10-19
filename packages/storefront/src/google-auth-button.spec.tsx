@@ -10,6 +10,14 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement;
 let root: Root;
 
+function buttonState() {
+    const api = window.google?.accounts.id;
+    if (!api) throw new Error('Google fixture is missing');
+    const call = vi.mocked(api, true).renderButton.mock.lastCall;
+    if (!call) throw new Error('Google button was not rendered');
+    return call[1].state;
+}
+
 async function settle(action: () => void) {
     await act(async () => {
         action();
@@ -32,8 +40,83 @@ afterEach(() => {
 });
 
 describe('GoogleAuthButton', () => {
+    function identityFixture() {
+        let callback: ((response: { credential?: string; state?: string }) => void) | undefined;
+        const initialize = vi.fn(options => {
+            callback = options.callback;
+        });
+        const renderButton = vi.fn();
+        window.google = { accounts: { id: { initialize, renderButton } } };
+        return {
+            initialize,
+            renderButton,
+            respond: (state?: string) => callback?.({ state, credential: 'fixture-id-token' }),
+        };
+    }
+
+    it('keeps an open authorization valid when language or presentation callback changes', async () => {
+        const google = identityFixture();
+        const oldHandler = vi.fn().mockResolvedValue(undefined);
+        const handler = vi.fn().mockResolvedValue(undefined);
+        const props = { clientId: 'fixture.apps.googleusercontent.com', onCredential: oldHandler };
+        await settle(() => root.render(<GoogleAuthButton {...props} language="zh" />));
+        const state = buttonState();
+        await settle(() => root.render(<GoogleAuthButton {...props} language="en" onCredential={handler} />));
+        expect(google.initialize).toHaveBeenCalledOnce();
+        expect(buttonState()).toBe(state);
+        await settle(() => google.respond(state));
+        expect(handler).toHaveBeenCalledExactlyOnceWith('fixture-id-token');
+        expect(oldHandler).not.toHaveBeenCalled();
+    });
+
+    it('initializes once across forms and ignores responses belonging to a removed form', async () => {
+        const google = identityFixture();
+        const login = vi.fn().mockResolvedValue(undefined);
+        const register = vi.fn().mockResolvedValue(undefined);
+        const props = { clientId: 'fixture.apps.googleusercontent.com', language: 'en' as const };
+        await settle(() => root.render(<GoogleAuthButton key="login" {...props} onCredential={login} />));
+        const oldState = buttonState();
+        await settle(() =>
+            root.render(<GoogleAuthButton key="register" {...props} onCredential={register} />),
+        );
+        const state = buttonState();
+        expect(state).not.toBe(oldState);
+        expect(google.initialize).toHaveBeenCalledOnce();
+        await settle(() => {
+            google.respond(oldState);
+            google.respond();
+        });
+        expect(login).not.toHaveBeenCalled();
+        expect(register).not.toHaveBeenCalled();
+        await settle(() => google.respond(state));
+        expect(register).toHaveBeenCalledOnce();
+    });
+
+    it('invalidates a response after its store scope or verification nonce changes', async () => {
+        const google = identityFixture();
+        const handler = vi.fn().mockResolvedValue(undefined);
+        const props = {
+            clientId: 'fixture.apps.googleusercontent.com',
+            language: 'en' as const,
+            onCredential: handler,
+        };
+        const scope = {};
+        await settle(() => root.render(<GoogleAuthButton {...props} scope={scope} />));
+        const oldState = buttonState();
+        await settle(() => root.render(<GoogleAuthButton {...props} scope={{}} />));
+        await settle(() => google.respond(oldState));
+        expect(handler).not.toHaveBeenCalled();
+        const oldCallback = google.initialize.mock.calls[0][0].callback;
+        const beforeNonce = buttonState();
+        await settle(() => root.render(<GoogleAuthButton {...props} scope={scope} nonce="new-challenge" />));
+        await settle(() => oldCallback({ state: beforeNonce, credential: 'stale-proof' }));
+        expect(handler).not.toHaveBeenCalled();
+        await settle(() => google.respond(buttonState()));
+        expect(handler).toHaveBeenCalledOnce();
+        expect(google.initialize).toHaveBeenCalledTimes(2);
+    });
     it('renders the official button and forwards the returned ID credential', async () => {
-        let callback: ((response: { credential?: string }) => void) | undefined;
+        let callback: ((response: { credential?: string; state?: string }) => void) | undefined;
         const renderButton = vi.fn((parent: HTMLElement) => {
             parent.append(document.createElement('button'));
         });
@@ -70,14 +153,14 @@ describe('GoogleAuthButton', () => {
             expect.objectContaining({ locale: 'zh-CN', text: 'continue_with' }),
         );
         await act(async () => {
-            callback?.({ credential: 'signed-id-token' });
+            callback?.({ credential: 'signed-id-token', state: buttonState() });
             await Promise.resolve();
         });
         expect(onCredential).toHaveBeenCalledWith('signed-id-token');
     });
 
     it('shows a localized error when Google returns no credential', async () => {
-        let callback: ((response: { credential?: string }) => void) | undefined;
+        let callback: ((response: { credential?: string; state?: string }) => void) | undefined;
         window.google = {
             accounts: {
                 id: {
@@ -99,12 +182,12 @@ describe('GoogleAuthButton', () => {
             );
             await Promise.resolve();
         });
-        act(() => callback?.({}));
+        act(() => callback?.({ state: buttonState() }));
 
         expect(host.querySelector('[role="alert"]')?.textContent).toContain('未返回有效凭证');
     });
     it('blocks disabled and duplicate callbacks and ignores stale callbacks after unmount', async () => {
-        let callback: ((response: { credential?: string }) => void) | undefined;
+        let callback: ((response: { credential?: string; state?: string }) => void) | undefined;
         window.google = {
             accounts: {
                 id: {
@@ -122,16 +205,17 @@ describe('GoogleAuthButton', () => {
             onCredential,
         };
         await settle(() => root.render(<GoogleAuthButton {...props} disabled />));
-        act(() => callback?.({ credential: 'qa-only' }));
+        const state = buttonState();
+        act(() => callback?.({ credential: 'qa-only', state }));
         expect(onCredential).not.toHaveBeenCalled();
         await settle(() => root.render(<GoogleAuthButton {...props} />));
         act(() => {
-            callback?.({ credential: 'qa-only' });
-            callback?.({ credential: 'qa-only' });
+            callback?.({ credential: 'qa-only', state });
+            callback?.({ credential: 'qa-only', state });
         });
         expect(onCredential).toHaveBeenCalledOnce();
         act(() => root.render(<div />));
-        act(() => callback?.({ credential: 'qa-only' }));
+        act(() => callback?.({ credential: 'qa-only', state }));
         expect(onCredential).toHaveBeenCalledOnce();
     });
 
