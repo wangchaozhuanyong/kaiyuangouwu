@@ -3707,10 +3707,6 @@ html[lang='en'] .primary-category-image {
         scrollbar-width: none;
     }
 
-    .category-page .category-subcat-sidebar {
-        padding-top: 0;
-    }
-
     .category-page .subcat-side-item {
         min-height: 44px;
         padding-block: 6px;
@@ -3819,27 +3815,21 @@ html[lang='en'] .primary-category-image {
         gap: 6px;
     }
 
-    /* Each section owns balanced space around its complete content block. */
+    /* Keep the sticky gutters opaque; the inset control surface owns all four corners. */
     .category-page .category-results .sort-bar {
-        height: 44px;
-        top: 0;
-        width: auto;
-        margin: 0 var(--page-section-inset, 16px);
-        padding: 0;
+        padding: 0 var(--page-section-inset, 16px);
         align-items: center;
         gap: 4px;
-        border: 0;
-        border-radius: 0;
-        background: var(--control-surface);
-        box-shadow: none;
+        background: var(--category-results-surface);
     }
 
     .category-page .category-results .sort-bar::before {
         content: '';
         position: absolute;
-        inset: 0 calc(-1 * var(--page-section-inset, 16px));
+        inset: 0 var(--page-section-inset, 16px);
         z-index: -1;
-        background: inherit;
+        border-radius: var(--skin-control-radius);
+        background: var(--control-surface);
         pointer-events: none;
     }
 

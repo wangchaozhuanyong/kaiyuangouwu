@@ -146,7 +146,7 @@ describe('category navigation responsive spacing', () => {
         expect(categoryPageSource).not.toContain('subcat-side-count');
         expect(categoryPageSource).not.toContain("{isZh ? '综合' : 'Default'}");
         expect(stylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*border-radius:\s*0;[^}]*background:\s*var\(--control-surface\);/,
+            /\.category-page \.category-results \.sort-bar::before\s*\{[^}]*border-radius:\s*var\(--skin-control-radius\);[^}]*background:\s*var\(--control-surface\);/,
         );
     });
 
@@ -161,7 +161,7 @@ describe('category navigation responsive spacing', () => {
             /\.category-page \.primary-category-strip\s*\{[^}]*margin:\s*0 var\(--page-section-inset, 16px\);/,
         );
         expect(presetStylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*margin:\s*0 var\(--page-section-inset, 16px\);/,
+            /\.category-page \.category-results \.sort-bar\s*\{[^}]*padding:\s*0 var\(--page-section-inset, 16px\);/,
         );
         expect(stylesheet).toMatch(
             /\.category-product-list\s*\{[^}]*padding:\s*8px var\(--page-section-inset, 10px\) 12px;/,
@@ -169,9 +169,10 @@ describe('category navigation responsive spacing', () => {
     });
 
     it('centers the sorting row and separates the first product with shared list padding', () => {
-        expect(presetStylesheet).toMatch(
-            /\.category-page \.category-results \.sort-bar\s*\{[^}]*height:\s*44px;[^}]*margin:\s*0 var\(--page-section-inset, 16px\);[^}]*align-items:\s*center;/,
-        );
+        const sortRule =
+            presetStylesheet.match(/\.category-page \.category-results \.sort-bar\s*\{([^}]*)\}/)?.[1] ?? '';
+        expect(sortRule).toMatch(/padding:\s*0 var\(--page-section-inset, 16px\);/);
+        expect(sortRule).toMatch(/align-items:\s*center;/);
         expect(stylesheet).toMatch(/\.category-page \.category-product-list\s*\{[^}]*padding-top:\s*12px;/);
     });
 

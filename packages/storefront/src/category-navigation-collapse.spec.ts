@@ -111,6 +111,35 @@ describe('mobile catalog navigation motion', () => {
         history.replaceState(null, '');
     });
 
+    it('coalesces resize measurements outside observer delivery and cancels pending work on disposal', () => {
+        control.dispose();
+        let notify: (() => void) | undefined;
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                constructor(callback: () => void) {
+                    notify = callback;
+                }
+                observe = vi.fn();
+                disconnect = vi.fn();
+            },
+        );
+        bind();
+        fullHeight = 200;
+        notify?.();
+        notify?.();
+        expect(headerHeight()).toBe(160);
+        expect(frames.size).toBe(1);
+        frame();
+        expect(headerHeight()).toBe(200);
+        fullHeight = 240;
+        notify?.();
+        control.dispose();
+        expect(frames.size).toBe(0);
+        frame();
+        expect(headerHeight()).toBe(200);
+    });
+
     it('releases the complete header height while keeping the same product at the same screen position', () => {
         scroll(320);
         const anchor = headerHeight() + 700 - root.scrollTop;
