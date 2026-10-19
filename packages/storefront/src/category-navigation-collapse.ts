@@ -29,6 +29,7 @@ export function bindCategoryNavigationCollapse({
     let compensationRemainder = 0;
     let animation: number | undefined;
     let scrollFrame: number | undefined;
+    let measureFrame: number | undefined;
     const previousAnchor = root.style.overflowAnchor;
     root.style.overflowAnchor = 'none';
     const top = () => Math.max(0, Math.min(root.scrollTop, root.scrollHeight - root.clientHeight));
@@ -160,7 +161,14 @@ export function bindCategoryNavigationCollapse({
         navigation.style.transform = `translateY(${height - fullHeight}px)`;
         onCollapsed(target);
     } else target = false;
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    // Layout writes must leave ResizeObserver delivery before changing the observed scroller.
+    const scheduleMeasure = () => {
+        measureFrame ??= requestAnimationFrame(() => {
+            measureFrame = undefined;
+            measure();
+        });
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure);
     observer?.observe(navigation);
     observer?.observe(root);
     const contents = new MutationObserver(measure);
@@ -177,6 +185,7 @@ export function bindCategoryNavigationCollapse({
         dispose: () => {
             stop();
             if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame);
+            if (measureFrame !== undefined) cancelAnimationFrame(measureFrame);
             observer?.disconnect();
             contents.disconnect();
             root.removeEventListener('scroll', onScroll);

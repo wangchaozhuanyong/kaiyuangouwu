@@ -43,6 +43,12 @@
     outline-offset: var(--experience-focus-offset);
 }
 
+/* Route reading anchors retain focus without Safari's native ring around non-interactive text. */
+#storefront-content[tabindex='-1']:focus,
+#storefront-content h1[tabindex='-1']:focus {
+    outline: 0;
+}
+
 html {
     min-width: 0;
     min-height: 100%;
