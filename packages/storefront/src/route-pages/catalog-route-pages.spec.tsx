@@ -21,6 +21,7 @@ function HomeReadProbe() {
         <div>
             <output>{String(Boolean(value.managedContentLoading))}</output>
             <span data-error>{value.managedContentError}</span>
+            <span data-coupons-pending>{String(value.couponCampaignsLoading)}</span>
             <button onClick={value.onManagedContentRetry}>Retry selections</button>
         </div>
     );
@@ -39,6 +40,50 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('home selection read boundaries', () => {
+    it.each([
+        ['loading', false, '', true],
+        ['ready', true, '', true],
+        ['ready', false, '', false],
+        ['error', false, '', false],
+        ['ready', true, 'Offline', false],
+    ] as const)(
+        'reserves coupon space for identity=%s / pending=%s / error=%s',
+        (identity, pending, error, expected) => {
+            const client = new QueryClient();
+            const host = document.createElement('div');
+            const root = createRoot(host);
+            try {
+                const value = {
+                    language: 'zh',
+                    market: enabledMarkets[0],
+                    collections: [],
+                    catalogTakes: { sales: 16, recommended: 16 },
+                    bestSellerProducts: [],
+                    recommendationProducts: [],
+                    configQuery: {},
+                    contentQuery: { data: {} },
+                    productsQuery: { data: [] },
+                    customerLoadState: identity,
+                    couponCampaignsLoading: pending,
+                    couponCampaignsError: error,
+                } as unknown as StorefrontContextValue;
+                act(() =>
+                    root.render(
+                        <QueryClientProvider client={client}>
+                            <StorefrontContext.Provider value={value}>
+                                <HomeRoutePage />
+                            </StorefrontContext.Provider>
+                        </QueryClientProvider>,
+                    ),
+                );
+                expect(host.querySelector('[data-coupons-pending]')?.textContent).toBe(String(expected));
+            } finally {
+                act(() => root.unmount());
+                client.clear();
+            }
+        },
+    );
+
     it.each([
         { data: [] as Product[] | undefined, paused: true, failed: false, waiting: false },
         { data: [] as Product[] | undefined, paused: false, failed: true, waiting: false },

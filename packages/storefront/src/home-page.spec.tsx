@@ -909,9 +909,13 @@ describe('HomePage public coupon campaigns', () => {
         expect(markup).not.toContain('暂无可领取的优惠');
     });
 
-    it('does not reserve a coupon region before offers are confirmed', () => {
-        const markup = renderHome({ contentBlocks: [couponBlock], couponCampaignsLoading: true });
-        expect(markup).not.toContain('coupon-hub-section');
+    it.each([false, true])('reserves the published coupon rail while offers load on desktop=%s', desktop => {
+        const markup = renderHome({ contentBlocks: [couponBlock], couponCampaignsLoading: true }, desktop);
+        expect(markup).toContain('coupon-hub-section');
+        expect(markup).toContain('aria-busy="true"');
+        expect(markup).toContain('正在加载优惠券');
+        expect(markup.match(/class="coupon-hub-placeholder"/g)).toHaveLength(4);
+        expect(markup).not.toContain('coupon-claim-btn');
         expect(markup).not.toContain('暂无可领取的优惠');
     });
 
@@ -985,6 +989,7 @@ describe('HomePage public coupon campaigns', () => {
                 );
                 expect(markup).toContain('coupon-hub-section');
                 expect(markup).toContain('满100减10');
+                expect(markup).not.toContain('coupon-hub-placeholder');
             }
         },
     );
@@ -993,7 +998,11 @@ describe('HomePage public coupon campaigns', () => {
         'keeps an unpublished coupon module hidden even with offers on desktop=%s',
         desktop => {
             const markup = renderHome(
-                { contentBlocks: [{ ...couponBlock, enabled: false }], coupons: [couponCampaign] },
+                {
+                    contentBlocks: [{ ...couponBlock, enabled: false }],
+                    coupons: [couponCampaign],
+                    couponCampaignsLoading: true,
+                },
                 desktop,
             );
             expect(markup).not.toContain('coupon-hub-section');
