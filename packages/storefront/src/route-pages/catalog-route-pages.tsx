@@ -72,7 +72,10 @@ export function HomeRoutePage() {
                 heroAutoplayIntervalSeconds: runtime.heroAutoplayIntervalSeconds,
                 configuredBlockTypes: runtime.configuredBlockTypes,
                 coupons: runtime.activeCoupons,
-                couponCampaignsLoading: runtime.couponCampaignsLoading,
+                // Offers can finish before identity; keep their local space until both settle.
+                couponCampaignsLoading:
+                    runtime.customerLoadState === 'loading' ||
+                    (runtime.couponCampaignsLoading && !runtime.couponCampaignsError),
                 couponCampaignsError: runtime.couponCampaignsError,
                 flashSales: runtime.activeFlashSales,
                 systemAnnouncements: runtime.systemAnnouncements,

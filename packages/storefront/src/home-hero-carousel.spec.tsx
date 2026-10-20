@@ -800,20 +800,26 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.hero-media-error')).toBeNull();
         expect(target).not.toHaveBeenCalled();
     });
-    it('never mounts a coupon wrapper for loading, empty or failed reads', async () => {
+    it('keeps the same coupon wrapper from loading to offers and removes it for settled empty or failed reads', async () => {
         const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         const blocks = [...heroes, offers];
         await render(false, blocks, 'en', { couponCampaignsLoading: true });
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
-        for (const props of [
-            {},
-            { couponCampaignsLoading: true },
-            { couponCampaignsError: 'Local read failed' },
-        ] as const) {
+        const section = requiredElement(host, '.coupon-hub-section');
+        const wrapper = section.parentElement;
+        expect(section.getAttribute('aria-busy')).toBe('true');
+        expect(section.querySelectorAll('.coupon-hub-placeholder')).toHaveLength(4);
+        await render(false, blocks, 'en', { coupons: [homepageOffer] });
+        expect(host.querySelector('.coupon-hub-section')).toBe(section);
+        expect(section.parentElement).toBe(wrapper);
+        expect(section.getAttribute('aria-busy')).toBe('false');
+        expect(section.querySelector('.coupon-hub-placeholder')).toBeNull();
+        for (const props of [{}, { couponCampaignsError: 'Local read failed' }] as const) {
             await render(false, blocks, 'en', props);
             expect(host.querySelector('.coupon-hub-section')).toBeNull();
         }
-        await render(false, [...heroes, { ...offers, enabled: false }]);
+        await render(false, [...heroes, { ...offers, enabled: false }], 'en', {
+            couponCampaignsLoading: true,
+        });
         expect(host.querySelector('.coupon-hub-section')).toBeNull();
     });
 
