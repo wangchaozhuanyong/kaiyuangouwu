@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryHistory } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,12 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShopApi } from '../api';
 import { CatalogPaginationError } from '../catalog-pagination';
 import { enabledMarkets } from '../i18n';
+import { PageReadinessBoundary } from '../page-readiness';
 import { storefrontQueryKeys } from '../query-client';
 import { registerStorefrontNavigationHistory } from '../storefront-navigation-history';
 import { SearchPageContext } from '../storefront-page-contexts';
 import { Product } from '../types';
 
-import { SearchPage, type SearchPageProps } from './search-page';
+import { SearchPage, type EmbeddedSearchControl, type SearchPageProps } from './search-page';
 (
     globalThis as typeof globalThis & {
         IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -77,27 +78,47 @@ describe('search result and product-detail cache separation', () => {
             ),
         );
     }
-    function renderDiscovery(overrides: Partial<SearchPageProps> = {}) {
+    function renderDiscovery(
+        overrides: Partial<SearchPageProps> = {},
+        withReadiness = false,
+        embedded?: EmbeddedSearchControl,
+    ) {
+        const content = (
+            <QueryClientProvider client={client}>
+                <SearchPageContext.Provider
+                    value={{
+                        api: {
+                            catalog: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }),
+                        } as unknown as ShopApi,
+                        products: [product],
+                        market,
+                        locale: 'en-MY',
+                        language: 'en',
+                        storefrontCode: market.code,
+                        initialQuery: '',
+                        ...overrides,
+                    }}
+                >
+                    <SearchPage embedded={embedded} />
+                </SearchPageContext.Provider>
+            </QueryClientProvider>
+        );
         void act(() =>
             root.render(
-                <QueryClientProvider client={client}>
-                    <SearchPageContext.Provider
-                        value={{
-                            api: {
-                                catalog: vi.fn().mockResolvedValue({ items: [], totalItems: 0 }),
-                            } as unknown as ShopApi,
-                            products: [product],
-                            market,
-                            locale: 'en-MY',
-                            language: 'en',
-                            storefrontCode: market.code,
-                            initialQuery: '',
-                            ...overrides,
-                        }}
+                withReadiness ? (
+                    <PageReadinessBoundary
+                        pending={false}
+                        online={onlineManager.isOnline()}
+                        language="en"
+                        navigationKey="search"
+                        onRetry={navigate}
+                        onBack={navigate}
                     >
-                        <SearchPage />
-                    </SearchPageContext.Provider>
-                </QueryClientProvider>,
+                        {content}
+                    </PageReadinessBoundary>
+                ) : (
+                    content
+                ),
             ),
         );
     }
@@ -398,6 +419,189 @@ describe('search result and product-detail cache separation', () => {
         expect(container.querySelector('.search-results-heading')?.textContent).not.toContain('0 items');
         expect(container.querySelector('.search-empty')).toBeNull();
     });
+    it('shows an offline recovery state instead of a skeleton for an uncached search', async () => {
+        onlineManager.setOnline(false);
+        const catalog = vi.fn();
+        renderDiscovery({ initialQuery: 'uncached', api: { catalog } as unknown as ShopApi }, true);
+        await act(async () => {
+            await Promise.resolve();
+        });
+        expect(container.querySelector('.list-skeleton')).toBeNull();
+        expect(container.textContent).toContain('Search unavailable');
+        expect(container.textContent).toContain('offline');
+        expect(catalog).not.toHaveBeenCalled();
+        expect(container.querySelector('.page-readiness-overlay')).toBeNull();
+    });
+    it('replaces a timed-out search with a new read and ignores the abandoned late result', async () => {
+        vi.useFakeTimers();
+        let resolveRead!: (value: { items: Product[]; totalItems: number }) => void;
+        const catalog = vi
+            .fn()
+            .mockImplementationOnce(
+                () =>
+                    new Promise<{ items: Product[]; totalItems: number }>(resolve => {
+                        resolveRead = resolve;
+                    }),
+            )
+            .mockResolvedValue({ items: [], totalItems: 0 });
+        renderDiscovery({ initialQuery: 'slow', api: { catalog } as unknown as ShopApi }, true);
+        const sorting = container.querySelector('.search-sort');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10_001);
+        });
+        expect(container.querySelector('.search-results .page-readiness-inline-error')).not.toBeNull();
+        expect(container.querySelector('.list-skeleton')).toBeNull();
+        expect(container.querySelector('.page-readiness-overlay')).toBeNull();
+        act(() =>
+            required(
+                container.querySelector<HTMLButtonElement>('.search-results .page-readiness-error button'),
+            ).click(),
+        );
+        expect(navigate).not.toHaveBeenCalled();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(catalog).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('.search-empty')).not.toBeNull();
+        await act(async () => {
+            resolveRead({ items: [{ ...product, name: 'Abandoned search result' }], totalItems: 1 });
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(container.querySelector('.search-sort')).toBe(sorting);
+        expect(container.querySelector('.search-empty')).not.toBeNull();
+        expect(container.querySelector('.list-skeleton')).toBeNull();
+        expect(container.textContent).not.toContain('Abandoned search result');
+    });
+    it('gives a new embedded search its own deadline after the previous term timed out', async () => {
+        vi.useFakeTimers();
+        const catalog = vi.fn(() => new Promise(() => undefined));
+        const embedded: EmbeddedSearchControl = {
+            query: 'old',
+            submittedQuery: 'old',
+            submission: 0,
+            active: true,
+            composing: false,
+            inputRef: { current: null },
+            keyDownRef: { current: null },
+            setQuery: vi.fn(),
+            setSubmittedQuery: vi.fn(),
+            close: vi.fn(),
+        };
+        renderDiscovery({ api: { catalog } as unknown as ShopApi }, true, embedded);
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(10_001);
+        });
+        expect(container.querySelector('.page-readiness-inline-error')).not.toBeNull();
+        renderDiscovery({ api: { catalog } as unknown as ShopApi }, true, {
+            ...embedded,
+            query: 'new',
+            submittedQuery: 'new',
+        });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(container.querySelector('.page-readiness-inline-error')).toBeNull();
+        expect(container.querySelector('.list-skeleton')).not.toBeNull();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(9_998);
+        });
+        expect(container.querySelector('.page-readiness-inline-error')).toBeNull();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2);
+        });
+        expect(container.querySelector('.page-readiness-inline-error')).not.toBeNull();
+    });
+    it('reads the URL page offset on a cold search', async () => {
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        renderDiscovery({
+            initialQuery: 'paged',
+            initialFilters: { page: 2 },
+            api: { catalog } as unknown as ShopApi,
+        });
+        await vi.waitFor(() => expect(catalog).toHaveBeenCalled());
+        expect(catalog.mock.calls[0][0].skip).toBe(12);
+    });
+    it.each(['sort', 'keyword'])('resets the URL page when changing the %s', async action => {
+        const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+        renderDiscovery({
+            initialQuery: 'paged',
+            initialFilters: { page: 2 },
+            api: { catalog } as unknown as ShopApi,
+        });
+        if (action === 'sort') {
+            act(() =>
+                required(container.querySelectorAll<HTMLButtonElement>('.search-sort button')[1]).click(),
+            );
+        } else {
+            const input = typeTerm('new term');
+            await act(() =>
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })),
+            );
+        }
+        expect(navigate.mock.calls.at(-1)?.[0].search.page).toBeUndefined();
+        await vi.waitFor(() => expect(catalog.mock.calls.at(-1)?.[0].skip).toBe(0));
+    });
+    it('removes load more when the final response reports a smaller result total', async () => {
+        const first = Array.from({ length: 12 }, (_, index) => ({ ...product, id: `first-${index}` }));
+        client.setQueryData(searchKey, { pages: [{ items: first, totalItems: 24 }], pageParams: [0] });
+        const catalog = vi.fn().mockResolvedValue({
+            items: Array.from({ length: 3 }, (_, index) => ({ ...product, id: `last-${index}` })),
+            totalItems: 15,
+        });
+        renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi });
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-load-more')).click();
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.querySelector('.search-load-more')).toBeNull();
+        expect(container.querySelector('.search-results-heading')?.textContent).toContain('15 items');
+    });
+    it.each(['slow', 'offline'])('preserves results with local recovery for a %s append', async mode => {
+        vi.useFakeTimers();
+        client.setQueryData(searchKey, { pages: [{ items: [product], totalItems: 2 }], pageParams: [0] });
+        const readers: Array<(value: { items: Product[]; totalItems: number }) => void> = [];
+        const catalog = vi.fn(
+            () =>
+                new Promise<{ items: Product[]; totalItems: number }>(resolve => {
+                    readers.push(resolve);
+                }),
+        );
+        renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi }, true);
+        const firstCard = container.querySelector('.product-card');
+        if (mode === 'offline') onlineManager.setOnline(false);
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-load-more')).click();
+            await vi.advanceTimersByTimeAsync(mode === 'slow' ? 10_001 : 1);
+        });
+        const retry = container.querySelector<HTMLButtonElement>(
+            '.search-load-error button, .search-results .page-readiness-error button',
+        );
+        expect(retry).not.toBeNull();
+        expect(container.querySelector('.product-card')).toBe(firstCard);
+        expect(container.querySelector('.page-readiness-overlay')).toBeNull();
+        act(() => required(retry).click());
+        expect(navigate).not.toHaveBeenCalled();
+        await act(async () => {
+            onlineManager.setOnline(true);
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(catalog).toHaveBeenCalledTimes(mode === 'slow' ? 2 : 1);
+        await act(async () => {
+            required(readers.at(-1))({ items: [{ ...product, id: 'second' }], totalItems: 2 });
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        if (mode === 'slow')
+            await act(async () => {
+                readers[0]({
+                    items: [{ ...product, id: 'abandoned', name: 'Abandoned append' }],
+                    totalItems: 2,
+                });
+                await vi.advanceTimersByTimeAsync(1);
+            });
+        expect(container.querySelectorAll('.product-card')).toHaveLength(2);
+        expect(container.querySelector('.product-card')).toBe(firstCard);
+        expect(container.textContent).not.toContain('Abandoned append');
+    });
     it('keeps confirmed results and shows next-page failure in the pagination footer', async () => {
         const catalog = vi
             .fn()
@@ -445,7 +649,9 @@ describe('search result and product-detail cache separation', () => {
     });
     afterEach(() => {
         void act(() => root.unmount());
+        onlineManager.setOnline(true);
         client.clear();
+        vi.useRealTimers();
         container.remove();
         localStorage.clear();
     });

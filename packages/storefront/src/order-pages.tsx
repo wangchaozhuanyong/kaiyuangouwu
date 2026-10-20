@@ -17,7 +17,7 @@ import {
     WifiOff,
     X,
 } from 'lucide-react';
-import { FormEvent, ReactNode, useEffect, useId, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useId, useRef, useState } from 'react';
 
 import { fulfillmentStateDisplayLabel } from '../../common/src/display-localization';
 import { ContentText } from '../../storefront-content-plugin/src/shared/content-text';
@@ -32,11 +32,12 @@ import { PageBackButton } from './components/common/page-back-button';
 import { useDesktopLayout } from './desktop-layout';
 import { DigitalReceiptPanel, orderHasDigitalDelivery } from './digital-receipt-panel';
 import { compactUiCopy, languageCodeFor } from './i18n';
-import { offlineLoadError, storefrontInitialQueryError } from './loading-state';
+import { offlineLoadError, storefrontInitialQueryError, storefrontQueryPresentation } from './loading-state';
 import { OrderAdditionalPaymentPanel } from './order-additional-payment-panel';
 import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
 import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
 import { Overlay } from './overlay-host';
+import { PageReadinessError, usePageLoadingState, usePageReadiness } from './page-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
 import { PageSkeleton } from './route-loading';
 import { storefrontErrorMessage } from './storefront-errors';
@@ -111,13 +112,17 @@ export function OrdersPage({
     const [orderCode, setOrderCode] = useState('');
     const pageSize = 10;
     const queryClient = useQueryClient();
+    const ordersQueryKey = storefrontQueryKeys.customerOrders(
+        storefrontQueryKeys.market(market),
+        languageCodeFor(language),
+        customer?.id ?? '',
+        { tab, orderCode },
+    );
+    const readIdentity = JSON.stringify(ordersQueryKey);
+    const currentRead = useRef(readIdentity);
+    currentRead.current = readIdentity;
     const ordersQuery = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.customerOrders(
-            storefrontQueryKeys.market(market),
-            languageCodeFor(language),
-            customer?.id ?? '',
-            { tab, orderCode },
-        ),
+        queryKey: ordersQueryKey,
         queryFn: ({ pageParam, signal }) =>
             api.customerOrders(pageParam, pageSize, orderStatesForTab(tab), orderCode, signal),
         initialPageParam: 0,
@@ -240,10 +245,38 @@ export function OrdersPage({
             setUpdatingAfterSalesId('');
         }
     };
-    const totalItems = ordersQuery.data?.pages[0]?.totalItems ?? 0;
-    const loading = ordersQuery.isLoading;
+    const totalItems = ordersQuery.data?.pages.at(-1)?.totalItems ?? 0;
+    const loading = storefrontQueryPresentation(ordersQuery).initialLoading;
+    const loadingState = usePageLoadingState();
+    const appending =
+        ordersQuery.isFetchingNextPage ||
+        (ordersQuery.isPaused &&
+            queryClient.getQueryState(ordersQueryKey)?.fetchMeta?.fetchMore?.direction === 'forward');
+    usePageReadiness(Boolean(customer) && tab !== 'service' && (loading || appending), 'local', readIdentity);
+    const retryOrders = (append = false) => {
+        const read = () => {
+            if (currentRead.current !== readIdentity) return;
+            if (append) void ordersQuery.fetchNextPage({ cancelRefetch: false });
+            else void ordersQuery.refetch({ cancelRefetch: false });
+        };
+        const recover = () => {
+            if (ordersQuery.isFetching && !ordersQuery.isPaused) {
+                void queryClient.cancelQueries({ queryKey: ordersQueryKey, exact: true }).then(read);
+            } else read();
+        };
+        if (loadingState) loadingState.retryRead(recover);
+        else recover();
+    };
+    const retryAppend = () => retryOrders(true);
     const loadingMore = ordersQuery.isFetchingNextPage;
     const listError = storefrontInitialQueryError(ordersQuery, language);
+    const appendTimedOut = appending && !ordersQuery.isPaused && loadingState?.phase === 'error';
+    const loadMoreError =
+        appending && ordersQuery.isPaused
+            ? offlineLoadError(language)
+            : ordersQuery.isFetchNextPageError
+              ? storefrontErrorMessage(ordersQuery.error, language)
+              : '';
     const tabs: Array<{ id: OrderTab; label: string }> = [
         { id: 'all', label: compactCopy.orders.all },
         { id: 'pending', label: compactCopy.orders.unpaid },
@@ -255,7 +288,10 @@ export function OrdersPage({
 
     const tabCounts: Partial<Record<OrderTab, number>> = {
         ...countsQuery.data,
-        all: customer?.orders?.totalItems,
+        all:
+            tab === 'all' && !orderCode && ordersQuery.data !== undefined
+                ? totalItems
+                : customer?.orders?.totalItems,
         service: afterSalesQuery.data?.length,
     };
 
@@ -366,7 +402,17 @@ export function OrdersPage({
                     onConfirmReplacement={id => void confirmAfterSalesReplacement(id)}
                 />
             ) : loading && !orders.length ? (
-                <PageSkeleton label={isZh ? '正在加载订单' : 'Loading orders'} />
+                loadingState?.phase === 'error' ? (
+                    <PageReadinessError
+                        inline
+                        state={{
+                            ...loadingState,
+                            retry: () => retryOrders(),
+                        }}
+                    />
+                ) : (
+                    <PageSkeleton label={isZh ? '正在加载订单' : 'Loading orders'} />
+                )
             ) : listError && !orders.length ? (
                 <EmptyState
                     icon={<WifiOff />}
@@ -388,14 +434,16 @@ export function OrdersPage({
                             onOpen={() => openOrder(order.id)}
                         />
                     ))}
-                    {listError && (
+                    {appendTimedOut && loadingState ? (
+                        <PageReadinessError inline state={{ ...loadingState, retry: retryAppend }} />
+                    ) : loadMoreError ? (
                         <InlineError
-                            message={listError}
+                            message={loadMoreError}
                             action={isZh ? '重试' : 'Retry'}
-                            onAction={() => void ordersQuery.fetchNextPage({ cancelRefetch: false })}
+                            onAction={retryAppend}
                         />
-                    )}
-                    {orders.length < totalItems && (
+                    ) : null}
+                    {ordersQuery.hasNextPage && !appendTimedOut && !loadMoreError && (
                         <button
                             type="button"
                             className={orderPageClassName('load-more-button order-load-more')}
@@ -411,7 +459,7 @@ export function OrdersPage({
                                   : `Load more (${orders.length}/${totalItems})`}
                         </button>
                     )}
-                    {desktop && orders.length >= totalItems && !listError && (
+                    {desktop && !ordersQuery.hasNextPage && !loadMoreError && (
                         <div className="desktop-orders-end">
                             <p>{isZh ? '没有更多订单' : 'No more orders'}</p>
                             <button
@@ -1912,6 +1960,7 @@ function InlineError({
 }) {
     return (
         <div className={orderPageClassName('inline-error')} role="alert">
+            <CircleAlert aria-hidden="true" />
             <span>{message}</span>
             <button type="button" onClick={onAction}>
                 {action}

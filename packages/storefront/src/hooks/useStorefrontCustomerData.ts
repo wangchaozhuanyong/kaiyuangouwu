@@ -59,6 +59,8 @@ export function useStorefrontCustomerData({
     const needsAddresses = addressRoutes.includes(activeRoute);
     const needsOrders =
         orderRoutes.includes(activeRoute) || (activeRoute === 'home' && homepageRecommendations);
+    // Orders owns its paginated list; the recent summary only supplies optional counts there.
+    const requiresOrders = needsOrders && activeRoute !== 'orders';
     const customerAddressesQueryKey = [
         ...storefrontQueryKeys.scope(storefrontQueryKeys.market(market), vendureLanguageCode),
         'customer-addresses',
@@ -83,7 +85,7 @@ export function useStorefrontCustomerData({
     });
     const confirmedMissing =
         (needsAddresses && customerAddressesQuery.data === null) ||
-        (needsOrders && customerRecentOrdersQuery.data === null);
+        (requiresOrders && customerRecentOrdersQuery.data === null);
     const customer: ActiveCustomer | null =
         identity && !confirmedMissing
             ? {
@@ -99,7 +101,7 @@ export function useStorefrontCustomerData({
     const requiredDetails = customer
         ? [
               ...(needsAddresses ? [customerAddressesQuery] : []),
-              ...(needsOrders && activeRoute !== 'home' && activeRoute !== 'recommendations'
+              ...(requiresOrders && activeRoute !== 'home' && activeRoute !== 'recommendations'
                   ? [customerRecentOrdersQuery]
                   : []),
           ]

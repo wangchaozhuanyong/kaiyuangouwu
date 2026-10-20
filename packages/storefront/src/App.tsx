@@ -2,6 +2,7 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { useStorefrontAppState } from './hooks/useStorefrontAppState';
+import { useStorefrontScrollContinuity } from './hooks/useStorefrontScrollContinuity';
 import { PageSkeleton } from './route-loading';
 import { StorefrontShell } from './StorefrontShell';
 
@@ -24,6 +25,7 @@ export function App() {
 }
 
 function StorefrontRuntime() {
+    useStorefrontScrollContinuity();
     const state = useStorefrontAppState();
     return (
         <>

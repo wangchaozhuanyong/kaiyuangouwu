@@ -3,7 +3,12 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PageReadinessBoundary, usePageReadiness, usePageRouteCommit } from './page-readiness';
+import {
+    PageReadinessBoundary,
+    usePageLoadingState,
+    usePageReadiness,
+    usePageRouteCommit,
+} from './page-readiness';
 import { PageSkeleton, RouteTransitionLoader } from './route-loading';
 import { StorefrontContext, type StorefrontContextValue } from './StorefrontContext';
 
@@ -246,6 +251,130 @@ describe('explicit route readiness', () => {
         expect(phase()).toBe('ready');
         expect(host.querySelector('.page-readiness-navigation')).toBeNull();
     });
+    it('keeps source reads and target navigation feedback, deadlines and retry owners independent', async () => {
+        const sourceRetry = vi.fn();
+        const navigationRetry = vi.fn();
+        const present = (target: string, navigating: boolean) =>
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        navigationKey="source"
+                        requestKey={target}
+                        pending={false}
+                        navigationPreparing={navigating}
+                        online
+                        language="en"
+                        onRetry={sourceRetry}
+                        onNavigationRetry={navigationRetry}
+                        onBack={vi.fn()}
+                    >
+                        <main>
+                            Source content
+                            <PageSkeleton compact />
+                        </main>
+                    </PageReadinessBoundary>,
+                ),
+            );
+        present('source', false);
+        await advance(8_000);
+        present('target-b', true);
+        await advance(200);
+        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+        expect(
+            host.querySelector('[data-navigation-readiness]')?.getAttribute('data-navigation-readiness'),
+        ).toBe('preparing');
+        await advance(1_900);
+        expect(host.querySelector('main [role=alert]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-overlay')).toBeNull();
+        const sourceAction = host.querySelector<HTMLButtonElement>('main [role=alert] button');
+        act(() => sourceAction?.click());
+        expect(sourceRetry).toHaveBeenCalledOnce();
+        expect(navigationRetry).not.toHaveBeenCalled();
+        await advance(7_900);
+        expect(
+            host.querySelector('[data-navigation-readiness]')?.getAttribute('data-navigation-readiness'),
+        ).toBe('error');
+        expect(host.querySelector('.page-readiness-overlay [role=alert]')).not.toBeNull();
+        expect(host.querySelector('main [role=alert]')).toBeNull();
+        act(() => host.querySelector<HTMLButtonElement>('.page-readiness-overlay button')?.click());
+        expect(navigationRetry).toHaveBeenCalledOnce();
+        expect(sourceRetry).toHaveBeenCalledOnce();
+        present('source', false);
+        expect(host.querySelector('[data-navigation-readiness]')).toBeNull();
+        expect(host.querySelector('.page-readiness-overlay')).toBeNull();
+    });
+
+    it('gives a newly selected local query its own deadline without restarting navigation', async () => {
+        function LocalRead({ readKey }: { readKey: string }) {
+            usePageReadiness(true, 'local', readKey);
+            const loading = usePageLoadingState();
+            return <main data-local-phase={loading?.phase}>Existing list</main>;
+        }
+        const present = (readKey: string, navigating: boolean) =>
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        navigationKey="source"
+                        requestKey="target"
+                        pending={false}
+                        navigationPreparing={navigating}
+                        online
+                        language="en"
+                        onRetry={retry}
+                        onBack={retry}
+                    >
+                        <LocalRead readKey={readKey} />
+                    </PageReadinessBoundary>,
+                ),
+            );
+        const localPhase = () => host.querySelector('main')?.getAttribute('data-local-phase');
+        present('query-a', false);
+        await advance(8_000);
+        present('query-a', true);
+        await advance(2_000);
+        expect(localPhase()).toBe('error');
+        present('query-b', true);
+        expect(localPhase()).toBe('preparing');
+        await advance(8_000);
+        expect(
+            host.querySelector('[data-navigation-readiness]')?.getAttribute('data-navigation-readiness'),
+        ).toBe('error');
+        expect(localPhase()).toBe('preparing');
+        await advance(2_000);
+        expect(localPhase()).toBe('error');
+    });
+
+    it('emits an error for each new offline navigation target while retaining the source', () => {
+        const failed = vi.fn();
+        document.addEventListener('storefront:page-error', failed);
+        const present = (requestKey: string) =>
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        navigationKey="source"
+                        requestKey={requestKey}
+                        pending={false}
+                        navigationPreparing
+                        online={false}
+                        language="en"
+                        onRetry={retry}
+                        onBack={retry}
+                    >
+                        <main>Retained source</main>
+                    </PageReadinessBoundary>,
+                ),
+            );
+        try {
+            present('target-one');
+            expect(failed).toHaveBeenCalledOnce();
+            present('target-two');
+            expect(failed).toHaveBeenCalledTimes(2);
+            expect(host.querySelector('main')?.textContent).toBe('Retained source');
+        } finally {
+            document.removeEventListener('storefront:page-error', failed);
+        }
+    });
+
     it('retains skeleton readiness registration and emits page-ready when its token is released', () => {
         const ready = vi.fn();
         document.addEventListener('storefront:page-ready', ready);

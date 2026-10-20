@@ -30,8 +30,8 @@ import { ProductRow } from '../components/common/product-row';
 import { useDesktopLayout } from '../desktop-layout';
 import { languageCodeFor } from '../i18n';
 import { isInputMethodKey } from '../input-method';
-import { storefrontInitialQueryError } from '../loading-state';
-import { usePageReadiness } from '../page-readiness';
+import { offlineLoadError, storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
+import { PageReadinessError, usePageLoadingState, usePageReadiness } from '../page-readiness';
 import { priceSortActionLabel } from '../price-sort-label';
 import {
     STOREFRONT_CATALOG_PAGE_SIZE,
@@ -163,15 +163,19 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         inStockOnly: filters.inStockOnly || undefined,
     };
     const queryClient = useQueryClient();
+    const searchQueryKey = storefrontQueryKeys.catalog(marketKey, languageCode, searchInput);
+    const readIdentity = JSON.stringify(searchQueryKey);
+    const currentRead = useRef(readIdentity);
+    currentRead.current = readIdentity;
     const searchQuery = useInfiniteQuery({
-        queryKey: storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
+        queryKey: searchQueryKey,
         queryFn: async ({ pageParam, signal }) => {
             const page = await api.catalog(
                 { ...searchInput, skip: pageParam, take: STOREFRONT_CATALOG_PAGE_SIZE },
                 signal,
             );
             const cached = queryClient.getQueryData<{ pages: ProductSearchPage[]; pageParams: number[] }>(
-                storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
+                searchQueryKey,
             );
             const previousIds = new Set(
                 cached?.pages.flatMap((previous, index) =>
@@ -185,20 +189,40 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                 isZh ? '暂时无法加载更多商品，请重试' : 'Could not load more products. Please retry.',
             );
         },
-        initialPageParam: 0,
+        initialPageParam: searchInput.skip ?? 0,
         getNextPageParam: nextCatalogPageParam,
         enabled: contextResolved && !!term && (!embedded || embedded.active),
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
         placeholderData: (previous, previousQuery) =>
-            storefrontPlaceholderData(
-                previous,
-                previousQuery?.queryKey,
-                storefrontQueryKeys.catalog(marketKey, languageCode, searchInput),
-            ),
+            storefrontPlaceholderData(previous, previousQuery?.queryKey, searchQueryKey),
         meta: publicQueryMeta(),
     });
-    usePageReadiness(Boolean(term) && (!embedded || embedded.active) && searchQuery.isPending);
+    const appending =
+        searchQuery.isFetchingNextPage ||
+        (searchQuery.isPaused &&
+            queryClient.getQueryState(searchQueryKey)?.fetchMeta?.fetchMore?.direction === 'forward');
+    usePageReadiness(
+        Boolean(term) && (!embedded || embedded.active) && (searchQuery.isPending || appending),
+        'local',
+        readIdentity,
+    );
+    const loadingState = usePageLoadingState();
+    const retrySearch = (append = false) => {
+        const read = () => {
+            if (currentRead.current !== readIdentity) return;
+            if (append) void searchQuery.fetchNextPage({ cancelRefetch: false });
+            else void searchQuery.refetch({ cancelRefetch: false });
+        };
+        const recover = () => {
+            if (searchQuery.isFetching && !searchQuery.isPaused) {
+                void queryClient.cancelQueries({ queryKey: searchQueryKey, exact: true }).then(read);
+            } else read();
+        };
+        if (loadingState) loadingState.retryRead(recover);
+        else recover();
+    };
+    const retryAppend = () => retrySearch(true);
     const suggestionsQuery = useQuery({
         // A bounded suggestion page must never overwrite the infinite result cache.
         queryKey: [
@@ -236,12 +260,18 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
             return true;
         });
     }, [searchQuery.data?.pages]);
-    const totalItems = searchQuery.data?.pages[0]?.totalItems ?? 0;
-    const searching = !!term && searchQuery.isPending && !searchQuery.isError;
+    const totalItems = searchQuery.data?.pages.at(-1)?.totalItems ?? 0;
+    const remainingItems = Math.max(0, totalItems - (searchInput.skip ?? 0) - results.length);
+    const searching = !!term && storefrontQueryPresentation(searchQuery).initialLoading;
+    const searchTimedOut = searching && loadingState?.phase === 'error';
     const searchError = storefrontInitialQueryError(searchQuery, language);
-    const loadMoreError = searchQuery.isFetchNextPageError
-        ? storefrontErrorMessage(searchQuery.error, language)
-        : '';
+    const appendTimedOut = appending && !searchQuery.isPaused && loadingState?.phase === 'error';
+    const loadMoreError =
+        appending && searchQuery.isPaused
+            ? offlineLoadError(language)
+            : searchQuery.isFetchNextPageError
+              ? storefrontErrorMessage(searchQuery.error, language)
+              : '';
     const relatedProducts = products
         .filter(product => !results.some(result => result.id === product.id))
         .slice(0, 4);
@@ -285,13 +315,14 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         }
     };
     const updateFilters = (next: typeof filters) => {
-        setFilters(next);
+        const resetFilters = { ...next, page: 1 };
+        setFilters(resetFilters);
         if (!embedded)
             void navigate({
                 ...routeNavigateOptions({
                     name: 'search',
                     term,
-                    ...catalogRouteSearch({ name: 'search', ...next }),
+                    ...catalogRouteSearch({ name: 'search', ...resetFilters }),
                 }),
                 replace: true,
             } as never);
@@ -300,6 +331,8 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
     const submit = (value = query) => {
         const next = value.trim();
         if (!next || composing) return;
+        const resetFilters = { ...filters, page: 1 };
+        setFilters(resetFilters);
         setQuery(next);
         setSubmittedQuery(next);
         setActiveSuggestion(-1);
@@ -309,7 +342,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                 ...routeNavigateOptions({
                     name: 'search',
                     term: next,
-                    ...catalogRouteSearch({ name: 'search', ...filters }),
+                    ...catalogRouteSearch({ name: 'search', ...resetFilters }),
                 }),
                 replace: true,
             } as never);
@@ -434,7 +467,9 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         <Page
             className={embedded ? 'search-page is-embedded-search' : 'page subpage search-page'}
             data-page-pending={
-                term && !showSuggestions && (searching || searchQuery.isPlaceholderData) ? 'query' : undefined
+                term && !showSuggestions && !searchTimedOut && (searching || searchQuery.isPlaceholderData)
+                    ? 'query'
+                    : undefined
             }
         >
             <CommercePageStyles />
@@ -632,11 +667,11 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                     <header className="search-results-heading">
                         <h2>{isZh ? '“' + term + '”的结果' : 'Results for “' + term + '”'}</h2>
                         <span role="status">
-                            {searching || searchQuery.isPlaceholderData
+                            {(searching && !searchTimedOut) || searchQuery.isPlaceholderData
                                 ? isZh
                                     ? '搜索中'
                                     : 'Searching'
-                                : searchError && !results.length
+                                : (searchError && !results.length) || searchTimedOut
                                   ? isZh
                                       ? '暂不可用'
                                       : 'Unavailable'
@@ -712,7 +747,15 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                             </button>
                         </div>
                     )}
-                    {searching ? (
+                    {searchTimedOut && loadingState ? (
+                        <PageReadinessError
+                            inline
+                            state={{
+                                ...loadingState,
+                                retry: () => retrySearch(),
+                            }}
+                        />
+                    ) : searching ? (
                         embedded ? (
                             <ListSkeleton
                                 className="product-list"
@@ -775,20 +818,17 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                     />
                                 ),
                             )}
-                            {loadMoreError && (
+                            {appendTimedOut && loadingState ? (
+                                <PageReadinessError inline state={{ ...loadingState, retry: retryAppend }} />
+                            ) : loadMoreError ? (
                                 <div className="search-load-error" role="alert">
                                     <span>{loadMoreError}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            void searchQuery.fetchNextPage({ cancelRefetch: false })
-                                        }
-                                    >
+                                    <button type="button" onClick={retryAppend}>
                                         {isZh ? '重试' : 'Retry'}
                                     </button>
                                 </div>
-                            )}
-                            {results.length < totalItems && (
+                            ) : null}
+                            {searchQuery.hasNextPage && !appendTimedOut && !loadMoreError && (
                                 <button
                                     className="load-more-button search-load-more"
                                     type="button"
@@ -800,8 +840,8 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                                             ? '加载中'
                                             : 'Loading'
                                         : isZh
-                                          ? '加载更多（剩余 ' + (totalItems - results.length) + ' 件）'
-                                          : 'Load more (' + (totalItems - results.length) + ' remaining)'}
+                                          ? '加载更多（剩余 ' + remainingItems + ' 件）'
+                                          : 'Load more (' + remainingItems + ' remaining)'}
                                 </button>
                             )}
                         </div>

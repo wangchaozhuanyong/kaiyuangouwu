@@ -155,7 +155,9 @@ export function performanceReport(log) {
             'Fewer than 20 unique metric samples, unknown region or unknown network cannot PASS. ' +
             'Synthetic measurements require a separate report. LCP phase p75 values are diagnostic only: ' +
             'their individual sample counts may differ, and their sum is not total LCP p75. ' +
-            'NAV metrics measure committed SPA routes only; IMAGE_PRESENT is the slowest observed visible ' +
+            'NAV_RENDER/NAV_READY measure committed SPA routes; NAV_ERROR also includes an active target ' +
+            'that fails before commit, excluding retained-source failures and canceled navigation. ' +
+            'IMAGE_PRESENT is the slowest observed visible ' +
             'pending-to-painted frame per route, not full network time or a white-frame detector. ' +
             'Already painted images and hidden/offscreen waits are not measured zeros. ' +
             'Experience metrics have no pass threshold.',

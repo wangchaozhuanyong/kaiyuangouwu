@@ -717,6 +717,77 @@ describe('public page fetch boundary', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1);
     });
 
+    it('releases an abandoned aggregate read so a retry starts before the old response arrives', async () => {
+        const completions: Array<(response: Response) => void> = [];
+        const signals: AbortSignal[] = [];
+        const fetchMock = vi.fn((_url, options) => {
+            signals.push(options.signal);
+            return new Promise<Response>(resolve => completions.push(resolve));
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const { fetchPublicPage } = await import('./storefront-page-data');
+        const first = new AbortController();
+        const cancelled = fetchPublicPage('en', 'MYR', first.signal);
+        const rejection = expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+        first.abort();
+        await rejection;
+        expect(signals[0].aborted).toBe(true);
+        const retry = fetchPublicPage('en', 'MYR');
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const newer = { ...fixture(), version: 'retry' };
+        completions[1](Response.json(newer));
+        await expect(retry).resolves.toMatchObject({ version: 'retry' });
+        completions[0](Response.json(fixture()));
+        await Promise.resolve();
+    });
+
+    it('does not restart an abandoned bootstrap read as an unowned fallback', async () => {
+        let transportSignal!: AbortSignal;
+        const fetchMock = vi.fn((_url, options) => {
+            transportSignal = options.signal;
+            return new Promise<Response>((_resolve, reject) =>
+                transportSignal.addEventListener('abort', () =>
+                    reject(new DOMException('Aborted', 'AbortError')),
+                ),
+            );
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const { startPublicPageBootstrap } = await import('./public-page-transport');
+        const { fetchPublicPage } = await import('./storefront-page-data');
+        startPublicPageBootstrap({ kind: 'home' }, 'en', 'MYR');
+        const controller = new AbortController();
+        const cancelled = fetchPublicPage('en', 'MYR', controller.signal);
+        const rejection = expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+        controller.abort();
+        await rejection;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(transportSignal.aborted).toBe(true);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps an aggregate transport alive for its remaining consumer', async () => {
+        let complete!: (response: Response) => void;
+        let transportSignal!: AbortSignal;
+        const fetchMock = vi.fn((_url, options) => {
+            transportSignal = options.signal;
+            return new Promise<Response>(resolve => {
+                complete = resolve;
+            });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const { fetchPublicPage } = await import('./storefront-page-data');
+        const first = new AbortController();
+        const cancelled = fetchPublicPage('en', 'MYR', first.signal);
+        const remaining = fetchPublicPage('en', 'MYR');
+        const rejection = expect(cancelled).rejects.toMatchObject({ name: 'AbortError' });
+        first.abort();
+        await rejection;
+        expect(transportSignal.aborted).toBe(false);
+        complete(Response.json(fixture()));
+        await expect(remaining).resolves.toMatchObject({ version: 'v1' });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
     it('rejects cancellation during JSON parsing before the result can seed any public query', async () => {
         const controller = new AbortController();
         const page = fixture();

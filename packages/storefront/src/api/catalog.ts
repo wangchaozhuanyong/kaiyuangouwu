@@ -25,12 +25,12 @@ export class CatalogApi extends BaseDomainApi {
     async products(take = 16, signal?: AbortSignal): Promise<Product[]> {
         const result = await this.request<{ products: { items: Product[] } }>(
             `
-            query StorefrontProducts($options: ProductListOptions) {
-                products(options: $options) {
-                    items { ${productSummaryFields} }
-                }
-            }
-        `,
+query StorefrontProducts($options: ProductListOptions) {
+  products(options: $options) {
+    items { ${productSummaryFields} }
+  }
+}
+`,
             { options: { take, sort: { name: 'ASC' } } },
             signal,
         );
@@ -56,14 +56,14 @@ export class CatalogApi extends BaseDomainApi {
         }
         const result = await this.request<{ product: Product | null }>(
             `
-                query StorefrontProduct($id: ID!) {
-                    product(id: $id) {
-                        ${productFields}
-                        ${productPackagingFields}
-                        variants { storeCouponCollectionIds }
-                    }
-                }
-            `,
+query StorefrontProduct($id: ID!) {
+  product(id: $id) {
+    ${productFields}
+    ${productPackagingFields}
+    variants { storeCouponCollectionIds }
+  }
+}
+`,
             { id },
             signal,
         );
@@ -116,13 +116,13 @@ export class CatalogApi extends BaseDomainApi {
         try {
             const result = await this.request<{ storefrontCatalog: ProductSearchPage }>(
                 `
-                    query StorefrontCatalog($input: StorefrontCatalogInput!) {
-                        storefrontCatalog(input: $input) {
-                            totalItems
-                            items { ${productSummaryFields} }
-                        }
-                    }
-                `,
+query StorefrontCatalog($input: StorefrontCatalogInput!) {
+  storefrontCatalog(input: $input) {
+    totalItems
+    items { ${productSummaryFields} }
+  }
+}
+`,
                 {
                     input: request.input,
                 },
@@ -160,8 +160,8 @@ export class CatalogApi extends BaseDomainApi {
     async dailyRecommendations(signal?: AbortSignal): Promise<DailyRecommendations> {
         const result = await this.request<{ storefrontDailyRecommendations: DailyRecommendations }>(
             `query StorefrontDailyRecommendations {
-                storefrontDailyRecommendations { businessDate expiresAt items { ${productSummaryFields} } }
-            }`,
+storefrontDailyRecommendations { businessDate expiresAt items { ${productSummaryFields} } }
+}`,
             undefined,
             signal,
         );
@@ -182,13 +182,13 @@ export class CatalogApi extends BaseDomainApi {
                 storefrontProductSales: Array<{ productId: string; quantity: number }>;
             }>(
                 `
-                    query StorefrontProductSales($productIds: [ID!]!) {
-                        storefrontProductSales(productIds: $productIds) {
-                            productId
-                            quantity
-                        }
-                    }
-                `,
+query StorefrontProductSales($productIds: [ID!]!) {
+  storefrontProductSales(productIds: $productIds) {
+    productId
+    quantity
+  }
+}
+`,
                 { productIds: batch },
                 signal,
             );
@@ -208,32 +208,32 @@ export class CatalogApi extends BaseDomainApi {
                 collections: { items: CollectionSummary[]; totalItems?: number };
             }>(
                 `
-            query StorefrontCollections($skip: Int!) {
-                collections(options: { take: 100, skip: $skip, topLevelOnly: true, sort: { position: ASC } }) {
-                    totalItems
-                    items {
-                        id
-                        name
-                        slug
-                        description
-                        position
-                        parentId
-                        productVariantCount
-                        featuredAsset { id preview }
-                        children {
-                            id
-                            name
-                            slug
-                            description
-                            position
-                            parentId
-                            productVariantCount
-                            featuredAsset { id preview }
-                        }
-                    }
-                }
-            }
-        `,
+query StorefrontCollections($skip: Int!) {
+  collections(options: { take: 100, skip: $skip, topLevelOnly: true, sort: { position: ASC } }) {
+    totalItems
+    items {
+      id
+      name
+      slug
+      description
+      position
+      parentId
+      productVariantCount
+      featuredAsset { id preview }
+      children {
+        id
+        name
+        slug
+        description
+        position
+        parentId
+        productVariantCount
+        featuredAsset { id preview }
+      }
+    }
+  }
+}
+`,
                 { skip: items.length },
                 signal,
             );

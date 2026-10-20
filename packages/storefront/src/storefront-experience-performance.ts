@@ -140,10 +140,15 @@ export function observeStorefrontExperience(report: ExperienceReport): () => voi
         navigation = undefined;
     };
     const error = () => {
+        const boundary = document.querySelector<HTMLElement>('[data-page-readiness]');
+        const targetFailed =
+            !document.hidden &&
+            router.state.location === navigation?.target &&
+            boundary?.dataset.navigationReadiness === 'error';
         if (
-            currentCommit() &&
             navigation &&
-            document.querySelector<HTMLElement>('[data-page-readiness]')?.dataset.pageReadiness === 'error'
+            performance.now() - navigation.started <= MAX_NAVIGATION_MS &&
+            (targetFailed || (currentCommit() && boundary?.dataset.pageReadiness === 'error'))
         ) {
             report(navigation.sampleId, navigation.pageType, 'NAV_ERROR', 1);
             navigation = undefined;

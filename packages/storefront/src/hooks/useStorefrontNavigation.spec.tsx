@@ -1100,6 +1100,30 @@ describe('storefront navigation state', () => {
         expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/cart' }));
     });
 
+    it('opens authentication on the still-visible page and replaces an uncommitted destination', async () => {
+        authenticated = false;
+        router.state.status = 'pending';
+        router.state.matches = [
+            { pathname: '/category', search: { collectionId: 'first', minPrice: '10' }, searchStr: '' },
+        ];
+        router.state.location = { pathname: '/services', search: {}, searchStr: '' };
+        act(() => root.render(<Harness />));
+        await authAction(() => value.navigate({ name: 'purchase', id: 'variant-7', quantity: 2 }));
+        expect(router.navigate).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                to: '/category',
+                replace: true,
+                resetScroll: false,
+                search: expect.objectContaining({
+                    collectionId: 'first',
+                    minPrice: '10',
+                    auth: 'login',
+                    authTarget: '/purchase?id=variant-7&quantity=2',
+                }),
+            }),
+        );
+    });
+
     it('pushes the first auth opening on the current page without resetting its scroll or filters', async () => {
         router.state.location = {
             pathname: '/category',

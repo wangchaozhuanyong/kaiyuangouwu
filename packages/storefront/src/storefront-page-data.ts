@@ -29,6 +29,7 @@ import { languageCodeFor, marketForStorefrontConfig } from './i18n';
 import { asListProduct } from './product-summary';
 import {
     awaitPublicPage,
+    cancelPublicPageRequest,
     publicPageUrl,
     requestPublicPage,
     takePublicPageBootstrap,
@@ -326,7 +327,7 @@ export async function fetchPublicPage(
     const key = `${generation}:${url.href}`;
     let flight = validatedFlights.get(key);
     if (!flight) {
-        flight = (async () => {
+        const promise = (async () => {
             const early = takePublicPageBootstrap(normalized, { languageCode, currencyCode });
             let value = early
                 ? await early.catch(error => {
@@ -335,6 +336,8 @@ export async function fetchPublicPage(
                       return undefined;
                   })
                 : undefined;
+            if (flight && validatedFlights.get(key) !== flight)
+                throw new DOMException('Request aborted', 'AbortError');
             // A first visit may have no preference cookie yet. Only adopt an exact public scope.
             if (
                 value !== undefined &&
@@ -374,20 +377,27 @@ export async function fetchPublicPage(
             pageGenerations.set(responsePage, generation);
             return responsePage;
         })();
+        flight = { promise, consumers: 0 };
         validatedFlights.set(key, flight);
-        void flight
+        void promise
             .finally(() => {
                 if (validatedFlights.get(key) === flight) validatedFlights.delete(key);
             })
             .catch(() => undefined);
     }
+    flight.consumers++;
     let page: PublicPageData | undefined;
     try {
-        page = (await awaitPublicPage(flight, signal)) as PublicPageData | undefined;
+        page = (await awaitPublicPage(flight.promise, signal)) as PublicPageData | undefined;
     } catch (error) {
         if (signal?.aborted || generation !== publicPageReadGeneration())
             throw new DOMException('Request invalidated', 'AbortError');
         throw error;
+    } finally {
+        if (--flight.consumers === 0 && signal?.aborted && validatedFlights.get(key) === flight) {
+            validatedFlights.delete(key);
+            cancelPublicPageRequest(url, generation);
+        }
     }
     if (signal?.aborted || generation !== publicPageReadGeneration())
         throw new DOMException('Request invalidated', 'AbortError');
@@ -399,7 +409,10 @@ export async function fetchPublicPage(
     return page;
 }
 
-const validatedFlights = new Map<string, Promise<PublicPageData | undefined>>();
+const validatedFlights = new Map<
+    string,
+    { promise: Promise<PublicPageData | undefined>; consumers: number }
+>();
 const pageGenerations = new WeakMap<PublicPageData, number>();
 // Provenance of the existing Query-owned array, not another store of response data.
 const publicMediaOrigins = new WeakMap<
@@ -449,7 +462,7 @@ export function storefrontRouteCodeLoader({
     return preloadStorefrontRouteComponent(routeFromRouterLocation(location.pathname, location.search).name);
 }
 
-/** Prepare code and required data together under the Router's body-only pending boundary. */
+/** Prepare code and data together while preserving the published page. */
 export async function publicPageRouteLoader({
     location,
     abortController,
@@ -457,12 +470,15 @@ export async function publicPageRouteLoader({
     location: { publicHref: string; pathname: string; search: Record<string, unknown> };
     abortController: AbortController;
 }): Promise<void> {
-    await Promise.all([
-        storefrontRouteCodeLoader({ location }),
-        prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
-            () => undefined,
-        ),
-    ]);
+    const code = storefrontRouteCodeLoader({ location });
+    const data = prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
+        () => undefined,
+    );
+    await code;
+    // Catalogs commit their controls immediately; the result region owns the read.
+    // Preloads also release it, because Router reuses them on click.
+    const name = routeFromRouterLocation(location.pathname, location.search).name;
+    if (name !== 'category' && name !== 'search') await data;
 }
 
 /** Navigation starts code and data together; the route query adopts this exact response. */

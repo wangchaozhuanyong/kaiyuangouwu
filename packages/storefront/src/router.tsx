@@ -1,13 +1,11 @@
 // Release alignment: perf-unified-architecture-20260911
 import { createBrowserHistory, createRouter, useRouterState } from '@tanstack/react-router';
 
-import { PageBackButton } from './components/common/page-back-button';
-import { usePageLoadingState } from './page-readiness';
 import { publicRouteRewrite } from './public-route-rewrite';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import { registerStorefrontNavigationHistory } from './storefront-navigation-history';
-import { getStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
+import { createStorefrontScrollRestorationKey, routeFromHash, routeHref } from './storefront-router';
 
 if (typeof window !== 'undefined') {
     const { history, location } = window;
@@ -16,6 +14,7 @@ if (typeof window !== 'undefined') {
     }
 }
 
+const scroll = createStorefrontScrollRestorationKey(() => router.state);
 export const router = createRouter({
     routeTree,
     history: createBrowserHistory(),
@@ -34,32 +33,25 @@ export const router = createRouter({
     },
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
-    // Keep the current route through short waits. A slow destination replaces only
-    // its Outlet body; the shared shell and its actions stay mounted.
-    defaultPendingMs: 200,
+    // Keep the published page and its callbacks until the destination is ready.
+    // PageReadinessBoundary owns the delayed, non-blocking navigation feedback;
+    // a pending Outlet must not hide content the customer is still viewing.
+    defaultPendingMs: Infinity,
     defaultPendingMinMs: 0,
     defaultPendingComponent: StorefrontPendingPage,
     scrollRestoration: true,
     scrollToTopSelectors: ['[data-scroll-restoration-id="category-results"]'],
-    getScrollRestorationKey: getStorefrontScrollRestorationKey,
+    getScrollRestorationKey: location => scroll.getKey(location),
 });
 
 registerStorefrontNavigationHistory(router);
+router.subscribe('onLoad', event => scroll.commit(event.toLocation));
 
 function StorefrontPendingPage() {
-    const location = useRouterState({ select: s => s.matches.at(-1) ?? s.location });
-    const readiness = usePageLoadingState();
-    return (
-        <>
-            {readiness && (
-                <PageBackButton
-                    label={readiness.language === 'zh' ? '返回' : 'Back'}
-                    onClick={readiness.onBack}
-                />
-            )}
-            <PageSkeleton variant={pageSkeletonVariantForPathname(location.pathname)} />
-        </>
-    );
+    const pathname = useRouterState({ select: s => s.location.pathname });
+    // Normal navigation retains the source page and its own controls. This fallback
+    // is only for an entry without ready content or an unresolved render boundary.
+    return <PageSkeleton variant={pageSkeletonVariantForPathname(pathname)} />;
 }
 
 declare module '@tanstack/react-router' {

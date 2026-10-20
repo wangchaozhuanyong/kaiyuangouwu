@@ -57,6 +57,8 @@ vi.mock('./components/common/desktop-account-navigation', async importOriginal =
     DesktopAccountNavigation: () => <div>DESKTOP_ACCOUNT_NAVIGATION</div>,
 }));
 vi.mock('@tanstack/react-router', () => ({
+    useRouter: () => ({ state: { status: 'idle' } }),
+    useRouterState: () => '/',
     Outlet: () => {
         const context = useContext(StorefrontContext);
         const draft = useContext(AuthEmailDraftContext);

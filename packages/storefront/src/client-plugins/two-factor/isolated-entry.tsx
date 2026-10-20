@@ -40,6 +40,8 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
     const [migrating, setMigrating] = useState(false);
     const [legacy, setLegacy] = useState(false);
     const [ready, setReady] = useState(false);
+    const [timedOut, setTimedOut] = useState(false);
+    const [attempt, setAttempt] = useState(0);
     let origin: string | null = null;
     let invalid = false;
     try {
@@ -47,6 +49,11 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
     } catch {
         invalid = true;
     }
+    useEffect(() => {
+        if (!origin || migrating || ready) return;
+        const timeout = window.setTimeout(() => setTimedOut(true), 10_000);
+        return () => window.clearTimeout(timeout);
+    }, [origin, migrating, ready, attempt]);
     useEffect(() => {
         if (!origin) return;
         try {
@@ -66,8 +73,10 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
                     },
                     origin,
                 );
-            } else if (event.data?.type === 'vendure-vault-initialized') setReady(true);
-            else if (event.data?.type === 'vendure-vault-back') props.onBack();
+            } else if (event.data?.type === 'vendure-vault-initialized') {
+                setReady(true);
+                setTimedOut(false);
+            } else if (event.data?.type === 'vendure-vault-back') props.onBack();
         };
         window.addEventListener('message', receive);
         return () => window.removeEventListener('message', receive);
@@ -95,6 +104,7 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
                     onClick={() => {
                         setMigrating(false);
                         setReady(false);
+                        setTimedOut(false);
                     }}
                 >
                     {props.language === 'zh' ? '返回安全页面' : 'Return to secure page'}
@@ -115,14 +125,34 @@ function IsolatedEntrySession(props: Parameters<typeof CustomerTwoFactorEntry>[0
                         : 'Migrate accounts from old browser storage'}
                 </button>
             )}
-            {!ready && (
+            {!ready && !timedOut && (
                 <p role="status" className="p-4">
                     {props.language === 'zh'
-                        ? '正在连接 2FA 安全页面。若持续未加载，请联系管理员。'
-                        : 'Connecting to the secure 2FA page. Contact support if it does not load.'}
+                        ? '正在连接 2FA 安全页面。'
+                        : 'Connecting to the secure 2FA page.'}
                 </p>
             )}
+            {!ready && timedOut && (
+                <div role="alert" className="p-4">
+                    <p>
+                        {props.language === 'zh'
+                            ? '2FA 安全页面连接超时，请重试。'
+                            : 'The secure 2FA page took too long to connect. Please retry.'}
+                    </p>
+                    <button
+                        type="button"
+                        className="mt-2 min-h-11 rounded-xl border px-4"
+                        onClick={() => {
+                            setTimedOut(false);
+                            setAttempt(value => value + 1);
+                        }}
+                    >
+                        {props.language === 'zh' ? '重试' : 'Retry'}
+                    </button>
+                </div>
+            )}
             <iframe
+                key={attempt}
                 ref={iframe}
                 onLoad={() =>
                     iframe.current?.contentWindow?.postMessage(

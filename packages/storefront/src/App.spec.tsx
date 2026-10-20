@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
     storefrontContextValue: { market: { code: 'fixture', currencyCode: 'CNY' }, language: 'zh' },
 }));
 vi.mock('./hooks/useStorefrontAppState', () => ({ useStorefrontAppState: () => state }));
+vi.mock('./hooks/useStorefrontScrollContinuity', () => ({ useStorefrontScrollContinuity: () => undefined }));
 vi.mock('./StorefrontShell', () => ({ StorefrontShell: () => <main>STORE_SHELL</main> }));
 vi.mock('./storefront-ui/content-ui', () => ({ HomeDualCategoryShowcase: () => null }));
 vi.mock('@tanstack/react-router', async () => {

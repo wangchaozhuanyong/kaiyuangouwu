@@ -66,6 +66,37 @@ afterEach(() => {
 });
 
 describe('shared storefront return history', () => {
+    it('keeps pending source presentation separate from the target and a replaced login background', () => {
+        const flow = harness(['/category?collectionId=a']);
+        const sourceKey = flow.history.location.state.__TSR_key;
+        const source = getStorefrontNavigationEntryPresentation(flow.history);
+        flow.push({ name: 'home' });
+        expect(getStorefrontNavigationEntryPresentation(flow.history, sourceKey)).toBe(source);
+        const pendingSource = getStorefrontNavigationEntryPresentation(flow.history, sourceKey);
+        if (!pendingSource) throw new Error('Expected the source navigation presentation');
+        pendingSource.categoryNavigation = {
+            scope: 'store:category-a',
+            collapsed: true,
+        };
+        expect(getStorefrontNavigationEntryPresentation(flow.history)?.categoryNavigation).toBeUndefined();
+        flow.history.replace('/category?collectionId=a&auth=login');
+        const backgroundKey = flow.history.location.state.__TSR_key;
+        const background = getStorefrontNavigationEntryPresentation(flow.history, backgroundKey);
+        expect(background).not.toBe(source);
+        flow.push({ name: 'services' });
+        if (!background) throw new Error('Expected the login background presentation');
+        background.categoryNavigation = { scope: 'store:category-a', collapsed: false };
+        expect(
+            getStorefrontNavigationEntryPresentation(flow.history, sourceKey)?.categoryNavigation?.collapsed,
+        ).toBe(true);
+        expect(getStorefrontNavigationEntryPresentation(flow.history)?.categoryNavigation).toBeUndefined();
+        flow.actualGo(-1);
+        expect(getStorefrontNavigationEntryPresentation(flow.history)?.categoryNavigation?.collapsed).toBe(
+            false,
+        );
+        expect(getStorefrontNavigationEntryPresentation(flow.history, 'removed-entry')).toBeUndefined();
+    });
+
     it('retains catalog presentation on back without emitting a navigation to save it', () => {
         const flow = harness(['/category?collectionId=a']);
         const notify = vi.fn();

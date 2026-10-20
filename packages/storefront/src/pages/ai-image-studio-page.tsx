@@ -142,7 +142,10 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
     const isZh = language === 'zh';
     const initialCached = getStudioCachedData(market.code, customer?.id);
     const [config, setConfig] = useState<ImageStudioConfig | null>(() => initialCached?.config ?? null);
-    const [balance, setBalance] = useState(() => initialCached?.balance ?? 0);
+    const [balance, setBalance] = useState<number | null>(() => initialCached?.balance ?? null);
+    const [walletReadReady, setWalletReadReady] = useState(false);
+    const [promptReadReady, setPromptReadReady] = useState(false);
+    const [modelReadReady, setModelReadReady] = useState(false);
     const [walletCurrencyCode, setWalletCurrencyCode] = useState(
         () => initialCached?.walletCurrencyCode || market.currencyCode,
     );
@@ -379,6 +382,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                     jobs: [],
                     historyIds: [],
                     historyTotal: 0,
+                    lastFetchedAt: Date.now(),
                 });
                 return;
             }
@@ -388,32 +392,31 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                 api.imageModelQuotaStatus(),
             ]);
             if (epoch !== loadEpoch.current) return;
-            let currentBalance = 0;
-            let currentCurrency = market.currencyCode;
+            setWalletReadReady(wallet.status === 'fulfilled');
+            setPromptReadReady(loadedPromptQuota.status === 'fulfilled');
+            setModelReadReady(loadedModelQuotas.status === 'fulfilled');
             if (wallet.status === 'fulfilled') {
-                currentBalance = wallet.value.availableBalance;
-                currentCurrency = wallet.value.currencyCode;
-                setBalance(currentBalance);
-                setWalletCurrencyCode(currentCurrency);
+                setBalance(wallet.value.availableBalance);
+                setWalletCurrencyCode(wallet.value.currencyCode);
             }
-            const currentPromptQuota = usablePromptQuota(
-                loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null,
-                wallet.status === 'fulfilled',
-            );
-            setPromptQuota(currentPromptQuota);
-            let currentModelQuotas: ImageModelQuotaStatus[] = [];
+            if (loadedPromptQuota.status === 'fulfilled') setPromptQuota(loadedPromptQuota.value);
             if (loadedModelQuotas.status === 'fulfilled') {
-                currentModelQuotas = loadedModelQuotas.value;
-                setModelQuotas(currentModelQuotas);
+                setModelQuotas(loadedModelQuotas.value);
             }
+            const complete = [wallet, loadedPromptQuota, loadedModelQuotas].every(
+                result => result.status === 'fulfilled',
+            );
             setStudioCachedData(market.code, customer.id, {
                 config: studioConfig,
-                balance: currentBalance,
-                walletCurrencyCode: currentCurrency,
-                promptQuota: currentPromptQuota,
-                modelQuotas: currentModelQuotas,
+                ...(wallet.status === 'fulfilled' && {
+                    balance: wallet.value.availableBalance,
+                    walletCurrencyCode: wallet.value.currencyCode,
+                }),
+                ...(loadedPromptQuota.status === 'fulfilled' && { promptQuota: loadedPromptQuota.value }),
+                ...(loadedModelQuotas.status === 'fulfilled' && { modelQuotas: loadedModelQuotas.value }),
+                ...(complete && { lastFetchedAt: Date.now() }),
             });
-            if ([wallet, loadedPromptQuota, loadedModelQuotas].some(result => result.status === 'rejected')) {
+            if (!complete) {
                 setRefreshWarning(
                     isZh
                         ? '部分数据刷新失败，已保留现有内容，请点击“刷新”重试。'
@@ -422,6 +425,9 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
             }
         } catch (error) {
             if (epoch === loadEpoch.current) {
+                setWalletReadReady(false);
+                setPromptReadReady(false);
+                setModelReadReady(false);
                 if (configRef.current) {
                     setRefreshWarning(customerErrorMessage(error, isZh));
                 } else {
@@ -464,16 +470,14 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                 setJobs(current => current.map(job => refreshed.get(job.id) ?? job));
             }
         } else partialFailure = true;
+        setWalletReadReady(wallet.status === 'fulfilled');
+        setPromptReadReady(loadedPromptQuota.status === 'fulfilled');
+        setModelReadReady(loadedModelQuotas.status === 'fulfilled');
         if (wallet.status === 'fulfilled') {
             setBalance(wallet.value.availableBalance);
             setWalletCurrencyCode(wallet.value.currencyCode);
         } else partialFailure = true;
-        setPromptQuota(
-            usablePromptQuota(
-                loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null,
-                wallet.status === 'fulfilled',
-            ),
-        );
+        if (loadedPromptQuota.status === 'fulfilled') setPromptQuota(loadedPromptQuota.value);
         if (loadedPromptQuota.status === 'rejected') partialFailure = true;
         if (loadedModelQuotas.status === 'fulfilled') setModelQuotas(loadedModelQuotas.value);
         else partialFailure = true;
@@ -492,7 +496,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
         if (!cached?.config) {
             setLoading(true);
             setConfig(null);
-            setBalance(0);
+            setBalance(null);
             setWalletCurrencyCode(market.currencyCode);
             setPromptQuota(null);
             setModelQuotas([]);
@@ -609,6 +613,9 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
         budgetReady &&
         termsAccepted &&
         quoteCurrencyReady &&
+        walletReadReady &&
+        modelReadReady &&
+        balance !== null &&
         balance >= estimatedPrice &&
         (selectedQuota?.safety.remaining ?? 0) >= quantity &&
         (paidQuantity === 0 || Boolean(selectedQuota?.paidAfterFreeEnabled)) &&
@@ -647,12 +654,15 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
     const paidOptimization = Boolean(
         promptQuota && !promptQuota.daily.unlimited && promptQuota.daily.remaining <= 0,
     );
+    const confirmedPromptQuota = promptReadReady ? usablePromptQuota(promptQuota, walletReadReady) : null;
     const optimizationReady = Boolean(
+        confirmedPromptQuota &&
         promptQuota &&
         (!paidOptimization ||
             (promptQuota.paidEnabled &&
                 promptQuota.paidPrice > 0 &&
                 promptQuota.currencyCode === walletCurrencyCode &&
+                balance !== null &&
                 balance >= promptQuota.paidPrice)),
     );
     const optimizePrompt = async () => {
@@ -688,6 +698,8 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
             optimizeRequestRef.current = null;
             const wallet = await api.imageStudioWallet().catch(() => null);
             if (epoch !== settlementEpoch.current) return;
+            setWalletReadReady(wallet !== null);
+            setPromptReadReady(true);
             setPromptQuota(usablePromptQuota(result.promptQuota, wallet !== null));
             if (wallet) {
                 setBalance(wallet.availableBalance);
@@ -919,13 +931,16 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
             setHistoryFilter('ALL');
             showView('HISTORY', true);
             void loadHistory();
-            setBalance(value => Math.max(0, value - job.reservedAmount));
+            setBalance(value => (value === null ? null : Math.max(0, value - job.reservedAmount)));
             const [nextPromptQuota, nextModelQuotas, nextWallet] = await Promise.allSettled([
                 api.imagePromptQuotaStatus(),
                 api.imageModelQuotaStatus(),
                 api.imageStudioWallet(),
             ]);
             if (epoch !== settlementEpoch.current) return;
+            setWalletReadReady(nextWallet.status === 'fulfilled');
+            setPromptReadReady(nextPromptQuota.status === 'fulfilled');
+            setModelReadReady(nextModelQuotas.status === 'fulfilled');
             if (nextPromptQuota.status === 'fulfilled') setPromptQuota(nextPromptQuota.value);
             if (nextModelQuotas.status === 'fulfilled') setModelQuotas(nextModelQuotas.value);
             if (nextWallet.status === 'fulfilled') {
@@ -1346,12 +1361,12 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                                         ) : (
                                             <Sparkles />
                                         )}
-                                        {!promptQuota
+                                        {!confirmedPromptQuota
                                             ? isZh
                                                 ? '费用待更新'
                                                 : 'Pricing unavailable'
                                             : paidOptimization
-                                              ? `${isZh ? '付费优化' : 'Paid optimization'} · ${formatBillingMoney(promptQuota.paidPrice, promptQuota.currencyCode, market.locale)}/${isZh ? '次' : 'request'}`
+                                              ? `${isZh ? '付费优化' : 'Paid optimization'} · ${formatBillingMoney(confirmedPromptQuota.paidPrice, confirmedPromptQuota.currencyCode, market.locale)}/${isZh ? '次' : 'request'}`
                                               : isZh
                                                 ? '免费优化'
                                                 : 'Free optimization'}
@@ -1361,6 +1376,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                             {paidOptimization &&
                             promptQuota &&
                             promptQuota.currencyCode === walletCurrencyCode &&
+                            balance !== null &&
                             balance < promptQuota.paidPrice ? (
                                 <div className="ai-studio-error" role="status">
                                     {isZh
@@ -1655,11 +1671,15 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                                         <div className="ai-studio-settlement-amount">
                                             <small>{isZh ? '返利可用余额' : 'Available rewards'}</small>
                                             <strong className="is-balance">
-                                                {formatDisplayMoney(
-                                                    balance,
-                                                    billingCurrencyCode,
-                                                    market.locale,
-                                                )}
+                                                {balance === null
+                                                    ? isZh
+                                                        ? '待更新'
+                                                        : 'Unavailable'
+                                                    : formatDisplayMoney(
+                                                          balance,
+                                                          billingCurrencyCode,
+                                                          market.locale,
+                                                      )}
                                             </strong>
                                         </div>
                                         <div className="ai-studio-settlement-refund">
@@ -1679,7 +1699,7 @@ function AiImageStudioPageContent(props: Readonly<AiImageStudioPageProps>) {
                                         </div>
                                     </div>
                                 </div>
-                                {balance < estimatedPrice ? (
+                                {balance !== null && balance < estimatedPrice ? (
                                     <div className="ai-studio-low-balance" role="alert">
                                         <CircleAlert aria-hidden="true" />
                                         <span>

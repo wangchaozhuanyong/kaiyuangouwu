@@ -27,8 +27,13 @@ export function useCategoryNavigationCollapse(
         let active = true;
         let loading = false;
         const mobile = window.matchMedia('(max-width: 1023px)');
-        const ownerKey = router?.history.location.state.__TSR_key;
-        const saved = router && getStorefrontNavigationEntryPresentation(router.history)?.categoryNavigation;
+        const displayedEntry = () =>
+            router &&
+            getStorefrontNavigationEntryPresentation(
+                router.history,
+                router.options.getScrollRestorationKey?.(router.state.location),
+            );
+        const saved = displayedEntry()?.categoryNavigation;
         const restoreCollapsed = mobile.matches && saved?.scope === scope && saved.collapsed === true;
         setCollapsed(restoreCollapsed);
         viewport.style.height = restoreCollapsed ? '0px' : '';
@@ -45,8 +50,7 @@ export function useCategoryNavigationCollapse(
                         navigation,
                         initialCollapsed: restoreCollapsed,
                         onRemember: value => {
-                            if (!router || router.history.location.state.__TSR_key !== ownerKey) return;
-                            const entry = getStorefrontNavigationEntryPresentation(router.history);
+                            const entry = displayedEntry();
                             if (entry) entry.categoryNavigation = { scope, collapsed: value };
                         },
                         getLocks: () => locks.current,

@@ -1,4 +1,4 @@
-import { lazyRouteComponent, Outlet } from '@tanstack/react-router';
+import { lazyRouteComponent, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 
@@ -104,6 +104,8 @@ export function mountStorefrontEnhancements(
 }
 
 export function StorefrontShell({ state }: StorefrontShellProps) {
+    const router = useRouter();
+    const navigationTarget = useRouterState({ select: routerState => routerState.location.href });
     useEffect(() => mountStorefrontEnhancements(), []);
     const desktop = useDesktopViewport();
     // Preview identity belongs to this iframe document, not a changing route query string.
@@ -234,13 +236,15 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             storefrontContextValue.configQuery.isError &&
                             !storefrontContextValue.configQuery.isFetching
                         }
-                        requestKey={readinessIdentity}
+                        // Keep the visible identity; each new target gets its own deadline.
+                        requestKey={readinessIdentity + navigationTarget}
                         navigationKey={readinessIdentity}
                         pending={Boolean(state.pageDataPending)}
                         navigationPreparing={Boolean(state.isNavigationPending || state.isPreparingProduct)}
                         online={online}
                         language={language}
                         onRetry={() => void state.retryPageLoad()}
+                        onNavigationRetry={() => void router.load()}
                         onBack={
                             storefrontContextValue.goBack ??
                             (() => storefrontContextValue.navigate({ name: 'home' }, true))

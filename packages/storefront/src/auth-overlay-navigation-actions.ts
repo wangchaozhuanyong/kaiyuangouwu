@@ -49,7 +49,8 @@ export function applyAuthOverlayNavigation(
             resetScroll: false,
             state: (previous: Record<string, unknown>) => ({
                 ...previous,
-                // Locale replacement must close in the chosen language rather than go back.
+                // An explicit background replaces a locale or an abandoned target;
+                // closing must stay on that background rather than revisit the old target.
                 storefrontAuthPushed: background
                     ? false
                     : existing
