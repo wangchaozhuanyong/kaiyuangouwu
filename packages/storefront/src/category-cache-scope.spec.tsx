@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
 import { ShopApiTimeoutError } from './api/helpers';
+import { PageReadinessBoundary } from './page-readiness';
 import { CategoryPage, categoryFilterActionLabel, type CategoryPageProps } from './pages/category-page';
 import { storefrontQueryKeys } from './query-client';
 import { CategoryPageContext } from './storefront-page-contexts';
@@ -17,6 +18,157 @@ vi.mock('@tanstack/react-router', async original => ({
 }));
 vi.mock('./components/common/product-card', () => ({ ProductCard: () => null }));
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
+
+it.each([false, true])(
+    'retries a slow category read without replacing navigation or a newer selection (%s)',
+    async changeSelection => {
+        vi.useFakeTimers();
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const container = document.createElement('div');
+        const root = createRoot(container);
+        type CatalogResult = { items: []; totalItems: number };
+        const reads: Array<{ finish(value: CatalogResult): void; signal: AbortSignal }> = [];
+        const api = {
+            catalog: vi.fn(
+                (_input: unknown, signal: AbortSignal) =>
+                    new Promise<CatalogResult>(resolve => {
+                        reads.push({ finish: resolve, signal });
+                    }),
+            ),
+        };
+        const onRetry = vi.fn();
+        const noop = () => undefined;
+        const unrelatedKey = ['independent-catalog-read'];
+        const retainedProducts = { items: [{ id: 'already-visible' }] };
+        client.setQueryData(unrelatedKey, retainedProducts);
+        let unrelatedSignal: AbortSignal | undefined;
+        void client
+            .fetchQuery({
+                queryKey: unrelatedKey,
+                queryFn: ({ signal }) => {
+                    unrelatedSignal = signal;
+                    return new Promise(() => undefined);
+                },
+            })
+            .catch(noop);
+        const value = {
+            api,
+            products: [],
+            collections: [{ id: 'category', name: 'Retained category', children: [] }],
+            contentBlocks: [],
+            loading: false,
+            contextResolved: true,
+            error: null,
+            market: { code: 'my-malaysia', currencyCode: 'MYR' },
+            locale: 'en-MY',
+            language: 'en',
+            activeCollectionId: 'category',
+            activeChildId: 'all',
+            sortMode: 'recommended',
+            fulfillmentFilter: 'all',
+            inStockOnly: false,
+            minimumPrice: '',
+            maximumPrice: '',
+            onCollectionChange: noop,
+            onChildChange: noop,
+            onSortChange: noop,
+            onFilterChange: noop,
+            onNotify: noop,
+            onRetry,
+        } as unknown as CategoryPageProps;
+        const render = (currentValue = value) =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <PageReadinessBoundary
+                        pending={false}
+                        online
+                        language="en"
+                        onRetry={onRetry}
+                        onBack={noop}
+                    >
+                        <CategoryPageContext.Provider value={currentValue}>
+                            <CategoryPage />
+                        </CategoryPageContext.Provider>
+                    </PageReadinessBoundary>
+                </QueryClientProvider>,
+            );
+        let finishCancel: (() => void) | undefined;
+        const cancel = client.cancelQueries.bind(client);
+        const cancelSpy = vi.spyOn(client, 'cancelQueries');
+        if (changeSelection)
+            cancelSpy.mockImplementationOnce(async filters => {
+                await cancel(filters);
+                await new Promise<void>(resolve => {
+                    finishCancel = resolve;
+                });
+            });
+        try {
+            await act(async () => {
+                render();
+                await Promise.resolve();
+            });
+            const navigation = container.querySelector('.primary-categories');
+            expect(container.querySelector('.category-results .list-skeleton')).not.toBeNull();
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(10_000);
+            });
+            expect(container.querySelector('.category-results .page-readiness-error')).not.toBeNull();
+            expect(container.querySelector('.category-results .list-skeleton')).toBeNull();
+            expect(container.querySelector('.page-readiness-overlay')).toBeNull();
+            expect(container.querySelector('.primary-categories')).toBe(navigation);
+            await act(async () => {
+                container
+                    .querySelector<HTMLButtonElement>('.category-results .page-readiness-error button')
+                    ?.click();
+                await Promise.resolve();
+            });
+            expect(onRetry).not.toHaveBeenCalled();
+            if (changeSelection) {
+                expect(api.catalog).toHaveBeenCalledTimes(1);
+                await act(async () => {
+                    render({ ...value, activeCollectionId: 'next-category' });
+                    await Promise.resolve();
+                });
+                expect(api.catalog).toHaveBeenCalledTimes(2);
+                expect(api.catalog.mock.calls[1][0]).toMatchObject({ collectionId: 'next-category' });
+                await act(async () => {
+                    finishCancel?.();
+                    await Promise.resolve();
+                });
+            }
+            expect(api.catalog).toHaveBeenCalledTimes(2);
+            expect(reads[0].signal.aborted).toBe(true);
+            expect(reads[1].signal.aborted).toBe(false);
+            expect(container.querySelector('.category-results .list-skeleton')).not.toBeNull();
+            await act(async () => {
+                reads[1].finish({ items: [], totalItems: 0 });
+                await vi.advanceTimersByTimeAsync(1);
+            });
+            expect(container.querySelector('.category-results .page-readiness-error')).toBeNull();
+            expect(container.querySelector('.category-results .list-skeleton')).toBeNull();
+            expect(container.querySelector('.primary-categories')).toBe(navigation);
+            const key = storefrontQueryKeys.catalog('my-malaysia:MYR', 'en', {
+                collectionId: changeSelection ? 'next-category' : 'category',
+            });
+            const recovered = client.getQueryData(key);
+            expect(recovered).toEqual({ pages: [{ items: [], totalItems: 0 }], pageParams: [0] });
+            await act(async () => {
+                reads[0].finish({ items: [], totalItems: 1 });
+                await vi.advanceTimersByTimeAsync(1);
+            });
+            expect(client.getQueryData(key)).toBe(recovered);
+            expect(container.querySelector('.category-results .page-readiness-error')).toBeNull();
+            expect(container.querySelector('.primary-categories')).toBe(navigation);
+            expect(unrelatedSignal?.aborted).toBe(false);
+            expect(client.getQueryData(unrelatedKey)).toBe(retainedProducts);
+        } finally {
+            cancelSpy.mockRestore();
+            act(() => root.unmount());
+            client.clear();
+            vi.useRealTimers();
+        }
+    },
+);
 
 it('shows a trusted catalog count or a count-free apply action', () => {
     expect(categoryFilterActionLabel('zh', 1)).toBe('查看 1 件商品');

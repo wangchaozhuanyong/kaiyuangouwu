@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from '../api';
 import { type ActiveCustomer, type ImageStudioConfig, type MarketConfig } from '../types';
@@ -17,6 +17,7 @@ describe('ai-image-studio-cache', () => {
     beforeEach(() => {
         clearStudioCache();
     });
+    afterEach(() => vi.useRealTimers());
 
     const mockMarket: MarketConfig = {
         code: 'MY',
@@ -217,5 +218,85 @@ describe('ai-image-studio-cache', () => {
         finish(mockConfig);
         await preload;
         expect(getStudioCachedData('MY', mockCustomer.id)).toBeNull();
+    });
+
+    it('preserves failed fields and the draft without refreshing a partial snapshot', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(200_000);
+        setStudioCachedData('MY', mockCustomer.id, {
+            config: mockConfig,
+            balance: 5000,
+            walletCurrencyCode: 'MYR',
+            modelQuotas: [{ modelCode: 'old-model' }] as never,
+            lastFetchedAt: 1000,
+            draft: { prompt: 'keep my draft' },
+        });
+        const api = {
+            imageStudioConfig: vi.fn().mockResolvedValue({ ...mockConfig, maxQuantity: 2 }),
+            imageStudioWallet: vi.fn().mockRejectedValue(new Error('offline')),
+            imagePromptQuotaStatus: vi.fn().mockResolvedValue(null),
+            imageModelQuotaStatus: vi.fn().mockRejectedValue(new Error('offline')),
+        } as unknown as ShopApi;
+        await preloadImageStudioData(api, mockCustomer, mockMarket);
+        expect(getStudioCachedData('MY', mockCustomer.id)).toMatchObject({
+            config: { maxQuantity: 2 },
+            balance: 5000,
+            walletCurrencyCode: 'MYR',
+            modelQuotas: [{ modelCode: 'old-model' }],
+            lastFetchedAt: 1000,
+            draft: { prompt: 'keep my draft' },
+        });
+        await preloadImageStudioData(api, mockCustomer, mockMarket);
+        expect(api.imageStudioWallet).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not invent a zero wallet or a fresh timestamp on cold partial failure', async () => {
+        const api = {
+            imageStudioConfig: vi.fn().mockResolvedValue(mockConfig),
+            imageStudioWallet: vi
+                .fn()
+                .mockRejectedValueOnce(new Error('offline'))
+                .mockResolvedValue({ availableBalance: 0, currencyCode: 'MYR' }),
+            imagePromptQuotaStatus: vi.fn().mockResolvedValue(null),
+            imageModelQuotaStatus: vi.fn().mockResolvedValue([]),
+        } as unknown as ShopApi;
+        await preloadImageStudioData(api, mockCustomer, mockMarket);
+        expect(getStudioCachedData('MY', mockCustomer.id)?.balance).toBeNull();
+        expect(getStudioCachedData('MY', mockCustomer.id)?.lastFetchedAt).toBe(0);
+        await preloadImageStudioData(api, mockCustomer, mockMarket);
+        expect(getStudioCachedData('MY', mockCustomer.id)?.balance).toBe(0);
+        expect(getStudioCachedData('MY', mockCustomer.id)?.lastFetchedAt).toBeGreaterThan(0);
+    });
+
+    it('does not refresh the composite snapshot when only jobs, history or drafts change', () => {
+        setStudioCachedData('MY', mockCustomer.id, { config: mockConfig, lastFetchedAt: 1000 });
+        setStudioCachedData('MY', mockCustomer.id, { jobs: [], historyIds: ['new'], historyTotal: 1 });
+        updateStudioDraftCache('MY', mockCustomer.id, { prompt: 'new draft' });
+        expect(getStudioCachedData('MY', mockCustomer.id)?.lastFetchedAt).toBe(1000);
+    });
+
+    it('does not roll back history or drafts edited while a preload is waiting', async () => {
+        let finishWallet: (value: { availableBalance: number; currencyCode: string }) => void = () =>
+            undefined;
+        const wallet = new Promise<{ availableBalance: number; currencyCode: string }>(resolve => {
+            finishWallet = resolve;
+        });
+        setStudioCachedData('MY', mockCustomer.id, { config: mockConfig });
+        const api = {
+            imageStudioConfig: vi.fn().mockResolvedValue(mockConfig),
+            imageStudioWallet: vi.fn(() => wallet),
+            imagePromptQuotaStatus: vi.fn().mockResolvedValue(null),
+            imageModelQuotaStatus: vi.fn().mockResolvedValue([]),
+        } as unknown as ShopApi;
+        const preload = preloadImageStudioData(api, mockCustomer, mockMarket);
+        setStudioCachedData('MY', mockCustomer.id, { historyIds: ['new-history'], historyTotal: 1 });
+        updateStudioDraftCache('MY', mockCustomer.id, { prompt: 'new draft' });
+        finishWallet({ availableBalance: 10, currencyCode: 'MYR' });
+        await preload;
+        expect(getStudioCachedData('MY', mockCustomer.id)).toMatchObject({
+            historyIds: ['new-history'],
+            historyTotal: 1,
+            draft: { prompt: 'new draft' },
+        });
     });
 });

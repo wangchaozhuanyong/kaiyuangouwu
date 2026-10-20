@@ -191,4 +191,28 @@ describe('customer query boundaries', () => {
             true,
         );
     });
+    it.each(['loading', 'error', 'missing'])(
+        'opens the orders list without waiting for recent-order summaries: %s',
+        state => {
+            customer = { id: 'buyer-a' } as ActiveCustomer;
+            mocks.useQuery.mockImplementation(queryOptions => ({
+                data:
+                    queryOptions.queryKey.includes('customer-recent-orders') && state === 'missing'
+                        ? null
+                        : undefined,
+                isLoading: state === 'loading',
+                isPending: state === 'loading',
+                isPaused: false,
+                isError: state === 'error',
+                error: state === 'error' ? new Error('Summary unavailable') : null,
+            }));
+            const result = read('MYR', true, { activeRoute: 'orders' });
+            expect(result.customer?.id).toBe('buyer-a');
+            expect(result.customerDetailsLoadState).toBe('ready');
+            const options = mocks.useQuery.mock.calls.map(([input]) => input);
+            expect(options.find(input => input.queryKey.includes('customer-recent-orders')).enabled).toBe(
+                true,
+            );
+        },
+    );
 });

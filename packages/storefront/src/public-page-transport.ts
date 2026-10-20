@@ -20,7 +20,7 @@ export function invalidatePublicPageReads(): void {
     generationListeners.forEach(notify => notify());
 }
 
-const flights = new Map<string, Promise<unknown>>();
+const flights = new Map<string, { promise: Promise<unknown>; controller: AbortController }>();
 let bootstrap:
     { key: string; promise: Promise<unknown>; languageCode?: string; currencyCode?: string } | undefined;
 
@@ -34,7 +34,7 @@ export function publicPageUrl(request: PublicPageRequest, languageCode?: string,
 export function requestPublicPage(url: URL): Promise<unknown> {
     const key = `${generation}:${url.href}`;
     const existing = flights.get(key);
-    if (existing) return existing;
+    if (existing) return existing.promise;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
     const promise = fetch(url, {
@@ -78,10 +78,18 @@ export function requestPublicPage(url: URL): Promise<unknown> {
         })
         .finally(() => {
             clearTimeout(timeout);
-            if (flights.get(key) === promise) flights.delete(key);
+            if (flights.get(key)?.promise === promise) flights.delete(key);
         });
-    flights.set(key, promise);
+    flights.set(key, { promise, controller });
     return promise;
+}
+
+/** The validated read owner calls this only after its final consumer leaves. */
+export function cancelPublicPageRequest(url: URL, readGeneration: number): void {
+    const key = `${readGeneration}:${url.href}`;
+    const flight = flights.get(key);
+    flights.delete(key);
+    flight?.controller.abort();
 }
 
 export function startPublicPageBootstrap(

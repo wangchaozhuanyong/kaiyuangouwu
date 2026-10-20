@@ -2,10 +2,13 @@ import { chromium, expect } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
+import { TRAFFIC_OPT_OUT_KEY } from '../../src/storefront-traffic.ts';
 import { fixtureData } from '../visual-presets/fixtures.mjs';
 
 const base = process.env.STOREFRONT_INTERACTION_TEST_URL ?? 'http://127.0.0.1:5326';
-const output = fileURLToPath(new URL('../../artifacts/loading-refresh/', import.meta.url));
+const output =
+    process.env.STOREFRONT_INTERACTION_OUTPUT ??
+    fileURLToPath(new URL('../../artifacts/loading-refresh/', import.meta.url));
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 const checks = [];
@@ -18,6 +21,7 @@ try {
         ['neo-minimalist', 1440, 'en-US'],
     ]) {
         const page = await browser.newPage({ viewport: { width, height: 900 }, locale });
+        await page.addInitScript(key => localStorage.setItem(key, '1'), TRAFFIC_OPT_OUT_KEY);
         page.setDefaultTimeout(15000);
         page.on('pageerror', error => errors.push(error.message));
         page.on('console', message => {
@@ -40,8 +44,13 @@ try {
         await page.route('**/*', async route => {
             const url = new URL(route.request().url());
             if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return route.abort();
-            if (url.pathname.includes('shop-api')) {
+            // Exercise the supported individual-query fallback without contacting a backend.
+            if (url.pathname === '/_storefront/page-data')
+                return route.fulfill({ contentType: 'text/html', body: '<!doctype html>' });
+            if (url.pathname === '/shop-api') {
                 const body = route.request().postDataJSON();
+                if (/\b(?:mutation|subscription)\b/u.test(String(body?.query)))
+                    throw new Error('Read-only fixture rejected a business write');
                 const content = /\bstorefrontContent\s*\{/u.test(String(body?.query));
                 if (content) {
                     contentReads++;
@@ -117,7 +126,8 @@ try {
         await refreshContent();
         await refreshContent();
         try {
-            await expect(page.locator('[data-query-feedback=refreshing]')).toBeVisible();
+            await expect.poll(() => contentReads - baselineReads).toBe(1);
+            await expect(page.locator('[data-query-feedback=refreshing]')).toHaveCount(0);
         } catch (error) {
             process.stdout.write(
                 JSON.stringify({
@@ -143,6 +153,16 @@ try {
         await expect(page.locator('.business-services-page')).toBeVisible();
         expect(contentReads - baselineReads).toBe(1);
         releaseSlow();
+        await expect
+            .poll(() =>
+                page.evaluate(async moduleUrl => {
+                    const { storefrontQueryClient } = await import(moduleUrl);
+                    return storefrontQueryClient.isFetching({
+                        predicate: query => query.queryKey[3] === 'content',
+                    });
+                }, queryModule),
+            )
+            .toBe(0);
         await expect(page.locator('[data-query-feedback=refreshing]')).toHaveCount(0);
         checks.push(
             `${preset}/${width}/${locale}: slow repeated refresh retains content and joins one request`,

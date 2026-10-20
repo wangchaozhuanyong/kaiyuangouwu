@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
     ArrowUpDown,
@@ -26,8 +27,10 @@ import { useCategoryNavigationCollapse } from '../hooks/useCategoryNavigationCol
 import { useCategoryPagination } from '../hooks/useCategoryPagination';
 import { languageCodeFor } from '../i18n';
 import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
+import { PageReadinessError, usePageLoadingState, usePageReadiness } from '../page-readiness';
 import { priceSortActionLabel } from '../price-sort-label';
 import { productAvailability } from '../product-availability';
+import { storefrontQueryKeys } from '../query-client';
 import { STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { CategoryPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
@@ -83,6 +86,7 @@ export { categoryFilterActionLabel } from '../components/common/catalog-filter-s
 
 export function CategoryPage() {
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
     const {
         api,
@@ -229,6 +233,14 @@ export function CategoryPage() {
         },
     });
     const catalogQuery = pagination.query;
+    const catalogQueryKey = storefrontQueryKeys.catalog(
+        storefrontQueryKeys.market(market),
+        vendureLanguageCode,
+        { ...catalogInput },
+    );
+    const catalogReadIdentity = JSON.stringify(catalogQueryKey);
+    const currentCatalogRead = useRef(catalogReadIdentity);
+    currentCatalogRead.current = catalogReadIdentity;
     const navigationCollapse = useCategoryNavigationCollapse(
         pagination.resultsRef,
         JSON.stringify([market.code, market.currencyCode, language, catalogInput]),
@@ -297,6 +309,11 @@ export function CategoryPage() {
     const categoryError = categoryResolved
         ? (storefrontInitialQueryError(catalogQuery, language) ?? '')
         : (error ?? '');
+    const loadingState = usePageLoadingState();
+    usePageReadiness(
+        categoryLoading || (categoryResolved && catalogQuery.isPaused && catalogQuery.isPending),
+        'local',
+    );
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
     const allCategoriesTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -771,7 +788,24 @@ export function CategoryPage() {
                         onNavigate={navigateTo}
                     />
 
-                    {categoryLoading ? (
+                    {categoryLoading && loadingState?.phase === 'error' ? (
+                        <PageReadinessError
+                            inline
+                            state={{
+                                ...loadingState,
+                                retry: () =>
+                                    loadingState.retryRead(() => {
+                                        if (!categoryResolved) return onRetry();
+                                        void queryClient
+                                            .cancelQueries({ queryKey: catalogQueryKey, exact: true })
+                                            .then(() => {
+                                                if (currentCatalogRead.current === catalogReadIdentity)
+                                                    void catalogQuery.refetch({ cancelRefetch: false });
+                                            });
+                                    }),
+                            }}
+                        />
+                    ) : categoryLoading ? (
                         <ListSkeleton
                             className="category-product-list desktop-product-grid"
                             layout="products"

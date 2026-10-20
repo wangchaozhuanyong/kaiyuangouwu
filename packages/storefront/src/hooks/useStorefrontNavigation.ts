@@ -71,16 +71,13 @@ export function useStorefrontNavigation({
                 ),
             );
         };
-        document.addEventListener('pointerover', onIntent);
-        document.addEventListener('focusin', onIntent);
-        document.addEventListener('pointerdown', onIntent);
+        const intentEvents = ['pointerover', 'focusin', 'pointerdown'];
+        intentEvents.forEach(type => document.addEventListener(type, onIntent));
         return () => {
             navigationIntent.current++;
             unsubscribe();
             unsubscribeLoad();
-            document.removeEventListener('pointerover', onIntent);
-            document.removeEventListener('focusin', onIntent);
-            document.removeEventListener('pointerdown', onIntent);
+            intentEvents.forEach(type => document.removeEventListener(type, onIntent));
         };
     }, [router]);
 
@@ -89,9 +86,9 @@ export function useStorefrontNavigation({
 
     const isNavigationPending = useRouterState({ select: state => state.status === 'pending' });
 
-    // Router keeps the old matches before its pending threshold, then publishes the
-    // destination pending match. resolvedLocation lags behind that second commit.
-    // Every consumer (including action callbacks) must use the same published match.
+    // Keep content, selected navigation and action callbacks on the published match
+    // while the next destination prepares. The latest URL can already point ahead;
+    // resolvedLocation can still lag behind the destination's actual commit.
     const presentedMatch = useRouterState({ select: state => state.matches.at(-1) });
     const displayedRouterLocation = presentedMatch ?? routerLocation;
     const targetRoute = useMemo(
@@ -204,17 +201,27 @@ export function useStorefrontNavigation({
         (request: AuthOverlayRequest | null, fallback: RouteState, replace = false) => {
             const intent = ++navigationIntent.current;
             const location = router.state.location;
+            // A new action belongs to the page the customer can still see, not
+            // an unfinished destination whose URL has already moved ahead.
+            const background = request && isNavigationPending ? route : undefined;
             const isCurrent = () => navigationIntent.current === intent && router.state.location === location;
             void import('../auth-overlay-navigation-actions')
                 .then(({ applyAuthOverlayNavigation }) => {
-                    if (isCurrent()) applyAuthOverlayNavigation(router, tanstackNavigate, request, replace);
+                    if (isCurrent())
+                        applyAuthOverlayNavigation(
+                            router,
+                            tanstackNavigate,
+                            request,
+                            replace || !!background,
+                            background,
+                        );
                 })
                 .catch(() => {
                     // Preserve the existing standalone route if the optional action chunk fails to load.
                     if (isCurrent()) navigatePage(fallback, request ? replace : true);
                 });
         },
-        [navigatePage, router, tanstackNavigate],
+        [navigatePage, router, tanstackNavigate, isNavigationPending, route],
     );
 
     const navigate = useCallback(

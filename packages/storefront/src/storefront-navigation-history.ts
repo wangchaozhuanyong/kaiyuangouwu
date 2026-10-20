@@ -67,8 +67,12 @@ export function registerStorefrontNavigationHistory(router: NavigationRouter): v
 /** UI-only history metadata never replaces browser state or starts a router navigation. */
 export function getStorefrontNavigationEntryPresentation(
     history: RouterHistory,
+    ownerKey?: string,
 ): Pick<Entry, 'categoryNavigation'> | undefined {
-    return navigationHistory({ history }).entries.get(history.location.state.__TSR_index);
+    const entries = navigationHistory({ history }).entries;
+    return ownerKey === undefined
+        ? entries.get(history.location.state.__TSR_index)
+        : [...entries.values()].find(entry => entry.key === ownerKey);
 }
 
 function returnToIndex(router: NavigationRouter, tracker: NavigationHistory, index: number): void {

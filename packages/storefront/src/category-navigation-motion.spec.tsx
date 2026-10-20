@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +25,7 @@ vi.mock('./hooks/useCategoryPagination', () => ({
 describe('category clicks move the actual navigation rail', () => {
     let host: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
+    let queryClient: QueryClient;
     let props: CategoryPageProps;
     let rail: HTMLElement;
     let now: number;
@@ -38,9 +40,11 @@ describe('category clicks move the actual navigation rail', () => {
     function render() {
         act(() => {
             root.render(
-                <CategoryPageContext.Provider value={{ ...props }}>
-                    <CategoryPage />
-                </CategoryPageContext.Provider>,
+                <QueryClientProvider client={queryClient}>
+                    <CategoryPageContext.Provider value={{ ...props }}>
+                        <CategoryPage />
+                    </CategoryPageContext.Provider>
+                </QueryClientProvider>,
             );
         });
     }
@@ -58,6 +62,7 @@ describe('category clicks move the actual navigation rail', () => {
     }
 
     beforeEach(() => {
+        queryClient = new QueryClient();
         now = 0;
         nextFrame = 0;
         reducedMotion = false;
@@ -136,6 +141,7 @@ describe('category clicks move the actual navigation rail', () => {
     });
     afterEach(() => {
         act(() => root.unmount());
+        queryClient.clear();
         expect(frames.size).toBe(0);
         expect(rail.style.getPropertyValue('scroll-snap-type')).toBe('x proximity');
         expect(rail.style.getPropertyPriority('scroll-snap-type')).toBe('important');

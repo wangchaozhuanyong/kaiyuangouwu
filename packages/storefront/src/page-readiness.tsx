@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { BrandLoadingIndicator } from './brand-loading';
+import { offlineLoadError } from './loading-state';
 
 export const PAGE_DATA_TIMEOUT_MS = 10_000;
 export const PAGE_MEDIA_TIMEOUT_MS = 3_000;
@@ -28,6 +29,8 @@ interface PageLoadingState {
     online: boolean;
     failure: 'offline' | 'request' | 'timeout';
     retry: () => void;
+    retryRead: (read: () => void) => void;
+    restartRead: () => void;
     onBack: () => void;
 }
 const PageLoadingContext = createContext<PageLoadingState | null>(null);
@@ -48,13 +51,22 @@ export function usePageRouteCommit(): void {
 }
 
 /** Route modules and their required queries declare state; DOM visibility is never a data signal. */
-export function usePageReadiness(pending: boolean, presentation: ReadinessPresentation = 'query'): void {
+export function usePageReadiness(
+    pending: boolean,
+    presentation: ReadinessPresentation = 'query',
+    readKey?: string,
+): void {
     const register = useContext(ReadinessContext);
+    const restartRead = useContext(PageLoadingContext)?.restartRead;
     const token = useRef({});
     useLayoutEffect(() => {
         register?.(token.current, pending, presentation);
         return () => register?.(token.current, false, presentation);
     }, [pending, presentation, register]);
+    // Local filters can start a different read without changing the visible route.
+    useLayoutEffect(() => {
+        if (readKey !== undefined) restartRead?.();
+    }, [readKey, restartRead]);
 }
 
 /** Empty page regions share the boundary deadline instead of animating underneath its error. */
@@ -66,17 +78,15 @@ export function PageReadinessError({ state, inline = false }: { state: PageLoadi
     return (
         <div className={`page-readiness-error${inline ? ' page-readiness-inline-error' : ''}`} role="alert">
             <p>
-                {state.language === 'zh'
-                    ? state.online
-                        ? state.failure === 'request'
-                            ? '页面暂时无法加载，请重试'
-                            : '页面加载超时，请重试'
-                        : '当前网络不可用，请恢复网络后重试'
-                    : state.online
+                {!state.online
+                    ? offlineLoadError(state.language)
+                    : state.language === 'zh'
                       ? state.failure === 'request'
-                          ? 'This page could not be loaded. Try again.'
-                          : 'The page took too long to load. Try again.'
-                      : 'You are offline. Reconnect and try again.'}
+                          ? '页面暂时无法加载，请重试'
+                          : '页面加载超时，请重试'
+                      : state.failure === 'request'
+                        ? 'This page could not be loaded. Try again.'
+                        : 'The page took too long to load. Try again.'}
             </p>
             <div className="page-readiness-error-actions">
                 <button type="button" onClick={state.retry}>
@@ -103,7 +113,30 @@ interface PageReadinessProps {
     online: boolean;
     language: 'zh' | 'en';
     onRetry: () => void;
+    onNavigationRetry?: () => void;
     onBack: () => void;
+}
+
+function useLoadingCycle(waiting: boolean, scope: string | undefined, key: string) {
+    const [attempt, restart] = useState(0);
+    const restartCycle = useCallback(() => restart(value => value + 1), []);
+    const cycle = useMemo(() => ({}), [waiting, scope, key, attempt]);
+    const [status, setStatus] = useState<{ cycle: object; phase: number }>();
+    useLayoutEffect(() => {
+        if (!waiting) return;
+        const indicator = window.setTimeout(() => setStatus({ cycle, phase: 1 }), PAGE_LOADING_DELAY_MS);
+        const deadline = window.setTimeout(() => setStatus({ cycle, phase: 2 }), PAGE_DATA_TIMEOUT_MS);
+        return () => {
+            clearTimeout(indicator);
+            clearTimeout(deadline);
+        };
+    }, [waiting, cycle]);
+    const phase = status?.cycle === cycle ? status.phase : 0;
+    return {
+        progress: phase > 0,
+        expired: phase === 2,
+        restart: restartCycle,
+    };
 }
 
 /** Initial empty pages may fill the viewport; existing content remains usable on later reads. */
@@ -114,9 +147,10 @@ export function PageReadinessBoundary({
     online,
     language,
     onRetry,
+    onNavigationRetry = onRetry,
     onBack,
-    navigationKey = '',
-    requestKey = navigationKey,
+    navigationKey,
+    requestKey = navigationKey ?? '',
     initialScopeKey,
     initialError = false,
     requireInitialRouteCommit = false,
@@ -154,20 +188,23 @@ export function PageReadinessBoundary({
     });
     const failedInitialRead =
         initialError && initialScopeKey !== undefined && displayedScope !== initialScopeKey;
-    const waiting = pending || navigationPreparing || required.total > 0 || failedInitialRead;
+    const waiting = pending || required.total > 0 || failedInitialRead;
     const initial =
         initialScopeKey !== undefined && displayedScope !== initialScopeKey && (pending || failedInitialRead);
-    const [attempt, setAttempt] = useState(0);
-    // A -> B -> A is a new read, even when the string scope/request values repeat.
-    const cycle = useMemo(() => ({}), [initialScopeKey, requestKey, attempt]);
-    const [progressCycle, setProgressCycle] = useState<object>();
-    const [timeoutCycle, setTimeoutCycle] = useState<object>();
-    const started = useRef<{ cycle: object; at: number } | null>(null);
+    // Visible reads keep their own deadline when a different destination starts.
+    const reading = useLoadingCycle(waiting, initialScopeKey, navigationKey ?? requestKey);
+    const navigation = useLoadingCycle(navigationPreparing, initialScopeKey, requestKey);
     const phase: ReadinessPhase = waiting
-        ? failedInitialRead || !online || timeoutCycle === cycle
+        ? failedInitialRead || !online || reading.expired
             ? 'error'
             : 'preparing'
         : 'ready';
+    const navigationPhase: ReadinessPhase = navigationPreparing
+        ? !online || navigation.expired
+            ? 'error'
+            : 'preparing'
+        : 'ready';
+    const presentedPhase = navigationPreparing && !initial ? navigationPhase : phase;
 
     useLayoutEffect(() => {
         // A rendered public snapshot is adopted only by its real route commit.
@@ -192,61 +229,59 @@ export function PageReadinessBoundary({
     }, [initialScopeKey, initialError, pending, navigationPreparing, required.page]);
 
     useLayoutEffect(() => {
-        if (!waiting) {
-            started.current = null;
-            setProgressCycle(undefined);
-            setTimeoutCycle(undefined);
+        if (!waiting && !navigationPreparing) {
             if (!tokens.current.size && (!requireInitialRouteCommit || initialRouteCommitted))
                 document.dispatchEvent(new Event('storefront:page-ready'));
-            return;
         }
-        if (!started.current || started.current.cycle !== cycle) {
-            started.current = { cycle, at: performance.now() };
-        }
-        const elapsed = performance.now() - started.current.at;
-        const indicator = window.setTimeout(
-            () => setProgressCycle(cycle),
-            Math.max(0, PAGE_LOADING_DELAY_MS - elapsed),
-        );
-        const deadline = window.setTimeout(
-            () => setTimeoutCycle(cycle),
-            Math.max(0, PAGE_DATA_TIMEOUT_MS - elapsed),
-        );
-        return () => {
-            clearTimeout(indicator);
-            clearTimeout(deadline);
-        };
-    }, [waiting, cycle, requireInitialRouteCommit, initialRouteCommitted]);
+    }, [waiting, navigationPreparing, requestKey, requireInitialRouteCommit, initialRouteCommitted]);
 
     useLayoutEffect(() => {
-        if (phase === 'error') document.dispatchEvent(new Event('storefront:page-error'));
-    }, [phase]);
+        if (phase === 'error' || navigationPhase === 'error')
+            document.dispatchEvent(new Event('storefront:page-error'));
+    }, [phase, navigationPhase, requestKey]);
 
-    const retry = useCallback(() => {
-        onRetry();
-        setAttempt(value => value + 1);
-    }, [onRetry]);
+    const retryRead = (read: () => void) => {
+        read();
+        reading.restart();
+    };
     const loadingState: PageLoadingState = {
         phase,
         initial,
         language,
         online,
-        retry,
+        retry: () => retryRead(onRetry),
+        retryRead,
+        restartRead: reading.restart,
         onBack,
         failure: !online ? 'offline' : failedInitialRead ? 'request' : 'timeout',
     };
     const navigationLabel = language === 'zh' ? '正在打开页面' : 'Opening page';
     const loadingLabel = language === 'zh' ? '页面正在加载' : 'Page loading';
-    const showProgress = progressCycle === cycle || (initial && continueDocumentBrand);
-    const inlineLoadingRegions = required.page + required.local > 0;
+    const showProgress =
+        (navigationPreparing && !initial ? navigation.progress : reading.progress) ||
+        (initial && continueDocumentBrand);
+    const inlineLoadingRegions = !navigationPreparing && required.page + required.local > 0;
+    const feedbackState =
+        navigationPreparing && !initial
+            ? {
+                  ...loadingState,
+                  phase: navigationPhase,
+                  failure: online ? ('timeout' as const) : ('offline' as const),
+                  retry: () => {
+                      onNavigationRetry();
+                      navigation.restart();
+                  },
+              }
+            : loadingState;
     return (
         <ReadinessContext.Provider value={register}>
             <PageLoadingContext.Provider value={loadingState}>
                 <PageRouteCommitContext.Provider value={commitRoute}>
                     <div
                         className="page-readiness"
-                        data-page-readiness={phase}
-                        aria-busy={phase === 'preparing' || undefined}
+                        data-page-readiness={presentedPhase}
+                        data-navigation-readiness={navigationPreparing ? navigationPhase : undefined}
+                        aria-busy={presentedPhase === 'preparing' || undefined}
                     >
                         <div className="page-readiness-stage" hidden={initial} inert={initial || undefined}>
                             {children}
@@ -266,27 +301,30 @@ export function PageReadinessBoundary({
                                 )}
                             </main>
                         )}
-                        {!initial && !inlineLoadingRegions && phase === 'preparing' && showProgress && (
-                            <div
-                                className={
-                                    navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'
-                                }
-                                role="status"
-                                aria-live="polite"
-                                aria-label={navigationPreparing ? navigationLabel : loadingLabel}
-                            >
-                                {navigationPreparing && (
-                                    <BrandLoadingIndicator
-                                        language={language}
-                                        compact
-                                        label={navigationLabel}
-                                    />
-                                )}
-                            </div>
-                        )}
-                        {!initial && !inlineLoadingRegions && phase === 'error' && (
+                        {!initial &&
+                            !inlineLoadingRegions &&
+                            presentedPhase === 'preparing' &&
+                            showProgress && (
+                                <div
+                                    className={
+                                        navigationPreparing ? 'page-readiness-navigation' : 'visually-hidden'
+                                    }
+                                    role="status"
+                                    aria-live="polite"
+                                    aria-label={navigationPreparing ? navigationLabel : loadingLabel}
+                                >
+                                    {navigationPreparing && (
+                                        <BrandLoadingIndicator
+                                            language={language}
+                                            compact
+                                            label={navigationLabel}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        {!initial && !inlineLoadingRegions && presentedPhase === 'error' && (
                             <div className="page-readiness-overlay" aria-busy="false">
-                                <PageReadinessError state={loadingState} />
+                                <PageReadinessError state={feedbackState} />
                             </div>
                         )}
                     </div>

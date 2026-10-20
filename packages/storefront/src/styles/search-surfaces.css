@@ -362,8 +362,11 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 24px;
     }
-    .search-route-product-list > :is(.search-load-error, .search-load-more) {
+    .search-route-product-list > :is(.search-load-error, .search-load-more, .page-readiness-inline-error) {
         grid-column: 1 / -1;
+    }
+    .search-route-product-list > .page-readiness-inline-error {
+        justify-self: center;
     }
 }
 @media (min-width: 1280px) {

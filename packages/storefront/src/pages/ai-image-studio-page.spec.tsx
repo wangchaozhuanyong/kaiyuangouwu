@@ -12,7 +12,7 @@ import {
     type MarketConfig,
 } from '../types';
 
-import { clearStudioCache } from './ai-image-studio-cache';
+import { clearStudioCache, getStudioCachedData } from './ai-image-studio-cache';
 import { AiImageStudioPage } from './ai-image-studio-page';
 
 const cleanups: Array<() => void> = [];
@@ -76,7 +76,14 @@ function job(index = 0): ImageGenerationJob {
         inputSnapshotVersion: 1,
     };
 }
-async function setup(options: { paid?: boolean; balance?: number; history?: ImageGenerationJob[] } = {}) {
+async function setup(
+    options: {
+        paid?: boolean;
+        balance?: number;
+        history?: ImageGenerationJob[];
+        walletFailure?: boolean;
+    } = {},
+) {
     vi.useFakeTimers();
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
@@ -175,6 +182,7 @@ async function setup(options: { paid?: boolean; balance?: number; history?: Imag
             return true;
         }),
     };
+    if (options.walletFailure) api.imageStudioWallet.mockRejectedValue(new Error('wallet unavailable'));
     const onNotify = vi.fn();
     const container = document.createElement('div');
     document.body.append(container);
@@ -225,6 +233,54 @@ async function type(container: Element, value: string) {
 }
 
 describe('AI studio complete customer workflows', () => {
+    it('keeps successful cached values and the draft after a partial refresh and remount', async () => {
+        const { api, container } = await setup({ balance: 2500 });
+        await type(container, '保留客户草稿');
+        const previous = getStudioCachedData('test', 'customer-1');
+        const displayedBalance = container.querySelector('.is-balance')?.textContent;
+        await act(async () => vi.advanceTimersByTimeAsync(1000));
+        api.imageStudioWallet.mockRejectedValue(new Error('wallet unavailable'));
+        api.imagePromptQuotaStatus.mockRejectedValue(new Error('quota unavailable'));
+        api.imageModelQuotaStatus.mockRejectedValue(new Error('models unavailable'));
+        await click(button(container, '刷新'));
+        const cached = getStudioCachedData('test', 'customer-1');
+        expect(cached?.balance).toBe(2500);
+        expect(cached?.promptQuota).toEqual(previous?.promptQuota);
+        expect(cached?.modelQuotas).toEqual(previous?.modelQuotas);
+        expect(cached?.lastFetchedAt).toBe(previous?.lastFetchedAt);
+        expect(container.querySelector('.is-balance')?.textContent).toBe(displayedBalance);
+        expect(container.querySelector('textarea')?.value).toBe('保留客户草稿');
+        expect(container.textContent).toContain('部分数据刷新失败');
+        const reopened = await setup({ walletFailure: true });
+        expect(reopened.container.querySelector('.is-balance')?.textContent).toBe(displayedBalance);
+        expect(reopened.container.querySelector('textarea')?.value).toBe('保留客户草稿');
+    });
+
+    it('shows an unavailable cold wallet instead of a fabricated zero and keeps paid actions disabled', async () => {
+        const { api, container } = await setup({ walletFailure: true, paid: true });
+        await type(container, '保留客户草稿');
+        expect(getStudioCachedData('test', 'customer-1')?.balance).toBeNull();
+        expect(getStudioCachedData('test', 'customer-1')?.lastFetchedAt).toBe(0);
+        expect(container.querySelector('.is-balance')?.textContent).toContain('待更新');
+        expect(button(container, '费用待更新').disabled).toBe(true);
+        expect(api.optimizeImagePrompt).not.toHaveBeenCalled();
+    });
+
+    it('retains displayed model quota after a failed refresh without enabling a generation from stale quota', async () => {
+        const { api, container } = await setup();
+        await type(container, '保留客户草稿');
+        expect(button(container, '开始生成').disabled).toBe(false);
+        const previous = getStudioCachedData('test', 'customer-1');
+        api.imageModelQuotaStatus.mockRejectedValueOnce(new Error('models unavailable'));
+        await click(button(container, '刷新'));
+        expect(getStudioCachedData('test', 'customer-1')?.modelQuotas).toEqual(previous?.modelQuotas);
+        expect(getStudioCachedData('test', 'customer-1')?.lastFetchedAt).toBe(previous?.lastFetchedAt);
+        expect(button(container, '开始生成').disabled).toBe(true);
+        expect(api.createImageGeneration).not.toHaveBeenCalled();
+        await click(button(container, '刷新'));
+        expect(button(container, '开始生成').disabled).toBe(false);
+    });
+
     it('does not show the previous account balance or draft while another account loads', async () => {
         const { api, container, root } = await setup({ balance: 2500 });
         await type(container, '客户 A 的私有创作内容');

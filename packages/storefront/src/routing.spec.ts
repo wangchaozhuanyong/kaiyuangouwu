@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    createStorefrontScrollRestorationKey,
     customerResolvedRoutes,
     getStorefrontScrollRestorationKey,
     routeFromHash,
@@ -9,6 +10,38 @@ import {
 } from './storefront-router';
 
 describe('storefront routing', () => {
+    it('records the visible source while loading and restores the newly published destination before resolvedLocation advances', () => {
+        const location = (id: string) => ({
+            pathname: '/product',
+            href: `/product?id=${id}`,
+            state: { __TSR_key: id },
+        });
+        const source = location('a');
+        const target = location('b');
+        const state = { isLoading: false, resolvedLocation: source };
+        const scroll = createStorefrontScrollRestorationKey(() => state);
+        expect(scroll.getKey(source)).toBe('a');
+        state.isLoading = true;
+        expect(scroll.getKey(target)).toBe('a');
+        state.isLoading = false;
+        expect(scroll.getKey(target)).toBe('b');
+        state.isLoading = true;
+        expect(scroll.getKey(location('c'))).toBe('b');
+        scroll.commit(location('c'));
+        expect(scroll.getKey(location('d'))).toBe('c');
+        state.isLoading = false;
+        expect(scroll.getKey(source)).toBe('a');
+        const independent = createStorefrontScrollRestorationKey(() => state);
+        state.isLoading = true;
+        expect(independent.getKey(location('other'))).toBe('a');
+
+        const currentState = { isLoading: false, location: target, resolvedLocation: source };
+        const current = createStorefrontScrollRestorationKey(() => currentState);
+        expect(current.getKey(target)).toBe('b');
+        expect(current.getKey(source)).toBe('a');
+        currentState.isLoading = true;
+        expect(current.getKey(location('next'))).toBe('b');
+    });
     it('round-trips announcement detail and list page in shared and browser-history URLs', () => {
         const detail = { name: 'announcements' as const, id: 'notice-25', page: 3 };
         expect(routeFromHash(routeHref(detail))).toMatchObject(detail);

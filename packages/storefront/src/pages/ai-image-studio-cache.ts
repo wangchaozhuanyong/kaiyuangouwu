@@ -26,7 +26,7 @@ export interface ImageStudioDraft {
 
 export interface ImageStudioCacheEntry {
     config: ImageStudioConfig | null;
-    balance: number;
+    balance: number | null;
     walletCurrencyCode: string;
     promptQuota: ImagePromptQuotaStatus | null;
     modelQuotas: ImageModelQuotaStatus[];
@@ -77,7 +77,7 @@ export function setStudioCachedData(
 
     studioCache.set(key, {
         config: data.config !== undefined ? data.config : (existing?.config ?? null),
-        balance: data.balance !== undefined ? data.balance : (existing?.balance ?? 0),
+        balance: data.balance !== undefined ? data.balance : (existing?.balance ?? null),
         walletCurrencyCode:
             data.walletCurrencyCode !== undefined
                 ? data.walletCurrencyCode
@@ -87,7 +87,7 @@ export function setStudioCachedData(
         jobs: data.jobs !== undefined ? data.jobs : (existing?.jobs ?? []),
         historyIds: data.historyIds !== undefined ? data.historyIds : (existing?.historyIds ?? []),
         historyTotal: data.historyTotal !== undefined ? data.historyTotal : (existing?.historyTotal ?? 0),
-        lastFetchedAt: Date.now(),
+        lastFetchedAt: data.lastFetchedAt ?? existing?.lastFetchedAt ?? 0,
         draft,
     });
 }
@@ -110,7 +110,7 @@ export async function preloadImageStudioData(
 ): Promise<void> {
     const key = getStudioCacheKey(market.code, customer?.id);
     const existing = studioCache.get(key);
-    if (existing?.config && Date.now() - existing.lastFetchedAt < 120_000) {
+    if (existing?.config && existing.lastFetchedAt > 0 && Date.now() - existing.lastFetchedAt < 120_000) {
         return;
     }
     const activePreload = activePreloads.get(key);
@@ -121,6 +121,7 @@ export async function preloadImageStudioData(
         try {
             const studioConfig = await api.imageStudioConfig();
             if (generation !== studioCacheState.generation) return;
+            if (!studioConfig) return;
             if (!customer) {
                 setStudioCachedData(market.code, null, {
                     config: studioConfig,
@@ -131,6 +132,7 @@ export async function preloadImageStudioData(
                     jobs: [],
                     historyIds: [],
                     historyTotal: 0,
+                    lastFetchedAt: Date.now(),
                 });
                 return;
             }
@@ -140,18 +142,19 @@ export async function preloadImageStudioData(
                 api.imageModelQuotaStatus(),
             ]);
             if (generation !== studioCacheState.generation) return;
-            const walletVal = wallet.status === 'fulfilled' ? wallet.value : undefined;
-            const promptQuotaVal = loadedPromptQuota.status === 'fulfilled' ? loadedPromptQuota.value : null;
-            const modelQuotasVal = loadedModelQuotas.status === 'fulfilled' ? loadedModelQuotas.value : [];
             setStudioCachedData(market.code, customer.id, {
                 config: studioConfig,
-                balance: walletVal?.availableBalance ?? 0,
-                walletCurrencyCode: walletVal?.currencyCode ?? market.currencyCode,
-                promptQuota: promptQuotaVal,
-                modelQuotas: modelQuotasVal,
-                jobs: existing?.jobs ?? [],
-                historyIds: existing?.historyIds ?? [],
-                historyTotal: existing?.historyTotal ?? 0,
+                ...(wallet.status === 'fulfilled' && {
+                    balance: wallet.value.availableBalance,
+                    walletCurrencyCode: wallet.value.currencyCode,
+                }),
+                ...(loadedPromptQuota.status === 'fulfilled' && { promptQuota: loadedPromptQuota.value }),
+                ...(loadedModelQuotas.status === 'fulfilled' && { modelQuotas: loadedModelQuotas.value }),
+                ...([wallet, loadedPromptQuota, loadedModelQuotas].every(
+                    result => result.status === 'fulfilled',
+                ) && {
+                    lastFetchedAt: Date.now(),
+                }),
             });
         } catch {
             // Ignore background prefetch errors

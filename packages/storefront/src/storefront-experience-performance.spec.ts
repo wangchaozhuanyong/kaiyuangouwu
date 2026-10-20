@@ -154,6 +154,41 @@ describe('bounded anonymous experience observation', () => {
         expect(report).not.toHaveBeenCalled();
     });
 
+    it('records a target navigation failure before commit without reporting the retained page failure', () => {
+        dispose = observeStorefrontExperience(report);
+        const target = begin();
+        runtime.router.state.location = target;
+        document.querySelector('[data-route]')?.setAttribute('data-route', 'home');
+        const boundary = document.querySelector('[data-page-readiness]');
+        boundary?.setAttribute('data-page-readiness', 'error');
+        document.dispatchEvent(new Event('storefront:page-error'));
+        expect(report).not.toHaveBeenCalled();
+        boundary?.setAttribute('data-navigation-readiness', 'error');
+        now += 10_000;
+        document.dispatchEvent(new Event('storefront:page-error'));
+        document.dispatchEvent(new Event('storefront:page-error'));
+        expect(report.mock.calls.map(call => call.slice(1))).toEqual([['services', 'NAV_ERROR', 1]]);
+        expect(JSON.stringify(report.mock.calls)).not.toContain('/services');
+    });
+
+    it('ignores precommit failures for canceled, hidden and over-deadline navigation', () => {
+        dispose = observeStorefrontExperience(report);
+        document.querySelector('[data-page-readiness]')?.setAttribute('data-navigation-readiness', 'error');
+        const canceled = begin();
+        begin('/home');
+        runtime.router.state.location = canceled;
+        document.dispatchEvent(new Event('storefront:page-error'));
+        expect(report).not.toHaveBeenCalled();
+        runtime.router.state.location = begin();
+        Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+        document.dispatchEvent(new Event('storefront:page-error'));
+        expect(report).not.toHaveBeenCalled();
+        Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+        now += 120_001;
+        document.dispatchEvent(new Event('storefront:page-error'));
+        expect(report).not.toHaveBeenCalled();
+    });
+
     it('measures only pending viewport-intersecting images, never treats already painted or offscreen waits as zeros', () => {
         const root = document.getElementById('root');
         if (!root) throw new Error('Expected the experience observation fixture root');

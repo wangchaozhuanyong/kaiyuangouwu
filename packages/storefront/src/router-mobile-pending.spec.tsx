@@ -17,6 +17,7 @@ import { type Product } from './types';
 const loads = vi.hoisted(() => ({
     code: vi.fn<() => Promise<void>>(),
     product: vi.fn<() => Promise<Product | null>>(),
+    retryPage: vi.fn(),
 }));
 vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: loads.code }));
 vi.mock('./route-media-preload', () => ({ preloadRouteMedia: vi.fn() }));
@@ -83,7 +84,7 @@ function MobileShell() {
         language: 'en',
         customer: null,
         customerLoadState: 'ready',
-        retryPageLoad: () => undefined,
+        retryPageLoad: loads.retryPage,
         storefrontContextValue: {
             ...navigation,
             customer: null,
@@ -107,6 +108,7 @@ beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
     loads.code.mockReset().mockResolvedValue(undefined);
     loads.product.mockReset().mockResolvedValue({ id: 'cold', name: 'Fixture product' } as Product);
+    loads.retryPage.mockReset();
     release = () => undefined;
     storefrontQueryClient.clear();
     setPublicPageNavigationScope({
@@ -191,7 +193,7 @@ it('preserves query scalar coercion and ignores omitted or compound search value
     expect(productionRouter.options.parseSearch?.('??x=1')).toEqual({ x: '1' });
 });
 it.each(['code', 'data', 'timeout'])(
-    'keeps the real mobile shell return usable while product %s is pending',
+    'keeps the real mobile source visible and browser return usable while product %s is pending',
     async kind => {
         await start();
         if (kind === 'data') {
@@ -201,7 +203,13 @@ it.each(['code', 'data', 'timeout'])(
             loads.product.mockImplementation(() => promise);
         } else holdCode();
         await click('Open product', 240);
-        expect(host.querySelector('[data-page-pending]')).not.toBeNull();
+        const home = host.querySelector('[data-mobile-home]');
+        expect(home).not.toBeNull();
+        if (!home) throw new Error('Expected the mobile home during navigation');
+        expect(getComputedStyle(home).display).not.toBe('none');
+        expect(home?.closest('[hidden],[inert]')).toBeNull();
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
         expect(host.querySelector('[data-product-purchase-bar]')).toBeNull();
         if (kind === 'timeout') {
             await act(async () => {
@@ -209,12 +217,15 @@ it.each(['code', 'data', 'timeout'])(
             });
             expect(host.querySelector('[role="alert"]')).not.toBeNull();
         }
-        const back = host.querySelector<HTMLButtonElement>('.page-back-button');
-        expect(back).not.toBeNull();
-        expect(back?.closest('[hidden],[inert]')).toBeNull();
-        if (!back) throw new Error('Pending return action is missing');
         await act(async () => {
-            back.click();
+            if (kind === 'timeout') {
+                const back = Array.from(host.querySelectorAll('.page-readiness-error button')).find(
+                    node => node.textContent === 'Back',
+                ) as HTMLButtonElement | undefined;
+                if (!back) throw new Error('Timeout return action is missing');
+                expect(back.closest('[hidden],[inert]')).toBeNull();
+                back.click();
+            } else router.history.back();
             await new Promise(resolve => setTimeout(resolve, 20));
         });
         expect(host.querySelector('[data-mobile-home]')?.textContent).toContain('Home ready');
@@ -223,11 +234,13 @@ it.each(['code', 'data', 'timeout'])(
             await new Promise(resolve => setTimeout(resolve, 20));
         });
         expect(host.querySelector('[data-mobile-home]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(host.querySelector('[role="alert"]')).toBeNull();
         expect(host.querySelector('.page-back-button')).toBeNull();
     },
     15_000,
 );
-it('does not add pending controls over the ready purchase bar before the router threshold', async () => {
+it('keeps the ready purchase bar and source controls visible through a slow navigation', async () => {
     await start();
     await click('Open product');
     expect(host.querySelector('[data-product-purchase-bar]')).not.toBeNull();
@@ -248,10 +261,67 @@ it('does not add pending controls over the ready purchase bar before the router 
         expect(host.querySelector('.page-back-button')).toBeNull();
         expect(host.querySelector('.storefront-bottom-nav')).toBeNull();
         await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+        });
+        const purchaseBar = host.querySelector('[data-product-purchase-bar]');
+        expect(purchaseBar).not.toBeNull();
+        const purchaseArticle = purchaseBar?.closest('article');
+        if (!purchaseArticle) throw new Error('Expected the purchase bar inside the source article');
+        expect(getComputedStyle(purchaseArticle).display).not.toBe('none');
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+        await act(async () => {
             release();
             await vi.advanceTimersByTimeAsync(20);
         });
         expect(host.textContent).toContain('Services ready');
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('gives each pending destination its own timeout and retries the latest navigation only', async () => {
+    await start();
+    holdCode();
+    vi.useFakeTimers();
+    try {
+        await act(async () => {
+            void router.navigate({ to: '/product', search: { id: 'cold' } } as never);
+            await vi.advanceTimersByTimeAsync(9_000);
+        });
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        await act(async () => {
+            void router.navigate({ to: '/services' } as never);
+            await vi.advanceTimersByTimeAsync(1_100);
+        });
+        expect(router.state.location.pathname).toBe('/services');
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(host.querySelector('[data-mobile-home]')).not.toBeNull();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(9_000);
+        });
+        expect(host.querySelector('[role="alert"]')).not.toBeNull();
+        const reload = vi.spyOn(router, 'load');
+        const retry = Array.from(host.querySelectorAll('button')).find(
+            node => node.textContent === 'Try again',
+        );
+        if (!retry) throw new Error('Expected the navigation retry action');
+        await act(async () => {
+            retry.click();
+            await vi.advanceTimersByTimeAsync(1);
+        });
+        expect(reload).toHaveBeenCalledOnce();
+        expect(loads.retryPage).not.toHaveBeenCalled();
+        expect(router.state.location.pathname).toBe('/services');
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        await act(async () => {
+            release();
+            await vi.advanceTimersByTimeAsync(20);
+        });
+        expect(host.textContent).toContain('Services ready');
+        expect(host.querySelector('[data-mobile-product]')).toBeNull();
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
     } finally {
         vi.useRealTimers();
     }

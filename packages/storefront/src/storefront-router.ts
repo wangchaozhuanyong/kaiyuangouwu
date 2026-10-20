@@ -46,32 +46,25 @@ export type RouteName =
 
 export type OrderTab = 'all' | 'pending' | 'shipping' | 'receiving' | 'completed' | 'service';
 export type SortMode = ProductSearchSort;
-export type CheckoutRouteName = 'purchase' | 'checkout' | 'payment';
+const checkoutRoutes = ['purchase', 'checkout', 'payment'] as const;
+export type CheckoutRouteName = (typeof checkoutRoutes)[number];
 
 export function isCheckoutRoute(name: string): name is CheckoutRouteName {
-    return name === 'purchase' || name === 'checkout' || name === 'payment';
+    return checkoutRoutes.includes(name as CheckoutRouteName);
 }
 
 export function routePageIdentity(route: RouteState): string {
     switch (route.name) {
         case 'product':
-            return `product:${route.id ?? ''}`;
         case 'guide':
-            return `guide:${route.id ?? ''}`;
+        case 'legal':
+            return `${route.name}:${route.id ?? ''}`;
         case 'order-detail':
             return `order-detail:${route.id ?? route.orderCode ?? ''}`;
         case 'announcements':
             return `announcements:${route.id ?? 'list'}`;
-        case 'legal':
-            return `legal:${route.id ?? ''}`;
-        case 'category':
-            // In-page category switcher (collectionId, childId, sort, filters) must not be treated as a whole-page unmount.
-            return 'category';
-        case 'search':
-            return 'search';
-        case 'orders':
-            return 'orders';
         default:
+            // Category, search and order filters keep the same page identity.
             return route.name;
     }
 }
@@ -105,13 +98,10 @@ export interface RouteState {
 
 export const rootPages: MainPage[] = ['home', 'category', 'services', 'cart', 'account'];
 export const orderTabs: OrderTab[] = ['all', 'pending', 'shipping', 'receiving', 'completed', 'service'];
+export const cartResolvedRoutes: RouteName[] = ['cart', ...checkoutRoutes, 'coupons'];
 export const customerResolvedRoutes: RouteName[] = [
     'account',
-    'cart',
-    'purchase',
-    'checkout',
-    'payment',
-    'coupons',
+    ...cartResolvedRoutes,
     'referral',
     'orders',
     'logistics',
@@ -122,51 +112,50 @@ export const customerResolvedRoutes: RouteName[] = [
     'reviews',
     'image-studio',
 ];
-export const cartResolvedRoutes: RouteName[] = ['cart', 'purchase', 'checkout', 'payment', 'coupons'];
 
-const routePaths: Record<RouteName, string> = {
-    home: '/',
-    category: '/category',
-    services: '/services',
-    cart: '/cart',
-    account: '/account',
-    product: '/product',
-    guide: '/guides',
-    search: '/search',
-    purchase: '/purchase',
-    checkout: '/checkout',
-    payment: '/payment',
-    'order-confirmation': '/order-confirmation',
-    orders: '/orders',
-    logistics: '/logistics',
-    'order-detail': '/order-detail',
-    addresses: '/addresses',
-    'account-security': '/account-security',
-    favorites: '/favorites',
-    announcements: '/announcements',
-    history: '/history',
-    notifications: '/notifications',
-    coupons: '/coupons',
-    referral: '/referral',
-    'flash-sale': '/flash-sale',
-    recommendations: '/recommendations',
-    support: '/support',
-    reviews: '/reviews',
-    'image-studio': '/image-studio',
-    'two-factor': '/two-factor',
-    'mail-query': '/mail-query',
-    'gpt-recharge': '/gpt-recharge',
-    login: '/login',
-    register: '/register',
-    'verify-account': '/verify-account',
-    'forgot-password': '/forgot-password',
-    'reset-password': '/reset-password',
-    legal: '/legal',
-    'not-found': '/not-found',
-};
+// Registration, path generation and enumeration retain one canonical route order.
+export const storefrontRouteNames = [
+    ...rootPages,
+    'product',
+    'guide',
+    'search',
+    ...checkoutRoutes,
+    'order-confirmation',
+    'orders',
+    'logistics',
+    'order-detail',
+    'addresses',
+    'account-security',
+    'favorites',
+    'announcements',
+    'history',
+    'notifications',
+    'coupons',
+    'referral',
+    'flash-sale',
+    'recommendations',
+    'support',
+    'reviews',
+    'image-studio',
+    'two-factor',
+    'mail-query',
+    'gpt-recharge',
+    'login',
+    'register',
+    'verify-account',
+    'forgot-password',
+    'reset-password',
+    'legal',
+    'not-found',
+] as const satisfies readonly RouteName[];
 
-// Registration and enumeration share the same canonical route ordering.
-export const storefrontRouteNames: readonly RouteName[] = Object.keys(routePaths) as RouteName[];
+// Assigning the inferred keys to Record<RouteName, string> also checks that no route is omitted.
+const routePaths: Record<RouteName, string> = Object.fromEntries(
+    storefrontRouteNames.map(name => [
+        name,
+        name === 'home' ? '/' : name === 'guide' ? '/guides' : `/${name}`,
+    ]),
+) as Record<(typeof storefrontRouteNames)[number], string>;
 
 const routeNamesByPath = new Map(Object.entries(routePaths).map(([name, path]) => [path, name as RouteName]));
 
@@ -196,6 +185,35 @@ export function getStorefrontScrollRestorationKey(location: ScrollRestorationLoc
     if (pathname === '/category') return location.state.__TSR_key ?? location.href;
     if (rootPagePaths.has(pathname)) return `root:${pathname}`;
     return location.state.__TSR_key ?? location.href;
+}
+
+/** Select the visible page's owner; TanStack remains the only scroll-position cache. */
+export function createStorefrontScrollRestorationKey(
+    readState: () => {
+        isLoading: boolean;
+        location?: ScrollRestorationLocation;
+        resolvedLocation?: ScrollRestorationLocation;
+    },
+) {
+    let displayed: ScrollRestorationLocation | undefined;
+    const commit = (location: ScrollRestorationLocation) => {
+        displayed = location;
+    };
+    return {
+        commit,
+        getKey(location: ScrollRestorationLocation): string {
+            const state = readState();
+            // isLoading clears in the same batch that publishes matches. status and
+            // resolvedLocation may still describe the previous page at onRendered.
+            if (!state.isLoading) {
+                // Router also asks for the previous key during restoration. That
+                // lookup must not move the displayed owner back to the old page.
+                commit(state.location ?? location);
+                return getStorefrontScrollRestorationKey(location);
+            }
+            return getStorefrontScrollRestorationKey(displayed ?? state.resolvedLocation ?? location);
+        },
+    };
 }
 
 export function routeSearch(route: RouteState): StorefrontRouteSearch {
@@ -289,6 +307,7 @@ export function routeFromRouterLocation(pathname: string, search: Record<string,
     const languageCode = publicLanguageFromUrl(pathname);
     const path = publicUnlocalizedPathname(pathname);
     const normalizedPath = path === '/' ? '/' : path.replace(/\/+$/, '');
+    const guide = /^\/guides\/[a-z0-9_-]{1,100}$/iu.test(normalizedPath);
     // Overlay state must not change the background page/query/readiness identity.
     const {
         auth: _auth,
@@ -298,18 +317,14 @@ export function routeFromRouterLocation(pathname: string, search: Record<string,
         ...pageSearch
     } = normalizeRouteSearch(search);
     return {
-        name: /^\/guides\/[a-z0-9_-]{1,100}$/iu.test(normalizedPath)
-            ? 'guide'
-            : (routeNamesByPath.get(normalizedPath) ?? 'not-found'),
+        name: guide ? 'guide' : (routeNamesByPath.get(normalizedPath) ?? 'not-found'),
         ...(languageCode || __storefrontLanguage
             ? {
                   publicLanguage: languageCode === 'zh_Hans' ? 'zh' : (languageCode ?? __storefrontLanguage),
               }
             : {}),
         ...pageSearch,
-        ...(/^\/guides\/[a-z0-9_-]{1,100}$/iu.test(normalizedPath)
-            ? { id: normalizedPath.slice('/guides/'.length) }
-            : {}),
+        ...(guide ? { id: normalizedPath.slice('/guides/'.length) } : {}),
     };
 }
 
@@ -331,27 +346,47 @@ export function routeFromLocation(): RouteState {
 export function routeHref(route: RouteState): string {
     const params = new URLSearchParams();
     const search = routeSearch(route);
-    if (search.returnTo) params.set('returnTo', search.returnTo);
-    if (search.source) params.set('source', search.source);
-    if (search.deliveryStatus) params.set('deliveryStatus', search.deliveryStatus);
-    if (search.addressId) params.set('addressId', search.addressId);
-    if (search.checkoutOrderId) params.set('checkoutOrderId', search.checkoutOrderId);
-    if (search.editAddress) params.set('editAddress', 'true');
-    if (search.id && route.name !== 'guide') params.set('id', search.id);
-    if (search.quantity) params.set('quantity', String(search.quantity));
-    if (search.page) params.set('page', String(search.page));
-    if (search.orderCode) params.set('orderCode', search.orderCode);
-    if (search.focus) params.set('focus', search.focus);
-    if (search.tab) params.set('tab', search.tab);
-    if (search.token) params.set('token', search.token);
-    if (search.term) params.set('term', search.term);
-    if (search.collectionId) params.set('collectionId', search.collectionId);
-    if (search.childId) params.set('childId', search.childId);
-    if (search.sort && search.sort !== 'recommended') params.set('sort', search.sort);
-    if (search.fulfillment && search.fulfillment !== 'all') params.set('fulfillment', search.fulfillment);
-    if (search.inStockOnly) params.set('inStockOnly', 'true');
-    if (search.minPrice) params.set('minPrice', search.minPrice);
-    if (search.maxPrice) params.set('maxPrice', search.maxPrice);
+    // Preserve parameter order, omission rules and URLSearchParams coercion.
+    for (const key of [
+        'returnTo',
+        'source',
+        'deliveryStatus',
+        'addressId',
+        'checkoutOrderId',
+        'editAddress',
+        'id',
+        'quantity',
+        'page',
+        'orderCode',
+        'focus',
+        'tab',
+        'token',
+        'term',
+        'collectionId',
+        'childId',
+        'sort',
+        'fulfillment',
+        'inStockOnly',
+        'minPrice',
+        'maxPrice',
+    ] as const) {
+        const value = search[key];
+        if (
+            value &&
+            !(key === 'id' && route.name === 'guide') &&
+            !(key === 'sort' && value === 'recommended') &&
+            !(key === 'fulfillment' && value === 'all')
+        ) {
+            params.set(
+                key,
+                key === 'editAddress' || key === 'inStockOnly'
+                    ? 'true'
+                    : key === 'quantity' || key === 'page'
+                      ? String(value)
+                      : (value as string),
+            );
+        }
+    }
     const code = route.publicLanguage === 'zh' ? 'zh_Hans' : route.publicLanguage;
     const locationCode =
         typeof window === 'undefined' ? undefined : publicLanguageFromUrl(window.location.pathname);
