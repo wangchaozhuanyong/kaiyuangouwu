@@ -685,6 +685,39 @@ describe('public SEO with real isolated SQL publication and catalog membership',
         expect(preview.seo?.robots).toBe('noindex, follow');
         expect(preview.seo?.reasons).toContain('STORE_NOT_LIVE');
     });
+    it.each(['settings-unpublish', 'document-publish', 'primary-withdraw'])(
+        'rejects a request-local prepared snapshot after a real SQL %s change',
+        async action => {
+            const ctx = context();
+            const source = page(ctx);
+            if (!source.request) throw new Error('Expected product fixture request');
+            const prepared = await publicSeo.prepare(ctx, 'store-1.test', source.request, {
+                configuration: await seo.publishedConfiguration(ctx),
+                primary: await publicSeo.primaryHost(ctx),
+            });
+            if (action === 'settings-unpublish') {
+                await seo.unpublish(context(1, 'en', true), {
+                    ...storefrontSeoSettingsIdentity,
+                    expectedVersion: 2,
+                });
+            } else if (action === 'document-publish') {
+                const admin = context(1, 'en', true);
+                await seo.saveDraft(admin, {
+                    ...productIdentity,
+                    expectedVersion: 0,
+                    draft: { title: 'Newly published title' },
+                });
+                await seo.publish(admin, { ...productIdentity, expectedVersion: 1 });
+            } else {
+                await data.getRepository(StoreDomain).update({ channelId: 1 }, { verifiedAt: null });
+            }
+
+            const rendered = await publicSeo.enrich(ctx, 'store-1.test', source, prepared);
+
+            await expect(publicSeo.assertOutput(ctx, rendered)).rejects.toThrow('Public authority changed');
+        },
+    );
+
     it.each(['document-publish', 'document-unpublish', 'settings-publish', 'settings-unpublish'])(
         'rejects rendered output after %s changes its real SQL publication',
         async action => {

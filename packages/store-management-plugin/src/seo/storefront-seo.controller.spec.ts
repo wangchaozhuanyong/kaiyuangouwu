@@ -32,6 +32,14 @@ function responseMock() {
     return response;
 }
 
+function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>(complete => {
+        resolve = complete;
+    });
+    return { promise, resolve };
+}
+
 function fixture() {
     const ctx = {
         channelId: 'synthetic-channel',
@@ -60,13 +68,19 @@ function fixture() {
         read: vi.fn().mockResolvedValue(page),
         readForDocument: vi.fn().mockResolvedValue(page),
     };
+    const prepared = { requestLocal: true };
     const publicSeo = {
         primaryHost: vi.fn().mockResolvedValue('synthetic-store.invalid'),
+        prepare: vi.fn().mockResolvedValue(prepared),
         enrich: vi.fn().mockResolvedValue(page),
         assertOutput: vi.fn().mockResolvedValue(undefined),
     };
     const html = { render: vi.fn().mockResolvedValue('<html>synthetic public body</html>') };
-    const seo = { publishedSettings: vi.fn().mockResolvedValue(settings) };
+    const configuration = { payload: settings, version: 1, publishedAt: new Date(0) };
+    const seo = {
+        publishedSettings: vi.fn().mockResolvedValue(settings),
+        publishedConfiguration: vi.fn().mockResolvedValue(configuration),
+    };
     const controller = new StorefrontSeoController(
         access as never,
         contexts as never,
@@ -86,7 +100,21 @@ function fixture() {
             },
             query: {},
         }) as unknown as Request;
-    return { controller, ctx, page, settings, access, contexts, pages, publicSeo, html, seo, req };
+    return {
+        controller,
+        ctx,
+        page,
+        settings,
+        configuration,
+        prepared,
+        access,
+        contexts,
+        pages,
+        publicSeo,
+        html,
+        seo,
+        req,
+    };
 }
 
 describe('StorefrontSeoController public document and legacy redirects', () => {
@@ -96,6 +124,84 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         vi.spyOn(Logger, 'error').mockImplementation(errorLog);
     });
     afterEach(() => vi.restoreAllMocks());
+    it.each(['page', 'prepare'] as const)(
+        'starts document and SEO preparation together and waits when %s finishes first',
+        async first => {
+            const test = fixture();
+            const document = deferred<StorefrontPageData>();
+            const preparation = deferred<typeof test.prepared>();
+            test.pages.readForDocument.mockReturnValue(document.promise);
+            test.publicSeo.prepare.mockReturnValue(preparation.promise);
+            const response = responseMock();
+            const pending = test.controller.document(
+                test.req('/en/product?id=product-1'),
+                response as unknown as Response,
+            );
+
+            await vi.waitFor(() => {
+                expect(test.pages.readForDocument).toHaveBeenCalledOnce();
+                expect(test.publicSeo.prepare).toHaveBeenCalledWith(
+                    test.ctx,
+                    'synthetic-store.invalid',
+                    { kind: 'product', id: 'product-1' },
+                    { configuration: test.configuration, primary: 'synthetic-store.invalid' },
+                );
+            });
+            if (first === 'page') document.resolve(test.page);
+            else preparation.resolve(test.prepared);
+            await Promise.resolve();
+            expect(test.publicSeo.enrich).not.toHaveBeenCalled();
+            expect(test.html.render).not.toHaveBeenCalled();
+            document.resolve(test.page);
+            preparation.resolve(test.prepared);
+            await pending;
+
+            expect(test.publicSeo.enrich).toHaveBeenCalledWith(
+                test.ctx,
+                'synthetic-store.invalid',
+                test.page,
+                test.prepared,
+            );
+            expect(test.seo.publishedConfiguration).toHaveBeenCalledOnce();
+            expect(test.seo.publishedSettings).not.toHaveBeenCalled();
+            expect(response.status).toHaveBeenCalledWith(200);
+        },
+    );
+
+    it.each(['page', 'prepare'] as const)('does not render when parallel %s reading fails', async phase => {
+        const test = fixture();
+        const error = new ServiceUnavailableException('Synthetic reading failure');
+        if (phase === 'page') test.pages.readForDocument.mockRejectedValue(error);
+        else test.publicSeo.prepare.mockRejectedValue(error);
+        const response = responseMock();
+
+        await test.controller.document(test.req('/en/product?id=product-1'), response as unknown as Response);
+
+        expect(test.html.render).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(503);
+        expect(response.status).not.toHaveBeenCalledWith(200);
+        expect(JSON.parse(errorLog.mock.calls[0][0]) as { stage: string }).toMatchObject({
+            stage: phase === 'page' ? 'read-page' : 'resolve-seo',
+        });
+    });
+
+    it('reports phase durations without request, store or publication identifiers', async () => {
+        const test = fixture();
+        const response = responseMock();
+
+        await test.controller.document(test.req('/en/product?id=product-1'), response as unknown as Response);
+
+        const header = response.setHeader.mock.calls.find(
+            ([name]) => name === 'Server-Timing',
+        )?.[1] as string;
+        const phases = header.split(', ');
+        expect(phases).toHaveLength(10);
+        for (const phase of phases) {
+            expect(phase).toMatch(
+                /^storefront-(access|settings|domain|context|page|prepare|seo|render|check|total);dur=\d+\.\d$/u,
+            );
+        }
+    });
 
     it('renders the document media result instead of the short public API result', async () => {
         const test = fixture();
@@ -135,6 +241,8 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
             expect(test.pages.readForDocument).not.toHaveBeenCalled();
             expect(test.html.render).not.toHaveBeenCalled();
             expect(test.contexts.create).not.toHaveBeenCalled();
+            expect(test.publicSeo.prepare).not.toHaveBeenCalled();
+            expect(test.publicSeo.primaryHost).not.toHaveBeenCalled();
         },
     );
 

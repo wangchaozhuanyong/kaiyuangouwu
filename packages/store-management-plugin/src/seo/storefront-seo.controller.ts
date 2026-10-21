@@ -73,9 +73,28 @@ export class StorefrontSeoController {
 
     @Get('html')
     async document(@Req() req: Request, @Res() res: Response) {
+        const started = performance.now();
+        const timings = new Map<string, number>();
+        const measure = async <T>(name: string, read: () => Promise<T>): Promise<T> => {
+            const start = performance.now();
+            try {
+                return await read();
+            } finally {
+                timings.set(name, performance.now() - start);
+            }
+        };
+        const reportTiming = () => {
+            timings.set('total', performance.now() - started);
+            res.setHeader(
+                'Server-Timing',
+                [...timings]
+                    .map(([name, duration]) => `storefront-${name};dur=${duration.toFixed(1)}`)
+                    .join(', '),
+            );
+        };
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        const verified = await this.access.resolveRequest(req);
+        const verified = await measure('access', () => this.access.resolveRequest(req));
         if (!verified) {
             res.status(404).type('text/plain').send('Storefront not found');
             return;
@@ -87,7 +106,8 @@ export class StorefrontSeoController {
             res.status(400).end();
             return;
         }
-        const settings = await this.seo.publishedSettings(verified.ctx);
+        const configuration = await measure('settings', () => this.seo.publishedConfiguration(verified.ctx));
+        const settings = configuration?.payload;
         const redirect = settings?.redirects.find(
             item => item.from === normalizedPublicRedirectPath(rawPath),
         );
@@ -110,7 +130,7 @@ export class StorefrontSeoController {
         const defaultCode =
             verified.ctx.channel.defaultLanguageCode === LanguageCode.zh_Hans ? 'zh_Hans' : 'en';
         const code = explicit === 'zh' ? 'zh_Hans' : explicit === 'en' ? 'en' : defaultCode;
-        const primary = await this.publicSeo.primaryHost(verified.ctx);
+        const primary = await measure('domain', () => this.publicSeo.primaryHost(verified.ctx));
         if (!explicit || (primary && primary !== verified.host)) {
             const location = `${primary ? `https://${primary}` : ''}/${code === 'zh_Hans' ? 'zh' : 'en'}${publicPageRouteHref(request)}`;
             res.redirect(301, publicRedirectTracking(location, rawPath));
@@ -121,35 +141,55 @@ export class StorefrontSeoController {
             code,
             verified.ctx.channel.defaultCurrencyCode,
         );
-        const ctx = await this.contexts.create({
-            apiType: 'shop',
-            channelOrToken: verified.ctx.channel,
-            ...preferences,
-            req: {
-                headers: { host: verified.host },
-                protocol: 'https',
-                get: (name: string) => (name.toLowerCase() === 'host' ? verified.host : undefined),
-            } as unknown as Request,
-        });
+        const ctx = await measure('context', () =>
+            this.contexts.create({
+                apiType: 'shop',
+                channelOrToken: verified.ctx.channel,
+                ...preferences,
+                req: {
+                    headers: { host: verified.host },
+                    protocol: 'https',
+                    get: (name: string) => (name.toLowerCase() === 'host' ? verified.host : undefined),
+                } as unknown as Request,
+            }),
+        );
         const startedAt = Date.now();
         let stage: PublicDocumentStage = 'read-page';
         try {
-            const data = await this.pages.readForDocument(ctx, verified.host, request);
+            // Both reads are request-local; the independent final authority check stays after rendering.
+            const [documentPage, prepared] = await Promise.all([
+                measure('page', () => this.pages.readForDocument(ctx, verified.host, request)),
+                measure('prepare', async () => {
+                    try {
+                        return await this.publicSeo.prepare(ctx, verified.host, request, {
+                            configuration,
+                            primary,
+                        });
+                    } catch (error) {
+                        stage = 'resolve-seo';
+                        throw error;
+                    }
+                }),
+            ]);
             stage = 'resolve-seo';
-            const page = await this.publicSeo.enrich(ctx, verified.host, data);
+            const page = await measure('seo', () =>
+                this.publicSeo.enrich(ctx, verified.host, documentPage, prepared),
+            );
             stage = 'required-content';
             if (page.failures.includes('content'))
                 throw new ServiceUnavailableException('Public content is unavailable');
             stage = 'render-html';
-            const rendered = await this.html.render(page);
+            const rendered = await measure('render', () => this.html.render(page));
             stage = 'verify-publication';
-            await this.publicSeo.assertOutput(ctx, page);
+            await measure('check', () => this.publicSeo.assertOutput(ctx, page));
             stage = 'resolved-seo';
             if (!page.seo) throw new ServiceUnavailableException('Public SEO resolution is unavailable');
             res.setHeader('X-Robots-Tag', page.seo.robots);
+            reportTiming();
             res.status(200).type('html').send(rendered);
         } catch (error) {
             res.setHeader('X-Robots-Tag', 'noindex, follow');
+            reportTiming();
             if (error instanceof NotFoundException)
                 res.status(404).type('text/plain').send('Public page not found');
             else if (error instanceof ServiceUnavailableException) {

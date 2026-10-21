@@ -12,6 +12,7 @@ import {
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import {
+    publicPageRequestKey,
     StorefrontContentService,
     type PublicPageRequest,
     type StorefrontPageData,
@@ -36,6 +37,22 @@ type PublicConfig = {
     supportEmail?: string;
 };
 type PublicBlock = { type: string; title?: string; body?: string; subtitle?: string };
+export type StorefrontPublicSeoInitial = {
+    configuration: Awaited<ReturnType<StorefrontSeoService['publishedConfiguration']>>;
+    primary: string | null;
+};
+export type PreparedStorefrontPublicSeo = StorefrontPublicSeoInitial & {
+    record: Awaited<ReturnType<StorefrontSeoService['publishedRecord']>>;
+    profile: StoreProfile | null;
+    scope: {
+        channelId: string;
+        channelCode: string;
+        languageCode: string;
+        currencyCode: string;
+        host: string;
+        requestKey: string;
+    };
+};
 const plain = (value: string | null | undefined) =>
     (value ?? '')
         .replace(/<[^>]*>/gu, ' ')
@@ -92,15 +109,47 @@ export class StorefrontPublicSeoService {
         return entity;
     }
 
-    async enrich(ctx: RequestContext, host: string, page: StorefrontPageData): Promise<StorefrontPageData> {
-        const request = page.request ?? { kind: 'home' };
-        const code = language(ctx);
-        const [configuration, primaryHost, documentRecord, profile] = await Promise.all([
-            this.seo.publishedConfiguration(ctx),
-            this.primaryHost(ctx),
-            this.seo.publishedRecord(ctx, identity(request, code)),
+    /** Request-local reads may overlap page loading; final output authority is always read again. */
+    async prepare(
+        ctx: RequestContext,
+        host: string,
+        request: PublicPageRequest,
+        initial?: StorefrontPublicSeoInitial,
+    ): Promise<PreparedStorefrontPublicSeo> {
+        const scope = this.preparationScope(ctx, host, request);
+        const [configuration, primary, record, profile] = await Promise.all([
+            initial ? initial.configuration : this.seo.publishedConfiguration(ctx),
+            initial ? initial.primary : this.primaryHost(ctx),
+            this.seo.publishedRecord(ctx, identity(request, language(ctx))),
             this.connection.getRepository(ctx, StoreProfile).findOne({ where: { channelId: ctx.channelId } }),
         ]);
+        return { scope, configuration, primary, record, profile };
+    }
+
+    private preparationScope(ctx: RequestContext, host: string, request: PublicPageRequest) {
+        return {
+            channelId: String(ctx.channelId),
+            channelCode: ctx.channel.code,
+            languageCode: ctx.languageCode,
+            currencyCode: ctx.currencyCode,
+            host,
+            requestKey: publicPageRequestKey(request),
+        };
+    }
+
+    async enrich(
+        ctx: RequestContext,
+        host: string,
+        page: StorefrontPageData,
+        prepared?: PreparedStorefrontPublicSeo,
+    ): Promise<StorefrontPageData> {
+        const request = page.request ?? { kind: 'home' };
+        const code = language(ctx);
+        const resolved = prepared ?? (await this.prepare(ctx, host, request));
+        const scope = this.preparationScope(ctx, host, request);
+        if ((Object.keys(scope) as Array<keyof typeof scope>).some(key => resolved.scope[key] !== scope[key]))
+            throw new ServiceUnavailableException('Public SEO preparation scope changed');
+        const { configuration, primary: primaryHost, record: documentRecord, profile } = resolved;
         const settings = configuration?.payload ?? null;
         const document = documentRecord?.payload ?? null;
         const config = page.config as PublicConfig;
