@@ -116,7 +116,15 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         const dom = load(html);
                         expect(dom('#root').attr('data-public-rendered')).toBe('1');
                         expect(dom('#root #storefront-content').length).toBe(1);
-                        expect(dom('#storefront-boot-loading').length).toBe(0);
+                        // The document keeps startup feedback outside React until app-owned;
+                        // existing SSR must retain compact, non-blocking feedback, not an overlay.
+                        const startup = dom('body > #storefront-boot-loading');
+                        expect(startup).toHaveLength(1);
+                        expect(dom('#root #storefront-boot-loading')).toHaveLength(0);
+                        expect(startup.attr('role')).toBe('status');
+                        expect(startup.attr('aria-busy')).toBe('true');
+                        expect(dom('#root').is('[hidden], [inert]')).toBe(false);
+                        expect(dom('script[defer][src^="/storefront/document-loading.js"]')).toHaveLength(1);
                         expect(dom('html').attr('lang')).toBe(language === 'zh_Hans' ? 'zh-CN' : 'en');
                         expect(dom('title').length).toBe(1);
                         expect(dom('title').text()).toBe(payload.seo.title);
@@ -126,6 +134,14 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         expect(dom('link[rel="alternate"]').length).toBe(payload.seo.alternates.length);
                         expect(dom('script[type="module"][src^="/assets/"]').length).toBeGreaterThan(0);
                         expect(dom('link[rel="stylesheet"][href^="/assets/index-"]').length).toBe(1);
+                        const stylesheet = dom('link[rel="stylesheet"][href^="/assets/index-"]').attr('href');
+                        if (!stylesheet) throw new Error('Missing matching startup stylesheet');
+                        const css = await readFile(path.join(artifact, stylesheet), 'utf8');
+                        const compactStyle = css.match(
+                            /#storefront-boot-loading\[data-presentation=["']?status["']?\]\{([^}]+)\}/u,
+                        )?.[1];
+                        expect(compactStyle).toContain('pointer-events:none');
+                        expect(compactStyle).toContain('inset:0 0 auto');
                         if (kind === 'home') {
                             expect(dom('head style[data-href="storefront-home-showcase"]')).toHaveLength(1);
                             expect(dom('#root style[data-href="storefront-home-showcase"]')).toHaveLength(0);

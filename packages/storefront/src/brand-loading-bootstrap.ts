@@ -121,12 +121,14 @@ function ownsInitialLoadingStage(boot: HTMLElement): boolean {
     const root = document.getElementById('root');
     return Boolean(
         boot.isConnected &&
+        boot.getAttribute('aria-hidden') !== 'true' &&
+        !document.documentElement.hasAttribute('data-storefront-app-owned') &&
         document.getElementById('storefront-boot-loading') === boot &&
         root &&
         (root.contains(boot) ||
             (root.parentElement === document.body &&
                 boot.parentElement === document.body &&
-                root.previousElementSibling === boot)),
+                (root.previousElementSibling === boot || root.nextElementSibling === boot))),
     );
 }
 
@@ -194,7 +196,8 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     const mark = document.createElement('span');
     mark.className = 'route-transition-mark';
     content.prepend(mark);
-    if (!brand.logoUrl) return;
+    // A rendered public page uses the thin status bar, whose hidden logo must not compete with content.
+    if (!brand.logoUrl || document.getElementById('root')?.dataset.publicRendered === '1') return;
     const image = document.createElement('img');
     image.alt = '';
     image.width = 160;
