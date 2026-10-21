@@ -121,8 +121,6 @@ function ownsInitialLoadingStage(boot: HTMLElement): boolean {
     const root = document.getElementById('root');
     return Boolean(
         boot.isConnected &&
-        boot.getAttribute('aria-hidden') !== 'true' &&
-        !document.documentElement.hasAttribute('data-storefront-app-owned') &&
         document.getElementById('storefront-boot-loading') === boot &&
         root &&
         (root.contains(boot) ||
@@ -164,8 +162,13 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     }
     const content = boot.querySelector('.brand-loading');
     if (!boot || !content) return;
-    const ownsBoot = () => generation === initialBrandGeneration && ownsInitialLoadingStage(boot);
-    if (!ownsBoot()) return;
+    const ownsBoot = () =>
+        generation === initialBrandGeneration &&
+        ownsInitialLoadingStage(boot) &&
+        boot.getAttribute('aria-hidden') !== 'true' &&
+        !document.documentElement.hasAttribute('data-storefront-app-owned');
+    // Committed scopes may refresh retained identity without restarting startup feedback.
+    if (!ownsInitialLoadingStage(boot)) return;
     boot.dataset.loadingBrand = brandKey;
     content
         .querySelectorAll('.brand-loading-name, .brand-loading-subtitle, .route-transition-mark')

@@ -183,7 +183,7 @@ describe('parser-time storefront loading', () => {
         expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
     });
 
-    it('leaves the retained startup node unchanged after the app has taken ownership', async () => {
+    it('rejects a late image reveal while confirmed identity updates stay hidden after app ownership', async () => {
         let decoded!: () => void;
         vi.spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(
             () => new Promise<void>(resolve => (decoded = resolve)),
@@ -197,12 +197,13 @@ describe('parser-time storefront loading', () => {
         image.dispatchEvent(new Event('load'));
         document.documentElement.setAttribute('data-storefront-app-owned', '');
         boot.setAttribute('aria-hidden', 'true');
-        const content = boot.innerHTML;
         decoded();
         await Promise.resolve();
         expect(mark.classList.contains('is-logo-ready')).toBe(false);
-        applyInitialLoadingBrand({ ...brand, storefrontName: 'Late store' });
-        expect(boot.innerHTML).toBe(content);
+        applyInitialLoadingBrand({ ...brand, storefrontName: 'Updated store' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('Updated store');
+        expect(boot.getAttribute('aria-hidden')).toBe('true');
+        expect(document.documentElement.hasAttribute('data-storefront-boot-pending')).toBe(false);
     });
 
     it('reveals the real image only after decoding completes', async () => {
