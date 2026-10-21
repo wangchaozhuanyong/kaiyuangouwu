@@ -398,6 +398,14 @@
     gap: 16px;
 }
 
+.filter-price-error {
+    margin: 0;
+    color: var(--danger);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+    overflow-wrap: anywhere;
+}
+
 .filter-stock-card {
     min-height: 52px;
     padding: 0 14px;

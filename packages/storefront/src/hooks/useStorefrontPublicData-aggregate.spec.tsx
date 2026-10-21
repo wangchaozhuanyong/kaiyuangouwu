@@ -6,9 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type ShopApi } from '../api';
 import { enabledMarkets } from '../i18n';
+import { invalidatePublicPageReads } from '../public-page-transport';
 import { refreshStorefrontQueries, storefrontQueryKeys } from '../query-client';
 import { invalidateStorefrontRealtimeQueries } from '../realtime-updates';
-import { type PublicPageData } from '../storefront-page-data';
+import { publicSeoQueryKey, type PublicPageData } from '../storefront-page-data';
 import { type StorefrontContentResponse } from '../types';
 import { useStorefrontVisualPreset } from '../use-storefront-visual-preset';
 
@@ -27,7 +28,7 @@ afterEach(() => {
     delete document.documentElement.dataset.storefrontPreset;
 });
 
-async function setup(mode: 'missing' | 'partial' | 'complete') {
+async function setup(mode: 'missing' | 'partial' | 'deferred' | 'complete') {
     const market = enabledMarkets[0];
     let revision = 0;
     const label = () => `revision-${revision}`;
@@ -97,11 +98,17 @@ async function setup(mode: 'missing' | 'partial' | 'complete') {
         },
         config: config(),
         products: products(),
-        collections: collections(),
-        flashSales: flashSales(),
-        ...(mode === 'complete' ? { content: content(), visualPreset: visualPreset() } : {}),
+        ...(mode !== 'deferred' ? { collections: collections(), flashSales: flashSales() } : {}),
+        ...(mode === 'complete' || mode === 'deferred'
+            ? { content: content(), visualPreset: visualPreset() }
+            : {}),
         media: [],
-        failures: mode === 'partial' ? ['content', 'visualPreset'] : [],
+        failures:
+            mode === 'partial'
+                ? ['content', 'visualPreset']
+                : mode === 'deferred'
+                  ? ['collections', 'flashSales']
+                  : [],
     });
     const fetch = vi.fn(() =>
         Promise.resolve(mode === 'missing' ? new Response('', { status: 404 }) : Response.json(page())),
@@ -173,6 +180,7 @@ async function setup(mode: 'missing' | 'partial' | 'complete') {
         });
     const expectRevision = (expected: number) => settle(() => assertRevision(expected));
     await expectRevision(0);
+    const initialAggregateReads = fetch.mock.calls.length;
     fetch.mockClear();
     const refresh = () =>
         refreshStorefrontQueries(client, {
@@ -185,10 +193,61 @@ async function setup(mode: 'missing' | 'partial' | 'complete') {
             { version: 1, id: 'content-publication', occurredAt: '', topics: ['content'] },
             { marketCode: storefrontQueryKeys.market(market), languageCode: 'zh_Hans' },
         );
-    return { api, current, fetch, refresh, publication, expectRevision, settle, publish: () => revision++ };
+    return {
+        api,
+        client,
+        market,
+        current,
+        fetch,
+        initialAggregateReads,
+        refresh,
+        publication,
+        expectRevision,
+        settle,
+        publish: () => revision++,
+    };
 }
 
 describe('aggregate owner fallback refresh', () => {
+    it('recovers initially deferred sections without downloading the completed aggregate again', async () => {
+        const fixture = await setup('deferred');
+        expect(fixture.initialAggregateReads).toBe(1);
+        expect(fixture.api.collections).toHaveBeenCalledTimes(1);
+        expect(fixture.api.activeFlashSales).toHaveBeenCalledTimes(1);
+        expect(fixture.api.storefrontContent).not.toHaveBeenCalled();
+        expect(fixture.api.products).not.toHaveBeenCalled();
+        expect(fixture.api.storefrontConfig).not.toHaveBeenCalled();
+    });
+
+    it.each(['expired', 'invalidated', 'generation-changed', 'boot-only'] as const)(
+        'reads the aggregate again when its prior page is %s',
+        async condition => {
+            const fixture = await setup('deferred');
+            const mediaKey = publicSeoQueryKey(
+                storefrontQueryKeys.market(fixture.market),
+                'zh_Hans',
+                { kind: 'home' },
+                'public-media',
+            );
+            if (condition === 'expired') {
+                fixture.client.setQueryData(mediaKey, fixture.client.getQueryData(mediaKey), {
+                    updatedAt: Date.now() - 30_001,
+                });
+            } else if (condition === 'invalidated') {
+                await fixture.client.invalidateQueries({ queryKey: mediaKey, refetchType: 'none' });
+            } else if (condition === 'generation-changed') {
+                invalidatePublicPageReads();
+            } else {
+                fixture.client.removeQueries({ queryKey: mediaKey, exact: true });
+            }
+            await act(async () => {
+                await fixture.current().collectionsQuery.refetch();
+            });
+            expect(fixture.fetch).toHaveBeenCalledTimes(1);
+            expect(fixture.api.collections).toHaveBeenCalledTimes(2);
+        },
+    );
+
     it('refreshes missing endpoint sections and skin once through the shared owner', async () => {
         const fixture = await setup('missing');
         fixture.publish();

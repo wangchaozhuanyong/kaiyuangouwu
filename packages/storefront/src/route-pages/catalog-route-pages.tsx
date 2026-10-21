@@ -2,6 +2,7 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 
+import { importHomePage, importProductDetailPage } from '../catalog-page-imports';
 import { catalogRouteState } from '../catalog-route-query';
 import { offlineLoadError } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
@@ -16,11 +17,8 @@ import { CollectionSummary, Product, ProductVariant } from '../types';
 import '../commerce-styles';
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
 
-const HomePage = lazyRouteComponent(() => import('../pages/home-page'), 'HomePage');
-const ProductDetailPage = lazyRouteComponent(
-    () => import('../pages/product-detail-page'),
-    'ProductDetailPage',
-);
+const HomePage = lazyRouteComponent(importHomePage, 'HomePage');
+const ProductDetailPage = lazyRouteComponent(importProductDetailPage, 'ProductDetailPage');
 const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'SearchPage');
 
 export function HomeRoutePage() {

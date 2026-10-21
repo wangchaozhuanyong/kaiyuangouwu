@@ -9,6 +9,7 @@ import {
 import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/responsive-image';
 import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
+import { invalidatePublicPageReads as invalidateReads } from './public-page-transport';
 import {
     PUBLIC_QUERY_STALE_TIME,
     persistPublicQueryCache,
@@ -17,6 +18,7 @@ import {
 } from './query-client';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import {
+    hasFreshPublicPage,
     publicSeoQueryKey,
     seedPublicPage,
     validatePublicPageData,
@@ -50,6 +52,64 @@ function fixture(now = Date.now()): PublicPageData {
         failures: ['content'],
     };
 }
+
+describe('received public aggregate freshness', () => {
+    it('recognizes an empty-media partial page but not boot configuration alone', () => {
+        const client = new QueryClient();
+        const page = fixture();
+        const request = { kind: 'home' } as const;
+        client.setQueryData([...storefrontQueryKeys.config('store-a:MYR', 'en'), 'public'], page.config);
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(false);
+        seedPublicPage(client, page);
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(true);
+        client.clear();
+    });
+
+    it('requires a new aggregate after expiry, invalidation or a read-generation change', async () => {
+        const client = new QueryClient();
+        const request = { kind: 'home' } as const;
+        const page = fixture();
+        seedPublicPage(client, { ...page, generatedAt: Date.now() - 30_001 });
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(false);
+        seedPublicPage(client, page);
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(true);
+        await client.invalidateQueries({
+            queryKey: publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media'),
+            refetchType: 'none',
+        });
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(false);
+        seedPublicPage(client, { ...page, generatedAt: Date.now() + 1 });
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(true);
+        invalidateReads();
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(false);
+        client.clear();
+    });
+
+    it.each([
+        { host: 'other.test' },
+        { channelCode: 'store-b' },
+        { languageCode: 'zh_Hans' },
+        { currencyCode: 'USD' },
+    ])('does not reuse a received page across scope %j', changed => {
+        const client = new QueryClient();
+        const page = fixture();
+        seedPublicPage(client, page);
+        expect(hasFreshPublicPage(client, { kind: 'home' }, { ...page.scope, ...changed })).toBe(false);
+        expect(hasFreshPublicPage(client, { kind: 'product', id: 'different-route' }, page.scope)).toBe(
+            false,
+        );
+        client.clear();
+    });
+
+    it('does not treat a restored media array without live provenance as a received aggregate', () => {
+        const client = new QueryClient();
+        const page = fixture();
+        const request = { kind: 'home' } as const;
+        client.setQueryData(publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media'), []);
+        expect(hasFreshPublicPage(client, request, page.scope)).toBe(false);
+        client.clear();
+    });
+});
 
 describe('public page hydration', () => {
     it('isolates route hints by language, currency and version and clears old routes before preview seeding', () => {

@@ -75,6 +75,7 @@ import {
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
+    InlineError,
     LegalFooter,
     SectionHeader,
     Sheet,
@@ -114,6 +115,8 @@ interface HomepageCouponHubProps {
     language: StorefrontLanguage;
     loading: boolean;
     pending: boolean;
+    error: string;
+    onRetry?: () => void;
     onClaim: (campaignId: string) => Promise<string | null>;
     onToast?: (message: string) => void;
 }
@@ -246,6 +249,8 @@ function HomepageCouponHub({
     language,
     loading,
     pending,
+    error,
+    onRetry,
     onClaim,
     onToast,
 }: HomepageCouponHubProps) {
@@ -265,10 +270,10 @@ function HomepageCouponHub({
         claimPending.current = true;
         setClaimingId(coupon.id);
         try {
-            const error = await onClaim(coupon.campaignId);
+            const claimError = await onClaim(coupon.campaignId);
             // The last verified claim may unmount this optional module before
             // its refresh finishes. The shared flow already rejects stale owners.
-            if (error) onToast?.(error);
+            if (claimError) onToast?.(claimError);
         } finally {
             claimPending.current = false;
             if (active.current) setClaimingId(null);
@@ -310,6 +315,18 @@ function HomepageCouponHub({
                         {[0, 1, 2, 3].map(index => (
                             <div key={index} className="coupon-hub-placeholder" />
                         ))}
+                    </div>
+                ) : coupons.length === 0 ? (
+                    <div className="coupon-hub-query-state">
+                        {error ? (
+                            <InlineError
+                                message={error}
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={onRetry}
+                            />
+                        ) : (
+                            <p role="status">{isZh ? '暂无可领取的优惠' : 'No offers available to claim'}</p>
+                        )}
                     </div>
                 ) : (
                     <HomepageCouponRail isZh={isZh}>
@@ -454,6 +471,8 @@ export function HomePage() {
         configuredBlockTypes,
         coupons,
         couponCampaignsLoading,
+        couponCampaignsError,
+        onCouponCampaignsRetry,
         flashSales,
         systemAnnouncements,
         initialRenderTime,
@@ -1576,24 +1595,24 @@ export function HomePage() {
 
                         {trustBar}
 
-                        {couponBlock?.enabled &&
-                            hasHomepageModule('COUPONS') &&
-                            (couponCards.length > 0 || couponPending) && (
-                                <div
-                                    className={homepageSectionShellClassName}
-                                    style={{ order: homepageModuleOrder('COUPONS') }}
-                                >
-                                    <HomepageCouponHub
-                                        block={couponBlock}
-                                        coupons={couponCards}
-                                        language={language}
-                                        loading={couponLoading}
-                                        pending={couponPending}
-                                        onClaim={onClaimCoupon}
-                                        onToast={onToast}
-                                    />
-                                </div>
-                            )}
+                        {couponBlock?.enabled && hasHomepageModule('COUPONS') && (
+                            <div
+                                className={homepageSectionShellClassName}
+                                style={{ order: homepageModuleOrder('COUPONS') }}
+                            >
+                                <HomepageCouponHub
+                                    block={couponBlock}
+                                    coupons={couponCards}
+                                    language={language}
+                                    loading={couponLoading}
+                                    pending={couponPending}
+                                    error={couponCampaignsError}
+                                    onRetry={onCouponCampaignsRetry}
+                                    onClaim={onClaimCoupon}
+                                    onToast={onToast}
+                                />
+                            </div>
+                        )}
 
                         {coreCategoriesBlock ? (
                             <div

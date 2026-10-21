@@ -187,7 +187,7 @@ export function CatalogFilterSheet({
                     </div>
                 </fieldset>
                 {invalidPrice && (
-                    <p id={priceErrorId} className="inline-error" role="alert">
+                    <p id={priceErrorId} className="filter-price-error" role="alert">
                         {isZh
                             ? '请输入有效价格，最高价不能低于最低价'
                             : 'Enter valid prices; the maximum must be at least the minimum.'}

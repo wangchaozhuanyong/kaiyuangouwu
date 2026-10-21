@@ -19,6 +19,7 @@ import {
     mediaDescriptor,
     STOREFRONT_IMAGE_SIZES,
 } from '../../../storefront-content-plugin/src/shared/responsive-image.ts';
+import { fixtureData as cartFixtureData } from '../cart-commands/fixtures.mjs';
 import { fixtureData } from '../visual-presets/fixtures.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -66,6 +67,8 @@ function optionsFor(req, url, defaults) {
         delay: Math.min(10_000, Math.max(0, Number(value('qaDelay')) || 0)),
         imageDelay: Math.min(30_000, Math.max(0, Number(value('qaImageDelay')) || 0)),
         empty: value('qaEmpty') === '1',
+        coupons: value('qaCoupons'),
+        pendingCart: value('qaPendingCart') === '1',
         missingProduct: value('qaMissingProduct') === '1',
         ssi: value('qaSsi') === 'hot' ? 'hot' : 'cold',
         legacy: value('qaLegacy') === '1',
@@ -94,8 +97,26 @@ function fixtureCatalog(products, input = {}, empty = false) {
     return { items: items.slice(skip, skip + (input.take ?? 12)), totalItems };
 }
 
-function fixtures(preset) {
+function fixtures(preset, options = {}) {
     const source = fixtureData(preset, false);
+    if (options.coupons) {
+        source.storefrontContent.push({
+            ...source.storefrontContent[0],
+            id: 'qa-coupons',
+            code: 'qa-coupons',
+            type: 'COUPONS',
+            title: '优惠券专区',
+            imageUrl: null,
+            items: [],
+            position: 3,
+        });
+        source.storefrontContentSettings.configuredBlockTypes.push('COUPONS');
+    }
+    const pendingCart = options.pendingCart ? structuredClone(cartFixtureData(preset)) : undefined;
+    if (pendingCart) {
+        pendingCart.storefrontCart.state = 'PAYMENT_PENDING';
+        pendingCart.storefrontCart.checkoutOrder.state = 'ArrangingPayment';
+    }
     const asset = id => ({ id, preview: `/assets/preview/${id}.svg` });
     const products = Array.from({ length: 24 }, (_, index) => {
         const id = `product-${index + 1}`;
@@ -145,9 +166,9 @@ function fixtures(preset) {
     ];
     return {
         ...source,
-        activeCustomer: null,
-        order: null,
-        storefrontCart: {
+        activeCustomer: pendingCart?.activeCustomer ?? null,
+        order: pendingCart?.storefrontCart.checkoutOrder ?? null,
+        storefrontCart: pendingCart?.storefrontCart ?? {
             ...source.storefrontCart,
             lines: [],
             totalQuantity: 0,
@@ -166,7 +187,7 @@ function fixtures(preset) {
 
 export function buildPublicPage(request, host, options = {}, scope = {}) {
     request = canonicalPublicPageRequest(request);
-    const data = fixtures(options.preset);
+    const data = fixtures(options.preset, options);
     const channel = data.activeChannel;
     const config = {
         ...channel,
@@ -382,7 +403,7 @@ export function createPreviewServer({ dist = defaultDist, defaults = {} } = {}) 
                     });
                 const operation = getOperationAST(document, input.operationName);
                 if (!operation) return json(res, 400, { error: 'One read operation is required' });
-                const data = fixtures(options.preset);
+                const data = fixtures(options.preset, options);
                 if (options.accessMode === 'CLOSED')
                     return json(res, 403, {
                         errors: [{ message: '店铺暂未开放', extensions: { code: 'STOREFRONT_CLOSED' } }],
@@ -405,6 +426,11 @@ export function createPreviewServer({ dist = defaultDist, defaults = {} } = {}) 
                     delay: options.delay,
                 });
                 if (options.delay) await new Promise(done => setTimeout(done, options.delay));
+                if (
+                    options.coupons === 'error' &&
+                    fields.some(field => field.name.value === 'activeStorefrontCoupons')
+                )
+                    return json(res, 200, { errors: [{ message: 'Synthetic coupon read failure' }] });
                 return json(res, 200, {
                     data: Object.fromEntries(
                         fields.map(field => [
