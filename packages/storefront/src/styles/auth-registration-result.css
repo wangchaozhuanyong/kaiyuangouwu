@@ -1,0 +1,179 @@
+/* Keep the registration receipt, address and recovery actions in one reading flow. */
+.auth-form-column:has(.auth-result-compact) {
+    display: grid;
+    grid-template-columns: minmax(74px, 1fr) minmax(44px, 140px) minmax(74px, 1fr);
+    gap: 40px 12px;
+}
+.auth-form-column:has(.auth-result-compact) .auth-form-toolbar {
+    display: contents;
+}
+.auth-form-column:has(.auth-result-compact) .auth-form-back-button {
+    grid-area: 1 / 1;
+    justify-self: start;
+    align-self: center;
+}
+.auth-form-column:has(.auth-result-compact) .auth-language-control {
+    grid-area: 1 / 3;
+    justify-self: end;
+    align-self: center;
+}
+.auth-form-column:has(.auth-result-compact) > .auth-form-brand {
+    grid-area: 1 / 2;
+    min-height: 44px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    margin: 0;
+}
+.auth-form-column:has(.auth-result-compact) > .auth-form-brand .auth-form-logo {
+    width: 44px;
+    height: 44px;
+}
+.auth-form-column:has(.auth-result-compact) > .auth-card-content {
+    grid-area: 2 / 1 / 3 / -1;
+    align-self: center;
+}
+.auth-result.auth-result-compact {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    column-gap: 12px;
+    margin: 0;
+    text-align: left;
+}
+.auth-result.auth-result-compact > span {
+    width: 40px;
+    height: 40px;
+    margin: 0;
+    align-self: center;
+    border-radius: var(--skin-control-radius);
+    background: color-mix(in srgb, var(--success) 10%, var(--surface));
+    color: var(--success);
+}
+.auth-result.auth-result-compact > span svg {
+    width: 24px;
+    height: 24px;
+}
+.auth-result.auth-result-compact > h1 {
+    margin: 0;
+    align-self: center;
+    font-size: var(--type-auth-size);
+    line-height: var(--type-auth-leading);
+    text-wrap: pretty;
+}
+.auth-result.auth-result-compact > p {
+    grid-column: 1 / -1;
+    margin-top: 20px;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+    text-wrap: pretty;
+}
+.auth-registration-address {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.auth-registration-address > strong {
+    flex: 1;
+    min-width: 0;
+    color: var(--text);
+    font-weight: var(--font-weight-semibold);
+    overflow-wrap: anywhere;
+}
+.auth-result.auth-result-compact > div {
+    grid-column: 1 / -1;
+    margin-top: 24px;
+    gap: 12px;
+}
+.auth-registration-account-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0 16px;
+    margin-top: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line-subtle);
+    color: var(--muted);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.auth-result-compact .auth-secondary-action {
+    width: auto;
+    min-height: 44px;
+    padding: 0;
+    background: transparent;
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.auth-registration-address .auth-secondary-action {
+    flex: none;
+}
+.auth-result-compact .auth-secondary-action:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 4px;
+}
+@media (max-width: 480px) {
+    .auth-result.auth-result-compact > h1 {
+        font-size: var(--type-page-size);
+        line-height: var(--type-page-leading);
+    }
+    .auth-registration-address,
+    .auth-registration-address > strong {
+        display: block;
+    }
+    .auth-registration-account-actions > span {
+        flex-basis: 100%;
+        text-align: center;
+    }
+}
+
+@media (min-width: 1024px) {
+    .desktop-store-layout .auth-form-column:has(.auth-result-compact) {
+        min-height: 520px;
+        grid-template-rows: auto 1fr;
+    }
+}
+
+.auth-verification-recovery > summary {
+    min-height: 44px;
+    padding-block: 12px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: var(--type-helper-size);
+    line-height: var(--type-helper-leading);
+}
+.auth-verification-recovery > form {
+    padding-top: 12px;
+}
+.auth-verification-progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+}
+.auth-result-compact .form-error,
+.auth-result-compact .auth-success-message {
+    text-align: left;
+}
+
+.auth-page .auth-result-compact .auth-recovery-form {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+}
+.auth-page .auth-result-compact .auth-recovery-form .auth-field {
+    margin: 0;
+}
+.auth-result.auth-result-compact .primary-action {
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+    padding: 12px 16px;
+}
+
+.auth-result-compact > span:has(.auth-result-error-icon) {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}

@@ -56,6 +56,7 @@ import { storefrontWebpUrl } from './responsive-image';
 import { storefrontErrorMessage } from './storefront-errors';
 import { routeNavigateOptions, RouteState } from './storefront-router';
 import { SafeImage } from './storefront-ui/product-display';
+import registrationResultStyles from './styles/auth-registration-result.css?url';
 import './styles/auth-shell.css';
 import {
     StorefrontAuthSettings,
@@ -633,32 +634,13 @@ export function LoginPage({
             {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             {autoRegistrationEmail ? (
-                <AuthResult
-                    icon={<CircleCheck />}
-                    title={isZh ? '注册请求已提交' : 'Registration request submitted'}
-                    detail={
-                        isZh
-                            ? `需要验证 ${autoRegistrationEmail} 时，请检查收件箱或垃圾邮件，打开邮件链接并设置密码。若该邮箱已有账号，请直接登录或找回密码。`
-                            : `If ${autoRegistrationEmail} needs verification, check your inbox or spam folder, ` +
-                              'then open the email link and set a password. ' +
-                              'If you already have an account, sign in or reset your password.'
-                    }
-                >
-                    <button
-                        className="auth-secondary-action"
-                        type="button"
-                        onClick={() => setAutoRegistrationEmail('')}
-                    >
-                        {isZh ? '返回登录' : 'Back to sign in'}
-                    </button>
-                    <button
-                        className="auth-secondary-action"
-                        type="button"
-                        onClick={() => navigateTo({ name: 'forgot-password' })}
-                    >
-                        {isZh ? '重置密码' : 'Reset password'}
-                    </button>
-                </AuthResult>
+                <RegistrationResult
+                    email={autoRegistrationEmail}
+                    language={language}
+                    onChangeEmail={() => setAutoRegistrationEmail('')}
+                    onSignIn={() => setAutoRegistrationEmail('')}
+                    onResetPassword={() => navigateTo({ name: 'forgot-password' })}
+                />
             ) : (
                 <>
                     <AuthFormIntro variant="login" language={language} content={authVisualContent} />
@@ -1039,16 +1021,19 @@ export function RegisterPage({
             {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             {registeredEmail ? (
-                <AuthResult
-                    icon={<CircleCheck />}
-                    title={isZh ? '注册请求已提交' : 'Registration request submitted'}
-                    detail={
-                        isZh
-                            ? `需要验证 ${registeredEmail} 时，请检查收件箱或垃圾邮件，打开邮件链接并设置密码。若该邮箱已有账号，请直接登录或找回密码。`
-                            : `If ${registeredEmail} needs verification, check your inbox or spam folder, ` +
-                              'then open the email link and set a password. ' +
-                              'If you already have an account, sign in or reset your password.'
-                    }
+                <RegistrationResult
+                    email={registeredEmail}
+                    language={language}
+                    submitting={submitting}
+                    onChangeEmail={() => {
+                        setRegisteredEmail('');
+                        setResendMessage('');
+                        setResendError('');
+                        setError('');
+                        setResendSeconds(0);
+                    }}
+                    onSignIn={() => navigateTo({ name: 'login' })}
+                    onResetPassword={() => navigateTo({ name: 'forgot-password' })}
                 >
                     <ShopAbuseChallengeControl
                         challenge={verificationRecovery.challenge}
@@ -1085,35 +1070,7 @@ export function RegisterPage({
                         busy={isZh ? '发送中' : 'Sending'}
                         onClick={() => void verificationRecovery.resend(registeredEmail)}
                     />
-                    <button
-                        className="auth-secondary-action"
-                        type="button"
-                        disabled={submitting}
-                        onClick={() => {
-                            setRegisteredEmail('');
-                            setResendMessage('');
-                            setResendError('');
-                            setError('');
-                            setResendSeconds(0);
-                        }}
-                    >
-                        {isZh ? '修改电子邮箱' : 'Change email address'}
-                    </button>
-                    <button
-                        className="auth-secondary-action"
-                        type="button"
-                        onClick={() => navigateTo({ name: 'login' })}
-                    >
-                        {isZh ? '返回登录' : 'Back to sign in'}
-                    </button>
-                    <button
-                        className="auth-secondary-action"
-                        type="button"
-                        onClick={() => navigateTo({ name: 'forgot-password' })}
-                    >
-                        {isZh ? '找回密码' : 'Reset password'}
-                    </button>
-                </AuthResult>
+                </RegistrationResult>
             ) : (
                 <>
                     <AuthFormIntro variant="register" language={language} content={authVisualContent} />
@@ -1270,11 +1227,12 @@ export function VerifyAccountPage({
     language,
     storefrontName,
     logoUrl,
+    authVisualContent,
     token,
     onBack,
     onToggleLanguage,
     onSuccess,
-}: AuthPageBaseProps & AuthCompletionProps & { token?: string }) {
+}: AuthPageBaseProps & AuthCompletionProps & AuthVisualProps & { token?: string }) {
     const navigate = useNavigate();
     const navigateTo = (route: AuthRoute) =>
         void navigate(
@@ -1287,27 +1245,27 @@ export function VerifyAccountPage({
         );
     const isZh = language === 'zh';
     const challenge = useShopAbuseChallenge(api, language);
-    const resendChallenge = useShopAbuseChallenge(api, language);
     const [error, setError] = useState('');
     const [requiresPassword, setRequiresPassword] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [resending, setResending] = useState(false);
-    const [resendError, setResendError] = useState('');
-    const [resendMessage, setResendMessage] = useState('');
-    const [resendSeconds, setResendSeconds] = useState(0);
     const [verified, setVerified] = useState(false);
+    const [invalidLink, setInvalidLink] = useState(!token);
     const [restoringSession, setRestoringSession] = useState(false);
     const [sessionError, setSessionError] = useState('');
     const requestScope = useAuthRequestScope(api, token ?? '');
+    const recovery = useAuthVerificationResend(api, language, requestScope, setResending);
+    const {
+        error: resendError,
+        message: resendMessage,
+        seconds: resendSeconds,
+        setError: setResendError,
+        setMessage: setResendMessage,
+        setSeconds: setResendSeconds,
+    } = recovery;
     const attempted = useRef<typeof requestScope.owner | null>(null);
     const completionCallback = useRef(onSuccess);
     completionCallback.current = onSuccess;
-
-    useEffect(() => {
-        if (resendSeconds <= 0) return;
-        const timeout = window.setTimeout(() => setResendSeconds(seconds => seconds - 1), 1000);
-        return () => window.clearTimeout(timeout);
-    }, [resendSeconds]);
 
     const restoreSession = async (operation: AuthRequestOperation) => {
         if (!operation.isCurrent()) return;
@@ -1370,6 +1328,7 @@ export function VerifyAccountPage({
                     requestError.errorCode === 'VERIFICATION_TOKEN_INVALID_ERROR')
             ) {
                 setRequiresPassword(false);
+                setInvalidLink(true);
             }
             setError(verificationErrorMessage(requestError, language));
         } finally {
@@ -1394,45 +1353,11 @@ export function VerifyAccountPage({
         await verifyAccount(password);
     };
 
-    const resend = async (event: FormEvent<HTMLFormElement>) => {
+    const resend = (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        if (resendSeconds > 0) return;
-        const data = new FormData(event.currentTarget);
-        const operation = requestScope.begin();
-        if (!operation) return;
-        setResending(true);
-        setResendError('');
-        setResendMessage('');
-        try {
-            const email = formString(data, 'emailAddress').trim();
-            const checked = await resendChallenge.execute('REGISTER', email, proof =>
-                api.refreshCustomerVerification(
-                    email,
-                    operation.signal,
-                    ...(proof ? ([proof] as const) : []),
-                ),
-            );
-            if (!checked.executed) return;
-            if (!operation.isCurrent()) return;
-            setResendMessage(
-                isZh
-                    ? '重新发送请求已提交；如该邮箱仍待验证，请检查收件箱和垃圾邮件。'
-                    : 'Verification email resend request submitted. If this account still needs verification, check your inbox and spam folder.',
-            );
-            setResendSeconds(60);
-        } catch (requestError) {
-            if (!operation.isCurrent()) return;
-            setResendError(
-                requestError instanceof Error
-                    ? authRequestErrorMessage(requestError, language)
-                    : isZh
-                      ? '无法重新发送验证邮件'
-                      : 'Could not resend the verification email',
-            );
-        } finally {
-            operation.finish();
-            if (operation.isCurrent()) setResending(false);
-        }
+        const form = event.currentTarget;
+        const email = formString(new FormData(form), 'emailAddress').trim();
+        void recovery.resend(email, () => formString(new FormData(form), 'emailAddress').trim() === email);
     };
 
     useEffect(() => {
@@ -1440,6 +1365,7 @@ export function VerifyAccountPage({
         const owner = requestScope.owner;
         attempted.current = owner;
         setError('');
+        setInvalidLink(!token);
         setRequiresPassword(false);
         setVerified(false);
         setSessionError('');
@@ -1462,16 +1388,19 @@ export function VerifyAccountPage({
     return (
         <AuthLayout
             title={isZh ? '验证邮箱' : 'Verify email'}
+            heroVariant="register"
+            heroContent={authVisualContent}
             {...{ language, storefrontName, logoUrl, onBack, onToggleLanguage }}
         >
             <AuthResult
+                className="auth-result-compact"
                 icon={
                     verified ? (
                         <CircleCheck />
                     ) : requiresPassword ? (
                         <LockKeyhole />
                     ) : error ? (
-                        <CircleAlert />
+                        <CircleAlert className="auth-result-error-icon" />
                     ) : (
                         <Fingerprint />
                     )
@@ -1504,12 +1433,12 @@ export function VerifyAccountPage({
                                 ? '正在恢复登录状态，请稍候'
                                 : 'Restoring your sign-in session. Please wait.'
                             : isZh
-                              ? '邮箱验证已完成，无需再次验证或重新发送邮件。'
-                              : 'Your email verification is complete. You do not need to verify or request another email.'
+                              ? '邮箱验证已完成。'
+                              : 'Your email is verified.'
                         : requiresPassword
                           ? isZh
-                              ? '该账号尚未设置登录密码，请设置密码并完成邮箱验证。'
-                              : 'This account does not have a sign-in password yet. Set one to finish email verification.'
+                              ? '设置密码后即可完成验证并登录。'
+                              : 'Set a password to verify your email and sign in.'
                           : error ||
                             (challenge.state || !submitting
                                 ? isZh
@@ -1520,6 +1449,12 @@ export function VerifyAccountPage({
                                   : 'Please wait. You will be signed in automatically.')
                 }
             >
+                {submitting && !requiresPassword && !verified && (
+                    <span className="auth-verification-progress" role="status">
+                        <span className="auth-button-spinner" aria-hidden="true" />
+                        {isZh ? '正在核对验证链接…' : 'Checking your verification link…'}
+                    </span>
+                )}
                 {!verified && !requiresPassword && !submitting && !error && token && (
                     <form
                         className="auth-recovery-form"
@@ -1552,13 +1487,6 @@ export function VerifyAccountPage({
                                 onClick={() => void restoreVerifiedSession()}
                             />
                         )}
-                        <button
-                            className="auth-secondary-action"
-                            type="button"
-                            onClick={() => navigateTo({ name: 'login' })}
-                        >
-                            {isZh ? '返回登录' : 'Back to sign in'}
-                        </button>
                     </>
                 ) : requiresPassword ? (
                     <form className="auth-recovery-form" onSubmit={event => void submitPassword(event)}>
@@ -1597,7 +1525,8 @@ export function VerifyAccountPage({
                         />
                     </form>
                 ) : error ? (
-                    <>
+                    <details className="auth-verification-recovery" open={invalidLink || undefined}>
+                        <summary>{isZh ? '需要新的验证邮件？' : 'Need a new verification email?'}</summary>
                         <form className="auth-recovery-form" onSubmit={event => void resend(event)}>
                             <Field
                                 name="emailAddress"
@@ -1606,7 +1535,7 @@ export function VerifyAccountPage({
                                 autoComplete="email"
                                 icon={<Mail />}
                             />
-                            <ShopAbuseChallengeControl challenge={resendChallenge} language={language} />
+                            <ShopAbuseChallengeControl challenge={recovery.challenge} language={language} />
                             {resendMessage && (
                                 <small className="auth-success-message" role="status">
                                     {resendMessage}
@@ -1632,15 +1561,15 @@ export function VerifyAccountPage({
                                 busy={isZh ? '发送中' : 'Sending'}
                             />
                         </form>
-                        <button
-                            className="auth-secondary-action"
-                            type="button"
-                            onClick={() => navigateTo({ name: 'login' })}
-                        >
-                            {isZh ? '返回登录' : 'Back to sign in'}
-                        </button>
-                    </>
+                    </details>
                 ) : null}
+                <button
+                    className="auth-secondary-action"
+                    type="button"
+                    onClick={() => navigateTo({ name: 'login' })}
+                >
+                    {isZh ? '返回登录' : 'Back to sign in'}
+                </button>
             </AuthResult>
         </AuthLayout>
     );
@@ -2256,24 +2185,97 @@ function SubmitButton({
     );
 }
 
+function RegistrationResult({
+    email,
+    language,
+    submitting = false,
+    onChangeEmail,
+    onSignIn,
+    onResetPassword,
+    children,
+}: {
+    email: string;
+    language: StorefrontLanguage;
+    submitting?: boolean;
+    onChangeEmail: () => void;
+    onSignIn: () => void;
+    onResetPassword: () => void;
+    children?: ReactNode;
+}) {
+    const isZh = language === 'zh';
+    return (
+        <>
+            <AuthResult
+                className="auth-result-compact"
+                icon={<CircleCheck />}
+                title={isZh ? '注册请求已提交' : 'Registration request submitted'}
+                detail={
+                    <>
+                        <span className="auth-registration-address">
+                            <strong>{email}</strong>
+                            <button
+                                className="auth-secondary-action"
+                                type="button"
+                                disabled={submitting}
+                                onClick={onChangeEmail}
+                            >
+                                {isZh ? '修改电子邮箱' : 'Change email address'}
+                            </button>
+                        </span>
+                        {isZh ? (
+                            <>
+                                如需验证，请通过邮件中的链接设置密码。
+                                <br />
+                                未找到邮件时，请检查垃圾邮件文件夹。
+                            </>
+                        ) : (
+                            <>
+                                If verification is required, use the link in your email to set a password.
+                                <br />
+                                Can't find the email? Check your spam folder.
+                            </>
+                        )}
+                    </>
+                }
+            >
+                {children}
+                <div className="auth-registration-account-actions">
+                    <span>{isZh ? '已有账号？' : 'Already have an account?'}</span>
+                    <button className="auth-secondary-action" type="button" onClick={onSignIn}>
+                        {isZh ? '返回登录' : 'Back to sign in'}
+                    </button>
+                    <button className="auth-secondary-action" type="button" onClick={onResetPassword}>
+                        {isZh ? '找回密码' : 'Reset password'}
+                    </button>
+                </div>
+            </AuthResult>
+        </>
+    );
+}
+
 function AuthResult({
+    className,
     icon,
     title,
     detail,
     children,
 }: {
+    className?: string;
     icon: ReactNode;
     title: string;
-    detail: string;
+    detail: ReactNode;
     children: ReactNode;
 }) {
     return (
-        <div className="auth-result">
-            <span>{icon}</span>
-            <h1>{title}</h1>
-            <p>{detail}</p>
-            <div>{children}</div>
-        </div>
+        <>
+            {className && <link rel="stylesheet" href={registrationResultStyles} precedence="auth-result" />}
+            <div className={`auth-result${className ? ` ${className}` : ''}`}>
+                <span aria-hidden="true">{icon}</span>
+                <h1>{title}</h1>
+                <p>{detail}</p>
+                <div>{children}</div>
+            </div>
+        </>
     );
 }
 

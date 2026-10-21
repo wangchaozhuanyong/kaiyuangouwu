@@ -1534,30 +1534,14 @@
         gap: 28px;
     }
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-message {
-        background: linear-gradient(90deg, rgba(7, 11, 20, 0.78), rgba(7, 11, 20, 0.6));
-        color: #ffffff;
+        /* Artwork reserves its own copy space; preserve its original brightness. */
+        background: none;
+        color: var(--auth-hero-text-color);
         text-shadow: none;
-    }
-    .desktop-store-layout
-        .auth-page.auth-page-has-image
-        .auth-hero:has(> .safe-image-frame:not(.is-loaded))
-        .auth-hero-message {
-        background: linear-gradient(90deg, rgba(7, 11, 20, 0.9), rgba(7, 11, 20, 0.74));
     }
     .desktop-store-layout .auth-page .auth-hero[data-copy-position='bottom'] .auth-hero-message {
         justify-content: flex-end;
         padding-bottom: 40px;
-    }
-    .desktop-store-layout
-        .auth-page.auth-page-has-image
-        .auth-hero[data-copy-position='bottom']
-        .auth-hero-message {
-        background: linear-gradient(
-            180deg,
-            rgba(7, 11, 20, 0.6),
-            rgba(7, 11, 20, 0.66) 25%,
-            rgba(7, 11, 20, 0.9)
-        );
     }
     .desktop-store-layout .auth-page .auth-hero-brand {
         position: absolute;
@@ -1572,7 +1556,7 @@
         color: inherit;
     }
     .desktop-store-layout .auth-page.auth-page-has-image .auth-hero-brand {
-        color: #ffffff;
+        color: var(--auth-hero-text-color);
     }
     .desktop-store-layout .auth-hero-brand .auth-form-logo {
         width: 160px;

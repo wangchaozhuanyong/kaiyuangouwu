@@ -215,16 +215,19 @@ describe('catalog rendering boundary', () => {
         render({ displayedRoute: { name: 'login' } });
         expect(element.querySelector('[data-testid="email-draft"]')?.textContent).toBe('');
     });
-    it.each(['login', 'register'])('preserves the %s form and layout when the customer resolves', name => {
-        viewport.desktop = true;
-        render({ displayedRoute: { name }, customerLoadState: 'loading' });
-        const formControl = element.querySelector('[data-testid="set-email-draft"]');
-        expect(formControl).not.toBeNull();
-        render({ displayedRoute: { name }, customer: { id: 'fixture-customer' } });
-        expect(element.querySelector('[data-testid="set-email-draft"]')).toBe(formControl);
-        expect(element.textContent).not.toContain('DESKTOP_CATALOG_HEADER');
-        expect(element.textContent).not.toContain('DESKTOP_ACCOUNT_NAVIGATION');
-    });
+    it.each(['login', 'register', 'verify-account'])(
+        'preserves the %s form and layout when the customer resolves',
+        name => {
+            viewport.desktop = true;
+            render({ displayedRoute: { name }, customerLoadState: 'loading' });
+            const formControl = element.querySelector('[data-testid="set-email-draft"]');
+            expect(formControl).not.toBeNull();
+            render({ displayedRoute: { name }, customer: { id: 'fixture-customer' } });
+            expect(element.querySelector('[data-testid="set-email-draft"]')).toBe(formControl);
+            expect(element.textContent).not.toContain('DESKTOP_CATALOG_HEADER');
+            expect(element.textContent).not.toContain('DESKTOP_ACCOUNT_NAVIGATION');
+        },
+    );
     it('uses the centered initial state until configuration is resolved, including an immediate read failure', () => {
         render({
             pageDataPending: true,

@@ -366,6 +366,25 @@ describe('public page fetch boundary', () => {
         },
     );
 
+    it.each(['/verify-account', '/reset-password', '/login'])(
+        'does not adopt a home snapshot after a legacy hash entry resolves to %s',
+        async pathname => {
+            const page = fixture(Date.now());
+            page.requestKey = publicPageRequestKey({ kind: 'home' });
+            vi.stubGlobal('window', {
+                location: { host: 'store.test', origin: 'https://store.test', pathname, search: '' },
+            });
+            vi.stubGlobal('document', {
+                getElementById: (id: string) =>
+                    id === 'root'
+                        ? { dataset: { publicRendered: '1' } }
+                        : { textContent: JSON.stringify(page) },
+            });
+            const { readInitialPublicPage } = await import('./storefront-page-data');
+            expect(readInitialPublicPage()).toBeUndefined();
+        },
+    );
+
     it.each(['host', 'channel', 'language', 'request', 'private', 'closed'])(
         'still rejects a rendered document with the wrong %s identity',
         async mismatch => {

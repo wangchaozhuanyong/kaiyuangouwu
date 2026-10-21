@@ -140,7 +140,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const protectedRoute = !isPublicStorefrontRoute(displayedRoute.name);
     const waitingForAccount = !customer && customerLoadState !== 'ready';
     const accountFailed = customerLoadState === 'error' || customerLoadState === 'paused';
-    const authRoute = ['login', 'register', 'forgot-password'].includes(displayedRoute.name);
+    const authRoute = ['login', 'register', 'forgot-password', 'verify-account'].includes(
+        displayedRoute.name,
+    );
     const showNavigation = isBrowsingStorefrontRoute(displayedRoute.name) || (!!customer && !authRoute);
     const readinessIdentity = JSON.stringify([
         storefrontContextValue.storefrontCode,

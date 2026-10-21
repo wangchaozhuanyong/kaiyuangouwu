@@ -383,8 +383,8 @@ describe('storefront configurable authentication methods', () => {
             expect.any(AbortSignal),
         );
         expect(host.textContent).toContain('注册请求已提交');
-        expect(host.textContent).toContain('收件箱或垃圾邮件');
-        expect(host.textContent).toContain('若该邮箱已有账号，请直接登录或找回密码');
+        expect(host.textContent).toContain('请检查垃圾邮件文件夹');
+        expect(host.textContent).toContain('已有账号？返回登录找回密码');
         expect(host.textContent).not.toContain('已发送');
         expect(host.querySelector('.login-content .auth-form-back-button')).not.toBeNull();
     });
@@ -438,10 +438,11 @@ describe('storefront configurable authentication methods', () => {
             undefined,
             expect.any(AbortSignal),
         );
-        expect(host.textContent).toContain('需要验证 new@example.com 时');
-        expect(host.textContent).toContain('若该邮箱已有账号');
+        expect(requiredElement('.auth-registration-address strong').textContent).toBe('new@example.com');
+        expect(host.textContent).toContain('如需验证');
+        expect(host.textContent).toContain('已有账号？返回登录找回密码');
         expect(host.textContent).toContain('注册请求已提交');
-        expect(host.textContent).toContain('收件箱或垃圾邮件');
+        expect(host.textContent).toContain('请检查垃圾邮件文件夹');
         expect(host.textContent).not.toContain('已发送');
     });
 
@@ -484,8 +485,9 @@ describe('storefront configurable authentication methods', () => {
             expect.any(AbortSignal),
         );
         expect(host.textContent).toContain('注册请求已提交');
-        expect(host.textContent).toContain('需要验证 quick@example.com 时，请检查收件箱或垃圾邮件');
-        expect(host.textContent).toContain('打开邮件链接并设置密码');
+        expect(requiredElement('.auth-registration-address strong').textContent).toBe('quick@example.com');
+        expect(host.textContent).toContain('如需验证');
+        expect(host.textContent).toContain('请通过邮件中的链接设置密码');
         expect(host.textContent).not.toContain('已发送');
     });
     it('changes language without replacing the form and passes the remember-me choice', async () => {

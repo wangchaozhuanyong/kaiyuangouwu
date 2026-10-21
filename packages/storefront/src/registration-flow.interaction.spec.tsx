@@ -629,7 +629,8 @@ describe('registration and verification ownership', () => {
         expect(verifyCustomerAccount).toHaveBeenCalledTimes(2);
         expect(verifyCustomerAccount.mock.calls[1][0]).toBe('synthetic-current');
         expect(verifyCustomerAccount.mock.calls[1][1]).toBeUndefined();
-        expect(host.textContent).toContain('该账号尚未设置登录密码');
+        expect(element('.auth-result h1').textContent).toBe('设置登录密码');
+        expect(host.querySelector('input[name="password"]')).not.toBeNull();
         expect(host.textContent).not.toContain('由后台开户');
         await settle(oldResponse.resolve);
         expect(host.textContent).toContain('设置登录密码');
@@ -829,4 +830,89 @@ describe('authentication form timeout presentation', () => {
             expect(host.querySelector('[aria-busy="true"]')).toBeNull();
         },
     );
+});
+
+describe('email-link presentation and recovery', () => {
+    it('keeps navigation available while verification is pending and does not replay it', async () => {
+        const response = deferred();
+        const verifyCustomerAccount = vi.fn(() => response.promise);
+        const api = { verifyCustomerAccount };
+        await settle(() =>
+            root.render(
+                <VerifyAccountPage
+                    {...props}
+                    api={api as never}
+                    token="synthetic-link"
+                    onSuccess={vi.fn()}
+                />,
+            ),
+        );
+        expect(host.querySelector('.auth-page-register')).not.toBeNull();
+        expect(element('[role="status"]').textContent).toContain('正在核对验证链接');
+        const back = Array.from(host.querySelectorAll('button')).find(
+            button => button.textContent === '返回登录',
+        );
+        expect(back).toBeDefined();
+        await settle(() => back?.click());
+        expect(router.navigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/login' }));
+        expect(verifyCustomerAccount).toHaveBeenCalledOnce();
+    });
+
+    it.each(['network', 'expired', 'missing'] as const)(
+        'offers the appropriate recovery for a %s link',
+        async kind => {
+            const verifyCustomerAccount = vi
+                .fn()
+                .mockRejectedValue(
+                    kind === 'expired'
+                        ? new ShopApiError('VERIFICATION_TOKEN_EXPIRED_ERROR', 'Synthetic expired link')
+                        : new TypeError('Load failed'),
+                );
+            const refreshCustomerVerification = vi.fn();
+            await settle(() =>
+                root.render(
+                    <VerifyAccountPage
+                        {...props}
+                        api={{ verifyCustomerAccount, refreshCustomerVerification } as never}
+                        token={kind === 'missing' ? undefined : 'synthetic-link'}
+                        onSuccess={vi.fn()}
+                    />,
+                ),
+            );
+            expect(element<HTMLDetailsElement>('.auth-verification-recovery').open).toBe(kind !== 'network');
+            expect(host.querySelector('[role="status"]')).toBeNull();
+            expect(verifyCustomerAccount).toHaveBeenCalledTimes(kind === 'missing' ? 0 : 1);
+            expect(refreshCustomerVerification).not.toHaveBeenCalled();
+            if (kind === 'network') expect(host.textContent).toContain('网络连接失败');
+        },
+    );
+});
+
+it('does not attach a resend receipt or cooldown to a different email draft', async () => {
+    const response = deferred();
+    const refreshCustomerVerification = vi.fn(() => response.promise);
+    await settle(() =>
+        root.render(
+            <VerifyAccountPage
+                {...props}
+                api={
+                    {
+                        verifyCustomerAccount: vi.fn().mockRejectedValue(invalidLink()),
+                        refreshCustomerVerification,
+                    } as never
+                }
+                token="synthetic-link"
+                onSuccess={vi.fn()}
+            />,
+        ),
+    );
+    const email = element<HTMLInputElement>('input[name="emailAddress"]');
+    email.value = 'first@example.invalid';
+    await settle(submit);
+    email.value = 'changed@example.invalid';
+    await settle(response.resolve);
+    expect(refreshCustomerVerification).toHaveBeenCalledOnce();
+    expect(host.querySelector('.auth-success-message')).toBeNull();
+    expect(element<HTMLButtonElement>('button[type="submit"]').disabled).toBe(false);
+    expect(host.textContent).not.toContain('60 秒');
 });

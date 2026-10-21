@@ -149,7 +149,10 @@ export function readInitialPublicPage(): PublicPageData | undefined {
         const renderedDocument = root?.dataset?.publicRendered === '1' && root.dataset.publicAdopted !== '1';
         if (!hasPublicPageIdentity(value, window.location.host) || !isReusablePublicPageData(value)) return;
         if (!renderedDocument && !validatePublicPageData(value, window.location.host)) return;
-        const request = currentPublicPageRequest();
+        // Legacy email hashes normalize to auth paths before bootstrap. A home
+        // fallback here would incorrectly hydrate the homepage as that auth page.
+        const request = publicPageRequestFromUrl(window.location.pathname + window.location.search);
+        if (!request) return;
         if (
             value.requestKey
                 ? value.requestKey !== publicPageRequestKey(request)
