@@ -7,6 +7,7 @@ import {
     readFileSync,
     readdirSync,
     readlinkSync,
+    realpathSync,
     renameSync,
     rmSync,
     symlinkSync,
@@ -58,6 +59,24 @@ function fixture(
 ) {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'vendure-runtime-security-'));
     t.after(() => rmSync(directory, { recursive: true, force: true }));
+    // Project-owned TMPDIRs must not lend the fixture the development install.
+    // Keep packages inside this fixture but outside runtime visible, so explicit
+    // outside-artifact fallback cases still exercise the production verifier unchanged.
+    const boundary = realpathSync(directory) + path.sep;
+    const resolveFilename = Module._resolveFilename;
+    t.mock.method(Module, '_resolveFilename', function (request, parent, ...options) {
+        const resolved = resolveFilename.call(this, request, parent, ...options);
+        if (
+            ['@tiptap/core', '@vendure/dashboard'].includes(request) &&
+            parent?.filename?.startsWith(directory + path.sep) &&
+            !realpathSync(resolved).startsWith(boundary)
+        ) {
+            const error = new Error(`Cannot find module '${request}' in the standalone fixture`);
+            error.code = 'MODULE_NOT_FOUND';
+            throw error;
+        }
+        return resolved;
+    });
     const runtime = path.join(directory, 'runtime');
     mkdirSync(path.join(runtime, 'packages/dev-server'), { recursive: true });
     writeFileSync(path.join(runtime, 'packages/dev-server/package.json'), '{"name":"dev-server"}');

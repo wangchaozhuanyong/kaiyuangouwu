@@ -61,8 +61,10 @@ const DERIVED = new Set([
     'admin_incident_evidence',
     'admin_incident_action',
     'store_notification_read',
-    'governance_audit_entry',
 ]);
+// Order cleanup may retain references in the append-only audit chain. Removing
+// even a test-order entry invalidates all later records in that Channel.
+const IMMUTABLE = new Set(['governance_audit_entry']);
 const RETAINED = new Set(['session', 'storefront_cart', 'storefront_cart_line', 'customer_coupon']);
 const IMPLICIT = {
     orderId: 'order',
@@ -358,6 +360,7 @@ function buildPlan(graph) {
     const block = (code, table) => blockers.push({ code, table });
     for (const [name, rows] of Object.entries(graph.rows)) {
         if (!rows.length) continue;
+        if (IMMUTABLE.has(name)) continue;
         if (DERIVED.has(name))
             deletes.push(
                 ...rows.map(row => ({
@@ -521,6 +524,10 @@ async function execute(connection, mode, expectedHash = '') {
         }
         assert.equal(plan.planHash, expectedHash, 'CLEANUP_PLAN_CHANGED');
         assert.equal(plan.blockers.length, 0, 'CLEANUP_GRAPH_BLOCKED');
+        assert.ok(
+            [...plan.deletes, ...plan.patches].every(item => !IMMUTABLE.has(item.table)),
+            'IMMUTABLE_AUDIT_MUTATION_FORBIDDEN',
+        );
         for (const patch of plan.patches) {
             const columns = Object.keys(patch.changes),
                 keys = Object.keys(patch.identity);

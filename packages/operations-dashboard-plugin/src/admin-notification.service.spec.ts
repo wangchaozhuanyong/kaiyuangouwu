@@ -2,8 +2,97 @@ import { Channel, Order, TransactionSubscriber } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AdminNotificationService } from './admin-notification.service';
+import { UNREGISTERED_NOTIFICATION_ACTION_HINT } from './department-notification-router';
 
 describe('AdminNotificationService', () => {
+    it('corrects an unclaimed legacy route on recovery while retaining critical human verification', async () => {
+        const firstOccurredAt = new Date('2026-10-15T03:00:00Z');
+        const existing = {
+            id: 9,
+            eventType: 'governance.control.anomaly',
+            severity: 'P0',
+            incidentStatus: 'OPEN',
+            ownerDepartmentCode: 'EXEC',
+            acknowledgedAt: null,
+            actionHint: UNREGISTERED_NOTIFICATION_ACTION_HINT,
+            firstOccurredAt,
+            payload: {},
+        };
+        const test = serviceTest({ findOne: vi.fn().mockResolvedValue(existing) }, { sendResolved: false });
+        const result = await test.service.resolveIncident(null, 'governance.control-health:5', {
+            auditIntegrityValid: true,
+        });
+        expect(result).toMatchObject({
+            ownerDepartmentCode: 'GOVERNANCE',
+            escalationDepartmentCode: 'EXEC',
+            incidentStatus: 'RECOVERY_PENDING',
+            eventState: 'RESOLVED',
+            acknowledgedAt: null,
+            closedAt: null,
+            slaDueAt: firstOccurredAt,
+        });
+        expect(test.incidentResponse.appendSystemEvidence.mock.calls[0][4]).toMatchObject({
+            routeCorrection: { previousOwner: 'EXEC', owner: 'GOVERNANCE' },
+        });
+        expect(test.worker.dispatch).not.toHaveBeenCalled();
+    });
+    it.each([
+        ['OPEN', 'EXEC'],
+        ['ACKNOWLEDGED', 'EXEC'],
+        ['OPEN', 'TECH'],
+    ])(
+        'corrects only unclaimed fallback routing while preserving %s / %s ownership history',
+        async (status, owner) => {
+            const firstOccurredAt = new Date('2026-10-15T03:00:00Z');
+            const existing = {
+                id: 9,
+                eventType: 'governance.control.anomaly',
+                occurrenceCount: 7,
+                severity: 'P0',
+                deliveryStatus: 'PENDING',
+                incidentStatus: status,
+                firstOccurredAt,
+                acknowledgedAt: status === 'OPEN' ? null : firstOccurredAt,
+                ownerDepartmentCode: owner,
+                collaboratorDepartmentCodes: ['TECH'],
+                escalationDepartmentCode: 'EXEC',
+                actionRequired: true,
+                actionHint: UNREGISTERED_NOTIFICATION_ACTION_HINT,
+                slaDueAt: firstOccurredAt,
+                payload: {},
+            };
+            const test = serviceTest({ findOne: vi.fn().mockResolvedValue(existing) });
+            const result = await test.service.upsertIncident(null, {
+                eventType: 'governance.control.anomaly',
+                category: 'GOVERNANCE',
+                severity: 'P0',
+                fingerprint: 'governance.control-health:5',
+                title: '治理控制存在待处理异常',
+                payload: { summary: '审计链完整=false' },
+            });
+            expect(result).toMatchObject({
+                id: 9,
+                occurrenceCount: 8,
+                incidentStatus: status,
+                firstOccurredAt,
+                ownerDepartmentCode: status === 'OPEN' && owner === 'EXEC' ? 'GOVERNANCE' : owner,
+                escalationDepartmentCode: 'EXEC',
+                slaDueAt: firstOccurredAt,
+            });
+            const evidence = test.incidentResponse.appendSystemEvidence.mock.calls[0][4];
+            if (status === 'OPEN' && owner === 'EXEC') {
+                expect(result?.actionHint).toContain('审计链异常须保留证据');
+                expect(evidence.routeCorrection).toMatchObject({
+                    previousOwner: 'EXEC',
+                    owner: 'GOVERNANCE',
+                });
+            } else {
+                expect(result?.actionHint).toBe(UNREGISTERED_NOTIFICATION_ACTION_HINT);
+                expect(evidence).not.toHaveProperty('routeCorrection');
+            }
+            expect(test.worker.dispatch).not.toHaveBeenCalled();
+        },
+    );
     for (const eventType of [
         'commerce.fulfillment.manual_delivery_failed',
         'commerce.fulfillment.manual_delivery_overdue',

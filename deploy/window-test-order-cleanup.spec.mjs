@@ -97,6 +97,46 @@ test('unknown relations, real payments, fulfillment and inventory effects stop d
         ),
     );
 });
+
+test('retains original governance audit rows while deleting the matching disposable order graph', () => {
+    const auditRows = [
+        {
+            id: 81,
+            channelId: 5,
+            sequence: 23,
+            resourceType: 'Order',
+            resourceId: '22',
+            eventType: 'FRAUD_EVALUATION_ALLOWED',
+            entryHash: 'original-first-hash',
+        },
+        {
+            id: 82,
+            channelId: 5,
+            sequence: 24,
+            resourceType: 'FraudRiskCase',
+            resourceId: '7',
+            eventType: 'FRAUD_CASE_CREATED',
+            previousHash: 'original-first-hash',
+            entryHash: 'original-next-hash',
+        },
+    ];
+    const original = structuredClone(auditRows);
+    const plan = cleanup.buildPlan(
+        graph({ governance_audit_entry: auditRows, fraud_risk_case: [{ id: 7, orderId: 22 }] }),
+    );
+    assert.equal(cleanup.publicPlan(plan).canApply, true);
+    assert.equal(plan.deletes.filter(row => row.table === 'order').length, 4);
+    assert.equal(plan.deletes.filter(row => row.table === 'fraud_risk_case').length, 1);
+    assert.equal(
+        plan.deletes.some(row => row.table === 'governance_audit_entry'),
+        false,
+    );
+    assert.equal(
+        plan.patches.some(row => row.table === 'governance_audit_entry'),
+        false,
+    );
+    assert.deepEqual(auditRows, original);
+});
 test('production wrapper rejects drift and blockers before backup, and only forwards a safe receipt', () => {
     const request = operations.validateRequest({
         OPS_SOURCE_SHA: sourceSha,

@@ -5,6 +5,41 @@ import { AdminNotificationDelivery } from './entities/admin-notification-deliver
 import { formatTelegramNotification } from './telegram-notification-formatter';
 
 describe('Telegram notification formatting', () => {
+    it('shows the affected store, governance counts and audit breakpoint without exposing nested data', () => {
+        const message = formatTelegramNotification(
+            deliveryFixture({
+                eventType: 'governance.control.anomaly',
+                title: '治理控制存在待处理异常',
+                severity: 'P0',
+                mode: 'INCIDENT',
+                eventState: 'FIRING',
+                incidentStatus: 'OPEN',
+                payload: sanitizePayload({
+                    storeName: '合成店铺',
+                    channelId: '5',
+                    summary: '过期审批 0，逾期风险案件 0，审计链完整=false',
+                    businessDate: '2026-10-21',
+                    expiredApprovals: 0,
+                    overdueCases: 0,
+                    auditIntegrityValid: false,
+                    auditCheckedEntries: 35,
+                    auditBrokenAt: 28,
+                    auditIntegrity: { privateDetail: 'must-not-appear' },
+                }),
+            }),
+            { timezone: 'Asia/Kuala_Lumpur', adminBaseUrl: null },
+        ).text;
+        expect(message).toContain('[危急]');
+        expect(message).toContain('店铺：合成店铺');
+        expect(message).toContain('事件摘要：过期审批 0，逾期风险案件 0，审计链完整=false');
+        expect(message).toContain('过期审批数：0');
+        expect(message).toContain('逾期风险案件数：0');
+        expect(message).toContain('审计链状态：异常');
+        expect(message).toContain('已核对审计记录数：35');
+        expect(message).toContain('首个异常审计记录：28');
+        expect(message).not.toContain('must-not-appear');
+        expect(message).not.toContain('[object omitted]');
+    });
     it('keeps Chinese severity, departments, zero counts and unavailable shops in the hourly report', () => {
         const delivery = deliveryFixture({
             eventType: 'platform.online.hourly',

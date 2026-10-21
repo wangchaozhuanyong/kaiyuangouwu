@@ -40,7 +40,7 @@ function fixture(databaseType = 'sqljs') {
         publish: vi.fn(),
         registerBlockingEventHandler: vi.fn(({ id, handler }) => handlers.set(id, handler)),
     };
-    const digital = { lock: vi.fn(), reserveOrder: vi.fn(), releaseLine: vi.fn() };
+    const digital = { lock: vi.fn(), reserveOrder: vi.fn(), releaseLine: vi.fn(), reservation: vi.fn() };
     const stock = { createReleasesForOrderLines: vi.fn() };
     const connection = {
         rawConnection: { getRepository: vi.fn(() => repository), options: { type: databaseType } },
@@ -73,6 +73,74 @@ function fixture(databaseType = 'sqljs') {
     };
 }
 describe('checkout resource payment and retry boundaries', () => {
+    it('holds added digital units after core has already increased the sold baseline', async () => {
+        const test = fixture();
+        const line = {
+            id: 'digital',
+            quantity: 2,
+            orderPlacedQuantity: 2,
+            customFields: { fulfillmentTypeSnapshot: 'digital' },
+        };
+        Object.assign(test.order, { state: 'Modifying', lines: [line] });
+        test.digital.reservation.mockResolvedValue({ quantity: 1 });
+        await requireFixture(test.handlers.get('commerce-digital-quantity-change-guard'))({
+            ctx: test.ctx,
+            entity: test.order,
+            type: 'updated',
+        });
+        expect(test.digital.reserveOrder).toHaveBeenCalledWith(
+            test.ctx,
+            expect.objectContaining({ lines: [line] }),
+        );
+        expect(test.order.lines).toEqual([line]);
+    });
+    it('does not reserve the same digital units again on a later metadata edit', async () => {
+        const test = fixture();
+        Object.assign(test.order, {
+            state: 'Modifying',
+            lines: [
+                {
+                    id: 'digital',
+                    quantity: 2,
+                    orderPlacedQuantity: 2,
+                    customFields: { fulfillmentTypeSnapshot: 'digital' },
+                },
+            ],
+        });
+        test.digital.reservation.mockResolvedValue({ quantity: 2 });
+        await requireFixture(test.handlers.get('commerce-digital-quantity-change-guard'))({
+            ctx: test.ctx,
+            entity: test.order,
+            type: 'updated',
+        });
+        expect(test.digital.reserveOrder).not.toHaveBeenCalled();
+    });
+    it('rejects an increase after a partial refund even when the sold baseline was already incremented', async () => {
+        const test = fixture();
+        Object.assign(test.order, {
+            state: 'Modifying',
+            lines: [
+                {
+                    id: 'digital',
+                    quantity: 2,
+                    orderPlacedQuantity: 3,
+                    customFields: { fulfillmentTypeSnapshot: 'digital' },
+                },
+            ],
+        });
+        Object.assign(test.order.payments[0], {
+            refunds: [{ state: 'Settled', lines: [{ orderLineId: 'digital', quantity: 1 }] }],
+        });
+        test.digital.reservation.mockResolvedValue({ quantity: 2 });
+        await expect(
+            requireFixture(test.handlers.get('commerce-digital-quantity-change-guard'))({
+                ctx: test.ctx,
+                entity: test.order,
+                type: 'updated',
+            }),
+        ).rejects.toThrow('已有按份退款');
+        expect(test.digital.reserveOrder).not.toHaveBeenCalled();
+    });
     it.each(['mysql', 'mariadb', 'postgres', 'sqljs'])(
         'reads expiry funding evidence after waiting for order locks on %s',
         async databaseType => {

@@ -58,10 +58,16 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                 const refunded = effectiveRefundLines(
                     order.payments.flatMap(payment => payment.refunds ?? []),
                 );
-                for (const line of order.lines) {
+                const additions: Order['lines'] = [];
+                for (const line of order.lines.filter(
+                    item => getOrderLineFulfillmentType(item) === 'digital',
+                )) {
+                    const reservation = await this.digital.reservation(event.ctx, line.id);
+                    // Core updates the sold baseline before publishing this event. Compare with
+                    // the existing reservation so newly added units are held before their top-up.
+                    const reservedQuantity = reservation?.quantity ?? line.orderPlacedQuantity;
+                    if (Math.max(line.quantity, line.orderPlacedQuantity) <= reservedQuantity) continue;
                     if (
-                        getOrderLineFulfillmentType(line) === 'digital' &&
-                        line.quantity > line.orderPlacedQuantity &&
                         refunded.some(
                             item => String(item.orderLineId) === String(line.id) && item.quantity > 0,
                         )
@@ -69,15 +75,9 @@ export class CheckoutResourcesService implements OnApplicationBootstrap {
                         throw new UserInputError(
                             '该数字订单行已有按份退款，请新建订单购买，不能恢复已撤销的交付内容',
                         );
-                }
-                const additions = order.lines.filter(
-                    line =>
-                        getOrderLineFulfillmentType(line) === 'digital' &&
-                        line.quantity > line.orderPlacedQuantity,
-                );
-                for (const line of additions) {
-                    if (line.orderPlacedQuantity > 0 && !(await this.digital.reservation(event.ctx, line.id)))
+                    if (line.orderPlacedQuantity > 0 && !reservation)
                         throw new UserInputError('历史数字订单缺少成交资源快照，请新建订单购买');
+                    additions.push(line);
                 }
                 if (additions.length) {
                     const originalLines = order.lines;
