@@ -1,0 +1,110 @@
+{
+    "status": "AUTH_ARTWORK_CONFIGURATION_REFERENCE",
+    "container": {
+        "width": 648,
+        "height": 680
+    },
+    "asset": {
+        "width": 1296,
+        "height": 1360
+    },
+    "publishing": "Use each store's existing Admin AUTH_LOGIN and AUTH_REGISTER block. Update only main artwork, backgroundColor and textColor; preserve all current copy, translations, items, logos and other settings. Shared CSS must be released together.",
+    "stores": [
+        {
+            "key": "moyao",
+            "name": "MOYAO AI｜模钥",
+            "origin": "https://moyaoai.com",
+            "file": "moyao-auth.webp",
+            "backgroundColor": "#EAF2FA",
+            "textColor": "#142C49",
+            "accentColor": "#2563EB",
+            "logoUrl": "https://moyaoai.com/assets/preview/a5/app-icon__preview.webp?preset=storefront-thumbnail-320&format=webp&q=90",
+            "copy": {
+                "register": {
+                    "zh": {
+                        "title": "开启你的 AI 之旅",
+                        "subtitle": "发现创作、编程与办公工具。"
+                    },
+                    "en": {
+                        "subtitle": "Discover tools for creating, coding and work.",
+                        "title": "Start your AI journey"
+                    }
+                },
+                "login": {
+                    "zh": {
+                        "subtitle": "你的 AI 工具，一处管理。",
+                        "title": "欢迎回到模钥"
+                    },
+                    "en": {
+                        "subtitle": "Your AI tools, in one place.",
+                        "title": "Welcome back to MOYAO"
+                    }
+                }
+            }
+        },
+        {
+            "key": "flashcast",
+            "name": "闪铸商城",
+            "origin": "https://shop.flashcast.com.my",
+            "file": "flashcast-auth.webp",
+            "backgroundColor": "#F0E8DC",
+            "textColor": "#332B23",
+            "accentColor": "#73563C",
+            "logoUrl": "https://shop.flashcast.com.my/assets/preview/5b/flashcast-symbol-512__preview.webp?preset=storefront-thumbnail-320&format=webp&q=90",
+            "copy": {
+                "register": {
+                    "zh": {
+                        "title": "开启家的新灵感",
+                        "subtitle": "创建账号，探索适合你的家具与家居好物。"
+                    },
+                    "en": {
+                        "subtitle": "Create an account and discover furniture for your home.",
+                        "title": "Make room for new ideas"
+                    }
+                },
+                "login": {
+                    "zh": {
+                        "subtitle": "登录账号，查看订单与心仪好物。",
+                        "title": "欢迎回到闪铸"
+                    },
+                    "en": {
+                        "subtitle": "Sign in to view your orders and favourite finds.",
+                        "title": "Welcome back to Flash Cast"
+                    }
+                }
+            }
+        },
+        {
+            "key": "damatong",
+            "name": "大马通",
+            "origin": "https://damatong.net",
+            "file": "damatong-auth.webp",
+            "backgroundColor": "#E6EEE7",
+            "textColor": "#17372E",
+            "accentColor": "#28604B",
+            "logoUrl": "https://damatong.net/assets/preview/59/damatong-logo-peacock-gold-transparent-v1__preview.webp?preset=storefront-thumbnail-320&format=webp&q=90",
+            "copy": {
+                "register": {
+                    "zh": {
+                        "title": "开启你的在马生活",
+                        "subtitle": "发现生活好物，连接在马服务。"
+                    },
+                    "en": {
+                        "subtitle": "Everyday finds and local services.",
+                        "title": "Start your life in Malaysia"
+                    }
+                },
+                "login": {
+                    "zh": {
+                        "subtitle": "订单、收藏与常用服务，一处查看。",
+                        "title": "欢迎回到大马通"
+                    },
+                    "en": {
+                        "subtitle": "Orders, saved finds and support.",
+                        "title": "Welcome back to Damatong"
+                    }
+                }
+            }
+        }
+    ]
+}

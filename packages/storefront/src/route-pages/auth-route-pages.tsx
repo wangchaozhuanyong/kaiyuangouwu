@@ -113,6 +113,11 @@ export function RegisterRoutePage() {
 
 export function VerifyAccountRoutePage() {
     const runtime = useRuntime();
+    const authVisualContent = useAuthVisualContent('register');
+    // Hidden bootstrap content still runs effects. Wait for the confirmed API scope
+    // so resolving the store cannot cancel and replay this one-time verification.
+    if (!runtime.storefrontContextResolved) return <span data-page-pending="module" />;
+    // Verification must remain usable while optional merchant artwork is loading or unavailable.
     return (
         <AuthRouteBoundary>
             <LazyVerifyAccountPage
@@ -123,6 +128,7 @@ export function VerifyAccountRoutePage() {
                 language={runtime.language}
                 logoUrl={runtime.logoUrl}
                 storefrontName={runtime.storefrontName}
+                authVisualContent={authVisualContent}
                 token={runtime.route.token}
                 onBack={runtime.goBack}
                 onSuccess={isCurrent => runtime.completeAuthentication(undefined, undefined, isCurrent)}
