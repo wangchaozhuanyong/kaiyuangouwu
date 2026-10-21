@@ -16,6 +16,8 @@ export const departmentCodes = [
 export type DepartmentCode = (typeof departmentCodes)[number];
 export type NotificationSeverity = 'P0' | 'P1' | 'P2' | 'P3';
 
+export const UNREGISTERED_NOTIFICATION_ACTION_HINT = '核对未注册事件并补充明确的责任路由';
+
 export interface DepartmentRoute {
     owner: DepartmentCode;
     collaborators: DepartmentCode[];
@@ -79,6 +81,10 @@ const routeDefinitions: readonly DepartmentRouteDefinition[] = [
     route('security.admin.changed', 'P2', 'GOVERNANCE', ['TECH'], false, null),
     route('security.factor.changed', 'P1', 'GOVERNANCE', ['TECH'], true, 60),
     route('security.api_key.changed', 'P2', 'GOVERNANCE', ['TECH'], false, null),
+    route('governance.control.anomaly', 'P2', 'GOVERNANCE', ['TECH'], true, null),
+    route('governance.control.recovered', 'P2', 'GOVERNANCE', ['TECH'], false, null),
+    route('fraud.case.attention', 'P2', 'GOVERNANCE', ['TECH', 'SALES'], true, null),
+    route('fraud.case.resolved', 'P2', 'GOVERNANCE', ['SALES'], false, null),
     route('system.monitor.unavailable', 'P1', 'TECH', ['GOVERNANCE'], true, 60),
     route('system.store.unavailable', 'P0', 'TECH', ['SALES'], true, 0),
     route('system.certificate.invalid', 'P0', 'TECH', ['GOVERNANCE'], true, 0),
@@ -104,7 +110,7 @@ export class DepartmentNotificationRouter {
                   escalation: severity === 'P0' ? 'EXEC' : null,
                   actionRequired: severity === 'P0' || severity === 'P1',
                   slaMinutes: severity === 'P0' ? 0 : severity === 'P1' ? 60 : null,
-                  actionHint: '核对未注册事件并补充明确的责任路由',
+                  actionHint: UNREGISTERED_NOTIFICATION_ACTION_HINT,
                   fallback: true,
               };
         const override = overrides.find(item => item.eventType === eventType);
@@ -209,6 +215,10 @@ function route(
 }
 
 function actionHint(eventType: string): string {
+    if (eventType === 'governance.control.anomaly')
+        return '核对治理日报、逾期审批与风险案件；审计链异常须保留证据并定位首个断点';
+    if (eventType === 'governance.control.recovered') return '核验治理检查恢复结果并完成事故复盘';
+    if (eventType.startsWith('fraud.case.')) return '核对风险证据、订单影响和复核时限，记录复核决定';
     if (eventType === 'commerce.order.placed') return '销售确认订单信息，履约部门准备交付';
     if (eventType.startsWith('commerce.payment.')) return '核对支付状态、金额、渠道记录及订单一致性';
     if (eventType.startsWith('commerce.fulfillment.')) return '检查订单交付进度并及时联系客户';

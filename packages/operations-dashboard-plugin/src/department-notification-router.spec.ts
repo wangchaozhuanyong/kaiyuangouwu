@@ -52,6 +52,32 @@ describe('DepartmentNotificationRouter', () => {
         expect(result.actionRequired).toBe(true);
     });
 
+    it.each(['governance.control.anomaly', 'fraud.case.attention'])(
+        'registers %s with governance ownership and retains critical escalation',
+        eventType => {
+            const router = new DepartmentNotificationRouter();
+            expect(router.route(eventType, 'P0')).toMatchObject({
+                owner: 'GOVERNANCE',
+                escalation: 'EXEC',
+                actionRequired: true,
+                slaMinutes: 0,
+                fallback: false,
+            });
+            expect(router.route(eventType, 'P1')).toMatchObject({ escalation: 'EXEC', slaMinutes: 60 });
+            expect(router.route(eventType, 'P2')).toMatchObject({ escalation: null, slaMinutes: null });
+        },
+    );
+
+    it.each(['governance.control.recovered', 'fraud.case.resolved'])(
+        'registers the recovery event %s without an unregistered fallback',
+        eventType =>
+            expect(new DepartmentNotificationRouter().route(eventType, 'P2')).toMatchObject({
+                owner: 'GOVERNANCE',
+                actionRequired: false,
+                fallback: false,
+            }),
+    );
+
     it('falls back unknown events to EXEC instead of returning an empty owner', () => {
         expect(new DepartmentNotificationRouter().route('unknown.event', 'P2')).toMatchObject({
             owner: 'EXEC',

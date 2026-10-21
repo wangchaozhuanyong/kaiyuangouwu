@@ -1566,6 +1566,12 @@ it('appends only newly purchased units after a paid digital order quantity incre
             );
         }
         const updated = (await shopClient.query(claim, receiptArguments(fixture))).claimDigitalDelivery;
+        const persistedLine = await connection
+            .getRepository(ctx, OrderLine)
+            .findOneOrFail({ where: { id: fixture.line.id } });
+        const hold = await server.app.get(CheckoutResourcesService).hold(ctx, fixture.order.id);
+        expect(persistedLine.orderPlacedQuantity, mode).toBe(2);
+        expect(hold?.state, mode).toBe('CONFIRMED');
         expect(updated.readyQuantity, mode).toBe(2);
         if (mode !== 'file_download') expect(updated.packages[0]).toEqual(original.packages[0]);
         const before = await connection
@@ -1883,7 +1889,7 @@ it('stops a shared warehouse migration without copying its balance into either s
     expect(result.conflicts.join(' ')).toContain('共享归属');
     await expect(
         connection.withTransaction(ctx, tx => products.migrate(tx, variant.id, 7, 0)),
-    ).rejects.toThrow('共享归属');
+    ).rejects.toThrow('迁移核对结果已变化');
     expect(
         await connection
             .getRepository(ctx, DigitalVariantConfig)

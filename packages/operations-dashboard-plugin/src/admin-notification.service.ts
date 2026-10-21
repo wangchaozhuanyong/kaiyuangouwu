@@ -17,6 +17,7 @@ import {
     DepartmentCode,
     DepartmentNotificationRouter,
     NotificationSeverity,
+    UNREGISTERED_NOTIFICATION_ACTION_HINT,
 } from './department-notification-router';
 import {
     AdminNotificationDelivery,
@@ -83,6 +84,44 @@ export class AdminNotificationService {
         return updated.incident;
     }
 
+    private correctUnclaimedFallbackRoute(
+        current: AdminNotificationDelivery,
+        config: Awaited<ReturnType<AdminNotificationConfigService['get']>>,
+    ): Record<string, unknown> | undefined {
+        // Correct only an unclaimed legacy fallback. Human ownership and its
+        // acknowledgement history must survive later occurrences unchanged.
+        if (
+            current.incidentStatus === 'OPEN' &&
+            current.ownerDepartmentCode === 'EXEC' &&
+            !current.acknowledgedAt &&
+            !current.acknowledgedByUserId &&
+            current.actionHint === UNREGISTERED_NOTIFICATION_ACTION_HINT
+        ) {
+            const route = this.router.route(current.eventType, current.severity, config.routeOverrides);
+            if (!route.fallback) {
+                const override = config.routeOverrides.find(item => item.eventType === current.eventType);
+                if (current.severity === 'P1' && override?.slaMinutes === undefined)
+                    route.slaMinutes = config.p1EscalationMinutes;
+                const routeCorrection = {
+                    previousOwner: current.ownerDepartmentCode,
+                    owner: route.owner,
+                    reason: '已注册事件纠正未接手事故的历史兜底路由',
+                };
+                current.ownerDepartmentCode = route.owner;
+                current.collaboratorDepartmentCodes = route.collaborators;
+                current.escalationDepartmentCode = route.escalation;
+                current.actionRequired = route.actionRequired;
+                current.actionHint = route.actionHint;
+                current.slaDueAt =
+                    route.slaMinutes == null
+                        ? null
+                        : new Date(current.firstOccurredAt.getTime() + route.slaMinutes * 60_000);
+                return routeCorrection;
+            }
+        }
+        return undefined;
+    }
+
     private async updateExistingIncident(
         ctx: RequestContext | null,
         input: AdminNotificationInput,
@@ -109,6 +148,7 @@ export class AdminNotificationService {
             current.title = boundedText(input.title, 300);
             current.severity = input.severity;
             current.priority = input.priority ?? severityPriority(input.severity);
+            const routeCorrection = this.correctUnclaimedFallbackRoute(current, config);
             if (upgraded) current.silent = false;
             const repeatMinutes = input.severity === 'P0' ? config.p0RepeatMinutes : config.p1RepeatMinutes;
             const repeatDue =
@@ -136,6 +176,7 @@ export class AdminNotificationService {
                     occurrenceCount: current.occurrenceCount,
                     severity: current.severity,
                     payload: current.payload,
+                    ...(routeCorrection ? { routeCorrection } : {}),
                 },
                 now,
             );
@@ -225,12 +266,15 @@ export class AdminNotificationService {
                       where: { activeFingerprint: normalizedFingerprint },
                   });
             if (!current) return null;
+            const routeCorrection = this.correctUnclaimedFallbackRoute(current, config);
             const resolvedAt = new Date();
             current.activeFingerprint = null;
             current.eventState = 'RESOLVED';
             current.resolvedAt = resolvedAt;
             current.lastOccurredAt = resolvedAt;
-            current.payload = sanitizePayload({ ...current.payload, ...payload });
+            current.payload = sanitizePayload(
+                await this.withStoreName(txCtx, { ...current.payload, ...payload }),
+            );
             current.recoveryObservedAt = resolvedAt;
             const severity = current.severity === 'P0' || current.severity === 'P1' ? current.severity : null;
             current.incidentStatus = severity ? 'RECOVERY_PENDING' : 'CLOSED';
@@ -254,7 +298,11 @@ export class AdminNotificationService {
                 current,
                 'RECOVERY_OBSERVED',
                 severity ? '系统已观测恢复，等待人工验证' : '系统已恢复，事故自动闭环',
-                { payload: current.payload, recoveryValidationDueAt: current.recoveryValidationDueAt },
+                {
+                    payload: current.payload,
+                    recoveryValidationDueAt: current.recoveryValidationDueAt,
+                    ...(routeCorrection ? { routeCorrection } : {}),
+                },
                 resolvedAt,
             );
             if (!severity) {

@@ -494,36 +494,38 @@ beforeAll(async () => {
             .create(own, { name: 'Synthetic digital migration location' })
     ).id;
     shippingMethodId = (
-        await server.app.get(ShippingMethodService).create(own, {
-            code: 'synthetic-digital-mixed-shipping',
-            fulfillmentHandler: 'manual-fulfillment',
-            checker: {
-                code: 'supported-destination-eligibility-checker',
-                arguments: [
-                    { name: 'allowedCountryCodes', value: 'GB' },
-                    { name: 'blockedPostalPrefixes', value: '' },
-                ],
-            },
-            calculator: {
-                code: 'physical-subtotal-shipping-calculator',
-                arguments: [
-                    { name: 'baseRate', value: '0' },
-                    { name: 'freeAbove', value: '0' },
-                    { name: 'currencyCode', value: 'CNY' },
-                    { name: 'taxRate', value: '0' },
-                    { name: 'priceIncludesTax', value: 'true' },
-                    { name: 'estimateMinDays', value: '1' },
-                    { name: 'estimateMaxDays', value: '3' },
-                ],
-            },
-            translations: [
-                {
-                    languageCode: LanguageCode.zh_Hans,
-                    name: 'Synthetic local shipping',
-                    description: 'No physical shipping occurs',
+        await connection.withTransaction(own, tx =>
+            server.app.get(ShippingMethodService).create(tx, {
+                code: 'synthetic-digital-mixed-shipping',
+                fulfillmentHandler: 'manual-fulfillment',
+                checker: {
+                    code: 'supported-destination-eligibility-checker',
+                    arguments: [
+                        { name: 'allowedCountryCodes', value: 'GB' },
+                        { name: 'blockedPostalPrefixes', value: '' },
+                    ],
                 },
-            ],
-        })
+                calculator: {
+                    code: 'physical-subtotal-shipping-calculator',
+                    arguments: [
+                        { name: 'baseRate', value: '0' },
+                        { name: 'freeAbove', value: '0' },
+                        { name: 'currencyCode', value: 'CNY' },
+                        { name: 'taxRate', value: '0' },
+                        { name: 'priceIncludesTax', value: 'true' },
+                        { name: 'estimateMinDays', value: '1' },
+                        { name: 'estimateMaxDays', value: '3' },
+                    ],
+                },
+                translations: [
+                    {
+                        languageCode: LanguageCode.zh_Hans,
+                        name: 'Synthetic local shipping',
+                        description: 'No physical shipping occurs',
+                    },
+                ],
+            }),
+        )
     ).id;
     for (const handler of [settledProvider, pendingProvider]) {
         const method = await server.app.get(PaymentMethodService).create(platform, {

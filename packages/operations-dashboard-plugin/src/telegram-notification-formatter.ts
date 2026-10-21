@@ -128,6 +128,16 @@ function severityIcon(severity: string): string {
 function payloadLabel(key: string): string {
     const labels: Record<string, string> = {
         storeName: '店铺',
+        summary: '事件摘要',
+        businessDate: '检查日期',
+        expiredApprovals: '过期审批数',
+        overdueCases: '逾期风险案件数',
+        pendingApprovals: '待审批数',
+        openCases: '待复核风险案件数',
+        pendingAppeals: '待处理申诉数',
+        auditIntegrityValid: '审计链状态',
+        auditCheckedEntries: '已核对审计记录数',
+        auditBrokenAt: '首个异常审计记录',
         products: '商品摘要',
         orderState: '订单状态',
         rating: '服务评分',
@@ -199,6 +209,7 @@ const states: Record<string, string> = {
     Idle: '待处理',
 };
 function formatPayloadValue(value: unknown, key = ''): string {
+    if (key === 'auditIntegrityValid' && typeof value === 'boolean') return value ? '完整' : '异常';
     if (key === 'shops' && Array.isArray(value))
         return (
             '\n' +

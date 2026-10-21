@@ -15,9 +15,9 @@ import {
     Sale,
     StockLevel,
 } from '@vendure/core';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { expect, it } from 'vitest';
 
 import { CouponLedgerEntry } from '../../store-management-plugin/src/entities/coupon-ledger-entry.entity';
@@ -41,6 +41,7 @@ const reportPath = resolve(
     '../../../docs/public-preview-closure-20261006/browser-checkout-backend-acceptance.json',
 );
 const mysql = process.env.DB === 'mysql' && process.env.ORDER_CLOSURE_MYSQL === '1';
+mkdirSync(dirname(reportPath), { recursive: true });
 
 it(
     'accepts a naturally prepared browser checkout and controlled native payment without seeded order state',

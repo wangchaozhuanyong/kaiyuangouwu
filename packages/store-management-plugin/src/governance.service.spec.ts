@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { GovernanceApprovalRequest } from './entities/governance-approval-request.entity';
 import { GovernanceAuditEntry } from './entities/governance-audit-entry.entity';
+import { GovernanceReportSnapshot } from './entities/governance-report-snapshot.entity';
 import { GovernedConfigVersion } from './entities/governed-config-version.entity';
 import {
     derivedIdempotencyKey,
@@ -14,6 +15,57 @@ import {
 const ctx = { channelId: 'channel-1', activeUserId: 'admin-1' } as unknown as RequestContext;
 
 describe('governance control plane', () => {
+    it.each([true, false])(
+        'publishes an attributable report with readable audit integrity %s',
+        async valid => {
+            const snapshot = {
+                findOneBy: vi.fn().mockResolvedValue(null),
+                save: vi.fn(value => Promise.resolve(Object.assign(value, { id: 'report-1' }))),
+            };
+            const counts = {
+                countBy: vi.fn().mockResolvedValue(0),
+                createQueryBuilder: vi.fn(() => ({
+                    where: vi.fn().mockReturnThis(),
+                    getCount: vi.fn().mockResolvedValue(0),
+                })),
+            };
+            const events = { publish: vi.fn().mockResolvedValue(undefined) };
+            const service = new GovernanceService(
+                {
+                    getRepository: vi.fn((_ctx, entity) =>
+                        entity === GovernanceReportSnapshot ? snapshot : counts,
+                    ),
+                } as never,
+                {} as never,
+                events as never,
+            );
+            vi.spyOn(service, 'verifyAuditChain').mockResolvedValue({
+                valid,
+                checkedEntries: 35,
+                brokenAt: valid ? null : 28,
+            });
+            vi.spyOn(service, 'appendAudit').mockResolvedValue(new GovernanceAuditEntry());
+            const report = await service.generateReport(ctx, '2026-10-21', new Date('2026-10-21T00:00:00Z'));
+            expect(report.anomalyCount).toBe(valid ? 0 : 1);
+            expect(events.publish).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    notification: expect.objectContaining({
+                        eventType: valid ? 'governance.control.recovered' : 'governance.control.anomaly',
+                        severity: valid ? 'P2' : 'P0',
+                        mode: valid ? 'INCIDENT_RESOLVED' : 'INCIDENT_FIRING',
+                        payload: expect.objectContaining({
+                            channelId: 'channel-1',
+                            expiredApprovals: 0,
+                            overdueCases: 0,
+                            auditIntegrityValid: valid,
+                            auditCheckedEntries: 35,
+                            auditBrokenAt: valid ? null : 28,
+                        }),
+                    }),
+                }),
+            );
+        },
+    );
     it('normalizes approved rule schemas and rejects unknown configuration keys', () => {
         expect(
             parseAndValidateConfig('FRAUD_RULES', JSON.stringify({ reviewScore: 45, holdScore: 70 })),

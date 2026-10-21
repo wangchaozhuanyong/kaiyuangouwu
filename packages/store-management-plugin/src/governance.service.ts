@@ -467,12 +467,16 @@ export class GovernanceService {
                 fingerprint,
                 mode: anomalyCount ? 'INCIDENT_FIRING' : 'INCIDENT_RESOLVED',
                 payload: {
+                    channelId: String(ctx.channelId),
                     summary: anomalyCount
                         ? `过期审批 ${expiredApprovals}，逾期风险案件 ${overdueCases}，审计链完整=${auditIntegrity.valid}`
                         : '审批、风险复核和审计链检查正常',
                     businessDate,
                     ...metrics,
                     auditIntegrity,
+                    auditIntegrityValid: auditIntegrity.valid,
+                    auditCheckedEntries: auditIntegrity.checkedEntries,
+                    auditBrokenAt: auditIntegrity.brokenAt,
                 },
             }),
         );
