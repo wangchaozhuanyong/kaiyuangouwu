@@ -9,7 +9,6 @@ import {
 } from '@tanstack/react-router';
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { StorefrontContentBlock } from '../../src/types';
 
 import {
     resolveStorefrontSemanticPalette,
@@ -20,6 +19,7 @@ import { ShopApiError, type ShopApi } from '../../src/api';
 import { ForgotPasswordPage, LoginPage, RegisterPage, VerifyAccountPage } from '../../src/auth-pages';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import '../../src/storefront-styles';
+import { type StorefrontContentBlock } from '../../src/types';
 
 import artworkPlan from './artwork-plan.json';
 
