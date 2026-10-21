@@ -138,7 +138,7 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                         if (!stylesheet) throw new Error('Missing matching startup stylesheet');
                         const css = await readFile(path.join(artifact, stylesheet), 'utf8');
                         const compactStyle = css.match(
-                            /#storefront-boot-loading\[data-presentation=["']?status["']?\]\{([^}]+)\}/u,
+                            /html\s+#storefront-boot-loading\[data-presentation=["']?status["']?\]\{([^}]+)\}/u,
                         )?.[1];
                         expect(compactStyle).toContain('pointer-events:none');
                         expect(compactStyle).toContain('inset:0 0 auto');
