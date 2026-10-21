@@ -1,22 +1,11 @@
 export const productFields = `
-    id
-    createdAt
-    name
-    slug
-    description
+    id createdAt name slug description
     featuredAsset { id preview }
     assets { id preview }
     collections { id name slug parentId }
     customFields { fulfillmentType pricingMode refundPolicy manualDeliverySlaMinutes }
     variants {
-        id
-        name
-        sku
-        priceWithTax
-        currencyCode
-        saleableStockLevel
-        autoCardAvailableStock
-        storeCouponCollectionIds
+        id name sku priceWithTax currencyCode saleableStockLevel autoCardAvailableStock storeCouponCollectionIds
         featuredAsset { id preview }
         product { id name featuredAsset { id preview } }
         customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
