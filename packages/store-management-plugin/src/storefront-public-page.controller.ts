@@ -111,8 +111,13 @@ export class StorefrontPublicPageController {
             ...preferences,
         });
         const start = performance.now();
-        const snapshot = await this.pages.read(ctx, verified.host, request);
-        const page = this.seo ? await this.seo.enrich(ctx, verified.host, snapshot) : snapshot;
+        // Independent request-local SEO reads overlap the snapshot, as they do for HTML documents.
+        // Enrichment still validates the prepared scope and current access before any response.
+        const [snapshot, prepared] = await Promise.all([
+            this.pages.read(ctx, verified.host, request),
+            this.seo?.prepare(ctx, verified.host, request),
+        ]);
+        const page = this.seo ? await this.seo.enrich(ctx, verified.host, snapshot, prepared) : snapshot;
         void this.warmer?.observe(ctx, verified.host, request).catch(() => undefined);
         res.setHeader('Server-Timing', `public-page;dur=${(performance.now() - start).toFixed(1)}`);
         res.status(200).json(page);

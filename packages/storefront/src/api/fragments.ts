@@ -1,22 +1,12 @@
 export const productFields = `
-    id
-    createdAt
-    name
-    slug
+    id createdAt name slug
     description
     featuredAsset { id preview }
     assets { id preview }
     collections { id name slug parentId }
     customFields { fulfillmentType pricingMode refundPolicy manualDeliverySlaMinutes }
     variants {
-        id
-        name
-        sku
-        priceWithTax
-        currencyCode
-        saleableStockLevel
-        autoCardAvailableStock
-        storeCouponCollectionIds
+        id name sku priceWithTax currencyCode saleableStockLevel autoCardAvailableStock storeCouponCollectionIds
         featuredAsset { id preview }
         product { id name featuredAsset { id preview } }
         customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
@@ -27,362 +17,157 @@ export const productFields = `
 export const productSummaryFields = productFields.replace(/\n    assets \{ id preview \}\n/u, '\n');
 
 export const productPackagingFields = `
-    packaging {
-        id
-        enabled
-        autoUnpack
-        unitLabel
-        packageLabel
-        unitsPerPackage
-        unitVariant { id name sku }
-        packageVariant { id name sku }
-    }
+packaging {
+  id enabled autoUnpack unitLabel packageLabel unitsPerPackage
+  unitVariant { id name sku }
+  packageVariant { id name sku }
+}
 `;
 
 export const cartQuoteFields = `
-    id
-    code
-    state
-    orderPlacedAt
-    totalQuantity
-    subTotalWithTax
-    shippingWithTax
-    totalWithTax
-    currencyCode
-    customer { id emailAddress }
-    payments { id kind method amount state transactionId metadata }
-    discounts { adjustmentSource description amountWithTax }
-    taxSummary { description taxRate taxBase taxTotal }
-    couponCodes
-    customFields { customerNote deliveryEmail paymentCurrencyCode }
-    lines {
-        id
-        quantity
-        linePriceWithTax
-        proratedUnitPriceWithTax
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
-            featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
-        }
-        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot refundPolicySnapshot manualDeliverySlaMinutesSnapshot }
-    }
-    checkoutFulfillment {
-        fulfillmentType
-        containsPhysicalProducts
-        containsDigitalProducts
-        requiresShippingAddress
-        requiresShippingMethod
-    }
-    checkoutShipping {
-        methodCode
-        methodName
-        priceWithTax
-        estimateMinDays
-        estimateMaxDays
-        freeShippingThreshold
-        freeShippingApplied
-    }
+id code state orderPlacedAt totalQuantity subTotalWithTax shippingWithTax totalWithTax currencyCode
+customer { id emailAddress }
+payments { id kind method amount state transactionId metadata }
+discounts { adjustmentSource description amountWithTax }
+taxSummary { description taxRate taxBase taxTotal }
+couponCodes
+customFields { customerNote deliveryEmail paymentCurrencyCode }
+lines {
+  id quantity linePriceWithTax proratedUnitPriceWithTax
+  productVariant {
+    id name sku priceWithTax currencyCode saleableStockLevel autoCardAvailableStock
+    featuredAsset { id preview }
+    product { id name featuredAsset { id preview } }
+    customFields { fulfillmentType digitalDeliveryMode digitalStockPolicy }
+  }
+  customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot refundPolicySnapshot manualDeliverySlaMinutesSnapshot }
+}
+checkoutFulfillment {
+  fulfillmentType containsPhysicalProducts containsDigitalProducts requiresShippingAddress
+  requiresShippingMethod
+}
+checkoutShipping {
+  methodCode methodName priceWithTax estimateMinDays estimateMaxDays freeShippingThreshold
+  freeShippingApplied
+}
 `;
 
 // Delivery and fulfilment records are fetched by order detail routes, not by high-frequency cart edits.
 export const orderFields = `${cartQuoteFields}
-    fulfillments {
-        id
-        state
-        method
-        trackingCode
-        createdAt
-        updatedAt
-        deliveryEvidence {
-            id
-            status
-            carrier
-            trackingCode
-            exceptionReason
-            proofReference
-            shippedAt
-            deliveredAt
-            nextActionDueAt
-            overdue
-            events {
-                id
-                createdAt
-                status
-                actorType
-                actorLabel
-                note
-            }
-        }
+fulfillments {
+  id state method trackingCode createdAt updatedAt
+  deliveryEvidence {
+    id status carrier trackingCode exceptionReason proofReference shippedAt deliveredAt
+    nextActionDueAt overdue
+    events {
+      id createdAt status actorType actorLabel note
     }
-    autoCardDeliveries {
-        id
-        createdAt
-        updatedAt
-        state
-        productName
-        sku
-        quantity
-        attemptCount
-        sentAt
-        orderLineId
-    }
-    manualDigitalDeliveries {
-        id
-        createdAt
-        updatedAt
-        state
-        productName
-        sku
-        quantity
-        expectedAt
-        overdue
-        attemptCount
-        lastError
-        sentAt
-        orderLineId
-    }
+  }
+}
+autoCardDeliveries {
+  id createdAt updatedAt state productName sku quantity attemptCount sentAt orderLineId
+}
+manualDigitalDeliveries {
+  id createdAt updatedAt state productName sku quantity expectedAt overdue attemptCount lastError
+  sentAt orderLineId
+}
 `;
 
 export const customerCouponFields = `
-    id
-    campaignId
-    campaignName
-    campaignKind
-    customerEligibility
-    appearanceTheme
-    status
-    minimumSpend
-    currencyCode
-    discountAmount
-    discountRate
-    collectionIds
-    productVariantIds
-    claimedAt
-    validFrom
-    validUntil
-    lockedAt
-    usedAt
-    returnedAt
-    expiredAt
-    lockedOrderId
-    usedOrderId
-    returnCount
-    usable
+id campaignId campaignName campaignKind customerEligibility appearanceTheme status minimumSpend
+currencyCode discountAmount discountRate collectionIds productVariantIds claimedAt validFrom
+validUntil lockedAt usedAt returnedAt expiredAt lockedOrderId usedOrderId returnCount usable
 `;
 
 export const referralWalletFields = `
-    id
-    createdAt
-    updatedAt
-    currencyCode
-    availableBalance
-    pendingBalance
-    reservedBalance
+id createdAt updatedAt currencyCode availableBalance pendingBalance reservedBalance
 `;
 
 export const imageGenerationJobFields = `
-    id
-    createdAt
-    updatedAt
-    state
-    modelCodeSnapshot
-    modelNameSnapshot
-    officialModelIdSnapshot
-    originalPrompt
-    finalPrompt
-    promptSkillHash
-    referenceMode
-    aspectRatio
-    resolution
-    quantity
-    unitPriceSnapshot
-    reservedAmount
-    expectedChargeAmount
-    freeQuantityReserved
-    freeQuantityCaptured
-    paidQuantityReserved
-    capturedAmount
-    releasedAmount
-    currencyCode
-    termsVersion
-    errorMessage
-    completedAt
-    referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
-    referenceAssetIds referenceInstruction optimizedPrompt inputSnapshotVersion
-    referenceAssets { id originalName mimeType byteSize width height expiresAt previewUrl }
-    outputs { id outputIndex state attemptCount errorMessage failureCode completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
+id createdAt updatedAt state modelCodeSnapshot modelNameSnapshot officialModelIdSnapshot
+originalPrompt finalPrompt promptSkillHash referenceMode aspectRatio resolution quantity
+unitPriceSnapshot reservedAmount expectedChargeAmount freeQuantityReserved freeQuantityCaptured
+paidQuantityReserved capturedAmount releasedAmount currencyCode termsVersion errorMessage
+completedAt
+referenceAsset { id originalName mimeType byteSize width height expiresAt previewUrl }
+referenceAssetIds referenceInstruction optimizedPrompt inputSnapshotVersion
+referenceAssets { id originalName mimeType byteSize width height expiresAt previewUrl }
+outputs { id outputIndex state attemptCount errorMessage failureCode completedAt refundedAt billingMode chargeAmount width height imageUrl downloadUrl }
 `;
 
 // Keep paginated order queries below the production complexity limit. Full order
 // details are fetched separately by id when a customer opens an order.
 export const orderSummaryFields = `
-    id
-    updatedAt
-    code
-    state
-    orderPlacedAt
-    totalQuantity
-    totalWithTax
-    currencyCode
-    fulfillments {
-        state
-        method
-        trackingCode
-        updatedAt
-    }
-    lines {
-        id
-        quantity
-        linePriceWithTax
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            featuredAsset { id preview }
-            product { id name featuredAsset { id preview } }
-            customFields { fulfillmentType digitalDeliveryMode }
-        }
-        customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot }
-    }
-    checkoutFulfillment { containsDigitalProducts }
-    checkoutShipping { methodName }
+id updatedAt code state orderPlacedAt totalQuantity totalWithTax currencyCode
+fulfillments {
+  state method trackingCode updatedAt
+}
+lines {
+  id quantity linePriceWithTax
+  productVariant {
+    id name sku priceWithTax currencyCode
+    featuredAsset { id preview }
+    product { id name featuredAsset { id preview } }
+    customFields { fulfillmentType digitalDeliveryMode }
+  }
+  customFields { fulfillmentTypeSnapshot digitalDeliveryModeSnapshot }
+}
+checkoutFulfillment { containsDigitalProducts }
+checkoutShipping { methodName }
 `;
 
 export const afterSalesFields = `
-    evidence { id createdAt mimeType byteSize available previewUrl expiresAt }
-    id
-    createdAt
-    updatedAt
-    code
-    type
-    state
-    reason
-    description
-    currencyCode
-    requestedAmount
-    approvedAmount
-    resolution
-    returnStatus
-    returnInstructions
-    returnCarrier
-    returnTrackingCode
-    returnShippedAt
-    returnReceivedAt
-    inspectedAt
-    inspectionNote
-    replacementStatus
-    replacementCarrier
-    replacementTrackingCode
-    replacementProofReference
-    replacementException
-    replacementShippedAt
-    replacementDeliveredAt
-    nextActionDueAt
-    overdue
-    respondedAt
-    completedAt
-    cancelledAt
-    order { id code state }
-    items {
-        id
-        orderLineId
-        quantity
-        unitPriceWithTax
-        lineAmountWithTax
-        productName
-        sku
-        fulfillmentType
-        acceptedReturnQuantity
-        rejectedReturnQuantity
-        returnLotCode
-        inventoryOperationId
-    }
-    events {
-        id
-        createdAt
-        state
-        eventType
-        actorType
-        actorLabel
-        note
-    }
+evidence { id createdAt mimeType byteSize available previewUrl expiresAt }
+id createdAt updatedAt code type state reason description currencyCode requestedAmount
+approvedAmount resolution returnStatus returnInstructions returnCarrier returnTrackingCode
+returnShippedAt returnReceivedAt inspectedAt inspectionNote replacementStatus replacementCarrier
+replacementTrackingCode replacementProofReference replacementException replacementShippedAt
+replacementDeliveredAt nextActionDueAt overdue respondedAt completedAt cancelledAt
+order { id code state }
+items {
+  id orderLineId quantity unitPriceWithTax lineAmountWithTax productName sku fulfillmentType
+  acceptedReturnQuantity rejectedReturnQuantity returnLotCode inventoryOperationId
+}
+events {
+  id createdAt state eventType actorType actorLabel note
+}
 `;
 
 export const storefrontReviewFields = `
-    id
-    createdAt
-    updatedAt
-    state
-    rating
-    title
-    body
-    images { id preview }
-    customerName
-    anonymous
-    productName
-    sku
-    merchantResponse
-    moderatedAt
-    orderLineId
-    productId
-    productVariantId
-    verifiedPurchase
+id createdAt updatedAt state rating title body
+images { id preview }
+customerName anonymous productName sku merchantResponse moderatedAt orderLineId productId
+productVariantId verifiedPurchase
 `;
 
 export const cartFields = `
-    id
-    revision
-    state
-    projectedRevision
-    totalQuantity
-    selectedLineCount
-    selectedQuantity
-    selectionState
-    lines {
-        id
-        quantity
-        selected
-        available
-        productVariant {
-            id
-            name
-            sku
-            priceWithTax
-            currencyCode
-            saleableStockLevel
-            autoCardAvailableStock
-            featuredAsset { id preview }
-            product { id name description featuredAsset { id preview } customFields { pricingMode } }
-            customFields { fulfillmentType digitalDeliveryMode }
-        }
-    }
-    checkoutOrder { ${cartQuoteFields} }
+id revision state projectedRevision totalQuantity selectedLineCount selectedQuantity selectionState
+lines {
+  id quantity selected available
+  productVariant {
+    id name sku priceWithTax currencyCode saleableStockLevel autoCardAvailableStock
+    featuredAsset { id preview }
+    product { id name description featuredAsset { id preview } customFields { pricingMode } }
+    customFields { fulfillmentType digitalDeliveryMode }
+  }
+}
+checkoutOrder { ${cartQuoteFields} }
 `;
 
 export const cartResultFields = `
-    __typename
-    ... on StorefrontCart { ${cartFields} }
-    ... on ErrorResult { errorCode message }
-    ... on CartProjectionError { causeCode }
+__typename
+... on StorefrontCart { ${cartFields} }
+... on ErrorResult { errorCode message }
+... on CartProjectionError { causeCode }
 `;
 
 export const checkoutResultFields = `
-    __typename
-    ... on StorefrontCheckoutSession {
-        cart { ${cartFields} }
-        order { ${orderFields} }
-        checkout { id cartRevision state completedAt }
-    }
-    ... on ErrorResult { errorCode message }
-    ... on CartProjectionError { causeCode }
+__typename
+... on StorefrontCheckoutSession {
+  cart { ${cartFields} }
+  order { ${orderFields} }
+  checkout { id cartRevision state completedAt }
+}
+... on ErrorResult { errorCode message }
+... on CartProjectionError { causeCode }
 `;

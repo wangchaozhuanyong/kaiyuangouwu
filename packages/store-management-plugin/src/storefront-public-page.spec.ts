@@ -55,6 +55,109 @@ function setup() {
 }
 
 describe('public page boundary', () => {
+    function setupSeo() {
+        const h = setup();
+        const prepared = { scope: { host: 'a.test' } };
+        const enriched = { ...h.page, seo: { title: 'Public product' } };
+        const seo = {
+            prepare: vi.fn().mockResolvedValue(prepared),
+            enrich: vi.fn().mockResolvedValue(enriched),
+        };
+        const controller = new StorefrontPublicPageController(
+            h.access as never,
+            h.contexts as never,
+            h.pages as never,
+            undefined,
+            seo as never,
+        );
+        return { ...h, controller, seo, prepared, enriched };
+    }
+
+    it('starts SEO preparation before the product snapshot finishes and emits only the enriched page', async () => {
+        const h = setupSeo();
+        let finishPage!: (page: typeof h.page) => void;
+        h.pages.read.mockReturnValue(new Promise(resolve => (finishPage = resolve)));
+        const res = response();
+        const pending = h.controller.read(
+            { query: { kind: 'product', id: 'product-1' } } as never,
+            res as never,
+        );
+
+        await vi.waitFor(() => {
+            expect(h.pages.read).toHaveBeenCalledWith(h.ctx, 'a.test', { kind: 'product', id: 'product-1' });
+            expect(h.seo.prepare).toHaveBeenCalledWith(h.ctx, 'a.test', { kind: 'product', id: 'product-1' });
+        });
+        expect(h.seo.enrich).not.toHaveBeenCalled();
+        expect(res.json).not.toHaveBeenCalled();
+
+        finishPage(h.page);
+        await pending;
+        expect(h.seo.enrich).toHaveBeenCalledWith(h.ctx, 'a.test', h.page, h.prepared);
+        expect(res.json).toHaveBeenCalledWith(h.enriched);
+        expect(res.setHeader).toHaveBeenCalledWith(
+            'Server-Timing',
+            expect.stringMatching(/^public-page;dur=/),
+        );
+    });
+
+    it.each([new StorefrontClosedError(), new Error('origin unavailable')])(
+        'does not wait for SEO or emit page data after page assembly fails: %s',
+        async error => {
+            const h = setupSeo();
+            let finishPreparation!: (prepared: typeof h.prepared) => void;
+            h.seo.prepare.mockReturnValue(new Promise(resolve => (finishPreparation = resolve)));
+            h.pages.read.mockRejectedValue(error);
+            const res = response();
+            const pending = h.controller.read({ query: {} } as never, res as never);
+            if (error instanceof StorefrontClosedError) {
+                await pending;
+                expect(res.status).toHaveBeenCalledWith(403);
+                expect(res.json).toHaveBeenCalledWith(
+                    expect.objectContaining({ errorCode: 'STOREFRONT_CLOSED' }),
+                );
+            } else {
+                await expect(pending).rejects.toThrow('origin unavailable');
+                expect(res.json).not.toHaveBeenCalled();
+            }
+            expect(h.seo.enrich).not.toHaveBeenCalled();
+            expect(res.status).not.toHaveBeenCalledWith(200);
+            finishPreparation(h.prepared);
+        },
+    );
+
+    it.each([{ currencyCode: 'USD' }, { languageCode: 'xx' }])(
+        'does not prepare SEO for unsupported scope %j',
+        async query => {
+            const h = setupSeo();
+            const res = response();
+            await h.controller.read({ query } as never, res as never);
+            expect(res.status).toHaveBeenCalledWith(400);
+            expect(h.pages.read).not.toHaveBeenCalled();
+            expect(h.seo.prepare).not.toHaveBeenCalled();
+            expect(h.seo.enrich).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        new StorefrontClosedError(),
+        new ServiceUnavailableException('Public SEO preparation scope changed'),
+    ])('retains enrichment closure and scope checks before publishing: %s', async error => {
+        const h = setupSeo();
+        h.seo.enrich.mockRejectedValue(error);
+        const res = response();
+        const pending = h.controller.read({ query: {} } as never, res as never);
+        if (error instanceof StorefrontClosedError) {
+            await pending;
+            expect(res.status).toHaveBeenCalledWith(403);
+        } else {
+            await expect(pending).rejects.toThrow('Public SEO preparation scope changed');
+            expect(res.json).not.toHaveBeenCalled();
+        }
+        expect(res.status).not.toHaveBeenCalledWith(200);
+        expect(res.json).not.toHaveBeenCalledWith(h.page);
+        expect(res.json).not.toHaveBeenCalledWith(h.enriched);
+    });
+
     it.each([new ForbiddenError(), new StorefrontClosedError()])(
         'maps closed store resolution to structured no-store 403',
         async error => {

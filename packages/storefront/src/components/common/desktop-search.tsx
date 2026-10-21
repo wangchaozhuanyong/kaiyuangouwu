@@ -12,6 +12,7 @@ import {
 } from 'react';
 
 import { catalogRouteState } from '../../catalog-route-query';
+import { isInputMethodKey } from '../../input-method';
 import { SearchPageContext } from '../../storefront-page-contexts';
 import { routeHref } from '../../storefront-router';
 import { useStorefront } from '../../StorefrontContext';
@@ -144,6 +145,7 @@ function DesktopSearchPopover() {
             if (
                 event.key === 'Escape' &&
                 !event.defaultPrevented &&
+                !isInputMethodKey(event) &&
                 !document.querySelector('.search-filter-sheet')
             )
                 close();

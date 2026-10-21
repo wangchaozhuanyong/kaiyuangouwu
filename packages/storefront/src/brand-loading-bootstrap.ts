@@ -126,7 +126,7 @@ function ownsInitialLoadingStage(boot: HTMLElement): boolean {
         (root.contains(boot) ||
             (root.parentElement === document.body &&
                 boot.parentElement === document.body &&
-                root.previousElementSibling === boot)),
+                (root.previousElementSibling === boot || root.nextElementSibling === boot))),
     );
 }
 
@@ -162,8 +162,13 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     }
     const content = boot.querySelector('.brand-loading');
     if (!boot || !content) return;
-    const ownsBoot = () => generation === initialBrandGeneration && ownsInitialLoadingStage(boot);
-    if (!ownsBoot()) return;
+    const ownsBoot = () =>
+        generation === initialBrandGeneration &&
+        ownsInitialLoadingStage(boot) &&
+        boot.getAttribute('aria-hidden') !== 'true' &&
+        !document.documentElement.hasAttribute('data-storefront-app-owned');
+    // Committed scopes may refresh retained identity without restarting startup feedback.
+    if (!ownsInitialLoadingStage(boot)) return;
     boot.dataset.loadingBrand = brandKey;
     content
         .querySelectorAll('.brand-loading-name, .brand-loading-subtitle, .route-transition-mark')
@@ -194,7 +199,8 @@ export function applyInitialLoadingBrand(brand: InitialLoadingBrand): void {
     const mark = document.createElement('span');
     mark.className = 'route-transition-mark';
     content.prepend(mark);
-    if (!brand.logoUrl) return;
+    // A rendered public page uses the thin status bar, whose hidden logo must not compete with content.
+    if (!brand.logoUrl || document.getElementById('root')?.dataset.publicRendered === '1') return;
     const image = document.createElement('img');
     image.alt = '';
     image.width = 160;

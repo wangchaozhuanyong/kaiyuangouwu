@@ -432,6 +432,40 @@ export function publicMediaOrigin(media: readonly MediaDescriptor[]) {
     return publicMediaOrigins.get(media);
 }
 
+/** A received aggregate may defer a section; recover that section without downloading the page again. */
+export function hasFreshPublicPage(
+    client: QueryClient,
+    request: PublicPageRequest,
+    scope: Pick<PublicPageData['scope'], 'host' | 'channelCode' | 'languageCode' | 'currencyCode'>,
+): boolean {
+    const market = `${scope.channelCode}:${scope.currencyCode}`;
+    if (isStorefrontScopeAccessDenied(client, { marketCode: market, languageCode: scope.languageCode }))
+        return false;
+    const collections = client.getQueryData<CollectionSummary[]>(
+        storefrontQueryKeys.collections(market, scope.languageCode),
+    );
+    const state = client.getQueryState<MediaDescriptor[]>(
+        publicSeoQueryKey(market, scope.languageCode, request, 'public-media', collections),
+    );
+    if (
+        !state?.data ||
+        state.status !== 'success' ||
+        state.isInvalidated ||
+        Date.now() - state.dataUpdatedAt >= 30_000
+    )
+        return false;
+    const origin = publicMediaOrigin(state.data);
+    return Boolean(
+        origin &&
+        origin[0] === publicPageReadGeneration() &&
+        origin[1].host === scope.host &&
+        origin[1].channelCode === scope.channelCode &&
+        origin[1].languageCode === scope.languageCode &&
+        origin[1].currencyCode === scope.currencyCode &&
+        origin[2] !== 'CLOSED',
+    );
+}
+
 export function currentPublicPageRequest(href?: string): PublicPageRequest {
     try {
         return (

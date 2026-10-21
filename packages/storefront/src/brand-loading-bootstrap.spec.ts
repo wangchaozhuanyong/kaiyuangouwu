@@ -57,8 +57,9 @@ beforeEach(() => {
     const boot = parsed.getElementById('storefront-boot-loading');
     if (!root || !boot) throw new Error('Initial storefront loader is missing');
     document.body.replaceChildren(
-        ...(!root.contains(boot) ? [document.importNode(boot, true)] : []),
-        document.importNode(root, true),
+        ...Array.from(parsed.body.children)
+            .filter(element => element === root || element === boot)
+            .map(element => document.importNode(element, true)),
     );
 });
 afterEach(() => {
@@ -66,6 +67,7 @@ afterEach(() => {
     if (originalDecode) Object.defineProperty(HTMLImageElement.prototype, 'decode', originalDecode);
     else Reflect.deleteProperty(HTMLImageElement.prototype, 'decode');
     document.body.replaceChildren();
+    document.documentElement.removeAttribute('data-storefront-app-owned');
 });
 
 describe('parser-time storefront loading', () => {
@@ -132,7 +134,7 @@ describe('parser-time storefront loading', () => {
         const root = document.getElementById('root');
         const boot = document.getElementById('storefront-boot-loading');
         if (!root || !boot) throw new Error('Initial storefront loader is missing');
-        root.before(boot);
+        expect(root.nextElementSibling).toBe(boot);
         root.dataset.publicRendered = '1';
         root.innerHTML = '<p>Published content</p>';
         applyInitialLoadingBrand({ ...brand, logoUrl: '' });
@@ -149,13 +151,59 @@ describe('parser-time storefront loading', () => {
         expect(boot.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
     });
 
+    it('does not request a hidden brand image while public SSR content remains available', () => {
+        const root = document.getElementById('root');
+        const boot = document.getElementById('storefront-boot-loading');
+        if (!root || !boot) throw new Error('Initial storefront loader is missing');
+        root.dataset.publicRendered = '1';
+        root.innerHTML = '<p>Published content</p>';
+        applyInitialLoadingBrand(brand);
+        expect(boot.querySelector('img')).toBeNull();
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
+        expect(root.innerHTML).toBe('<p>Published content</p>');
+    });
+
+    it('retains support for the earlier document stage before its root', () => {
+        const root = document.getElementById('root');
+        const boot = document.getElementById('storefront-boot-loading');
+        if (!root || !boot) throw new Error('Initial storefront loader is missing');
+        root.before(boot);
+        applyInitialLoadingBrand({ ...brand, logoUrl: '' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe(brand.storefrontName);
+    });
+
     it('does not claim a similarly named loader outside the document startup position', () => {
         const root = document.getElementById('root');
         const boot = document.getElementById('storefront-boot-loading');
         if (!root || !boot) throw new Error('Initial storefront loader is missing');
-        root.after(boot);
+        const unrelated = document.createElement('aside');
+        root.after(unrelated);
+        unrelated.after(boot);
         applyInitialLoadingBrand({ ...brand, logoUrl: '' });
         expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('');
+    });
+
+    it('rejects a late image reveal while confirmed identity updates stay hidden after app ownership', async () => {
+        let decoded!: () => void;
+        vi.spyOn(HTMLImageElement.prototype, 'decode').mockImplementation(
+            () => new Promise<void>(resolve => (decoded = resolve)),
+        );
+        applyInitialLoadingBrand(brand);
+        const boot = document.getElementById('storefront-boot-loading');
+        const image = boot?.querySelector('img');
+        const mark = image?.parentElement;
+        if (!boot || !image || !mark) throw new Error('Expected startup brand image');
+        Object.defineProperty(image, 'naturalWidth', { value: 160 });
+        image.dispatchEvent(new Event('load'));
+        document.documentElement.setAttribute('data-storefront-app-owned', '');
+        boot.setAttribute('aria-hidden', 'true');
+        decoded();
+        await Promise.resolve();
+        expect(mark.classList.contains('is-logo-ready')).toBe(false);
+        applyInitialLoadingBrand({ ...brand, storefrontName: 'Updated store' });
+        expect(boot.querySelector('.brand-loading-name')?.textContent).toBe('Updated store');
+        expect(boot.getAttribute('aria-hidden')).toBe('true');
+        expect(document.documentElement.hasAttribute('data-storefront-boot-pending')).toBe(false);
     });
 
     it('reveals the real image only after decoding completes', async () => {

@@ -21,6 +21,7 @@ import { useProductsByIdsQuery } from '../route-queries';
 import {
     currentPublicPageRequest,
     fetchPublicPage,
+    hasFreshPublicPage,
     publicSeoQueryKey,
     readInitialPublicPage,
     seedPublicPage,
@@ -85,6 +86,16 @@ export function useStorefrontPublicData({
         signal?: AbortSignal,
     ): Promise<T> {
         if (!publicRoute) return fallback();
+        if (
+            typeof window !== 'undefined' &&
+            hasFreshPublicPage(queryClient, request, {
+                host: window.location.host,
+                channelCode: market.code,
+                languageCode: vendureLanguageCode,
+                currencyCode: market.currencyCode,
+            })
+        )
+            return fallback();
         const page = await fetchPublicPage(
             vendureLanguageCode,
             market.currencyCode,

@@ -389,8 +389,8 @@ html[data-storefront-boot-pending] #storefront-boot-loading {
     opacity: 1;
     pointer-events: auto;
 }
-/* A thin header-edge indicator keeps the document and its controls visible. */
-#storefront-boot-loading[data-presentation='status'] {
+/* Match pending-state specificity so the thin indicator cannot intercept clicks. */
+html #storefront-boot-loading[data-presentation='status'] {
     inset: 0 0 auto;
     min-height: 0;
     padding: 0;

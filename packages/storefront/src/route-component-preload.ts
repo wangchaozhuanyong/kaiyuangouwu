@@ -1,3 +1,4 @@
+import { importHomePage, importProductDetailPage } from './catalog-page-imports';
 import { RouteName } from './storefront-router';
 
 type RoutePreloader = () => Promise<void>;
@@ -5,8 +6,14 @@ type RoutePreloader = () => Promise<void>;
 function preload<T extends string>(
     load: () => Promise<Record<`preload${T}RoutePage`, RoutePreloader>>,
     name: T,
+    page?: () => Promise<unknown>,
 ): RoutePreloader {
-    return async () => (await load())[`preload${name}RoutePage`]();
+    return async () => {
+        // Start the selected page alongside its route wrapper. Waiting for the
+        // wrapper first adds another network round trip on a cold visit.
+        const [routes] = await Promise.all([load(), page?.()]);
+        await routes[`preload${name}RoutePage`]();
+    };
 }
 
 // Reuse each module import rather than emitting its dependency list for every destination.
@@ -18,9 +25,9 @@ const orderRoutes = () => import('./route-pages/order-route-pages');
 const contentRoutes = () => import('./route-pages/content-route-pages');
 
 const routePreloaders = {
-    home: preload(catalogRoutes, 'Home'),
+    home: preload(catalogRoutes, 'Home', importHomePage),
     category: preload(() => import('./route-pages/category-route-page'), 'Category'),
-    product: preload(catalogRoutes, 'Product'),
+    product: preload(catalogRoutes, 'Product', importProductDetailPage),
     search: preload(catalogRoutes, 'Search'),
     cart: preload(() => import('./route-pages/cart-route-page'), 'Cart'),
     account: preload(accountRoutes, 'Account'),

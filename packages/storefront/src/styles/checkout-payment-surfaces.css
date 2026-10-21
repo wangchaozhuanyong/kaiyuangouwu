@@ -239,20 +239,6 @@
     }
 }
 
-.cart-pending-actions {
-    background: var(--surface);
-}
-
-.cart-pending-actions > button {
-    width: calc(100% - 28px);
-    min-height: 42px;
-    margin: 0 14px 10px;
-    border: 0;
-    border-radius: var(--skin-control-radius);
-    background: transparent;
-    color: var(--accent-ink);
-}
-
 .payment-main,
 .payment-summary {
     min-width: 0;
