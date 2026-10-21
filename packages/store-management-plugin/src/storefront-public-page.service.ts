@@ -749,11 +749,28 @@ export class StorefrontPublicPageService {
             mode === 'PREVIEW' ? this.cache.loadUncached(load) : this.cache.readThrough(ctx, key, ttl, load);
         // Optional sections fail independently. No failed response is converted to an empty success.
         const configPromise = section(`config:${host}`, 60_000, () => this.loadConfig(ctx));
+        const contentPromise = section(`content:${host}`, 60_000, () => this.loadContent(ctx));
+        // Ranked data depends on published content, not on the other optional sections.
+        // Start its existing budget when that dependency is ready so independent waits overlap.
+        const bestSellersPromise = home
+            ? contentPromise.then(
+                  content =>
+                      content
+                          ? publicSectionWithinBudget(
+                                section(`home-best-sellers:${host}`, 30_000, () =>
+                                    this.loadHomeBestSellers(ctx, content),
+                                ),
+                            )
+                          : undefined,
+                  // The required content result below owns this failure; no ranked read ran.
+                  () => undefined,
+              )
+            : Promise.resolve(undefined);
         const [config, sections] = await Promise.all([
             configPromise,
-            Promise.allSettled(
-                [
-                    section(`content:${host}`, 60_000, () => this.loadContent(ctx)),
+            Promise.allSettled([
+                ...[
+                    contentPromise,
                     home
                         ? section(`home-products:${host}`, 30_000, () =>
                               this.moduleRef
@@ -783,26 +800,24 @@ export class StorefrontPublicPageService {
                     // finish before output; only optional recommendations may be deferred.
                     index === 0 ? promise : publicSectionWithinBudget<unknown>(promise),
                 ),
-            ),
+                bestSellersPromise,
+            ]),
         ]);
-        const names = ['content', 'products', 'collections', 'visualPreset', 'flashSales'] as const;
+        const names = [
+            'content',
+            'products',
+            'collections',
+            'visualPreset',
+            'flashSales',
+            'bestSellers',
+        ] as const;
         const values: Record<string, unknown> = {};
         const failures: StorefrontPageData['failures'] = [];
         sections.forEach((result, index) => {
+            if (names[index] === 'bestSellers' && (!home || !values.content)) return;
             if (result.status === 'fulfilled') values[names[index]] = result.value;
             else failures.push(names[index]);
         });
-        if (home && values.content) {
-            try {
-                values.bestSellers = await publicSectionWithinBudget(
-                    section(`home-best-sellers:${host}`, 30_000, () =>
-                        this.loadHomeBestSellers(ctx, values.content),
-                    ),
-                );
-            } catch {
-                failures.push('bestSellers');
-            }
-        }
         const generatedAt = Date.now();
         const payload = { config, ...values, media: [], failures };
         return {

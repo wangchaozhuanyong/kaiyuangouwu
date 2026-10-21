@@ -963,19 +963,19 @@ describe('public page inline artwork', () => {
 });
 
 describe('ranked home data in the public snapshot', () => {
-    async function homeHarness() {
-        const h = accessHarness();
+    async function homeHarness(mode: 'LIVE' | 'PREVIEW' = 'LIVE') {
+        const h = accessHarness(mode);
         const { PUBLIC_CATALOG_READER } = await import('./public-catalog-reader.js');
         const catalog = { items: [{ id: 'ranked-low' }, { id: 'ranked-high' }], totalItems: 2 };
         const find = vi.fn().mockResolvedValue(catalog);
         const sales = vi.fn().mockResolvedValue({ 'ranked-low': 2, 'ranked-high': 20 });
         const byId = vi.fn((_: unknown, id: string) => Promise.resolve(id === 'pinned' ? { id } : null));
+        const list = vi.fn().mockResolvedValue({ items: [{ id: 'ordinary' }] });
         const original = h.modules.get.getMockImplementation();
         if (!original) throw new Error('Expected the default public provider fixture');
         h.modules.get.mockImplementation(token => {
             if (token === PUBLIC_CATALOG_READER) return { find, sales };
-            if (token === PUBLIC_PRODUCT_SUMMARY_READER)
-                return { list: vi.fn().mockResolvedValue({ items: [{ id: 'ordinary' }] }), byId };
+            if (token === PUBLIC_PRODUCT_SUMMARY_READER) return { list, byId };
             return original(token);
         });
         h.content.mockResolvedValue({
@@ -987,8 +987,66 @@ describe('ranked home data in the public snapshot', () => {
             ],
             settings: { configuredBlockTypes: ['BEST_SELLERS'] },
         });
-        return { ...h, catalog, find, sales, byId };
+        return { ...h, catalog, find, sales, byId, list };
     }
+    it.each(['LIVE', 'PREVIEW'] as const)(
+        'starts ranked data after published content without waiting for unrelated products in %s',
+        async mode => {
+            const h = await homeHarness(mode);
+            const published = await h.content();
+            let publish!: (value: unknown) => void;
+            let products!: (value: { items: Array<{ id: string }> }) => void;
+            h.content.mockReturnValue(new Promise(resolve => (publish = resolve)));
+            h.list.mockReturnValue(new Promise(resolve => (products = resolve)));
+            vi.useFakeTimers();
+            const pending = h.service.read(h.ctx, 'a.test');
+            try {
+                await vi.advanceTimersByTimeAsync(0);
+                expect(h.list).toHaveBeenCalledOnce();
+                expect(h.find).not.toHaveBeenCalled();
+                publish(published);
+                await vi.advanceTimersByTimeAsync(0);
+                expect(h.find).toHaveBeenCalledOnce();
+                expect(h.sales).toHaveBeenCalledOnce();
+            } finally {
+                publish(published);
+                products({ items: [{ id: 'ordinary' }] });
+                await pending;
+                vi.useRealTimers();
+            }
+            const page = await pending;
+            expect(page.bestSellers).toMatchObject({ catalog: h.catalog });
+            expect(page.products).toEqual([{ id: 'ordinary' }]);
+        },
+    );
+    it('overlaps independent optional deadlines instead of adding a second ranked wait', async () => {
+        const h = await homeHarness();
+        let products!: (value: { items: Array<{ id: string }> }) => void;
+        let ranked!: (value: typeof h.catalog) => void;
+        h.list.mockReturnValue(new Promise(resolve => (products = resolve)));
+        h.find.mockReturnValue(new Promise(resolve => (ranked = resolve)));
+        let settled = false;
+        const pending = h.service.read(h.ctx, 'a.test').then(page => {
+            settled = true;
+            return page;
+        });
+        try {
+            await vi.waitFor(() => expect(h.list).toHaveBeenCalledOnce());
+            // The service uses node:timers, which the global fake clock does not own.
+            // Check after one real 600ms budget plus guard completion, before two can elapse.
+            await new Promise(resolve => setTimeout(resolve, 650));
+            expect(settled).toBe(true);
+            const page = await pending;
+            expect(page.content).toMatchObject({ blocks: [{ type: 'BEST_SELLERS' }] });
+            expect(page.failures).toEqual(['products', 'bestSellers']);
+            expect(page.products).toBeUndefined();
+            expect(page.bestSellers).toBeUndefined();
+        } finally {
+            products({ items: [{ id: 'late-product' }] });
+            ranked(h.catalog);
+            await pending;
+        }
+    });
     it('uses the existing scoped sales catalog and pinned summaries rather than ordinary home products', async () => {
         const h = await homeHarness();
         const page = await h.service.read(h.ctx, 'a.test');
