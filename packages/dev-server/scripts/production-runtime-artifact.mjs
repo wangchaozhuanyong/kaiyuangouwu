@@ -25,7 +25,7 @@ import { parseArgs } from 'node:util';
 import { assertStorefrontRenderer } from '../../../deploy/storefront-renderer.mjs';
 
 import { damatongAssets } from './damatong-storefront-config.mjs';
-import { auditRuntimePackages } from './production-runtime-audit.mjs';
+import { auditRuntimePackages, verifyReportPatches } from './production-runtime-audit.mjs';
 import {
     collectArtifactEntries,
     collectPackageInventory,
@@ -289,6 +289,31 @@ function installProductionDependencies(stagingRoot) {
     if (result.status !== 0) {
         throw new Error(`Production dependency install failed with exit code ${result.status ?? 'unknown'}`);
     }
+}
+
+// Bun's filtered file-dependency install can place the maintained implementation
+// only under dev-server while hoisted consumers require the canonical root alias.
+// Materialize that alias from a verified installed copy before pruning sources.
+export async function materializeSecurityVendorAliases(stagingRoot) {
+    const packages = await collectPackageInventory(stagingRoot);
+    const proofs = verifyReportPatches({}, stagingRoot, {
+        runtimePackages: packages,
+        requireRegistration: false,
+    });
+    for (const proof of proofs.filter(item => item.state === 'VERIFIED_SECURITY_REPLACEMENT')) {
+        const destination = path.join(stagingRoot, 'node_modules', proof.name);
+        try {
+            await lstat(destination);
+            continue; // Already included in the installed-byte proof above.
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+        }
+        await cp(path.join(stagingRoot, proof.copies[0].path), destination, { recursive: true });
+    }
+    verifyReportPatches({}, stagingRoot, {
+        runtimePackages: await collectPackageInventory(stagingRoot),
+        requireRegistration: false,
+    });
 }
 
 export async function pruneDeniedRuntimePackages(stagingRoot) {
@@ -652,6 +677,7 @@ export async function buildRuntimeArtifact({
         };
         await copyInstallerInputs(stagingRoot);
         installProductionDependencies(stagingRoot);
+        await materializeSecurityVendorAliases(stagingRoot);
         await pruneDeniedRuntimePackages(stagingRoot);
         await pruneInstallerWorkspace(stagingRoot);
         await copyRuntimeBuildOutputs(stagingRoot);

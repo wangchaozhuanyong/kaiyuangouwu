@@ -31,7 +31,8 @@ export function verifySecurityVendors(
     const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : {};
     const verified = [];
     for (const vendor of SECURITY_VENDORS) {
-        const configured = manifest.overrides?.[vendor.original] === 'file:' + vendor.path;
+        const configured =
+            requireRegistration && manifest.overrides?.[vendor.original] === 'file:' + vendor.path;
         const copies = runtimePackages
             ? runtimePackages.filter(pkg => pkg.name === vendor.package).map(pkg => path.join(root, pkg.path))
             : installedPackagePaths(root, vendor.package);

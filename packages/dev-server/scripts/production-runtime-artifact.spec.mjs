@@ -10,12 +10,14 @@ import {
     mkdtemp,
     readFile,
     readlink,
+    realpath,
     rename,
     rm,
     stat,
     symlink,
     writeFile,
 } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -26,6 +28,7 @@ import {
     copyStorefrontMediaReleaseInputs,
     ensureRuntimeRootPermissions,
     HOMEPAGE_CAROUSEL_RUNTIME_FILES,
+    materializeSecurityVendorAliases,
     pruneDeniedRuntimePackages,
     REFERRAL_POSTER_RUNTIME_FILES,
     repositoryRoot,
@@ -57,6 +60,35 @@ import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 void test('runtime artifact includes catalog management plugin build output', () => {
     assert.deepEqual(RUNTIME_PACKAGE_ASSETS['catalog-management-plugin'], ['dist']);
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/catalog-management-plugin/dist/index.js'));
+});
+
+void test('filtered production installs materialize verified aliases for hoisted consumers', async () => {
+    const root = await realpath(await mkdtemp(path.join(tmpdir(), 'vendure-runtime-vendor-alias-')));
+    try {
+        const nested = 'packages/dev-server/node_modules/braces';
+        await cp(path.join(repositoryRoot, 'patches/security-vendors/braces'), path.join(root, nested), {
+            recursive: true,
+        });
+        for (const name of ['fill-range', 'to-regex-range', 'is-number']) {
+            await cp(path.join(repositoryRoot, 'node_modules', name), path.join(root, 'node_modules', name), {
+                recursive: true,
+            });
+        }
+        const source = path.join(root, nested, 'index.js');
+        const original = await readFile(source);
+        await writeFile(source, '// corrupted replacement');
+        await assert.rejects(materializeSecurityVendorAliases(root), /fingerprint mismatch/u);
+        await assert.rejects(access(path.join(root, 'node_modules/braces')), /ENOENT/u);
+        await writeFile(source, original);
+        await materializeSecurityVendorAliases(root);
+        const require = createRequire(path.join(root, 'node_modules/consumer/package.json'));
+        assert.ok(require.resolve('braces').startsWith(root + path.sep));
+        assert.deepEqual(require('braces').expand('{a,b}'), ['a', 'b']);
+        assert.equal((await lstat(path.join(root, 'node_modules/braces'))).isDirectory(), true);
+        await materializeSecurityVendorAliases(root);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });
 
 void test('runtime artifact includes the telemetry plugin required by dev-server', () => {
