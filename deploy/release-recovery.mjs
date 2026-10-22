@@ -41,7 +41,7 @@ const deploymentPrefixes = [
 // derived-failure evidence until it is independently reviewed and pinned.
 const guardRecipes = new Map([
     ['ready', 'e09e08dd9d4d296c046fe5495b65163c27fd376a92141a29f77e54452516b4aa'],
-    ['complete', '530c1c13ffb7431205fdd7997d5d295bf2bcee5465296d48581bc45b6f69a5bd'],
+    ['complete', '4c4e2093dbfa438861a2b3f4a643a98454352f5edf094a5d9495056a2e1ba0ac'],
     ['all-passed', '7e1e36d420cdbd6cee497f296601669135254dd32c60aec7f85cbd0c05e06305'],
 ]);
 
@@ -426,7 +426,7 @@ function isDependentGuard(job, logs, run, jobs, reader) {
                             '[[ "$LANE" == none || -n "$REUSED" || "$CHECKS_RESULT" == success ]]',
                         ),
                 );
-                assert.match(text, /^  LANE: (runtime|frontend|nginx)$/mu);
+                assert.match(text, /^  LANE: (runtime|frontend|nginx|frontend-nginx)$/mu);
                 assert.match(text, /^  REUSED: *$/mu);
                 assert.match(text, /^  CHECKS_RESULT: failure$/mu);
             } else {

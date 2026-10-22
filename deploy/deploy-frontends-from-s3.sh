@@ -4,6 +4,7 @@ readonly target_sha="${1:-}"
 readonly archive_name="${2:-}"
 readonly archive_sha256="${3:-}"
 readonly components="${4:-}"
+readonly staged_nginx="${5:-false}"
 readonly repository=/var/www/kaiyuangouwu
 readonly releases_dir=/var/www/kaiyuangouwu-frontend-releases
 readonly artifact_bucket=yunqiao-vendure-prod-backup-079740175286-apne1
@@ -13,6 +14,7 @@ fail() { printf '%s\n' "$*" >&2; exit 1; }
 [[ "$archive_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'Expected artifact checksum'
 [[ "$archive_name" =~ ^frontends-${target_sha}-[0-9]+-[0-9]+\.tar\.gz$ ]] || fail 'Invalid archive name'
 case "$components" in storefront|next-admin|next-admin,storefront) ;; *) fail 'Invalid component scope' ;; esac
+case "$staged_nginx" in true|false) ;; *) fail 'Invalid staged Nginx phase' ;; esac
 exec 9>/run/lock/vendure-production-deploy.lock
 flock --exclusive --wait 300 9 || fail 'Timed out waiting for production deployment lock'
 cd "$repository"
@@ -29,7 +31,7 @@ readonly storefront_sha="$(read_frontend_sha /var/www/kaiyuangouwu-storefront-cu
 readonly admin_sha="$(read_frontend_sha /var/www/kaiyuangouwu-next-admin-current/frontend-release.json)"
 readonly nginx_sha="$(sudo -n node "$controls_root/deploy/nginx-revision.cjs" "$backend_sha" "$target_sha" | node -e 'let text="";process.stdin.on("data",chunk=>text+=chunk).on("end",()=>{const m=JSON.parse(text);if(!/^[a-f0-9]{40}$/.test(m.sourceSha))process.exit(1);process.stdout.write(m.sourceSha)})')"
 git diff --no-renames --name-only -z "$backend_sha" "$target_sha" -- | \
-    STOREFRONT_SHA="$storefront_sha" ADMIN_SHA="$admin_sha" TARGET_SHA="$target_sha" NGINX_SHA="$nginx_sha" \
+    STOREFRONT_SHA="$storefront_sha" ADMIN_SHA="$admin_sha" TARGET_SHA="$target_sha" NGINX_SHA="$nginx_sha" STAGED_NGINX="$staged_nginx" \
     node "$controls_root/deploy/frontend-release.mjs" scope "$components"
 # A full release installs both pointers and the Nginx routing before static releases are possible.
 IFS=',' read -r -a apps <<< "$components"

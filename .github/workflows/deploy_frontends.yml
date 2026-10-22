@@ -24,6 +24,10 @@ on:
                 required: false
                 default: ''
                 type: string
+            staged_nginx:
+                required: false
+                default: false
+                type: boolean
 permissions:
     contents: read
     actions: read
@@ -42,6 +46,7 @@ jobs:
             STOREFRONT_SHA: ${{ inputs.storefront_sha }}
             ADMIN_SHA: ${{ inputs.admin_sha }}
             NGINX_SHA: ${{ inputs.nginx_sha }}
+            STAGED_NGINX: ${{ inputs.staged_nginx }}
             GH_TOKEN: ${{ github.token }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
