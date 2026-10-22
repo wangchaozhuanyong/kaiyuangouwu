@@ -158,6 +158,7 @@ import { AddCatalogContinuousSync1792022400000 } from './1792022400000-add-catal
 import { AddGptRecharge1792152000000 } from './1792152000000-add-gpt-recharge';
 import { AddShopAbuseProtection1792180800000 } from './1792180800000-add-shop-abuse-protection';
 import { AddCatalogImportExecutionLease1792195200000 } from './1792195200000-add-catalog-import-execution-lease';
+import { PreserveIncidentEvidenceMilliseconds1792651200000 } from './1792651200000-preserve-incident-evidence-milliseconds';
 
 export const devServerMigrations = [
     CommerceFulfillment1786514145999,
@@ -320,4 +321,5 @@ export const devServerMigrations = [
     AddGptRecharge1792152000000,
     AddShopAbuseProtection1792180800000,
     AddCatalogImportExecutionLease1792195200000,
+    PreserveIncidentEvidenceMilliseconds1792651200000,
 ];

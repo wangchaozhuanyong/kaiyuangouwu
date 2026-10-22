@@ -254,6 +254,77 @@ describe('TelegramNotificationsPanel', () => {
         }
     });
 
+    it('submits department codes while displaying department names in an incident review', async () => {
+        (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+        const mutation = vi.fn().mockResolvedValue({ data: {} });
+        apolloMocks.useMutation.mockReturnValue([mutation, { loading: false }]);
+        apolloMocks.useQuery.mockReturnValue({
+            data: {
+                ...result,
+                adminIncidents: {
+                    ...result.adminIncidents,
+                    items: [{ ...result.adminIncidents.items[0], incidentStatus: 'REVIEW_PENDING' }],
+                },
+            },
+            loading: false,
+            refetch: vi.fn(),
+        });
+        try {
+            await act(async () =>
+                root.render(
+                    <FeatureHelpProvider>
+                        <TelegramNotificationsPanel />
+                    </FeatureHelpProvider>,
+                ),
+            );
+            const button = (text: string) =>
+                Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+                    node => node.textContent === text,
+                )!;
+            await act(async () => button('事故闭环').click());
+            await act(async () => button('提交复盘').click());
+            const dialog = container.querySelector('[role="dialog"]')!;
+            const department = dialog.querySelector<HTMLSelectElement>('select')!;
+            expect(department.value).toBe('TECH');
+            expect(department.selectedOptions[0].textContent).toBe('TECH 部门');
+            await act(async () => {
+                department.value = 'GOVERNANCE';
+                department.dispatchEvent(new Event('change', { bubbles: true }));
+                const fields = dialog.querySelectorAll<HTMLTextAreaElement>('textarea');
+                for (const field of fields) {
+                    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+                        field,
+                        '已核验原始审计记录与正常日报，保留原生恢复证据和历史记录。',
+                    );
+                    field.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                const action = dialog.querySelector<HTMLInputElement>('input:not([type="datetime-local"])')!;
+                Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+                    action,
+                    '复核完整审计链与治理责任路由',
+                );
+                action.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            expect(department.selectedOptions[0].textContent).toBe('GOVERNANCE 部门');
+            await act(async () => button('确认并留存证据').click());
+            expect(mutation).toHaveBeenCalledWith({
+                variables: {
+                    id: '9',
+                    input: expect.objectContaining({
+                        correctiveActions: [expect.objectContaining({ ownerDepartmentCode: 'GOVERNANCE' })],
+                    }),
+                },
+            });
+        } finally {
+            await act(async () => root.unmount());
+            container.remove();
+            (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
+        }
+    });
+
     it('keeps P0 escalation and action controls locked', () => {
         const html = renderPanel();
 
