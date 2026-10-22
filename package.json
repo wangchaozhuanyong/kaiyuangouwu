@@ -86,7 +86,8 @@
         "vite": "^7.3.6",
         "vitest": "^4.1.11",
         "braces": "file:patches/security-vendors/braces",
-        "http-cache-semantics": "file:patches/security-vendors/http-cache-semantics"
+        "http-cache-semantics": "file:patches/security-vendors/http-cache-semantics",
+        "ajv": "8.20.0"
     },
     "//": "Fix for https://github.com/npm/cli/issues/4828",
     "optionalDependencies": {
