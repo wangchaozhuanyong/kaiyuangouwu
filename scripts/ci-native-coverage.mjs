@@ -166,11 +166,15 @@ function logData(text, run) {
     const full = lines.map(line => /^\s*FULL: (true|false)$/u.exec(line)?.[1]).filter(Boolean);
     assert.equal(bases.length, 1, 'Native scope base is missing or ambiguous');
     assert.equal(full.length, 1, 'Native full flag is missing or ambiguous');
-    if (run.event === 'pull_request' && run.pull_requests?.length)
-        assert.ok(
-            run.pull_requests?.some(pr => pr.base?.sha === bases[0]),
-            'Native PR base mismatch',
-        );
+    if (run.event === 'pull_request') {
+        // GitHub updates historical run.pull_requests when the live PR advances.
+        // Bind the original event base captured by the native guard, not that mutable view.
+        const eventBases = lines
+            .map(line => /^\s*PR_BASE_SHA: ([a-f0-9]{40})$/u.exec(line)?.[1])
+            .filter(Boolean);
+        assert.equal(eventBases.length, 1, 'Native captured PR base is missing or ambiguous');
+        assert.equal(eventBases[0], bases[0], 'Native captured PR base mismatch');
+    }
     const objects = [];
     for (let start = 0; start < lines.length; start++) {
         if (lines[start].trim() !== '{' || !/^\s*"version":/u.test(lines[start + 1] ?? '')) continue;
@@ -300,6 +304,18 @@ export async function loadNativeCoverage({ run, repository, sourceTree, reader, 
         'Incomplete native attempt jobs',
     );
     const text = reader.text(run.head_sha, workflowPath);
+    if (run.event === 'pull_request') {
+        const detectionSource = sourceJobs(text).get('detect-changes')?.join('\n') ?? '';
+        for (const binding of [
+            "                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}",
+            "                  BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || 'HEAD^' }}",
+        ])
+            assert.equal(
+                detectionSource.split('\n').filter(line => line === binding).length,
+                1,
+                'Native PR base event binding is missing or ambiguous',
+            );
+    }
     const names = expectedNativeJobNames(text, 'detect-changes', { full: false }, path =>
         reader.text(run.head_sha, path),
     );
