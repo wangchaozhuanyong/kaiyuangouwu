@@ -787,6 +787,7 @@
 .coupon-hub-more-btn {
     display: inline-flex;
     align-items: center;
+    min-height: var(--experience-control-min, 44px);
     gap: 2px;
     padding: 2px 0;
     border: 0;
@@ -864,7 +865,8 @@
 }
 @media (min-width: 1024px) {
     .coupon-hub-scroll {
-        grid-auto-columns: calc((100% - 48px) / 4);
+        /* Keep the offer readable at narrow desktop widths; extra tickets stay scrollable. */
+        grid-auto-columns: max(300px, calc((100% - 48px) / 4));
         gap: 16px;
     }
 }

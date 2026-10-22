@@ -33,7 +33,7 @@ import { observeStorefrontPerformance } from './storefront-performance';
 
 it('respects opt-out before/after pending observations and keeps document CWV separate from SPA samples', async () => {
     vi.useFakeTimers();
-    const send = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', send);
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
     const listeners: Array<{
@@ -61,6 +61,8 @@ it('respects opt-out before/after pending observations and keeps document CWV se
         runtime.experience?.(routeId, 'services', 'NAV_READY', 80);
         runtime.metric?.({ name: 'LCP', value: 1234, id: 'private', entries: [] });
         await vi.advanceTimersByTimeAsync(1000);
+        expect(send).toHaveBeenCalledTimes(1);
+        await vi.advanceTimersByTimeAsync(3000);
         expect(send).toHaveBeenCalledTimes(2);
         const payloads = send.mock.calls.map(([, options]) => JSON.parse(options.body));
         expect(payloads.find(value => value.pageType === 'services')).toMatchObject({
@@ -88,6 +90,8 @@ it('respects opt-out before/after pending observations and keeps document CWV se
         expect(runtime.observe).toHaveBeenCalledTimes(2);
         runtime.experience?.(routeId, 'support', 'NAV_READY', 20);
         window.dispatchEvent(new Event('pagehide'));
+        expect(send).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2000);
         expect(send).toHaveBeenCalledTimes(1);
         expect(runtime.stop).toHaveBeenCalledTimes(2);
     } finally {

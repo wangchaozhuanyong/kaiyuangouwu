@@ -465,6 +465,7 @@
 
 .hero.hero-image-overlay .hero-rich-title {
     margin: 0;
+    text-wrap: balance;
     font-size: var(--type-hero-size);
     line-height: var(--type-hero-leading);
     font-weight: var(--font-weight-bold);

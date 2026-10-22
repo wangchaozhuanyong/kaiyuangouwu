@@ -276,6 +276,7 @@
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    text-wrap: balance;
     overflow: hidden;
 }
 .coupon-hub-scroll .desktop-coupon-scope {

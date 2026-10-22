@@ -1,0 +1,10 @@
+/baseline-dist/
+/*.log
+!/storefront-final-build.log
+!/admin-locked-validation.log
+!/failed-check-repair.log
+!/lazy-entry-validation.log
+/performance-before.ts.txt
+/release-scope-precommit.json
+/release-*.json
+/.pr-body.md
