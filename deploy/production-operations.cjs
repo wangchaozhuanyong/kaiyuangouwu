@@ -3008,6 +3008,10 @@ function runLocked(environment = process.env) {
         process.stdout.write(frontendRevisionEvidence(plan));
         process.stdout.write(storefront.stdout);
         process.stdout.write(migrations.stdout);
+        const nginx = require('./nginx-revision.cjs').inspectNginxRevision(plan.markerSha, request.sourceSha);
+        process.stdout.write(
+            `PRODUCTION_NGINX_REVISION source=${nginx.sourceSha} config_sha256=${nginx.configSha256}\n`,
+        );
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=preflight-release\n');
         return;
     }

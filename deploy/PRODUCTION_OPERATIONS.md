@@ -633,3 +633,27 @@ reports `protected-over-budget` and retains them. The existing root-disk health
 threshold still applies. This maintenance neither changes process core limits
 nor restarts Apport or the website. Backups, uploads, databases, logs and formal
 runtime/frontend releases are outside its scope.
+
+## Configuration-only Nginx publication
+
+The authorized configuration-only path remains under `Production Release`. Its
+`nginx` route requires that every other serving input is already active; pending
+backend, dependency, migration or frontend changes cannot enter it. The native
+preflight reads the actual configuration hash and its Git-bound Nginx revision.
+Later frontend releases exclude only a verified already-active configuration,
+without advancing the backend or frontend version markers.
+
+The workflow ships one checksummed configuration archive through the existing
+AWS SSM role and production deployment lock. The host rechecks all bound revisions,
+source and active configuration hashes, stages an isolated syntax check, retains
+the previous configuration, atomically installs, validates and reloads Nginx.
+It never stops or restarts API/Worker processes and never runs a migration.
+Public HTML/API checks and unchanged process/frontend identities are mandatory.
+A post-install failure restores and verifies the saved configuration; failed
+recovery is a separate failure requiring attention.
+
+Nginx receipts and backups live under
+`/var/www/kaiyuangouwu-nginx-releases/<nginx-source-run-attempt>/`;
+`current.json` identifies only the accepted Nginx configuration. The full runtime
+marker and frontend pointers retain their own identities. Do not invoke host
+scripts as an alternative manual release entry.

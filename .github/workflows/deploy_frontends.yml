@@ -20,6 +20,10 @@ on:
             admin_sha:
                 required: true
                 type: string
+            nginx_sha:
+                required: false
+                default: ''
+                type: string
 permissions:
     contents: read
     actions: read
@@ -37,6 +41,7 @@ jobs:
             CI_RUN_ID: ${{ inputs.ci_run_id }}
             STOREFRONT_SHA: ${{ inputs.storefront_sha }}
             ADMIN_SHA: ${{ inputs.admin_sha }}
+            NGINX_SHA: ${{ inputs.nginx_sha }}
             GH_TOKEN: ${{ github.token }}
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd

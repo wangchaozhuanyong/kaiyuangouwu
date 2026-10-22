@@ -27,8 +27,9 @@ read_frontend_sha() {
 }
 readonly storefront_sha="$(read_frontend_sha /var/www/kaiyuangouwu-storefront-current/frontend-release.json)"
 readonly admin_sha="$(read_frontend_sha /var/www/kaiyuangouwu-next-admin-current/frontend-release.json)"
+readonly nginx_sha="$(sudo -n node "$controls_root/deploy/nginx-revision.cjs" "$backend_sha" "$target_sha" | node -e 'let text="";process.stdin.on("data",chunk=>text+=chunk).on("end",()=>{const m=JSON.parse(text);if(!/^[a-f0-9]{40}$/.test(m.sourceSha))process.exit(1);process.stdout.write(m.sourceSha)})')"
 git diff --no-renames --name-only -z "$backend_sha" "$target_sha" -- | \
-    STOREFRONT_SHA="$storefront_sha" ADMIN_SHA="$admin_sha" TARGET_SHA="$target_sha" \
+    STOREFRONT_SHA="$storefront_sha" ADMIN_SHA="$admin_sha" TARGET_SHA="$target_sha" NGINX_SHA="$nginx_sha" \
     node "$controls_root/deploy/frontend-release.mjs" scope "$components"
 # A full release installs both pointers and the Nginx routing before static releases are possible.
 IFS=',' read -r -a apps <<< "$components"

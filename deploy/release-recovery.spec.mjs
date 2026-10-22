@@ -725,6 +725,12 @@ test('all three real gate recipes must agree with native upstream state', async 
         f => {
             f.jobs.find(item => item.id === 106).conclusion = 'success';
         },
+        f => {
+            const job = f.jobs.find(item => item.id === 106);
+            job.name =
+                'publish only the reviewed Nginx configuration / validate and reload Nginx without stopping serving processes';
+            job.conclusion = 'success';
+        },
         f => f.logs.set(105, f.logs.get(105).replace('ROUTE_RESULT: success', 'ROUTE_RESULT: failure')),
         f =>
             f.logs.set(

@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import { affectedFrontendsForFile, classifyChanges, STATIC_APPS } from '../scripts/ci-impact.mjs';
 
+import nginxRevision from './nginx-revision.cjs';
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { assertServedStorefrontAssets, switchStorefront } from './storefront-release.mjs';
 import { assertStorefrontRenderer } from './storefront-renderer.mjs';
@@ -220,7 +221,7 @@ export function assertFrontendScope(
     revisions,
     changedSince = frontendChangedSinceObserved,
 ) {
-    const plan = classifyChanges(paths);
+    const plan = classifyChanges(nginxRevision.withoutActiveNginx(paths, revisions));
     assert.equal(plan.lane, 'frontend', 'The cumulative production diff requires a full runtime release');
     assert.deepEqual(
         [...components].sort(),
@@ -342,6 +343,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
             assertFrontendScope(readFileSync(0, 'utf8').split('\0').filter(Boolean), components, {
                 storefrontSha: process.env.STOREFRONT_SHA,
                 adminSha: process.env.ADMIN_SHA,
+                nginxSha: process.env.NGINX_SHA,
                 targetSha: process.env.TARGET_SHA,
             });
         else if (command === 'activate') {
