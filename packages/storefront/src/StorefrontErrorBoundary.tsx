@@ -135,6 +135,11 @@ interface StorefrontErrorBoundaryState {
     failed: boolean;
 }
 
+/** Failed JavaScript resources need a new document; ordinary data retries never use this. */
+export function reloadStorefrontResources(): void {
+    window.location.reload();
+}
+
 export class StorefrontErrorBoundary extends Component<
     StorefrontErrorBoundaryProps,
     StorefrontErrorBoundaryState
@@ -159,7 +164,7 @@ export class StorefrontErrorBoundary extends Component<
         if (!this.state.failed) return this.props.children;
         if (this.props.fallback !== undefined)
             return typeof this.props.fallback === 'function'
-                ? this.props.fallback(() => window.location.reload())
+                ? this.props.fallback(reloadStorefrontResources)
                 : this.props.fallback;
 
         const isZh = document.documentElement.lang.toLowerCase().startsWith('zh');
@@ -178,7 +183,7 @@ export class StorefrontErrorBoundary extends Component<
                         ? '内容没有丢失，请重新加载后再试。'
                         : 'Your data is still available. Reload the page to try again.'}
                 </p>
-                <button type="button" onClick={() => window.location.reload()}>
+                <button type="button" onClick={reloadStorefrontResources}>
                     {isZh ? '重新加载' : 'Reload'}
                 </button>
             </main>
