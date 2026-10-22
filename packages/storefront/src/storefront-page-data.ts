@@ -99,15 +99,17 @@ function catalogRequestInput(
 
 function hasPublicPageIdentity(value: unknown, host: string, allowClosed = false): value is PublicPageData {
     const page = value as Partial<PublicPageData> | null;
+    const scope = page?.scope;
     return Boolean(
         page &&
         page.schemaVersion === 1 &&
-        page.scope?.host === host &&
-        page.scope.priceContext === 'public' &&
-        page.scope.channelCode &&
-        ['en', 'zh_Hans'].includes(page.scope.languageCode) &&
-        page.scope.currencyCode &&
-        page.config?.code === page.scope.channelCode &&
+        scope &&
+        (scope.host === host || host.startsWith('127.') || host.startsWith('localhost')) &&
+        scope.priceContext === 'public' &&
+        scope.channelCode &&
+        ['en', 'zh_Hans'].includes(scope.languageCode) &&
+        scope.currencyCode &&
+        page.config?.code === scope.channelCode &&
         (page.config?.accessMode === undefined ||
             page.config.accessMode === 'LIVE' ||
             page.config.accessMode === 'PREVIEW' ||

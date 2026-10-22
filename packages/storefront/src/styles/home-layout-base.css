@@ -23,6 +23,8 @@
 
 .homepage-module-shell.is-section-start {
     margin-block-start: calc(var(--homepage-section-gap) - var(--homepage-module-gap));
+    content-visibility: auto;
+    contain-intrinsic-size: auto 320px;
 }
 
 .homepage-modules > .notice-strip,

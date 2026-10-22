@@ -52,6 +52,12 @@
     min-height: inherit;
 }
 
+.hero-carousel-slide {
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
 .hero-carousel-stage {
     overflow: hidden;
     transition: height 220ms cubic-bezier(0.22, 0.68, 0, 1);

@@ -4,6 +4,7 @@
     --product-card-inset: 8px;
     position: relative;
     isolation: isolate;
+    contain: layout style;
     display: flex;
     flex-direction: column;
     min-width: 0;
