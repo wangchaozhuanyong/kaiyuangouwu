@@ -327,7 +327,7 @@ function publicFetcher(candidate, mutate = () => undefined) {
             'Permissions-Policy': 'camera=()',
             'Content-Type': api ? 'application/json' : 'text/html',
             'Cache-Control': 'private, no-store',
-            Vary: 'Accept-Encoding, User-Agent',
+            Vary: 'Origin, accept-encoding',
         });
         if (!candidate || api || options.headers['User-Agent'] !== IPHONE_UA)
             headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
@@ -355,6 +355,16 @@ test('public acceptance checks all three stores and retains API and unrelated se
     await assert.rejects(
         observePublic(origins, 'bad', async () => new Response('error', { status: 503 })),
         /HTTP 200/u,
+    );
+    await assert.rejects(
+        observePublic(
+            origins,
+            'cacheable',
+            publicFetcher(true, (headers, { api }) => {
+                if (!api) headers.set('Cache-Control', 'public, max-age=3600');
+            }),
+        ),
+        /no-store/iu,
     );
 });
 
