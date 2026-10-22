@@ -1,8 +1,9 @@
 // organize-imports-ignore
 import type { BrandLoadingProps } from './brand-loading';
-import { useContext, useLayoutEffect, useRef, useState } from 'react';
+import { useContext } from 'react';
 
 import { normalizeStorefrontAssetUrl, storefrontWebpUrl } from './responsive-image';
+import { SafeImage } from './safe-image';
 import { readInitialStorefrontBoot } from './storefront-boot-data';
 import { readInitialPublicPage } from './storefront-page-data';
 import { StorefrontContext } from './StorefrontContext';
@@ -90,56 +91,24 @@ export default function BrandLoadingContent({
 }
 
 function BrandLoadingLogo({ source, reserveSpace = false }: { source: string; reserveSpace?: boolean }) {
-    const imageRef = useRef<HTMLImageElement>(null);
-    const [originalSource, setOriginalSource] = useState(false);
-    const [failed, setFailed] = useState(false);
-    const [readySource, setReadySource] = useState('');
-    const src = source ? (originalSource ? source : storefrontWebpUrl(source, 'thumbnail')) : '';
-    const ready = Boolean(src && readySource === src && !failed);
-
-    function failCandidate() {
-        setReadySource('');
-        if (src !== source) setOriginalSource(true);
-        else setFailed(true);
-    }
-
-    function reveal(image: HTMLImageElement) {
-        const show = () => {
-            if (imageRef.current === image && image.getAttribute('src') === src && image.naturalWidth > 0) {
-                setReadySource(src);
-            }
-        };
-        if (typeof image.decode === 'function') {
-            void image.decode().then(show, () => {
-                if (imageRef.current === image && image.getAttribute('src') === src) failCandidate();
-            });
-        } else {
-            show();
-        }
-    }
-
-    useLayoutEffect(() => {
-        const image = imageRef.current;
-        // A cached image can finish before React attaches its load listener.
-        if (image?.complete && image.naturalWidth > 0) reveal(image);
-    }, [src]);
-
-    if ((!src || failed) && !reserveSpace) return null;
+    if (!source && !reserveSpace) return null;
 
     return (
-        <span className={`route-transition-mark${ready ? ' is-logo-ready' : ''}`}>
-            {src && !failed && (
-                <img
-                    ref={imageRef}
-                    src={src}
+        <span className="route-transition-mark">
+            {source && (
+                <SafeImage
+                    src={storefrontWebpUrl(source, 'thumbnail')}
+                    fallbackSrc={source}
                     alt=""
+                    aria-hidden="true"
                     width="160"
                     height="120"
                     loading="eager"
                     decoding="async"
                     fetchPriority="high"
-                    onLoad={event => reveal(event.currentTarget)}
-                    onError={failCandidate}
+                    showFallbackIcon={false}
+                    loadingFallback={null}
+                    errorFallback={<span />}
                 />
             )}
         </span>

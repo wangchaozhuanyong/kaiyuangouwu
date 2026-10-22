@@ -485,9 +485,16 @@ it('uses the server catalog total in the filter confirmation action', async () =
             button => button.textContent?.trim() === 'Filter',
         );
         expect(filterButton).toBeDefined();
-        void act(() => filterButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
-
-        expect(document.body.textContent).toContain('View 1 product');
+        await act(async () => {
+            filterButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+            await vi.dynamicImportSettled();
+        });
+        await vi.waitFor(async () => {
+            await act(async () => {
+                await Promise.resolve();
+            });
+            expect(document.body.textContent).toContain('View 1 product');
+        });
         expect(document.body.textContent).not.toContain('View 0 products');
     } finally {
         act(() => root.unmount());

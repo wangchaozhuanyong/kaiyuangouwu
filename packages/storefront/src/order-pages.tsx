@@ -247,12 +247,20 @@ export function OrdersPage({
     };
     const totalItems = ordersQuery.data?.pages.at(-1)?.totalItems ?? 0;
     const loading = storefrontQueryPresentation(ordersQuery).initialLoading;
-    const loadingState = usePageLoadingState();
     const appending =
         ordersQuery.isFetchingNextPage ||
         (ordersQuery.isPaused &&
             queryClient.getQueryState(ordersQueryKey)?.fetchMeta?.fetchMore?.direction === 'forward');
-    usePageReadiness(Boolean(customer) && tab !== 'service' && (loading || appending), 'local', readIdentity);
+    const loadingState = usePageLoadingState({
+        pending: Boolean(customer) && tab !== 'service' && (loading || appending),
+        key: readIdentity,
+    });
+    usePageReadiness(
+        Boolean(customer) && tab !== 'service' && loading,
+        'local',
+        readIdentity,
+        Boolean(customer) && tab !== 'service' && Boolean(storefrontInitialQueryError(ordersQuery, language)),
+    );
     const retryOrders = (append = false) => {
         const read = () => {
             if (currentRead.current !== readIdentity) return;
@@ -270,7 +278,8 @@ export function OrdersPage({
     const retryAppend = () => retryOrders(true);
     const loadingMore = ordersQuery.isFetchingNextPage;
     const listError = storefrontInitialQueryError(ordersQuery, language);
-    const appendTimedOut = appending && !ordersQuery.isPaused && loadingState?.phase === 'error';
+    const appendTimedOut =
+        appending && !ordersQuery.isPaused && (loadingState?.phase === 'error' || loadingState?.slow);
     const loadMoreError =
         appending && ordersQuery.isPaused
             ? offlineLoadError(language)
@@ -402,7 +411,7 @@ export function OrdersPage({
                     onConfirmReplacement={id => void confirmAfterSalesReplacement(id)}
                 />
             ) : loading && !orders.length ? (
-                loadingState?.phase === 'error' ? (
+                loadingState?.phase === 'error' || loadingState?.slow ? (
                     <PageReadinessError
                         inline
                         state={{

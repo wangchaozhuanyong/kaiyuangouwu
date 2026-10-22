@@ -388,6 +388,18 @@ async function runCase(id, width, fn, { expectedConsoleErrors = [] } = {}) {
     const errors = [];
     const expectedErrors = [];
     const requests = [];
+    const failedResponses = [];
+    page.on('response', async response => {
+        if (response.status() >= 400)
+            failedResponses.push({
+                url: response.url(),
+                status: response.status(),
+                body: await response.text().then(
+                    text => text.slice(0, 2000),
+                    () => '',
+                ),
+            });
+    });
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => {
         if (message.type() === 'error') {
@@ -427,7 +439,11 @@ async function runCase(id, width, fn, { expectedConsoleErrors = [] } = {}) {
         const timeline = await page.evaluate(() => window.__continuity?.finish()).catch(() => null);
         await writeFile(
             path.join(output, id + '.json'),
-            JSON.stringify({ id, width, errors, expectedErrors, requests, detail, timeline }, null, 2),
+            JSON.stringify(
+                { id, width, errors, expectedErrors, failedResponses, requests, detail, timeline },
+                null,
+                2,
+            ),
         );
         await context.close();
     }
@@ -1030,9 +1046,12 @@ try {
                         frame => frame.product === 'synthetic-a Synthetic product 1' && frame.content,
                     );
                     assert.ok(index >= 0, `${label}: public product never became available`);
-                    assert.ok(
-                        samples.slice(0, index).some(frame => frame.bootPending && frame.bootVisible),
-                        `${label}: waiting for interactivity never displayed document loading feedback`,
+                    // SSR may be visible in the first observed frame. A fast adoption
+                    // must not manufacture a compulsory startup presentation.
+                    assert.equal(
+                        samples.some(frame => frame.bootVisible && frame.brand),
+                        false,
+                        `${label}: document and React startup brands overlapped`,
                     );
                     assert.equal(
                         samples.at(-1).bootPending,
@@ -1040,11 +1059,7 @@ try {
                         `${label}: document loading did not finish`,
                     );
                     assert.equal(
-                        samples
-                            .slice(index)
-                            .some(
-                                frame => frame.bootPending || frame.brand || !frame.content || frame.missing,
-                            ),
+                        samples.slice(index).some(frame => frame.brand || !frame.content || frame.missing),
                         false,
                         `${label}: SSR content was hidden or replaced with initial loading`,
                     );
@@ -1180,10 +1195,17 @@ try {
                                         ? /offline|network|网络|离线/iu
                                         : mode === 'request'
                                           ? /could not be loaded|无法加载/iu
-                                          : /too long|超时/iu,
+                                          : /taking longer|加载较慢/iu,
                             })
                             .first();
                         await expect(error).toBeVisible({ timeout: mode === 'timeout' ? 15_000 : 10_000 });
+                        if (mode === 'timeout') {
+                            await expect(error).toHaveAttribute('role', 'status');
+                            await expect(page.locator('[data-page-readiness]')).toHaveAttribute(
+                                'data-page-readiness',
+                                'preparing',
+                            );
+                        }
                         const message = await error.innerText();
                         await page.screenshot({ path: path.join(output, `product-error-${mode}.png`) });
                         const frames = await readSince(page, 'critical-failure');

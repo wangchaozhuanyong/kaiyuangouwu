@@ -26,6 +26,7 @@ import { PageBackButton } from '../components/common/page-back-button';
 import { ProductSkeletonItems } from '../components/common/product-skeleton';
 import { QueryLoadState } from '../loading-state';
 import { Overlay } from '../overlay-host';
+import { usePageReadiness } from '../page-readiness';
 import { PageSkeleton } from '../route-loading';
 import { routeFromLocation, RouteName } from '../storefront-router';
 import { StorefrontContentBlock, StorefrontContentTargetType, StorefrontLanguage } from '../types';
@@ -84,12 +85,17 @@ export function AsyncRouteStatePage({
     onBack: () => void;
     onRetry: () => void;
 }) {
+    usePageReadiness(false, 'page', routeName, state === 'error' || state === 'paused');
     const isZh = language === 'zh';
     const title = asyncRouteTitle(routeName, language);
     const rootSkeletonVariant = rootRouteSkeletonVariant(routeName);
     const content =
         state === 'loading' ? (
-            <PageSkeleton label={isZh ? '正在加载' : 'Loading'} variant={rootSkeletonVariant ?? 'default'} />
+            <PageSkeleton
+                label={isZh ? '正在加载' : 'Loading'}
+                variant={rootSkeletonVariant ?? 'default'}
+                onRetry={onRetry}
+            />
         ) : (
             <EmptyState
                 icon={state === 'paused' ? <WifiOff /> : <CircleAlert />}

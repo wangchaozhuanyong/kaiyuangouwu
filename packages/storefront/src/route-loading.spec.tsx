@@ -199,15 +199,19 @@ describe('transition logo loading', () => {
             finishDecode = resolve;
         });
         Object.defineProperties(image, {
+            complete: { value: true },
             naturalWidth: { value: 160 },
             decode: { value: () => decoding },
         });
         await interact(() => image.dispatchEvent(new Event('load')));
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
-        expect(container.querySelector('.is-logo-ready')).toBeNull();
+        expect(container.querySelector('.is-painted')).toBeNull();
         await interact(() => finishDecode());
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
-        expect(container.querySelector('.is-logo-ready')).not.toBeNull();
+        await vi.waitFor(async () => {
+            await interact(() => undefined);
+            expect(container.querySelector('.is-painted')).not.toBeNull();
+        });
     });
 
     it('tries the original logo once and retains the store name after image failures', async () => {
@@ -235,15 +239,16 @@ describe('transition logo loading', () => {
     it('retains the identity slots when image decoding fails and never reveals an undecodable logo', async () => {
         await render('/brand.svg');
         const image = logoImage();
-        const slot = image.parentElement;
+        const slot = image.closest('.route-transition-mark');
         Object.defineProperties(image, {
+            complete: { value: true },
             naturalWidth: { value: 160 },
             decode: { value: () => Promise.reject(new Error('decode failed')) },
         });
         await interact(() => image.dispatchEvent(new Event('load')));
         expect(container.querySelector('img')).toBeNull();
         expect(container.querySelector('.route-transition-mark')).toBe(slot);
-        expect(container.querySelector('.is-logo-ready')).toBeNull();
+        expect(container.querySelector('.is-painted')).toBeNull();
         expect(container.querySelector('.brand-loading-name')).not.toBeNull();
         expect(container.querySelector('.brand-loading-subtitle')).not.toBeNull();
     });
@@ -252,7 +257,10 @@ describe('transition logo loading', () => {
         vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(true);
         vi.spyOn(HTMLImageElement.prototype, 'naturalWidth', 'get').mockReturnValue(160);
         await render('/cached-logo.svg');
-        expect(container.querySelector('.is-logo-ready')).not.toBeNull();
+        await vi.waitFor(async () => {
+            await interact(() => undefined);
+            expect(container.querySelector('.is-painted')).not.toBeNull();
+        });
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
     });
 
@@ -264,6 +272,7 @@ describe('transition logo loading', () => {
             finishDecode = resolve;
         });
         Object.defineProperties(firstImage, {
+            complete: { value: true },
             naturalWidth: { value: 160 },
             decode: { value: () => decoding },
         });
@@ -271,7 +280,7 @@ describe('transition logo loading', () => {
         await render('/second-logo.svg');
         await interact(() => finishDecode());
         expect(logoImage().getAttribute('src')).toBe('/second-logo.svg');
-        expect(container.querySelector('.is-logo-ready')).toBeNull();
+        expect(container.querySelector('.is-painted')).toBeNull();
         expect(container.querySelector('.route-transition-placeholder')).toBeNull();
     });
 });

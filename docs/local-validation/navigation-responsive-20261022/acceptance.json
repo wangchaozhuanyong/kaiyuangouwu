@@ -1,0 +1,330 @@
+{
+  "status": "local-validation-complete",
+  "source": {
+    "project": "vendure-master",
+    "branch": "codex/navigation-responsive-20261022",
+    "base": "fdbb87b5ecb70b2eba20b8bd4a3e31da5b386a8f",
+    "storefrontTree": "63a50d1b5269d2f8f2b4f0f8d657d844e5a8468c",
+    "builtAssetInventorySha256": "20b5055b9c311a9f0d6e86bc766b634cb9562a861fe1aa68441bccf68744e6f2"
+  },
+  "checks": {
+    "storefrontExplicit": {
+      "files": 13,
+      "tests": 267,
+      "status": "PASS"
+    },
+    "storefrontRelated": {
+      "files": 132,
+      "tests": 2162,
+      "status": "PASS"
+    },
+    "nextAdmin": {
+      "files": 222,
+      "tests": 1783,
+      "status": "PASS"
+    },
+    "builds": {
+      "storefront": "PASS",
+      "nextAdmin": "PASS"
+    },
+    "lint": {
+      "files": 45,
+      "status": "PASS"
+    },
+    "quality": "PASS",
+    "interaction": "PASS",
+    "ssr": {
+      "checks": 18,
+      "failures": []
+    },
+    "ownership": [
+      {
+        "name": "scroll",
+        "width": 390,
+        "status": "PASS"
+      },
+      {
+        "name": "scroll-first",
+        "width": 390,
+        "status": "PASS"
+      },
+      {
+        "name": "scroll-wheel",
+        "width": 390,
+        "status": "PASS"
+      },
+      {
+        "name": "auth",
+        "width": 390,
+        "status": "PASS"
+      },
+      {
+        "name": "wait-ownership",
+        "width": 390,
+        "status": "PASS"
+      },
+      {
+        "name": "scroll",
+        "width": 1440,
+        "status": "PASS"
+      },
+      {
+        "name": "scroll-first",
+        "width": 1440,
+        "status": "PASS"
+      },
+      {
+        "name": "scroll-wheel",
+        "width": 1440,
+        "status": "PASS"
+      },
+      {
+        "name": "auth",
+        "width": 1440,
+        "status": "PASS"
+      },
+      {
+        "name": "wait-ownership",
+        "width": 1440,
+        "status": "PASS"
+      }
+    ],
+    "navigation": [
+      {
+        "run": "artifact-feedback",
+        "width": 390,
+        "language": "zh",
+        "cpu": 1,
+        "status": "PASS",
+        "clicks": [
+          {
+            "target": "/zh/",
+            "feedbackMs": 66.89999997615814,
+            "contentMs": 1444.1000000238419
+          },
+          {
+            "target": "/zh/category",
+            "feedbackMs": 37.700000047683716,
+            "contentMs": null
+          },
+          {
+            "target": "/zh/",
+            "feedbackMs": 47.89999997615814,
+            "contentMs": 47.89999997615814
+          },
+          {
+            "target": "/zh/",
+            "feedbackMs": 25.600000023841858,
+            "contentMs": 25.600000023841858
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 352.89999997615814,
+            "ms": 79
+          },
+          {
+            "at": 837.3999999761581,
+            "ms": 54
+          }
+        ],
+        "loadingGeometry": {
+          "x": 106,
+          "y": 393,
+          "width": 178,
+          "height": 48,
+          "viewport": 390,
+          "innerWidth": 390,
+          "bodyWidth": 390
+        },
+        "errors": []
+      },
+      {
+        "run": "artifact-feedback",
+        "width": 1440,
+        "language": "en",
+        "cpu": 1,
+        "status": "PASS",
+        "clicks": [
+          {
+            "target": "/en/",
+            "feedbackMs": 60.10000002384186,
+            "contentMs": 636.3999999761581
+          },
+          {
+            "target": "/en/category",
+            "feedbackMs": 14.799999952316284,
+            "contentMs": null
+          },
+          {
+            "target": "/en/",
+            "feedbackMs": 31,
+            "contentMs": 31
+          },
+          {
+            "target": "/en/",
+            "feedbackMs": 20.299999952316284,
+            "contentMs": 20.299999952316284
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 356.1999999284744,
+            "ms": 58
+          },
+          {
+            "at": 615.6000000238419,
+            "ms": 51
+          }
+        ],
+        "loadingGeometry": {
+          "x": 620.046875,
+          "y": 462,
+          "width": 184.90625,
+          "height": 48,
+          "viewport": 1440,
+          "innerWidth": 1440,
+          "bodyWidth": 1425
+        },
+        "errors": []
+      },
+      {
+        "run": "artifact-cross-zh",
+        "width": 1440,
+        "language": "zh",
+        "cpu": 1,
+        "status": "PASS",
+        "clicks": [
+          {
+            "target": "/zh/",
+            "feedbackMs": 59,
+            "contentMs": 647.2000000476837
+          },
+          {
+            "target": "/zh/category",
+            "feedbackMs": 11.100000023841858,
+            "contentMs": null
+          },
+          {
+            "target": "/zh/",
+            "feedbackMs": 25.399999976158142,
+            "contentMs": 25.399999976158142
+          },
+          {
+            "target": "/zh/",
+            "feedbackMs": 20.699999928474426,
+            "contentMs": 20.699999928474426
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 373,
+            "ms": 94
+          }
+        ],
+        "loadingGeometry": {
+          "x": 623.5,
+          "y": 462,
+          "width": 178,
+          "height": 48,
+          "viewport": 1440,
+          "innerWidth": 1440,
+          "bodyWidth": 1425
+        },
+        "errors": []
+      },
+      {
+        "run": "artifact-cpu4",
+        "width": 390,
+        "language": "zh",
+        "cpu": 4,
+        "status": "PASS",
+        "clicks": [
+          {
+            "target": "/zh/",
+            "feedbackMs": 117,
+            "contentMs": 1087.3999999761581
+          },
+          {
+            "target": "/zh/category",
+            "feedbackMs": 108.29999995231628,
+            "contentMs": null
+          },
+          {
+            "target": "/zh/",
+            "feedbackMs": 127.20000004768372,
+            "contentMs": 127.20000004768372
+          },
+          {
+            "target": "/zh/",
+            "feedbackMs": 71.10000002384186,
+            "contentMs": 71.10000002384186
+          }
+        ],
+        "longTasks": [
+          {
+            "at": 252.80000007152557,
+            "ms": 95
+          },
+          {
+            "at": 357.2000000476837,
+            "ms": 115
+          },
+          {
+            "at": 875.6000000238419,
+            "ms": 184
+          },
+          {
+            "at": 1064.3999999761581,
+            "ms": 268
+          },
+          {
+            "at": 2681.5,
+            "ms": 117
+          },
+          {
+            "at": 2798.8000000715256,
+            "ms": 56
+          },
+          {
+            "at": 3439.5,
+            "ms": 112
+          },
+          {
+            "at": 3680.600000023842,
+            "ms": 133
+          },
+          {
+            "at": 3933.399999976158,
+            "ms": 99
+          },
+          {
+            "at": 4208.300000071526,
+            "ms": 76
+          }
+        ],
+        "loadingGeometry": {
+          "x": 106,
+          "y": 393,
+          "width": 178,
+          "height": 48,
+          "viewport": 390,
+          "innerWidth": 390,
+          "bodyWidth": 390
+        },
+        "errors": []
+      }
+    ]
+  },
+  "remote": {
+    "ci": null,
+    "merge": null,
+    "productionRelease": null,
+    "publicVerification": null
+  },
+  "limitations": [
+    "Synthetic loopback fixtures; no real customer writes",
+    "Regional networks, real devices and real-user INP p75 NOT_MEASURED",
+    "CPU slowdown trace is not a comparable production before/after benchmark"
+  ]
+}

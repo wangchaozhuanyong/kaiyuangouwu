@@ -28,12 +28,14 @@ export function StorefrontQueryFeedback({
         cache.getAll().filter(query => query.isActive() && isStorefrontQueryInScope(query.queryKey, scope));
     const snapshot = () =>
         activeQueries()
+            // Successful cache writes do not change this error-only surface.
+            // Avoid publishing a new React snapshot on every background result.
+            .filter(query => query.state.status === 'error' && query.state.data !== undefined)
             .map(query =>
                 [
                     query.queryHash,
                     query.state.fetchStatus,
                     query.state.status,
-                    query.state.dataUpdatedAt,
                     query.state.errorUpdatedAt,
                 ].join(':'),
             )

@@ -43,16 +43,18 @@ export function PageSkeleton({
     variant = 'default',
     root = false,
     compact = false,
+    onRetry,
 }: {
     label?: string;
     language?: string;
     variant?: RouteSkeletonVariant;
     root?: boolean;
     compact?: boolean;
+    onRetry?: () => void;
 }) {
-    usePageReadiness(true, compact ? 'local' : 'page');
-    const readiness = usePageLoadingState();
-    const failed = readiness?.phase === 'error';
+    usePageReadiness(true, compact ? 'optional' : 'page');
+    const readiness = usePageLoadingState(compact ? { pending: true } : undefined);
+    const failed = readiness?.phase === 'error' || readiness?.slow;
     const ariaLabel = label === 'Loading' ? loadingPageLabel(language) : label;
     const Tag = root ? 'main' : 'div';
     // The boundary owns the one initial brand; keep this component mounted for registration.
@@ -66,14 +68,21 @@ export function PageSkeleton({
     ].join(' ');
     return (
         <Tag
-            data-page-pending={failed ? undefined : 'data'}
+            data-page-pending={readiness?.phase === 'error' ? undefined : 'data'}
             className={className}
-            role={failed ? undefined : 'status'}
+            role={failed ? undefined : readiness && !compact ? 'region' : 'status'}
             aria-label={failed ? undefined : ariaLabel}
-            aria-busy={!failed}
+            aria-busy={readiness?.phase !== 'error'}
         >
             {failed && readiness ? (
-                <PageReadinessError state={readiness} inline />
+                <div className={compact ? undefined : 'page-readiness-overlay'}>
+                    <PageReadinessError
+                        state={
+                            onRetry ? { ...readiness, retry: () => readiness.retryRead(onRetry) } : readiness
+                        }
+                        inline={compact}
+                    />
+                </div>
             ) : initialBrand ? (
                 <BrandLoadingIndicator language={language} label={ariaLabel} />
             ) : (
@@ -166,19 +175,21 @@ export function RouteTransitionLoader({
 }) {
     usePageReadiness(true, 'page');
     const readiness = usePageLoadingState();
-    const failed = readiness?.phase === 'error';
+    const failed = readiness?.phase === 'error' || readiness?.slow;
     if (readiness?.initial) return null;
     return (
         <div
-            data-page-pending={failed ? undefined : 'module'}
+            data-page-pending={readiness?.phase === 'error' ? undefined : 'module'}
             className="route-transition"
-            role={failed ? undefined : 'status'}
+            role={failed ? undefined : readiness ? 'region' : 'status'}
             aria-label={failed ? undefined : loadingPageLabel(language)}
-            aria-live="polite"
-            aria-busy={!failed}
+            aria-live={readiness ? undefined : 'polite'}
+            aria-busy={readiness?.phase !== 'error'}
         >
             {failed && readiness ? (
-                <PageReadinessError state={readiness} inline />
+                <div className="page-readiness-overlay">
+                    <PageReadinessError state={readiness} />
+                </div>
             ) : readiness ? (
                 <RouteSkeletonContent variant="default" />
             ) : (

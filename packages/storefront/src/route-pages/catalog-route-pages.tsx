@@ -1,12 +1,15 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
 
 import { importHomePage, importProductDetailPage } from '../catalog-page-imports';
 import { catalogRouteState } from '../catalog-route-query';
+import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
-import { usePageRouteCommit } from '../page-readiness';
+import { usePageReadiness, usePageRouteCommit } from '../page-readiness';
 import { PublicCatalogMediaProvider, merchandisingMediaCatalogs } from '../public-catalog-media';
+import { retryStorefrontRead, storefrontQueryKeys } from '../query-client';
 import { PageSkeleton } from '../route-loading';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { HomePageContext, ProductDetailPageContext, SearchPageContext } from '../storefront-page-contexts';
@@ -22,10 +25,19 @@ const ProductDetailPage = lazyRouteComponent(importProductDetailPage, 'ProductDe
 const SearchPage = lazyRouteComponent(() => import('../pages/search-page'), 'SearchPage');
 
 export function HomeRoutePage() {
+    const client = useQueryClient();
     usePageRouteCommit();
     const runtime = useRuntime();
+    const readMarket = storefrontQueryKeys.market(runtime.market);
+    const readLanguage = languageCodeFor(runtime.language);
     const [initialRenderTime] = useState(() => readInitialPublicPage()?.generatedAt);
     const { language, configQuery, contentQuery, productsQuery } = runtime;
+    usePageReadiness(
+        contentQuery.isPending,
+        'query',
+        undefined,
+        contentQuery.data === undefined && contentQuery.isError,
+    );
     const contentError =
         contentQuery.data === undefined
             ? contentQuery.isPaused
@@ -119,7 +131,16 @@ export function HomeRoutePage() {
                 onCouponCampaignsRetry: () =>
                     void runtime.couponCampaignsQuery.refetch({ cancelRefetch: false }),
                 onContentTarget: runtime.openContentTarget,
-                onContentRetry: () => void runtime.contentQuery?.refetch?.({ cancelRefetch: false }),
+                onContentRetry: () =>
+                    void retryStorefrontRead(client, [
+                        ...storefrontQueryKeys.content(readMarket, readLanguage),
+                        'public',
+                    ]),
+                onCatalogRetry: () =>
+                    void retryStorefrontRead(
+                        client,
+                        storefrontQueryKeys.products(readMarket, readLanguage, 12),
+                    ),
                 onRetry: () => void runtime.refetchStorefront(),
             }}
         >
@@ -141,9 +162,18 @@ export function HomeRoutePage() {
 }
 
 export function ProductRoutePage() {
+    const client = useQueryClient();
     usePageRouteCommit();
     const runtime = useRuntime();
+    const readMarket = storefrontQueryKeys.market(runtime.market);
+    const readLanguage = languageCodeFor(runtime.language);
     const isZh = runtime.language === 'zh';
+    usePageReadiness(
+        !runtime.selectedProduct && runtime.routeProductLoading,
+        'query',
+        runtime.route.id,
+        !runtime.selectedProduct && Boolean(runtime.routeProductError),
+    );
     if (!runtime.selectedProduct && runtime.routeProductLoading) {
         return (
             <Subpage
@@ -153,6 +183,12 @@ export function ProductRoutePage() {
             >
                 <PageSkeleton
                     variant="detail"
+                    onRetry={() =>
+                        void retryStorefrontRead(
+                            client,
+                            storefrontQueryKeys.product(readMarket, readLanguage, runtime.route.id ?? ''),
+                        )
+                    }
                     label={isZh ? '正在加载商品详情' : 'Loading product details'}
                 />
             </Subpage>

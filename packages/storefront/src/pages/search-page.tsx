@@ -203,11 +203,15 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
         (searchQuery.isPaused &&
             queryClient.getQueryState(searchQueryKey)?.fetchMeta?.fetchMore?.direction === 'forward');
     usePageReadiness(
-        Boolean(term) && (!embedded || embedded.active) && (searchQuery.isPending || appending),
+        Boolean(term) && (!embedded || embedded.active) && searchQuery.isPending,
         'local',
         readIdentity,
+        Boolean(storefrontInitialQueryError(searchQuery, language)),
     );
-    const loadingState = usePageLoadingState();
+    const loadingState = usePageLoadingState({
+        pending: Boolean(term) && (!embedded || embedded.active) && (searchQuery.isPending || appending),
+        key: readIdentity,
+    });
     const retrySearch = (append = false) => {
         const read = () => {
             if (currentRead.current !== readIdentity) return;
@@ -263,9 +267,10 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
     const totalItems = searchQuery.data?.pages.at(-1)?.totalItems ?? 0;
     const remainingItems = Math.max(0, totalItems - (searchInput.skip ?? 0) - results.length);
     const searching = !!term && storefrontQueryPresentation(searchQuery).initialLoading;
-    const searchTimedOut = searching && loadingState?.phase === 'error';
+    const searchTimedOut = searching && (loadingState?.phase === 'error' || loadingState?.slow);
     const searchError = storefrontInitialQueryError(searchQuery, language);
-    const appendTimedOut = appending && !searchQuery.isPaused && loadingState?.phase === 'error';
+    const appendTimedOut =
+        appending && !searchQuery.isPaused && (loadingState?.phase === 'error' || loadingState?.slow);
     const loadMoreError =
         appending && searchQuery.isPaused
             ? offlineLoadError(language)

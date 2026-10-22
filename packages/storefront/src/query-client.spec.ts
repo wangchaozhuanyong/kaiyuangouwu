@@ -15,6 +15,7 @@ import {
     publicQueryMeta,
     restorePublicQueryCache,
     restrictStorefrontScopePersistence,
+    retryStorefrontRead,
     ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
     storefrontQueryRetry,
@@ -654,4 +655,45 @@ describe('authoritative scope access and preview persistence', () => {
         persistPublicQueryCache(client, storage);
         expect(storage.values.has(PUBLIC_QUERY_CACHE_KEY)).toBe(false);
     });
+});
+
+it('restarts only the active read requested by recovery and leaves other consumers alone', async () => {
+    const client = createStorefrontQueryClient();
+    const a = storefrontQueryKeys.products('recovery:MYR', 'en', 12);
+    const b = storefrontQueryKeys.content('recovery:MYR', 'en');
+    let aborted = 0;
+    let attempts = 0;
+    let partnerSignal: AbortSignal | undefined;
+    const read = vi.fn(({ signal }: { signal: AbortSignal }) => {
+        if (++attempts > 1) return Promise.resolve(['Recovered']);
+        return new Promise<string[]>((_resolve, reject) =>
+            signal.addEventListener('abort', () => {
+                aborted++;
+                reject(new DOMException('Read canceled', 'AbortError'));
+            }),
+        );
+    });
+    const partner = vi.fn(({ signal }: { signal: AbortSignal }) => {
+        partnerSignal = signal;
+        return new Promise<string[]>(() => undefined);
+    });
+    const observer = new QueryObserver(client, { queryKey: a, queryFn: read, retry: false });
+    const other = new QueryObserver(client, { queryKey: b, queryFn: partner, retry: false });
+    const stop = observer.subscribe(() => undefined);
+    const stopOther = other.subscribe(() => undefined);
+    try {
+        await retryStorefrontRead(client, a);
+        expect(aborted).toBe(1);
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(client.getQueryData(a)).toEqual(['Recovered']);
+        expect(partner).toHaveBeenCalledOnce();
+        expect(partnerSignal?.aborted).toBe(false);
+        stop();
+        await retryStorefrontRead(client, a);
+        expect(read).toHaveBeenCalledTimes(2);
+    } finally {
+        stop();
+        stopOther();
+        client.clear();
+    }
 });

@@ -309,10 +309,12 @@ export function CategoryPage() {
     const categoryError = categoryResolved
         ? (storefrontInitialQueryError(catalogQuery, language) ?? '')
         : (error ?? '');
-    const loadingState = usePageLoadingState();
+    const loadingState = usePageLoadingState({ pending: categoryLoading, key: catalogReadIdentity });
     usePageReadiness(
         categoryLoading || (categoryResolved && catalogQuery.isPaused && catalogQuery.isPending),
         'local',
+        catalogReadIdentity,
+        Boolean(categoryError),
     );
 
     const allCategoriesRef = useRef<HTMLDivElement | null>(null);
@@ -788,7 +790,7 @@ export function CategoryPage() {
                         onNavigate={navigateTo}
                     />
 
-                    {categoryLoading && loadingState?.phase === 'error' ? (
+                    {categoryLoading && (loadingState?.phase === 'error' || loadingState?.slow) ? (
                         <PageReadinessError
                             inline
                             state={{
