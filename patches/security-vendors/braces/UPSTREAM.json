@@ -1,0 +1,16 @@
+{
+  "origin": {
+    "name": "braces",
+    "version": "3.0.3",
+    "repository": "micromatch/braces",
+    "license": "MIT"
+  },
+  "advisory": "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+  "derivedFromPublishedSourceWithReviewedFix": true,
+  "originalPatch": {
+    "path": "patches/braces@3.0.3.patch",
+    "sha256": "78eb00165305b88c9b6df49d8915842680423482c7663c141cee211479702b6f"
+  },
+  "sourceRevision": "fdbb87b5ecb70b2eba20b8bd4a3e31da5b386a8f",
+  "maintenance": "Vendure project; not an upstream release"
+}

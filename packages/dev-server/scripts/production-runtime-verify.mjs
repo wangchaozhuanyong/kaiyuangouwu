@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { isVerifiedFinding, verifyReportPatches } from './production-runtime-audit.mjs';
+import { securityVendorForPackage } from './security-vendors.mjs';
 
 export const GOVERNANCE_RECONCILIATION_RUNTIME_FILES = Object.freeze(
     [
@@ -141,7 +142,24 @@ function assertRuntimeAudit(value, packages, root) {
         ) {
             throw new Error(`Runtime audit finding ${index} is invalid`);
         }
-        const packageKey = [finding.name, finding.version, finding.path].join('\u0000');
+        const replacement = finding.replacement;
+        if (replacement) {
+            const vendor = securityVendorForPackage(replacement.name);
+            if (
+                !vendor ||
+                vendor.original !== finding.name ||
+                vendor.originalVersion !== finding.version ||
+                vendor.version !== replacement.version ||
+                finding.source !== 'UPSTREAM_PROVENANCE'
+            ) {
+                throw new Error('Runtime audit replacement identity is invalid');
+            }
+        }
+        const packageKey = [
+            replacement?.name ?? finding.name,
+            replacement?.version ?? finding.version,
+            finding.path,
+        ].join('\u0000');
         if (!expectedPackages.has(packageKey)) {
             throw new Error(`Runtime audit finding does not match package inventory: ${finding.path}`);
         }

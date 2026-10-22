@@ -84,7 +84,9 @@
         "typescript": "5.9.3",
         "unplugin-swc": "^1.4.4",
         "vite": "^7.3.6",
-        "vitest": "^4.1.11"
+        "vitest": "^4.1.11",
+        "braces": "file:patches/security-vendors/braces",
+        "http-cache-semantics": "file:patches/security-vendors/http-cache-semantics"
     },
     "//": "Fix for https://github.com/npm/cli/issues/4828",
     "optionalDependencies": {
@@ -187,7 +189,10 @@
         "vitest": "4.1.12",
         "@vitest/browser": "4.1.12",
         "@vitest/browser-playwright": "4.1.12",
-        "@vitest/coverage-v8": "4.1.12"
+        "@vitest/coverage-v8": "4.1.12",
+        "argparse": "2.0.1",
+        "braces": "file:patches/security-vendors/braces",
+        "http-cache-semantics": "file:patches/security-vendors/http-cache-semantics"
     },
     "trustedDependencies": [
         "husky",
@@ -220,8 +225,6 @@
     "patchedDependencies": {
         "husky@4.3.8": "patches/husky@4.3.8.patch",
         "brace-expansion@5.0.12": "patches/brace-expansion@5.0.12.patch",
-        "braces@3.0.3": "patches/braces@3.0.3.patch",
-        "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch",
-        "sprintf-js@1.0.3": "patches/sprintf-js@1.0.3.patch"
+        "@rushstack/ts-command-line@5.3.12": "patches/@rushstack%2Fts-command-line@5.3.12.patch"
     }
 }

@@ -1,0 +1,20 @@
+{
+  "name": "@vendure-security/braces",
+  "version": "3.0.3-vendure.1",
+  "private": true,
+  "description": "Project-maintained security implementation derived from braces 3.0.3",
+  "main": "index.js",
+  "license": "MIT",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangchaozhuanyong/kaiyuangouwu.git",
+    "directory": "patches/security-vendors/braces"
+  },
+  "engines": {
+    "node": ">=8"
+  },
+  "dependencies": {
+    "fill-range": "^7.1.1"
+  }
+}

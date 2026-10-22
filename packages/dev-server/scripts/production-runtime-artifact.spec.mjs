@@ -687,6 +687,9 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
             path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
             path.join(root, 'production-runtime-audit.mjs'),
         );
+        for (const file of ['security-vendors.mjs', 'security-vendor-definitions.mjs']) {
+            await cp(path.join(repositoryRoot, 'packages/dev-server/scripts', file), path.join(root, file));
+        }
         await writeFile(path.join(root, 'package.json'), '{"name":"fixture-runtime","version":"1.0.0"}\n');
         await writeFile(
             path.join(root, 'RUNTIME-METADATA.json'),
@@ -715,7 +718,8 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         );
         const saved = path.join(fixture, 'saved-audit.json');
         const lockfile = path.join(repositoryRoot, 'bun.lock');
-        writeBunAuditEvidence(saved, lockfile, raw);
+        // Native audit sees private installed identities; provenance independently restores original findings.
+        writeBunAuditEvidence(saved, lockfile, {});
         const lockSha = createHash('sha256')
             .update(await readFile(lockfile))
             .digest('hex');
@@ -723,6 +727,7 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
             auditReportPath: saved,
             expectedLockfileSha256: lockSha,
             failOn: 'high',
+            originAudit: async () => raw,
         });
         const refresh = async value => {
             await writeFile(path.join(root, 'RUNTIME-AUDIT.json'), JSON.stringify(value));
@@ -732,6 +737,15 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         await verifyRuntimeArtifact(root, { expectedSha, verifyModules: false });
         assert.equal(report.summary.high, 2);
         assert.equal(report.findings.length, 2);
+        assert.ok(report.findings.every(finding => finding.source === 'UPSTREAM_PROVENANCE'));
+        const wrongIdentity = structuredClone(report);
+        wrongIdentity.findings[0].replacement.version = 'unreviewed';
+        await refresh(wrongIdentity);
+        await assert.rejects(
+            verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
+            /replacement identity/u,
+        );
+        await refresh(report);
         const standalone = spawnSync(
             process.execPath,
             [
@@ -773,9 +787,6 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         );
         const unrelated = structuredClone(report);
         unrelated.findings[0].url = 'https://example.invalid/unapproved-high';
-        unrelated.verifiedPatches = unrelated.verifiedPatches.filter(
-            proof => proof.name !== unrelated.findings[0].name,
-        );
         await refresh(unrelated);
         await assert.rejects(
             verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
@@ -798,6 +809,8 @@ void test('copied runtime CLI validates governance imports and the database driv
         for (const [source, destination] of [
             ['production-runtime-verify.mjs', 'verify-runtime.mjs'],
             ['production-runtime-audit.mjs', 'production-runtime-audit.mjs'],
+            ['security-vendors.mjs', 'security-vendors.mjs'],
+            ['security-vendor-definitions.mjs', 'security-vendor-definitions.mjs'],
         ]) {
             await cp(
                 path.join(repositoryRoot, 'packages/dev-server/scripts', source),
