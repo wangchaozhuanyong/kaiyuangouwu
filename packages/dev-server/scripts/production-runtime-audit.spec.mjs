@@ -14,6 +14,62 @@ import {
     runBunAudit,
     writeBunAuditEvidence,
 } from './production-runtime-audit.mjs';
+
+void test('sprintf precision patch verifies both entrypoints and rejects changed bytes or advisories', async () => {
+    const { cp, mkdir } = await import('node:fs/promises');
+    const { SPRINTF_PATCH, verifySprintfPatch } = await import('./production-runtime-audit.mjs');
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-sprintf-patch-'));
+    const installed = path.join(repositoryRoot, 'node_modules/sprintf-js');
+    const localCopy = path.join(root, 'node_modules/sprintf-js');
+    const registration = JSON.stringify({
+        patchedDependencies: { 'sprintf-js@1.0.3': SPRINTF_PATCH.path },
+    });
+    const finding = {
+        id: 1,
+        severity: 'moderate',
+        title: 'Unbounded numeric precision',
+        url: SPRINTF_PATCH.advisory,
+        vulnerable_versions: '<=1.1.3',
+    };
+    const run = report =>
+        runBunAudit(root, {
+            auditLevel: 'moderate',
+            runCommand: () => ({ status: 1, stdout: JSON.stringify(report), stderr: '' }),
+        });
+    try {
+        await mkdir(path.join(root, 'patches'), { recursive: true });
+        await cp(path.join(repositoryRoot, SPRINTF_PATCH.path), path.join(root, SPRINTF_PATCH.path));
+        await writeFile(path.join(root, 'package.json'), registration);
+        await writeFile(path.join(root, 'bun.lock'), registration);
+        await cp(installed, localCopy, { recursive: true });
+        const verified = verifySprintfPatch(root);
+        assert.equal(verified.state, 'VERIFIED_PATCH');
+        const report = { 'sprintf-js': [finding] };
+        assert.deepEqual(await run(report), report);
+        const inventory = [{ name: 'sprintf-js', version: '1.0.3', path: 'node_modules/sprintf-js' }];
+        const result = createRuntimeAuditReport(inventory, report, {
+            failOn: 'moderate',
+            verifiedPatches: [verified],
+        });
+        assert.equal(result.report.summary.moderate, 1);
+        assert.equal(result.blockedFindings.length, 0);
+        assert.equal(result.report.findings[0].url, finding.url);
+        for (const changed of [{ severity: 'high' }, { url: 'https://example.invalid/other' }]) {
+            await assert.rejects(run({ 'sprintf-js': [{ ...finding, ...changed }] }), /policy failed/u);
+        }
+        for (const file of ['src/sprintf.js', 'dist/sprintf.min.js']) {
+            await writeFile(path.join(localCopy, file), '// unpatched fixture');
+            assert.throws(() => verifySprintfPatch(root), /fingerprint mismatch/u);
+            await cp(path.join(installed, file), path.join(localCopy, file));
+        }
+        await writeFile(path.join(root, SPRINTF_PATCH.path), '// changed patch');
+        await assert.rejects(run(report), /source fingerprint mismatch/u);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
+});
+
 void test('cache backport verifies aliases and runtime bytes without hiding raw high findings', async () => {
     const { cp, mkdir, symlink } = await import('node:fs/promises');
     const { HTTP_CACHE_PATCH, BRACES_PATCH, verifyHttpCachePatch } =

@@ -1,0 +1,43 @@
+diff --git a/src/sprintf.js b/src/sprintf.js
+index c0fc7c08b..df5f8b34a 100644
+--- a/src/sprintf.js
++++ b/src/sprintf.js
+@@ -58,6 +58,10 @@
+                     is_positive = arg >= 0
+                 }
+ 
++                // Bound numeric precision to the supported ECMAScript range.
++                // Invalid external format strings must not cause native RangeError.
++                var precision = match[7] ? Math.min(parseInt(match[7], 10), 100) : undefined
++                if (match[8] === "g" && precision !== undefined) precision = Math.max(1, precision)
+                 switch (match[8]) {
+                     case "b":
+                         arg = arg.toString(2)
+@@ -73,13 +77,13 @@
+                         arg = JSON.stringify(arg, null, match[6] ? parseInt(match[6]) : 0)
+                     break
+                     case "e":
+-                        arg = match[7] ? arg.toExponential(match[7]) : arg.toExponential()
++                        arg = match[7] ? arg.toExponential(precision) : arg.toExponential()
+                     break
+                     case "f":
+-                        arg = match[7] ? parseFloat(arg).toFixed(match[7]) : parseFloat(arg)
++                        arg = match[7] ? parseFloat(arg).toFixed(precision) : parseFloat(arg)
+                     break
+                     case "g":
+-                        arg = match[7] ? parseFloat(arg).toPrecision(match[7]) : parseFloat(arg)
++                        arg = match[7] ? parseFloat(arg).toPrecision(precision) : parseFloat(arg)
+                     break
+                     case "o":
+                         arg = arg.toString(8)
+diff --git a/dist/sprintf.min.js b/dist/sprintf.min.js
+index dc61e51ad..eae16cf27 100644
+--- a/dist/sprintf.min.js
++++ b/dist/sprintf.min.js
+@@ -1,4 +1 @@
+-/*! sprintf-js | Alexandru Marasteanu <hello@alexei.ro> (http://alexei.ro/) | BSD-3-Clause */
+-
+-!function(a){function b(){var a=arguments[0],c=b.cache;return c[a]&&c.hasOwnProperty(a)||(c[a]=b.parse(a)),b.format.call(null,c[a],arguments)}function c(a){return Object.prototype.toString.call(a).slice(8,-1).toLowerCase()}function d(a,b){return Array(b+1).join(a)}var e={not_string:/[^s]/,number:/[diefg]/,json:/[j]/,not_json:/[^j]/,text:/^[^\x25]+/,modulo:/^\x25{2}/,placeholder:/^\x25(?:([1-9]\d*)\$|\(([^\)]+)\))?(\+)?(0|'[^$])?(-)?(\d+)?(?:\.(\d+))?([b-gijosuxX])/,key:/^([a-z_][a-z_\d]*)/i,key_access:/^\.([a-z_][a-z_\d]*)/i,index_access:/^\[(\d+)\]/,sign:/^[\+\-]/};b.format=function(a,f){var g,h,i,j,k,l,m,n=1,o=a.length,p="",q=[],r=!0,s="";for(h=0;o>h;h++)if(p=c(a[h]),"string"===p)q[q.length]=a[h];else if("array"===p){if(j=a[h],j[2])for(g=f[n],i=0;i<j[2].length;i++){if(!g.hasOwnProperty(j[2][i]))throw new Error(b("[sprintf] property '%s' does not exist",j[2][i]));g=g[j[2][i]]}else g=j[1]?f[j[1]]:f[n++];if("function"==c(g)&&(g=g()),e.not_string.test(j[8])&&e.not_json.test(j[8])&&"number"!=c(g)&&isNaN(g))throw new TypeError(b("[sprintf] expecting number but found %s",c(g)));switch(e.number.test(j[8])&&(r=g>=0),j[8]){case"b":g=g.toString(2);break;case"c":g=String.fromCharCode(g);break;case"d":case"i":g=parseInt(g,10);break;case"j":g=JSON.stringify(g,null,j[6]?parseInt(j[6]):0);break;case"e":g=j[7]?g.toExponential(j[7]):g.toExponential();break;case"f":g=j[7]?parseFloat(g).toFixed(j[7]):parseFloat(g);break;case"g":g=j[7]?parseFloat(g).toPrecision(j[7]):parseFloat(g);break;case"o":g=g.toString(8);break;case"s":g=(g=String(g))&&j[7]?g.substring(0,j[7]):g;break;case"u":g>>>=0;break;case"x":g=g.toString(16);break;case"X":g=g.toString(16).toUpperCase()}e.json.test(j[8])?q[q.length]=g:(!e.number.test(j[8])||r&&!j[3]?s="":(s=r?"+":"-",g=g.toString().replace(e.sign,"")),l=j[4]?"0"===j[4]?"0":j[4].charAt(1):" ",m=j[6]-(s+g).length,k=j[6]&&m>0?d(l,m):"",q[q.length]=j[5]?s+g+k:"0"===l?s+k+g:k+s+g)}return q.join("")},b.cache={},b.parse=function(a){for(var b=a,c=[],d=[],f=0;b;){if(null!==(c=e.text.exec(b)))d[d.length]=c[0];else if(null!==(c=e.modulo.exec(b)))d[d.length]="%";else{if(null===(c=e.placeholder.exec(b)))throw new SyntaxError("[sprintf] unexpected placeholder");if(c[2]){f|=1;var g=[],h=c[2],i=[];if(null===(i=e.key.exec(h)))throw new SyntaxError("[sprintf] failed to parse named argument key");for(g[g.length]=i[1];""!==(h=h.substring(i[0].length));)if(null!==(i=e.key_access.exec(h)))g[g.length]=i[1];else{if(null===(i=e.index_access.exec(h)))throw new SyntaxError("[sprintf] failed to parse named argument key");g[g.length]=i[1]}c[2]=g}else f|=2;if(3===f)throw new Error("[sprintf] mixing positional and named placeholders is not (yet) supported");d[d.length]=c}b=b.substring(c[0].length)}return d};var f=function(a,c,d){return d=(c||[]).slice(0),d.splice(0,0,a),b.apply(null,d)};"undefined"!=typeof exports?(exports.sprintf=b,exports.vsprintf=f):(a.sprintf=b,a.vsprintf=f,"function"==typeof define&&define.amd&&define(function(){return{sprintf:b,vsprintf:f}}))}("undefined"==typeof window?this:window);
+-//# sourceMappingURL=sprintf.min.map
+\ No newline at end of file
++!function(e){var n={not_string:/[^s]/,number:/[diefg]/,json:/[j]/,not_json:/[^j]/,text:/^[^\x25]+/,modulo:/^\x25{2}/,placeholder:/^\x25(?:([1-9]\d*)\$|\(([^\)]+)\))?(\+)?(0|'[^$])?(-)?(\d+)?(?:\.(\d+))?([b-gijosuxX])/,key:/^([a-z_][a-z_\d]*)/i,key_access:/^\.([a-z_][a-z_\d]*)/i,index_access:/^\[(\d+)\]/,sign:/^[\+\-]/};function t(){var e=arguments[0],n=t.cache;return n[e]&&n.hasOwnProperty(e)||(n[e]=t.parse(e)),t.format.call(null,n[e],arguments)}t.format=function(e,r){var o,i,l,c,f,p,u,d=1,g=e.length,h="",x=[],b=!0,y="";for(i=0;i<g;i++)if("string"===(h=s(e[i])))x[x.length]=e[i];else if("array"===h){if((c=e[i])[2])for(o=r[d],l=0;l<c[2].length;l++){if(!o.hasOwnProperty(c[2][l]))throw new Error(t("[sprintf] property '%s' does not exist",c[2][l]));o=o[c[2][l]]}else o=c[1]?r[c[1]]:r[d++];if("function"==s(o)&&(o=o()),n.not_string.test(c[8])&&n.not_json.test(c[8])&&"number"!=s(o)&&isNaN(o))throw new TypeError(t("[sprintf] expecting number but found %s",s(o)));n.number.test(c[8])&&(b=o>=0);var w=c[7]?Math.min(parseInt(c[7],10),100):void 0;switch("g"===c[8]&&void 0!==w&&(w=Math.max(1,w)),c[8]){case"b":o=o.toString(2);break;case"c":o=String.fromCharCode(o);break;case"d":case"i":o=parseInt(o,10);break;case"j":o=JSON.stringify(o,null,c[6]?parseInt(c[6]):0);break;case"e":o=c[7]?o.toExponential(w):o.toExponential();break;case"f":o=c[7]?parseFloat(o).toFixed(w):parseFloat(o);break;case"g":o=c[7]?parseFloat(o).toPrecision(w):parseFloat(o);break;case"o":o=o.toString(8);break;case"s":o=(o=String(o))&&c[7]?o.substring(0,c[7]):o;break;case"u":o>>>=0;break;case"x":o=o.toString(16);break;case"X":o=o.toString(16).toUpperCase()}n.json.test(c[8])?x[x.length]=o:(!n.number.test(c[8])||b&&!c[3]?y="":(y=b?"+":"-",o=o.toString().replace(n.sign,"")),p=c[4]?"0"===c[4]?"0":c[4].charAt(1):" ",u=c[6]-(y+o).length,f=c[6]&&u>0?a(p,u):"",x[x.length]=c[5]?y+o+f:"0"===p?y+f+o:f+y+o)}return x.join("")},t.cache={},t.parse=function(e){for(var t=e,r=[],s=[],a=0;t;){if(null!==(r=n.text.exec(t)))s[s.length]=r[0];else if(null!==(r=n.modulo.exec(t)))s[s.length]="%";else{if(null===(r=n.placeholder.exec(t)))throw new SyntaxError("[sprintf] unexpected placeholder");if(r[2]){a|=1;var o=[],i=r[2],l=[];if(null===(l=n.key.exec(i)))throw new SyntaxError("[sprintf] failed to parse named argument key");for(o[o.length]=l[1];""!==(i=i.substring(l[0].length));)if(null!==(l=n.key_access.exec(i)))o[o.length]=l[1];else{if(null===(l=n.index_access.exec(i)))throw new SyntaxError("[sprintf] failed to parse named argument key");o[o.length]=l[1]}r[2]=o}else a|=2;if(3===a)throw new Error("[sprintf] mixing positional and named placeholders is not (yet) supported");s[s.length]=r}t=t.substring(r[0].length)}return s};var r=function(e,n,r){return(r=(n||[]).slice(0)).splice(0,0,e),t.apply(null,r)};function s(e){return Object.prototype.toString.call(e).slice(8,-1).toLowerCase()}function a(e,n){return Array(n+1).join(e)}"undefined"!=typeof exports?(exports.sprintf=t,exports.vsprintf=r):(e.sprintf=t,e.vsprintf=r,"function"==typeof define&&define.amd&&define(function(){return{sprintf:t,vsprintf:r}}))}("undefined"==typeof window?this:window);

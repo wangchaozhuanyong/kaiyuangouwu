@@ -50,7 +50,22 @@ export const HTTP_CACHE_PATCH = Object.freeze({
         'package.json': 'bee0609d5ab09a590afe0e1209d3702b0afb0a3c158492f90902a724d889d22b',
     }),
 });
-const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH]);
+// No upstream fixed release exists. Pin this bounded-precision backport, and
+// verify both CommonJS and browser entrypoints before recognizing the finding.
+export const SPRINTF_PATCH = Object.freeze({
+    advisory: 'https://github.com/advisories/GHSA-hp3w-g68c-fv3c',
+    package: 'sprintf-js',
+    version: '1.0.3',
+    severity: 'moderate',
+    path: 'patches/sprintf-js@1.0.3.patch',
+    sha256: '995646f295034bdb89425dd3570171da52273eaeede830e8e5622dc45956b02c',
+    files: Object.freeze({
+        'src/sprintf.js': 'b30cac9c0a68ce42ee56b5f22361d8071caadf3b4771a045c4de0cad994cfa53',
+        'dist/sprintf.min.js': '5a5f79b7330dbb2c961dd53296b55d2e754a39c0cc4229f5ba2c3a471dcbb1f0',
+        'package.json': 'f7ed5a0dc9b4c939e92be6acdf3bd83abc3d7e5def9c1307f3c9f53bd7cb2f8c',
+    }),
+});
+const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH, SPRINTF_PATCH]);
 
 function installedPackagePaths(root, name) {
     const pending = [path.join(root, 'node_modules')];
@@ -197,12 +212,43 @@ export function verifyHttpCachePatch(root, options) {
     return verifyInstalledPatch(root, HTTP_CACHE_PATCH, assertCacheReuseGuard, options);
 }
 
+function assertSprintfPrecisionGuard({ sprintf, vsprintf }) {
+    for (const [type, method] of [
+        ['e', 'toExponential'],
+        ['f', 'toFixed'],
+        ['g', 'toPrecision'],
+    ]) {
+        for (const precision of ['101', '9'.repeat(64)]) {
+            if (sprintf('%.' + precision + type, 1.25) !== (1.25)[method](100)) {
+                throw new Error('Patched sprintf-js failed bounded precision guard');
+            }
+        }
+    }
+    if (
+        sprintf('%.0g', 1.25) !== (1.25).toPrecision(1) ||
+        sprintf('%+08.2f', 12.3) !== '+0012.30' ||
+        sprintf('%(name)s', { name: 'fixture' }) !== 'fixture' ||
+        vsprintf('%s:%d', ['fixture', 42]) !== 'fixture:42'
+    ) {
+        throw new Error('Patched sprintf-js failed ordinary format compatibility');
+    }
+}
+
+export function verifySprintfPatch(root, options) {
+    const verified = verifyInstalledPatch(root, SPRINTF_PATCH, assertSprintfPrecisionGuard, options);
+    const require = createRequire(import.meta.url);
+    for (const copy of verified.copies) {
+        assertSprintfPrecisionGuard(require(path.join(root, copy.path, 'dist/sprintf.min.js')));
+    }
+    return verified;
+}
+
 export function isVerifiedFinding(name, advisory, verifiedPatches) {
     return VERIFIED_PATCHES.some(
         patch =>
             name === patch.package &&
             advisory.url === patch.advisory &&
-            advisory.severity === 'high' &&
+            advisory.severity === (patch.severity ?? 'high') &&
             (advisory.version === undefined || advisory.version === patch.version) &&
             verifiedPatches.some(
                 item =>
@@ -223,7 +269,11 @@ export function verifyReportPatches(auditReport, root, options) {
         const advisories = auditReport[patch.package] ?? [];
         if (!advisories.some(advisory => advisory.url === patch.advisory)) continue;
         verified.push(
-            patch === BRACES_PATCH ? verifyBracesPatch(root, options) : verifyHttpCachePatch(root, options),
+            patch === BRACES_PATCH
+                ? verifyBracesPatch(root, options)
+                : patch === HTTP_CACHE_PATCH
+                  ? verifyHttpCachePatch(root, options)
+                  : verifySprintfPatch(root, options),
         );
     }
     return verified;
