@@ -1479,10 +1479,7 @@ export function TelegramNotificationsPanel() {
                                                     className={inputClass}
                                                 >
                                                     {routing.departments.map(department => (
-                                                        <option
-                                                            key={department.nameZh}
-                                                            value={department.nameZh}
-                                                        >
+                                                        <option key={department.code} value={department.code}>
                                                             {department.nameZh}
                                                         </option>
                                                     ))}

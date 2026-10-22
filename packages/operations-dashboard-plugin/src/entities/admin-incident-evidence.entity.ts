@@ -43,7 +43,7 @@ export class AdminIncidentEvidence extends VendureEntity {
     @Column({ type: 'simple-json' })
     evidence: Record<string, unknown>;
 
-    @Column({ type: Date })
+    @Column({ type: Date, precision: 3 })
     occurredAt: Date;
 
     @Column({ type: 'varchar', length: 64 })
