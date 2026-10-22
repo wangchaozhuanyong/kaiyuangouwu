@@ -41,6 +41,7 @@ node --test packages/storefront/e2e/client-loading/preview-server.spec.mjs
 node packages/storefront/e2e/client-loading/verify-navigation-feedback.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=feedback
 node packages/storefront/e2e/client-loading/verify-navigation-feedback.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=cpu4 --widths=390 --cpu=4
 node packages/storefront/e2e/client-loading/verify-pending-ownership.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=ownership
+node packages/storefront/e2e/client-loading/verify-module-recovery.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=module-recovery
 ```
 
 导航等待期间仅保留共享壳层，正文呈现目标占位；React保留的隐藏子树不算可见来源页。

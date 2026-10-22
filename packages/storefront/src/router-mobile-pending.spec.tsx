@@ -182,6 +182,32 @@ async function click(label: string, delay = 0) {
         await new Promise(resolve => setTimeout(resolve, delay));
     });
 }
+it('keeps navigation and a real recovery action when a leaf module fails', async () => {
+    await start();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    loads.code.mockRejectedValue(new Error('Synthetic module failure'));
+    await act(async () => {
+        await router.navigate({ to: '/services' } as never);
+    });
+    expect(host.textContent).toContain('Page resources unavailable');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Page resources unavailable');
+    expect(host.textContent).toContain('Intelligent services');
+    expect(host.querySelector('.storefront-bottom-nav')).not.toBeNull();
+    expect([...host.querySelectorAll('button')].some(button => button.textContent === 'Reload')).toBe(true);
+    expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+    expect(host.querySelector('[data-route]')?.getAttribute('data-route')).toBe('services');
+    loads.code.mockResolvedValue(undefined);
+    await act(async () => {
+        const back = host.querySelector<HTMLButtonElement>('.page-back-button');
+        if (!back) throw new Error('Missing failed route return action');
+        back.click();
+        await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(host.querySelector('[data-mobile-home]')).not.toBeNull();
+    expect(host.textContent).not.toContain('Page resources unavailable');
+});
+
 it('preserves query scalar coercion and ignores omitted or compound search values', () => {
     const stringify = productionRouter.options.stringifySearch;
     if (!stringify) throw new Error('Missing production search serializer');

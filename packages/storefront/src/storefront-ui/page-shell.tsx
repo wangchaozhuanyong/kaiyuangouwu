@@ -36,6 +36,12 @@ import '../styles/right-drawer.css';
 export function asyncRouteTitle(routeName: RouteName, language: StorefrontLanguage): string {
     const isZh = language === 'zh';
     const routeTitles: Partial<Record<RouteName, string>> = {
+        home: isZh ? '首页' : 'Home',
+        category: isZh ? '商品' : 'Shop',
+        product: isZh ? '商品详情' : 'Product',
+        search: isZh ? '搜索' : 'Search',
+        services: isZh ? '智能服务' : 'Intelligent services',
+        support: isZh ? '帮助中心' : 'Help center',
         account: isZh ? '我的账户' : 'Account',
         cart: isZh ? '购物车' : 'Cart',
         purchase: isZh ? '确认购买' : 'Confirm purchase',
@@ -77,6 +83,7 @@ export function AsyncRouteStatePage({
     language,
     onBack,
     onRetry,
+    failureKind = 'data',
 }: {
     routeName: RouteName;
     state: Exclude<QueryLoadState, 'ready'>;
@@ -84,6 +91,7 @@ export function AsyncRouteStatePage({
     language: StorefrontLanguage;
     onBack: () => void;
     onRetry: () => void;
+    failureKind?: 'data' | 'module';
 }) {
     usePageReadiness(false, 'page', routeName, state === 'error' || state === 'paused');
     const isZh = language === 'zh';
@@ -98,18 +106,23 @@ export function AsyncRouteStatePage({
             />
         ) : (
             <EmptyState
+                role="alert"
                 icon={state === 'paused' ? <WifiOff /> : <CircleAlert />}
                 title={
                     state === 'paused'
                         ? isZh
                             ? '网络连接已暂停'
                             : 'Connection paused'
-                        : isZh
-                          ? '页面数据加载失败'
-                          : 'Could not load this page'
+                        : failureKind === 'module'
+                          ? isZh
+                              ? '页面资源加载失败'
+                              : 'Page resources unavailable'
+                          : isZh
+                            ? '页面数据加载失败'
+                            : 'Could not load this page'
                 }
                 detail={error}
-                action={isZh ? '重试' : 'Retry'}
+                action={failureKind === 'module' ? (isZh ? '重新加载' : 'Reload') : isZh ? '重试' : 'Retry'}
                 onAction={onRetry}
             />
         );
@@ -537,6 +550,7 @@ export function LegalFooter({
 }
 
 export function EmptyState({
+    role,
     icon,
     title,
     detail,
@@ -545,6 +559,7 @@ export function EmptyState({
     secondaryAction,
     compact = false,
 }: {
+    role?: 'alert' | 'status';
     icon: ReactNode;
     title: string;
     detail?: string;
@@ -554,7 +569,7 @@ export function EmptyState({
     compact?: boolean;
 }) {
     return (
-        <section className={`empty-state ${compact ? 'is-compact' : ''}`}>
+        <section role={role} className={`empty-state ${compact ? 'is-compact' : ''}`}>
             <span className="empty-state-icon" aria-hidden="true">
                 {icon}
             </span>
