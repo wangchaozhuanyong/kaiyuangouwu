@@ -1,0 +1,14 @@
+{
+  "name": "@vendure-security/http-cache-semantics",
+  "version": "4.2.0-vendure.1",
+  "private": true,
+  "description": "Project-maintained security implementation derived from http-cache-semantics 4.2.0",
+  "main": "index.js",
+  "license": "BSD-2-Clause",
+  "author": "Kornel Lesiński <npms2@geekhood.net> (https://kornel.ski/)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wangchaozhuanyong/kaiyuangouwu.git",
+    "directory": "patches/security-vendors/http-cache-semantics"
+  }
+}

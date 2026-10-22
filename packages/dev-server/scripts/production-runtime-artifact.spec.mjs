@@ -10,12 +10,14 @@ import {
     mkdtemp,
     readFile,
     readlink,
+    realpath,
     rename,
     rm,
     stat,
     symlink,
     writeFile,
 } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -26,6 +28,7 @@ import {
     copyStorefrontMediaReleaseInputs,
     ensureRuntimeRootPermissions,
     HOMEPAGE_CAROUSEL_RUNTIME_FILES,
+    materializeSecurityVendorAliases,
     pruneDeniedRuntimePackages,
     REFERRAL_POSTER_RUNTIME_FILES,
     repositoryRoot,
@@ -57,6 +60,38 @@ import { storefrontMediaManifest } from './sync-storefront-media.mjs';
 void test('runtime artifact includes catalog management plugin build output', () => {
     assert.deepEqual(RUNTIME_PACKAGE_ASSETS['catalog-management-plugin'], ['dist']);
     assert.ok(REQUIRED_RUNTIME_FILES.includes('packages/catalog-management-plugin/dist/index.js'));
+});
+
+void test('filtered production installs materialize verified aliases for hoisted consumers', async () => {
+    const root = await realpath(await mkdtemp(path.join(tmpdir(), 'vendure-runtime-vendor-alias-')));
+    try {
+        const nested = 'packages/dev-server/node_modules/braces';
+        await cp(path.join(repositoryRoot, 'patches/security-vendors/braces'), path.join(root, nested), {
+            recursive: true,
+        });
+        for (const name of ['fill-range', 'to-regex-range', 'is-number']) {
+            await cp(path.join(repositoryRoot, 'node_modules', name), path.join(root, 'node_modules', name), {
+                recursive: true,
+            });
+        }
+        const source = path.join(root, nested, 'index.js');
+        const original = await readFile(source);
+        await writeFile(source, '// corrupted replacement');
+        await assert.rejects(materializeSecurityVendorAliases(root), /fingerprint mismatch/u);
+        await assert.rejects(access(path.join(root, 'node_modules/braces')), /ENOENT/u);
+        await writeFile(source, original);
+        await mkdir(path.join(root, 'node_modules/braces'));
+        await assert.rejects(materializeSecurityVendorAliases(root), /Unverified canonical/u);
+        await rm(path.join(root, 'node_modules/braces'), { recursive: true });
+        await materializeSecurityVendorAliases(root);
+        const require = createRequire(path.join(root, 'node_modules/consumer/package.json'));
+        assert.ok(require.resolve('braces').startsWith(root + path.sep));
+        assert.deepEqual(require('braces').expand('{a,b}'), ['a', 'b']);
+        assert.equal((await lstat(path.join(root, 'node_modules/braces'))).isDirectory(), true);
+        await materializeSecurityVendorAliases(root);
+    } finally {
+        await rm(root, { recursive: true, force: true });
+    }
 });
 
 void test('runtime artifact includes the telemetry plugin required by dev-server', () => {
@@ -687,6 +722,9 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
             path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
             path.join(root, 'production-runtime-audit.mjs'),
         );
+        for (const file of ['security-vendors.mjs', 'security-vendor-definitions.mjs']) {
+            await cp(path.join(repositoryRoot, 'packages/dev-server/scripts', file), path.join(root, file));
+        }
         await writeFile(path.join(root, 'package.json'), '{"name":"fixture-runtime","version":"1.0.0"}\n');
         await writeFile(
             path.join(root, 'RUNTIME-METADATA.json'),
@@ -715,7 +753,8 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         );
         const saved = path.join(fixture, 'saved-audit.json');
         const lockfile = path.join(repositoryRoot, 'bun.lock');
-        writeBunAuditEvidence(saved, lockfile, raw);
+        // Native audit sees private installed identities; provenance independently restores original findings.
+        writeBunAuditEvidence(saved, lockfile, {});
         const lockSha = createHash('sha256')
             .update(await readFile(lockfile))
             .digest('hex');
@@ -723,6 +762,7 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
             auditReportPath: saved,
             expectedLockfileSha256: lockSha,
             failOn: 'high',
+            originAudit: async () => raw,
         });
         const refresh = async value => {
             await writeFile(path.join(root, 'RUNTIME-AUDIT.json'), JSON.stringify(value));
@@ -732,6 +772,15 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         await verifyRuntimeArtifact(root, { expectedSha, verifyModules: false });
         assert.equal(report.summary.high, 2);
         assert.equal(report.findings.length, 2);
+        assert.ok(report.findings.every(finding => finding.source === 'UPSTREAM_PROVENANCE'));
+        const wrongIdentity = structuredClone(report);
+        wrongIdentity.findings[0].replacement.version = 'unreviewed';
+        await refresh(wrongIdentity);
+        await assert.rejects(
+            verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
+            /replacement identity/u,
+        );
+        await refresh(report);
         const standalone = spawnSync(
             process.execPath,
             [
@@ -773,9 +822,6 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         );
         const unrelated = structuredClone(report);
         unrelated.findings[0].url = 'https://example.invalid/unapproved-high';
-        unrelated.verifiedPatches = unrelated.verifiedPatches.filter(
-            proof => proof.name !== unrelated.findings[0].name,
-        );
         await refresh(unrelated);
         await assert.rejects(
             verifyRuntimeArtifact(root, { expectedSha, verifyModules: false }),
@@ -798,6 +844,8 @@ void test('copied runtime CLI validates governance imports and the database driv
         for (const [source, destination] of [
             ['production-runtime-verify.mjs', 'verify-runtime.mjs'],
             ['production-runtime-audit.mjs', 'production-runtime-audit.mjs'],
+            ['security-vendors.mjs', 'security-vendors.mjs'],
+            ['security-vendor-definitions.mjs', 'security-vendor-definitions.mjs'],
         ]) {
             await cp(
                 path.join(repositoryRoot, 'packages/dev-server/scripts', source),

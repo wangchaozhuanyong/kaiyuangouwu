@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import './security-vendors.spec.mjs';
 
 import {
     auditRuntimePackages,
@@ -15,56 +16,35 @@ import {
     writeBunAuditEvidence,
 } from './production-runtime-audit.mjs';
 
-void test('sprintf precision patch verifies both entrypoints and rejects changed bytes or advisories', async () => {
-    const { cp, mkdir } = await import('node:fs/promises');
-    const { SPRINTF_PATCH, verifySprintfPatch } = await import('./production-runtime-audit.mjs');
+void test('retired sprintf dependency has no audit exception and cannot reappear', async () => {
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-    const root = await mkdtemp(path.join(tmpdir(), 'vendure-sprintf-patch-'));
-    const installed = path.join(repositoryRoot, 'node_modules/sprintf-js');
-    const localCopy = path.join(root, 'node_modules/sprintf-js');
-    const registration = JSON.stringify({
-        patchedDependencies: { 'sprintf-js@1.0.3': SPRINTF_PATCH.path },
-    });
-    const finding = {
-        id: 1,
-        severity: 'moderate',
-        title: 'Unbounded numeric precision',
-        url: SPRINTF_PATCH.advisory,
-        vulnerable_versions: '<=1.1.3',
-    };
-    const run = report =>
-        runBunAudit(root, {
-            auditLevel: 'moderate',
-            runCommand: () => ({ status: 1, stdout: JSON.stringify(report), stderr: '' }),
-        });
+    const manifest = JSON.parse(await readFile(path.join(repositoryRoot, 'package.json'), 'utf8'));
+    const lock = await readFile(path.join(repositoryRoot, 'bun.lock'), 'utf8');
+    assert.equal(manifest.overrides.argparse, '2.0.1');
+    assert.equal(manifest.patchedDependencies?.['sprintf-js@1.0.3'], undefined);
+    assert.doesNotMatch(lock, /"sprintf-js":\s*\[/u);
+    const root = await mkdtemp(path.join(tmpdir(), 'vendure-retired-sprintf-'));
     try {
-        await mkdir(path.join(root, 'patches'), { recursive: true });
-        await cp(path.join(repositoryRoot, SPRINTF_PATCH.path), path.join(root, SPRINTF_PATCH.path));
-        await writeFile(path.join(root, 'package.json'), registration);
-        await writeFile(path.join(root, 'bun.lock'), registration);
-        await cp(installed, localCopy, { recursive: true });
-        const verified = verifySprintfPatch(root);
-        assert.equal(verified.state, 'VERIFIED_PATCH');
-        const report = { 'sprintf-js': [finding] };
-        assert.deepEqual(await run(report), report);
-        const inventory = [{ name: 'sprintf-js', version: '1.0.3', path: 'node_modules/sprintf-js' }];
-        const result = createRuntimeAuditReport(inventory, report, {
-            failOn: 'moderate',
-            verifiedPatches: [verified],
-        });
-        assert.equal(result.report.summary.moderate, 1);
-        assert.equal(result.blockedFindings.length, 0);
-        assert.equal(result.report.findings[0].url, finding.url);
-        for (const changed of [{ severity: 'high' }, { url: 'https://example.invalid/other' }]) {
-            await assert.rejects(run({ 'sprintf-js': [{ ...finding, ...changed }] }), /policy failed/u);
+        for (const severity of ['moderate', 'high', 'critical']) {
+            const report = {
+                'sprintf-js': [
+                    {
+                        id: 1,
+                        severity,
+                        title: 'Retired dependency returned',
+                        url: 'https://github.com/advisories/GHSA-hp3w-g68c-fv3c',
+                        vulnerable_versions: '<=1.1.3',
+                    },
+                ],
+            };
+            await assert.rejects(
+                runBunAudit(root, {
+                    auditLevel: 'moderate',
+                    runCommand: () => ({ status: 1, stdout: JSON.stringify(report), stderr: '' }),
+                }),
+                /policy failed/u,
+            );
         }
-        for (const file of ['src/sprintf.js', 'dist/sprintf.min.js']) {
-            await writeFile(path.join(localCopy, file), '// unpatched fixture');
-            assert.throws(() => verifySprintfPatch(root), /fingerprint mismatch/u);
-            await cp(path.join(installed, file), path.join(localCopy, file));
-        }
-        await writeFile(path.join(root, SPRINTF_PATCH.path), '// changed patch');
-        await assert.rejects(run(report), /source fingerprint mismatch/u);
     } finally {
         await rm(root, { recursive: true, force: true });
     }
@@ -76,7 +56,7 @@ void test('cache backport verifies aliases and runtime bytes without hiding raw 
         await import('./production-runtime-audit.mjs');
     const root = await mkdtemp(path.join(tmpdir(), 'vendure-cache-patch-'));
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-    const installed = path.join(repositoryRoot, 'node_modules/http-cache-semantics');
+    const installed = path.join(repositoryRoot, 'patches/security-vendors/http-cache-semantics');
     const localCopy = path.join(root, 'node_modules/http-cache-semantics');
     const nestedCopy = path.join(root, 'packages/fixture/node_modules/cache-alias');
     const registration = JSON.stringify({
@@ -122,7 +102,9 @@ void test('cache backport verifies aliases and runtime bytes without hiding raw 
         await writeFile(path.join(root, 'package.json'), registration);
         await writeFile(path.join(root, 'bun.lock'), registration);
         await cp(installed, localCopy, { recursive: true });
+        await cp(path.join(installed, 'UPSTREAM-PACKAGE.json'), path.join(localCopy, 'package.json'));
         await cp(installed, nestedCopy, { recursive: true });
+        await cp(path.join(installed, 'UPSTREAM-PACKAGE.json'), path.join(nestedCopy, 'package.json'));
         const verified = verifyHttpCachePatch(root);
         assert.equal(verified.copies.length, 2);
         assert.deepEqual(await run(onlyCache), onlyCache);
@@ -190,9 +172,16 @@ void test('cache backport verifies aliases and runtime bytes without hiding raw 
         assert.throws(() => verifyHttpCachePatch(root), /registration/u);
         await writeFile(path.join(root, 'package.json'), registration);
         const external = path.join(root, 'node_modules/external-cache');
-        await symlink(installed, external);
-        assert.throws(() => verifyHttpCachePatch(root), /outside the audited tree/u);
-        await rm(external);
+        const outside = await mkdtemp(path.join(tmpdir(), 'vendure-original-cache-outside-'));
+        try {
+            await cp(installed, outside, { recursive: true });
+            await cp(path.join(installed, 'UPSTREAM-PACKAGE.json'), path.join(outside, 'package.json'));
+            await symlink(outside, external);
+            assert.throws(() => verifyHttpCachePatch(root), /outside the audited tree/u);
+            await rm(external);
+        } finally {
+            await rm(outside, { recursive: true, force: true });
+        }
         await rm(path.join(root, 'node_modules'), { recursive: true });
         await rm(path.join(root, 'packages'), { recursive: true });
         assert.throws(() => verifyHttpCachePatch(root), /No installed/u);
@@ -650,9 +639,10 @@ void test('approved braces backport verifies all installed copies and preserves 
             patchedDependencies: { 'braces@3.0.3': BRACES_PATCH.path },
         }),
     );
-    const installed = path.join(repositoryRoot, 'node_modules/braces');
+    const installed = path.join(repositoryRoot, 'patches/security-vendors/braces');
     const localCopy = path.join(root, 'node_modules/braces');
     await cp(installed, localCopy, { recursive: true });
+    await cp(path.join(installed, 'UPSTREAM-PACKAGE.json'), path.join(localCopy, 'package.json'));
     // Keep the existing range dependency available without installing anything in the test.
     await cp(
         path.join(repositoryRoot, 'node_modules/fill-range'),
@@ -669,7 +659,12 @@ void test('approved braces backport verifies all installed copies and preserves 
     });
     const nestedCopy = path.join(root, 'node_modules/dependent/node_modules/braces');
     await cp(installed, nestedCopy, { recursive: true });
+    await cp(path.join(installed, 'UPSTREAM-PACKAGE.json'), path.join(nestedCopy, 'package.json'));
     await cp(installed, path.join(root, 'node_modules/braces-alias'), { recursive: true });
+    await cp(
+        path.join(installed, 'UPSTREAM-PACKAGE.json'),
+        path.join(root, 'node_modules/braces-alias/package.json'),
+    );
     const braceReport = {
         braces: [
             {
@@ -682,6 +677,18 @@ void test('approved braces backport verifies all installed copies and preserves 
         ],
     };
     try {
+        // The upstream backport kept an extra EOF newline. Reconstruct its exact
+        // historical bytes; do not change the historical proof to fit our distribution.
+        for (const copy of [localCopy, nestedCopy, path.join(root, 'node_modules/braces-alias')]) {
+            const file = path.join(copy, 'lib/stringify.js');
+            await writeFile(file, (await readFile(file, 'utf8')) + '\n');
+            assert.equal(
+                createHash('sha256')
+                    .update(await readFile(file))
+                    .digest('hex'),
+                BRACES_PATCH.files['lib/stringify.js'],
+            );
+        }
         const verified = verifyBracesPatch(root);
         assert.equal(verified.state, 'VERIFIED_PATCH');
         assert.equal(verified.copies.length, 3);

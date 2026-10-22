@@ -1,0 +1,47 @@
+// Source-reviewed private replacements. Preserve origin identity for advisory tracking.
+export const SECURITY_VENDORS = Object.freeze(
+    [
+        {
+            original: 'braces',
+            originalVersion: '3.0.3',
+            package: '@vendure-security/braces',
+            version: '3.0.3-vendure.1',
+            path: 'patches/security-vendors/braces',
+            advisory: 'https://github.com/advisories/GHSA-vfj7-8cjw-p6xm',
+            severity: 'high',
+            files: {
+                LICENSE: '35bdd8a44339719441900fb50fbefc5e2dca1ca662cbaed7a687de842c8b70f2',
+                'README.md': '64c1e726d40185d4b2a79adb450904a65f028c012c1af48ec2ae6a9bb51fb179',
+                'UPSTREAM-PACKAGE.json': '56f08b888a4f30dc7cf8a7dbb36ffe92b737912ba36abe9d069d32167c957ac7',
+                'UPSTREAM.json': 'ae797ea6db85e780360681ddd86f589be0e1fd642c98335ca148ad14d5698ec0',
+                'index.js': '332ea07c7b006361aad12aa994ca75dc1db8e8382b884909e2f38f10b85c88a4',
+                'lib/compile.js': 'b651f7715e6db8942ce61d3394357b4d81c8ece88240aa31a458ea1165edd195',
+                'lib/constants.js': 'f9fb688959232eee3e6ad7906a5b0e3234815db49ee857ef86983d65b917dc7c',
+                'lib/expand.js': '2974d5b8763a358d81dfa5b4b804329f525239f34429c396b93a540219504809',
+                'lib/parse.js': 'ef9b3851f848460daaf91ff248222a43e266f97c4f2df7010cb7858e1e39a107',
+                'lib/stringify.js': '645f13c68af685148e9fe8eca449ee2ebb88eee0f27de7b2125fbfc175b1584d',
+                'lib/utils.js': 'b5a7596aa67730412b3c029ef09e84e6b67b8e445cffd35d1d295549c89066c7',
+                'package.json': 'a35762a4be367fd003e0fbc33070c3731e2d3ce0ce8f45b4ca04bb37a5fcfdbf',
+            },
+            sourceSha256: 'e9cddc34b7872e8214fbd09866d5a95754c2f97ea0bbe282c7572db0b31fbf48',
+        },
+        {
+            original: 'http-cache-semantics',
+            originalVersion: '4.2.0',
+            package: '@vendure-security/http-cache-semantics',
+            version: '4.2.0-vendure.1',
+            path: 'patches/security-vendors/http-cache-semantics',
+            advisory: 'https://github.com/advisories/GHSA-ch52-4w7c-c8xp',
+            severity: 'high',
+            files: {
+                LICENSE: 'ab868ad5a2ef5068560d9cd3b2180ec63c140bb4c5cae1ba779d300a0ac74fa3',
+                'README.md': '397d6fba8e7a8245b7ae05a9fe5c85ec3b378a22c2ab450468cde7267f67cd48',
+                'UPSTREAM-PACKAGE.json': 'bee0609d5ab09a590afe0e1209d3702b0afb0a3c158492f90902a724d889d22b',
+                'UPSTREAM.json': '2b8084d4f84aa7b8cf2f05ad18a87c9b5f8c4e39effc8f22c0cb9a3065011ef2',
+                'index.js': 'fc7b3f0265b7a7d0fee83bafa47186a66495720d3179801c2be3083de6d0cf76',
+                'package.json': '4191ad79539c7d3853a674ba9fca43d9b6ae7660fa7fdb689f7c56fc395e62a2',
+            },
+            sourceSha256: '3dbbca4de3d2dfd7c41725b4472743350f7bd8b6ccadad2f045537831ac919e1',
+        },
+    ].map(vendor => Object.freeze({ ...vendor, files: Object.freeze(vendor.files) })),
+);

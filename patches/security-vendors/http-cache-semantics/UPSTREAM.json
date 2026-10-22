@@ -1,0 +1,19 @@
+{
+  "origin": {
+    "name": "http-cache-semantics",
+    "version": "4.2.0",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/kornelski/http-cache-semantics.git"
+    },
+    "license": "BSD-2-Clause"
+  },
+  "advisory": "https://github.com/advisories/GHSA-ch52-4w7c-c8xp",
+  "derivedFromPublishedSourceWithReviewedFix": true,
+  "originalPatch": {
+    "path": "patches/http-cache-semantics@4.2.0.patch",
+    "sha256": "ef5fa630ed4a64ff13eeea43113d5e137d351881afa4afd2db78249629c58db9"
+  },
+  "sourceRevision": "fdbb87b5ecb70b2eba20b8bd4a3e31da5b386a8f",
+  "maintenance": "Vendure project; not an upstream release"
+}

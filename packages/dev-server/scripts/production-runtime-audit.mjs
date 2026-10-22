@@ -8,6 +8,13 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import semver from 'semver';
 
+import {
+    addSecurityOriginFindings,
+    isVerifiedSecurityReplacement,
+    securityVendorForPackage,
+    verifySecurityVendors,
+} from './security-vendors.mjs';
+
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
 const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000]);
 const RETRYABLE_AUDIT_FAILURE =
@@ -65,7 +72,7 @@ export const SPRINTF_PATCH = Object.freeze({
         'package.json': 'f7ed5a0dc9b4c939e92be6acdf3bd83abc3d7e5def9c1307f3c9f53bd7cb2f8c',
     }),
 });
-const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH, SPRINTF_PATCH]);
+const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH]);
 
 function installedPackagePaths(root, name) {
     const pending = [path.join(root, 'node_modules')];
@@ -244,26 +251,39 @@ export function verifySprintfPatch(root, options) {
 }
 
 export function isVerifiedFinding(name, advisory, verifiedPatches) {
-    return VERIFIED_PATCHES.some(
-        patch =>
-            name === patch.package &&
-            advisory.url === patch.advisory &&
-            advisory.severity === (patch.severity ?? 'high') &&
-            (advisory.version === undefined || advisory.version === patch.version) &&
-            verifiedPatches.some(
-                item =>
-                    item.state === 'VERIFIED_PATCH' &&
-                    item.advisory === advisory.url &&
-                    item.name === name &&
-                    item.version === patch.version &&
-                    item.patchSha256 === patch.sha256,
-            ),
+    return (
+        isVerifiedSecurityReplacement(name, advisory, verifiedPatches) ||
+        VERIFIED_PATCHES.some(
+            patch =>
+                name === patch.package &&
+                advisory.url === patch.advisory &&
+                advisory.severity === (patch.severity ?? 'high') &&
+                (advisory.version === undefined || advisory.version === patch.version) &&
+                verifiedPatches.some(
+                    item =>
+                        item.state === 'VERIFIED_PATCH' &&
+                        item.advisory === advisory.url &&
+                        item.name === name &&
+                        item.version === patch.version &&
+                        item.patchSha256 === patch.sha256,
+                ),
+        )
     );
 }
 
 export function verifyReportPatches(auditReport, root, options) {
-    const verified = [];
+    const verified = verifySecurityVendors(root, {
+        ...options,
+        installedPackagePaths,
+        behaviors: { braces: assertDepthGuard, 'http-cache-semantics': assertCacheReuseGuard },
+    });
     for (const patch of VERIFIED_PATCHES) {
+        if (
+            verified.some(
+                item => item.name === patch.package && item.state === 'VERIFIED_SECURITY_REPLACEMENT',
+            )
+        )
+            continue;
         if (options?.runtimePackages && !options.runtimePackages.some(item => item.name === patch.package))
             continue;
         const advisories = auditReport[patch.package] ?? [];
@@ -337,7 +357,10 @@ export function matchRuntimeAdvisories(runtimePackages, auditReport) {
     }
     const findings = [];
     for (const runtimePackage of runtimePackages) {
-        const advisories = auditReport[runtimePackage.name];
+        const replacement = securityVendorForPackage(runtimePackage.name);
+        const advisoryPackage = replacement?.original ?? runtimePackage.name;
+        const advisoryVersion = replacement?.originalVersion ?? runtimePackage.version;
+        const advisories = auditReport[advisoryPackage];
         if (advisories === undefined) {
             continue;
         }
@@ -362,18 +385,24 @@ export function matchRuntimeAdvisories(runtimePackages, auditReport) {
             }
             severityRank(advisory.severity);
             if (
-                semver.satisfies(runtimePackage.version, advisory.vulnerable_versions, {
+                semver.satisfies(advisoryVersion, advisory.vulnerable_versions, {
                     includePrerelease: true,
                 })
             ) {
                 findings.push({
                     id: String(advisory.id),
-                    name: runtimePackage.name,
+                    name: advisoryPackage,
+                    ...(replacement
+                        ? {
+                              replacement: { name: runtimePackage.name, version: runtimePackage.version },
+                              source: 'UPSTREAM_PROVENANCE',
+                          }
+                        : {}),
                     path: runtimePackage.path,
                     severity: advisory.severity,
                     title: advisory.title,
                     url: advisory.url,
-                    version: runtimePackage.version,
+                    version: advisoryVersion,
                     vulnerableVersions: advisory.vulnerable_versions,
                 });
             }
@@ -490,6 +519,8 @@ export async function runBunAudit(
                 encoding: 'utf8',
             }),
         wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
+        originAudit,
+        onOriginReport,
     } = {},
 ) {
     if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 2) {
@@ -534,7 +565,11 @@ export async function runBunAudit(
         // Preserve the complete raw report even when a patch check or policy blocks publication.
         await onReport(report);
         const verifiedPatches = verifyReportPatches(report, workingDirectory);
-        const blockedFindings = evaluateAuditPolicy(report, auditLevel ?? 'critical', verifiedPatches);
+        const assessed = await addSecurityOriginFindings(report, verifiedPatches, {
+            requestAudit: originAudit,
+            onOriginReport,
+        });
+        const blockedFindings = evaluateAuditPolicy(assessed, auditLevel ?? 'critical', verifiedPatches);
         if (auditLevel && blockedFindings.length > 0) {
             const first = blockedFindings[0];
             throw new Error(
@@ -544,7 +579,7 @@ export async function runBunAudit(
         if (result.status !== 0 && result.status !== 1) {
             throw new Error(`bun audit exited unexpectedly with code ${result.status ?? 'unknown'}`);
         }
-        return report;
+        return assessed;
     }
     throw new Error('bun audit retry loop exited unexpectedly');
 }
@@ -552,7 +587,7 @@ export async function runBunAudit(
 export async function auditRuntimePackages(
     artifactRoot,
     runtimePackages,
-    { auditReportPath, expectedLockfileSha256, failOn = 'critical' } = {},
+    { auditReportPath, expectedLockfileSha256, failOn = 'critical', originAudit } = {},
 ) {
     if (auditReportPath && !expectedLockfileSha256) {
         throw new Error('Saved bun audit evidence requires the source lockfile SHA-256');
@@ -567,7 +602,10 @@ export async function auditRuntimePackages(
         runtimePackages,
         requireRegistration: false,
     });
-    const { blockedFindings, report } = createRuntimeAuditReport(runtimePackages, auditReport, {
+    const assessed = await addSecurityOriginFindings(auditReport, verifiedPatches, {
+        requestAudit: originAudit,
+    });
+    const { blockedFindings, report } = createRuntimeAuditReport(runtimePackages, assessed, {
         failOn,
         verifiedPatches,
     });
@@ -594,6 +632,26 @@ async function main() {
     severityRank(auditLevel);
     const report = await runBunAudit(repositoryRoot, {
         auditLevel,
+        onOriginReport: originReport => {
+            if (values['evidence-output']) {
+                const sourceLockfileSha256 = hashFile(
+                    path.resolve(repositoryRoot, values.lockfile ?? 'bun.lock'),
+                );
+                writeFileSync(
+                    path.resolve(values['evidence-output']) + '.origins.json',
+                    JSON.stringify(
+                        {
+                            format: 'vendure-upstream-provenance-audit-v1',
+                            sourceLockfileSha256,
+                            generatedAt: new Date().toISOString(),
+                            ...originReport,
+                        },
+                        null,
+                        2,
+                    ) + '\n',
+                );
+            }
+        },
         onReport: rawReport => {
             if (values['evidence-output']) {
                 const lockfilePath = path.resolve(repositoryRoot, values.lockfile ?? 'bun.lock');
@@ -603,7 +661,7 @@ async function main() {
     });
     const verifiedPatches = verifyReportPatches(report, repositoryRoot);
     process.stdout.write(
-        `bun audit policy passed (${auditLevel}+); verified patches: ${verifiedPatches.length}\n`,
+        `bun audit policy passed (${auditLevel}+); verified patches or maintained replacements: ${verifiedPatches.length}\n`,
     );
     if (verifiedPatches.length) process.stdout.write(`${JSON.stringify({ verifiedPatches })}\n`);
 }

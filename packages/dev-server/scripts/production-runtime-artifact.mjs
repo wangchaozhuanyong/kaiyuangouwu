@@ -25,7 +25,7 @@ import { parseArgs } from 'node:util';
 import { assertStorefrontRenderer } from '../../../deploy/storefront-renderer.mjs';
 
 import { damatongAssets } from './damatong-storefront-config.mjs';
-import { auditRuntimePackages } from './production-runtime-audit.mjs';
+import { auditRuntimePackages, verifyReportPatches } from './production-runtime-audit.mjs';
 import {
     collectArtifactEntries,
     collectPackageInventory,
@@ -160,6 +160,8 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     ...REQUIRED_PROTECTION_PAIRS.map(({ source }) => source),
     PROTECTION_MANIFEST_FILE,
     'production-runtime-audit.mjs',
+    'security-vendors.mjs',
+    'security-vendor-definitions.mjs',
     'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
     'packages/dev-server/dist/index-worker.js',
@@ -287,6 +289,35 @@ function installProductionDependencies(stagingRoot) {
     if (result.status !== 0) {
         throw new Error(`Production dependency install failed with exit code ${result.status ?? 'unknown'}`);
     }
+}
+
+// Bun's filtered file-dependency install can place the maintained implementation
+// only under dev-server while hoisted consumers require the canonical root alias.
+// Materialize that alias from a verified installed copy before pruning sources.
+export async function materializeSecurityVendorAliases(stagingRoot) {
+    const packages = await collectPackageInventory(stagingRoot);
+    const proofs = verifyReportPatches({}, stagingRoot, {
+        runtimePackages: packages,
+        requireRegistration: false,
+    });
+    for (const proof of proofs.filter(item => item.state === 'VERIFIED_SECURITY_REPLACEMENT')) {
+        const destination = path.resolve(stagingRoot, 'node_modules', proof.name);
+        try {
+            await lstat(destination);
+            assert.ok(
+                proof.copies.some(copy => path.resolve(stagingRoot, copy.path) === destination),
+                'Unverified canonical security dependency path',
+            );
+            continue;
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+        }
+        await cp(path.join(stagingRoot, proof.copies[0].path), destination, { recursive: true });
+    }
+    verifyReportPatches({}, stagingRoot, {
+        runtimePackages: await collectPackageInventory(stagingRoot),
+        requireRegistration: false,
+    });
 }
 
 export async function pruneDeniedRuntimePackages(stagingRoot) {
@@ -583,6 +614,12 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
         path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
         path.join(stagingRoot, 'production-runtime-audit.mjs'),
     );
+    for (const file of ['security-vendors.mjs', 'security-vendor-definitions.mjs']) {
+        await cp(
+            path.join(repositoryRoot, 'packages/dev-server/scripts', file),
+            path.join(stagingRoot, file),
+        );
+    }
     await writeFile(
         path.join(stagingRoot, 'RUNTIME-METADATA.json'),
         `${JSON.stringify(metadata, null, 2)}\n`,
@@ -644,6 +681,7 @@ export async function buildRuntimeArtifact({
         };
         await copyInstallerInputs(stagingRoot);
         installProductionDependencies(stagingRoot);
+        await materializeSecurityVendorAliases(stagingRoot);
         await pruneDeniedRuntimePackages(stagingRoot);
         await pruneInstallerWorkspace(stagingRoot);
         await copyRuntimeBuildOutputs(stagingRoot);
