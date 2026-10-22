@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront
+
+
+ Test Files  5 passed (5)
+      Tests  56 passed (56)
+   Start at  18:05:57
+   Duration  8.53s (transform 1.45s, setup 0ms, import 3.59s, tests 4.83s, environment 2.43s)
