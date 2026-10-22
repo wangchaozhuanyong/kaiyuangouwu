@@ -104,9 +104,7 @@ void mountStorefront().catch(error => {
 window.addEventListener(
     'load',
     () => {
-        void import('./storefront-performance')
-            .then(module => module.observeStorefrontPerformance())
-            .catch(() => undefined);
+        void import('./performance-entry').catch(() => undefined);
     },
     { once: true },
 );

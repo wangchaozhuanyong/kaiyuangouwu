@@ -3,6 +3,9 @@ import type { LCPMetricWithAttribution } from 'web-vitals/attribution';
 
 import { storefrontTrafficOptedOut, TRAFFIC_PREFERENCE_EVENT } from './storefront-traffic';
 
+const MIN_REPORT_INTERVAL_MS = 3000;
+const RATE_LIMIT_COOLDOWN_MS = 60_000;
+
 export function performancePageType(
     path: string,
 ): 'home' | 'catalog' | 'search' | 'product' | 'services' | 'support' | 'auth' | 'other' {
@@ -72,44 +75,78 @@ export function observeStorefrontPerformance(): void {
     let stopExperience: (() => void) | undefined;
     let experienceLoading = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let inFlight = false;
+    let nextSendAt = 0;
+    let cooldownUntil = 0;
     const flush = () => {
         clearTimeout(timer);
+        timer = undefined;
         if (storefrontTrafficOptedOut()) {
             pending.clear();
             return;
         }
-        if (!pending.size) return;
-        const batches = [...pending.values()];
-        pending.clear();
+        if (!pending.size || inFlight) return;
+        if (Date.now() < nextSendAt) {
+            timer = setTimeout(flush, nextSendAt - Date.now());
+            return;
+        }
+        const first = pending.entries().next().value;
+        if (!first) return;
+        const [id, batch] = first;
+        pending.delete(id);
+        inFlight = true;
+        nextSendAt = Date.now() + MIN_REPORT_INTERVAL_MS;
         // A failed telemetry read never delays navigation or gets retried as a business operation.
-        for (const batch of batches)
-            void fetch('/_storefront/performance', {
-                method: 'POST',
-                credentials: 'omit',
-                keepalive: true,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    sampleId: batch.sampleId,
-                    revision,
-                    pageType: batch.pageType,
-                    device,
-                    network,
-                    metrics: [...batch.metrics.values()].slice(0, 5),
-                }),
-            }).catch(() => undefined);
+        void fetch('/_storefront/performance', {
+            method: 'POST',
+            credentials: 'omit',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sampleId: batch.sampleId,
+                revision,
+                pageType: batch.pageType,
+                device,
+                network,
+                metrics: [...batch.metrics.values()].slice(0, 5),
+            }),
+        })
+            .then(response => {
+                if (response.status !== 429) return;
+                const retryAfter = response.headers.get('Retry-After');
+                const seconds = retryAfter?.trim() ? Number(retryAfter) : NaN;
+                const delay = Number.isFinite(seconds)
+                    ? seconds * 1000
+                    : Date.parse(retryAfter ?? '') - Date.now();
+                // Respect server backoff, with a safe browser-timer bound. Discard stale samples.
+                cooldownUntil =
+                    Date.now() + Math.min(86_400_000, Math.max(RATE_LIMIT_COOLDOWN_MS, delay || 0));
+                nextSendAt = cooldownUntil;
+                pending.clear();
+            })
+            .catch(() => undefined)
+            .finally(() => {
+                inFlight = false;
+                if (pending.size && !storefrontTrafficOptedOut())
+                    timer = setTimeout(flush, Math.max(0, nextSendAt - Date.now()));
+            });
     };
     const enqueue = (
         id: string,
         type: string,
         metric: { name: string; value: number; phases?: Record<string, number> },
     ) => {
-        if (storefrontTrafficOptedOut()) return;
-        if (!pending.has(id) && pending.size >= 4) flush();
+        if (storefrontTrafficOptedOut() || Date.now() < cooldownUntil) return;
+        // Keep recent samples bounded without forcing a burst when users navigate quickly.
+        if (!pending.has(id) && pending.size >= 4) {
+            const oldestId = pending.keys().next().value;
+            if (oldestId !== undefined) pending.delete(oldestId);
+        }
         const batch = pending.get(id) ?? { sampleId: id, pageType: type, metrics: new Map() };
         batch.metrics.set(metric.name, metric);
         pending.set(id, batch);
-        clearTimeout(timer);
-        timer = setTimeout(flush, 1000);
+        if (timer === undefined && !inFlight)
+            timer = setTimeout(flush, Math.max(1000, nextSendAt - Date.now()));
     };
     const report = (metric: Metric | LCPMetricWithAttribution) => {
         if (storefrontTrafficOptedOut()) return;
@@ -120,6 +157,7 @@ export function observeStorefrontPerformance(): void {
     const start = () => {
         if (storefrontTrafficOptedOut()) {
             clearTimeout(timer);
+            timer = undefined;
             pending.clear();
             stopExperience?.();
             stopExperience = undefined;

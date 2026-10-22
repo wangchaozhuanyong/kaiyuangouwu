@@ -1,0 +1,435 @@
+$ bun run check:typography && bun run verify:router-toolchain && tsc --noEmit && vite build && node ./scripts/verify-production-build.mjs && vite build --config vite.public-server.config.ts && vite build --config vite.two-factor.config.ts
+$ node scripts/check-typography.mjs
+Typography check passed: 443 source files, 93 shared tokens.
+$ node scripts/verify-router-toolchain.mjs
+Storefront router toolchain verified: 1.168.33
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 2299 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/storefront-page-data.ts is dynamically imported by /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/api/catalog.ts, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/api/catalog.ts but also statically imported by /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/StorefrontShell.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/brand-loading-content.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/hooks/useStorefrontBootstrap.ts, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/hooks/useStorefrontPublicData.ts, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/main.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/pages/guide-page.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/public-catalog-media.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/route-pages/catalog-route-pages.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/account-security.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/account.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/addresses.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/announcements.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/cart.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/category.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/checkout.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/coupons.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/favorites.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/flash-sale.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/forgot-password.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/gpt-recharge.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/guides.$slug.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/history.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/image-studio.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/index.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/legal.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/login.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/logistics.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/mail-query.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/notifications.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/order-confirmation.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/order-detail.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/orders.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/payment.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/product.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/purchase.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/recommendations.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/referral.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/register.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/reset-password.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/reviews.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/search.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/services.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/support.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/two-factor.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/routes/verify-account.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/index.html                                                 4.15 kB │ gzip:   1.38 kB
+dist/assets/catalog-directory-color-qvxS7lXs.webp               4.23 kB
+dist/assets/account-services-v1-480-D8VSruyw.webp              16.06 kB
+dist/assets/token-topup-v1-480-C-hiOw-Z.webp                   17.22 kB
+dist/assets/codex-tiers-v1-480-0ApjsdXK.webp                   18.11 kB
+dist/assets/default-hero-480-CDcTo4Zm.webp                     29.43 kB
+dist/assets/account-recommendation-crest-DH3GxgVY.webp         32.06 kB
+dist/assets/hero-cloudbridge-ai-hub-480-DWWdu4lw.webp          37.77 kB
+dist/assets/account-services-v1-960-h1jW5SQV.webp              43.20 kB
+dist/assets/hero-02-vip-480-Dd73wKhM.webp                      45.23 kB
+dist/assets/codex-tiers-v1-960-BlgmiFRG.webp                   48.29 kB
+dist/assets/token-topup-v1-960-CvsaZXhW.webp                   51.16 kB
+dist/assets/account-services-v1-1440-DEAe07HF.webp             73.01 kB
+dist/assets/codex-tiers-v1-1440-DTYV5IWe.webp                  83.00 kB
+dist/assets/account-services-v1-1600-BZB4Fmru.webp             85.26 kB
+dist/assets/default-hero-960-CcXGLeri.webp                     88.57 kB
+dist/assets/token-topup-v1-1440-CGjUS_y9.webp                  90.92 kB
+dist/assets/codex-tiers-v1-1600-BFfTeOvL.webp                  92.81 kB
+dist/assets/token-topup-v1-1600-DXdoeKPZ.webp                 105.01 kB
+dist/assets/hero-cloudbridge-ai-hub-960-DK6mVg95.webp         125.25 kB
+dist/assets/hero-02-vip-960-7YPSB5Ba.webp                     145.07 kB
+dist/assets/default-hero-1376-BzQEVEbi.webp                   152.29 kB
+dist/assets/hero-cloudbridge-ai-hub-1440-BPr9ExV7.webp        226.18 kB
+dist/assets/hero-02-vip-1376--DbwSTxp.webp                    253.04 kB
+dist/assets/hero-cloudbridge-ai-hub-1600-BJfLxBt1.webp        258.97 kB
+dist/assets/hero-cloudbridge-ai-hub-B1iZ_Bjz.jpg              294.39 kB
+dist/assets/codex-tiers-v1-2DaS_So2.png                       488.98 kB
+dist/assets/account-services-v1-C9QSiatF.png                  592.84 kB
+dist/assets/token-topup-v1-BRrvbX9R.png                       624.43 kB
+dist/assets/default-hero-RmeReIaG.jpg                         704.15 kB
+dist/assets/hero-02-vip-mAZ5GjmJ.jpg                          932.62 kB
+dist/assets/google-auth-button-BTFSTwWP.css                     0.63 kB │ gzip:   0.32 kB
+dist/assets/storefront-preview-scenario-panel-BiTXyT5r.css      0.84 kB │ gzip:   0.40 kB
+dist/assets/storefront-design-preview-DNeHSLow.css              1.13 kB │ gzip:   0.50 kB
+dist/assets/announcements-page-BwGcBH5G.css                     1.42 kB │ gzip:   0.50 kB
+dist/assets/not-found-route-page-WKyn3AIU.css                   1.53 kB │ gzip:   0.60 kB
+dist/assets/shop-abuse-challenge-implementation-1kHeK-aB.css    2.19 kB │ gzip:   0.60 kB
+dist/assets/auth-registration-result-uRqjKJMH.css               3.70 kB │ gzip:   1.00 kB
+dist/assets/addresses-page-CzqWG4of.css                         4.33 kB │ gzip:   1.29 kB
+dist/assets/isolated-entry-B9UYiw1w.css                         4.34 kB │ gzip:   1.13 kB
+dist/assets/search-loading-BokBrawW.css                         5.18 kB │ gzip:   1.27 kB
+dist/assets/coupon-center-page-BSTOP9rM.css                     5.49 kB │ gzip:   1.33 kB
+dist/assets/account-catalog-surfaces-Cclm4kLF.css               6.64 kB │ gzip:   1.62 kB
+dist/assets/search-page-TqlnEFGR.css                            6.89 kB │ gzip:   1.54 kB
+dist/assets/account-route-pages-CrdUP9Dh.css                    7.49 kB │ gzip:   1.45 kB
+dist/assets/notifications-D1IbFxIM.css                          7.90 kB │ gzip:   1.71 kB
+dist/assets/business-services-page-DqycWj8U.css                 9.18 kB │ gzip:   1.72 kB
+dist/assets/referral-page-C7ULcHDh.css                         11.04 kB │ gzip:   2.04 kB
+dist/assets/account-security-page-DyRoWaxk.css                 11.91 kB │ gzip:   2.51 kB
+dist/assets/order-aftercare-CLKlpUE9.css                       12.95 kB │ gzip:   2.56 kB
+dist/assets/checkout-payment-surfaces-D3j4q9s0.css             13.10 kB │ gzip:   2.68 kB
+dist/assets/auth-pages-C52hhoms.css                            13.27 kB │ gzip:   3.03 kB
+dist/assets/gpt-recharge-page-CYbmlID1.css                     17.71 kB │ gzip:   2.91 kB
+dist/assets/product-detail-page-CwiKQpZK.css                   18.48 kB │ gzip:   3.63 kB
+dist/assets/auth-overlay-D4fYGGaY.css                          21.33 kB │ gzip:   4.32 kB
+dist/assets/modals-and-support-CCBQbovb.css                    22.27 kB │ gzip:   4.10 kB
+dist/assets/mail-query-page-vpPM6EJL.css                       22.92 kB │ gzip:   3.45 kB
+dist/assets/order-pages-DEz2pEYh.css                           26.87 kB │ gzip:   4.39 kB
+dist/assets/ai-image-studio-page-DAWWO7iM.css                  67.29 kB │ gzip:   9.53 kB
+dist/assets/index-DKHgGgzQ.css                                383.16 kB │ gzip:  61.97 kB
+dist/assets/auth-visual-content-CO7iQFQM.js                     0.10 kB │ gzip:   0.11 kB
+dist/assets/logout-error-CvjZYrri.js                            0.10 kB │ gzip:   0.11 kB
+dist/assets/chevron-left-D8hZxE8V.js                            0.13 kB │ gzip:   0.14 kB
+dist/assets/message-circle-CvsxPQYs.js                          0.15 kB │ gzip:   0.16 kB
+dist/assets/plus-bsnwUIL8.js                                    0.15 kB │ gzip:   0.15 kB
+dist/assets/arrow-right-BB2VYDNy.js                             0.17 kB │ gzip:   0.16 kB
+dist/assets/arrow-up-right-CUhbH3Xo.js                          0.17 kB │ gzip:   0.16 kB
+dist/assets/circle-check-tyku8Slb.js                            0.17 kB │ gzip:   0.17 kB
+dist/assets/info-DUFVhh0J.js                                    0.20 kB │ gzip:   0.18 kB
+dist/assets/mail-CGlAEjjh.js                                    0.21 kB │ gzip:   0.20 kB
+dist/assets/business-time-C4w8N8pk.js                           0.23 kB │ gzip:   0.16 kB
+dist/assets/copy-ZiLaIvFg.js                                    0.23 kB │ gzip:   0.21 kB
+dist/assets/external-link-CeNV405k.js                           0.25 kB │ gzip:   0.20 kB
+dist/assets/eye-VgVWpStS.js                                     0.25 kB │ gzip:   0.20 kB
+dist/assets/lock-keyhole-DS0L8OH-.js                            0.26 kB │ gzip:   0.22 kB
+dist/assets/download-sSGsdQiD.js                                0.26 kB │ gzip:   0.22 kB
+dist/assets/pencil-D76DxPQ3.js                                  0.28 kB │ gzip:   0.23 kB
+dist/assets/not-found-D3kzrRGa.js                               0.30 kB │ gzip:   0.22 kB
+dist/assets/shop-abuse-BMfbBEq7.js                              0.32 kB │ gzip:   0.19 kB
+dist/assets/refresh-cw-DD_qovSy.js                              0.32 kB │ gzip:   0.23 kB
+dist/assets/legal-CdoF8Kve.js                                   0.32 kB │ gzip:   0.23 kB
+dist/assets/key-round-gNegDX3p.js                               0.35 kB │ gzip:   0.26 kB
+dist/assets/share-2-D-_rUBic.js                                 0.35 kB │ gzip:   0.23 kB
+dist/assets/gift-Bdz7YtHi.js                                    0.36 kB │ gzip:   0.25 kB
+dist/assets/trash-2-ClWe1zjP.js                                 0.36 kB │ gzip:   0.25 kB
+dist/assets/image-plus-DYnhDy2l.js                              0.36 kB │ gzip:   0.26 kB
+dist/assets/gpt-recharge-jpw5f07n.js                            0.37 kB │ gzip:   0.25 kB
+dist/assets/reviews-DfMMLIBB.js                                 0.37 kB │ gzip:   0.25 kB
+dist/assets/support-Bdh1EkKT.js                                 0.37 kB │ gzip:   0.25 kB
+dist/assets/services-CoCvn_pp.js                                0.37 kB │ gzip:   0.25 kB
+dist/assets/announcements-DRJUkn9M.js                           0.38 kB │ gzip:   0.25 kB
+dist/assets/flash-sale-Cn2Cl_pA.js                              0.38 kB │ gzip:   0.25 kB
+dist/assets/mail-query-DXPRnKAy.js                              0.38 kB │ gzip:   0.25 kB
+dist/assets/two-factor-CIGPGaa0.js                              0.38 kB │ gzip:   0.25 kB
+dist/assets/image-studio-DAm8vK5j.js                            0.38 kB │ gzip:   0.25 kB
+dist/assets/recommendations-t8P58tGV.js                         0.38 kB │ gzip:   0.25 kB
+dist/assets/cart-B0XTVYdt.js                                    0.40 kB │ gzip:   0.27 kB
+dist/assets/payment-DOS_0trL.js                                 0.41 kB │ gzip:   0.27 kB
+dist/assets/checkout-Cf8oYq_R.js                                0.41 kB │ gzip:   0.27 kB
+dist/assets/purchase-DXob0ffw.js                                0.41 kB │ gzip:   0.27 kB
+dist/assets/order-confirmation-Bm9rcOb6.js                      0.42 kB │ gzip:   0.28 kB
+dist/assets/eye-off-XC2-DB9O.js                                 0.43 kB │ gzip:   0.27 kB
+dist/assets/address-region-options-CrkQUuEZ.js                  0.44 kB │ gzip:   0.21 kB
+dist/assets/login-DL6KyvqR.js                                   0.45 kB │ gzip:   0.28 kB
+dist/assets/register-uRmBA_W_.js                                0.45 kB │ gzip:   0.28 kB
+dist/assets/index-BJ3hv9kV.js                                   0.45 kB │ gzip:   0.29 kB
+dist/assets/search-B9Q4jot9.js                                  0.45 kB │ gzip:   0.29 kB
+dist/assets/product-0HK_h8Eq.js                                 0.45 kB │ gzip:   0.29 kB
+dist/assets/reset-password-2-PkxH9O.js                          0.46 kB │ gzip:   0.29 kB
+dist/assets/verify-account-hPkSRe4M.js                          0.46 kB │ gzip:   0.29 kB
+dist/assets/forgot-password-ClbOUdmf.js                         0.46 kB │ gzip:   0.29 kB
+dist/assets/referral-client-feature-NSbSEd66.js                 0.46 kB │ gzip:   0.27 kB
+dist/assets/orders-DrziRiMH.js                                  0.47 kB │ gzip:   0.30 kB
+dist/assets/addresses-C3rKj500.js                               0.48 kB │ gzip:   0.30 kB
+dist/assets/logistics-BkiyW29K.js                               0.48 kB │ gzip:   0.30 kB
+dist/assets/order-detail-ZAp_rUog.js                            0.48 kB │ gzip:   0.30 kB
+dist/assets/account-security-C52L01X_.js                        0.48 kB │ gzip:   0.31 kB
+dist/assets/account-lAiQ_ZlF.js                                 0.49 kB │ gzip:   0.30 kB
+dist/assets/coupons-CT_EinZf.js                                 0.49 kB │ gzip:   0.30 kB
+dist/assets/history-TH5sP0JN.js                                 0.49 kB │ gzip:   0.30 kB
+dist/assets/referral-ClHlTXqK.js                                0.49 kB │ gzip:   0.30 kB
+dist/assets/favorites-CnE6fm0m.js                               0.49 kB │ gzip:   0.30 kB
+dist/assets/notifications-Dazi-ZEh.js                           0.49 kB │ gzip:   0.31 kB
+dist/assets/wand-sparkles-ziDlSGcu.js                           0.51 kB │ gzip:   0.29 kB
+dist/assets/logout-D5njJ1iA.js                                  0.61 kB │ gzip:   0.44 kB
+dist/assets/storefront-page-contexts-BTQeEYeg.js                0.65 kB │ gzip:   0.40 kB
+dist/assets/useAccountProductList-mLrUERPy.js                   0.65 kB │ gzip:   0.39 kB
+dist/assets/quantity-control-Nc81rqzE.js                        0.70 kB │ gzip:   0.38 kB
+dist/assets/checkout-address-Ot7c6n5r.js                        0.71 kB │ gzip:   0.41 kB
+dist/assets/auth-visual-utils-Dv9XarpD.js                       0.75 kB │ gzip:   0.47 kB
+dist/assets/announcements-DUadNGmo.js                           0.75 kB │ gzip:   0.38 kB
+dist/assets/category-Qy_iLYOR.js                                0.78 kB │ gzip:   0.44 kB
+dist/assets/tax-summary-Jg9qH_gm.js                             0.79 kB │ gzip:   0.49 kB
+dist/assets/content-target-href-DHdG3jBE.js                     0.91 kB │ gzip:   0.49 kB
+dist/assets/store-notifications-BP44Ag3U.js                     0.91 kB │ gzip:   0.34 kB
+dist/assets/session-queue-Cw1Oedo7.js                           0.98 kB │ gzip:   0.53 kB
+dist/assets/session-runtime-D-0yUD0S.js                         0.98 kB │ gzip:   0.59 kB
+dist/assets/cart-shipping-selection-DVLHKwuX.js                 1.04 kB │ gzip:   0.48 kB
+dist/assets/auth-overlay-navigation-actions-KjFnJofJ.js         1.06 kB │ gzip:   0.57 kB
+dist/assets/legal-route-page-D9FUJ5aF.js                        1.07 kB │ gzip:   0.55 kB
+dist/assets/public-page-bootstrap-D4mj6F-P.js                   1.26 kB │ gzip:   0.67 kB
+dist/assets/announcements-route-page-CkmP1v7r.js                1.27 kB │ gzip:   0.63 kB
+dist/assets/commerce-content-route-pages-Ca2g4Fy-.js            1.29 kB │ gzip:   0.62 kB
+dist/assets/realtime-BrrvqmfB.js                                1.30 kB │ gzip:   0.76 kB
+dist/assets/storefront-preview-scenario-panel-DxPWFZKr.js       1.33 kB │ gzip:   0.85 kB
+dist/assets/shared-BX7yFWBu.js                                  1.40 kB │ gzip:   0.60 kB
+dist/assets/not-found-route-page-B2HQvf7Y.js                    1.42 kB │ gzip:   0.79 kB
+dist/assets/product-section-B48gNWXd.js                         1.59 kB │ gzip:   0.90 kB
+dist/assets/storefront-traffic-preference-DxSnTwHq.js           1.66 kB │ gzip:   0.99 kB
+dist/assets/image-tone-Dz9vH2FB.js                              1.81 kB │ gzip:   0.87 kB
+dist/assets/search-loading-hwLJxPqj.js                          1.85 kB │ gzip:   0.77 kB
+dist/assets/mail-query-C4Hf7prP.js                              2.00 kB │ gzip:   0.69 kB
+dist/assets/shop-abuse-challenge-fPJru_mY.js                    2.07 kB │ gzip:   1.13 kB
+dist/assets/storefront-traffic-observer-DP2YYAcy.js             2.22 kB │ gzip:   0.86 kB
+dist/assets/google-authentication-B_9zwLO-.js                   2.29 kB │ gzip:   1.32 kB
+dist/assets/daily-recommendation-section-BBSSU11i.js            2.34 kB │ gzip:   1.22 kB
+dist/assets/ai-image-studio-cache-CxeCsbXR.js                   2.36 kB │ gzip:   0.99 kB
+dist/assets/public-catalog-media-C07vgfLW.js                    2.37 kB │ gzip:   1.26 kB
+dist/assets/guides._slug-AU2uJFvR.js                            2.38 kB │ gzip:   1.21 kB
+dist/assets/coupon-claim-verification-CNm6lc_4.js               2.43 kB │ gzip:   1.34 kB
+dist/assets/display-localization-GPEqf7EU.js                    2.50 kB │ gzip:   1.29 kB
+dist/assets/cart-route-page-BSAc6879.js                         2.52 kB │ gzip:   1.13 kB
+dist/assets/storefront-traffic-DNYse5sF.js                      2.66 kB │ gzip:   1.29 kB
+dist/assets/mail-events-C6lSC-Ai.js                             2.70 kB │ gzip:   1.37 kB
+dist/assets/share-poster-surface-C-RewE4X.js                    2.72 kB │ gzip:   1.24 kB
+dist/assets/checkout-route-pages-DmU6hcFE.js                    2.76 kB │ gzip:   1.15 kB
+dist/assets/google-auth-button-G1dYkMXn.js                      2.94 kB │ gzip:   1.52 kB
+dist/assets/category-navigation-collapse-Dd8d7-b3.js            3.02 kB │ gzip:   1.38 kB
+dist/assets/checkout-authentication-fEiZDjfL.js                 3.08 kB │ gzip:   1.57 kB
+dist/assets/gpt-recharge-route-page-CWCwc2yt.js                 3.18 kB │ gzip:   1.37 kB
+dist/assets/browsing-history-page-DAhmZX8c.js                   3.22 kB │ gzip:   1.62 kB
+dist/assets/favorite-products-page-BJHrM-my.js                  3.25 kB │ gzip:   1.68 kB
+dist/assets/auth-overlay-4bVR-YjS.js                            3.54 kB │ gzip:   1.65 kB
+dist/assets/Feedback-CRYBxNLS.js                                3.59 kB │ gzip:   1.78 kB
+dist/assets/auth-route-pages-D6wDJosO.js                        3.64 kB │ gzip:   1.15 kB
+dist/assets/order-ui-BFaQqRWa.js                                3.75 kB │ gzip:   1.57 kB
+dist/assets/storefront-experience-performance-D5RF3cyA.js       3.86 kB │ gzip:   1.58 kB
+dist/assets/StorefrontUpdatePrompt-BDYL8stZ.js                  3.97 kB │ gzip:   1.93 kB
+dist/assets/performance-entry-DduGnfmY.js                       4.04 kB │ gzip:   2.04 kB
+dist/assets/legal-page-3tyiB9yp.js                              4.15 kB │ gzip:   1.95 kB
+dist/assets/lazy-storefront-pages-a9vf414J.js                   4.20 kB │ gzip:   1.46 kB
+dist/assets/native-catalog-DEOixP4V.js                          4.37 kB │ gzip:   1.72 kB
+dist/assets/managed-ad-carousel-Bb8jVqGj.js                     4.62 kB │ gzip:   2.16 kB
+dist/assets/price-sort-label-Dmo2mE2K.js                        4.68 kB │ gzip:   1.91 kB
+dist/assets/storefront-enhancements-D9JGxXdA.js                 4.68 kB │ gzip:   1.96 kB
+dist/assets/route-media-preload-Y3-dfz2y.js                     4.73 kB │ gzip:   2.14 kB
+dist/assets/announcements-page-DcFTeFue.js                      5.15 kB │ gzip:   2.26 kB
+dist/assets/auth-overlay-surface-DTkMW1Q3.js                    5.19 kB │ gzip:   2.26 kB
+dist/assets/product-card-BvLt3TSS.js                            5.33 kB │ gzip:   2.13 kB
+dist/assets/share-poster-modal-CHf0k3B1.js                      5.41 kB │ gzip:   2.73 kB
+dist/assets/mobile-page-header-BciKgKo3.js                      5.68 kB │ gzip:   2.30 kB
+dist/assets/desktop-search-Ci1BjixU.js                          5.82 kB │ gzip:   2.47 kB
+dist/assets/shop-abuse-challenge-implementation-B5MXntOM.js     5.97 kB │ gzip:   2.79 kB
+dist/assets/storefront-coupons-DF1S-pam.js                      6.17 kB │ gzip:   2.29 kB
+dist/assets/image-studio-FwmpDFVO.js                            6.25 kB │ gzip:   1.64 kB
+dist/assets/content-route-pages-Ca5BkofI.js                     6.36 kB │ gzip:   2.22 kB
+dist/assets/catalog-route-pages-D6k3W70u.js                     6.77 kB │ gzip:   2.50 kB
+dist/assets/account-route-pages-i9ixG2wN.js                     7.07 kB │ gzip:   2.41 kB
+dist/assets/product-display-Dg303JcX.js                         7.25 kB │ gzip:   3.38 kB
+dist/assets/storefront-design-preview-B8_dPIIU.js               7.33 kB │ gzip:   2.84 kB
+dist/assets/order-route-pages-BZpHW9Wa.js                       9.18 kB │ gzip:   3.04 kB
+dist/assets/referrals-CQKcd4ZU.js                              10.38 kB │ gzip:   1.65 kB
+dist/assets/coupon-center-page-BTtQ2yJC.js                     11.27 kB │ gzip:   4.51 kB
+dist/assets/notifications-page-JVdW-BEb.js                     11.31 kB │ gzip:   4.26 kB
+dist/assets/web-vitals.attribution-ZD3Pai4r.js                 11.64 kB │ gzip:   4.49 kB
+dist/assets/cart-page-bV2apmfP.js                              12.33 kB │ gzip:   5.05 kB
+dist/assets/order-aftercare-BMaVFORd.js                        12.42 kB │ gzip:   5.03 kB
+dist/assets/content-ui-Dx1s2muU.js                             12.94 kB │ gzip:   5.49 kB
+dist/assets/client-plugin-registry-K9vx3jCk.js                 14.40 kB │ gzip:   4.92 kB
+dist/assets/cart-ui-BqXMhiau.js                                15.38 kB │ gzip:   5.28 kB
+dist/assets/search-page-C5LHoW5v.js                            15.43 kB │ gzip:   6.24 kB
+dist/assets/review-pages-Df5Nks_9.js                           16.08 kB │ gzip:   5.75 kB
+dist/assets/brand-loading-bootstrap-DwB7AI7i.js                17.83 kB │ gzip:   6.35 kB
+dist/assets/vendor-content-sanitizer-CJpyhneo.js               18.49 kB │ gzip:   6.35 kB
+dist/assets/addresses-page-CfiJrfue.js                         19.56 kB │ gzip:   6.77 kB
+dist/assets/account-security-page-D7P3Umci.js                  19.57 kB │ gzip:   7.19 kB
+dist/assets/product-detail-page-CnHiE8Rj.js                    19.57 kB │ gzip:   7.75 kB
+dist/assets/mail-query-page-BNI3FsDm.js                        20.15 kB │ gzip:   7.45 kB
+dist/assets/account-m1suIYg-.js                                21.88 kB │ gzip:   4.82 kB
+dist/assets/account-page-rlx09bai.js                           23.75 kB │ gzip:   7.24 kB
+dist/assets/category-route-page-BwzMcsKI.js                    25.40 kB │ gzip:   8.93 kB
+dist/assets/storefront-preview-runtime-bgEKw5Tx.js             26.22 kB │ gzip:   9.77 kB
+dist/assets/poster-qr-Cz5Ur4sU.js                              29.49 kB │ gzip:  12.03 kB
+dist/assets/business-services-page-DrmkZDP7.js                 30.90 kB │ gzip:   7.04 kB
+dist/assets/referral-page--asnPrhu.js                          31.26 kB │ gzip:  11.33 kB
+dist/assets/payment-pages-DvlRrVbz.js                          31.38 kB │ gzip:  11.18 kB
+dist/assets/gpt-recharge-page-B1lgfXGc.js                      34.45 kB │ gzip:  11.95 kB
+dist/assets/auth-pages-BBsFzZG-.js                             38.95 kB │ gzip:  12.62 kB
+dist/assets/support-page-CLv_PB89.js                           45.68 kB │ gzip:  13.36 kB
+dist/assets/home-page-C0h1dykj.js                              46.95 kB │ gzip:  16.03 kB
+dist/assets/checkout-page-Dw_bsHFN.js                          49.95 kB │ gzip:  14.49 kB
+dist/assets/isolated-entry-DiN9BvSu.js                         50.04 kB │ gzip:  16.20 kB
+dist/assets/ai-image-studio-page-CtzQ6GpD.js                   57.34 kB │ gzip:  19.96 kB
+dist/assets/order-pages-DH3AFqeW.js                            76.61 kB │ gzip:  21.66 kB
+dist/assets/vendor-tanstack-D-V3EZfR.js                       115.81 kB │ gzip:  38.15 kB
+dist/assets/commerce-styles-D12Q13fW.js                       162.98 kB │ gzip:  24.71 kB
+dist/assets/vendor-react-GZY1VIEG.js                          192.51 kB │ gzip:  60.35 kB
+dist/assets/index-BQqqomA2.js                                 384.37 kB │ gzip: 123.82 kB
+✓ built in 10.27s
+Display localization audit passed (770 source files)
+Verified storefront performance budgets: entry 376 KiB; critical CSS 375 KiB; largest lazy route CSS 27 KiB
+Verified initial route resource closures: startup JS 730259 B / CSS 383155 B; home JS 994902 B / CSS 383155 B; catalog JS 955380 B / CSS 389797 B; product JS 964325 B / CSS 423912 B; services JS 792256 B / CSS 392337 B; login JS 793542 B / CSS 397054 B
+vite v7.3.7 building ssr environment for production...
+transforming...
+✓ 2217 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/storefront-page-data.ts is dynamically imported by /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/api/catalog.ts, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/api/catalog.ts but also statically imported by /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/brand-loading-content.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/pages/guide-page.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/public-catalog-media.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/public-snapshot.tsx, /Users/wangchao/Desktop/源码文件夹/vendure开源/vendure-master/.codex-worktrees/home-design-review-20261022/packages/storefront/src/route-pages/catalog-route-pages.tsx, dynamic import will not move module into another chunk.
+
+dist/.server/assets/useQuery-D1c0uJuT.cjs                                 0.22 kB
+dist/.server/assets/chevron-left-CvS0E2bZ.cjs                             0.27 kB
+dist/.server/assets/plus-Co1tx6xI.cjs                                     0.29 kB
+dist/.server/assets/message-circle-Cy4h73TM.cjs                           0.30 kB
+dist/.server/assets/arrow-right-i2PhYlDA.cjs                              0.31 kB
+dist/.server/assets/arrow-up-right-ZafzROFV.cjs                           0.32 kB
+dist/.server/assets/circle-check-CeltL08G.cjs                             0.33 kB
+dist/.server/assets/megaphone-CzIAT_PI.cjs                                0.34 kB
+dist/.server/assets/rotate-ccw-Gle2BBJW.cjs                               0.35 kB
+dist/.server/assets/info-Bs7bKGxv.cjs                                     0.35 kB
+dist/.server/assets/mail-BrHcCB6m.cjs                                     0.36 kB
+dist/.server/assets/copy-C93WDWsG.cjs                                     0.38 kB
+dist/.server/assets/external-link-Pew8fOXT.cjs                            0.42 kB
+dist/.server/assets/eye-D5VjRJQT.cjs                                      0.42 kB
+dist/.server/assets/download-JJDzN6Mq.cjs                                 0.42 kB
+dist/.server/assets/lock-keyhole-D4QRMhb0.cjs                             0.43 kB
+dist/.server/assets/map-pin-DQPH6JtX.cjs                                  0.43 kB
+dist/.server/assets/pencil-zrgHGvHx.cjs                                   0.44 kB
+dist/.server/assets/business-time-CLhZM-yJ.cjs                            0.46 kB
+dist/.server/assets/refresh-cw-BAPB2zJ1.cjs                               0.49 kB
+dist/.server/assets/product-media-Co1bi2cs.cjs                            0.51 kB
+dist/.server/assets/shop-abuse-By9_61CP.cjs                               0.52 kB
+dist/.server/assets/key-round-DZuZnF7O.cjs                                0.53 kB
+dist/.server/assets/trash-2-BmfJqsLe.cjs                                  0.53 kB
+dist/.server/assets/image-plus-C9drMlV4.cjs                               0.54 kB
+dist/.server/assets/gift-C61G76Dv.cjs                                     0.54 kB
+dist/.server/assets/share-2-DuTA3ilo.cjs                                  0.55 kB
+dist/.server/assets/order-refresh-C8JC6wSB.cjs                            0.59 kB
+dist/.server/assets/truck-CMdAqh4O.cjs                                    0.60 kB
+dist/.server/assets/eye-off-Fm-X_PNE.cjs                                  0.64 kB
+dist/.server/assets/route-queries-BU_8c8gg.cjs                            0.80 kB
+dist/.server/assets/announcements-B4qh0jMa.cjs                            1.01 kB
+dist/.server/assets/logout-D_oINGqg.cjs                                   1.05 kB
+dist/.server/assets/address-region-options-CUxdEtW0.cjs                   1.10 kB
+dist/.server/assets/ai-image-studio-cache-state-Ddidn-kC.cjs              1.12 kB
+dist/.server/assets/referral-client-feature-Bkc2OCJZ.cjs                  1.18 kB
+dist/.server/assets/auth-visual-utils-DyrlEPg0.cjs                        1.21 kB
+dist/.server/assets/customer-avatar-DCDTgyoD.cjs                          1.22 kB
+dist/.server/assets/legal-route-page-Dp9ggPUm.cjs                         1.27 kB
+dist/.server/assets/announcements-route-page-CNe6ITfI.cjs                 1.30 kB
+dist/.server/assets/quantity-control-d5B57wwO.cjs                         1.32 kB
+dist/.server/assets/store-notifications-BAVGoG0o.cjs                      1.33 kB
+dist/.server/assets/useAccountProductList-S4qgkm9J.cjs                    1.39 kB
+dist/.server/assets/money-display-Bjb-xIxW.cjs                            1.41 kB
+dist/.server/assets/lazyRouteComponent-B4UIcZp5.cjs                       1.42 kB
+dist/.server/assets/checkout-address-6BdX28xn.cjs                         1.45 kB
+dist/.server/assets/tax-summary-_bmoL1eW.cjs                              1.46 kB
+dist/.server/assets/session-runtime-DxCeYd1y.cjs                          1.61 kB
+dist/.server/assets/storefront-semantic-palette-BSzAhkdc.cjs              1.65 kB
+dist/.server/assets/content-target-href-CGYoqRga.cjs                      1.71 kB
+dist/.server/assets/mail-query-DPRfwKow.cjs                               1.90 kB
+dist/.server/assets/cart-shipping-selection-DKN_TTX7.cjs                  1.95 kB
+dist/.server/assets/session-queue-v463WY72.cjs                            2.20 kB
+dist/.server/assets/useInfiniteQuery-C7X6BJ2o.cjs                         2.31 kB
+dist/.server/assets/commerce-content-route-pages-FGDvc2qT.cjs             2.42 kB
+dist/.server/assets/coupon-center-state-DODZ4h_4.cjs                      2.80 kB
+dist/.server/assets/cart-route-page-CVqpcqLn.cjs                          2.95 kB
+dist/.server/assets/shared-xiykziYh.cjs                                   3.00 kB
+dist/.server/assets/lazy-storefront-pages-D0ew5Is7.cjs                    3.07 kB
+dist/.server/assets/shop-abuse-challenge-D_r5iptu.cjs                     3.09 kB
+dist/.server/assets/realtime-BgC0iv_Q.cjs                                 3.15 kB
+dist/.server/assets/category-route-page-DA45vieW.cjs                      3.16 kB
+dist/.server/assets/referral-attribution-CGMpXuer.cjs                     3.25 kB
+dist/.server/assets/product-section-EIHIjSIx.cjs                          3.30 kB
+dist/.server/assets/google-authentication-DyWTYtQp.cjs                    3.58 kB
+dist/.server/assets/storefront-navigation-history-C3wJvCzy.cjs            3.67 kB
+dist/.server/assets/display-localization-B43tyE3p.cjs                     3.80 kB
+dist/.server/assets/support-content-DdTCcju8.cjs                          3.86 kB
+dist/.server/assets/image-tone-CFSgQVUS.cjs                               4.04 kB
+dist/.server/assets/gpt-recharge-route-page--KVxC-pZ.cjs                  4.24 kB
+dist/.server/assets/ai-image-studio-cache-CutkV63q.cjs                    4.64 kB
+dist/.server/assets/guide-page-DIkxw417.cjs                               5.14 kB
+dist/.server/assets/realtime-updates-BbedVlze.cjs                         5.32 kB
+dist/.server/assets/public-catalog-media-DCXNmknp.cjs                     5.53 kB
+dist/.server/assets/order-ui-ByYUDbRL.cjs                                 5.55 kB
+dist/.server/assets/checkout-route-pages-C4NOC_b0.cjs                     5.77 kB
+dist/.server/assets/mail-events-BBfhQ4Nh.cjs                              5.80 kB
+dist/.server/assets/share-poster-surface-xg6U-zMQ.cjs                     6.03 kB
+dist/.server/assets/category-navigation-collapse-azeNLCfv.cjs             6.45 kB
+dist/.server/assets/google-auth-button-CcuoQH_p.cjs                       6.51 kB
+dist/.server/assets/daily-recommendation-section-BkwUQt0R.cjs             6.60 kB
+dist/.server/assets/favorite-products-page-DuB1Wn5u.cjs                   7.75 kB
+dist/.server/assets/image-studio-B872mLNm.cjs                             7.77 kB
+dist/.server/assets/browsing-history-page-Dnzhkdc5.cjs                    7.95 kB
+dist/.server/assets/auth-route-pages-D5Q1AnD1.cjs                         8.08 kB
+dist/.server/assets/legal-page-DlYJup2h.cjs                               8.57 kB
+dist/.server/assets/native-catalog-DipWisoL.cjs                           8.63 kB
+dist/.server/assets/content-route-pages-Cdob7Dhd.cjs                      8.72 kB
+dist/.server/assets/managed-ad-carousel-B_-3nAp9.cjs                      9.16 kB
+dist/.server/assets/share-poster-modal-BBbbhxKF.cjs                      10.17 kB
+dist/.server/assets/account-route-pages-DMMEJCCp.cjs                     10.30 kB
+dist/.server/assets/price-sort-label-Dq-ImWt5.cjs                        10.87 kB
+dist/.server/assets/shop-abuse-challenge-implementation-B3Fksv7E.cjs     11.01 kB
+dist/.server/assets/catalog-route-pages-DCPzeYcA.cjs                     11.25 kB
+dist/.server/assets/referrals-D6pccH5n.cjs                               11.36 kB
+dist/.server/assets/announcements-page-BJT4GASd.cjs                      11.65 kB
+dist/.server/assets/product-card-BomaJOXP.cjs                            12.17 kB
+dist/.server/assets/mobile-page-header-DhymFHd2.cjs                      12.20 kB
+dist/.server/assets/storefront-coupons-DdO4yVsN.cjs                      12.87 kB
+dist/.server/assets/product-display-CxbFtV7P.cjs                         15.08 kB
+dist/.server/assets/client-plugin-registry-DRvu4LHS.cjs                  20.17 kB
+dist/.server/assets/order-route-pages-B0Ubdn2u.cjs                       20.54 kB
+dist/.server/assets/useBaseQuery-BueWbMGd.cjs                            23.15 kB
+dist/.server/assets/order-aftercare-CdEb38BO.cjs                         25.09 kB
+dist/.server/assets/content-ui-DyIAWQJT.cjs                              26.12 kB
+dist/.server/assets/notifications-page-CxBDgH1w.cjs                      26.34 kB
+dist/.server/assets/cart-page-1fFYyFHO.cjs                               28.27 kB
+dist/.server/assets/account-COg6A4TQ.cjs                                 28.27 kB
+dist/.server/assets/coupon-center-page-9OlyuQ9j.cjs                      28.85 kB
+dist/.server/assets/cart-ui-DB8Z4R3g.cjs                                 35.88 kB
+dist/.server/assets/business-services-page-CJherEti.cjs                  37.66 kB
+dist/.server/assets/search-page-BsCx2g-_.cjs                             38.92 kB
+dist/.server/assets/review-pages-C_DJTk_W.cjs                            39.42 kB
+dist/.server/assets/account-security-page-DZwbFcXM.cjs                   44.18 kB
+dist/.server/assets/addresses-page-wFoy29l5.cjs                          45.71 kB
+dist/.server/assets/mail-query-page-DcbryJrD.cjs                         46.40 kB
+dist/.server/assets/account-page-C86uZFoc.cjs                            53.85 kB
+dist/.server/assets/referral-page-BdhmZVJ-.cjs                           63.82 kB
+dist/.server/assets/support-page-3ae_C-Od.cjs                            67.01 kB
+dist/.server/assets/payment-pages-D1yupAex.cjs                           67.95 kB
+dist/.server/assets/category-page-CYBfVDzR.cjs                           67.97 kB
+dist/.server/assets/gpt-recharge-page-BPcyYazX.cjs                       70.04 kB
+dist/.server/assets/product-detail-page-B5OS1I55.cjs                     86.02 kB
+dist/.server/assets/checkout-page-CQojIiVz.cjs                           96.40 kB
+dist/.server/assets/auth-pages-D2-bi2QS.cjs                              98.59 kB
+dist/.server/assets/isolated-entry-vHAvsJd8.cjs                         103.22 kB
+dist/.server/assets/home-page-DCJr_BHm.cjs                              117.07 kB
+dist/.server/assets/ai-image-studio-page-DXCu4sTF.cjs                   135.93 kB
+dist/.server/assets/poster-qr-D13xLLqZ.cjs                              146.55 kB
+dist/.server/assets/order-pages-B8EE1a2i.cjs                            162.51 kB
+dist/.server/assets/commerce-styles-qhIhiB0G.cjs                        163.35 kB
+dist/.server/public-page-renderer.cjs                                 2,095.48 kB
+✓ built in 6.67s
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 2138 modules transformed.
+rendering chunks...
+computing gzip size...
+../dist-two-factor/build-config.json                                    0.04 kB │ gzip:  0.06 kB
+../dist-two-factor/index.html                                           0.82 kB │ gzip:  0.42 kB
+../dist-two-factor/assets/catalog-directory-color-qvxS7lXs.webp         4.23 kB
+../dist-two-factor/assets/account-services-v1-480-D8VSruyw.webp        16.06 kB
+../dist-two-factor/assets/token-topup-v1-480-C-hiOw-Z.webp             17.22 kB
+../dist-two-factor/assets/codex-tiers-v1-480-0ApjsdXK.webp             18.11 kB
+../dist-two-factor/assets/default-hero-480-CDcTo4Zm.webp               29.43 kB
+../dist-two-factor/assets/account-recommendation-crest-DH3GxgVY.webp   32.06 kB
+../dist-two-factor/assets/hero-cloudbridge-ai-hub-480-DWWdu4lw.webp    37.77 kB
+../dist-two-factor/assets/account-services-v1-960-h1jW5SQV.webp        43.20 kB
+../dist-two-factor/assets/hero-02-vip-480-Dd73wKhM.webp                45.23 kB
+../dist-two-factor/assets/codex-tiers-v1-960-BlgmiFRG.webp             48.29 kB
+../dist-two-factor/assets/token-topup-v1-960-CvsaZXhW.webp             51.16 kB
+../dist-two-factor/assets/account-services-v1-1440-DEAe07HF.webp       73.01 kB
+../dist-two-factor/assets/codex-tiers-v1-1440-DTYV5IWe.webp            83.00 kB
+../dist-two-factor/assets/account-services-v1-1600-BZB4Fmru.webp       85.26 kB
+../dist-two-factor/assets/default-hero-960-CcXGLeri.webp               88.57 kB
+../dist-two-factor/assets/token-topup-v1-1440-CGjUS_y9.webp            90.92 kB
+../dist-two-factor/assets/codex-tiers-v1-1600-BFfTeOvL.webp            92.81 kB
+../dist-two-factor/assets/token-topup-v1-1600-DXdoeKPZ.webp           105.01 kB
+../dist-two-factor/assets/hero-cloudbridge-ai-hub-960-DK6mVg95.webp   125.25 kB
+../dist-two-factor/assets/hero-02-vip-960-7YPSB5Ba.webp               145.07 kB
+../dist-two-factor/assets/default-hero-1376-BzQEVEbi.webp             152.29 kB
+../dist-two-factor/assets/hero-cloudbridge-ai-hub-1440-BPr9ExV7.webp  226.18 kB
+../dist-two-factor/assets/hero-02-vip-1376--DbwSTxp.webp              253.04 kB
+../dist-two-factor/assets/hero-cloudbridge-ai-hub-1600-BJfLxBt1.webp  258.97 kB
+../dist-two-factor/assets/hero-cloudbridge-ai-hub-B1iZ_Bjz.jpg        294.39 kB
+../dist-two-factor/assets/codex-tiers-v1-2DaS_So2.png                 488.98 kB
+../dist-two-factor/assets/account-services-v1-C9QSiatF.png            592.84 kB
+../dist-two-factor/assets/token-topup-v1-BRrvbX9R.png                 624.43 kB
+../dist-two-factor/assets/default-hero-RmeReIaG.jpg                   704.15 kB
+../dist-two-factor/assets/hero-02-vip-mAZ5GjmJ.jpg                    932.62 kB
+../dist-two-factor/assets/index-CDQGAzrJ.css                           32.18 kB │ gzip:  7.09 kB
+../dist-two-factor/assets/index-BnKCP5_X.js                           303.40 kB │ gzip: 96.84 kB
+✓ built in 4.28s
