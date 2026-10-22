@@ -130,6 +130,7 @@ function nativeLog(executionPlan = plan, options = {}) {
     const lines = [
         '[command]/usr/bin/git log -1 --format=%H',
         options.checkoutSource ?? sourceSha,
+        `  PR_BASE_SHA: ${options.prBaseSha ?? baseSha}`,
         `  BASE_SHA: ${options.baseSha ?? baseSha}`,
         `  FULL: ${options.full ?? executionPlan.full}`,
         JSON.stringify(executionPlan, null, 2),
@@ -481,6 +482,37 @@ test('native scope logs reject malformed, missing, duplicate and truncated plans
         nativeLog({ ...plan, packages: ['widget', 'widget'] }),
     ])
         assert.throws(() => parseNativeScopeLog(invalid, run, plan, inventory));
+});
+
+test('native PR scope keeps the original captured event base when live PR metadata advances', async () => {
+    const advancedRun = {
+        ...run,
+        pull_requests: [{ number: 7, base: { sha: aheadSha }, head: { sha: aheadSha } }],
+    };
+    assert.equal(parseNativeScopeLog(nativeLog(), advancedRun, plan, inventory).baseSha, baseSha);
+    const result = await nativeFixture({ sourceRun: advancedRun }).load();
+    assert.deepEqual([...result.checks], ['backend:widget']);
+});
+
+test('native PR scope rejects missing, duplicated or inconsistent captured event bases', () => {
+    const log = nativeLog(plan, { timestamp: false });
+    for (const invalid of [
+        log.replace(`  PR_BASE_SHA: ${baseSha}\n`, ''),
+        `${log}\n  PR_BASE_SHA: ${baseSha}`,
+        nativeLog(plan, { prBaseSha: aheadSha }),
+    ])
+        assert.throws(() => parseNativeScopeLog(invalid, run, plan, inventory), /captured PR base/u);
+});
+
+test('native PR recovery requires the checked workflow to bind the captured base to the event', async () => {
+    const fixture = nativeFixture();
+    const originalText = fixture.reader.text;
+    fixture.reader.text = (ref, file) =>
+        originalText(ref, file).replace(
+            'PR_BASE_SHA: ${{ github.event.pull_request.base.sha',
+            'UNBOUND_BASE: ${{ github.event.pull_request.base.sha',
+        );
+    await assert.rejects(fixture.load(), /Native PR base event binding/u);
 });
 
 test('native scope logs reject changed source, base, FULL and unproved larger scope', () => {

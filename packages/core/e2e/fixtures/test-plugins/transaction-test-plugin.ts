@@ -16,7 +16,7 @@ import {
     VendurePlugin,
 } from '@vendure/core';
 import gql from 'graphql-tag';
-import { ReplaySubject, Subscription } from 'rxjs';
+import { mergeMap, ReplaySubject, Subscription } from 'rxjs';
 import { vi } from 'vitest';
 
 export class TestEvent extends VendureEvent {
@@ -220,7 +220,12 @@ class TestResolver {
                     );
                 }
 
-                return Promise.all(promises);
+                return Promise.all(promises).catch(async failure => {
+                    // Keep every child operation inside the wrapper before it rolls back.
+                    // Otherwise late saves can outlive the transaction and pollute later cases.
+                    await this.allSettled(promises);
+                    throw failure;
+                });
             })
             .catch((e: any) => {
                 error = e;
@@ -349,38 +354,43 @@ export class TransactionTestPlugin implements OnApplicationBootstrap {
     onApplicationBootstrap(): any {
         // This part is used to test how RequestContext with transactions behave
         // when used in an Event subscription
-        this.subscription = this.eventBus.ofType(TestEvent).subscribe(async event => {
-            const { ctx, administrator } = event;
+        this.subscription = this.eventBus
+            .ofType(TestEvent)
+            .pipe(
+                mergeMap(async event => {
+                    const { ctx, administrator } = event;
 
-            if (administrator.emailAddress?.includes(TRIGGER_NO_OPERATION)) {
-                TransactionTestPlugin.callHandler();
-                TransactionTestPlugin.eventHandlerComplete$.complete();
-            }
-            if (administrator.emailAddress?.includes(TRIGGER_ATTEMPTED_UPDATE_EMAIL)) {
-                TransactionTestPlugin.callHandler();
-                const adminRepository = this.connection.getRepository(ctx, Administrator);
-                await new Promise(resolve => setTimeout(resolve, 50));
-                administrator.lastName = 'modified';
-                try {
-                    await adminRepository.save(administrator);
-                } catch (e: any) {
-                    TransactionTestPlugin.errorHandler(e);
-                } finally {
-                    TransactionTestPlugin.eventHandlerComplete$.complete();
-                }
-            }
-            if (administrator.emailAddress?.includes(TRIGGER_ATTEMPTED_READ_EMAIL)) {
-                TransactionTestPlugin.callHandler();
-                // note the ctx is not passed here, so we are not inside the ongoing transaction
-                const adminRepository = this.connection.getRepository(Administrator);
-                try {
-                    await adminRepository.findOneOrFail({ where: { id: administrator.id } });
-                } catch (e: any) {
-                    TransactionTestPlugin.errorHandler(e);
-                } finally {
-                    TransactionTestPlugin.eventHandlerComplete$.complete();
-                }
-            }
-        });
+                    if (administrator.emailAddress?.includes(TRIGGER_NO_OPERATION)) {
+                        TransactionTestPlugin.callHandler();
+                        TransactionTestPlugin.eventHandlerComplete$.complete();
+                    }
+                    if (administrator.emailAddress?.includes(TRIGGER_ATTEMPTED_UPDATE_EMAIL)) {
+                        TransactionTestPlugin.callHandler();
+                        const adminRepository = this.connection.getRepository(ctx, Administrator);
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                        administrator.lastName = 'modified';
+                        try {
+                            await adminRepository.save(administrator);
+                        } catch (e: any) {
+                            TransactionTestPlugin.errorHandler(e);
+                        } finally {
+                            TransactionTestPlugin.eventHandlerComplete$.complete();
+                        }
+                    }
+                    if (administrator.emailAddress?.includes(TRIGGER_ATTEMPTED_READ_EMAIL)) {
+                        TransactionTestPlugin.callHandler();
+                        // note the ctx is not passed here, so we are not inside the ongoing transaction
+                        const adminRepository = this.connection.getRepository(Administrator);
+                        try {
+                            await adminRepository.findOneOrFail({ where: { id: administrator.id } });
+                        } catch (e: any) {
+                            TransactionTestPlugin.errorHandler(e);
+                        } finally {
+                            TransactionTestPlugin.eventHandlerComplete$.complete();
+                        }
+                    }
+                }),
+            )
+            .subscribe();
     }
 }

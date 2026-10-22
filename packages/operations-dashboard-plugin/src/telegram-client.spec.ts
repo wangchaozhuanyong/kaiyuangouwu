@@ -77,6 +77,45 @@ describe('TelegramClient', () => {
         expect(error).toMatchObject({ code: 'AUTHORIZATION', retryable: false });
         expect(String(error.message)).not.toContain('test-token');
     });
+
+    it('reaches an IPv4-only server through its localhost hostname', async () => {
+        const url = (
+            await startServer(() =>
+                Promise.resolve({
+                    status: 200,
+                    body: { ok: true, result: { id: 42, username: 'fixture_bot', first_name: 'Fixture' } },
+                }),
+            )
+        ).replace('127.0.0.1', 'localhost');
+        const client = new TelegramClient({ token: 'test-token', apiBaseUrl: url });
+        await expect(client.getMe()).resolves.toEqual({
+            id: '42',
+            username: 'fixture_bot',
+            displayName: 'Fixture',
+        });
+    });
+
+    it('aborts a stalled response within the configured request timeout', async () => {
+        const url = await startServer(async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            return { status: 200, body: { ok: true, result: { message_id: 1 } } };
+        });
+        const client = new TelegramClient({ token: 'test-token', apiBaseUrl: url, timeoutMs: 20 });
+        await expect(client.sendMessage({ chatId: '-1001', text: 'fixture' })).rejects.toMatchObject({
+            code: 'TIMEOUT',
+            retryable: true,
+        });
+    });
+
+    it('preserves injected fetch transports without exposing raw connection failures', async () => {
+        const client = new TelegramClient({
+            token: 'test-token',
+            fetchImpl: () => Promise.reject(new Error('https://example.invalid/bottest-token/getMe')),
+        });
+        const error = await client.getMe().catch(value => value);
+        expect(error).toMatchObject({ code: 'NETWORK', retryable: true });
+        expect(String(error.message)).not.toContain('test-token');
+    });
 });
 
 async function startServer(

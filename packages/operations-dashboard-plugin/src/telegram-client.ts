@@ -1,4 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 
 export interface TelegramClientOptions {
     token?: string;
@@ -49,13 +51,13 @@ export class TelegramClient {
     private readonly token: string;
     private readonly apiBaseUrl: string;
     private readonly timeoutMs: number;
-    private readonly fetchImpl: typeof fetch;
+    private readonly fetchImpl?: typeof fetch;
 
     constructor(@Optional() options: TelegramClientOptions = {}) {
         this.token = options.token?.trim() ?? process.env.TELEGRAM_BOT_TOKEN?.trim() ?? '';
         this.apiBaseUrl = (options.apiBaseUrl ?? 'https://api.telegram.org').replace(/\/$/u, '');
         this.timeoutMs = options.timeoutMs ?? 10_000;
-        this.fetchImpl = options.fetchImpl ?? fetch;
+        this.fetchImpl = options.fetchImpl;
     }
 
     configured(): boolean {
@@ -105,12 +107,16 @@ export class TelegramClient {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
         try {
-            const response = await this.fetchImpl(`${this.apiBaseUrl}/bot${this.token}/${method}`, {
+            const url = `${this.apiBaseUrl}/bot${this.token}/${method}`;
+            const options = {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(body),
                 signal: controller.signal,
-            });
+            };
+            const response = this.fetchImpl
+                ? await this.fetchImpl(url, options)
+                : await postTelegramJson(url, options.body, controller.signal);
             const payload = (await response.json().catch(() => null)) as TelegramApiResponse<T> | null;
             if (!response.ok || !payload?.ok || payload.result === undefined) {
                 throw telegramApiError(response.status, payload);
@@ -126,6 +132,45 @@ export class TelegramClient {
             clearTimeout(timeout);
         }
     }
+}
+
+function postTelegramJson(
+    url: string,
+    body: string,
+    signal: AbortSignal,
+): Promise<Pick<Response, 'ok' | 'status' | 'json'>> {
+    // This host publishes both families, but production has no IPv6 route. Node's
+    // fetch family-attempt deadline can abandon a healthy, higher-latency IPv4
+    // connection. Scope the working transport to Telegram; retain TLS and timeout.
+    const endpoint = new URL(url);
+    const request = endpoint.protocol === 'http:' ? httpRequest : httpsRequest;
+    return new Promise((resolve, reject) => {
+        const outgoing = request(
+            endpoint,
+            {
+                method: 'POST',
+                family: 4,
+                headers: { 'content-type': 'application/json' },
+                signal,
+            },
+            incoming => {
+                let responseBody = '';
+                incoming.setEncoding('utf8');
+                incoming.on('data', chunk => (responseBody += chunk));
+                incoming.on('error', reject);
+                incoming.on('end', () => {
+                    const status = incoming.statusCode ?? 0;
+                    resolve({
+                        ok: status >= 200 && status < 300,
+                        status,
+                        json: () => Promise.resolve(responseBody).then(value => JSON.parse(value) as unknown),
+                    });
+                });
+            },
+        );
+        outgoing.on('error', reject);
+        outgoing.end(body);
+    });
 }
 
 function telegramApiError(status: number, payload: TelegramApiResponse<unknown> | null): TelegramClientError {
