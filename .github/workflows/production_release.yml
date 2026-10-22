@@ -202,7 +202,7 @@ jobs:
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             storefront_sha: ${{ needs.preflight.outputs.storefront_sha }}
             admin_sha: ${{ needs.preflight.outputs.admin_sha }}
-            ci_run_id: ${{ needs.route.outputs.ci_run_id || needs.checks.outputs.run_id }}
+            ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
         permissions:
             contents: read
             actions: read

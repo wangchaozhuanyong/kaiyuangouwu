@@ -407,5 +407,9 @@ test('Production Release requires Nginx acceptance and cannot silently fall thro
     const child = readFileSync(new URL('../.github/workflows/deploy_nginx.yml', import.meta.url), 'utf8');
     assert.match(child, /release-evidence\.mjs verify/u);
     assert.match(child, /nginx-acceptance-\$\{\{ inputs\.target_sha \}\}/u);
+    assert.ok(
+        !child.split('        steps:')[0].includes('${{ runner.'),
+        'Runner context is available only at step execution',
+    );
     assert.ok(!/bun install|migration|build_production|deploy_production_runtime/u.test(child));
 });

@@ -34,7 +34,6 @@ jobs:
             ADMIN_SHA: ${{ inputs.admin_sha }}
             CI_RUN_ID: ${{ inputs.ci_run_id }}
             GH_TOKEN: ${{ github.token }}
-            NGINX_RECEIPT_PATH: ${{ runner.temp }}/nginx-acceptance.json
         steps:
             - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd
               with:
@@ -67,6 +66,7 @@ jobs:
               run: aws s3 cp "$RUNNER_TEMP/$ARCHIVE" "s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/$TARGET_SHA/$ARCHIVE" --only-show-errors
             - name: Back up, validate, reload and verify the three stores
               env:
+                  NGINX_RECEIPT_PATH: ${{ runner.temp }}/nginx-acceptance.json
                   ARCHIVE: ${{ steps.archive.outputs.name }}
                   ARCHIVE_SHA256: ${{ steps.archive.outputs.sha256 }}
                   CONFIG_SHA256: ${{ steps.archive.outputs.config_sha256 }}
