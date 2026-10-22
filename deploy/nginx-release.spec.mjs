@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { classifyChanges } from '../scripts/ci-impact.mjs';
 
 import { assertFrontendScope } from './frontend-release.mjs';
+import { frontendDeployCommand } from './frontend-ssm.mjs';
 import {
     assertNginxScope,
     assertPublicTransition,
@@ -51,12 +52,50 @@ test('Nginx controls alone do not select an application or database release', ()
     );
 });
 
-test('only already-published frontend inputs may accompany an independent Nginx release', () => {
+test('pending static inputs require their own completed phase before Nginx can advance', () => {
     const files = [config, ...controls, 'packages/storefront/src/index.css'];
     assert.equal(scope(files).lane, 'nginx');
-    assert.equal(scope(files, { changedSince: () => true }).lane, 'runtime');
+    assert.equal(scope(files, { changedSince: () => true }).lane, 'frontend-nginx');
+    assert.deepEqual(scope(files, { changedSince: () => true }).components, ['next-admin', 'storefront']);
+    assert.equal(scope(files, { adminSha: target, changedSince: () => true }).lane, 'frontend-nginx');
     assert.equal(scope(files, { storefrontSha: 'unknown' }).lane, 'runtime');
     assert.equal(scope(files, { adminSha: 'unknown' }).lane, 'runtime');
+});
+
+test('the static phase still rejects backend changes, unknown Nginx identity and the wrong component set', () => {
+    const paths = [config, ...controls, 'packages/next-admin/src/pages/Catalog/CategoriesModule.tsx'];
+    const staged = { ...revisions, stagedNginx: true, nginxSha: old };
+    assert.equal(assertFrontendScope(paths, ['next-admin'], staged, () => true).lane, 'frontend');
+    assert.throws(
+        () => assertFrontendScope(paths, ['storefront'], staged, () => true),
+        /exactly the frontends/u,
+    );
+    assert.throws(
+        () => assertFrontendScope(paths, ['next-admin'], { ...staged, nginxSha: 'unknown' }, () => true),
+        /verified active Nginx/u,
+    );
+    for (const file of ['packages/core/src/order.ts', 'bun.lock', 'deploy/unreviewed.sh'])
+        assert.throws(
+            () => assertFrontendScope([...paths, file], ['next-admin'], staged, () => true),
+            /full runtime/u,
+        );
+    const command = frontendDeployCommand({
+        sha: target,
+        archive: `frontends-${target}-1-1.tar.gz`,
+        checksum: hash,
+        components: 'next-admin',
+        stagedNginx: true,
+    });
+    assert.ok(command.includes('next-admin true '));
+    assert.throws(() =>
+        frontendDeployCommand({
+            sha: target,
+            archive: `frontends-${target}-1-1.tar.gz`,
+            checksum: hash,
+            components: 'next-admin',
+            stagedNginx: 'true',
+        }),
+    );
 });
 
 test('a verified active Nginx revision cannot force later frontend or control changes into runtime', () => {
@@ -71,7 +110,7 @@ test('a verified active Nginx revision cannot force later frontend or control ch
     );
     assert.equal(
         scope(files, { nginxSha: old, nginxChangedSince: () => true, changedSince: () => true }).lane,
-        'runtime',
+        'frontend-nginx',
     );
     assert.equal(
         scope([config, 'packages/core/src/order.ts'], { nginxSha: old, nginxChangedSince: () => false }).lane,
@@ -404,6 +443,15 @@ test('Production Release requires Nginx acceptance and cannot silently fall thro
     );
     assert.match(workflow, /needs\.route\.outputs\.lane == 'nginx'/u);
     assert.match(workflow, /nginx\) \[\[ "\$NGINX_RESULT" == success \]\]/u);
+    assert.match(
+        workflow,
+        /frontend-nginx\) \[\[ "\$FRONTEND_RESULT" == success && "\$NGINX_RESULT" == success \]\]/u,
+    );
+    assert.ok(
+        workflow.includes(
+            "needs.route.outputs.lane == 'frontend-nginx' && needs.frontend.result == 'success'",
+        ),
+    );
     const child = readFileSync(new URL('../.github/workflows/deploy_nginx.yml', import.meta.url), 'utf8');
     assert.match(child, /release-evidence\.mjs verify/u);
     assert.match(child, /nginx-acceptance-\$\{\{ inputs\.target_sha \}\}/u);

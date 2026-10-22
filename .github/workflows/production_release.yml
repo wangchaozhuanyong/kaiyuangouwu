@@ -194,14 +194,14 @@ jobs:
 
     nginx:
         name: publish only the reviewed Nginx configuration
-        needs: [preflight, route, checks, ready]
-        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'nginx'
+        needs: [preflight, route, checks, ready, frontend]
+        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && (needs.route.outputs.lane == 'nginx' || (needs.route.outputs.lane == 'frontend-nginx' && needs.frontend.result == 'success'))
         uses: ./.github/workflows/deploy_nginx.yml
         with:
             target_sha: ${{ inputs.target_sha || github.sha }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
-            storefront_sha: ${{ needs.preflight.outputs.storefront_sha }}
-            admin_sha: ${{ needs.preflight.outputs.admin_sha }}
+            storefront_sha: ${{ needs.route.outputs.lane == 'frontend-nginx' && contains(needs.route.outputs.components, 'storefront') && (inputs.target_sha || github.sha) || needs.preflight.outputs.storefront_sha }}
+            admin_sha: ${{ needs.route.outputs.lane == 'frontend-nginx' && contains(needs.route.outputs.components, 'next-admin') && (inputs.target_sha || github.sha) || needs.preflight.outputs.admin_sha }}
             ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
         permissions:
             contents: read
@@ -212,13 +212,14 @@ jobs:
     frontend:
         name: deploy affected static apps
         needs: [preflight, route, ready]
-        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'frontend'
+        if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && (needs.route.outputs.lane == 'frontend' || needs.route.outputs.lane == 'frontend-nginx')
         uses: ./.github/workflows/deploy_frontends.yml
         with:
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
             components: ${{ needs.route.outputs.components }}
             nginx_sha: ${{ needs.preflight.outputs.nginx_sha }}
+            staged_nginx: ${{ needs.route.outputs.lane == 'frontend-nginx' }}
             ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
             storefront_sha: ${{ needs.preflight.outputs.storefront_sha }}
             admin_sha: ${{ needs.preflight.outputs.admin_sha }}
@@ -370,6 +371,7 @@ jobs:
                       }
                       ;;
                     nginx) [[ "$NGINX_RESULT" == success ]] || { echo 'Nginx deployment or acceptance did not complete' >&2; exit 1; } ;;
+                    frontend-nginx) [[ "$FRONTEND_RESULT" == success && "$NGINX_RESULT" == success ]] || { echo 'Staged frontend/Nginx deployment or acceptance did not complete' >&2; exit 1; } ;;
                     frontend) [[ "$FRONTEND_RESULT" == success ]] || { echo 'Frontend deployment did not complete' >&2; exit 1; } ;;
                     none) ;; # Preflight proved that all affected versions are already active.
                     *) echo 'Missing valid release route' >&2; exit 1 ;;
