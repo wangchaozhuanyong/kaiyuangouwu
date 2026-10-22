@@ -106,7 +106,8 @@ jobs:
                   base="$BASE_SHA"
                   if [ -z "$base" ]; then base="HEAD^"; fi
                   base="$(git merge-base "$base" HEAD)"
-                  git diff --check "$base" HEAD
+                  node --test scripts/ci-diff-whitespace.spec.mjs
+                  node scripts/ci-diff-whitespace.mjs --base "$base"
                   bun run lint:check -- --base "$base"
     detect-changes:
         name: detect changes
