@@ -301,10 +301,14 @@ export async function materializeSecurityVendorAliases(stagingRoot) {
         requireRegistration: false,
     });
     for (const proof of proofs.filter(item => item.state === 'VERIFIED_SECURITY_REPLACEMENT')) {
-        const destination = path.join(stagingRoot, 'node_modules', proof.name);
+        const destination = path.resolve(stagingRoot, 'node_modules', proof.name);
         try {
             await lstat(destination);
-            continue; // Already included in the installed-byte proof above.
+            assert.ok(
+                proof.copies.some(copy => path.resolve(stagingRoot, copy.path) === destination),
+                'Unverified canonical security dependency path',
+            );
+            continue;
         } catch (error) {
             if (error.code !== 'ENOENT') throw error;
         }
