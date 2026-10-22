@@ -40,6 +40,12 @@ async function fixture() {
             recursive: true,
         });
     }
+    // Keep the fixture self-contained even when TMPDIR is outside the checkout.
+    for (const name of ['fill-range', 'to-regex-range', 'is-number']) {
+        await cp(path.join(repository, 'node_modules', name), path.join(root, 'node_modules', name), {
+            recursive: true,
+        });
+    }
     const run = (report = {}, originReport = origins) =>
         runBunAudit(root, {
             auditLevel: 'moderate',

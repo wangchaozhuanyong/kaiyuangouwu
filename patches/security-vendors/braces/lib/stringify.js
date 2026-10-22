@@ -35,4 +35,3 @@ module.exports = (ast, options = {}) => {
 
   return stringify(ast, {}, ast.type === 'root' ? 0 : 1);
 };
-
