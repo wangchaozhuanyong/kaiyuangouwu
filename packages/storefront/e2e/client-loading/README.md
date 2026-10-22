@@ -34,3 +34,16 @@ node --test packages/storefront/e2e/client-loading/preview-server.spec.mjs
 - `/__qa/health`：本地 dist 与模式信息。
 
 图片使用已有合成 SVG 生成真实 WebP，尺寸有上限，响应浏览器 TTL 为 300 秒。SSE 返回 ready 和心跳，不产生业务变更；事件失效竞争由前端定向测试覆盖。浏览器访问前应清理该本地站点的旧 sessionStorage，或使用独立浏览器上下文，以免不同测试间复用已加载结果。
+
+2026-10-22 目标即时响应验收（使用当前项目内 dist）：
+
+```sh
+node packages/storefront/e2e/client-loading/verify-navigation-feedback.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=feedback
+node packages/storefront/e2e/client-loading/verify-navigation-feedback.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=cpu4 --widths=390 --cpu=4
+node packages/storefront/e2e/client-loading/verify-pending-ownership.mjs --output=docs/local-validation/navigation-responsive-20261022 --run=ownership
+```
+
+导航等待期间仅保留共享壳层，正文呈现目标占位；React保留的隐藏子树不算可见来源页。
+逐帧记录启动层重叠、目标身份、真实点击到反馈/内容帧的耗时和长任务。
+旧页滚动在离开前采集，返回时验证；登录归属已经呈现的目标，慢读十秒属于可恢复的非终态。
+这些合成场景不构成真实地区网络、INP百分位或生产业务结果。

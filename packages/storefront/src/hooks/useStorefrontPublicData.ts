@@ -23,7 +23,6 @@ import {
     fetchPublicPage,
     hasFreshPublicPage,
     publicSeoQueryKey,
-    readInitialPublicPage,
     seedPublicPage,
     type PublicPageData,
 } from '../storefront-page-data';
@@ -55,19 +54,14 @@ export function useStorefrontPublicData({
             return false;
         }
     })();
-    const initialSeoPage = readInitialPublicPage();
-    // Observe metadata delivered by the same public read; this observer never starts a request.
+    // main and validated public reads seed this exact Query before adoption.
+    // Observe it directly; parsing the full HTML snapshot on every result update
+    // repeats startup work and can reintroduce old document metadata.
     const publicSeoQuery = useQuery<PublicSeoDocument | null>({
         queryKey: publicSeoQueryKey(marketCode, vendureLanguageCode, request),
         queryFn: skipToken,
         enabled: false,
         ...publicCacheOptions,
-        initialData:
-            initialSeoPage?.scope.channelCode === market.code &&
-            initialSeoPage.scope.currencyCode === market.currencyCode &&
-            initialSeoPage.scope.languageCode === vendureLanguageCode
-                ? initialSeoPage.seo
-                : undefined,
     });
     const locationKey =
         presentedHref ??

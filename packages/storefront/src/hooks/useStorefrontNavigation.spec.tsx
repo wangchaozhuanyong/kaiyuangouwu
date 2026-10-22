@@ -280,48 +280,38 @@ describe('storefront navigation state', () => {
         expect(value.authOverlay?.mode).toBe('login');
     });
 
-    it('warms the canonical category before replacing its already visible route', async () => {
-        let finish!: () => void;
-        router.preloadRoute.mockImplementationOnce(() => new Promise<void>(resolve => (finish = resolve)));
+    it('replaces the visible category URL without waiting for another preload', () => {
         router.state.location = { pathname: '/category', search: {}, searchStr: '' };
         act(() => root.render(<Harness />));
         expect(value.activeCollectionId).toBe('first');
-        expect(router.navigate).not.toHaveBeenCalled();
-        await act(async () => {
-            finish();
-            await Promise.resolve();
-        });
-        expect(router.preloadRoute).toHaveBeenCalledOnce();
+        expect(router.preloadRoute).not.toHaveBeenCalled();
         expect(router.navigate).toHaveBeenCalledOnce();
         expect(router.navigate).toHaveBeenLastCalledWith(
             expect.objectContaining({ replace: true, resetScroll: false }),
         );
     });
 
-    it('does not let a late canonical category preload replace a later page', async () => {
-        let finish!: () => void;
-        router.preloadRoute.mockImplementationOnce(() => new Promise<void>(resolve => (finish = resolve)));
+    it('does not defer a canonical replacement that could overwrite a later page', async () => {
         router.state.location = { pathname: '/category', search: {}, searchStr: '' };
         act(() => root.render(<Harness />));
         act(() => value.navigate({ name: 'services' }));
         act(() => root.render(<Harness />));
         await act(async () => {
-            finish();
             await Promise.resolve();
         });
-        expect(router.navigate).toHaveBeenCalledOnce();
+        expect(router.navigate).toHaveBeenCalledTimes(2);
         expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/services' }));
     });
 
-    it('keeps the visible category when its canonical intent preload fails', async () => {
-        router.preloadRoute.mockRejectedValueOnce(new Error('Synthetic preload failure'));
+    it('canonicalizes without requesting an optional preload', async () => {
         router.state.location = { pathname: '/category', search: {}, searchStr: '' };
         await act(async () => {
             root.render(<Harness />);
             await Promise.resolve();
         });
         expect(value.activeCollectionId).toBe('first');
-        expect(router.navigate).not.toHaveBeenCalled();
+        expect(router.navigate).toHaveBeenCalledOnce();
+        expect(router.preloadRoute).not.toHaveBeenCalled();
     });
 
     it('resynchronizes filter state after a history navigation', () => {
@@ -547,6 +537,9 @@ describe('storefront navigation state', () => {
         link.href = `${window.location.origin}/services`;
         document.body.append(link);
         try {
+            await act(async () => {
+                await vi.dynamicImportSettled();
+            });
             act(() => {
                 link.dispatchEvent(new Event('pointerover', { bubbles: true }));
             });
@@ -746,12 +739,15 @@ describe('storefront navigation state', () => {
         act(() => root.render(<Harness />));
         act(() => value.navigate({ name: 'product', id: 'product-a' }));
         const services = servicesLink();
+        await act(async () => {
+            await vi.dynamicImportSettled();
+        });
         act(() => {
             services.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
             services.focus();
             services.dispatchEvent(new Event('pointerover', { bubbles: true }));
         });
-        expect(router.preloadRoute).toHaveBeenCalled();
+        expect(preloadStorefrontRouteComponent).toHaveBeenCalledWith('services');
         expect(value.isPreparingProduct).toBe(false);
         expect(router.navigate).toHaveBeenCalledTimes(1);
         await act(async () => {

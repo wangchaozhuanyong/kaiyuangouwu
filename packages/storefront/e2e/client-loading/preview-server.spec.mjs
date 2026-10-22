@@ -202,3 +202,22 @@ test('SEO fixture can bind the browser IPv4 address without loading built SSR fo
         await seo.close();
     }
 });
+
+test('SEO fixture serves scoped services and support aggregate reads', async () => {
+    const seo = await startSeoFixtureServer(0, { listenHost: '127.0.0.1' });
+    try {
+        for (const id of ['services', 'support'])
+            for (const languageCode of ['en', 'zh_Hans']) {
+                const response = await fetch(
+                    `http://127.0.0.1:${seo.port}/_storefront/page-data?kind=page&id=${id}&languageCode=${languageCode}`,
+                );
+                assert.equal(response.status, 200);
+                const page = await response.json();
+                assert.deepEqual(page.request, { kind: 'page', id });
+                assert.equal(page.scope.languageCode, languageCode);
+                assert.equal(page.seo.requestKey, JSON.stringify(page.request));
+            }
+    } finally {
+        await seo.close();
+    }
+});

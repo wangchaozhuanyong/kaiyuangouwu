@@ -5,6 +5,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { STOREFRONT_PAGE_DATA_ELEMENT_ID } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { ShopApi } from '../api';
 import { ContentReviewsApi } from '../api/content-reviews';
 import { CustomerIdentityApi } from '../api/customer-identity';
@@ -24,6 +25,7 @@ import { useStorefrontRouteData } from './useStorefrontRouteData';
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 it('loads public content and products without a customer and preserves them across sign-in changes', async () => {
+    const documentReads = vi.spyOn(document, 'getElementById');
     const content = { blocks: [], flashSales: [], systemAnnouncements: [], settings: {} };
     let finishContent: () => void = () => {
         throw new Error('Content fixture is not initialized');
@@ -93,7 +95,11 @@ it('loads public content and products without a customer and preserves them acro
         await render(false, 'Published product');
         expect(element.textContent).toContain('Public store');
         expect(api.products).toHaveBeenCalledTimes(1);
+        expect(
+            documentReads.mock.calls.filter(([id]) => id === STOREFRONT_PAGE_DATA_ELEMENT_ID),
+        ).toHaveLength(0);
     } finally {
+        documentReads.mockRestore();
         act(() => root.unmount());
         client.clear();
     }

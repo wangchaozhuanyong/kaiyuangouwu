@@ -72,11 +72,11 @@ describe('explicit route readiness', () => {
                 ),
             );
             expect(owned).toHaveBeenCalledOnce();
-            expect(ready).not.toHaveBeenCalled();
+            expect(ready).toHaveBeenCalled();
             expect(host.querySelector('.page-readiness-initial')).toBeNull();
             expect(host.querySelector('a')?.closest('[hidden], [inert]')).toBeNull();
             expect(host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness')).toBe(
-                'preparing',
+                'ready',
             );
         } finally {
             document.removeEventListener('storefront:app-owned', owned);
@@ -158,12 +158,51 @@ describe('explicit route readiness', () => {
         expect(host.querySelectorAll('.page-readiness-progress')).toHaveLength(0);
         await advance(220);
         expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
-        expect(host.querySelector('[role=status]')?.className).toBe('visually-hidden');
+        expect(host.querySelector('[role=status]')?.className).toBe('page-readiness-navigation');
         expect(host.querySelector('.page-readiness-progress')).toBeNull();
         render(false);
         expect(phase()).toBe('ready');
         expect(host.querySelector('.page-readiness-progress')).toBeNull();
     });
+    it('keeps actual required-read failures out of ready and lets the region own recovery', () => {
+        const ready = vi.fn();
+        const error = vi.fn();
+        document.addEventListener('storefront:page-ready', ready);
+        document.addEventListener('storefront:page-error', error);
+        function FailedRegion({ failed }: { failed: boolean }) {
+            usePageReadiness(false, 'page', 'current-target', failed);
+            return <main>{failed ? <div role="alert">Current read failed</div> : 'Recovered'}</main>;
+        }
+        const present = (failed: boolean) =>
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        pending={false}
+                        online
+                        language="en"
+                        onRetry={retry}
+                        onBack={retry}
+                    >
+                        <FailedRegion failed={failed} />
+                    </PageReadinessBoundary>,
+                ),
+            );
+        try {
+            present(true);
+            expect(phase()).toBe('error');
+            expect(error).toHaveBeenCalledOnce();
+            expect(ready).not.toHaveBeenCalled();
+            expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
+            expect(host.querySelector('.page-readiness-overlay')).toBeNull();
+            present(false);
+            expect(phase()).toBe('ready');
+            expect(ready).toHaveBeenCalled();
+        } finally {
+            document.removeEventListener('storefront:page-ready', ready);
+            document.removeEventListener('storefront:page-error', error);
+        }
+    });
+
     it('does not wait for images, cached content or DOM pending-marker remnants', async () => {
         render(false, 'cached', false, true, true);
         await advance(400);
@@ -178,34 +217,34 @@ describe('explicit route readiness', () => {
         await advance(250);
         expect(phase()).toBe('preparing');
         expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
-        expect(host.querySelector('[role=status]')?.className).toBe('visually-hidden');
+        expect(host.querySelector('[role=status]')?.className).toBe('page-readiness-navigation');
         expect(host.querySelector('.page-readiness-progress')).toBeNull();
     });
-    it('hands the document loading surface to the real timeout and retry state', async () => {
+    it('offers slow-read recovery after ten seconds without emitting a request failure', async () => {
         const failed = vi.fn();
         document.addEventListener('storefront:page-error', failed);
         try {
             render(true);
             expect(failed).not.toHaveBeenCalled();
             await advance(10_100);
-            expect(host.querySelector('[role=alert]')?.textContent).toContain('超时');
-            expect(failed).toHaveBeenCalledOnce();
+            expect(host.querySelector('[role=status]')?.textContent).toContain('加载较慢');
+            expect(failed).not.toHaveBeenCalled();
         } finally {
             document.removeEventListener('storefront:page-error', failed);
         }
     });
 
-    it('times out without hiding or disabling the existing page, and recovers on late data', async () => {
+    it('offers slow-read recovery without hiding or disabling the existing page, and recovers on late data', async () => {
         render(true);
         host.querySelector('button')?.focus();
         await advance(10_100);
-        expect(phase()).toBe('error');
-        expect(host.querySelector('[role=alert]')?.textContent).toContain('超时');
+        expect(phase()).toBe('preparing');
+        expect(host.querySelector('[role=status]')?.textContent).toContain('加载较慢');
         expect(host.querySelector('.page-readiness-stage')?.hasAttribute('inert')).toBe(false);
         expect(document.activeElement?.textContent).toBe('Action');
         render(false);
         expect(phase()).toBe('ready');
-        expect(host.querySelector('[role=alert]')).toBeNull();
+        expect(host.querySelector('[role=status]')).toBeNull();
     });
     it('gives a new filter its own deadline and cancels the previous deadline', async () => {
         render(true, 'empty-a');
@@ -284,18 +323,18 @@ describe('explicit route readiness', () => {
             host.querySelector('[data-navigation-readiness]')?.getAttribute('data-navigation-readiness'),
         ).toBe('preparing');
         await advance(1_900);
-        expect(host.querySelector('main [role=alert]')).not.toBeNull();
+        expect(host.querySelector('main [role=status]')).not.toBeNull();
         expect(host.querySelector('.page-readiness-overlay')).toBeNull();
-        const sourceAction = host.querySelector<HTMLButtonElement>('main [role=alert] button');
+        const sourceAction = host.querySelector<HTMLButtonElement>('main [role=status] button');
         act(() => sourceAction?.click());
         expect(sourceRetry).toHaveBeenCalledOnce();
         expect(navigationRetry).not.toHaveBeenCalled();
         await advance(7_900);
         expect(
             host.querySelector('[data-navigation-readiness]')?.getAttribute('data-navigation-readiness'),
-        ).toBe('error');
-        expect(host.querySelector('.page-readiness-overlay [role=alert]')).not.toBeNull();
-        expect(host.querySelector('main [role=alert]')).toBeNull();
+        ).toBe('preparing');
+        expect(host.querySelector('.page-readiness-overlay [role=status]')).not.toBeNull();
+        expect(host.querySelector('main .page-readiness-error')).toBeNull();
         act(() => host.querySelector<HTMLButtonElement>('.page-readiness-overlay button')?.click());
         expect(navigationRetry).toHaveBeenCalledOnce();
         expect(sourceRetry).toHaveBeenCalledOnce();
@@ -307,8 +346,12 @@ describe('explicit route readiness', () => {
     it('gives a newly selected local query its own deadline without restarting navigation', async () => {
         function LocalRead({ readKey }: { readKey: string }) {
             usePageReadiness(true, 'local', readKey);
-            const loading = usePageLoadingState();
-            return <main data-local-phase={loading?.phase}>Existing list</main>;
+            const loading = usePageLoadingState({ pending: true, key: readKey });
+            return (
+                <main data-local-slow={String(loading?.slow)} data-local-phase={loading?.phase}>
+                    Existing list
+                </main>
+            );
         }
         const present = (readKey: string, navigating: boolean) =>
             act(() =>
@@ -327,21 +370,21 @@ describe('explicit route readiness', () => {
                     </PageReadinessBoundary>,
                 ),
             );
-        const localPhase = () => host.querySelector('main')?.getAttribute('data-local-phase');
+        const localPhase = () => host.querySelector('main')?.getAttribute('data-local-slow');
         present('query-a', false);
         await advance(8_000);
         present('query-a', true);
         await advance(2_000);
-        expect(localPhase()).toBe('error');
+        expect(localPhase()).toBe('true');
         present('query-b', true);
-        expect(localPhase()).toBe('preparing');
+        expect(localPhase()).toBe('false');
         await advance(8_000);
         expect(
             host.querySelector('[data-navigation-readiness]')?.getAttribute('data-navigation-readiness'),
-        ).toBe('error');
-        expect(localPhase()).toBe('preparing');
+        ).toBe('preparing');
+        expect(localPhase()).toBe('false');
         await advance(2_000);
-        expect(localPhase()).toBe('error');
+        expect(localPhase()).toBe('true');
     });
 
     it('emits an error for each new offline navigation target while retaining the source', () => {
@@ -545,16 +588,16 @@ describe('store-scoped initial loading and recovery', () => {
     it('replaces the initial loader with one branded error and restarts only its current read', async () => {
         render();
         await advance(10_100);
-        expect(phase()).toBe('error');
+        expect(phase()).toBe('preparing');
         expect(initial()?.textContent).toContain('store-a');
-        expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
+        expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
         expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
-        expect(host.querySelector('[aria-busy=true]')).toBeNull();
+        expect(host.querySelector('[aria-busy=true]')).not.toBeNull();
         expect(host.querySelector('.page-readiness-overlay')).toBeNull();
         act(() => host.querySelector<HTMLButtonElement>('.page-readiness-error-actions button')?.click());
         expect(retry).toHaveBeenCalledTimes(1);
         expect(phase()).toBe('preparing');
-        expect(host.querySelector('[role=alert]')).toBeNull();
+        expect(host.querySelector('[role=status]')).toBeNull();
         await advance(200);
         expect(initial()?.textContent).toContain('store-a');
         expect(host.querySelector('.brand-loading-bar')).not.toBeNull();
@@ -574,11 +617,11 @@ describe('store-scoped initial loading and recovery', () => {
         expect(host.querySelector('.brand-loading')).toBeNull();
         expect(host.querySelector('.route-static-skeleton')).not.toBeNull();
         await advance(10_100);
-        expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
-        expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
-        expect(host.querySelector('.page-readiness-overlay')).toBeNull();
+        expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
+        expect(host.querySelector('.page-readiness-overlay')).not.toBeNull();
+        expect(host.querySelectorAll('.page-readiness-overlay')).toHaveLength(1);
         expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
-        expect(host.querySelector('[aria-busy=true]')).toBeNull();
+        expect(host.querySelector('[aria-busy=true]')).not.toBeNull();
     });
 
     it('does not turn a local coupon read into a full-page initial loader', async () => {
@@ -598,7 +641,7 @@ describe('store-scoped initial loading and recovery', () => {
         expect(host.querySelector('header button')?.closest('[hidden], [inert]')).toBeNull();
         expect(host.querySelector('.route-static-skeleton')).not.toBeNull();
         await advance(10_100);
-        expect(host.querySelector('.page-readiness-inline-error')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-overlay')).not.toBeNull();
         expect(host.querySelector('header button')?.closest('[hidden], [inert]')).toBeNull();
     });
 
@@ -623,7 +666,7 @@ describe('store-scoped initial loading and recovery', () => {
     it('does not reuse the timeout or visible loading delay from a previous A to B to A visit', async () => {
         render();
         await advance(10_100);
-        expect(phase()).toBe('error');
+        expect(phase()).toBe('preparing');
         render({ scope: 'store-b' });
         await advance(1000);
         render();
@@ -631,7 +674,7 @@ describe('store-scoped initial loading and recovery', () => {
         expect(host.querySelector('.brand-loading')).toBeNull();
         await advance(200);
         expect(initial()?.textContent).toContain('store-a');
-        expect(host.querySelector('[role=alert]')).toBeNull();
+        expect(host.querySelector('.page-readiness-error')).toBeNull();
         await advance(9000);
         expect(phase()).toBe('preparing');
     });
@@ -643,10 +686,10 @@ describe('store-scoped initial loading and recovery', () => {
         expect(stage()?.hidden).toBe(false);
         expect(host.querySelector('.route-transition')?.getAttribute('aria-label')).toBe('Loading page');
         await advance(10_100);
-        expect(host.querySelectorAll('[role=alert]')).toHaveLength(1);
-        expect(host.textContent).toContain('The page took too long');
+        expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
+        expect(host.textContent).toContain('Loading is taking longer');
         expect(host.querySelector('.brand-loading-dots, .brand-loading-bar')).toBeNull();
-        expect(host.querySelector('[aria-busy=true]')).toBeNull();
+        expect(host.querySelector('[aria-busy=true]')).not.toBeNull();
     });
 
     it('shows an offline initial error without motion and accepts late recovery', () => {

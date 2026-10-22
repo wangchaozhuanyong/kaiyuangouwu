@@ -501,7 +501,7 @@ export function storefrontRouteCodeLoader({
     return preloadStorefrontRouteComponent(routeFromRouterLocation(location.pathname, location.search).name);
 }
 
-/** Prepare code and data together while preserving the published page. */
+/** Warm the same Query data without holding the destination's body behind a network read. */
 export async function publicPageRouteLoader({
     location,
     abortController,
@@ -510,14 +510,11 @@ export async function publicPageRouteLoader({
     abortController: AbortController;
 }): Promise<void> {
     const code = storefrontRouteCodeLoader({ location });
-    const data = prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
+    void prefetchPublicPage(storefrontQueryClient, location.publicHref, abortController.signal).catch(
         () => undefined,
     );
     await code;
-    // Catalogs commit their controls immediately; the result region owns the read.
-    // Preloads also release it, because Router reuses them on click.
-    const name = routeFromRouterLocation(location.pathname, location.search).name;
-    if (name !== 'category' && name !== 'search') await data;
+    // The route's required Query renders its own missing-data or recovery state.
 }
 
 /** Navigation starts code and data together; the route query adopts this exact response. */

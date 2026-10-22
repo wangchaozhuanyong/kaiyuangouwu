@@ -14,7 +14,7 @@ vi.mock('../desktop-layout', () => ({ useDesktopLayout: () => false }));
 vi.mock('../storefront-ui/page-shell', () => ({
     AuthPageBoundary: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock('../lazy-storefront-pages', () => {
+vi.mock('../lazy-auth-pages', () => {
     const Form = ({
         authVisualContent,
         onSuccess,
