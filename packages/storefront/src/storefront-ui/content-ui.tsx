@@ -240,6 +240,30 @@ export function aggregateFlashSaleProducts(items: StorefrontFlashSaleItem[]): St
     return aggregated;
 }
 
+function FlashSaleCountdownBadge({
+    endsAt,
+    language,
+    initialRenderTime,
+}: {
+    endsAt: string | null;
+    language: StorefrontLanguage;
+    initialRenderTime?: number;
+}) {
+    const isZh = language === 'zh';
+    const countdown = useFlashSaleCountdown(endsAt, language, initialRenderTime);
+    if (!countdown) return null;
+    return (
+        <span
+            className="flash-sale-countdown"
+            role="timer"
+            aria-label={`${isZh ? '距结束' : 'Ends in'} ${countdown}`}
+        >
+            <span className="flash-sale-countdown-label">{isZh ? '距结束' : 'Ends in'}</span>
+            <strong>{countdown}</strong>
+        </span>
+    );
+}
+
 export function FlashSaleSection({
     title,
     items,
@@ -262,7 +286,6 @@ export function FlashSaleSection({
     layout?: 'carousel' | 'grid';
 }) {
     const isZh = language === 'zh';
-    const countdown = useFlashSaleCountdown(endsAt, language, initialRenderTime);
     const sectionRef = useRef<HTMLElement>(null);
     const [nearViewport, setNearViewport] = useState(false);
     useEffect(() => {
@@ -292,15 +315,12 @@ export function FlashSaleSection({
                 kind="flash-sale"
                 title={title}
                 titleSuffix={
-                    countdown ? (
-                        <span
-                            className="flash-sale-countdown"
-                            role="timer"
-                            aria-label={`${isZh ? '距结束' : 'Ends in'} ${countdown}`}
-                        >
-                            <span className="flash-sale-countdown-label">{isZh ? '距结束' : 'Ends in'}</span>
-                            <strong>{countdown}</strong>
-                        </span>
+                    endsAt ? (
+                        <FlashSaleCountdownBadge
+                            endsAt={endsAt}
+                            language={language}
+                            initialRenderTime={initialRenderTime}
+                        />
                     ) : undefined
                 }
                 action={onMore ? (isZh ? '更多' : 'More') : undefined}

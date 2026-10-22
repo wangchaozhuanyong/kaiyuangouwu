@@ -1175,6 +1175,8 @@
     opacity: 0.14;
     pointer-events: none;
     z-index: 2;
+    transform: translateZ(0);
+    will-change: opacity;
     transition: opacity 280ms ease;
 }
 

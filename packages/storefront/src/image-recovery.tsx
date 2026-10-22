@@ -134,8 +134,8 @@ export default function ImageRecovery({
                 attributes: true,
                 attributeFilter: ['hidden', 'aria-hidden', 'inert', 'style', 'class'],
             });
-        window.addEventListener('resize', position);
-        window.addEventListener('scroll', position, true);
+        window.addEventListener('resize', position, { passive: true });
+        window.addEventListener('scroll', position, { passive: true, capture: true });
         return () => {
             resize?.disconnect();
             intersection?.disconnect();

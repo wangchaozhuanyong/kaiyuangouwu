@@ -9,6 +9,8 @@ import { storefrontManualChunks } from './vite/storefront-manual-chunks.js';
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
     const apiProxyTarget = env.VITE_SHOP_API_PROXY_TARGET || 'http://127.0.0.1:3000';
+    const storeHost = env.VITE_STORE_HOST || 'damatong.net';
+    const storeToken = env.VITE_STORE_TOKEN || 'my-malaysia';
 
     return {
         plugins: [
@@ -61,12 +63,19 @@ export default defineConfig(({ mode }) => {
             port: 5175,
             strictPort: true,
             proxy: {
-                '/shop-api': apiProxyTarget,
+                '/shop-api': {
+                    target: apiProxyTarget,
+                    headers: { host: storeHost, 'vendure-token': storeToken },
+                },
                 '/_storefront/page-data': {
                     target: apiProxyTarget,
                     rewrite: path => path.replace('/_storefront/', '/storefront/'),
+                    headers: { host: storeHost, 'vendure-token': storeToken },
                 },
-                '/storefront-realtime': apiProxyTarget,
+                '/storefront-realtime': {
+                    target: apiProxyTarget,
+                    headers: { host: storeHost, 'vendure-token': storeToken },
+                },
                 '/assets': apiProxyTarget,
                 '/image-generation': apiProxyTarget,
                 '/after-sales/evidence': apiProxyTarget,
