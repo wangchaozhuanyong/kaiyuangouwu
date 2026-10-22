@@ -37,6 +37,42 @@ const controls = [
     'scripts/ci-impact.mjs',
 ];
 const config = 'deploy/nginx/damatong.conf';
+
+test('active Nginx source evidence resolves the enabled file instead of assuming the available file is loaded', () => {
+    const dump =
+        '# configuration file /etc/nginx/sites-enabled/shop:\nserver { server_name moyaoai.com damatong.net; add_header Vary User-Agent; }\n';
+    const result = nginxRevision.activeNginxSources(
+        dump,
+        () => '/etc/nginx/sites-available/damatong-production',
+        () => Buffer.from('original'),
+    );
+    assert.equal(result.length, 1);
+    assert.equal(result[0].expectedTarget, true);
+    const different = nginxRevision.activeNginxSources(
+        dump,
+        () => '/etc/nginx/sites-available/another',
+        () => Buffer.from('original'),
+    );
+    assert.equal(different[0].expectedTarget, false);
+});
+
+test('origin inspection keeps TLS verification enabled and excludes response credentials', () => {
+    const observed = nginxRevision.inspectNginxRouting((program, args) => {
+        if (program === 'nginx')
+            return { status: 0, stdout: '# configuration file /etc/nginx/nginx.conf:\nevents {}\n' };
+        assert.equal(program, 'curl');
+        assert.ok(args.includes('--resolve') && args.includes('--noproxy'));
+        assert.ok(!args.includes('-k') && !args.includes('--insecure'));
+        return {
+            status: 0,
+            stdout: 'HTTP/1.1 200 OK\r\nVary: Origin\r\nVary: User-Agent\r\nCache-Control: no-store\r\nSet-Cookie: sensitive-test-value\r\n\r\n',
+        };
+    });
+    assert.equal(observed.originResponses.length, 3);
+    assert.equal(observed.originResponses[0].headers.vary, 'Origin, User-Agent');
+    assert.ok(observed.originResponses.every(item => item.tlsVerified));
+    assert.ok(!JSON.stringify(observed).includes('sensitive-test-value'));
+});
 const scope = (files, options = {}) =>
     selectReleaseRoute({ ...revisions, plan: classifyChanges(files), changedSince: () => false, ...options });
 

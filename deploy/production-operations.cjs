@@ -3012,6 +3012,9 @@ function runLocked(environment = process.env) {
         process.stdout.write(
             `PRODUCTION_NGINX_REVISION source=${nginx.sourceSha} config_sha256=${nginx.configSha256}\n`,
         );
+        process.stdout.write(
+            `PRODUCTION_NGINX_ROUTING ${JSON.stringify(require('./nginx-revision.cjs').inspectNginxRouting())}\n`,
+        );
         process.stdout.write('PRODUCTION_OPERATIONS_COMPLETE operation=preflight-release\n');
         return;
     }
