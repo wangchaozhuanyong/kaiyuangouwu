@@ -123,6 +123,11 @@ const isTransientGitHubError = error =>
     );
 const isMissingGitHubProof = error =>
     /(?:^|\n)gh: (?:HTTP 404\b|[^\r\n]*\(HTTP 404\))/u.test(String(error?.stderr ?? ''));
+const isMissingGitObject = error =>
+    error?.status === 128 ||
+    /fatal: (?:ambiguous argument|bad object|not a valid object name|unknown revision)/u.test(
+        String(error?.stderr ?? '') + String(error?.message ?? ''),
+    );
 export function requestGitHubApi(endpoint, request = execFileSync, pause = retryPause) {
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -465,7 +470,7 @@ export async function findInputCoverage({
                     logReader: nativeLogReader,
                 });
             } catch (error) {
-                const proofMissing = isMissingGitHubProof(error);
+                const proofMissing = isMissingGitHubProof(error) || isMissingGitObject(error);
                 if (reference && !proofMissing) throw error;
                 const malformed = error instanceof assert.AssertionError || error instanceof SyntaxError;
                 // Reader/protection/permission failures must stop planning, never widen execution.
@@ -473,9 +478,11 @@ export async function findInputCoverage({
                 // Known missing or malformed old proof supplies no coverage; independent proof remains usable.
                 nativeRejected.push({
                     runId: run.id,
-                    reason: proofMissing
+                    reason: isMissingGitHubProof(error)
                         ? 'Native proof is unavailable (404)'
-                        : 'Native proof structure is invalid',
+                        : isMissingGitObject(error)
+                          ? 'Native proof source is unavailable in repository history'
+                          : 'Native proof structure is invalid',
                 });
                 continue;
             }
