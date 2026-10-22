@@ -39,6 +39,9 @@ on:
             deployed_sha:
                 description: Exact immutable runtime SHA observed by release preflight
                 value: ${{ jobs.operate.outputs.deployed_sha }}
+            nginx_sha:
+                description: Verified independent Nginx source revision
+                value: ${{ jobs.operate.outputs.nginx_sha }}
     workflow_dispatch:
         inputs:
             operation:
@@ -141,6 +144,7 @@ jobs:
             storefront_sha: ${{ steps.operation.outputs.storefront_sha }}
             admin_sha: ${{ steps.operation.outputs.admin_sha }}
             deployed_sha: ${{ steps.operation.outputs.deployed_sha }}
+            nginx_sha: ${{ steps.operation.outputs.nginx_sha }}
         env:
             AWS_REGION: ap-northeast-1
             AWS_ACCOUNT_ID: '079740175286'
@@ -326,6 +330,7 @@ jobs:
                       lines.append(transport('deploy/production-order-error-summary.cjs', 'production-order-error-summary.cjs'))
                   if operation_name == 'preflight-release':
                       lines.extend([
+                          transport('deploy/nginx-revision.cjs', 'nginx-revision.cjs'),
                           transport('deploy/usdt-migration-guard.cjs', 'usdt-migration-guard.cjs'),
                           transport('packages/dev-server/migrations/index.ts', 'repository/packages/dev-server/migrations/index.ts'),
                       ])
@@ -513,6 +518,9 @@ jobs:
                       exit 1
                     }
                     printf 'deployed_sha=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+                    nginx_evidence="$(jq -r '.Output' "$RUNNER_TEMP/production-operations-result.json" | sed -n 's/^PRODUCTION_NGINX_REVISION //p' | tail -n 1)"
+                    [[ "$nginx_evidence" =~ ^source=([a-f0-9]{40})\ config_sha256=([a-f0-9]{64})$ ]] || { echo 'Missing verified Nginx revision' >&2; exit 1; }
+                    printf 'nginx_sha=%s\n' "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
                     frontend_evidence="$(jq -r '.Output' "$RUNNER_TEMP/production-operations-result.json" | sed -n 's/^PRODUCTION_FRONTEND_REVISIONS //p' | tail -n 1)"
                     if [[ "$frontend_evidence" =~ ^storefront=([a-f0-9]{40}|unknown)\ next-admin=([a-f0-9]{40}|unknown)$ ]]; then
                         printf 'storefront_sha=%s\nadmin_sha=%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"

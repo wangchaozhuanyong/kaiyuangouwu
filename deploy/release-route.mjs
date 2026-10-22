@@ -6,6 +6,7 @@ import { classifyChanges, inspection } from '../scripts/ci-impact.mjs';
 import { retainedFrontendPlan } from '../scripts/release-preserve-frontends.mjs';
 
 import { frontendChangedSinceObserved, pendingFrontendComponents } from './frontend-release.mjs';
+import nginxRevision from './nginx-revision.cjs';
 
 export function selectReleaseRoute({
     plan,
@@ -13,11 +14,21 @@ export function selectReleaseRoute({
     targetSha,
     storefrontSha,
     adminSha,
+    nginxSha,
+    nginxChangedSince,
     managed = false,
     retainFrontends = false,
     changedSince = frontendChangedSinceObserved,
 }) {
     for (const sha of [baseSha, targetSha]) assert.match(sha, /^[a-f0-9]{40}$/u);
+    if (!plan.full) {
+        const paths = nginxRevision.withoutActiveNginx(
+            plan.files,
+            { nginxSha, targetSha },
+            nginxChangedSince,
+        );
+        if (paths !== plan.files) plan = classifyChanges(paths);
+    }
     if (retainFrontends) {
         assert.equal(managed, false, 'Runtime-only release cannot publish managed content');
         retainedFrontendPlan(plan);
@@ -40,6 +51,27 @@ export function selectReleaseRoute({
             components: [],
             reasons: ['Runtime and frontend versions already match; no rebuild or deployment.'],
         };
+    }
+    // Nginx may advance independently only when every other serving input is
+    // already active. Unknown/backend inputs and pending frontends retain the
+    // existing runtime route; managed writes and retained-runtime releases were
+    // handled above and cannot enter this branch.
+    if (!plan.full && plan.files.includes('deploy/nginx/damatong.conf')) {
+        const remaining = classifyChanges(plan.files.filter(file => file !== 'deploy/nginx/damatong.conf'));
+        const knownFrontends = [storefrontSha, adminSha].every(sha => /^[a-f0-9]{40}$/u.test(sha ?? ''));
+        if (
+            ['none', 'frontend'].includes(remaining.lane) &&
+            knownFrontends &&
+            !pendingFrontendComponents(remaining, { storefrontSha, adminSha, targetSha }, changedSince).length
+        ) {
+            return {
+                lane: 'nginx',
+                components: [],
+                reasons: [
+                    'Only reviewed Nginx configuration remains unpublished; preserve API, Worker and frontend versions.',
+                ],
+            };
+        }
     }
     if (plan.lane === 'frontend') {
         const observed = { storefront: storefrontSha, 'next-admin': adminSha };
@@ -82,6 +114,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         targetSha,
         storefrontSha: process.env.STOREFRONT_SHA,
         adminSha: process.env.ADMIN_SHA,
+        nginxSha: process.env.NGINX_SHA,
         managed: process.env.MANAGED === 'true',
         retainFrontends: process.env.RETAIN_FRONTENDS === 'true',
     });

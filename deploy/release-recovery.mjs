@@ -29,17 +29,19 @@ const archiveErrorPattern = new RegExp(
     'u',
 );
 const deploymentPrefixes = [
+    'publish only the reviewed Nginx configuration',
     'deploy ',
     'build immutable runtime',
     'prove complete offsite file restore',
     'verify exact running revision',
     'verify committed store acceptance',
 ];
-// Complete gate blocks reviewed at main 51b09. A changed recipe supplies no
+// Complete gate includes the reviewed Nginx result requirement from the
+// configuration-only release. A changed recipe supplies no
 // derived-failure evidence until it is independently reviewed and pinned.
 const guardRecipes = new Map([
     ['ready', 'e09e08dd9d4d296c046fe5495b65163c27fd376a92141a29f77e54452516b4aa'],
-    ['complete', 'e2614079b095e70ed5b70b4903b00163dd310fe89f293ef6a2aa6295e2e43216'],
+    ['complete', '530c1c13ffb7431205fdd7997d5d295bf2bcee5465296d48581bc45b6f69a5bd'],
     ['all-passed', '7e1e36d420cdbd6cee497f296601669135254dd32c60aec7f85cbd0c05e06305'],
 ]);
 
@@ -424,7 +426,7 @@ function isDependentGuard(job, logs, run, jobs, reader) {
                             '[[ "$LANE" == none || -n "$REUSED" || "$CHECKS_RESULT" == success ]]',
                         ),
                 );
-                assert.match(text, /^  LANE: (runtime|frontend)$/mu);
+                assert.match(text, /^  LANE: (runtime|frontend|nginx)$/mu);
                 assert.match(text, /^  REUSED: *$/mu);
                 assert.match(text, /^  CHECKS_RESULT: failure$/mu);
             } else {

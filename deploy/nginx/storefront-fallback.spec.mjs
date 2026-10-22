@@ -18,11 +18,12 @@ function block(label, after = 0) {
     throw new Error('Unclosed Nginx block: ' + label);
 }
 const fallbackMap = block('map $request_uri $storefront_legacy_fallback');
+const coopMap = block('map "$request_method|$sent_http_content_type|$http_user_agent" $storefront_html_coop');
 const applicationRoutes = [
     ...readFileSync(path.join(repo, 'packages/storefront/src/routeTree.gen.ts'), 'utf8')
         .split('export interface FileRoutesByFullPath {')[1]
         .split('\n}')[0]
-        .matchAll(/^\s+'([^']+)':/gm),
+        .matchAll(/^\s+['"]([^'"]+)['"]:/gm),
 ].map(match => match[1]);
 
 test('real Nginx keeps application routes and legacy redirects while unknown routes retain 404', async t => {
@@ -45,21 +46,25 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         path.join(fixture, 'www/index.html'),
         '<main>Application shell with recovery navigation</main>',
     );
+    writeFileSync(path.join(fixture, 'www/style.css'), 'body { color: black; }');
     writeFileSync(path.join(fixture, 'proxy_params'), 'proxy_set_header X-Forwarded-Proto $scheme;\n');
     const config = [
         'events {}',
         'http {',
         'access_log off;',
         'error_log /dev/stderr warn;',
+        'default_type text/html;',
+        'types { text/css css; }',
         'map $host $customer_vault_frame_origin { default "\'self\'"; }',
         fallbackMap,
+        coopMap,
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
         'location = /storefront/redirect {',
         'if ($http_x_storefront_original_uri ~ "^/old-route(?:[?]|$)") { return 301 /en/category; }',
         'if ($http_x_storefront_original_uri ~ "^/backend-failure") { return 503; }',
         'return 404; }',
-        'location = /storefront/html { return 200 "Published public page"; }',
+        'location = /storefront/html { default_type "text/html; charset=utf-8"; return 200 "Published public page"; }',
         '}',
         'server { listen 8080; root /fixtures/www;',
         block('location = /index.html'),
@@ -103,6 +108,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         }
     });
     await t.test('covers every current non-error file route', async () => {
+        assert.ok(applicationRoutes.length > 0, 'Generated route parsing must not silently skip coverage');
         for (const route of applicationRoutes.filter(pathname => pathname !== '/not-found')) {
             const pathname = route.replace('$slug', 'synthetic-guide');
             const response = await fetch(origin + pathname + '?fixture=1');
@@ -137,5 +143,64 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         assert.equal(redirect.status, 301);
         assert.match(redirect.headers.get('location'), /\/en\/category$/);
         assert.equal((await fetch(origin + '/backend-failure')).status, 503);
+    });
+    await t.test('limits the COOP exception to reproduced iPhone Chrome HTML responses', async () => {
+        const iphone =
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 27_0_1 like Mac OS X) ' +
+            'AppleWebKit/605.1.15 (KHTML, like Gecko)';
+        const chrome = version => `${iphone} CriOS/${version} Mobile/15E148 Safari/604.1`;
+        const affected = [chrome('155.0.8059.37'), chrome('156.0.8078.46')];
+        const unaffected = [
+            '',
+            chrome('157.0.8100.1'),
+            chrome('156.0.8078.47'),
+            chrome('156.0.8078.46').replace('27_0_1', '27_0_2'),
+            chrome('156.0.8078.46').replace('iPhone', 'iPad'),
+            `${iphone} Version/27.0 Mobile/15E148 Safari/604.1`,
+            'Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/156.0.8078.46 Mobile Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/156.0.8078.46 Safari/537.36',
+            'unrecognized-prefix ' + affected[1],
+            affected[1] + ' unrecognized-suffix',
+        ];
+        for (const userAgent of [...affected, ...unaffected]) {
+            for (const route of ['/zh/', '/index.html', '/login', '/missing-page']) {
+                for (const method of ['GET', 'HEAD']) {
+                    const response = await fetch(origin + route, {
+                        method,
+                        headers: { 'User-Agent': userAgent },
+                    });
+                    assert.equal(
+                        response.headers.get('cross-origin-opener-policy'),
+                        affected.includes(userAgent) ? null : 'same-origin-allow-popups',
+                        `${method} ${route}: ${userAgent}`,
+                    );
+                    assert.match(response.headers.get('content-type'), /^text\/html/);
+                    assert.match(response.headers.get('vary'), /\bUser-Agent\b/i);
+                    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+                    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+                    assert.match(response.headers.get('strict-transport-security'), /max-age=31536000/);
+                    assert.match(
+                        response.headers.get('content-security-policy'),
+                        /upgrade-insecure-requests/,
+                    );
+                    assert.match(
+                        response.headers.get('content-security-policy'),
+                        /accounts\.google\.com\/gsi\//,
+                    );
+                    assert.match(response.headers.get('cache-control'), /no-store/);
+                }
+            }
+        }
+        const css = await fetch(origin + '/style.css', {
+            headers: { 'User-Agent': affected[1] },
+        });
+        assert.equal(css.headers.get('content-type'), 'text/css');
+        assert.equal(css.headers.get('cross-origin-opener-policy'), 'same-origin-allow-popups');
+        const post = await fetch(origin + '/zh/', {
+            method: 'POST',
+            headers: { 'User-Agent': affected[1] },
+        });
+        assert.equal(post.status, 405);
+        assert.equal(post.headers.get('cross-origin-opener-policy'), 'same-origin-allow-popups');
     });
 });
