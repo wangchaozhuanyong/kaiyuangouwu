@@ -513,6 +513,7 @@
         "@vendure/storefront-review-plugin": "0.1.0",
         "@vendure/telemetry-plugin": "3.7.2",
         "@vendure/two-factor-dashboard-plugin": "0.1.0",
+        "braces": "file:../../patches/security-vendors/braces",
         "dotenv": "^16.6.1",
         "google-auth-library": "^10.9.1",
       },
@@ -6908,6 +6909,8 @@
     "debounce-fn/mimic-fn": ["mimic-fn@3.1.0", "", {}, "sha512-Ysbi9uYW9hFyfrThdDEQuykN4Ey6BuwPD2kpI5ES/nFTDn/98yxYNLZJcgUAKPT/mcrLLKaGzJR9YVxJrIdASQ=="],
 
     "default-browser/default-browser-id": ["default-browser-id@5.0.1", "", {}, "sha512-x1VCxdX4t+8wVfd1so/9w+vQ4vx7lKd2Qp5tDRutErwmR85OgmfX7RlLRMWafRMY7hbEiXIbudNrjOAPa/hL8Q=="],
+
+    "dev-server/braces": ["@vendure-security/braces@file:patches/security-vendors/braces", { "dependencies": { "fill-range": "^7.1.1" } }],
 
     "dev-server/commander": ["commander@12.1.0", "", {}, "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="],
 
