@@ -82,7 +82,7 @@ void test('filtered production installs materialize verified aliases for hoisted
         await writeFile(source, original);
         await mkdir(path.join(root, 'node_modules/braces'));
         await assert.rejects(materializeSecurityVendorAliases(root), /Unverified canonical/u);
-        await rm(path.join(root, 'node_modules/braces'));
+        await rm(path.join(root, 'node_modules/braces'), { recursive: true });
         await materializeSecurityVendorAliases(root);
         const require = createRequire(path.join(root, 'node_modules/consumer/package.json'));
         assert.ok(require.resolve('braces').startsWith(root + path.sep));
