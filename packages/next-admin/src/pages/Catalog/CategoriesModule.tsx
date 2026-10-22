@@ -218,6 +218,7 @@ export function CategoriesModule() {
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<EditableItem | null>(null);
     const [formName, setFormName] = useState('');
+    const [formSourceDescription, setFormSourceDescription] = useState('');
     const [formEnglishName, setFormEnglishName] = useState('');
     const [formEnglishDescription, setFormEnglishDescription] = useState('');
     const [formCode, setFormCode] = useState('');
@@ -362,6 +363,7 @@ export function CategoriesModule() {
 
     const serializedEditorDraft = JSON.stringify({
         name: formName,
+        sourceDescription: formSourceDescription,
         englishName: formEnglishName,
         englishDescription: formEnglishDescription,
         code: formCode,
@@ -558,6 +560,7 @@ export function CategoriesModule() {
                 ? customFieldValuesFromEntity(collectionCustomFields, item.customFields, item.translations)
                 : customFieldValuesFromEntity(collectionCustomFields, null);
         setFormName(name);
+        setFormSourceDescription(sourceTranslation?.description ?? '');
         setFormEnglishName(englishTranslation?.name ?? '');
         setFormEnglishDescription(englishTranslation?.description ?? '');
         setFormCode(code);
@@ -571,6 +574,7 @@ export function CategoriesModule() {
         setInitialEditorDraft(
             JSON.stringify({
                 name,
+                sourceDescription: sourceTranslation?.description ?? '',
                 englishName: englishTranslation?.name ?? '',
                 englishDescription: englishTranslation?.description ?? '',
                 code,
@@ -774,9 +778,14 @@ export function CategoriesModule() {
                         return;
                     }
                     const sourceTranslation = getSourceTranslation(editingItem);
+                    const sourceDescription =
+                        formSourceDescription === (sourceTranslation?.description ?? '')
+                            ? (sourceTranslation?.description ?? '')
+                            : formSourceDescription.trim() || sourceTranslation?.description || '';
                     const chineseChanged =
                         formName !== getSourceName(editingItem) ||
                         formCode !== (sourceTranslation?.slug || editingItem.slug) ||
+                        sourceDescription !== (sourceTranslation?.description ?? '') ||
                         JSON.stringify(customFieldValues) !==
                             JSON.stringify(
                                 customFieldValuesFromEntity(
@@ -831,8 +840,7 @@ export function CategoriesModule() {
                                                   languageCode,
                                                   name,
                                                   slug: code,
-                                                  description:
-                                                      getSourceTranslation(editingItem)?.description ?? '',
+                                                  description: sourceDescription,
                                                   customFields: localizedCustomFieldInputFromValues(
                                                       collectionCustomFields,
                                                       customFieldValues,
@@ -871,7 +879,7 @@ export function CategoriesModule() {
                                         languageCode,
                                         name,
                                         slug: code,
-                                        description: '',
+                                        description: formSourceDescription.trim(),
                                         customFields: localizedCustomFieldInputFromValues(
                                             collectionCustomFields,
                                             customFieldValues,
@@ -1779,6 +1787,20 @@ export function CategoriesModule() {
                         </AdminField>
                         {activeTab === 'CATEGORIES' ? (
                             <>
+                                <AdminField
+                                    label="中文描述"
+                                    layout="stacked"
+                                    description="留空保留原文；填写后会更新分类的中文源描述。"
+                                >
+                                    <AdminTextArea
+                                        aria-label="中文描述"
+                                        value={formSourceDescription}
+                                        onChange={event => setFormSourceDescription(event.target.value)}
+                                        disabled={saving}
+                                        rows={3}
+                                        className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
+                                    />
+                                </AdminField>
                                 {editingItem &&
                                     'slug' in editingItem &&
                                     getLocalizedEntityTranslation(editingItem.translations, 'en') && (
@@ -1792,17 +1814,6 @@ export function CategoriesModule() {
                                                     value={formEnglishName}
                                                     onChange={event => setFormEnglishName(event.target.value)}
                                                     disabled={saving}
-                                                    className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
-                                                />
-                                            </AdminField>
-                                            <AdminField label="中文描述（参照）" layout="stacked">
-                                                <AdminTextArea
-                                                    aria-label="中文描述（参照）"
-                                                    value={
-                                                        getSourceTranslation(editingItem)?.description ?? ''
-                                                    }
-                                                    readOnly
-                                                    rows={3}
                                                     className="w-full rounded-lg border border-slate-300 p-2.5 text-xs"
                                                 />
                                             </AdminField>
