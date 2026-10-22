@@ -665,18 +665,6 @@ void test('approved braces backport verifies all installed copies and preserves 
         path.join(installed, 'UPSTREAM-PACKAGE.json'),
         path.join(root, 'node_modules/braces-alias/package.json'),
     );
-    // The upstream backport kept an extra EOF newline. Reconstruct its exact
-    // historical bytes; do not change the historical proof to fit our distribution.
-    for (const copy of [localCopy, nestedCopy, path.join(root, 'node_modules/braces-alias')]) {
-        const file = path.join(copy, 'lib/stringify.js');
-        await writeFile(file, (await readFile(file, 'utf8')) + '\n');
-        assert.equal(
-            createHash('sha256')
-                .update(await readFile(file))
-                .digest('hex'),
-            BRACES_PATCH.files['lib/stringify.js'],
-        );
-    }
     const braceReport = {
         braces: [
             {
@@ -689,6 +677,18 @@ void test('approved braces backport verifies all installed copies and preserves 
         ],
     };
     try {
+        // The upstream backport kept an extra EOF newline. Reconstruct its exact
+        // historical bytes; do not change the historical proof to fit our distribution.
+        for (const copy of [localCopy, nestedCopy, path.join(root, 'node_modules/braces-alias')]) {
+            const file = path.join(copy, 'lib/stringify.js');
+            await writeFile(file, (await readFile(file, 'utf8')) + '\n');
+            assert.equal(
+                createHash('sha256')
+                    .update(await readFile(file))
+                    .digest('hex'),
+                BRACES_PATCH.files['lib/stringify.js'],
+            );
+        }
         const verified = verifyBracesPatch(root);
         assert.equal(verified.state, 'VERIFIED_PATCH');
         assert.equal(verified.copies.length, 3);
