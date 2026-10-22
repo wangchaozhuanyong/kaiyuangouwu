@@ -657,3 +657,9 @@ Nginx receipts and backups live under
 `current.json` identifies only the accepted Nginx configuration. The full runtime
 marker and frontend pointers retain their own identities. Do not invoke host
 scripts as an alternative manual release entry.
+
+When the same immutable main revision also contains pending static components,
+`frontend-nginx` completes the existing frontend release and acceptance first.
+Only then may the Nginx job run, bound to the newly active exact frontend SHAs.
+The host repeats the original strict Nginx-only scope and identity checks. Both
+phases must succeed; backend/dependency/unknown inputs cannot use this route.

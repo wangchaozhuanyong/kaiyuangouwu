@@ -53,17 +53,27 @@ export function selectReleaseRoute({
         };
     }
     // Nginx may advance independently only when every other serving input is
-    // already active. Unknown/backend inputs and pending frontends retain the
-    // existing runtime route; managed writes and retained-runtime releases were
+    // already active. Pending static components require a prior frontend phase;
+    // unknown/backend inputs retain the runtime route. Managed writes were
     // handled above and cannot enter this branch.
     if (!plan.full && plan.files.includes('deploy/nginx/damatong.conf')) {
         const remaining = classifyChanges(plan.files.filter(file => file !== 'deploy/nginx/damatong.conf'));
         const knownFrontends = [storefrontSha, adminSha].every(sha => /^[a-f0-9]{40}$/u.test(sha ?? ''));
-        if (
-            ['none', 'frontend'].includes(remaining.lane) &&
-            knownFrontends &&
-            !pendingFrontendComponents(remaining, { storefrontSha, adminSha, targetSha }, changedSince).length
-        ) {
+        if (['none', 'frontend'].includes(remaining.lane) && knownFrontends) {
+            const pending = pendingFrontendComponents(
+                remaining,
+                { storefrontSha, adminSha, targetSha },
+                changedSince,
+            );
+            if (pending.length) {
+                return {
+                    lane: 'frontend-nginx',
+                    components: pending,
+                    reasons: [
+                        'Publish pending static components first; apply Nginx only after their exact versions are active. Preserve API and Worker.',
+                    ],
+                };
+            }
             return {
                 lane: 'nginx',
                 components: [],

@@ -221,7 +221,20 @@ export function assertFrontendScope(
     revisions,
     changedSince = frontendChangedSinceObserved,
 ) {
-    const plan = classifyChanges(nginxRevision.withoutActiveNginx(paths, revisions));
+    let servingPaths;
+    if (revisions.stagedNginx === true) {
+        assert.match(
+            revisions.nginxSha ?? '',
+            /^[a-f0-9]{40}$/u,
+            'Staged publication needs a verified active Nginx revision',
+        );
+        assert.ok(
+            paths.includes('deploy/nginx/damatong.conf'),
+            'Staged publication requires a configuration phase',
+        );
+        servingPaths = paths.filter(file => file !== 'deploy/nginx/damatong.conf');
+    } else servingPaths = nginxRevision.withoutActiveNginx(paths, revisions);
+    const plan = classifyChanges(servingPaths);
     assert.equal(plan.lane, 'frontend', 'The cumulative production diff requires a full runtime release');
     assert.deepEqual(
         [...components].sort(),
@@ -344,6 +357,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
                 storefrontSha: process.env.STOREFRONT_SHA,
                 adminSha: process.env.ADMIN_SHA,
                 nginxSha: process.env.NGINX_SHA,
+                stagedNginx: process.env.STAGED_NGINX === 'true',
                 targetSha: process.env.TARGET_SHA,
             });
         else if (command === 'activate') {

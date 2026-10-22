@@ -3,11 +3,12 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-export function frontendDeployCommand({ sha, archive, checksum, components }) {
+export function frontendDeployCommand({ sha, archive, checksum, components, stagedNginx = false }) {
     assert.match(sha ?? '', /^[a-f0-9]{40}$/u);
     assert.match(archive ?? '', new RegExp(`^frontends-${sha}-[0-9]+-[0-9]+\\.tar\\.gz$`, 'u'));
     assert.match(checksum ?? '', /^[a-f0-9]{64}$/u);
     assert.ok(['storefront', 'next-admin', 'next-admin,storefront'].includes(components));
+    assert.equal(typeof stagedNginx, 'boolean');
     return `/bin/bash -s <<'VENDURE_FRONTEND_HOST'
 set -Eeuo pipefail
 # Maintenance acquires the production lock before the deployment opens FD 9.
@@ -19,7 +20,7 @@ if [[ -e "$disk_maintenance" || -L "$disk_maintenance" ]]; then
 else
     printf 'FRONTEND_DISK_MAINTENANCE_NOT_INSTALLED bootstrap requires a full production installation\\n'
 fi
-sudo -H -u ubuntu /bin/bash -s -- ${sha} ${archive} ${checksum} ${components} <<'VENDURE_FRONTEND_CONTROLS'
+sudo -H -u ubuntu /bin/bash -s -- ${sha} ${archive} ${checksum} ${components}${stagedNginx ? ' true' : ''} <<'VENDURE_FRONTEND_CONTROLS'
 set -Eeuo pipefail
 cd /var/www/kaiyuangouwu
 git fetch origin main --no-tags
@@ -53,7 +54,13 @@ async function main() {
                 { encoding: 'utf8', maxBuffer: 1024 * 1024 },
             ),
         );
-    const command = frontendDeployCommand({ sha, archive, checksum, components });
+    const command = frontendDeployCommand({
+        sha,
+        archive,
+        checksum,
+        components,
+        stagedNginx: process.env.STAGED_NGINX === 'true',
+    });
     const submitted = aws([
         'ssm',
         'send-command',
