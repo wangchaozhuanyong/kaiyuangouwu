@@ -333,6 +333,13 @@ export function storefrontPlaceholderData<T>(
 }
 
 const refreshFlights = new WeakMap<QueryClient, Map<string, Promise<void>>>();
+/** Explicit recovery owns one active read. Background refresh still joins existing reads. */
+export async function retryStorefrontRead(client: QueryClient, queryKey: QueryKey): Promise<void> {
+    if (!client.getQueryCache().find({ queryKey, exact: true })?.isActive()) return;
+    await client.cancelQueries({ queryKey, exact: true });
+    await client.refetchQueries({ queryKey, exact: true, type: 'active' }, { cancelRefetch: false });
+}
+
 /** SSE, reconnect and manual refresh join active reads. Mutations are never part of this path. */
 export function refreshStorefrontQueries(client: QueryClient, scope: StorefrontRefreshScope): Promise<void> {
     let flights = refreshFlights.get(client);

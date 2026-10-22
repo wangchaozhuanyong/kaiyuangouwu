@@ -1,7 +1,10 @@
-import { useId } from 'react';
+// organize-imports-ignore -- Preserve the repository type import grouping.
+import type { CollectionSummary, FulfillmentType, StorefrontLanguage } from '../../types';
+import { lazy, Suspense, useState } from 'react';
 
-import { Sheet } from '../../storefront-ui/page-shell';
-import { type CollectionSummary, type FulfillmentType, type StorefrontLanguage } from '../../types';
+import { PageSkeleton } from '../../route-loading';
+import { InlineError, Sheet } from '../../storefront-ui/page-shell';
+import { StorefrontErrorBoundary } from '../../StorefrontErrorBoundary';
 
 export interface CatalogFilterValues {
     collectionId?: string;
@@ -11,23 +14,7 @@ export interface CatalogFilterValues {
     maxPrice: string;
 }
 
-export function categoryFilterActionLabel(language: StorefrontLanguage, resultCount: number | null): string {
-    if (resultCount === null) return language === 'zh' ? '应用筛选' : 'Apply filters';
-    if (language === 'zh') return `查看 ${resultCount} 件商品`;
-    return `View ${resultCount} ${resultCount === 1 ? 'product' : 'products'}`;
-}
-
-export function CatalogFilterSheet({
-    language,
-    currencyCode,
-    value,
-    resultCount,
-    onChange,
-    onApply,
-    onClose,
-    collections,
-    className,
-}: {
+export type CatalogFilterSheetProps = {
     language: StorefrontLanguage;
     currencyCode: string;
     value: CatalogFilterValues;
@@ -37,190 +24,44 @@ export function CatalogFilterSheet({
     onClose: () => void;
     collections?: CollectionSummary[];
     className?: string;
-}) {
-    const isZh = language === 'zh';
-    const draftType = value.fulfillment;
-    const draftStock = value.inStockOnly;
-    const draftMinimumPrice = value.minPrice;
-    const draftMaximumPrice = value.maxPrice;
-    const draftResultCount = resultCount;
-    const setDraftType = (fulfillment: CatalogFilterValues['fulfillment']) =>
-        onChange({ ...value, fulfillment });
-    const setDraftStock = (inStockOnly: boolean) => onChange({ ...value, inStockOnly });
-    const setDraftMinimumPrice = (minPrice: string) => onChange({ ...value, minPrice });
-    const setDraftMaximumPrice = (maxPrice: string) => onChange({ ...value, maxPrice });
-    const priceErrorId = useId();
-    const invalidMinimum =
-        draftMinimumPrice !== '' &&
-        (!Number.isFinite(Number(draftMinimumPrice)) || Number(draftMinimumPrice) < 0);
-    const invalidMaximum =
-        draftMaximumPrice !== '' &&
-        (!Number.isFinite(Number(draftMaximumPrice)) || Number(draftMaximumPrice) < 0);
-    const invertedRange =
-        !invalidMinimum &&
-        !invalidMaximum &&
-        draftMinimumPrice !== '' &&
-        draftMaximumPrice !== '' &&
-        Number(draftMinimumPrice) > Number(draftMaximumPrice);
-    const invalidPrice = invalidMinimum || invalidMaximum || invertedRange;
+};
+
+export function categoryFilterActionLabel(language: StorefrontLanguage, resultCount: number | null): string {
+    if (resultCount === null) return language === 'zh' ? '应用筛选' : 'Apply filters';
+    if (language === 'zh') return `查看 ${resultCount} 件商品`;
+    return `View ${resultCount} ${resultCount === 1 ? 'product' : 'products'}`;
+}
+
+const loadContent = () =>
+    import('./catalog-filter-content').then(module => ({ default: module.CatalogFilterContent }));
+
+/** The closable shell is immediate; closed filters do not join catalog startup. */
+export function CatalogFilterSheet(props: CatalogFilterSheetProps) {
+    const [attempt, setAttempt] = useState(() => ({ id: 0, Content: lazy(loadContent) }));
+    const retry = () => setAttempt(current => ({ id: current.id + 1, Content: lazy(loadContent) }));
+    const Content = attempt.Content;
+    const isZh = props.language === 'zh';
     return (
-        <Sheet title={isZh ? '筛选' : 'Filter'} language={language} onClose={onClose} className={className}>
-            <div className="filter-sheet-content">
-                {!!collections?.length && (
-                    <label className="filter-collection-select">
-                        <span>{isZh ? '商品分类' : 'Category'}</span>
-                        <select
-                            value={value.collectionId ?? 'all'}
-                            onChange={event => onChange({ ...value, collectionId: event.target.value })}
-                        >
-                            <option value="all">{isZh ? '全部分类' : 'All categories'}</option>
-                            {collections.map(collection => (
-                                <option key={collection.id} value={collection.id}>
-                                    {collection.name}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                )}
-                <label className="filter-card filter-stock-card">
-                    <span className="filter-stock-title">{isZh ? '仅看有货' : 'In stock only'}</span>
-                    <input
-                        type="checkbox"
-                        checked={draftStock}
-                        onChange={event => setDraftStock(event.target.checked)}
+        <Sheet
+            title={isZh ? '筛选' : 'Filter'}
+            language={props.language}
+            onClose={props.onClose}
+            className={props.className}
+        >
+            <StorefrontErrorBoundary
+                key={attempt.id}
+                fallback={
+                    <InlineError
+                        message={isZh ? '筛选暂时无法加载' : 'Filters could not be loaded'}
+                        action={isZh ? '重新尝试' : 'Try again'}
+                        onAction={retry}
                     />
-                </label>
-                <fieldset className="filter-fieldset">
-                    <legend className="filter-legend">{isZh ? '价格区间' : 'Price range'}</legend>
-                    <div className="price-range-inputs">
-                        <label>
-                            <span>{currencyCode}</span>
-                            <input
-                                type="number"
-                                inputMode="decimal"
-                                min="0"
-                                placeholder={isZh ? '最低价' : 'Min'}
-                                aria-label={isZh ? '最低价' : 'Minimum price'}
-                                aria-invalid={invalidMinimum || invertedRange || undefined}
-                                aria-describedby={invalidMinimum || invertedRange ? priceErrorId : undefined}
-                                value={draftMinimumPrice}
-                                onChange={event => setDraftMinimumPrice(event.target.value)}
-                            />
-                        </label>
-                        <span className="price-separator">—</span>
-                        <label>
-                            <span>{currencyCode}</span>
-                            <input
-                                type="number"
-                                inputMode="decimal"
-                                min="0"
-                                placeholder={isZh ? '最高价' : 'Max'}
-                                aria-label={isZh ? '最高价' : 'Maximum price'}
-                                aria-invalid={invalidMaximum || invertedRange || undefined}
-                                aria-describedby={invalidMaximum || invertedRange ? priceErrorId : undefined}
-                                value={draftMaximumPrice}
-                                onChange={event => setDraftMaximumPrice(event.target.value)}
-                            />
-                        </label>
-                    </div>
-                    <div className="price-presets">
-                        {(
-                            [
-                                [0, 100],
-                                [100, 300],
-                                [300, 800],
-                                [800, null],
-                            ] as const
-                        ).map(([minimum, maximum]) => (
-                            <button
-                                type="button"
-                                key={`${minimum}-${maximum ?? 'up'}`}
-                                aria-pressed={
-                                    draftMinimumPrice === String(minimum) &&
-                                    draftMaximumPrice === (maximum === null ? '' : String(maximum))
-                                }
-                                className={
-                                    draftMinimumPrice === String(minimum) &&
-                                    draftMaximumPrice === (maximum === null ? '' : String(maximum))
-                                        ? 'is-active'
-                                        : undefined
-                                }
-                                onClick={() => {
-                                    onChange({
-                                        ...value,
-                                        minPrice: String(minimum),
-                                        maxPrice: maximum === null ? '' : String(maximum),
-                                    });
-                                }}
-                            >
-                                {maximum === null
-                                    ? `${minimum}${isZh ? '以上' : '+'}`
-                                    : `${minimum}-${maximum}`}
-                            </button>
-                        ))}
-                    </div>
-                </fieldset>
-                <fieldset className="filter-fieldset">
-                    <legend className="filter-legend">{isZh ? '商品类型' : 'Product type'}</legend>
-                    <div className="segmented-options">
-                        {(['all', 'physical', 'digital'] as const).map(type => (
-                            <button
-                                type="button"
-                                key={type}
-                                aria-pressed={draftType === type}
-                                className={draftType === type ? 'is-active' : undefined}
-                                onClick={() => setDraftType(type)}
-                            >
-                                {type === 'all'
-                                    ? isZh
-                                        ? '全部'
-                                        : 'All'
-                                    : type === 'physical'
-                                      ? isZh
-                                          ? '实物'
-                                          : 'Physical'
-                                      : isZh
-                                        ? '数字商品'
-                                        : 'Digital'}
-                            </button>
-                        ))}
-                    </div>
-                </fieldset>
-                {invalidPrice && (
-                    <p id={priceErrorId} className="filter-price-error" role="alert">
-                        {isZh
-                            ? '请输入有效价格，最高价不能低于最低价'
-                            : 'Enter valid prices; the maximum must be at least the minimum.'}
-                    </p>
-                )}
-                <div className="sheet-actions filter-actions">
-                    <button
-                        type="button"
-                        className="reset-filter-button"
-                        onClick={() => {
-                            onChange({
-                                ...(value.collectionId === undefined ? {} : { collectionId: 'all' }),
-                                fulfillment: 'all',
-                                inStockOnly: false,
-                                minPrice: '',
-                                maxPrice: '',
-                            });
-                        }}
-                    >
-                        {isZh ? '重置' : 'Reset'}
-                    </button>
-                    <button
-                        type="button"
-                        className="primary-action filter-confirm-button"
-                        disabled={invalidPrice}
-                        onClick={() => {
-                            if (!invalidPrice) onApply(value);
-                        }}
-                    >
-                        {categoryFilterActionLabel(language, draftResultCount)}
-                    </button>
-                </div>
-            </div>
+                }
+            >
+                <Suspense fallback={<PageSkeleton compact language={props.language} onRetry={retry} />}>
+                    <Content {...props} />
+                </Suspense>
+            </StorefrontErrorBoundary>
         </Sheet>
     );
 }

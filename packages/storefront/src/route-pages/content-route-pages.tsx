@@ -1,7 +1,10 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { lazyRouteComponent } from '@tanstack/react-router';
 
+import { languageCodeFor } from '../i18n';
 import { resolveQueryLoadState } from '../loading-state';
 import { usePageRouteCommit } from '../page-readiness';
+import { retryStorefrontRead, storefrontQueryKeys } from '../query-client';
 import { storefrontErrorMessage } from '../storefront-errors';
 import { BusinessServicesPageContext, SupportPageContext } from '../storefront-page-contexts';
 import { AsyncRouteStatePage } from '../storefront-ui/page-shell';
@@ -39,6 +42,7 @@ const MailQueryPage = lazyRouteComponent(
 );
 
 export function ServicesRoutePage() {
+    const client = useQueryClient();
     usePageRouteCommit();
     const runtime = useRuntime();
     const contentLoadState = resolveQueryLoadState({
@@ -55,7 +59,15 @@ export function ServicesRoutePage() {
                 error={runtime.contentError}
                 language={runtime.language}
                 onBack={runtime.goBack}
-                onRetry={() => void runtime.contentQuery.refetch({ cancelRefetch: false })}
+                onRetry={() =>
+                    void retryStorefrontRead(client, [
+                        ...storefrontQueryKeys.content(
+                            storefrontQueryKeys.market(runtime.market),
+                            languageCodeFor(runtime.language),
+                        ),
+                        'public',
+                    ])
+                }
             />
         );
     }

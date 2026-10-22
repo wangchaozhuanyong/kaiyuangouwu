@@ -49,7 +49,19 @@ function dataFor(url, host) {
               : url.pathname.includes('/guides/')
                 ? 'article'
                 : 'home');
-    const page = syntheticPage(store, languageCode, kind, { host, origin: `http://${host}` });
+    const pageId = kind === 'page' ? url.searchParams.get('id') : null;
+    const publicPage = pageId === 'services' || pageId === 'support';
+    const page = syntheticPage(store, languageCode, publicPage ? 'home' : kind, {
+        host,
+        origin: `http://${host}`,
+    });
+    if (publicPage) {
+        page.request = { kind: 'page', id: pageId };
+        page.requestKey = JSON.stringify(page.request);
+        page.route = `/${languageCode === 'zh_Hans' ? 'zh' : 'en'}/${pageId}`;
+        page.seo.requestKey = page.requestKey;
+        page.seo.canonical = `http://${host}${page.route}`;
+    }
     if (kind === 'catalog' && url.searchParams.get('input')) {
         const input = JSON.parse(url.searchParams.get('input'));
         // Page 2 is the explicit acceptance scope; other pages remain synthetic and scoped.

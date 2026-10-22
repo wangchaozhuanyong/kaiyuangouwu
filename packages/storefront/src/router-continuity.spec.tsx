@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { QueryClientProvider, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { QueryClientProvider, skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
     createMemoryHistory,
     createRouter,
@@ -16,8 +16,9 @@ import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/resp
 import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { useStorefrontNavigation } from './hooks/useStorefrontNavigation';
-import { PageReadinessBoundary } from './page-readiness';
+import { PageReadinessBoundary, usePageReadiness } from './page-readiness';
 import { PUBLIC_QUERY_STALE_TIME, storefrontQueryClient, storefrontQueryKeys } from './query-client';
+import { PageSkeleton } from './route-loading';
 import { router as productionRouter } from './router';
 import { publicSeoQueryKey, setPublicPageNavigationScope } from './storefront-page-data';
 import { type Product } from './types';
@@ -109,9 +110,12 @@ const readCatalog = vi.fn(() => Promise.resolve({ items: [], totalItems: 0 }));
 const productAction = vi.fn<(id: string) => void>();
 
 function HomeBody() {
-    const products = storefrontQueryClient.getQueryData<Product[]>(
-        storefrontQueryKeys.products('store-a:MYR', 'en', 12),
-    );
+    const { data: products } = useQuery<Product[]>({
+        queryKey: storefrontQueryKeys.products('store-a:MYR', 'en', 12),
+        queryFn: skipToken,
+    });
+    usePageReadiness(products === undefined);
+    if (products === undefined) return <PageSkeleton variant="home" />;
     return <article data-home>{products?.map(item => item.name).join(',') ?? 'Waiting for home'}</article>;
 }
 
@@ -134,11 +138,10 @@ function ContentBody() {
         kind: 'page' as const,
         id: route.includes('support') ? ('support' as const) : ('services' as const),
     };
-    const media = storefrontQueryClient.getQueryData([
-        ...storefrontQueryKeys.scope('store-a:MYR', 'en'),
-        'public-media',
-        publicPageRequestKey(request),
-    ]);
+    const { data: media } = useQuery({
+        queryKey: publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media'),
+        queryFn: skipToken,
+    });
     return <article data-content>{media ? 'Backed artwork' : 'Unbacked artwork'}</article>;
 }
 
@@ -156,6 +159,8 @@ function ProductBody() {
         refetchOnMount: false,
         retry: false,
     });
+    usePageReadiness(result.isPending, 'page', id, result.isError);
+    if (result.isPending) return <PageSkeleton variant="detail" />;
     return (
         <article data-product={id} onClick={() => productAction(id)}>
             {result.data?.name ?? 'Waiting for product'}
@@ -306,7 +311,7 @@ describe('real storefront router continuity', () => {
     });
 
     it.each(['services', 'support'] as const)(
-        'waits for first %s artwork before committing cached content',
+        'commits cached %s content without waiting for optional artwork',
         async id => {
             await start();
             const response = deferred<Response>();
@@ -335,14 +340,16 @@ describe('real storefront router continuity', () => {
                 } as never);
                 await Promise.resolve();
             });
-            expect(host.querySelector('article')?.textContent).toBe('a');
-            expect(host.querySelector('[data-content]')).toBeNull();
+            await vi.waitFor(() =>
+                expect(host.querySelector('[data-content]')?.textContent).toBe('Unbacked artwork'),
+            );
+            expect(host.querySelector('header')?.dataset.presentedRoute).toBe(id);
             await act(async () => {
                 response.resolve(Response.json(page));
                 await navigation;
             });
             expect(fetch).toHaveBeenCalledOnce();
-            expect(host.querySelector('article')?.textContent).toBe('Backed artwork');
+            await vi.waitFor(() => expect(host.querySelector('article')?.textContent).toBe('Backed artwork'));
             expect(host.querySelector('.brand-loading')).toBeNull();
         },
     );
@@ -373,7 +380,7 @@ describe('real storefront router continuity', () => {
         expect(pendingNodes).toEqual([]);
     });
 
-    it('retains the source during cold code loading without blocking on optional aggregate data', async () => {
+    it('presents the target during cold code loading without blocking on optional aggregate data', async () => {
         await start();
         expect(preloadRoute).toHaveBeenCalledWith('product');
         const code = deferred<void>();
@@ -410,13 +417,14 @@ describe('real storefront router continuity', () => {
         expect(preloadRoute).toHaveBeenCalledWith('services');
         expect(fetch).toHaveBeenCalledOnce();
         expect(host.querySelector('header')).toBe(header);
-        expect(host.querySelector('article')).toBe(article);
-        expect(article?.textContent).toBe('a');
-        expect(header?.dataset.presentedRoute).toBe('product');
+        const hiddenArticle = host.querySelector('article');
+        if (!hiddenArticle) throw new Error('Expected the retained offscreen subtree');
+        expect(getComputedStyle(hiddenArticle).display).toBe('none');
+        expect(header?.dataset.presentedRoute).toBe('services');
         if (!article) throw new Error('Expected the retained source article');
-        expect(getComputedStyle(article).display).not.toBe('none');
+        expect(getComputedStyle(article).display).toBe('none');
         expect(host.querySelector('[data-content]')).toBeNull();
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
+        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
         expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
         const action = host.querySelector('header button');
         if (!(action instanceof HTMLButtonElement)) throw new Error('Expected the retained shell action');
@@ -463,11 +471,16 @@ describe('real storefront router continuity', () => {
             await Promise.resolve();
         });
         await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('services'));
-        expect(host.querySelector('article')?.textContent).toBe('a');
+        await vi.waitFor(() => expect(host.querySelector('main [data-page-pending]')).not.toBeNull());
+        const hiddenArticle = host.querySelector('article');
+        if (!hiddenArticle) throw new Error('Expected the retained offscreen subtree');
+        expect(getComputedStyle(hiddenArticle).display).toBe('none');
         await navigate('b');
         expect(host.querySelector('header')).toBe(header);
         expect(header?.dataset.presentedProduct).toBe('b');
         expect(host.querySelector('article')?.textContent).toBe('b');
+        expect(pendingNodes.length).toBeGreaterThan(0);
+        pendingNodes.length = 0;
         await act(async () => {
             obsoleteCode.resolve();
             await abandoned;
@@ -524,8 +537,8 @@ describe('real storefront router continuity', () => {
                 await router.navigate({ to: '/support', search } as never);
             });
             await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('support'));
-            // Intent preparation and the required leaf loader both use this facade.
-            expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual(['support', 'support']);
+            // The leaf owns code preparation; navigation does not repeat the intent hint.
+            expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual(['support']);
             expect(host.querySelector('header')).toBe(header);
             // A completed hover preload is warm: do not manufacture another cold code wait.
             expect(header?.dataset.presentedRoute).toBe('support');
@@ -566,19 +579,17 @@ describe('real storefront router continuity', () => {
         await vi.waitFor(() => expect(preloadRoute).toHaveBeenCalledWith('services'));
         expect(router.state.location.pathname).toBe('/services');
         expect(router.state.location.search.__route).toBe('/services');
-        expect(host.querySelector('article')?.textContent).toBe('a');
+        await vi.waitFor(() => expect(host.querySelector('main [data-page-pending]')).not.toBeNull());
+        const hiddenArticle = host.querySelector('article');
+        if (!hiddenArticle) throw new Error('Expected the retained offscreen subtree');
+        expect(getComputedStyle(hiddenArticle).display).toBe('none');
 
         // Retaining search also retains the old internal value before rewrite.input replaces it.
         // This must use a distinct root code owner even though the public business search is identical.
         await act(async () => {
             await router.navigate({ to: '/support', search: true } as never);
         });
-        expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual([
-            'services',
-            'services',
-            'support',
-            'support',
-        ]);
+        expect(preloadRoute.mock.calls.map(([name]) => name)).toEqual(['services', 'support']);
         expect(host.querySelector('header')).toBe(header);
         expect(header?.dataset.presentedRoute).toBe('support');
         expect(host.querySelector('[data-content]')?.textContent).toBe('Backed artwork');
@@ -588,7 +599,9 @@ describe('real storefront router continuity', () => {
         expect(publicUrl.searchParams.get('term')).toBe('same');
         expect(publicUrl.searchParams.has('__route')).toBe(false);
         expect(publicUrl.searchParams.has('__storefrontLanguage')).toBe(false);
-        expect(pendingNodes).toEqual([]);
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
+        expect(pendingNodes.length).toBeGreaterThan(0);
+        pendingNodes.length = 0;
         await act(async () => {
             obsoleteCode.resolve();
             await abandoned;
@@ -600,135 +613,108 @@ describe('real storefront router continuity', () => {
         expect(pendingNodes).toEqual([]);
     });
 
-    it('keeps the source body and its matching header interactive until the cold destination is ready', async () => {
+    it('commits the target identity and missing-data region while keeping the shell interactive', async () => {
         await start();
         const cold = deferred<Product>();
         readProduct.mockImplementation(() => cold.promise);
         const header = host.querySelector('header');
-        let navigation: Promise<void> | undefined;
         await act(async () => {
-            navigation = router.navigate({ to: '/product', search: { id: 'cold' } } as never);
-            await Promise.resolve();
+            await router.navigate({ to: '/product', search: { id: 'cold' } } as never);
         });
-        expect(host.querySelector('article')?.textContent).toBe('a');
-        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('a');
+        expect(host.querySelector('header')).toBe(header);
+        expect(header?.dataset.presentedProduct).toBe('cold');
+        expect(host.querySelector('article')).toBeNull();
+        expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-initial')).toBeNull();
         await act(async () => {
             await new Promise(resolve => setTimeout(resolve, 230));
         });
-
-        expect(host.querySelector('header')).toBe(header);
-        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('a');
-        const article = host.querySelector('article');
-        if (!article) throw new Error('Expected the retained source article');
-        expect(getComputedStyle(article).display).not.toBe('none');
-        expect(article.closest('[hidden],[inert]')).toBeNull();
-        act(() => article.click());
-        expect(productAction).toHaveBeenLastCalledWith('a');
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
-        expect(host.querySelector('.page-readiness-initial')).toBeNull();
         expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
         expect(host.querySelector('main main')).toBeNull();
         const button = host.querySelector('button');
-        if (!button) throw new Error('Expected the retained shell action');
-        act(() => button.click());
-        expect(button.textContent).toBe('Shell action 1');
-
+        act(() => button?.click());
+        expect(button?.textContent).toBe('Shell action 1');
+        expect(productAction).not.toHaveBeenCalled();
         await act(async () => {
             cold.resolve(product('cold'));
-            await navigation;
+            await cold.promise;
         });
-        expect(host.querySelector('article')?.textContent).toBe('cold');
-        expect(host.querySelector('header')?.dataset.presentedProduct).toBe('cold');
+        await vi.waitFor(() => expect(host.querySelector('article')?.textContent).toBe('cold'));
         act(() => host.querySelector('article')?.click());
         expect(productAction).toHaveBeenLastCalledWith('cold');
+        expect(header?.dataset.presentedProduct).toBe('cold');
     });
 
-    it('keeps the source visible through code-only waits and lets the user leave a slow target', async () => {
+    it('shows the target code placeholder and lets the user leave without awaiting its module', async () => {
         await start();
         const code = deferred<void>();
         preloadRoute.mockImplementation(name => (name === 'legal' ? code.promise : Promise.resolve()));
         const header = host.querySelector('header');
-        let abandoned: Promise<void> | undefined;
+        let navigation: Promise<void> | undefined;
         await act(async () => {
-            abandoned = router.navigate({ to: '/legal' } as never);
+            navigation = router.navigate({ to: '/legal' } as never);
             await new Promise(resolve => setTimeout(resolve, 230));
         });
         expect(host.querySelector('header')).toBe(header);
-        expect(header?.dataset.presentedRoute).toBe('product');
-        expect(host.querySelector('article')?.textContent).toBe('a');
-        const sourceArticle = host.querySelector('article');
-        if (!sourceArticle) throw new Error('Expected the source article during navigation');
-        expect(getComputedStyle(sourceArticle).display).not.toBe('none');
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
+        expect(header?.dataset.presentedRoute).toBe('legal');
+        const hiddenArticle = host.querySelector('article');
+        if (!hiddenArticle) throw new Error('Expected the retained offscreen subtree');
+        expect(getComputedStyle(hiddenArticle).display).toBe('none');
+        expect(host.querySelector('[data-page-pending]')).not.toBeNull();
         expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
-        expect(host.querySelector('[data-legal]')).toBeNull();
-        await act(async () => {
-            await router.navigate({ to: '/product', search: { id: 'a' } } as never);
-        });
-        expect(host.querySelector('article')?.textContent).toBe('a');
-        expect(host.querySelector('header')).toBe(header);
-        expect(host.querySelector('[data-page-pending]')).toBeNull();
+        await navigate('a');
         await act(async () => {
             code.resolve();
-            await abandoned;
+            await navigation;
         });
         expect(host.querySelector('article')?.textContent).toBe('a');
         expect(header?.dataset.presentedProduct).toBe('a');
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
     });
 
-    it('preserves the source body and shell while the first-home aggregate loads', async () => {
+    it('opens the home body before its first aggregate completes and adopts that exact result', async () => {
         await start();
         const page = syntheticPage('synthetic-a', 'en', 'home');
         page.scope.host = window.location.host;
         page.scope.channelCode = 'store-a';
         page.config.code = 'store-a';
-        storefrontQueryClient.setQueryData(
-            [...storefrontQueryKeys.content('store-a:MYR', 'en'), 'public'],
-            page.content,
-        );
         const response = deferred<Response>();
         const fetch = vi.fn(() => response.promise);
         vi.stubGlobal('fetch', fetch);
-        const article = host.querySelector('article');
         const header = host.querySelector('header');
-        let navigation: Promise<void> | undefined;
         await act(async () => {
-            navigation = router.navigate({ to: '/', search: { __storefrontLanguage: 'en' } } as never);
-            await new Promise(resolve => setTimeout(resolve, 230));
-        });
-        expect(host.querySelector('article')).toBe(article);
-        expect(host.querySelector('[data-home]')).toBeNull();
-        if (!article) throw new Error('Expected the retained source article');
-        expect(getComputedStyle(article).display).not.toBe('none');
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
-        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
-        const action = host.querySelector('button');
-        if (!action) throw new Error('Expected retained shell action');
-        act(() => action.click());
-        expect(action.textContent).toBe('Shell action 1');
-        await act(async () => {
-            response.resolve(Response.json(page));
-            await navigation;
+            await router.navigate({ to: '/', search: { __storefrontLanguage: 'en' } } as never);
         });
         expect(host.querySelector('header')).toBe(header);
         expect(header?.dataset.presentedRoute).toBe('home');
-        expect(host.querySelector('[data-home]')?.textContent).toBe(
-            page.products?.map(item => item.name).join(','),
+        expect(host.querySelector('article')).toBeNull();
+        expect(host.querySelector('[data-page-pending]')).not.toBeNull();
+        const action = host.querySelector('button');
+        act(() => action?.click());
+        expect(action?.textContent).toBe('Shell action 1');
+        await act(async () => {
+            response.resolve(Response.json(page));
+            await response.promise;
+        });
+        await vi.waitFor(() =>
+            expect(host.querySelector('[data-home]')?.textContent).toBe(
+                page.products?.map(item => item.name).join(','),
+            ),
         );
         expect(fetch).toHaveBeenCalledOnce();
-        expect(host.querySelector('main [data-page-pending]')).toBeNull();
+        expect(host.querySelector('[data-page-pending]')).toBeNull();
     });
 
-    it('keeps a new source-page sign-in open after an obsolete destination finishes', async () => {
+    it('keeps sign-in owned by the visible target after its code finishes', async () => {
         await start();
         const code = deferred<void>();
         preloadRoute.mockImplementation(name => (name === 'services' ? code.promise : Promise.resolve()));
-        let abandoned: Promise<void> | undefined;
+        let navigation: Promise<void> | undefined;
         await act(async () => {
-            abandoned = router.navigate({ to: '/services' } as never);
+            navigation = router.navigate({ to: '/services' } as never);
             await new Promise(resolve => setTimeout(resolve, 230));
         });
-        expect(host.querySelector('article')?.textContent).toBe('a');
+        expect(host.querySelector('header')?.dataset.presentedRoute).toBe('services');
         const signIn = Array.from(host.querySelectorAll('button')).find(
             button => button.textContent === 'Sign in',
         );
@@ -736,16 +722,15 @@ describe('real storefront router continuity', () => {
             signIn?.click();
             await vi.dynamicImportSettled();
         });
-        expect(router.state.location.pathname).toBe('/product');
+        expect(router.state.location.pathname).toBe('/services');
         expect(router.state.location.search.auth).toBe('login');
-        expect(host.querySelector('header')?.dataset.authMode).toBe('login');
         await act(async () => {
             code.resolve();
-            await abandoned;
+            await navigation;
         });
-        expect(host.querySelector('article')?.textContent).toBe('a');
-        expect(host.querySelector('header')?.dataset.authMode).toBe('login');
-        expect(router.state.location.pathname).toBe('/product');
+        await vi.waitFor(() => expect(host.querySelector('header')?.dataset.authMode).toBe('login'));
+        expect(router.state.location.pathname).toBe('/services');
+        expect(host.querySelector('[data-product]')).toBeNull();
     });
 
     it('keeps the last navigation intent and restores visited content on history return', async () => {

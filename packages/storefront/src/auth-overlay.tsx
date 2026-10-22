@@ -11,7 +11,7 @@ import { applyAuthOverlayNavigation, authOverlayLoginRoute } from './auth-overla
 import { AuthOverlayLoading } from './auth-overlay-surface';
 import { AuthPresentationContext } from './auth-presentation';
 import { findAuthVisualContent } from './auth-visual-content';
-import { LazyForgotPasswordPage, LazyLoginPage, LazyRegisterPage } from './lazy-storefront-pages';
+import { LazyForgotPasswordPage, LazyLoginPage, LazyRegisterPage } from './lazy-auth-pages';
 import { Overlay } from './overlay-host';
 import { isCheckoutRoute, routeFromHash, routeHref } from './storefront-router';
 import { useStorefront } from './StorefrontContext';

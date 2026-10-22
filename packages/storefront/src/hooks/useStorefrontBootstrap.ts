@@ -92,9 +92,9 @@ export function useStorefrontBootstrap(presentedRoute?: RouteState) {
             if (document.getElementById('root')?.dataset.publicAdopted === '1')
                 setInitialPreferencesReady(true);
         };
-        document.addEventListener('storefront:page-ready', adopted);
+        document.addEventListener('storefront:app-owned', adopted);
         adopted();
-        return () => document.removeEventListener('storefront:page-ready', adopted);
+        return () => document.removeEventListener('storefront:app-owned', adopted);
     }, [initialPreferencesReady]);
     const initializedPreferenceScope = useRef('');
     const restoredCacheScopes = useRef(new Set<string>());

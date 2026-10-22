@@ -355,9 +355,16 @@ describe('search result and product-detail cache separation', () => {
                 },
             ],
         });
-        void act(() =>
-            required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click(),
-        );
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click();
+            await vi.dynamicImportSettled();
+        });
+        await vi.waitFor(async () => {
+            await act(async () => {
+                await Promise.resolve();
+            });
+            expect(document.querySelector('.filter-collection-select select')).not.toBeNull();
+        });
         const select = required(
             document.querySelector<HTMLSelectElement>('.filter-collection-select select'),
         );
@@ -378,9 +385,16 @@ describe('search result and product-detail cache separation', () => {
             expect.objectContaining({ term: 'cup', collectionId: 'kitchen' }),
             expect.anything(),
         );
-        void act(() =>
-            required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click(),
-        );
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click();
+            await vi.dynamicImportSettled();
+        });
+        await vi.waitFor(async () => {
+            await act(async () => {
+                await Promise.resolve();
+            });
+            expect(document.querySelector('.reset-filter-button')).not.toBeNull();
+        });
         void act(() => required(document.querySelector<HTMLButtonElement>('.reset-filter-button')).click());
         expect(
             required(document.querySelector<HTMLSelectElement>('.filter-collection-select select')).value,
@@ -602,6 +616,33 @@ describe('search result and product-detail cache separation', () => {
         expect(container.querySelector('.product-card')).toBe(firstCard);
         expect(container.textContent).not.toContain('Abandoned append');
     });
+    it('keeps a slow next page in the footer without starting a whole-page loader', async () => {
+        let finish!: (value: { items: Product[]; totalItems: number }) => void;
+        const catalog = vi.fn(
+            () =>
+                new Promise<{ items: Product[]; totalItems: number }>(resolve => {
+                    finish = resolve;
+                }),
+        );
+        client.setQueryData(searchKey, { pages: [{ items: [product], totalItems: 2 }], pageParams: [0] });
+        renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi }, true);
+        await act(async () => {
+            required(container.querySelector<HTMLButtonElement>('.search-load-more')).click();
+            await new Promise(resolve => setTimeout(resolve, 250));
+        });
+        expect(container.textContent).toContain('Coffee');
+        expect(container.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness')).toBe(
+            'ready',
+        );
+        expect(container.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(catalog).toHaveBeenCalledOnce();
+        await act(async () => {
+            finish({ items: [{ ...product, id: 'tea', name: 'Tea' }], totalItems: 2 });
+            await new Promise(resolve => setTimeout(resolve, 20));
+        });
+        expect(container.textContent).toContain('Tea');
+    });
+
     it('keeps confirmed results and shows next-page failure in the pagination footer', async () => {
         const catalog = vi
             .fn()

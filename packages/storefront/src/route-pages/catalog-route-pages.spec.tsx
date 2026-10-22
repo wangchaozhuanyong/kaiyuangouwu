@@ -198,6 +198,7 @@ describe('product detail read states', () => {
                         {
                             ...latest,
                             language,
+                            market,
                             route: { name: 'product', id: id || undefined },
                             selectedProduct: latest.routeProduct,
                             activeFlashSaleItems: [],

@@ -201,6 +201,23 @@ try {
                     await child.click();
                     await expect(category.locator('.list-skeleton')).toBeVisible();
                     await expect.poll(() => record.sourceReads).toBeGreaterThan(0);
+                    const localSlow = category.locator('.page-readiness-inline-error');
+                    await expect(localSlow).toBeVisible({ timeout: 12_000 });
+                    await expect(boundary).toHaveAttribute('data-page-readiness', 'preparing');
+                    const reads = record.sourceReads;
+                    await localSlow
+                        .getByRole('button', {
+                            name: language === 'zh' ? '重新尝试' : 'Try again',
+                            exact: true,
+                        })
+                        .click();
+                    await expect.poll(() => record.sourceReads).toBe(reads + 1);
+                    await expect(category.getByText('日常随行杯 13', { exact: true })).toBeVisible();
+                    releaseSource();
+                    await expect.poll(() => record.canceledSourceReads).toBe(1);
+                    record.checks.push(
+                        'Local slow-read retry cancels its stalled read and recovers before the old response',
+                    );
                 }
                 if (name === 'scroll') {
                     await page.evaluate(() =>
@@ -216,11 +233,25 @@ try {
                     .locator('.category-navigation-viewport')
                     .evaluate(element => element.getBoundingClientRect().height)
                     .catch(() => null);
+                if (name.startsWith('scroll')) {
+                    if (name === 'scroll-wheel') {
+                        await category.locator('.category-results').hover();
+                        await page.mouse.wheel(0, 600);
+                    } else {
+                        await page.evaluate(() =>
+                            window.__pendingScroll.scrollTo({ top: 700, behavior: 'instant' }),
+                        );
+                    }
+                    await expect.poll(readY).toBeGreaterThan(100);
+                    await page.waitForTimeout(400); // Settle the existing category-collapse transition before leaving.
+                    record.expectedY = await readY();
+                    if (name === 'scroll-wheel') record.sourceAnchor = await visibleAnchor();
+                }
                 const clickedAt = Date.now();
                 // Invoke the actual link handler without Playwright scrolling a fixed/offscreen nav.
                 await home().evaluate(element => element.click());
                 await expect.poll(() => record.homeModules).toBeGreaterThan(0);
-                await expect(category).toBeVisible();
+                await expect(category).not.toBeVisible();
                 await expect(page.locator('.page-readiness-navigation')).toBeVisible();
                 record.feedbackElapsedMs = Date.now() - clickedAt;
                 assert.ok(
@@ -233,36 +264,8 @@ try {
                     ),
                 );
                 if (name.startsWith('scroll')) {
-                    if (categoryNavigationHeight !== null) {
-                        assert.equal(
-                            await page
-                                .locator('.category-navigation-viewport')
-                                .evaluate(element => element.getBoundingClientRect().height),
-                            categoryNavigationHeight,
-                            'Navigation registration must not collapse category controls',
-                        );
-                    }
-                    if (name === 'scroll-wheel') {
-                        await category.locator('.category-results').hover();
-                        await page.mouse.wheel(0, 600);
-                        await expect
-                            .poll(() => page.evaluate(() => window.__pendingScroll.scrollTop))
-                            .toBeGreaterThan(100);
-                        await page.waitForTimeout(400); // Finish the existing bounded header collapse motion.
-                    } else {
-                        await page.evaluate(() => {
-                            const scroller = window.__pendingScroll;
-                            scroller.scrollTo({
-                                top: Math.min(700, scroller.scrollHeight - scroller.clientHeight - 20),
-                                behavior: 'instant',
-                            });
-                        });
-                    }
-                    const expectedY = await page.evaluate(() => window.__pendingScroll.scrollTop);
-                    assert.ok(expectedY > 100, 'Source fixture must have real document scrolling');
-                    await page.waitForTimeout(180); // Let the native scroll event and browser positioning settle.
-                    if (name === 'scroll-wheel') record.sourceAnchor = await visibleAnchor();
-                    await screenshot('source-pending');
+                    const expectedY = record.expectedY;
+                    await screenshot('target-pending');
                     releaseHome();
                     await expect(page.locator('.home-page')).toBeVisible();
                     await expect(boundary).toHaveAttribute('data-page-readiness', 'ready');
@@ -280,7 +283,7 @@ try {
                         );
                     }
                     record.checks.push(
-                        'source keeps DOM and owns scroll during pending target; back restores latest source position',
+                        'target body replaces source immediately; back restores the last source position',
                     );
                     await screenshot('returned');
                 } else if (name === 'auth') {
@@ -297,31 +300,35 @@ try {
                     const dialog = page.locator('.auth-dialog');
                     await expect(dialog).toBeVisible();
                     await dialog.locator('input[type="email"]').fill('draft@example.invalid');
-                    await expect(page).toHaveURL(/\/category\?.*auth=login/u);
+                    await expect(page).toHaveURL(/\/(?:zh|en)\/\?.*auth=login/u);
                     releaseHome();
                     await expect.poll(() => record.homeResponses).toBeGreaterThan(0);
                     await page.waitForTimeout(600);
                     await expect(dialog).toBeVisible();
                     await expect(dialog.locator('input[type="email"]')).toHaveValue('draft@example.invalid');
-                    await expect(page).toHaveURL(/\/category\?.*auth=login/u);
-                    await expect(page.locator('.home-page')).toHaveCount(0);
+                    await expect(page).toHaveURL(/\/(?:zh|en)\/\?.*auth=login/u);
+                    await expect(page.locator('.home-page')).toBeVisible();
                     await screenshot('late-target');
                     await page.keyboard.press('Escape');
                     await expect(dialog).toHaveCount(0);
-                    await expect(category).toBeVisible();
+                    await expect(page.locator('.home-page')).toBeVisible();
                     await expect(open).toBeFocused();
                     // Hidden category panels remain inert by design; the overlay
                     // must release its actual background owner and visible controls.
                     assert.equal(await page.locator('#root').getAttribute('inert'), null);
-                    assert.ok(await category.evaluate(element => !element.closest('[inert]')));
+                    assert.ok(
+                        await page.locator('.home-page').evaluate(element => !element.closest('[inert]')),
+                    );
                     assert.ok(await nav().evaluate(element => !element.closest('[inert]')));
                     assert.notEqual(
                         await page.evaluate(() => getComputedStyle(document.body).overflow),
                         'hidden',
                     );
                     record.checks.push(
-                        'new source login replaces old target; late module completion preserves overlay and email draft; Escape restores focus and scroll lock',
+                        'target-owned login survives module completion; Escape restores focus and releases the scroll lock',
                     );
+                    await page.goBack();
+                    await expect(category).toBeVisible();
                     await category.locator('.category-results').hover();
                     await page.mouse.wheel(0, 600);
                     await expect.poll(readY).toBeGreaterThan(100);
@@ -344,40 +351,33 @@ try {
                     );
                     await screenshot('returned');
                 } else if (name === 'wait-ownership') {
-                    await screenshot('both-pending');
-                    const localError = category.locator('.page-readiness-inline-error');
-                    const navigationError = page.locator('.page-readiness-overlay');
-                    await expect(localError).toBeVisible({ timeout: 12_000 });
-                    await expect(navigationError).toBeVisible();
-                    await expect(boundary).toHaveAttribute('data-navigation-readiness', 'error');
-                    await expect(category.locator('.list-skeleton')).toHaveCount(0);
-                    await screenshot('both-timeouts');
-                    const retryName = language === 'zh' ? '重新尝试' : 'Try again';
-                    await navigationError.getByRole('button', { name: retryName, exact: true }).click();
+                    await expect(category).not.toBeVisible();
+                    const navigationSlow = page.locator('.page-readiness-error:visible');
+                    await expect(navigationSlow).toBeVisible({ timeout: 12_000 });
                     await expect(boundary).toHaveAttribute('data-navigation-readiness', 'preparing');
-                    await expect(localError).toBeVisible();
+                    await expect(page.locator('[role=alert]:visible')).toHaveCount(0);
+                    await screenshot('target-slow');
                     const sourceCount = record.sourceReads;
+                    await navigationSlow
+                        .getByRole('button', {
+                            name: language === 'zh' ? '重新尝试' : 'Try again',
+                            exact: true,
+                        })
+                        .click();
+                    await expect(navigationSlow).toHaveCount(0);
                     await expect(page.locator('.page-readiness-navigation')).toBeVisible();
-                    await localError.getByRole('button', { name: retryName, exact: true }).click();
-                    await expect(boundary).toHaveAttribute('data-navigation-readiness', 'preparing');
-                    await expect.poll(() => record.sourceReads).toBe(sourceCount + 1);
-                    await expect(category.getByText('日常随行杯 13', { exact: true })).toBeVisible();
-                    await expect(page.locator('.page-readiness-navigation')).toBeVisible();
-                    await expect(localError).toHaveCount(0);
-                    await screenshot('source-recovered-target-pending');
-                    // The replacement read must recover without waiting for the old
-                    // stalled read, whose later completion cannot reclaim the source.
-                    releaseSource();
-                    await expect.poll(() => record.canceledSourceReads).toBe(1);
-                    await expect(category.getByText('日常随行杯 13', { exact: true })).toBeVisible();
-                    assert.equal(record.sourceReads, sourceCount + 1);
+                    assert.equal(
+                        record.sourceReads,
+                        sourceCount,
+                        'Navigation retry must not restart source data',
+                    );
                     releaseHome();
                     await expect(page.locator('.home-page')).toBeVisible();
                     await expect(boundary).toHaveAttribute('data-page-readiness', 'ready');
-                    await expect(page.locator('.page-readiness-overlay')).toHaveCount(0);
+                    await page.goBack();
+                    await expect(category.getByText('日常随行杯 13', { exact: true })).toBeVisible();
                     record.checks.push(
-                        'source local wait does not suppress target feedback; separate 10-second errors and retry clocks; ' +
-                            'retry cancels exactly the stalled source read and recovers before its late completion',
+                        'Target slow feedback stays nonterminal; retry owns only the current target; back retains recovered category data',
                     );
                 }
                 assert.deepEqual(exceptions, []);

@@ -10,7 +10,7 @@ import {
     LazyRegisterPage,
     LazyResetPasswordPage,
     LazyVerifyAccountPage,
-} from '../lazy-storefront-pages';
+} from '../lazy-auth-pages';
 import { imageSources } from '../responsive-image';
 import { AuthPageBoundary } from '../storefront-ui/page-shell';
 

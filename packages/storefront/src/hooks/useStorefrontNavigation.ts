@@ -15,8 +15,6 @@ import {
     type CatalogRouteState,
 } from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
-import { preloadStorefrontRouteComponent } from '../route-component-preload';
-import { prepareRouteMedia } from '../route-media-intent';
 import { goBackInStorefront, returnToStorefrontRoute } from '../storefront-navigation-history';
 import {
     routeFromHash,
@@ -52,32 +50,21 @@ export function useStorefrontNavigation({
     const mediaContext = useRef({ contentBlocks, products });
     mediaContext.current = { contentBlocks, products };
     useEffect(() => {
-        const prepare = (next: RouteState) => {
-            void preloadStorefrontRouteComponent(next.name);
-            prepareRouteMedia(next, mediaContext.current.contentBlocks, mediaContext.current.products);
-        };
-        const unsubscribe = router.subscribe('onBeforeNavigate', event => {
-            navigationIntent.current++;
-            prepare(routeFromRouterLocation(event.toLocation.pathname, event.toLocation.search));
-        });
+        const unsubscribe = router.subscribe('onBeforeNavigate', () => navigationIntent.current++);
         const unsubscribeLoad = router.subscribe('onBeforeLoad', () => navigationIntent.current++);
-        const onIntent = (event: Event) => {
-            const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
-            if (!(anchor instanceof HTMLAnchorElement) || anchor.origin !== window.location.origin) return;
-            prepare(
-                routeFromRouterLocation(
-                    anchor.pathname,
-                    Object.fromEntries(new URLSearchParams(anchor.search)),
-                ),
-            );
-        };
-        const intentEvents = ['pointerover', 'focusin', 'pointerdown'];
-        intentEvents.forEach(type => document.addEventListener(type, onIntent));
+        let active = true;
+        let removeHints: (() => void) | undefined;
+        void import('../storefront-navigation-hints')
+            .then(({ installNavigationHints }) => {
+                if (active) removeHints = installNavigationHints(mediaContext);
+            })
+            .catch(() => undefined);
         return () => {
+            active = false;
             navigationIntent.current++;
             unsubscribe();
             unsubscribeLoad();
-            intentEvents.forEach(type => document.removeEventListener(type, onIntent));
+            removeHints?.();
         };
     }, [router]);
 
@@ -103,25 +90,15 @@ export function useStorefrontNavigation({
         if (resolvedTargetRoute === targetRoute) return;
         const options = routeNavigateOptions(resolvedTargetRoute);
         const location = router.state.location;
-        let active = true;
         const replacement = {
             ...options,
             search: { ...routerLocation.search, ...options.search },
             replace: true,
             resetScroll: false,
         };
-        // This only spells out the category already being shown. Warm the existing
-        // Router/Query entries before replacing its URL, so normalization cannot
-        // replace that frame with a second whole-page pending skeleton.
-        void router
-            .preloadRoute(replacement as never)
-            .then(() => {
-                if (active && router.state.location === location) void tanstackNavigate(replacement as never);
-            })
-            .catch(() => undefined);
-        return () => {
-            active = false;
-        };
+        // The category code is already mounted. Canonicalization does not need a
+        // second preparation cycle, and may never replace a newer user destination.
+        if (location === routerLocation) void tanstackNavigate(replacement as never);
     }, [resolvedTargetRoute, targetRoute, routerLocation.search, router, tanstackNavigate]);
 
     const route = useMemo(

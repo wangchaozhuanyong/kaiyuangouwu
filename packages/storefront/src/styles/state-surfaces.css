@@ -27,7 +27,8 @@
     /* A late timeout must not repaint or intercept the already visible page. */
     position: fixed;
     right: max(16px, env(safe-area-inset-right));
-    bottom: calc(var(--bottom-navigation-height) + var(--safe-bottom) + 16px);
+    top: calc((100svh - var(--bottom-navigation-height) - var(--safe-bottom) + 56px) / 2);
+    transform: translateY(-50%);
     left: max(16px, env(safe-area-inset-left));
     z-index: var(--layer-readiness);
     max-width: 420px;
@@ -83,7 +84,7 @@
 }
 @media (min-width: 1024px) {
     .page-readiness-overlay {
-        bottom: 20px;
+        top: calc((100svh + var(--desktop-header-height, 72px)) / 2);
     }
 }
 
@@ -286,12 +287,14 @@ body:has(.traffic-consent-banner) .storefront-query-feedback {
     }
 }
 
-/* Product preparation keeps the previous page available and never adds a second top progress bar. */
+/* One non-blocking navigation status, centered between the persistent shell controls. */
 .page-readiness-navigation {
     position: fixed;
     z-index: var(--layer-readiness);
-    right: var(--space-16);
-    bottom: calc(var(--bottom-navigation-height) + var(--safe-bottom) + var(--space-16));
+    left: 50%;
+    top: calc((100svh - var(--bottom-navigation-height) - var(--safe-bottom) + 56px) / 2);
+    transform: translate(-50%, -50%);
+    width: max-content;
     display: flex;
     align-items: center;
     gap: var(--space-12);
@@ -306,12 +309,10 @@ body:has(.traffic-consent-banner) .storefront-query-feedback {
     pointer-events: none;
 }
 @media (min-width: 1024px) {
-    .page-readiness-navigation {
-        bottom: var(--space-24);
+    .storefront-pending-mobile-header {
+        display: none;
     }
-}
-
-/* Refresh/error feedback owns the shared notice area when both reads are pending. */
-body:has(.storefront-query-feedback) .page-readiness-navigation {
-    display: none;
+    .page-readiness-navigation {
+        top: calc((100svh + var(--desktop-header-height, 72px)) / 2);
+    }
 }

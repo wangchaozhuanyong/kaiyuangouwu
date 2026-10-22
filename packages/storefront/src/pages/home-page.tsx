@@ -431,6 +431,7 @@ export interface HomePageProps {
     onCouponCampaignsRetry: () => void;
     onContentTarget: (targetType: StorefrontContentTargetType, targetValue: string | null) => void;
     onContentRetry: () => void;
+    onCatalogRetry?: () => void;
     onRetry: () => void;
 }
 
@@ -505,6 +506,7 @@ export function HomePage() {
         onClaimCoupon,
         onContentTarget,
         onContentRetry,
+        onCatalogRetry,
         onRetry,
     } = HomePageContext.useValue();
     const isZh = language === 'zh';
@@ -1171,7 +1173,11 @@ export function HomePage() {
             )}
 
             {loading ? (
-                <PageSkeleton variant="home" label={isZh ? '正在加载首页' : 'Loading home page'} />
+                <PageSkeleton
+                    variant="home"
+                    label={isZh ? '正在加载首页' : 'Loading home page'}
+                    onRetry={onContentRetry}
+                />
             ) : error ? (
                 <EmptyState
                     icon={<WifiOff />}
@@ -1661,6 +1667,7 @@ export function HomePage() {
                                     <PageSkeleton
                                         compact
                                         variant="catalog"
+                                        onRetry={onCatalogRetry ?? onRetry}
                                         label={isZh ? '正在加载商品' : 'Loading products'}
                                     />
                                 ) : catalogError ? (
@@ -1669,7 +1676,7 @@ export function HomePage() {
                                         title={isZh ? '商品暂时无法加载' : 'Products are unavailable'}
                                         detail={catalogError}
                                         action={isZh ? '重试' : 'Try again'}
-                                        onAction={onRetry}
+                                        onAction={onCatalogRetry ?? onRetry}
                                     />
                                 ) : (
                                     <EmptyState

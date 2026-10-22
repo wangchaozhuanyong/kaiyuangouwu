@@ -38,11 +38,20 @@ describe('shared catalog filter draft', () => {
         if (!target) throw new Error(`Missing filter button: ${text}`);
         return target;
     };
-    beforeEach(() => {
+    beforeEach(async () => {
         host = document.createElement('div');
         document.body.append(host);
         root = createRoot(host);
-        act(() => root.render(<Harness />));
+        await act(async () => {
+            root.render(<Harness />);
+            await vi.dynamicImportSettled();
+        });
+        await vi.waitFor(async () => {
+            await act(async () => {
+                await Promise.resolve();
+            });
+            expect(document.querySelector('[aria-label="最低价"]')).not.toBeNull();
+        });
     });
     afterEach(() => {
         act(() => root.unmount());
@@ -80,8 +89,8 @@ describe('shared catalog filter draft', () => {
         { minPrice: 'invalid', maxPrice: '100', invalid: '最低价', valid: '最高价' },
     ])(
         'associates only the invalid field: $minPrice / $maxPrice',
-        ({ minPrice, maxPrice, invalid, valid }) => {
-            act(() =>
+        async ({ minPrice, maxPrice, invalid, valid }) => {
+            await act(async () => {
                 root.render(
                     <CatalogFilterSheet
                         language="zh"
@@ -92,8 +101,9 @@ describe('shared catalog filter draft', () => {
                         onApply={apply}
                         onClose={close}
                     />,
-                ),
-            );
+                );
+                await vi.dynamicImportSettled();
+            });
             const field = document.querySelector(`[aria-label="${invalid}"]`);
             const other = document.querySelector(`[aria-label="${valid}"]`);
             const error = document.querySelector('[role="alert"]');
