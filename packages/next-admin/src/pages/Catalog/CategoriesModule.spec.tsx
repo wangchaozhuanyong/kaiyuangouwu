@@ -470,6 +470,32 @@ describe('category English editing', () => {
         );
     });
 
+    it('saves a Chinese source description without changing English or other translations', async () => {
+        const category = collectionFixture();
+        const originalEnglish = structuredClone(category.translations[1]);
+        const originalOtherLanguage = structuredClone(category.translations[2]);
+        const { container, requests, click, changeInput } = await renderCategories({
+            customCollections: [category],
+        });
+        await click('编辑分类 签证留学');
+        const sourceDescription = container.querySelector<HTMLTextAreaElement>('[aria-label="中文描述"]');
+        expect(sourceDescription?.value).toBe('查看签证与留学相关服务');
+        await changeInput(sourceDescription!, '提供签证申请与留学规划相关服务。');
+        await click('保存');
+
+        const input = requests.mock.calls.find(([name]) => name === 'UpdateCatalogCollection')?.[1].input;
+        expect(input.id).toBe(category.id);
+        expect(input.translations).toHaveLength(1);
+        expect(input.translations[0]).toMatchObject({
+            languageCode: 'zh_Hans',
+            name: '签证留学',
+            slug: 'qianzheng-liuxue',
+            description: '提供签证申请与留学规划相关服务。',
+        });
+        expect(category.translations[1]).toEqual(originalEnglish);
+        expect(category.translations[2]).toEqual(originalOtherLanguage);
+    });
+
     it('does not clear existing English or submit unchanged translations when English fields are blank', async () => {
         const category = collectionFixture();
         const originalEnglish = structuredClone(category.translations[1]);
