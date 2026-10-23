@@ -8,6 +8,7 @@ import {
     LanguageCode,
     Product,
     ProductTranslation,
+    PUBLIC_PRODUCT_REVIEW_READER,
     PUBLIC_PRODUCT_SUMMARY_READER,
     type Permission,
     type RequestContext,
@@ -19,6 +20,8 @@ import { DataSource, EntitySchema } from 'typeorm';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { PublicProductSummaryService } from '../../../commerce-fulfillment-plugin/src/public-product-summary.service';
+import { StorefrontReview } from '../../../storefront-review-plugin/src/entities/storefront-review.entity';
+import { StorefrontReviewService } from '../../../storefront-review-plugin/src/storefront-review.service';
 import { StoreProfile } from '../entities/store-profile.entity';
 
 import { StorefrontPublicSeoService } from './storefront-public-seo.service';
@@ -36,6 +39,9 @@ describe('public SEO with real isolated SQL publication and catalog membership',
     let publicSeo: StorefrontPublicSeoService;
     let productReader: PublicProductSummaryService;
     let productListSpy: MockInstance<PublicProductSummaryService['list']>;
+    let reviewReader: StorefrontReviewService;
+    let reviewsEnabled: boolean;
+    let reviewAdapterAvailable: boolean;
     let mode: 'LIVE' | 'PREVIEW' | 'CLOSED';
     const context = (id = 1, languageCode = 'en', admin = false): RequestContext =>
         ({
@@ -69,6 +75,23 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             database: ':memory:',
             synchronize: true,
             entities: [
+                new EntitySchema({
+                    name: 'StorefrontReview',
+                    target: StorefrontReview,
+                    columns: {
+                        ...id,
+                        ...timestamps,
+                        channelId: { type: Number },
+                        productId: { type: Number },
+                        state: { type: String },
+                        rating: { type: Number },
+                        title: { type: String },
+                        body: { type: String },
+                        customerName: { type: String },
+                        anonymous: { type: Boolean },
+                        moderatedAt: { type: Date, nullable: true },
+                    },
+                }),
                 new EntitySchema({ name: 'Channel', target: Channel, columns: id }),
                 new EntitySchema({
                     name: 'StoreDomain',
@@ -266,6 +289,15 @@ describe('public SEO with real isolated SQL publication and catalog membership',
                 Promise.resolve(products.map(product => ({ id: String(product.id) }))),
         });
         productListSpy = vi.spyOn(productReader, 'list');
+        reviewsEnabled = true;
+        reviewAdapterAvailable = true;
+        reviewReader = new StorefrontReviewService(
+            connection,
+            undefined as never,
+            undefined as never,
+            undefined as never,
+            { get: () => Promise.resolve({ enabled: reviewsEnabled }) } as never,
+        );
         publicSeo = new StorefrontPublicSeoService(
             seo,
             connection,
@@ -274,6 +306,7 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             {
                 get: (token: unknown) => {
                     if (token === PUBLIC_PRODUCT_SUMMARY_READER) return productReader;
+                    if (token === PUBLIC_PRODUCT_REVIEW_READER && reviewAdapterAvailable) return reviewReader;
                     throw new Error('Unexpected public SEO dependency');
                 },
             } as never,
@@ -647,6 +680,130 @@ describe('public SEO with real isolated SQL publication and catalog membership',
             'Public product not found',
         );
     });
+
+    const seedReviews = async () => {
+        // A shared catalog item can have different approved reviews in each sales channel.
+        await data.getRepository(Product).save({ id: 10, channels: [{ id: 1 }, { id: 2 }] });
+        await data.getRepository(StorefrontReview).save(
+            [
+                { channelId: 1, productId: 10, rating: 5, customerName: 'Buyer A' },
+                { channelId: 1, productId: 10, rating: 3, customerName: 'Buyer B' },
+                { channelId: 2, productId: 10, rating: 1, customerName: 'Other store buyer' },
+                { channelId: 1, productId: 20, rating: 1, customerName: 'Other product buyer' },
+                { channelId: 1, productId: 10, rating: 1, state: 'PENDING' },
+                { channelId: 1, productId: 10, rating: 1, state: 'REJECTED' },
+            ].map(item => ({
+                title: 'Purchase review',
+                body: 'Actual buyer feedback from an isolated SQL fixture.',
+                customerName: 'Unpublished buyer',
+                anonymous: false,
+                state: 'APPROVED',
+                ...item,
+            })),
+        );
+    };
+    const productSchema = (result: StorefrontPageData) =>
+        result.seo?.structuredData.find(item => item['@type'] === 'Product');
+
+    it('publishes the real public review aggregate and visible review text in both languages per store', async () => {
+        await seedReviews();
+        for (const code of ['zh_Hans', 'en']) {
+            const result = await publicSeo.enrich(context(1, code), 'store-1.test', page(context(1, code)));
+            expect(productSchema(result)).toMatchObject({
+                aggregateRating: { ratingValue: 4, reviewCount: 2, bestRating: 5, worstRating: 1 },
+                review: expect.arrayContaining([
+                    expect.objectContaining({
+                        author: { '@type': 'Person', name: 'Buyer A' },
+                        reviewBody: 'Actual buyer feedback from an isolated SQL fixture.',
+                        reviewRating: { '@type': 'Rating', ratingValue: 5, bestRating: 5, worstRating: 1 },
+                    }),
+                ]),
+                offers: { price: '12.50', priceCurrency: 'MYR' },
+            });
+            expect(JSON.stringify(productSchema(result))).not.toMatch(
+                /Unpublished buyer|Other store buyer|Other product buyer/,
+            );
+        }
+        const other = await publicSeo.enrich(context(2), 'store-2.test', page(context(2), '10'));
+        expect(productSchema(other)).toMatchObject({ aggregateRating: { ratingValue: 1, reviewCount: 1 } });
+        expect(JSON.stringify(productSchema(other))).not.toMatch(/Buyer A|Buyer B/);
+    });
+
+    it('uses the full approved review count, not the first page count, and preserves anonymous privacy', async () => {
+        await seedReviews();
+        await data
+            .getRepository(StorefrontReview)
+            .update({ channelId: 1, productId: 10 }, { anonymous: true });
+        const anonymous = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+        expect(productSchema(anonymous)).toMatchObject({
+            aggregateRating: { ratingValue: 4, reviewCount: 2 },
+        });
+        expect(productSchema(anonymous)).not.toHaveProperty('review');
+        expect(JSON.stringify(productSchema(anonymous))).not.toMatch(/Buyer A|Buyer B|Anonymous customer/);
+        await data.getRepository(StorefrontReview).save(
+            Array.from({ length: 25 }, () => ({
+                channelId: 1,
+                productId: 10,
+                rating: 4,
+                state: 'APPROVED',
+                anonymous: false,
+                title: 'Real review',
+                body: 'SQL fixture feedback',
+                customerName: 'Public buyer',
+            })),
+        );
+        const paginated = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+        expect(productSchema(paginated)).toMatchObject({
+            aggregateRating: { ratingValue: 4, reviewCount: 27 },
+        });
+        expect(productSchema(paginated)?.review).toHaveLength(20);
+    });
+
+    it('omits review markup for no reviews or a disabled review feature while retaining offers', async () => {
+        const empty = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+        expect(productSchema(empty)).not.toHaveProperty('aggregateRating');
+        expect(productSchema(empty)).not.toHaveProperty('review');
+        await seedReviews();
+        reviewsEnabled = false;
+        const disabled = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+        expect(productSchema(disabled)).not.toHaveProperty('aggregateRating');
+        expect(productSchema(disabled)).not.toHaveProperty('review');
+        expect(productSchema(disabled)).toMatchObject({ offers: { price: '12.50' } });
+    });
+
+    it('retains product/offer availability when the optional review adapter is absent or fails', async () => {
+        reviewAdapterAvailable = false;
+        const missing = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+        expect(productSchema(missing)).toMatchObject({ offers: { price: '12.50' } });
+        reviewAdapterAvailable = true;
+        vi.spyOn(reviewReader, 'findApprovedForProduct').mockRejectedValueOnce(
+            new Error('Review read unavailable'),
+        );
+        const failed = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+        expect(productSchema(failed)).toMatchObject({ offers: { price: '12.50' } });
+        expect(productSchema(failed)).not.toHaveProperty('aggregateRating');
+    });
+
+    it.each([NaN, Infinity, 0, 6])(
+        'rejects an invalid aggregate rating %s without fabricating stars',
+        async averageRating => {
+            vi.spyOn(reviewReader, 'findApprovedForProduct').mockResolvedValueOnce({
+                totalItems: 1,
+                averageRating,
+                items: [
+                    {
+                        rating: 5,
+                        title: 'Review',
+                        body: 'Feedback',
+                        customerName: 'Buyer',
+                    } as StorefrontReview,
+                ],
+            });
+            const result = await publicSeo.enrich(context(), 'store-1.test', page(context()));
+            expect(productSchema(result)).not.toHaveProperty('aggregateRating');
+            expect(productSchema(result)).not.toHaveProperty('review');
+        },
+    );
 
     it('does not let a translated SEO record invent missing underlying language content or LIVE status', async () => {
         await data

@@ -3,11 +3,14 @@ import { ModuleRef } from '@nestjs/core';
 import {
     Collection,
     LanguageCode,
+    Logger,
     Product,
+    PUBLIC_PRODUCT_REVIEW_READER,
     PUBLIC_PRODUCT_SUMMARY_READER,
     RequestContext,
     TransactionalConnection,
     type PublicProductDetail,
+    type PublicProductReviewReader,
     type PublicProductSummaryReader,
 } from '@vendure/core';
 import { StoreDomain } from '@vendure/store-domain-plugin';
@@ -24,6 +27,7 @@ import { StorefrontPromotionService } from '../promotion/storefront-promotion.se
 import { StorefrontClosedError } from '../storefront-activation.service';
 import { StorefrontPublicPageService } from '../storefront-public-page.service';
 
+import { productReviewStructuredData } from './storefront-product-review-schema';
 import { resolvePromotionSeo } from './storefront-promotion-seo';
 import { buildPublicSeoDocument, publicRobots, sitemapXml } from './storefront-seo-output';
 import { type StorefrontSeoIdentity, type StorefrontSeoLanguage } from './storefront-seo.contract';
@@ -238,6 +242,7 @@ export class StorefrontPublicSeoService {
                 ...(image ? { image: [new URL(image, origin).href] } : {}),
                 ...(lowest?.sku ? { sku: lowest.sku } : {}),
                 ...(offers ? { offers } : {}),
+                ...(await this.productReviews(ctx, request.id)),
             });
         } else if (request.kind === 'catalog') {
             if (request.input.collectionId) {
@@ -454,6 +459,28 @@ export class StorefrontPublicSeoService {
             currentPrimary !== primary
         )
             throw new ServiceUnavailableException('Public discovery changed during read');
+    }
+
+    private async productReviews(ctx: RequestContext, productId: string): Promise<Record<string, unknown>> {
+        let reader: PublicProductReviewReader;
+        try {
+            reader = this.moduleRef.get<PublicProductReviewReader>(PUBLIC_PRODUCT_REVIEW_READER, {
+                strict: false,
+            });
+        } catch {
+            // Reviews are optional in deployments which do not install the review plugin.
+            return {};
+        }
+        try {
+            // Same first page and approved/channel/settings policy as ProductReviewsSection.
+            return productReviewStructuredData(
+                await reader.findApprovedForProduct(ctx, productId, { skip: 0, take: 20 }),
+            );
+        } catch {
+            // Optional review read failures must not make the product/offer page unavailable.
+            Logger.warn('Public product review structured data is unavailable', 'StorefrontPublicSeoService');
+            return {};
+        }
     }
 
     private availability(variant: PublicProductDetail['variants'][number]) {

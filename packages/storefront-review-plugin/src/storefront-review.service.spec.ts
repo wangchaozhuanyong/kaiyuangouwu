@@ -1,6 +1,9 @@
+import { Test } from '@nestjs/testing';
+import { PUBLIC_PRODUCT_REVIEW_READER } from '@vendure/core';
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
+import { StorefrontReviewPlugin } from './storefront-review.plugin';
 import { StorefrontReviewService } from './storefront-review.service';
 
 function createHarness(
@@ -135,6 +138,21 @@ const validInput = {
 };
 
 describe('StorefrontReviewService', () => {
+    it('registers the optional public reader as the same moderated review service instance', async () => {
+        const test = createHarness();
+        const alias = Reflect.getMetadata('providers', StorefrontReviewPlugin).find(
+            (provider: any) => provider.provide === PUBLIC_PRODUCT_REVIEW_READER,
+        );
+        expect(alias).toEqual({
+            provide: PUBLIC_PRODUCT_REVIEW_READER,
+            useExisting: StorefrontReviewService,
+        });
+        const module = await Test.createTestingModule({
+            providers: [{ provide: StorefrontReviewService, useValue: test.service }, alias],
+        }).compile();
+        expect(module.get(PUBLIC_PRODUCT_REVIEW_READER)).toBe(test.service);
+        await module.close();
+    });
     it('hides public and customer reviews and rejects submissions when the store disables reviews', async () => {
         const test = createHarness();
         test.reviewSettings.get.mockResolvedValue({ enabled: false });
