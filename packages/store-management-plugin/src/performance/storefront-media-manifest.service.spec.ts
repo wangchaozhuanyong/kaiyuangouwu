@@ -1,6 +1,9 @@
 import { Collection, Product, ProductVariant } from '@vendure/core';
+import { StorefrontContentBlock } from '@vendure/storefront-content-plugin';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
+import { ReferralProgramConfig } from '../entities/referral-program-config.entity';
 import { StoreProfile } from '../entities/store-profile.entity';
 
 import { StorefrontMediaManifestService } from './storefront-media-manifest.service';
@@ -15,7 +18,12 @@ vi.mock('@vendure/core', () => ({
     Collection: class {},
     LanguageCode: { zh_Hans: 'zh_Hans' },
 }));
-vi.mock('@vendure/storefront-content-plugin', () => ({ StorefrontContentService: class {} }));
+vi.mock('@vendure/storefront-content-plugin', () => ({
+    StorefrontContentService: class {},
+    StorefrontContentBlock: class {},
+}));
+vi.mock('../entities/referral-program-config.entity', () => ({ ReferralProgramConfig: class {} }));
+vi.mock('../entities/referral-poster-template.entity', () => ({ ReferralPosterTemplate: class {} }));
 vi.mock('../entities/store-profile.entity', () => ({ StoreProfile: class {} }));
 vi.mock('../promotion/storefront-promotion.service', () => ({ StorefrontPromotionService: class {} }));
 const ctx = { channelId: 'a', languageCode: 'en', currencyCode: 'MYR' } as any;
@@ -47,9 +55,20 @@ function harness() {
     const content = { findPublished: vi.fn((_ctx?: any) => Promise.resolve([] as any[])) };
     const promotion = { renderPublished: vi.fn(() => Promise.resolve('')) };
     const profile = { findOne: vi.fn((_options?: unknown) => Promise.resolve(null as any)) };
+    const referralConfig = { findOne: vi.fn(() => Promise.resolve(null as any)) };
+    const posterTemplates = { find: vi.fn(() => Promise.resolve([] as any[])) };
+    const posterBlocks = { find: vi.fn(() => Promise.resolve([] as any[])) };
     const connection = {
         getRepository: vi.fn((_ctx, entity) =>
-            entity === StoreProfile ? profile : { createQueryBuilder: () => queries.get(entity) },
+            entity === StoreProfile
+                ? profile
+                : entity === ReferralProgramConfig
+                  ? referralConfig
+                  : entity === ReferralPosterTemplate
+                    ? posterTemplates
+                    : entity === StorefrontContentBlock
+                      ? posterBlocks
+                      : { createQueryBuilder: () => queries.get(entity) },
         ),
     };
     const service = new StorefrontMediaManifestService(
@@ -58,9 +77,134 @@ function harness() {
         content as any,
         promotion as any,
     );
-    return { service, cache, queries, content, promotion, connection, profile };
+    return {
+        service,
+        cache,
+        queries,
+        content,
+        promotion,
+        connection,
+        profile,
+        referralConfig,
+        posterTemplates,
+        posterBlocks,
+    };
 }
 describe('public media manifest', () => {
+    it.each(['a', 'b'])(
+        'uses the same poster authorization mechanism for store %s and revokes disabled programs',
+        async channelId => {
+            const test = harness();
+            const scoped = { ...ctx, channelId };
+            const image = {
+                mimeType: 'image/webp',
+                source: `source/${channelId}-poster.webp`,
+                preview: `preview/${channelId}-poster.webp`,
+                channels: [{ id: channelId }],
+                tags: [],
+            };
+            test.referralConfig.findOne.mockResolvedValue({ channelId, enabled: true, posterTemplates: [] });
+            test.posterTemplates.find.mockResolvedValue([
+                { channelId, enabled: true, posterBackgroundAsset: image },
+            ]);
+            expect(await test.service.isPublic(scoped, `${channelId}.example`, image.source)).toBe(true);
+            expect(await test.service.isPublic(scoped, `${channelId}.example`, image.preview)).toBe(true);
+            expect(test.posterBlocks.find).not.toHaveBeenCalled();
+            test.referralConfig.findOne.mockResolvedValue({ channelId, enabled: false });
+            await test.cache.invalidate(channelId);
+            expect(await test.service.isPublic(scoped, `${channelId}.example`, image.source)).toBe(false);
+        },
+    );
+
+    it('authorizes only exact image bindings of enabled referral posters in the current store', async () => {
+        const test = harness();
+        const asset = (id: string, channelId = 'a', tags: any[] = []) => ({
+            mimeType: 'image/webp',
+            source: `source/${id}.webp`,
+            preview: `preview/${id}.webp`,
+            channels: [{ id: channelId }],
+            tags,
+        });
+        test.referralConfig.findOne.mockResolvedValue({
+            channelId: 'a',
+            enabled: true,
+            posterTemplates: ['BRAND_MINIMAL'],
+        });
+        test.posterTemplates.find.mockResolvedValue([
+            {
+                channelId: 'a',
+                enabled: true,
+                posterBackgroundAsset: asset('custom'),
+                shareBackgroundAsset: asset('share'),
+            },
+            { channelId: 'b', enabled: true, posterBackgroundAsset: asset('other-store') },
+            { channelId: 'a', enabled: false, posterBackgroundAsset: asset('disabled') },
+            { channelId: 'a', enabled: true, posterBackgroundAsset: asset('foreign-asset', 'b') },
+            {
+                channelId: 'a',
+                enabled: true,
+                posterBackgroundAsset: asset('avatar', 'a', [{ value: 'customer-avatar' }]),
+            },
+        ]);
+        test.posterBlocks.find.mockResolvedValue([
+            {
+                channelId: 'a',
+                code: 'referral-poster-brand-minimal',
+                settings: { purpose: 'referral-system-poster', templateId: 'BRAND_MINIMAL' },
+                imageAsset: asset('blue'),
+            },
+            {
+                channelId: 'a',
+                code: 'referral-poster-product-story',
+                settings: { purpose: 'referral-system-poster', templateId: 'PRODUCT_STORY' },
+                imageAsset: asset('unselected'),
+            },
+            {
+                channelId: 'b',
+                code: 'referral-poster-brand-minimal',
+                settings: { purpose: 'referral-system-poster', templateId: 'BRAND_MINIMAL' },
+                imageAsset: asset('foreign-block'),
+            },
+            {
+                channelId: 'a',
+                code: 'not-a-poster',
+                settings: { purpose: 'referral-system-poster', templateId: 'BRAND_MINIMAL' },
+                imageAsset: asset('unbound'),
+            },
+        ]);
+        for (const id of ['blue', 'custom', 'share']) {
+            expect(await test.service.isPublic(ctx, 'shop.example', `source/${id}.webp`)).toBe(true);
+            expect(await test.service.isPublic(ctx, 'shop.example', `preview/${id}.webp`)).toBe(true);
+        }
+        for (const id of [
+            'other-store',
+            'disabled',
+            'foreign-asset',
+            'avatar',
+            'unselected',
+            'foreign-block',
+            'unbound',
+        ]) {
+            expect(await test.service.isPublic(ctx, 'shop.example', `source/${id}.webp`)).toBe(false);
+        }
+        expect(test.posterTemplates.find).toHaveBeenCalledWith(
+            expect.objectContaining({ where: { channelId: 'a', enabled: true } }),
+        );
+    });
+
+    it.each([false, undefined])(
+        'does not expose poster assets when the referral program is inactive: %s',
+        async enabled => {
+            const test = harness();
+            test.referralConfig.findOne.mockResolvedValue(
+                enabled === false ? { channelId: 'a', enabled } : null,
+            );
+            expect(await test.service.isPublic(ctx, 'shop.example', 'source/blue.webp')).toBe(false);
+            expect(test.posterTemplates.find).not.toHaveBeenCalled();
+            expect(test.posterBlocks.find).not.toHaveBeenCalled();
+        },
+    );
+
     it('authorizes only the exact public branding variants bound to the current store', async () => {
         const test = harness();
         const logo = (id: string, mimeType = 'image/webp') => ({
@@ -146,7 +290,10 @@ describe('public media manifest', () => {
         ).toEqual(Array(5).fill(true));
         expect(test.content.findPublished).toHaveBeenCalledTimes(1);
         expect(test.promotion.renderPublished).toHaveBeenCalledTimes(1);
-        expect(test.connection.getRepository).toHaveBeenCalledTimes(4);
+        expect(test.connection.getRepository).toHaveBeenCalledTimes(5);
+        expect(test.referralConfig.findOne).toHaveBeenCalledExactlyOnceWith({
+            where: { channelId: ctx.channelId, enabled: true },
+        });
         expect((await test.service.get(ctx, 'shop.example')).uses).toContainEqual({
             path: 'preview/product.jpg',
             kind: 'card',

@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 
 import { SearchIndexCompletedEvent } from '../../../core/src/event-bus/events/search-index-completed-event';
+import { StorefrontDataChangedEvent } from '../realtime/storefront-data-changed.event';
 
 import { StorefrontCacheInvalidationService } from './storefront-cache-invalidation.service';
 
@@ -29,6 +30,19 @@ function harness() {
         },
     };
 }
+it('invalidates public poster authorization and queues media revocation after referral configuration changes', async () => {
+    const test = harness();
+    const ctx = { channelId: 'a' } as never;
+    const event = new StorefrontDataChangedEvent(ctx, ['referral'], {
+        entityType: 'ReferralPosterTemplate',
+    });
+    expect((test.service as any).isPublicChange(event)).toBe(true);
+    await (test.service as any).changed(event);
+    expect(test.cache.invalidate).toHaveBeenCalledExactlyOnceWith('a');
+    expect(test.media).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ channelId: 'a', ctx }));
+    const privateEvent = new StorefrontDataChangedEvent(ctx, ['referral'], { userIds: ['customer'] });
+    expect((test.service as any).isPublicChange(privateEvent)).toBe(false);
+});
 it('invalidates public catalog/content/cart after index completion without invalidating media', async () => {
     const test = harness();
     const event = new SearchIndexCompletedEvent({ channelId: 'a' } as never, 'update-product');

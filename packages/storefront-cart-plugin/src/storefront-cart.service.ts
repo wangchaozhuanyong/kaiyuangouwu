@@ -913,20 +913,24 @@ export class StorefrontCartService implements OnApplicationBootstrap {
         if (!cart) {
             throw new ForbiddenError();
         }
+        cart.checkoutOrder = cart.checkoutOrderId
+            ? ((await this.orderService.findOne(ctx, cart.checkoutOrderId, undefined, 'business')) ?? null)
+            : null;
+        // Every displayed cart amount uses the saved order's pricing currency. Reading
+        // a cart in another browsing currency must not reprice or mutate that order.
+        const priceContext =
+            cart.checkoutOrder && cart.checkoutOrder.currencyCode !== ctx.currencyCode
+                ? ctx.copy({ channel: ctx.channel, currencyCode: cart.checkoutOrder.currencyCode })
+                : ctx;
         const variants = await this.productVariantService.findByIdsWithProduct(
-            ctx,
+            priceContext,
             cart.lines.map(line => line.productVariantId),
         );
         const variantsById = new Map(variants.map(variant => [String(variant.id), variant]));
         for (const line of cart.lines) {
             const variant = variantsById.get(String(line.productVariantId));
-            if (variant) {
-                line.productVariant = variant;
-            }
+            if (variant) line.productVariant = variant;
         }
-        cart.checkoutOrder = cart.checkoutOrderId
-            ? ((await this.orderService.findOne(ctx, cart.checkoutOrderId, undefined, 'business')) ?? null)
-            : null;
         return cart;
     }
 

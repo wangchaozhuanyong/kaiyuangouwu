@@ -739,6 +739,41 @@ describe('cart commands against a real database', () => {
             `)
         ).activeOrder;
         expect(order.currencyCode).toBe(target);
+        // The browser still requests the channel's default currency here. Cart
+        // rows and their GraphQL price fields must retain the saved order currency.
+        const pricedCart = (
+            await shopClient.query(gql`
+                query {
+                    storefrontCart {
+                        lines {
+                            productVariant {
+                                id
+                                currencyCode
+                                priceWithTax
+                            }
+                        }
+                        checkoutOrder {
+                            currencyCode
+                            lines {
+                                unitPriceWithTax
+                                productVariant {
+                                    id
+                                }
+                            }
+                        }
+                    }
+                }
+            `)
+        ).storefrontCart;
+        expect(pricedCart.checkoutOrder.currencyCode).toBe(target);
+        expect(pricedCart.checkoutOrder.lines.length).toBeGreaterThan(0);
+        for (const line of pricedCart.lines) {
+            expect(line.productVariant.currencyCode).toBe(target);
+            const orderLine = pricedCart.checkoutOrder.lines.find(
+                (item: any) => item.productVariant.id === line.productVariant.id,
+            );
+            if (orderLine) expect(line.productVariant.priceWithTax).toBe(orderLine.unitPriceWithTax);
+        }
         const restored = await send({
             cartId,
             commandId: randomUUID(),

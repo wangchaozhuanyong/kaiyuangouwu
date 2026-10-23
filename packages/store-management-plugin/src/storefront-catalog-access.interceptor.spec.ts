@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { firstValueFrom, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,6 +43,20 @@ beforeEach(() => {
 });
 
 describe('public storefront browsing boundary', () => {
+    it('keeps the catalog resolvers public browsing contract aligned with the anonymous gate', () => {
+        const source = readFileSync(
+            new URL('../../storefront-catalog-plugin/src/storefront-catalog.resolver.ts', import.meta.url),
+            'utf8',
+        );
+        const queries = [...source.matchAll(/@Query\(\)\s+@Allow\(Permission\.Public\)\s+(\w+)\(/gu)].map(
+            match => match[1],
+        );
+        expect(queries).toContain('storefrontDailyRecommendations');
+        for (const query of queries) {
+            expect(invoke(query).run, query).not.toThrow();
+            expect(invoke(query, 'Mutation').run, query).toThrow();
+        }
+    });
     it('admits only the declared anonymous recharge operations before their service checks', () => {
         for (const field of ['gptRechargeConfig', 'gptRechargeTask']) {
             const { run, next } = invoke(field);
@@ -71,6 +86,7 @@ describe('public storefront browsing boundary', () => {
         'collections',
         'collection',
         'storefrontCatalog',
+        'storefrontDailyRecommendations',
         'storefrontProductSales',
         'activeStorefrontFlashSales',
         'activeStorefrontCoupons',
@@ -104,6 +120,7 @@ describe('public storefront browsing boundary', () => {
         'myDeliveryEmails',
     ])('keeps private and unreviewed queries protected: %s', field => expect(invoke(field).run).toThrow());
     it.each([
+        'storefrontDailyRecommendations',
         'setCustomerAvatar',
         'createAfterSalesRequest',
         'createImageGeneration',

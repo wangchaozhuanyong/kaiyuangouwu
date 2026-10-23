@@ -121,7 +121,9 @@ export function CartPage() {
     const interactionBlocked = editingBlocked || resultNeedsReview || recoveryPending || checkoutPending;
     const selectedCouponLabel = order ? appliedCouponLabel(coupons, order.id, language) : null;
     const locked = cart?.state === 'PAYMENT_PENDING';
-    const discount = Math.abs(order?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
+    const amountCurrency = amountOrder?.currencyCode ?? market.currencyCode;
+    const currencyMismatch = Boolean(amountOrder && amountCurrency !== market.currencyCode);
+    const discount = Math.abs(amountOrder?.discounts.reduce((sum, item) => sum + item.amountWithTax, 0) ?? 0);
     const amount = locked && amountOrder ? amountOrder.totalWithTax : (amountOrder?.subTotalWithTax ?? 0);
 
     useEffect(() => {
@@ -492,6 +494,27 @@ export function CartPage() {
                                 <h2>{isZh ? '订单摘要' : 'Order Summary'}</h2>
                                 {desktop && selectAllControl}
                             </div>
+                            {amountOrder && (
+                                <p className="cart-currency-info type-helper" data-cart-currency-info>
+                                    {isZh
+                                        ? `${error ? '上次确认的订单计价币种' : '订单计价币种'}：${amountCurrency}`
+                                        : `${error ? 'Last confirmed order pricing currency' : 'Order pricing currency'}: ${amountCurrency}`}
+                                    {currencyMismatch && (
+                                        <>
+                                            <br />
+                                            {isZh
+                                                ? error
+                                                    ? `当前浏览币种为 ${market.currencyCode}，上次确认的购物车以 ${amountCurrency} 计价。请先刷新核对当前金额。`
+                                                    : `当前浏览币种为 ${market.currencyCode}，购物车订单以 ${amountCurrency} 计价。请确认付款币种后核对金额。`
+                                                : error
+                                                  ? `Browsing in ${market.currencyCode}; last confirmed cart pricing in ${amountCurrency}. ` +
+                                                    'Refresh to verify current totals.'
+                                                  : `Browsing in ${market.currencyCode}; cart pricing in ${amountCurrency}. ` +
+                                                    'Confirm the payment currency before checkout.'}
+                                        </>
+                                    )}
+                                </p>
+                            )}
                             <div className="cart-summary-breakdown">
                                 <div className="summary-row">
                                     <span>{isZh ? '已选商品' : 'Selected items'}</span>
@@ -504,23 +527,14 @@ export function CartPage() {
                                 <div className="summary-row">
                                     <span>{isZh ? '商品总额' : 'Items subtotal'}</span>
                                     <span className="summary-value">
-                                        {formatMoney(
-                                            amount + (discount || 0),
-                                            order?.currencyCode ?? market.currencyCode,
-                                            locale,
-                                        )}
+                                        {formatMoney(amount + (discount || 0), amountCurrency, locale)}
                                     </span>
                                 </div>
                                 {discount > 0 && (
                                     <div className="summary-row discount">
                                         <span>{isZh ? '优惠抵扣' : 'Discount'}</span>
                                         <span className="summary-value discount-amount">
-                                            -
-                                            {formatMoney(
-                                                discount,
-                                                order?.currencyCode ?? market.currencyCode,
-                                                locale,
-                                            )}
+                                            -{formatMoney(discount, amountCurrency, locale)}
                                         </span>
                                     </div>
                                 )}
@@ -565,11 +579,7 @@ export function CartPage() {
                                                     ? isZh
                                                         ? '计算中…'
                                                         : 'Updating…'
-                                                    : formatMoney(
-                                                          amount,
-                                                          amountOrder?.currencyCode ?? market.currencyCode,
-                                                          locale,
-                                                      )}
+                                                    : formatMoney(amount, amountCurrency, locale)}
                                             </strong>
                                         </span>
                                         <small>
@@ -599,8 +609,8 @@ export function CartPage() {
                                                               : 'Delivery confirmed'
                                                       : discount
                                                         ? isZh
-                                                            ? `已优惠 ${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)}`
-                                                            : `${formatMoney(discount, order?.currencyCode ?? market.currencyCode, locale)} saved`
+                                                            ? `已优惠 ${formatMoney(discount, amountCurrency, locale)}`
+                                                            : `${formatMoney(discount, amountCurrency, locale)} saved`
                                                         : digitalOnly
                                                           ? isZh
                                                               ? '无需配送'

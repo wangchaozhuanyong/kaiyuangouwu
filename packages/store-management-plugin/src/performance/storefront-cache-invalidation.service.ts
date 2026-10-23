@@ -104,8 +104,11 @@ export class StorefrontCacheInvalidationService implements OnApplicationBootstra
         )
             return false;
         if ((event as any).realtimeEventKind?.startsWith('storefront-review')) return false;
+        // Poster configuration also grants/revokes public image bindings in the media manifest.
         if (event instanceof StorefrontDataChangedEvent)
-            return event.topics.some(topic => topic === 'content' || topic === 'config');
+            return event.topics.some(
+                topic => topic === 'content' || topic === 'config' || topic === 'referral',
+            );
         return true;
     }
 

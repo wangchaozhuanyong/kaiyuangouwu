@@ -38,6 +38,7 @@ import { useOnlineStatus } from './useOnlineStatus';
 import { useStorefrontBootstrap } from './useStorefrontBootstrap';
 import { useStorefrontCartActions } from './useStorefrontCartActions';
 import { useStorefrontCoupons } from './useStorefrontCoupons';
+import { useStorefrontCurrencySelection } from './useStorefrontCurrencySelection';
 import { useStorefrontCustomerData } from './useStorefrontCustomerData';
 import { useStorefrontMetadata } from './useStorefrontDocument';
 import { useStorefrontMerchandising } from './useStorefrontMerchandising';
@@ -812,67 +813,54 @@ export function useStorefrontAppState() {
         [productActivity.removeFavoriteProducts, language, notify],
     );
 
-    const switchCurrency = useCallback(
-        async (currencyCode: string) => {
-            if (
-                currencyCode === displayCurrencyCode ||
-                !availableCurrencyCodes.includes(currencyCode) ||
-                cartLoading
-            ) {
-                return;
-            }
-            setCartLoading(true);
-            setCartError(null);
-            try {
-                if (cart?.checkoutOrder) {
-                    const updatedOrder = await api.setPaymentCurrencyForOrder(currencyCode);
-                    setCheckoutOrder(updatedOrder);
+    const commitCurrencyPreference = useCallback(
+        (currencyCode: string) => {
+            writeStoredCurrency(market.code, currencyCode);
+            writeStoredSettlementCurrency(market.code, currencyCode);
+            setDisplayCurrencyCode(currencyCode);
+            if (currencyCode !== 'USDT' && currencyCode !== market.currencyCode) {
+                if (route.name === 'category' && (minimumPrice || maximumPrice)) {
+                    navigate({ ...route, minPrice: undefined, maxPrice: undefined }, true);
                 }
-                writeStoredCurrency(market.code, currencyCode);
-                writeStoredSettlementCurrency(market.code, currencyCode);
-                setDisplayCurrencyCode(currencyCode);
-                if (currencyCode !== 'USDT' && currencyCode !== market.currencyCode) {
-                    if (route.name === 'category' && (minimumPrice || maximumPrice)) {
-                        navigate({ ...route, minPrice: undefined, maxPrice: undefined }, true);
-                    }
-                    setStorefrontContext(current => ({
-                        ...current,
-                        market: { ...current.market, currencyCode },
-                    }));
-                }
-                notify(
-                    language === 'zh'
-                        ? `已切换为 ${currencyCode} 付款`
-                        : `Payment currency switched to ${currencyCode}`,
-                );
-            } catch (requestError) {
-                const message =
-                    requestError instanceof Error
-                        ? storefrontErrorMessage(requestError, language)
-                        : text.loadError;
-                setCartError(message);
-                notify(message);
-            } finally {
-                setCartLoading(false);
+                setStorefrontContext(current => ({
+                    ...current,
+                    market: { ...current.market, currencyCode },
+                }));
             }
+            notify(
+                language === 'zh'
+                    ? `已切换为 ${currencyCode} 付款`
+                    : `Payment currency switched to ${currencyCode}`,
+            );
         },
         [
-            api,
-            availableCurrencyCodes,
-            cart?.checkoutOrder,
-            cartLoading,
-            displayCurrencyCode,
             language,
-            market.code,
-            market.currencyCode,
+            market,
             maximumPrice,
             minimumPrice,
             navigate,
             notify,
             route,
-            text.loadError,
+            setDisplayCurrencyCode,
+            setStorefrontContext,
         ],
     );
+    const switchCurrency = useStorefrontCurrencySelection({
+        api,
+        cartController,
+        cart,
+        customerId: customer?.id,
+        availableCurrencyCodes,
+        displayCurrencyCode,
+        cartLoading: cartLoading || cartState.pending || checkoutStarting,
+        language,
+        setCart,
+        setCheckoutOrder,
+        setCartLoading,
+        setCartError,
+        commitPreference: commitCurrencyPreference,
+        notify,
+    });
 
     const storefrontContextValue = {
         retryAccount: retryCustomer,

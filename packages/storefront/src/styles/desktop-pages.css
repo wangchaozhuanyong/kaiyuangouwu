@@ -444,6 +444,9 @@
         justify-content: space-between;
         margin-bottom: 26px;
     }
+    .desktop-store-layout .cart-summary-panel > .cart-currency-info {
+        margin: 0 0 var(--space-16);
+    }
     .desktop-store-layout .cart-summary-header h2 {
         font-size: var(--type-section-size);
         font-weight: var(--font-weight-semibold);

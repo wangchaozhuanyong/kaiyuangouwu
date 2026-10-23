@@ -129,6 +129,10 @@
     display: contents;
 }
 
+.cart-currency-info {
+    margin: var(--space-12) var(--page-section-inset, var(--space-12));
+}
+
 .coupon-label-desktop {
     display: none;
 }

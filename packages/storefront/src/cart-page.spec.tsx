@@ -160,6 +160,62 @@ function renderCart(
 
 describe('CartPage guest cart', () => {
     it.each(['zh', 'en'] as const)(
+        'labels retained prices as last confirmed after a failed read: %s',
+        language => {
+            const value = { ...cart, checkoutOrder: { ...checkoutOrder, currencyCode: 'CNY' } };
+            const markup = renderCart(value, [], [], false, false, {
+                language,
+                error: 'Payment currency saved; cart refresh failed.',
+            });
+            expect(markup).toContain(
+                language === 'zh'
+                    ? '上次确认的订单计价币种：CNY'
+                    : 'Last confirmed order pricing currency: CNY',
+            );
+            expect(markup).toContain(
+                language === 'zh' ? '请先刷新核对当前金额' : 'Refresh to verify current totals',
+            );
+        },
+    );
+
+    it.each(['store-a', 'store-b'])(
+        'identifies the authoritative cart currency when the browsing preference differs: %s',
+        code => {
+            const value = {
+                ...cart,
+                checkoutOrder: {
+                    ...checkoutOrder,
+                    currencyCode: 'CNY',
+                    subTotalWithTax: 3277,
+                    totalWithTax: 3277,
+                },
+            };
+            const markup = renderCart(value, [], [], false, false, { market: { ...market, code } });
+            expect(markup).toContain('订单计价币种：CNY');
+            expect(markup).toContain('当前浏览币种为 MYR');
+        },
+    );
+
+    it('keeps confirmed summary amounts, discounts and currency from the same cart snapshot', () => {
+        const changed = {
+            ...cart,
+            checkoutOrder: {
+                ...checkoutOrder,
+                currencyCode: 'CNY',
+                discounts: [{ amountWithTax: -200 }] as Order['discounts'],
+            },
+        };
+        const markup = renderCart(changed, [], [], false, false, {
+            commandUnknown: true,
+            confirmedCart: { ...cart, checkoutOrder },
+        });
+        const host = document.createElement('div');
+        host.innerHTML = markup;
+        expect(host.querySelector('.cart-summary-breakdown')?.textContent).toContain('MYR 313.81');
+        expect(host.querySelector('.cart-summary-breakdown')?.textContent).not.toContain('315.81');
+    });
+
+    it.each(['zh', 'en'] as const)(
         'explains an acknowledged result with a failed display read and offers review without cancellation: %s',
         language => {
             const error = new CartCommandAcknowledgedReadError(
