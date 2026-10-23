@@ -4,6 +4,30 @@ import { Product } from '../../entity/product/product.entity';
 /** Optional commerce adapter consumed without introducing a plugin dependency cycle. */
 export const PUBLIC_PRODUCT_SUMMARY_READER = Symbol.for('vendure.public-product-summary-reader');
 
+/** Optional, channel-scoped public reviews adapter; does not expose customer or order records. */
+export const PUBLIC_PRODUCT_REVIEW_READER = Symbol.for('vendure.public-product-review-reader');
+
+export interface PublicProductReviewList {
+    totalItems: number;
+    averageRating: number;
+    items: Array<{
+        rating: number;
+        title: string;
+        body: string;
+        customerName: string;
+        anonymous: boolean;
+        createdAt: Date | string;
+    }>;
+}
+
+export interface PublicProductReviewReader {
+    findApprovedForProduct(
+        ctx: RequestContext,
+        productId: string,
+        options?: { skip?: number; take?: number },
+    ): Promise<PublicProductReviewList>;
+}
+
 export interface PublicProductSummaryAsset {
     id: string;
     preview: string;

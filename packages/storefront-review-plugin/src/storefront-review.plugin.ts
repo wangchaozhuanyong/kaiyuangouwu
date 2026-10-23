@@ -1,5 +1,11 @@
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
-import { Permission, PluginCommonModule, SettingsStoreScopes, VendurePlugin } from '@vendure/core';
+import {
+    Permission,
+    PluginCommonModule,
+    PUBLIC_PRODUCT_REVIEW_READER,
+    SettingsStoreScopes,
+    VendurePlugin,
+} from '@vendure/core';
 
 import { adminApiExtensions, shopApiExtensions } from './api-extensions';
 import { StorefrontReview } from './entities/storefront-review.entity';
@@ -13,7 +19,11 @@ import { StorefrontReviewService } from './storefront-review.service';
 @VendurePlugin({
     imports: [PluginCommonModule, ContentTranslationPlugin],
     entities: [StorefrontReview],
-    providers: [StorefrontReviewService, StorefrontReviewSettingsService],
+    providers: [
+        StorefrontReviewService,
+        StorefrontReviewSettingsService,
+        { provide: PUBLIC_PRODUCT_REVIEW_READER, useExisting: StorefrontReviewService },
+    ],
     configuration: config => {
         config.settingsStoreFields ??= {};
         config.settingsStoreFields[STOREFRONT_REVIEW_SETTINGS_NAMESPACE] = [

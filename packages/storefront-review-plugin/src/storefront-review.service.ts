@@ -13,6 +13,7 @@ import {
     UserInputError,
     processCustomerImage,
     translateDeep,
+    type PublicProductReviewReader,
 } from '@vendure/core';
 import { Readable } from 'node:stream';
 import { FindOptionsWhere, In, Like, Not } from 'typeorm';
@@ -50,7 +51,7 @@ export interface StorefrontReviewList {
 }
 
 @Injectable()
-export class StorefrontReviewService {
+export class StorefrontReviewService implements PublicProductReviewReader {
     constructor(
         private readonly connection: TransactionalConnection,
         private readonly customerService: CustomerService,
