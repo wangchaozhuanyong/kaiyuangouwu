@@ -7,11 +7,19 @@ import {
     RequestContext,
     TransactionalConnection,
 } from '@vendure/core';
-import { StorefrontContentService, type StorefrontImageKind } from '@vendure/storefront-content-plugin';
+import {
+    StorefrontContentBlock,
+    StorefrontContentService,
+    type StorefrontImageKind,
+} from '@vendure/storefront-content-plugin';
+import { In } from 'typeorm';
 
+import { ReferralPosterTemplate } from '../entities/referral-poster-template.entity';
+import { ReferralProgramConfig } from '../entities/referral-program-config.entity';
 import { StoreProfile } from '../entities/store-profile.entity';
 import { promotionAssetPaths } from '../promotion/promotion-public-assets';
 import { StorefrontPromotionService } from '../promotion/storefront-promotion.service';
+import { referralPosterContentCode, referralPosterPresets } from '../referral/referral-poster-presets';
 
 import { StorefrontPublicCacheService } from './storefront-public-cache.service';
 import { PUBLIC_MEDIA_USES, publicContentImageKinds, publicHeroMobileImage } from './storefront-public-media';
@@ -51,7 +59,7 @@ export class StorefrontMediaManifestService {
     get(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest> {
         return this.cache.readThrough(
             ctx,
-            `media-manifest:v2:${host}`,
+            `media-manifest:v3:${host}`,
             STOREFRONT_MEDIA_MANIFEST_TTL_MS,
             () => this.build(ctx, host),
             { requireSharedRevision: true },
@@ -59,12 +67,12 @@ export class StorefrontMediaManifestService {
     }
 
     peek(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest | undefined> {
-        return this.cache.peek(ctx, `media-manifest:v2:${host}`);
+        return this.cache.peek(ctx, `media-manifest:v3:${host}`);
     }
 
     private async build(ctx: RequestContext, host: string): Promise<StorefrontMediaManifest> {
         const origin = new URL(`https://${host}`).origin;
-        const [blocks, html, products, variants, collections, profile] = await Promise.all([
+        const [blocks, html, products, variants, collections, profile, posterPaths] = await Promise.all([
             this.content.findPublished(ctx, false, LanguageCode.zh_Hans),
             this.promotion.renderPublished(ctx, ''),
             this.catalogPaths(ctx, Product),
@@ -78,6 +86,7 @@ export class StorefrontMediaManifestService {
                     logoOnDarkAsset: { channels: true, tags: true },
                 },
             }),
+            this.referralPosterPaths(ctx),
         ]);
         const paths = new Set<string>();
         const uses = new Map<string, { path: string; kind: StorefrontImageKind }>();
@@ -130,6 +139,7 @@ export class StorefrontMediaManifestService {
             }
         }
         for (const path of promotionAssetPaths(html, origin)) add(path);
+        for (const path of posterPaths) add(path);
         for (const row of [...products, ...variants, ...collections]) {
             add(row.featuredPreview);
             add(row.featuredSource);
@@ -151,6 +161,56 @@ export class StorefrontMediaManifestService {
             paths: [...paths].sort(),
             uses: [...uses.values()].filter(item => paths.has(item.path)),
         };
+    }
+
+    // Poster artwork is configured outside normal page publication. Admit only exact,
+    // enabled program/template bindings with the same asset ownership and privacy checks.
+    private async referralPosterPaths(ctx: RequestContext): Promise<string[]> {
+        const config = await this.connection.getRepository(ctx, ReferralProgramConfig).findOne({
+            where: { channelId: ctx.channelId, enabled: true },
+        });
+        if (!config?.enabled || String(config.channelId) !== String(ctx.channelId)) return [];
+        const presetIds = new Set<string>(referralPosterPresets.map(preset => preset.id));
+        const systemIds = (config.posterTemplates ?? [...presetIds]).filter(id => presetIds.has(id));
+        const assetRelations = { channels: true, tags: true } as const;
+        const [templates, blocks] = await Promise.all([
+            this.connection.getRepository(ctx, ReferralPosterTemplate).find({
+                where: { channelId: ctx.channelId, enabled: true },
+                relations: {
+                    posterBackgroundAsset: assetRelations,
+                    shareBackgroundAsset: assetRelations,
+                },
+            }),
+            systemIds.length
+                ? this.connection.getRepository(ctx, StorefrontContentBlock).find({
+                      where: { channelId: ctx.channelId, code: In(systemIds.map(referralPosterContentCode)) },
+                      relations: { imageAsset: assetRelations },
+                  })
+                : [],
+        ]);
+        const assets = templates
+            .filter(template => template.enabled && String(template.channelId) === String(ctx.channelId))
+            .flatMap(template => [template.posterBackgroundAsset, template.shareBackgroundAsset]);
+        for (const block of blocks) {
+            const settings = block.settings;
+            const id = settings?.templateId;
+            if (
+                String(block.channelId) === String(ctx.channelId) &&
+                settings?.purpose === 'referral-system-poster' &&
+                typeof id === 'string' &&
+                systemIds.includes(id) &&
+                block.code === referralPosterContentCode(id)
+            )
+                assets.push(block.imageAsset);
+        }
+        return assets.flatMap(asset =>
+            asset?.mimeType?.startsWith('image/') &&
+            asset.channels?.some(channel => String(channel.id) === String(ctx.channelId)) &&
+            Array.isArray(asset.tags) &&
+            !asset.tags.some(tag => tag.value === 'customer-avatar')
+                ? [asset.source, asset.preview]
+                : [],
+        );
     }
 
     private async catalogPaths(

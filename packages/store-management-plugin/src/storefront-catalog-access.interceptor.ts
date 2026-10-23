@@ -23,6 +23,7 @@ const publicQueries = new Set([
     'collections',
     'collection',
     'storefrontCatalog',
+    'storefrontDailyRecommendations',
     'storefrontProductSales',
     'storefrontProductReviews',
     'storefrontReviewSettings',

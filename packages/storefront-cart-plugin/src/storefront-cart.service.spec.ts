@@ -16,6 +16,55 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
+describe('shared cart currency read model', () => {
+    it.each([
+        ['MYR', 'CNY', 3277],
+        ['CNY', 'MYR', 2000],
+    ])(
+        'keeps item prices and the existing order in one currency when browsing %s',
+        async (browseCurrency, orderCurrency, minorPrice) => {
+            const cart = new StorefrontCart({
+                id: 'cart-1',
+                checkoutOrderId: 'order-1',
+                lines: [{ productVariantId: 'variant-1' }],
+            });
+            const order = { id: 'order-1', currencyCode: orderCurrency };
+            const ctx: any = { channelId: 'store', channel: {}, currencyCode: browseCurrency };
+            ctx.copy = vi.fn((override: any) => ({ ...ctx, ...override }));
+            const variants = {
+                findByIdsWithProduct: vi.fn((priceCtx: any) =>
+                    Promise.resolve([
+                        {
+                            id: 'variant-1',
+                            currencyCode: priceCtx.currencyCode,
+                            priceWithTax: priceCtx.currencyCode === orderCurrency ? minorPrice : 999,
+                        },
+                    ]),
+                ),
+            };
+            const orders = { findOne: vi.fn().mockResolvedValue(order), updateOrderCurrency: vi.fn() };
+            const service = new StorefrontCartService(
+                { getRepository: () => ({ findOne: vi.fn().mockResolvedValue(cart) }) } as any,
+                {} as any,
+                {} as any,
+                orders as any,
+                variants as any,
+                {} as any,
+                {} as any,
+                {} as any,
+                {} as any,
+            );
+            const result = await (service as any).loadCart(ctx, cart.id, {
+                ownerType: 'CUSTOMER',
+                ownerId: 'owner',
+            });
+            expect(result.lines[0].productVariant.currencyCode).toBe(result.checkoutOrder.currencyCode);
+            expect(result.lines[0].productVariant.priceWithTax).toBe(minorPrice);
+            expect(orders.updateOrderCurrency).not.toHaveBeenCalled();
+        },
+    );
+});
+
 describe('unresolved payment protection when reopening a cart', () => {
     it.each(['PROCESSING', 'UNKNOWN', 'APPLIED'])(
         'does not reopen an order with an active %s receipt even before a native payment exists',

@@ -933,7 +933,17 @@ export class ProductVariantService {
         variant: ProductVariant,
         priceField: F,
     ): Promise<ProductVariant[F]> {
-        const cacheKey = `hydrate-variant-price-fields-${variant.id}`;
+        // A complete service snapshot carries its pricing currency, but must still
+        // pass the current channel's price/tax validation during field resolution.
+        const hasPricingSnapshot =
+            variant.listPrice != null &&
+            variant.listPriceIncludesTax != null &&
+            variant.currencyCode != null &&
+            variant.taxRateApplied != null;
+        const currencyCode = hasPricingSnapshot ? variant.currencyCode : ctx.currencyCode;
+        const priceContext =
+            currencyCode === ctx.currencyCode ? ctx : ctx.copy({ channel: ctx.channel, currencyCode });
+        const cacheKey = `hydrate-variant-price-fields-${variant.id}-${ctx.channelId}-${currencyCode}`;
         let populatePricesPromise = this.requestCache.get<Promise<ProductVariant>>(ctx, cacheKey);
 
         if (!populatePricesPromise) {
@@ -942,7 +952,7 @@ export class ProductVariantService {
                 try {
                     if (!variant.productVariantPrices?.length) {
                         const variantWithPrices = await this.connection.getEntityOrThrow(
-                            ctx,
+                            priceContext,
                             ProductVariant,
                             variant.id,
                             { relations: ['productVariantPrices'], includeSoftDeleted: true },
@@ -951,14 +961,14 @@ export class ProductVariantService {
                     }
                     if (!variant.taxCategory) {
                         const variantWithTaxCategory = await this.connection.getEntityOrThrow(
-                            ctx,
+                            priceContext,
                             ProductVariant,
                             variant.id,
                             { relations: ['taxCategory'], includeSoftDeleted: true },
                         );
                         variant.taxCategory = variantWithTaxCategory.taxCategory;
                     }
-                    resolve(await this.applyChannelPriceAndTax(variant, ctx, undefined, true));
+                    resolve(await this.applyChannelPriceAndTax(variant, priceContext, undefined, true));
                 } catch (e: unknown) {
                     reject(e instanceof Error ? e : new Error(String(e)));
                 }

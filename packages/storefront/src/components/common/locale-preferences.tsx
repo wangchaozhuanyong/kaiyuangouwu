@@ -65,17 +65,25 @@ export function LocalePreferencesSheet({
     const [draftLanguage, setDraftLanguage] = useState<StorefrontLanguage>(language);
     const [draftCurrency, setDraftCurrency] = useState(selectedCurrencyCode);
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const availableCurrencies = currencyCodes.length ? currencyCodes : [selectedCurrencyCode];
 
     const save = async () => {
         if (saving || currencyLoading) return;
         setSaving(true);
+        setSaveError(null);
         try {
-            if (draftCurrency !== selectedCurrencyCode) {
-                await onSelectCurrency(draftCurrency);
-            }
+            await onSelectCurrency(draftCurrency);
             if (draftLanguage !== language) onToggleLanguage();
             onClose();
+        } catch (error) {
+            setSaveError(
+                error instanceof Error
+                    ? error.message
+                    : isZh
+                      ? '设置未完成，请核对后重试'
+                      : 'Preferences were not saved. Review and retry.',
+            );
         } finally {
             setSaving(false);
         }
@@ -149,6 +157,11 @@ export function LocalePreferencesSheet({
                     </div>
                 </fieldset>
 
+                {saveError && (
+                    <p className="type-helper" role="alert">
+                        {saveError}
+                    </p>
+                )}
                 <button
                     type="button"
                     className="locale-preferences-save"
