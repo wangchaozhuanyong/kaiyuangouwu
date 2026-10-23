@@ -1,9 +1,16 @@
 import 'reflect-metadata';
 
-import { LanguageCode } from '@vendure/common/lib/generated-types';
-import { Channel, Product, ProductVariant, SearchIndexItem } from '@vendure/core';
+import { CurrencyCode, LanguageCode } from '@vendure/common/lib/generated-types';
+import {
+    Channel,
+    Product,
+    ProductVariant,
+    RequestContext,
+    SearchIndexItem,
+    TransactionalConnection,
+} from '@vendure/core';
 import { createRequire } from 'node:module';
-import { DataSource, EntitySchema, In } from 'typeorm';
+import { DataSource, EntitySchema, In, SelectQueryBuilder } from 'typeorm';
 import { describe, expect, it, vi } from 'vitest';
 
 // The workspace's Node type declarations predate node:sqlite, while CI runs Node 24.
@@ -432,6 +439,64 @@ it('uses live product and SKU channel/deletion/enable SQL joins before count and
         const restored = await service.find(context, { take: 48, sort: 'NAME' });
         expect(restored.totalItems).toBe(3);
         expect(restored.items.map(product => String(product.id))).toContain('p3');
+
+        // Exercise the real deferred access-control repository, including the
+        // product hydration filter which previously hid rows only after paging.
+        let hiddenIds = ['p1'];
+        const scopedConnection = new TransactionalConnection(
+            db,
+            {} as never,
+            {
+                authOptions: {
+                    entityAccessControlStrategy: {
+                        applyAccessControl: (
+                            qb: SelectQueryBuilder<Product | SearchIndexItem>,
+                            entity: { name: string },
+                        ) => {
+                            if (entity.name !== 'Product' && entity.name !== 'SearchIndexItem') return;
+                            const column = entity.name === 'Product' ? 'id' : 'productId';
+                            qb.andWhere(`${qb.alias}.${column} NOT IN (:...hiddenIds)`, { hiddenIds });
+                        },
+                    },
+                },
+            } as never,
+        );
+        const scopedContext = new RequestContext({
+            apiType: 'shop',
+            channel: new Channel({
+                id: 'a',
+                code: 'store-a',
+                defaultCurrencyCode: CurrencyCode.CNY,
+                defaultLanguageCode: LanguageCode.en,
+                customFields: {},
+            }),
+            isAuthorized: true,
+            authorizedAsOwnerOnly: false,
+        });
+        const scopedService = new StorefrontCatalogService(
+            scopedConnection,
+            {
+                findByIds: (ctx: RequestContext, ids: string[]) =>
+                    scopedConnection
+                        .getRepository(ctx, Product)
+                        .createQueryBuilder('product')
+                        .where('product.id IN (:...ids)', { ids })
+                        .getMany(),
+            } as never,
+            {} as never,
+        );
+        const visibleFirst = await scopedService.find(scopedContext, { take: 1, sort: 'NAME' });
+        expect(visibleFirst).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
+        const visibleSecond = await scopedService.find(scopedContext, { skip: 1, take: 1, sort: 'NAME' });
+        expect(visibleSecond).toMatchObject({ totalItems: 2, items: [{ id: 'p3' }] });
+        expect(
+            await scopedService.find(scopedContext, { minPriceWithTax: 200, take: 1, sort: 'NAME' }),
+        ).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
+        hiddenIds = ['p1', 'p3', 'p8'];
+        expect(await scopedService.find(scopedContext, { take: 1, sort: 'NAME' })).toEqual({
+            totalItems: 0,
+            items: [],
+        });
     } finally {
         await db.destroy();
     }
