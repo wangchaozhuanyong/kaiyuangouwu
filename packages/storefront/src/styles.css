@@ -913,16 +913,14 @@ img {
     cursor: pointer;
 }
 
-.notice-strip-all,
-.notice-strip-control {
+.notice-strip-all {
     flex: 0 0 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-.notice-strip-all:hover,
-.notice-strip-control:enabled:hover {
+.notice-strip-all:hover {
     background: var(--control-surface);
 }
 
@@ -944,30 +942,6 @@ img {
 .notice-strip-track {
     display: inline-block;
     will-change: transform;
-}
-
-.notice-strip-control:disabled {
-    cursor: default;
-}
-
-/* Playback glyphs use CSS geometry so this hot path needs no extra icon modules. */
-.notice-strip-control::before {
-    content: '';
-    width: 10px;
-    height: 12px;
-    border-inline: 3px solid var(--accent);
-}
-
-.notice-strip-control[aria-pressed='true']::before {
-    width: 0;
-    height: 0;
-    border-block: 6px solid transparent;
-    border-left: 10px solid var(--accent);
-    border-right: 0;
-}
-
-.notice-strip-control:disabled::before {
-    opacity: 0.4;
 }
 
 .notice-detail-content {

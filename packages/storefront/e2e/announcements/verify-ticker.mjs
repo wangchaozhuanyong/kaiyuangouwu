@@ -89,8 +89,8 @@ try {
                         assert(node.height <= node.lineHeight + 1, `${label}: ${node.selector} single line`);
                     assert.equal(
                         await page.locator('.notice-strip-control').count(),
-                        1,
-                        `${label}: explicit pause button`,
+                        0,
+                        `${label}: no playback button`,
                     );
                     for (const control of geometry.controls)
                         assert(control.height >= 44, `${label}: touch target height`);
@@ -214,7 +214,7 @@ try {
         await open('&count=1&shortFirst');
         await page.locator('.notice-strip-track').waitFor();
         assert.equal(await track().evaluate(element => element.getAnimations().length), 0);
-        assert.equal(await page.locator('.notice-strip-control').isDisabled(), true);
+        assert.equal(await page.locator('.notice-strip-control').count(), 0);
         report.cases.push({ label: 'one-notice-long-replay-and-short-static', status: 'pass' });
 
         await open('&state=empty');
@@ -225,7 +225,7 @@ try {
         await open();
         await page.locator('.notice-strip-track').waitFor();
         assert.equal(await track().evaluate(element => element.getAnimations().length), 0);
-        assert.equal(await page.locator('.notice-strip-control').isDisabled(), true);
+        assert.equal(await page.locator('.notice-strip-control').count(), 0);
         await page.locator('.notice-strip-open').click();
         await page.locator('.notice-detail-body').waitFor();
         assert.equal(

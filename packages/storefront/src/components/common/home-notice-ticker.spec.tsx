@@ -152,7 +152,7 @@ describe('home announcement playback', () => {
         render();
         const playback = required(animations.at(-1));
         playback.currentTime = 4200;
-        expect(host.querySelector<HTMLButtonElement>('.notice-strip-control')?.disabled).toBe(false);
+        expect(host.querySelector('.notice-strip-control')).toBeNull();
         render({ paused: true });
         expect(playback.playState).toBe('paused');
         render();
@@ -161,23 +161,17 @@ describe('home announcement playback', () => {
         expect(playback.playState).toBe('running');
     });
 
-    it('scrolls the full title and content together and keeps manual pause through dialog changes', () => {
+    it('scrolls title and content in one track with only full-notice and all-notice actions', () => {
         render();
         const track = required(host.querySelector('.notice-strip-track'));
         expect(track.textContent).toBe('Notice first · Complete content first');
         expect(track.querySelector('.notice-strip-title')).not.toBeNull();
-        const playback = required(animations.at(-1));
-        playback.currentTime = 4200;
-        click('.notice-strip-control');
-        expect(playback.playState).toBe('paused');
-        expect(host.querySelector('.notice-strip-control')?.getAttribute('aria-pressed')).toBe('true');
-        render({ paused: true });
-        render();
-        expect(playback.playState).toBe('paused');
-        click('.notice-strip-control');
-        expect(playback.playState).toBe('running');
-        expect(animations.at(-1)).toBe(playback);
-        expect(playback.currentTime).toBe(4200);
+        expect(host.querySelectorAll('.notice-strip button')).toHaveLength(2);
+        expect(host.querySelector('.notice-strip-control')).toBeNull();
+        click('.notice-strip-open');
+        expect(onOpen).toHaveBeenCalledWith('first');
+        click('.notice-strip-all');
+        expect(onAll).toHaveBeenCalledOnce();
     });
 
     it('scrolls a long title even when the notice has no body', () => {
@@ -198,7 +192,7 @@ describe('home announcement playback', () => {
         const previous = required(animations.at(-1));
         render({ items: items.slice(0, 1) });
         expect(previous.cancel).toHaveBeenCalled();
-        expect(host.querySelector<HTMLButtonElement>('.notice-strip-control')?.disabled).toBe(true);
+        expect(host.querySelector('.notice-strip-control')).toBeNull();
     });
 
     it('recomputes travel on resize and repeats a single long notice after the end hold', () => {
@@ -215,7 +209,7 @@ describe('home announcement playback', () => {
     it('keeps detail and all-announcement actions usable with reduced motion', () => {
         render({ reducedMotion: true });
         expect(animations).toHaveLength(0);
-        expect(host.querySelector<HTMLButtonElement>('.notice-strip-control')?.disabled).toBe(true);
+        expect(host.querySelector('.notice-strip-control')).toBeNull();
         click('.notice-strip-open');
         expect(onOpen).toHaveBeenCalledWith('first');
         click('.notice-strip-all');
