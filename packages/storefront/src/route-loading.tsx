@@ -70,7 +70,7 @@ export function PageSkeleton({
         <Tag
             data-page-pending={readiness?.phase === 'error' ? undefined : 'data'}
             className={className}
-            role={failed ? undefined : readiness && !compact ? 'region' : 'status'}
+            role={failed ? undefined : 'status'}
             aria-label={failed ? undefined : ariaLabel}
             aria-busy={readiness?.phase !== 'error'}
         >
@@ -181,9 +181,9 @@ export function RouteTransitionLoader({
         <div
             data-page-pending={readiness?.phase === 'error' ? undefined : 'module'}
             className="route-transition"
-            role={failed ? undefined : readiness ? 'region' : 'status'}
+            role={failed ? undefined : 'status'}
             aria-label={failed ? undefined : loadingPageLabel(language)}
-            aria-live={readiness ? undefined : 'polite'}
+            aria-live={failed ? undefined : 'polite'}
             aria-busy={readiness?.phase !== 'error'}
         >
             {failed && readiness ? (

@@ -255,7 +255,9 @@ it.each(['code', 'data', 'timeout'])(
             await act(async () => {
                 await Promise.resolve();
             });
-            expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+            expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+            expect(host.querySelector('[data-page-pending][role="status"]')).not.toBeNull();
+            expect(host.querySelector('.brand-loading')).toBeNull();
         });
         expect(host.querySelector('[data-product-purchase-bar]')).toBeNull();
         if (kind === 'timeout') {
@@ -316,7 +318,9 @@ it('removes source purchase actions from view and immediately exposes target nav
         if (!purchaseArticle) throw new Error('Expected the purchase bar inside the source article');
         expect(getComputedStyle(purchaseArticle).display).toBe('none');
         expect(host.querySelector('[data-page-pending]')).not.toBeNull();
-        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(host.querySelector('[data-page-pending][role="status"]')).not.toBeNull();
+        expect(host.querySelector('.brand-loading')).toBeNull();
         await act(async () => {
             release();
             await vi.advanceTimersByTimeAsync(20);

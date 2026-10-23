@@ -140,6 +140,33 @@ describe('desktop product purchase controls', () => {
         return { render, onAdd, variants, selectSecond, increase, selectParameters, add };
     }
 
+    it.each(['zh', 'en'] as const)(
+        'uses the same neutral quote label in %s without enabling purchase',
+        language => {
+            renderSelection({
+                language,
+                product: {
+                    ...product,
+                    customFields: {
+                        fulfillmentType: 'physical',
+                        refundPolicy: 'MERCHANT_REVIEW',
+                        manualDeliverySlaMinutes: 1440,
+                        ...product.customFields,
+                        pricingMode: 'QUOTE_ONLY',
+                    },
+                },
+            });
+            expect(host.querySelector('.detail-tags')?.textContent).toContain(
+                language === 'zh' ? '按需求报价' : 'Quoted on request',
+            );
+            expect(host.querySelector('.detail-tags')?.textContent).not.toContain(
+                language === 'zh' ? '预购商品' : 'Pre-order',
+            );
+            expect(host.querySelector('.detail-action-bar.is-quote-only')).not.toBeNull();
+            expect(host.querySelector('.quantity-control')).toBeNull();
+        },
+    );
+
     it('preserves selection and information state through same-product price and stock updates', () => {
         const controls = renderSelection();
         controls.selectSecond();

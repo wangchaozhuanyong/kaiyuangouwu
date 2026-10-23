@@ -312,7 +312,8 @@ export function PageReadinessBoundary({
     const showProgress =
         (navigationPreparing && !initial ? navigation.progress : reading.progress) ||
         (initial && continueDocumentBrand);
-    const inlineLoadingRegions = required.page + required.local > 0;
+    // A target skeleton owns its loading feedback; an unrelated local read must not hide navigation.
+    const inlineLoadingRegions = required.page > 0 || (!navigationPreparing && required.local > 0);
     const feedbackState =
         navigationPreparing && !initial
             ? {
@@ -365,6 +366,7 @@ export function PageReadinessBoundary({
                             </main>
                         )}
                         {!initial &&
+                            !inlineLoadingRegions &&
                             presentedPhase === 'preparing' &&
                             !feedbackState.slow &&
                             showProgress && (
