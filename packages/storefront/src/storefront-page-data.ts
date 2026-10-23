@@ -644,6 +644,7 @@ export async function prefetchPublicPage(
                                     take: 12,
                                 },
                                 querySignal,
+                                catalog.path === '/search' ? 'store' : 'route',
                             ),
                             pageParam,
                             new Set<string>(),
