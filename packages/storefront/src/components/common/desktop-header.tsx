@@ -87,7 +87,7 @@ export function DesktopHeader({
     cartQuantity,
 }: {
     navigationBlock?: StorefrontContentBlock;
-    cartQuantity: number;
+    cartQuantity: number | undefined;
 }) {
     const context = useStorefront();
     const isZh = context.language === 'zh';
@@ -176,11 +176,17 @@ export function DesktopHeader({
                         to="/cart"
                         className="proto-cart-link proto-header-action"
                         current={activeRoute === 'cart'}
-                        aria-label={countBadgeLabel(isZh ? '购物车' : 'Cart', cartQuantity)}
+                        aria-label={
+                            cartQuantity === undefined
+                                ? isZh
+                                    ? '购物车，正在读取数量'
+                                    : 'Cart, loading quantity'
+                                : countBadgeLabel(isZh ? '购物车' : 'Cart', cartQuantity)
+                        }
                     >
                         <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
                         <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
-                        <CountBadge count={cartQuantity} />
+                        <CountBadge count={cartQuantity} pending={cartQuantity === undefined} />
                     </DesktopNavigationLink>
                     <DesktopNavigationLink
                         to={context.customer ? '/account' : '/login'}

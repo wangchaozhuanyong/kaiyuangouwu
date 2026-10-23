@@ -2998,7 +2998,9 @@ describe('ShopApi storefront mutations', () => {
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
         expect(request.query).toContain('pending: orders');
-        expect(request.query).toContain('filter: { state: { eq: "ArrangingPayment" } }');
+        expect(request.query).toContain(
+            'filter: { state: { in: ["ArrangingPayment","AwaitingManualPayment","ArrangingAdditionalPayment"] } }',
+        );
         expect(request.query).not.toContain('"AddingItems"');
         expect(request.query).toContain('shipping: orders');
         expect(request.query).toContain('receiving: orders');

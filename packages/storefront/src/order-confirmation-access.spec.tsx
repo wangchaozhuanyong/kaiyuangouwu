@@ -38,6 +38,54 @@ const order = {
 } satisfies Order;
 
 describe('order confirmation access', () => {
+    it('retains a confirmed submission after a read failure and retries in the original order currency', async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        const submittedOrder = { ...order, state: 'AwaitingManualPayment', currencyCode: 'CNY' };
+        const read = vi
+            .fn()
+            .mockRejectedValueOnce(new Error('Read temporarily unavailable'))
+            .mockResolvedValueOnce(submittedOrder);
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        try {
+            act(() =>
+                root.render(
+                    <QueryClientProvider client={client}>
+                        <OrderConfirmationPage
+                            api={{ orderByConfirmationToken: read } as unknown as ShopApi}
+                            code={order.code}
+                            confirmationToken="valid-token"
+                            submittedOrder={submittedOrder}
+                            customer={null}
+                            market={market}
+                            locale="zh-CN"
+                            language="zh"
+                        />
+                    </QueryClientProvider>,
+                ),
+            );
+            await act(async () => {
+                await vi.waitFor(() => expect(host.textContent).toContain('请勿重复下单'));
+            });
+            expect(host.textContent).toContain(order.code);
+            expect(host.textContent).not.toContain('123.45');
+            expect(host.textContent).toContain('查看我的订单');
+            expect(read).toHaveBeenCalledWith('valid-token', expect.any(AbortSignal), 'CNY');
+            await act(async () => {
+                const retry = Array.from(host.querySelectorAll('button')).find(
+                    button => button.textContent === '重试读取',
+                );
+                if (!retry) throw new Error('Missing read-only retry action');
+                retry.click();
+                await vi.waitFor(() => expect(host.querySelector('.order-confirmation-page')).not.toBeNull());
+            });
+            expect(read).toHaveBeenCalledTimes(2);
+            expect(host.textContent).toContain('待客服确认收款');
+        } finally {
+            act(() => root.unmount());
+            client.clear();
+        }
+    });
     it.each([
         { responseCode: order.code, visible: true },
         { responseCode: 'ANOTHER-ORDER', visible: false },

@@ -88,7 +88,7 @@ query StorefrontProduct($id: ID!) {
         collectionId?: string,
         signal?: AbortSignal,
     ): Promise<ProductSearchPage> {
-        return this.catalog({ term, sort, skip, take, collectionId }, signal);
+        return this.catalog({ term, sort, skip, take, collectionId }, signal, 'store');
     }
 
     async catalog(

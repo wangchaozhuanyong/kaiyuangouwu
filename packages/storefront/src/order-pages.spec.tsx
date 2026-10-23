@@ -146,6 +146,15 @@ function renderLogistics(cachedOrders?: Order[]) {
 }
 
 describe('OrdersPage route query', () => {
+    it.each([false, true])(
+        'does not call manual pending payment paid or offer another payment on desktop=%s',
+        desktop => {
+            const markup = renderOrders([{ ...order, state: 'AwaitingManualPayment' }], 'zh', desktop);
+            expect(markup).toContain('应付');
+            expect(markup).not.toContain('实付');
+            expect(markup).not.toContain('立即付款');
+        },
+    );
     it('shows an unsubmitted cart as a cart without offering payment', () => {
         const cartOrder = { ...order, state: 'AddingItems', orderPlacedAt: null };
         for (const desktop of [false, true]) {
@@ -349,6 +358,17 @@ function renderDetail(detailOrder: Order) {
 }
 
 describe('OrderDetailPage fulfillment actions', () => {
+    it('labels line totals separately from quantity without multiplying a subtotal again', () => {
+        const markup = renderDetail({
+            ...order,
+            totalQuantity: 2,
+            totalWithTax: 5980,
+            lines: [{ ...order.lines[0], quantity: 2, linePriceWithTax: 5980 }],
+        });
+        expect(markup).toContain('59.8');
+        expect(markup).toContain('数量');
+        expect(markup).not.toContain('×');
+    });
     it('uses the order currency for historic lines even when the variant currency changed', () => {
         const markup = renderDetail({
             ...order,
@@ -373,6 +393,14 @@ describe('OrderDetailPage fulfillment actions', () => {
         expect(markup).not.toContain('返回修改订单');
         expect(markup).not.toContain('订单等待支付');
         expect(markup).not.toContain('page-action-bar');
+    });
+
+    it('keeps manual payment details pending without prompting another purchase or review', () => {
+        const markup = renderDetail({ ...order, state: 'AwaitingManualPayment' });
+        expect(markup).toContain('等待客服核款，请勿重复付款或下单');
+        expect(markup).not.toContain('服务评价');
+        expect(markup).not.toContain('再来一单');
+        expect(markup).not.toContain('返回修改订单');
     });
 
     it('shows included tax, delivery timing and the safe cancellation entry for authorized physical orders', () => {

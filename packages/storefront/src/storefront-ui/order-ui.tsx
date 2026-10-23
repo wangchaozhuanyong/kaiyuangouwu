@@ -3,6 +3,7 @@ import {
     orderStateDisplayLabel,
 } from '../../../common/src/display-localization';
 import { formatBusinessDate } from '../business-time';
+import { PENDING_PAYMENT_ORDER_STATES } from '../order-refresh';
 import { OrderTab } from '../storefront-router';
 import {
     AfterSalesRequest,
@@ -200,7 +201,7 @@ export function customerOrderStateLabel(
 }
 
 export function orderStatesForTab(tab: OrderTab): string[] | undefined {
-    if (tab === 'pending') return ['ArrangingPayment', 'AwaitingManualPayment', 'ArrangingAdditionalPayment'];
+    if (tab === 'pending') return [...PENDING_PAYMENT_ORDER_STATES];
     if (tab === 'shipping') return ['PaymentAuthorized', 'PaymentSettled'];
     if (tab === 'receiving') return ['Shipped', 'PartiallyShipped'];
     if (tab === 'completed') return ['Delivered'];

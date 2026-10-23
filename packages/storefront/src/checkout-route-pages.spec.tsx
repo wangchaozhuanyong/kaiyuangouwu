@@ -35,6 +35,7 @@ describe('checkout route handoff', () => {
         const order = { id: 'order-1', code: 'T0001', state: 'PaymentSettled' } as Order;
         const refreshedCart = { id: 'cart-2' } as StorefrontCart;
         const navigate = vi.fn();
+        const rememberSubmittedOrder = vi.fn();
         const invalidateCustomerRouteQueries = vi.fn().mockResolvedValue(undefined);
         const cart = vi.fn().mockResolvedValue(refreshedCart);
         const setCart = vi.fn();
@@ -49,6 +50,7 @@ describe('checkout route handoff', () => {
             displayCurrencyCode: 'MYR',
             locale: 'zh-CN',
             setCheckoutOrder: vi.fn(),
+            rememberSubmittedOrder,
             notify: vi.fn(),
             navigate,
             invalidateCustomerRouteQueries,
@@ -58,6 +60,10 @@ describe('checkout route handoff', () => {
         renderToStaticMarkup(<PaymentRoutePage />);
         await testState.paymentProps?.onComplete(order, 'confirmation-token');
 
+        expect(rememberSubmittedOrder).toHaveBeenCalledWith(order);
+        expect(rememberSubmittedOrder.mock.invocationCallOrder[0]).toBeLessThan(
+            cart.mock.invocationCallOrder[0],
+        );
         expect(navigate).toHaveBeenCalledWith(
             { name: 'order-confirmation', id: 'T0001', token: 'confirmation-token' },
             true,

@@ -1319,6 +1319,7 @@ export function OrderConfirmationPage({
     api,
     code,
     confirmationToken,
+    submittedOrder,
     customer,
     market,
     locale,
@@ -1327,6 +1328,7 @@ export function OrderConfirmationPage({
     api: ShopApi;
     code: string;
     confirmationToken: string;
+    submittedOrder?: Pick<Order, 'code' | 'state' | 'currencyCode'> | null;
     customer: ActiveCustomer | null;
     market: MarketConfig;
     locale: string;
@@ -1336,6 +1338,10 @@ export function OrderConfirmationPage({
     const router = useRouter();
     const navigateTo = (route: PaymentRoute) => void navigate(routeNavigateOptions(route) as never);
     const isZh = language === 'zh';
+    const confirmedSubmission =
+        submittedOrder?.code === code && isPaymentCompletedOrderState(submittedOrder.state)
+            ? submittedOrder
+            : null;
     const orderQuery = useQuery({
         queryKey: [
             ...storefrontQueryKeys.orderByCode(
@@ -1344,8 +1350,10 @@ export function OrderConfirmationPage({
                 code,
             ),
             confirmationToken,
+            ...(confirmedSubmission ? [confirmedSubmission.currencyCode] : []),
         ],
-        queryFn: ({ signal }) => api.orderByConfirmationToken(confirmationToken, signal),
+        queryFn: ({ signal }) =>
+            api.orderByConfirmationToken(confirmationToken, signal, confirmedSubmission?.currencyCode),
         enabled: Boolean(code && confirmationToken),
         staleTime: 0,
         refetchOnMount: 'always',
@@ -1382,7 +1390,15 @@ export function OrderConfirmationPage({
     if (loading) {
         return (
             <Subpage
-                title={isZh ? '订单已提交' : 'Order confirmed'}
+                title={
+                    confirmedSubmission
+                        ? isZh
+                            ? '订单已提交'
+                            : 'Order submitted'
+                        : isZh
+                          ? '订单确认'
+                          : 'Order confirmation'
+                }
                 language={language}
                 onBack={() => returnToStorefrontRoute(router, { name: 'home' })}
             >
@@ -1393,30 +1409,72 @@ export function OrderConfirmationPage({
     if (!order) {
         return (
             <Subpage
-                title={isZh ? '订单已提交' : 'Order confirmed'}
+                title={
+                    confirmedSubmission
+                        ? isZh
+                            ? '订单已提交'
+                            : 'Order submitted'
+                        : isZh
+                          ? '订单确认'
+                          : 'Order confirmation'
+                }
                 language={language}
                 onBack={() => returnToStorefrontRoute(router, { name: 'home' })}
             >
                 <EmptyState
                     icon={<Package />}
-                    title={isZh ? '无法读取订单' : 'Could not retrieve the order'}
-                    detail={
-                        loadError ||
-                        (isZh
-                            ? confirmationToken
-                                ? '确认链接可能已过期，请登录账户后从订单列表查看'
-                                : '确认链接缺少安全令牌，请登录账户后从订单列表查看'
-                            : confirmationToken
-                              ? 'The confirmation link may have expired. Sign in to view your orders.'
-                              : 'The confirmation link is missing its security token. Sign in to view your orders.')
+                    title={
+                        confirmedSubmission
+                            ? isZh
+                                ? '订单已提交，详情暂时无法加载'
+                                : 'Order submitted; details are unavailable'
+                            : isZh
+                              ? '无法读取订单'
+                              : 'Could not retrieve the order'
                     }
-                    action={loadError ? (isZh ? '重试' : 'Retry') : isZh ? '返回首页' : 'Back to home'}
+                    detail={
+                        confirmedSubmission
+                            ? isZh
+                                ? '请勿重复下单。可以重试读取，或从我的订单查看原订单。'
+                                : 'Do not place another order. Retry reading the result or view the original order in My orders.'
+                            : loadError ||
+                              (isZh
+                                  ? confirmationToken
+                                      ? '确认链接可能已过期，请登录账户后从订单列表查看'
+                                      : '确认链接缺少安全令牌，请登录账户后从订单列表查看'
+                                  : confirmationToken
+                                    ? 'The confirmation link may have expired. Sign in to view your orders.'
+                                    : 'The confirmation link is missing its security token. Sign in to view your orders.')
+                    }
+                    action={
+                        confirmationToken
+                            ? isZh
+                                ? '重试读取'
+                                : 'Retry reading'
+                            : isZh
+                              ? '查看我的订单'
+                              : 'View my orders'
+                    }
                     onAction={() =>
-                        loadError
+                        confirmationToken
                             ? void orderQuery.refetch({ cancelRefetch: false })
-                            : returnToStorefrontRoute(router, { name: 'home' })
+                            : navigateTo({ name: 'orders' })
                     }
                 />
+                {confirmedSubmission && (
+                    <p>
+                        {isZh ? '订单号' : 'Order number'} {confirmedSubmission.code}
+                    </p>
+                )}
+                {confirmationToken && (
+                    <button
+                        type="button"
+                        className="secondary-action"
+                        onClick={() => navigateTo({ name: 'orders' })}
+                    >
+                        {isZh ? '查看我的订单' : 'View my orders'}
+                    </button>
+                )}
             </Subpage>
         );
     }

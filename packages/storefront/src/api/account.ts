@@ -1,3 +1,4 @@
+// organize-imports-ignore -- Keep the project ESLint import groups.
 import type { DigitalReceiptContent, DigitalReceiptStatus } from '../digital-receipt-panel';
 import type { OrderAdditionalPaymentQuote } from '../order-additional-payment-panel';
 import type { ShopAbuseProof } from '../shop-abuse';
@@ -22,6 +23,8 @@ import type {
     StorefrontRegistrationConsentInput,
     StorefrontUsdtCheckoutQuote,
 } from '../types';
+
+import { PENDING_PAYMENT_ORDER_STATES } from '../order-refresh';
 
 import { AuthTransition, browserAuthTransition, type ConfirmLogout } from './auth-transition';
 import { CustomerIdentityApi } from './customer-identity';
@@ -380,7 +383,7 @@ export class AccountApi extends CustomerIdentityApi {
                     activeCustomer {
                         pending: orders(options: {
                             take: 0
-                            filter: { state: { eq: "ArrangingPayment" } }
+                            filter: { state: { in: ${JSON.stringify(PENDING_PAYMENT_ORDER_STATES)} } }
                         }) { totalItems }
                         shipping: orders(options: {
                             take: 0
