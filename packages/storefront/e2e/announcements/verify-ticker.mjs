@@ -89,8 +89,8 @@ try {
                         assert(node.height <= node.lineHeight + 1, `${label}: ${node.selector} single line`);
                     assert.equal(
                         await page.locator('.notice-strip-control').count(),
-                        0,
-                        `${label}: no pause button`,
+                        1,
+                        `${label}: explicit pause button`,
                     );
                     for (const control of geometry.controls)
                         assert(control.height >= 44, `${label}: touch target height`);
@@ -101,8 +101,8 @@ try {
                     const moving = await animationState();
                     assert(moving.x < moved.x - 3, `${label}: actual right-to-left motion`);
                     const titleAfter = await title().boundingBox();
-                    assert.equal(titleBefore.x, titleAfter.x, `${label}: fixed title`);
-                    assert.equal(titleBefore.y, titleAfter.y, `${label}: fixed title baseline`);
+                    assert(titleAfter.x < titleBefore.x - 3, `${label}: title moves with its content`);
+                    assert.equal(titleBefore.y, titleAfter.y, `${label}: stable single-line baseline`);
                     await page.screenshot({ path: `${output}/${label}.png`, fullPage: true });
                     report.cases.push({
                         label,
@@ -113,7 +113,7 @@ try {
                             'single line',
                             'no document overflow',
                             '44px controls',
-                            'fixed title',
+                            'title and body share one moving track',
                             'real right-to-left motion',
                         ],
                     });
@@ -123,7 +123,7 @@ try {
         await open();
         await waitAnimation();
         const firstTitle = await title().innerText();
-        const firstContent = await track().innerText();
+        const firstContent = (await track().innerText()).slice(firstTitle.length + 3);
         await seek(3500);
         await page.locator('.notice-strip').hover();
         const paused = await animationState();
@@ -214,7 +214,7 @@ try {
         await open('&count=1&shortFirst');
         await page.locator('.notice-strip-track').waitFor();
         assert.equal(await track().evaluate(element => element.getAnimations().length), 0);
-        assert.equal(await page.locator('.notice-strip-control').count(), 0);
+        assert.equal(await page.locator('.notice-strip-control').isDisabled(), true);
         report.cases.push({ label: 'one-notice-long-replay-and-short-static', status: 'pass' });
 
         await open('&state=empty');
@@ -225,7 +225,7 @@ try {
         await open();
         await page.locator('.notice-strip-track').waitFor();
         assert.equal(await track().evaluate(element => element.getAnimations().length), 0);
-        assert.equal(await page.locator('.notice-strip-control').count(), 0);
+        assert.equal(await page.locator('.notice-strip-control').isDisabled(), true);
         await page.locator('.notice-strip-open').click();
         await page.locator('.notice-detail-body').waitFor();
         assert.equal(

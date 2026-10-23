@@ -28,7 +28,7 @@ import {
     variantCanIncreaseQuantity,
 } from '../product-availability';
 import { bestProductCouponPrice } from '../product-coupon-pricing';
-import { lowestPricedProductVariant } from '../product-pricing';
+import { lowestPricedProductVariant, quoteOnlyProductLabel } from '../product-pricing';
 import { ProductReviewsSection } from '../review-pages';
 import { sanitizeProductDescription } from '../rich-text';
 import { preloadStorefrontRouteComponent } from '../route-component-preload';
@@ -351,9 +351,7 @@ export function ProductDetailPage() {
             <div className="detail-tags">
                 <span>
                     {quoteOnly
-                        ? isZh
-                            ? '预购商品 · 按需求报价'
-                            : 'Pre-order · quoted on request'
+                        ? quoteOnlyProductLabel(language)
                         : isAutoCard
                           ? isZh
                               ? '虚拟商品 · 自动发卡'
