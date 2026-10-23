@@ -46,7 +46,13 @@ async function fixture() {
             recursive: true,
         });
     }
-    const run = (report = {}, originReport = origins) =>
+    const run = (
+        report = {},
+        originReport = origins,
+        originAdvisory = async () => {
+            throw new Error('Origin advisory requires explicit review');
+        },
+    ) =>
         runBunAudit(root, {
             auditLevel: 'moderate',
             runCommand: () => ({
@@ -63,6 +69,7 @@ async function fixture() {
                 );
                 return originReport;
             },
+            originAdvisory,
         });
     return { root, run, manifest, close: () => rm(root, { recursive: true, force: true }) };
 }
@@ -171,6 +178,90 @@ void test('private replacements cannot conceal future, escalated or missing upst
             createRuntimeAuditReport(inventory, origins, { failOn: 'high', verifiedPatches: changedProof })
                 .blockedFindings.length,
             2,
+        );
+    } finally {
+        await f.close();
+    }
+});
+
+void test('missing upstream findings require an exact official withdrawal and retain new findings', async () => {
+    const f = await fixture();
+    try {
+        const vendor = SECURITY_VENDORS[0];
+        const current = structuredClone(origins);
+        delete current[vendor.original];
+        const withdrawn = {
+            ghsa_id: vendor.advisory.split('/').at(-1),
+            html_url: vendor.advisory,
+            severity: vendor.severity,
+            withdrawn_at: '2026-10-23T12:53:02Z',
+            vulnerabilities: [
+                {
+                    package: { ecosystem: 'npm', name: vendor.original },
+                    vulnerable_version_range: '<= ' + vendor.originalVersion,
+                },
+            ],
+        };
+        const receipts = [];
+        const assessed = await addSecurityOriginFindings({}, verifyReportPatches({}, f.root), {
+            requestAudit: async () => current,
+            requestAdvisory: async url => {
+                assert.equal(url, vendor.advisory);
+                return withdrawn;
+            },
+            onOriginReport: receipt => receipts.push(receipt),
+        });
+        assert.deepEqual(assessed[vendor.original], []);
+        assert.deepEqual(assessed['http-cache-semantics'], current['http-cache-semantics']);
+        assert.equal(receipts.length, 1);
+        assert.deepEqual(receipts[0].withdrawnAdvisories, [
+            {
+                state: 'WITHDRAWN_UPSTREAM',
+                advisory: vendor.advisory,
+                name: vendor.original,
+                version: vendor.originalVersion,
+                withdrawnAt: withdrawn.withdrawn_at,
+            },
+        ]);
+        await f.run({}, current, async () => withdrawn);
+        for (const changed of [
+            { ghsa_id: 'GHSA-wrong-identity' },
+            { html_url: 'https://example.invalid/advisory' },
+            { severity: 'critical' },
+            { withdrawn_at: null },
+            { withdrawn_at: 'invalid' },
+            { withdrawn_at: new Date(Date.now() + 60_000).toISOString() },
+            { vulnerabilities: [{ package: { ecosystem: 'npm', name: 'another-package' } }] },
+            {
+                vulnerabilities: [
+                    { package: { ecosystem: 'npm', name: vendor.original }, vulnerable_version_range: '<1' },
+                ],
+            },
+        ]) {
+            await assert.rejects(
+                f.run({}, current, async () => ({ ...withdrawn, ...changed })),
+                /official withdrawal could not be verified/u,
+            );
+        }
+        const futureFinding = {
+            ...current,
+            [vendor.original]: [
+                {
+                    ...origins[vendor.original][0],
+                    url: 'https://example.invalid/future-finding',
+                    title: 'New upstream vulnerability after withdrawal',
+                },
+            ],
+        };
+        await assert.rejects(
+            f.run({}, futureFinding, async () => withdrawn),
+            /policy failed/u,
+        );
+        await assert.rejects(
+            f.run({}, current, async () => {
+                throw new Error('Official advisory unavailable');
+            }),
+            /Official advisory unavailable/u,
         );
     } finally {
         await f.close();

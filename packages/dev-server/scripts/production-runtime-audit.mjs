@@ -520,6 +520,7 @@ export async function runBunAudit(
             }),
         wait = delayMs => new Promise(resolve => setTimeout(resolve, delayMs)),
         originAudit,
+        originAdvisory,
         onOriginReport,
     } = {},
 ) {
@@ -567,6 +568,7 @@ export async function runBunAudit(
         const verifiedPatches = verifyReportPatches(report, workingDirectory);
         const assessed = await addSecurityOriginFindings(report, verifiedPatches, {
             requestAudit: originAudit,
+            requestAdvisory: originAdvisory,
             onOriginReport,
         });
         const blockedFindings = evaluateAuditPolicy(assessed, auditLevel ?? 'critical', verifiedPatches);
