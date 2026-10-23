@@ -42,6 +42,11 @@ describe('shared count badge', () => {
 });
 
 describe('account count badge integration', () => {
+    it('keeps the cart badge present while unknown and retains confirmed counts during refresh', () => {
+        expect(renderContent(<CountBadge pending />).textContent).toBe('…');
+        expect(renderContent(<CountBadge count={2} pending />).textContent).toBe('2');
+        expect(renderContent(<CountBadge count={0} />).querySelector('.count-badge')).toBeNull();
+    });
     it('uses the shared overlay badge and full accessible quantity for order shortcuts', () => {
         const host = renderContent(
             <AccountShortcut icon={icon} label="待付款" count={124} onClick={noAction} />,

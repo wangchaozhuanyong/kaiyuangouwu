@@ -173,6 +173,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
             const page = await api.catalog(
                 { ...searchInput, skip: pageParam, take: STOREFRONT_CATALOG_PAGE_SIZE },
                 signal,
+                'store',
             );
             const cached = queryClient.getQueryData<{ pages: ProductSearchPage[]; pageParams: number[] }>(
                 searchQueryKey,
@@ -233,7 +234,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
             ...storefrontQueryKeys.catalog(marketKey, languageCode, { term: debouncedTerm }),
             'suggestions',
         ],
-        queryFn: ({ signal }) => api.catalog({ term: debouncedTerm, take: 5, skip: 0 }, signal),
+        queryFn: ({ signal }) => api.catalog({ term: debouncedTerm, take: 5, skip: 0 }, signal, 'store'),
         enabled: showSuggestions && !composing && !!debouncedTerm && debouncedTerm === draftTerm,
         staleTime: PUBLIC_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,

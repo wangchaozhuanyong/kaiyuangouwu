@@ -202,6 +202,7 @@ describe('search result and product-detail cache separation', () => {
         expect(catalog).toHaveBeenCalledWith(
             expect.objectContaining({ term: 'cof', take: 5 }),
             expect.anything(),
+            'store',
         );
         expect(client.getQueryData(searchKey)).toEqual({
             pages: [{ items: [product], totalItems: 1 }],
@@ -269,6 +270,7 @@ describe('search result and product-detail cache separation', () => {
         expect(catalog).toHaveBeenCalledWith(
             expect.objectContaining({ term: '中文', take: 5 }),
             expect.anything(),
+            'store',
         );
         expect(navigate).not.toHaveBeenCalled();
     });
@@ -300,6 +302,7 @@ describe('search result and product-detail cache separation', () => {
                 sort: 'price-desc',
             }),
             expect.anything(),
+            'store',
         );
         const nameSort = required(
             [...container.querySelectorAll<HTMLButtonElement>('.search-sort button')].find(
@@ -336,6 +339,7 @@ describe('search result and product-detail cache separation', () => {
                 sort: 'name',
             }),
             expect.anything(),
+            'store',
         );
     });
     it('applies the selected category and resets it with the other filter draft fields', async () => {
@@ -384,6 +388,7 @@ describe('search result and product-detail cache separation', () => {
         expect(catalog).toHaveBeenLastCalledWith(
             expect.objectContaining({ term: 'cup', collectionId: 'kitchen' }),
             expect.anything(),
+            'store',
         );
         await act(async () => {
             required(container.querySelector<HTMLButtonElement>('.search-filter-trigger')).click();
@@ -951,6 +956,7 @@ describe('search result and product-detail cache separation', () => {
             expect(catalog).toHaveBeenCalledWith(
                 expect.objectContaining({ term: '中华' }),
                 expect.anything(),
+                'store',
             );
             expect(storeHistory).toHaveBeenCalledWith(expect.any(String), JSON.stringify(['中华']));
         } finally {

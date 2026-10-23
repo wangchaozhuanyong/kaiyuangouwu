@@ -67,8 +67,9 @@ describe('customer query boundaries', () => {
         > = {},
     ) =>
         useStorefrontCustomerData({
-            ...options,
             api: {} as ShopApi,
+            activeRoute: 'account',
+            ...options,
             market: { ...enabledMarkets[0], currencyCode },
             language: 'zh',
             vendureLanguageCode: 'zh_Hans',
@@ -138,6 +139,30 @@ describe('customer query boundaries', () => {
         const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
         expect(result.couponCampaignsError).toBe('');
         expect(result.couponCampaignsLoading).toBe(true);
+    });
+
+    it('loads public home campaigns for guests but holds cards until identity is resolved', () => {
+        const campaigns = [{ id: 'public-campaign' }];
+        mocks.useQuery.mockImplementation(options => ({
+            data: options.queryKey.includes('coupon-campaigns') ? campaigns : undefined,
+            isLoading: false,
+            isPending: false,
+            isPaused: false,
+            isError: false,
+            error: null,
+        }));
+        const pending = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
+        expect(
+            mocks.useQuery.mock.calls
+                .map(([options]) => options)
+                .find(options => options.queryKey.includes('coupon-campaigns')).enabled,
+        ).toBe(true);
+        expect(pending.activeCoupons).toEqual([]);
+        customer = null;
+        expect(read('CNY', true, { activeRoute: 'home', homepageCoupons: true }).activeCoupons).toEqual(
+            campaigns,
+        );
+        expect(read('CNY', false, { activeRoute: 'home', homepageCoupons: true }).activeCoupons).toEqual([]);
     });
 
     it('isolates coupon cache keys when the account or settlement currency changes', () => {

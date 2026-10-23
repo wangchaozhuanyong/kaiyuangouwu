@@ -1,6 +1,6 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import { couponCampaignsForCustomer } from '../coupon-center-state';
+import { couponCampaignsForCustomer } from '../coupon-campaign-eligibility';
 import { uiCopy } from '../i18n';
 import { offlineLoadError, resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { storefrontQueryKeys } from '../query-client';

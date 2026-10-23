@@ -477,7 +477,7 @@ function SnapshotShell({ page }: { page: PublicPageData }) {
                             shouldShowBottomNavigation(route.name, navigationBlock) && (
                                 <BottomNavigation
                                     activeRoute={route.name}
-                                    cartQuantity={0}
+                                    cartQuantity={undefined}
                                     language={language}
                                     navigationBlock={navigationBlock}
                                     onNavigate={idle}

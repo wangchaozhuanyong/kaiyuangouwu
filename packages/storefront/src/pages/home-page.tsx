@@ -1,6 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
 import {
-    Check,
     ChevronLeft,
     ChevronRight,
     CircleCheck,
@@ -19,6 +18,7 @@ import {
     Zap,
 } from 'lucide-react';
 import {
+    memo,
     ReactNode,
     PointerEvent as ReactPointerEvent,
     useCallback,
@@ -47,7 +47,7 @@ import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
 import { MobilePageHeader } from '../components/common/mobile-page-header';
 import { ProductCard, ProductCardSkeleton } from '../components/common/product-card';
 import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
-import { claimableCouponCampaigns } from '../coupon-center-state';
+import { claimableCouponCampaigns } from '../coupon-campaign-eligibility';
 import { useDesktopLayout } from '../desktop-layout';
 import {
     HERO_HEIGHT_TRANSITION_MS,
@@ -75,7 +75,6 @@ import {
 } from '../storefront-ui/content-ui';
 import {
     EmptyState,
-    InlineError,
     LegalFooter,
     SectionHeader,
     Sheet,
@@ -114,9 +113,6 @@ interface HomepageCouponHubProps {
     coupons: StorefrontCouponCard[];
     language: StorefrontLanguage;
     loading: boolean;
-    pending: boolean;
-    error: string;
-    onRetry?: () => void;
     onClaim: (campaignId: string) => Promise<string | null>;
     onToast?: (message: string) => void;
 }
@@ -243,14 +239,11 @@ export function NoticeDetailSheet({
     );
 }
 
-function HomepageCouponHub({
+const HomepageCouponHub = memo(function HomepageCouponHubContent({
     block,
     coupons,
     language,
     loading,
-    pending,
-    error,
-    onRetry,
     onClaim,
     onToast,
 }: HomepageCouponHubProps) {
@@ -270,10 +263,10 @@ function HomepageCouponHub({
         claimPending.current = true;
         setClaimingId(coupon.id);
         try {
-            const claimError = await onClaim(coupon.campaignId);
+            const error = await onClaim(coupon.campaignId);
             // The last verified claim may unmount this optional module before
             // its refresh finishes. The shared flow already rejects stale owners.
-            if (claimError) onToast?.(claimError);
+            if (error) onToast?.(error);
         } finally {
             claimPending.current = false;
             if (active.current) setClaimingId(null);
@@ -284,7 +277,7 @@ function HomepageCouponHub({
         <section
             className="coupon-hub-section"
             aria-label={isZh ? '专享特惠与优惠券' : 'Exclusive Coupons'}
-            aria-busy={pending}
+            aria-busy={loading}
         >
             <div className="coupon-hub-header">
                 <div className="coupon-hub-title-lockup">
@@ -306,78 +299,40 @@ function HomepageCouponHub({
             </div>
 
             <div className="coupon-hub-body">
-                {pending ? (
-                    <div
-                        className="coupon-hub-scroll"
-                        role="status"
-                        aria-label={isZh ? '正在加载优惠券' : 'Loading coupons'}
-                    >
-                        {[0, 1, 2, 3].map(index => (
-                            <div key={index} className="coupon-hub-placeholder" />
-                        ))}
-                    </div>
-                ) : coupons.length === 0 ? (
-                    <div className="coupon-hub-query-state">
-                        {error ? (
-                            <InlineError
-                                message={error}
-                                action={isZh ? '重试' : 'Retry'}
-                                onAction={onRetry}
+                <HomepageCouponRail isZh={isZh}>
+                    {coupons.map(coupon => {
+                        const claimAction = (
+                            <button
+                                type="button"
+                                className={`coupon-claim-btn${claimingId === coupon.id ? ' is-claiming' : ''}`}
+                                onClick={() => void handleClaim(coupon)}
+                                disabled={loading || claimingId !== null}
+                                aria-label={isZh ? `领取 ${coupon.title}` : `Claim ${coupon.title}`}
+                            >
+                                <span className="coupon-btn-text-wrap">
+                                    {claimingId === coupon.id ? (
+                                        <span>{isZh ? '领取中' : 'Claiming'}</span>
+                                    ) : (
+                                        <span>{isZh ? '领取' : 'Claim'}</span>
+                                    )}
+                                </span>
+                            </button>
+                        );
+                        return (
+                            <DesktopCouponTicket
+                                key={coupon.id}
+                                card={coupon}
+                                variant="compact"
+                                role="listitem"
+                                action={claimAction}
                             />
-                        ) : (
-                            <p role="status">{isZh ? '暂无可领取的优惠' : 'No offers available to claim'}</p>
-                        )}
-                    </div>
-                ) : (
-                    <HomepageCouponRail isZh={isZh}>
-                        {coupons.map(coupon => {
-                            const canClaim = coupon.claimable && !coupon.claimed;
-                            const claimAction = (
-                                <button
-                                    type="button"
-                                    className={`coupon-claim-btn ${!canClaim ? 'is-claimed' : ''}${claimingId === coupon.id ? ' is-claiming' : ''}`}
-                                    onClick={() => void handleClaim(coupon)}
-                                    disabled={!canClaim || loading || claimingId !== null}
-                                    aria-label={
-                                        !canClaim
-                                            ? isZh
-                                                ? `已领取 ${coupon.title}`
-                                                : `Claimed ${coupon.title}`
-                                            : isZh
-                                              ? `领取 ${coupon.title}`
-                                              : `Claim ${coupon.title}`
-                                    }
-                                >
-                                    <span className="coupon-btn-text-wrap">
-                                        {claimingId === coupon.id ? (
-                                            <span>{isZh ? '领取中' : 'Claiming'}</span>
-                                        ) : !canClaim ? (
-                                            <>
-                                                <span>{isZh ? '已领取' : 'Claimed'}</span>
-                                                <Check size={12} strokeWidth={2.4} aria-hidden="true" />
-                                            </>
-                                        ) : (
-                                            <span>{isZh ? '领取' : 'Claim'}</span>
-                                        )}
-                                    </span>
-                                </button>
-                            );
-                            return (
-                                <DesktopCouponTicket
-                                    key={coupon.id}
-                                    card={coupon}
-                                    variant="compact"
-                                    role="listitem"
-                                    action={claimAction}
-                                />
-                            );
-                        })}
-                    </HomepageCouponRail>
-                )}
+                        );
+                    })}
+                </HomepageCouponRail>
             </div>
         </section>
     );
-}
+});
 
 export interface HomePageProps {
     products: Product[];
@@ -471,9 +426,6 @@ export function HomePage() {
         heroAutoplayIntervalSeconds,
         configuredBlockTypes,
         coupons,
-        couponCampaignsLoading,
-        couponCampaignsError,
-        onCouponCampaignsRetry,
         flashSales,
         systemAnnouncements,
         initialRenderTime,
@@ -638,17 +590,18 @@ export function HomePage() {
         );
         return () => window.clearTimeout(timer);
     }, [coupons, couponNow]);
-    const campaignCouponCards = couponCardsFromCampaigns(
-        claimableCouponCampaigns(coupons, couponNow),
-        language,
-        market.currencyCode,
-        displayCurrencyCode,
-    );
-    const couponCards = campaignCouponCards.filter(
-        (coupon, index, items) =>
-            items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
-    );
-    const couponPending = couponCards.length === 0 && couponCampaignsLoading;
+    const couponCards = useMemo(() => {
+        const campaignCouponCards = couponCardsFromCampaigns(
+            claimableCouponCampaigns(coupons, couponNow),
+            language,
+            market.currencyCode,
+            displayCurrencyCode,
+        );
+        return campaignCouponCards.filter(
+            (coupon, index, items) =>
+                items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
+        );
+    }, [coupons, couponNow, language, market.currencyCode, displayCurrencyCode]);
     const rawFlashSaleItems = flashSales
         .flatMap(sale => sale.items)
         .filter(
@@ -1601,7 +1554,7 @@ export function HomePage() {
 
                         {trustBar}
 
-                        {couponBlock?.enabled && hasHomepageModule('COUPONS') && (
+                        {couponBlock?.enabled && hasHomepageModule('COUPONS') && couponCards.length > 0 && (
                             <div
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('COUPONS') }}
@@ -1611,9 +1564,6 @@ export function HomePage() {
                                     coupons={couponCards}
                                     language={language}
                                     loading={couponLoading}
-                                    pending={couponPending}
-                                    error={couponCampaignsError}
-                                    onRetry={onCouponCampaignsRetry}
                                     onClaim={onClaimCoupon}
                                     onToast={onToast}
                                 />

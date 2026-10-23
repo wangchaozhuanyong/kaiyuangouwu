@@ -35,7 +35,11 @@ import { compactUiCopy, languageCodeFor } from './i18n';
 import { offlineLoadError, storefrontInitialQueryError, storefrontQueryPresentation } from './loading-state';
 import { OrderAdditionalPaymentPanel } from './order-additional-payment-panel';
 import { formatUsdtPaymentAmount, usdtPaymentReceipt } from './order-payment-display';
-import { ORDER_STATUS_REFRESH_INTERVAL, orderNeedsStatusRefresh } from './order-refresh';
+import {
+    isPendingPaymentOrderState,
+    ORDER_STATUS_REFRESH_INTERVAL,
+    orderNeedsStatusRefresh,
+} from './order-refresh';
 import { Overlay } from './overlay-host';
 import { PageReadinessError, usePageLoadingState, usePageReadiness } from './page-readiness';
 import { PUBLIC_QUERY_GC_TIME, ROUTE_QUERY_STALE_TIME, storefrontQueryKeys } from './query-client';
@@ -963,6 +967,7 @@ export function OrderDetailPage({
     const inTransit = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const inCart = order.state === 'AddingItems';
     const pending = ['AddingItems', 'ArrangingPayment'].includes(order.state);
+    const awaitingManualPayment = order.state === 'AwaitingManualPayment';
     const needsAdditionalPayment = order.state === 'ArrangingAdditionalPayment';
     const isBeingModified = order.state === 'Modifying';
     const fulfillments = order.fulfillments ?? [];
@@ -991,37 +996,41 @@ export function OrderDetailPage({
                 : reviewEnabled
                   ? 'Payment successful (test mode). Full fulfillment, logistics, review, and support workflows are enabled.'
                   : 'Payment successful (test mode). Fulfillment, logistics, and support workflows are enabled.'
-            : needsAdditionalPayment
+            : awaitingManualPayment
               ? isZh
-                  ? '订单已调整，请在下方核对并完成补款'
-                  : 'Your order changed. Review and complete the additional payment below.'
-              : isBeingModified
+                  ? '等待客服核款，请勿重复付款或下单'
+                  : 'Awaiting payment confirmation. Do not pay or place the order again.'
+              : needsAdditionalPayment
                 ? isZh
-                    ? '请等待商家结束修改后查看订单状态'
-                    : 'Wait for the merchant to finish updating the order.'
-                : orderHasDigitalDelivery(order)
+                    ? '订单已调整，请在下方核对并完成补款'
+                    : 'Your order changed. Review and complete the additional payment below.'
+                : isBeingModified
                   ? isZh
-                      ? '数字交付状态与领取入口显示在下方'
-                      : 'Delivery status and secure claim access are shown below.'
-                  : inCart
+                      ? '请等待商家结束修改后查看订单状态'
+                      : 'Wait for the merchant to finish updating the order.'
+                  : orderHasDigitalDelivery(order)
                     ? isZh
-                        ? '商品仍在购物车，尚未提交结算'
-                        : 'Items are still in the cart and checkout has not started'
-                    : pending
+                        ? '数字交付状态与领取入口显示在下方'
+                        : 'Delivery status and secure claim access are shown below.'
+                    : inCart
                       ? isZh
-                          ? '订单等待支付，请在支付页完成付款'
-                          : 'Complete payment to continue'
-                      : inTransit
+                          ? '商品仍在购物车，尚未提交结算'
+                          : 'Items are still in the cart and checkout has not started'
+                      : pending
                         ? isZh
-                            ? '商品正在运输中，请留意物流更新'
-                            : 'Your order is in transit'
-                        : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                            ? '订单等待支付，请在支付页完成付款'
+                            : 'Complete payment to continue'
+                        : inTransit
                           ? isZh
-                              ? '商家正在准备你的商品'
-                              : 'The merchant is preparing your order'
-                          : isZh
-                            ? '订单状态已更新'
-                            : 'Order status updated';
+                              ? '商品正在运输中，请留意物流更新'
+                              : 'Your order is in transit'
+                          : ['PaymentAuthorized', 'PaymentSettled'].includes(order.state)
+                            ? isZh
+                                ? '商家正在准备你的商品'
+                                : 'The merchant is preparing your order'
+                            : isZh
+                              ? '订单状态已更新'
+                              : 'Order status updated';
     const navigateToSupport = () => {
         void navigate(routeNavigateOptions({ name: 'support', orderCode: order.code }) as never);
     };
@@ -1067,7 +1076,7 @@ export function OrderDetailPage({
                     {isZh ? '查看物流' : 'Track'}
                 </button>
             )}
-            {!pending && !needsAdditionalPayment && !isBeingModified && (
+            {!pending && !awaitingManualPayment && !needsAdditionalPayment && !isBeingModified && (
                 <button
                     type="button"
                     className={orderPageClassName('order-secondary-action')}
@@ -1077,14 +1086,16 @@ export function OrderDetailPage({
                     {isZh ? '服务评价' : 'Rate service'}
                 </button>
             )}
-            <button
-                type="button"
-                className={orderPageClassName('primary-action')}
-                onClick={pending ? () => void onReopen(order) : () => void onBuyAgain(order)}
-            >
-                <RotateCcw aria-hidden="true" />
-                {pending ? (isZh ? '返回修改订单' : 'Reopen order') : isZh ? '再来一单' : 'Buy again'}
-            </button>
+            {!awaitingManualPayment && (
+                <button
+                    type="button"
+                    className={orderPageClassName('primary-action')}
+                    onClick={pending ? () => void onReopen(order) : () => void onBuyAgain(order)}
+                >
+                    <RotateCcw aria-hidden="true" />
+                    {pending ? (isZh ? '返回修改订单' : 'Reopen order') : isZh ? '再来一单' : 'Buy again'}
+                </button>
+            )}
         </div>
     );
     const orderProductRows = order.lines.map(line => (
@@ -1100,7 +1111,9 @@ export function OrderDetailPage({
             </div>
             <span>
                 <b>{formatMoney(line.linePriceWithTax, order.currencyCode, locale)}</b>
-                <small>×{line.quantity}</small>
+                <small>
+                    {isZh ? '数量' : 'Quantity'} {line.quantity}
+                </small>
             </span>
         </article>
     ));
@@ -1712,7 +1725,8 @@ function OrderCard({
     const compactCopy = compactUiCopy[language];
     const isCart = order.state === 'AddingItems';
     const needsAdditionalPayment = order.state === 'ArrangingAdditionalPayment';
-    const isPendingPayment = order.state === 'ArrangingPayment' || needsAdditionalPayment;
+    const isPendingPayment = isPendingPaymentOrderState(order.state);
+    const canContinuePayment = order.state === 'ArrangingPayment' || needsAdditionalPayment;
     const isPaidOrShipping = ['PaymentAuthorized', 'PaymentSettled'].includes(order.state);
     const isShipped = ['Shipped', 'PartiallyShipped'].includes(order.state);
     const isDelivered = order.state === 'Delivered' || order.state === 'TestPaymentSettled';
@@ -1728,8 +1742,8 @@ function OrderCard({
           : isPendingPayment
             ? compactCopy.orders.due
             : isZh
-              ? '实付'
-              : 'Total';
+              ? '订单金额'
+              : 'Order total';
 
     const stateModifier =
         isCart || isPendingPayment
@@ -1788,7 +1802,7 @@ function OrderCard({
                             {isZh ? '查看详情' : 'Details'}
                             <ChevronRight aria-hidden="true" />
                         </button>
-                        {isPendingPayment && (
+                        {canContinuePayment && (
                             <button type="button" className="primary-btn" onClick={onOpen}>
                                 {needsAdditionalPayment
                                     ? isZh
@@ -1872,7 +1886,7 @@ function OrderCard({
                     >
                         {isZh ? '查看详情' : 'Details'}
                     </button>
-                    {isCart ? null : isPendingPayment ? (
+                    {isCart ? null : canContinuePayment ? (
                         <button
                             type="button"
                             className={orderPageClassName('order-btn primary-btn')}

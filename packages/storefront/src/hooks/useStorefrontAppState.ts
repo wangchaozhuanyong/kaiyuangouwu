@@ -233,6 +233,28 @@ export function useStorefrontAppState() {
         homepageRecommendations: contentBlocks.some(block => block.type === 'RECOMMENDATIONS'),
     });
 
+    // The next cart read may clear its checkout order after a successful submission.
+    // Keep only a scoped in-memory receipt; confirmation details still require a valid token.
+    const submissionOwnerKey = JSON.stringify([storefrontCode, market.code, customer?.id ?? null]);
+    const [submissionReceipt, setSubmissionReceipt] = useState<{
+        ownerKey: string;
+        order: Pick<Order, 'code' | 'state' | 'currencyCode'>;
+    } | null>(null);
+    useEffect(() => {
+        setSubmissionReceipt(current => (current?.ownerKey === submissionOwnerKey ? current : null));
+    }, [submissionOwnerKey]);
+    const rememberSubmittedOrder = useCallback(
+        (order: Order) => {
+            setSubmissionReceipt({
+                ownerKey: submissionOwnerKey,
+                order: { code: order.code, state: order.state, currencyCode: order.currencyCode },
+            });
+        },
+        [submissionOwnerKey],
+    );
+    const submittedOrderReceipt =
+        submissionReceipt?.ownerKey === submissionOwnerKey ? submissionReceipt.order : null;
+
     const productActivity = useCustomerProductActivity({
         api,
         market,
@@ -954,6 +976,8 @@ export function useStorefrontAppState() {
         customerCouponUsageRecordsQuery,
         customerCouponUsageRecordsError,
         currentCheckoutOrder,
+        submittedOrderReceipt,
+        rememberSubmittedOrder,
         activeCollectionId,
         activeChildId,
         sortMode,

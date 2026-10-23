@@ -167,7 +167,7 @@ export function BottomNavigation({
     onNavigate,
 }: {
     activeRoute: RouteName;
-    cartQuantity: number;
+    cartQuantity: number | undefined;
     language: StorefrontLanguage;
     navigationBlock?: StorefrontContentBlock;
     onNavigate?: (route: { name: RouteName }) => void;
@@ -201,10 +201,14 @@ export function BottomNavigation({
                             isActive && 'weight-bold text-[var(--interaction-ink)]',
                         )}
                         aria-current={isActive ? 'page' : undefined}
-                        aria-label={countBadgeLabel(
-                            item.label,
-                            item.routeName === 'cart' ? cartQuantity : undefined,
-                        )}
+                        aria-label={
+                            item.routeName === 'cart' && cartQuantity === undefined
+                                ? `${item.label}, ${language === 'zh' ? '正在读取数量' : 'loading quantity'}`
+                                : countBadgeLabel(
+                                      item.label,
+                                      item.routeName === 'cart' ? cartQuantity : undefined,
+                                  )
+                        }
                         href={routeHref(destination)}
                         onClick={event => {
                             if (
@@ -234,7 +238,13 @@ export function BottomNavigation({
                                     style={{ color: isActive ? item.activeColor : 'var(--muted)' }}
                                 />
                             )}
-                            {item.routeName === 'cart' && <CountBadge count={cartQuantity} overlay />}
+                            {item.routeName === 'cart' && (
+                                <CountBadge
+                                    count={cartQuantity}
+                                    overlay
+                                    pending={cartQuantity === undefined}
+                                />
+                            )}
                         </span>
                         <span
                             className={clsx(

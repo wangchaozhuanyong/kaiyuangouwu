@@ -3,6 +3,7 @@ import type { StoreCustomerCoupon, StorefrontCouponCampaign, StorefrontLanguage 
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
 import { markCouponCampaignClaimed } from './coupon-center-state';
+import { uiCopy } from './i18n';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import { storefrontErrorCode, storefrontErrorMessage } from './storefront-errors';
 
@@ -156,5 +157,61 @@ export async function completeCouponClaim({
         return requestError instanceof Error
             ? storefrontErrorMessage(requestError, language)
             : storefrontErrorMessage(undefined, language);
+    }
+}
+
+/** Keep existing selection outcomes distinct from a subsequent totals-read failure. */
+export async function completeCouponSelection({
+    api,
+    customerCouponId,
+    remove,
+    language,
+    notify,
+    onSelected,
+    onRejected,
+    refresh,
+}: {
+    api: {
+        applyCustomerCoupon(id: string): Promise<unknown>;
+        removeCustomerCoupon(id: string): Promise<unknown>;
+    };
+    customerCouponId: string;
+    remove: boolean;
+    language: StorefrontLanguage;
+    notify: (message: string) => void;
+    onSelected: () => void;
+    onRejected: () => void;
+    refresh: () => Promise<unknown>;
+}): Promise<string | null> {
+    const isZh = language === 'zh';
+    let changed = false;
+    try {
+        if (remove) await api.removeCustomerCoupon(customerCouponId);
+        else await api.applyCustomerCoupon(customerCouponId);
+        changed = true;
+        onSelected();
+        await refresh();
+        notify(
+            remove
+                ? isZh
+                    ? '已取消使用优惠券'
+                    : 'Coupon unapplied'
+                : isZh
+                  ? '优惠券已使用'
+                  : 'Coupon applied',
+        );
+        return null;
+    } catch (error) {
+        if (changed) {
+            return remove
+                ? isZh
+                    ? '优惠券已取消，但订单金额刷新失败，请刷新购物车后确认。'
+                    : 'The coupon was removed, but the order total could not refresh. Refresh your cart to confirm.'
+                : isZh
+                  ? '优惠券已使用，但订单金额刷新失败，请刷新购物车后确认。'
+                  : 'The coupon was applied, but the order total could not refresh. Refresh your cart to confirm.';
+        }
+        onRejected();
+        return error instanceof Error ? storefrontErrorMessage(error, language) : uiCopy[language].loadError;
     }
 }

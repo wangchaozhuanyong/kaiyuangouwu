@@ -133,6 +133,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
             ? (sessionCustomer ?? PREVIEW_CUSTOMER)
             : null
         : sessionCustomer;
+    const cartQuantity = cart?.totalQuantity ?? (customerLoadState === 'ready' && !customer ? 0 : undefined);
     const effectiveStorefrontContext =
         customer === storefrontContextValue.customer
             ? storefrontContextValue
@@ -278,7 +279,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 desktop && showNavigation ? (
                                     <DesktopHeader
                                         navigationBlock={navigationBlock}
-                                        cartQuantity={cart?.totalQuantity ?? 0}
+                                        cartQuantity={cartQuantity}
                                     />
                                 ) : undefined
                             }
@@ -354,7 +355,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             shouldShowBottomNavigation(displayedRoute.name, navigationBlock) && (
                                 <BottomNavigation
                                     activeRoute={displayedRoute.name}
-                                    cartQuantity={cart?.totalQuantity ?? 0}
+                                    cartQuantity={cartQuantity}
                                     language={language}
                                     navigationBlock={navigationBlock}
                                     onNavigate={storefrontContextValue.navigate}
