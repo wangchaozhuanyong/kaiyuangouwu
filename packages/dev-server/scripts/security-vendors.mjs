@@ -4,6 +4,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import https from 'node:https';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import semver from 'semver';
 
 import { SECURITY_VENDORS } from './security-vendor-definitions.mjs';
 
@@ -119,37 +120,27 @@ export function isVerifiedSecurityReplacement(name, advisory, verified) {
     );
 }
 
-function requestOriginAudit(versions) {
+function requestAdvisoryJson(options, payload) {
     return new Promise((resolve, reject) => {
-        const payload = JSON.stringify(versions);
-        const request = https.request(
-            {
-                hostname: 'registry.npmjs.org',
-                path: '/-/npm/v1/security/advisories/bulk',
-                method: 'POST',
-                family: 4,
-                headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) },
-            },
-            response => {
-                let text = '';
-                response.setEncoding('utf8');
-                response.on('data', chunk => {
-                    text += chunk;
-                    if (Buffer.byteLength(text) > 1024 * 1024)
-                        response.destroy(new Error('Origin advisory response too large'));
-                });
-                response.on('error', reject);
-                response.on('end', () => {
-                    if (response.statusCode !== 200)
-                        return reject(new Error('Origin advisory registry HTTP failure'));
-                    try {
-                        resolve(JSON.parse(text));
-                    } catch {
-                        reject(new Error('Invalid origin advisory registry response'));
-                    }
-                });
-            },
-        );
+        const request = https.request({ ...options, family: 4 }, response => {
+            let text = '';
+            response.setEncoding('utf8');
+            response.on('data', chunk => {
+                text += chunk;
+                if (Buffer.byteLength(text) > 1024 * 1024)
+                    response.destroy(new Error('Origin advisory response too large'));
+            });
+            response.on('error', reject);
+            response.on('end', () => {
+                if (response.statusCode !== 200)
+                    return reject(new Error('Origin advisory registry HTTP failure'));
+                try {
+                    resolve(JSON.parse(text));
+                } catch {
+                    reject(new Error('Invalid origin advisory registry response'));
+                }
+            });
+        });
         const deadline = setTimeout(
             () => request.destroy(new Error('Origin advisory registry timeout')),
             15000,
@@ -160,12 +151,63 @@ function requestOriginAudit(versions) {
     });
 }
 
+function requestOriginAudit(versions) {
+    const payload = JSON.stringify(versions);
+    return requestAdvisoryJson(
+        {
+            hostname: 'registry.npmjs.org',
+            path: '/-/npm/v1/security/advisories/bulk',
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) },
+        },
+        payload,
+    );
+}
+
+function requestOriginAdvisory(advisoryUrl) {
+    const identity = /^https:\/\/github\.com\/advisories\/(GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})$/u.exec(
+        advisoryUrl,
+    );
+    assert.ok(identity, 'Invalid known origin advisory URL');
+    return requestAdvisoryJson({
+        hostname: 'api.github.com',
+        path: '/advisories/' + identity[1],
+        method: 'GET',
+        headers: { accept: 'application/vnd.github+json', 'user-agent': 'vendure-origin-advisory-audit' },
+    });
+}
+
+function verifyWithdrawal(vendor, advisory) {
+    const withdrawnAt = Date.parse(advisory?.withdrawn_at);
+    assert.ok(
+        advisory?.html_url === vendor.advisory &&
+            advisory.ghsa_id === vendor.advisory.split('/').at(-1) &&
+            advisory.severity === vendor.severity &&
+            Number.isFinite(withdrawnAt) &&
+            withdrawnAt <= Date.now() &&
+            advisory.vulnerabilities?.some(
+                item =>
+                    item.package?.ecosystem === 'npm' &&
+                    item.package.name === vendor.original &&
+                    semver.satisfies(vendor.originalVersion, item.vulnerable_version_range),
+            ),
+        'Known origin advisory disappeared; official withdrawal could not be verified',
+    );
+    return {
+        state: 'WITHDRAWN_UPSTREAM',
+        advisory: vendor.advisory,
+        name: vendor.original,
+        version: vendor.originalVersion,
+        withdrawnAt: advisory.withdrawn_at,
+    };
+}
+
 // Private package names must never hide future upstream advisories. Query the
 // recorded original identities independently; unknown findings still block policy.
 export async function addSecurityOriginFindings(
     report,
     verified,
-    { requestAudit = requestOriginAudit, onOriginReport } = {},
+    { requestAudit = requestOriginAudit, requestAdvisory = requestOriginAdvisory, onOriginReport } = {},
 ) {
     const vendors = SECURITY_VENDORS.filter(vendor =>
         verified.some(
@@ -185,20 +227,25 @@ export async function addSecurityOriginFindings(
         'Unexpected original-dependency advisory identity',
     );
     const combined = { ...report };
-    for (const vendor of vendors) {
-        const findings = origins[vendor.original];
-        assert.ok(
-            Array.isArray(findings) && findings.some(item => item.url === vendor.advisory),
-            'Known origin advisory disappeared; explicit review required',
-        );
-        const existing = report[vendor.original] ?? [];
-        assert.ok(Array.isArray(existing), 'Invalid original-dependency audit entry');
-        combined[vendor.original] = [...existing, ...findings];
+    const withdrawnAdvisories = [];
+    try {
+        for (const vendor of vendors) {
+            const findings = Object.hasOwn(origins, vendor.original) ? origins[vendor.original] : [];
+            assert.ok(Array.isArray(findings), 'Invalid original-dependency advisory entry');
+            if (!findings.some(item => item.url === vendor.advisory)) {
+                withdrawnAdvisories.push(verifyWithdrawal(vendor, await requestAdvisory(vendor.advisory)));
+            }
+            const existing = report[vendor.original] ?? [];
+            assert.ok(Array.isArray(existing), 'Invalid original-dependency audit entry');
+            combined[vendor.original] = [...existing, ...findings];
+        }
+    } finally {
+        await onOriginReport?.({
+            versions,
+            report: origins,
+            withdrawnAdvisories,
+            source: 'npm original dependency identities; withdrawals verified through GitHub Advisory API',
+        });
     }
-    await onOriginReport?.({
-        versions,
-        report: origins,
-        source: 'npm original dependency identities; not installed original packages',
-    });
     return combined;
 }
