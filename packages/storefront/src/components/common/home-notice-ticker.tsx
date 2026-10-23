@@ -1,4 +1,3 @@
-import { Bell } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { type HomeNoticeItem } from '../../pages/home-page';
@@ -33,7 +32,7 @@ export function HomeNoticeTicker({
     const [focused, setFocused] = useState(false);
     const viewport = useRef<HTMLSpanElement>(null);
     const text = useRef<HTMLSpanElement>(null);
-    const reader = useRef<HTMLButtonElement>(null);
+    const region = useRef<HTMLDivElement>(null);
     const animation = useRef<Animation | null>(null);
     const keyboardInput = useRef(true);
     const shouldPause = paused || hovered || focused;
@@ -47,7 +46,7 @@ export function HomeNoticeTicker({
     // Dialog cleanup restores focus during React's commit, before synthetic focus resumes.
     useEffect(() => {
         const focus = () => {
-            setFocused(Boolean(keyboardInput.current && reader.current?.contains(document.activeElement)));
+            setFocused(Boolean(keyboardInput.current && region.current?.contains(document.activeElement)));
         };
         const keyboard = () => {
             keyboardInput.current = true;
@@ -118,7 +117,7 @@ export function HomeNoticeTicker({
             playback.cancel();
             animation.current = null;
         };
-    }, [item?.id, content, language, distance, holdSeconds, items.length, reducedMotion, cycle]);
+    }, [item?.id, title, content, language, distance, holdSeconds, items.length, reducedMotion, cycle]);
 
     useEffect(() => {
         const playback = animation.current;
@@ -130,6 +129,7 @@ export function HomeNoticeTicker({
     if (!item) return null;
     return (
         <div
+            ref={region}
             className="notice-strip"
             style={{ order }}
             role="region"
@@ -139,21 +139,17 @@ export function HomeNoticeTicker({
             }}
             onPointerLeave={() => setHovered(false)}
         >
-            <Bell aria-hidden="true" />
             <button
-                ref={reader}
                 className="notice-strip-open"
                 type="button"
                 aria-haspopup="dialog"
                 aria-label={isZh ? `查看公告全文：${title}` : `Read full notice: ${title}`}
                 onClick={() => onOpen(item.id)}
             >
-                <span className={`notice-strip-copy${content ? '' : ' is-title-only'}`}>
-                    <strong className="notice-strip-title">{title}</strong>
-                    <span ref={viewport} className="notice-strip-content">
-                        <span ref={text} className="notice-strip-track">
-                            {content}
-                        </span>
+                <span ref={viewport} className="notice-strip-content">
+                    <span ref={text} className="notice-strip-track">
+                        <strong className="notice-strip-title">{title}</strong>
+                        {content && ` · ${content}`}
                     </span>
                 </span>
             </button>

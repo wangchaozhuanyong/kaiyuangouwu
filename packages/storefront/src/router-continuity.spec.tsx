@@ -425,7 +425,9 @@ describe('real storefront router continuity', () => {
         expect(getComputedStyle(article).display).toBe('none');
         expect(host.querySelector('[data-content]')).toBeNull();
         expect(host.querySelector('main [data-page-pending]')).not.toBeNull();
-        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(host.querySelector('[data-page-pending][role="status"]')).not.toBeNull();
+        expect(host.querySelector('.brand-loading')).toBeNull();
         const action = host.querySelector('header button');
         if (!(action instanceof HTMLButtonElement)) throw new Error('Expected the retained shell action');
         act(() => action.click());
@@ -629,7 +631,9 @@ describe('real storefront router continuity', () => {
         await act(async () => {
             await new Promise(resolve => setTimeout(resolve, 230));
         });
-        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(host.querySelector('[data-page-pending][role="status"]')).not.toBeNull();
+        expect(host.querySelector('.brand-loading')).toBeNull();
         expect(host.querySelector('main main')).toBeNull();
         const button = host.querySelector('button');
         act(() => button?.click());
@@ -661,7 +665,9 @@ describe('real storefront router continuity', () => {
         if (!hiddenArticle) throw new Error('Expected the retained offscreen subtree');
         expect(getComputedStyle(hiddenArticle).display).toBe('none');
         expect(host.querySelector('[data-page-pending]')).not.toBeNull();
-        expect(host.querySelector('.page-readiness-navigation')).not.toBeNull();
+        expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        expect(host.querySelector('[data-page-pending][role="status"]')).not.toBeNull();
+        expect(host.querySelector('.brand-loading')).toBeNull();
         await navigate('a');
         await act(async () => {
             code.resolve();

@@ -74,6 +74,7 @@ const product = {
     assets: [{ id: 'sample-image', preview: image }],
     featuredAsset: { id: 'sample-image', preview: image },
     customFields: {
+        pricingMode: params.has('quote') ? 'QUOTE_ONLY' : 'FIXED',
         fulfillmentType: 'digital',
         refundPolicy: 'MERCHANT_REVIEW',
         manualDeliverySlaMinutes: 1440,

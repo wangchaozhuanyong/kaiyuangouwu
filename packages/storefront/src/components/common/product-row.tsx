@@ -5,7 +5,7 @@ import {
     productWarrantyLabel,
 } from '../../../../common/src/product-description-summary';
 import { productListingAvailability } from '../../product-availability';
-import { lowestPricedProductVariant } from '../../product-pricing';
+import { lowestPricedProductVariant, quoteOnlyProductLabel } from '../../product-pricing';
 import { STOREFRONT_IMAGE_SIZES } from '../../responsive-image';
 import { PriceDisplay, ProductImage, resolveProductSubtitle } from '../../storefront-ui/product-display';
 import { MarketConfig, Product, StorefrontLanguage } from '../../types';
@@ -50,20 +50,22 @@ export function buildProductRowSmartInfo(
 
     return {
         primary:
-            [
-                fulfillmentType
-                    ? isDigital
-                        ? isZh
-                            ? '数字商品'
-                            : 'Digital'
-                        : isZh
-                          ? '实物商品'
-                          : 'Physical'
-                    : null,
-                variant ? deliveryLabel : null,
-            ]
-                .filter(Boolean)
-                .join(' · ') || (isZh ? '商品信息' : 'Product information'),
+            product.customFields?.pricingMode === 'QUOTE_ONLY'
+                ? quoteOnlyProductLabel(language)
+                : [
+                      fulfillmentType
+                          ? isDigital
+                              ? isZh
+                                  ? '数字商品'
+                                  : 'Digital'
+                              : isZh
+                                ? '实物商品'
+                                : 'Physical'
+                          : null,
+                      variant ? deliveryLabel : null,
+                  ]
+                      .filter(Boolean)
+                      .join(' · ') || (isZh ? '商品信息' : 'Product information'),
         secondary: warrantyLabel,
     };
 }

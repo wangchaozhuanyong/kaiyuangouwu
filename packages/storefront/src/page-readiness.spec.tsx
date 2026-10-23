@@ -418,6 +418,43 @@ describe('explicit route readiness', () => {
         }
     });
 
+    it.each(['page', 'module'] as const)(
+        'lets the target %s skeleton own waiting and recovery without duplicate branding',
+        async kind => {
+            act(() =>
+                root.render(
+                    <PageReadinessBoundary
+                        pending={false}
+                        navigationPreparing
+                        online
+                        language="zh"
+                        requestKey="services"
+                        onRetry={retry}
+                        onNavigationRetry={retry}
+                        onBack={retry}
+                    >
+                        <button>Navigation remains available</button>
+                        {kind === 'page' ? (
+                            <PageSkeleton variant="services" language="zh" />
+                        ) : (
+                            <RouteTransitionLoader language="zh" />
+                        )}
+                    </PageReadinessBoundary>,
+                ),
+            );
+            await advance(300);
+            expect(host.querySelector('.route-static-skeleton')).not.toBeNull();
+            expect(host.querySelector('.page-readiness-navigation, .brand-loading')).toBeNull();
+            expect(host.querySelectorAll('[role=status]')).toHaveLength(1);
+            expect(host.querySelector('[role=status]')?.getAttribute('aria-label')).toBe('正在加载页面');
+            expect(host.querySelector('button')?.closest('[hidden], [inert]')).toBeNull();
+            await advance(10_000);
+            expect(host.querySelectorAll('.page-readiness-error')).toHaveLength(1);
+            expect(host.querySelectorAll('.page-readiness-overlay')).toHaveLength(1);
+            expect(host.querySelector('.page-readiness-navigation')).toBeNull();
+        },
+    );
+
     it('retains skeleton readiness registration and emits page-ready when its token is released', () => {
         const ready = vi.fn();
         document.addEventListener('storefront:page-ready', ready);

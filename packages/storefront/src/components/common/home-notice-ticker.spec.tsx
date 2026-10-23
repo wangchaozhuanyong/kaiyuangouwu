@@ -161,6 +161,27 @@ describe('home announcement playback', () => {
         expect(playback.playState).toBe('running');
     });
 
+    it('scrolls title and content in one track with only full-notice and all-notice actions', () => {
+        render();
+        const track = required(host.querySelector('.notice-strip-track'));
+        expect(track.textContent).toBe('Notice first · Complete content first');
+        expect(track.querySelector('.notice-strip-title')).not.toBeNull();
+        expect(host.querySelectorAll('.notice-strip button')).toHaveLength(2);
+        expect(host.querySelector('.notice-strip-control')).toBeNull();
+        click('.notice-strip-open');
+        expect(onOpen).toHaveBeenCalledWith('first');
+        click('.notice-strip-all');
+        expect(onAll).toHaveBeenCalledOnce();
+    });
+
+    it('scrolls a long title even when the notice has no body', () => {
+        render({ items: [{ ...items[0], content: '' }] });
+        expect(required(host.querySelector('.notice-strip-track')).textContent).toBe('Notice first');
+        expect(required(animations.at(-1)).keyframes[2].transform).toBe('translateX(-280px)');
+        click('.notice-strip-open');
+        expect(onOpen).toHaveBeenCalledWith('first');
+    });
+
     it('uses the configured hold for short text and leaves a single short notice static', () => {
         lineWidth = 80;
         render({ holdSeconds: 8 });

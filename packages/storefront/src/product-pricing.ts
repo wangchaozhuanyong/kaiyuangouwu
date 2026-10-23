@@ -1,4 +1,9 @@
-import type { Product, ProductVariant } from './types';
+import type { Product, ProductVariant, StorefrontLanguage } from './types';
+
+/** A quote-only price does not establish a fulfillment method or pre-order status. */
+export function quoteOnlyProductLabel(language: StorefrontLanguage): string {
+    return language === 'zh' ? '按需求报价' : 'Quoted on request';
+}
 
 /** The storefront catalog sorts and filters products by their lowest variant price. */
 export function lowestPricedProductVariant(product: Product): ProductVariant | null {

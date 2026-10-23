@@ -90,7 +90,7 @@ try {
                     assert.equal(
                         await page.locator('.notice-strip-control').count(),
                         0,
-                        `${label}: no pause button`,
+                        `${label}: no playback button`,
                     );
                     for (const control of geometry.controls)
                         assert(control.height >= 44, `${label}: touch target height`);
@@ -101,8 +101,8 @@ try {
                     const moving = await animationState();
                     assert(moving.x < moved.x - 3, `${label}: actual right-to-left motion`);
                     const titleAfter = await title().boundingBox();
-                    assert.equal(titleBefore.x, titleAfter.x, `${label}: fixed title`);
-                    assert.equal(titleBefore.y, titleAfter.y, `${label}: fixed title baseline`);
+                    assert(titleAfter.x < titleBefore.x - 3, `${label}: title moves with its content`);
+                    assert.equal(titleBefore.y, titleAfter.y, `${label}: stable single-line baseline`);
                     await page.screenshot({ path: `${output}/${label}.png`, fullPage: true });
                     report.cases.push({
                         label,
@@ -113,7 +113,7 @@ try {
                             'single line',
                             'no document overflow',
                             '44px controls',
-                            'fixed title',
+                            'title and body share one moving track',
                             'real right-to-left motion',
                         ],
                     });
@@ -123,7 +123,7 @@ try {
         await open();
         await waitAnimation();
         const firstTitle = await title().innerText();
-        const firstContent = await track().innerText();
+        const firstContent = (await track().innerText()).slice(firstTitle.length + 3);
         await seek(3500);
         await page.locator('.notice-strip').hover();
         const paused = await animationState();

@@ -416,6 +416,35 @@ describe('product image navigation layers', () => {
         });
     });
 
+    it.each(['zh', 'en'] as const)(
+        'labels quote-only listings without promising delivery or pre-order status in %s',
+        language => {
+            const quoteProduct: Product = {
+                ...digitalProduct,
+                customFields: {
+                    fulfillmentType: 'digital',
+                    refundPolicy: 'MERCHANT_REVIEW',
+                    manualDeliverySlaMinutes: 1440,
+                    ...digitalProduct.customFields,
+                    pricingMode: 'QUOTE_ONLY',
+                },
+            };
+            const expected = language === 'zh' ? '按需求报价' : 'Quoted on request';
+            expect(buildProductRowSmartInfo(quoteProduct, language).primary).toBe(expected);
+            const markup = renderToStaticMarkup(
+                <ProductCard
+                    product={quoteProduct}
+                    market={market}
+                    locale={market.locale}
+                    language={language}
+                    onOpen={vi.fn()}
+                />,
+            );
+            expect(markup).toContain(expected);
+            expect(markup).not.toContain(language === 'zh' ? '邮箱自动发货' : 'Email delivery');
+        },
+    );
+
     it('renders clean flush-left fulfillment badge without pill background in ProductCard', () => {
         const physicalProduct: Product = {
             ...digitalProduct,
