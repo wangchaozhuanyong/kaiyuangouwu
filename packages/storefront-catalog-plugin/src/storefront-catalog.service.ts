@@ -83,17 +83,16 @@ export class StorefrontCatalogService {
             return this.findWithRequestPrices(ctx, input);
         }
         const candidates = this.createCandidateQuery(ctx, input);
+        // Execute the request-aware builder itself: access control is applied at
+        // its terminal method, while an early clone/SQL snapshot has no scope yet.
+        const rows = await candidates.offset(input.skip).limit(input.take).getRawMany<CatalogRow>();
+        const scopedCandidates = candidates.clone().offset(undefined).limit(undefined);
         const countQuery = this.connection.rawConnection
             .createQueryBuilder()
             .select('COUNT(*)', 'totalItems')
-            .from(`(${candidates.getQuery()})`, 'catalog_candidates')
-            .setParameters(candidates.getParameters());
-        const pageQuery = candidates.clone().offset(input.skip).limit(input.take);
-
-        const [countRow, rows] = await Promise.all([
-            countQuery.getRawOne<Record<string, string | number>>(),
-            pageQuery.getRawMany<CatalogRow>(),
-        ]);
+            .from(`(${scopedCandidates.getQuery()})`, 'catalog_candidates')
+            .setParameters(scopedCandidates.getParameters());
+        const countRow = await countQuery.getRawOne<Record<string, string | number>>();
         const productIds = rows.map(row => row.productId);
         if (productIds.length === 0) {
             return {
