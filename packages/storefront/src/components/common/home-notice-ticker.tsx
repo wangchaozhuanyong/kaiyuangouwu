@@ -30,20 +30,18 @@ export function HomeNoticeTicker({
     const [distance, setDistance] = useState<number | null>(null);
     const [hovered, setHovered] = useState(false);
     const [focused, setFocused] = useState(false);
-    const [userPaused, setUserPaused] = useState(false);
     const viewport = useRef<HTMLSpanElement>(null);
     const text = useRef<HTMLSpanElement>(null);
     const region = useRef<HTMLDivElement>(null);
     const animation = useRef<Animation | null>(null);
     const keyboardInput = useRef(true);
-    const shouldPause = paused || hovered || focused || userPaused;
+    const shouldPause = paused || hovered || focused;
     const pauseRef = useRef(shouldPause);
     pauseRef.current = shouldPause;
     const item = items[index % Math.max(1, items.length)];
     const isZh = language === 'zh';
     const title = item?.title || (isZh ? '公告' : 'Notice');
     const content = item?.content.replace(/\s+/gu, ' ').trim() || '';
-    const canAnimate = !reducedMotion && (Boolean(distance) || items.length > 1);
 
     // Dialog cleanup restores focus during React's commit, before synthetic focus resumes.
     useEffect(() => {
@@ -141,14 +139,6 @@ export function HomeNoticeTicker({
             }}
             onPointerLeave={() => setHovered(false)}
         >
-            <button
-                className="notice-strip-control"
-                type="button"
-                disabled={!canAnimate}
-                aria-pressed={userPaused}
-                aria-label={userPaused ? (isZh ? '继续' : 'Resume') : isZh ? '暂停' : 'Pause'}
-                onClick={() => setUserPaused(current => !current)}
-            />
             <button
                 className="notice-strip-open"
                 type="button"
