@@ -705,6 +705,64 @@ describe('public SEO with real isolated SQL publication and catalog membership',
     const productSchema = (result: StorefrontPageData) =>
         result.seo?.structuredData.find(item => item['@type'] === 'Product');
 
+    it.each(['zh_Hans', 'en'])(
+        'uses the current public sale for the default variant in %s Product offers',
+        async code => {
+            const source = page(context(1, code), '10', 1600);
+            source.flashSales = [
+                {
+                    id: 'public-sale',
+                    items: [
+                        {
+                            productId: '10',
+                            productVariantId: 'variant',
+                            currencyCode: 'MYR',
+                            salePrice: 1440,
+                        },
+                        {
+                            productId: '10',
+                            productVariantId: 'variant',
+                            currencyCode: 'MYR',
+                            salePrice: 1000,
+                        },
+                    ],
+                },
+            ];
+            const result = await publicSeo.enrich(context(1, code), 'store-1.test', source);
+            expect(productSchema(result)).toMatchObject({
+                sku: 'ACTUAL',
+                offers: { price: '14.40', priceCurrency: 'MYR', availability: 'https://schema.org/InStock' },
+            });
+            expect(source.product).toMatchObject({ variants: [{ priceWithTax: 1600 }] });
+        },
+    );
+
+    it.each([
+        { label: 'another product', productId: '20', productVariantId: 'variant', currencyCode: 'MYR' },
+        { label: 'another variant', productId: '10', productVariantId: 'other', currencyCode: 'MYR' },
+        { label: 'another currency', productId: '10', productVariantId: 'variant', currencyCode: 'CNY' },
+    ])('retains the base offer for a sale belonging to $label', async ({ label: _label, ...item }) => {
+        const source = page(context(), '10', 1600);
+        source.flashSales = [{ id: 'other-sale', items: [{ ...item, salePrice: 1440 }] }];
+        const result = await publicSeo.enrich(context(), 'store-1.test', source);
+        expect(productSchema(result)).toMatchObject({ offers: { price: '16.00', priceCurrency: 'MYR' } });
+    });
+
+    it('preserves zero sale prices and omits offers for quote-only products with a public sale', async () => {
+        const source = page(context());
+        source.flashSales = [
+            {
+                id: 'public-sale',
+                items: [{ productId: '10', productVariantId: 'variant', currencyCode: 'MYR', salePrice: 0 }],
+            },
+        ];
+        const free = await publicSeo.enrich(context(), 'store-1.test', source);
+        expect(productSchema(free)).toMatchObject({ offers: { price: '0.00' } });
+        (source.product as { customFields: { pricingMode: string } }).customFields.pricingMode = 'QUOTE_ONLY';
+        const quote = await publicSeo.enrich(context(), 'store-1.test', source);
+        expect(productSchema(quote)).not.toHaveProperty('offers');
+    });
+
     it('publishes the real public review aggregate and visible review text in both languages per store', async () => {
         await seedReviews();
         for (const code of ['zh_Hans', 'en']) {

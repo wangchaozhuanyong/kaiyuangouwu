@@ -26,6 +26,7 @@ import { StoreProfile } from '../entities/store-profile.entity';
 import { StorefrontPromotionService } from '../promotion/storefront-promotion.service';
 import { StorefrontClosedError } from '../storefront-activation.service';
 import { StorefrontPublicPageService } from '../storefront-public-page.service';
+import { type StoreFlashSaleView } from '../types';
 
 import { productReviewStructuredData } from './storefront-product-review-schema';
 import { resolvePromotionSeo } from './storefront-promotion-seo';
@@ -224,11 +225,19 @@ export class StorefrontPublicSeoService {
                     !selected || variant.priceWithTax < selected.priceWithTax ? variant : selected,
                 undefined,
             );
+            const flashSaleItem = (page.flashSales as StoreFlashSaleView[] | undefined)
+                ?.flatMap(sale => sale.items)
+                .find(
+                    item =>
+                        String(item.productId) === String(product.id) &&
+                        String(item.productVariantId) === String(lowest?.id) &&
+                        item.currencyCode === lowest?.currencyCode,
+                );
             const offers =
                 !quoteOnly && lowest
                     ? {
                           '@type': 'Offer',
-                          price: (lowest.priceWithTax / 100).toFixed(2),
+                          price: ((flashSaleItem?.salePrice ?? lowest.priceWithTax) / 100).toFixed(2),
                           priceCurrency: lowest.currencyCode,
                           availability: this.availability(lowest),
                           url: `${origin}/${code === 'zh_Hans' ? 'zh' : 'en'}/product?id=${encodeURIComponent(request.id)}`,

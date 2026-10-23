@@ -178,7 +178,9 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
                     supportContent: contentBlocks.find(block => block.type === 'SUPPORT'),
                     initialVariantId: route.variantId,
                     initialQuantity: route.quantity,
-                    flashSaleItems: [],
+                    flashSaleItems: ((page.flashSales as StorefrontFlashSale[]) ?? []).flatMap(
+                        sale => sale.items,
+                    ),
                     couponCampaigns: [],
                     customerCoupons: [],
                     addingVariantId: null,

@@ -172,6 +172,41 @@ describe('anonymous shared public component server render', () => {
         },
     );
 
+    it.each(fixtureLanguages)(
+        '%s renders the published sale price and original price before hydration',
+        async languageCode => {
+            const page = syntheticPage(fixtureStores[0], languageCode, 'product');
+            const product = fixtureValue(page.product);
+            const variant = fixtureValue(product.variants[0]);
+            page.flashSales = [
+                {
+                    id: 'public-sale',
+                    startsAt: null,
+                    endsAt: null,
+                    items: [
+                        {
+                            productId: product.id,
+                            productVariantId: variant.id,
+                            productName: product.name,
+                            variantName: variant.name,
+                            originalPrice: variant.priceWithTax,
+                            salePrice: 1440,
+                            currencyCode: variant.currencyCode,
+                            imageUrl: null,
+                        },
+                    ],
+                },
+            ];
+            const html = await renderPublicPage(page);
+            const price = fixtureValue(
+                html.match(/<p class="detail-price is-flash-sale">([^]*?)<\/p>/u)?.[1],
+            );
+            expect(price).toMatch(/<strong>[^<]*14\.4<\/strong>/u);
+            expect(price).toMatch(/<del>[^<]*24<\/del>/u);
+            expect(variant.priceWithTax).toBe(2400);
+        },
+    );
+
     it('renders a direct search URL as one responsive search result tree', async () => {
         const page = syntheticPage(fixtureStores[0], 'en', 'catalog');
         page.request = {
