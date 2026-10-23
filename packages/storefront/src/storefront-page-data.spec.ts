@@ -1769,6 +1769,60 @@ describe('navigation query ownership', () => {
             client.clear();
         }
     });
+    it.each(['/en/', '/en/category', '/en/product'])(
+        'keeps the full-store search scope while prefetching from %s',
+        async pathname => {
+            const { prefetchPublicPage, setPublicPageNavigationScope } =
+                await import('./storefront-page-data');
+            const { publicCatalogRequest } = await import('./catalog-route-query');
+            const { effectivePublicCatalogInput, publicPageRequestFromUrl } =
+                await import('../../storefront-content-plugin/src/shared/public-page-data');
+            vi.stubGlobal('window', {
+                location: { origin: 'https://store.test', host: 'store.test', pathname },
+            });
+            const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+            const term = 'Unrelated product Q42';
+            const href = '/en/search?term=' + encodeURIComponent(term);
+            const request = publicPageRequestFromUrl(href);
+            if (!request || request.kind !== 'catalog') throw new Error('Expected a search request');
+            const collections = [{ id: 'unrelated-first', productVariantCount: 1 }];
+            const product = syntheticPage('synthetic-a', 'en', 'home').products?.[0];
+            if (!product) throw new Error('Expected a product outside the first collection');
+            const catalog = vi.fn(
+                (
+                    input: import('./types').StorefrontCatalogInput,
+                    _signal?: AbortSignal,
+                    scope: 'route' | 'store' = 'route',
+                ) => {
+                    const resolved = effectivePublicCatalogInput(
+                        publicCatalogRequest(input, pathname, scope),
+                        collections,
+                    );
+                    return Promise.resolve(
+                        resolved.collectionId
+                            ? { items: [], totalItems: 0 }
+                            : { items: [product], totalItems: 1 },
+                    );
+                },
+            );
+            setPublicPageNavigationScope({
+                channelCode: 'store-a',
+                currencyCode: 'MYR',
+                languageCode: 'en',
+                api: { catalog, product: vi.fn() },
+            });
+            client.setQueryData(storefrontQueryKeys.collections('store-a:MYR', 'en'), collections);
+            client.setQueryData(publicSeoQueryKey('store-a:MYR', 'en', request, 'public-media'), []);
+            try {
+                await prefetchPublicPage(client, href);
+                expect(
+                    client.getQueryData(storefrontQueryKeys.catalog('store-a:MYR', 'en', { term })),
+                ).toMatchObject({ pages: [{ totalItems: 1, items: [{ id: product.id }] }] });
+            } finally {
+                client.clear();
+            }
+        },
+    );
     it.each([
         {
             href: '/en/category?collection=parent&child=child&sort=price-desc&fulfillment=digital&stock=1&minPrice=12.345&maxPrice=99&page=2',
@@ -1810,6 +1864,7 @@ describe('navigation query ownership', () => {
             expect(catalog).toHaveBeenCalledExactlyOnceWith(
                 expect.objectContaining(input),
                 expect.any(AbortSignal),
+                href.startsWith('/en/search') ? 'store' : 'route',
             );
             expect(
                 client.getQueryData(storefrontQueryKeys.catalog('store-a:MYR', 'en', input)),
@@ -1844,6 +1899,7 @@ describe('navigation query ownership', () => {
                     take: 12,
                 }),
                 expect.any(AbortSignal),
+                'route',
             );
             expect(client.getQueryData(key)).toEqual({
                 pages: [{ items: [], totalItems: 0 }],
