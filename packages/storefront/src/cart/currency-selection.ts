@@ -2,7 +2,7 @@ import type { ShopApi } from '../api';
 import type { Order, StorefrontCart, StorefrontLanguage } from '../types';
 import type { CartController } from './cart-controller';
 
-import { storefrontErrorMessage } from '../storefront-errors';
+import { StorefrontDisplayError, storefrontErrorMessage } from '../storefront-errors';
 
 export interface CurrencySelectionOptions {
     api: Pick<ShopApi, 'cart' | 'setPaymentCurrencyForOrder'>;
@@ -29,8 +29,6 @@ function currencyMatches(order: Order | null | undefined, currencyCode: string) 
     );
 }
 
-class CurrencySelectionError extends Error {}
-
 /** Reuse server payment validation, then adopt the complete confirmed cart. */
 export async function confirmCurrencySelection(
     options: CurrencySelectionOptions,
@@ -44,16 +42,21 @@ export async function confirmCurrencySelection(
         if (!isCurrent()) throw new Error('Cart session changed.');
     };
     assertOwner();
-    const isZh = language === 'zh';
     if (
         currencyCode === options.displayCurrencyCode &&
         (!options.cart?.checkoutOrder || currencyMatches(options.cart.checkoutOrder, currencyCode))
     )
         return;
     if (!options.availableCurrencyCodes.includes(currencyCode))
-        throw new Error(isZh ? '当前店铺未开放该付款币种' : 'This payment currency is unavailable.');
+        throw new StorefrontDisplayError(
+            { zh: '当前店铺未开放该付款币种', en: 'This payment currency is unavailable.' },
+            language,
+        );
     if (cartController.getSnapshot().editingBlocked)
-        throw new Error(isZh ? '请先核对当前购物车操作' : 'Review the current cart operation first.');
+        throw new StorefrontDisplayError(
+            { zh: '请先核对当前购物车操作', en: 'Review your cart first.' },
+            language,
+        );
     let acknowledged = false;
     options.setCartError(null);
     try {
@@ -66,22 +69,25 @@ export async function confirmCurrencySelection(
             const orderId = options.cart.checkoutOrder.id;
             const assertCart = () => {
                 if (fresh.id !== options.cart?.id || fresh.checkoutOrder?.id !== orderId)
-                    throw new CurrencySelectionError(
-                        isZh ? '购物车已变更，请重新核对' : 'The cart changed. Review it again.',
+                    throw new StorefrontDisplayError(
+                        { zh: '购物车已变更，请重新核对', en: 'The cart changed. Review it again.' },
+                        language,
                     );
             };
             assertCart();
             if (!currencyMatches(fresh.checkoutOrder, currencyCode)) {
                 if (fresh.state !== 'OPEN' || fresh.checkoutOrder?.state !== 'AddingItems')
-                    throw new CurrencySelectionError(
-                        isZh ? '当前订单状态不能切换付款币种' : 'This order cannot change currency.',
+                    throw new StorefrontDisplayError(
+                        { zh: '当前订单状态不能切换付款币种', en: 'This order cannot change currency.' },
+                        language,
                     );
                 const updatedOrder = await api.setPaymentCurrencyForOrder(currencyCode, signal);
                 acknowledged = true;
                 assertOwner();
                 if (updatedOrder.id !== orderId || !currencyMatches(updatedOrder, currencyCode))
-                    throw new CurrencySelectionError(
-                        isZh ? '订单币种尚未同步' : 'The order currency is not synchronized yet.',
+                    throw new StorefrontDisplayError(
+                        { zh: '订单币种尚未同步', en: 'The order currency is not synchronized yet.' },
+                        language,
                     );
                 options.setCheckoutOrder(updatedOrder);
                 fresh = await api.cart(signal);
@@ -89,8 +95,9 @@ export async function confirmCurrencySelection(
                 assertCart();
             }
             if (!currencyMatches(fresh.checkoutOrder, currencyCode))
-                throw new CurrencySelectionError(
-                    isZh ? '订单币种尚未同步' : 'The order currency is not synchronized yet.',
+                throw new StorefrontDisplayError(
+                    { zh: '订单币种尚未同步', en: 'The order currency is not synchronized yet.' },
+                    language,
                 );
             options.setCart(fresh);
             options.setCheckoutOrder(fresh.checkoutOrder);
@@ -99,15 +106,18 @@ export async function confirmCurrencySelection(
         options.commitPreference(currencyCode);
     } catch (error) {
         if (!isCurrent() || signal.aborted) throw error;
-        const message = acknowledged
-            ? isZh
-                ? '付款币种已保存，但购物车读取未完成。请重试读取核对，无需重复提交。'
-                : 'Payment currency saved; cart refresh failed. Retry reading the cart without resubmitting.'
-            : error instanceof CurrencySelectionError
-              ? error.message
-              : storefrontErrorMessage(error, language);
+        const failure = acknowledged
+            ? new StorefrontDisplayError(
+                  {
+                      zh: '付款币种已保存，但购物车读取未完成。请重试读取核对，无需重复提交。',
+                      en: 'Payment currency saved; cart refresh failed. Retry reading the cart without resubmitting.',
+                  },
+                  language,
+              )
+            : error;
+        const message = storefrontErrorMessage(failure, language);
         options.setCartError(message);
         options.notify(message);
-        throw new Error(message);
+        throw failure;
     }
 }

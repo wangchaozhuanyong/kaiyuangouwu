@@ -3,6 +3,16 @@ import type { StorefrontLanguage } from './types';
 type Copy = Readonly<Record<StorefrontLanguage, string>>;
 const copy = (zh: string, en: string): Copy => ({ zh, en });
 
+/** Locally authored bilingual feedback; server envelopes cannot instantiate this type. */
+export class StorefrontDisplayError extends Error {
+    declare readonly ui: Copy;
+
+    constructor(localCopy: Copy, language: StorefrontLanguage) {
+        super(localCopy[language]);
+        this.ui = localCopy;
+    }
+}
+
 /** Only reviewed customer-facing copy crosses the error presentation boundary. Keep raw errors intact. */
 export const storefrontErrorCopy = {
     POSTER_IMAGE_RATIO: copy(
@@ -365,9 +375,12 @@ export function storefrontErrorMessage(
     fallback?: string,
 ): string {
     const code = storefrontErrorCode(error);
-    const message = code
-        ? storefrontErrorCopy[code][language]
-        : (fallback ?? storefrontErrorCopy.UNKNOWN[language]);
+    const message =
+        error instanceof StorefrontDisplayError
+            ? error.ui[language]
+            : code
+              ? storefrontErrorCopy[code][language]
+              : (fallback ?? storefrontErrorCopy.UNKNOWN[language]);
     if (typeof error === 'object' && error !== null && (error as ErrorDetails).selectionRejected) {
         return language === 'zh'
             ? `本次选择未生效，已恢复原来的选择。${message}`

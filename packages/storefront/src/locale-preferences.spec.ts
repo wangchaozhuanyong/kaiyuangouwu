@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LocalePreferencesSheet } from './components/common/locale-preferences';
+import { StorefrontDisplayError, storefrontErrorCopy } from './storefront-errors';
 import { readStorefrontStylesheet } from './test-stylesheet';
 
 describe('locale preferences presentation', () => {
@@ -86,7 +87,15 @@ describe('currency preference confirmation', () => {
         expect(onClose).toHaveBeenCalledOnce();
     });
     it('keeps the dialog and its draft visible when currency confirmation fails', async () => {
-        const select = vi.fn().mockRejectedValue(new Error('付款币种已保存，但读取未完成'));
+        const select = vi.fn().mockRejectedValue(
+            new StorefrontDisplayError(
+                {
+                    zh: '付款币种已保存，但购物车读取未完成。请重试读取核对，无需重复提交。',
+                    en: 'Payment currency saved; cart refresh failed. Retry reading the cart without resubmitting.',
+                },
+                'zh',
+            ),
+        );
         const { host, onClose } = render(select);
         const button = host.querySelector<HTMLButtonElement>('.locale-preferences-save');
         if (!button) throw new Error('Missing save action');
@@ -98,5 +107,19 @@ describe('currency preference confirmation', () => {
         expect(host.querySelector('[role="alert"]')?.textContent).toContain('读取未完成');
         expect(host.querySelector('[aria-checked="true"]')?.textContent).toBeTruthy();
         expect(host.querySelector<HTMLButtonElement>('.locale-preferences-save')?.disabled).toBe(false);
+    });
+    it('keeps private exception details out of the settings dialog', async () => {
+        const { host, onClose } = render(
+            vi.fn().mockRejectedValue(new Error('SQL driver /private/internal-path')),
+        );
+        const button = host.querySelector<HTMLButtonElement>('.locale-preferences-save');
+        if (!button) throw new Error('Missing save action');
+        await act(async () => {
+            button.click();
+            await Promise.resolve();
+        });
+        expect(onClose).not.toHaveBeenCalled();
+        expect(host.querySelector('[role="alert"]')?.textContent).toBe(storefrontErrorCopy.UNKNOWN.zh);
+        expect(host.textContent).not.toContain('/private/');
     });
 });
