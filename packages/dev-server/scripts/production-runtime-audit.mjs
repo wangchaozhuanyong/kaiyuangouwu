@@ -14,6 +14,7 @@ import {
     securityVendorForPackage,
     verifySecurityVendors,
 } from './security-vendors.mjs';
+import { ZOD_COMPATIBILITY_PATCH, verifyZodCompatibilityPatch } from './zod-security-backport.mjs';
 
 const SEVERITIES = Object.freeze(['low', 'moderate', 'high', 'critical']);
 const DEFAULT_AUDIT_RETRY_DELAYS_MS = Object.freeze([15_000]);
@@ -72,7 +73,7 @@ export const SPRINTF_PATCH = Object.freeze({
         'package.json': 'f7ed5a0dc9b4c939e92be6acdf3bd83abc3d7e5def9c1307f3c9f53bd7cb2f8c',
     }),
 });
-const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH]);
+const VERIFIED_PATCHES = Object.freeze([BRACES_PATCH, HTTP_CACHE_PATCH, ZOD_COMPATIBILITY_PATCH]);
 
 function installedPackagePaths(root, name) {
     const pending = [path.join(root, 'node_modules')];
@@ -288,6 +289,11 @@ export function verifyReportPatches(auditReport, root, options) {
             continue;
         const advisories = auditReport[patch.package] ?? [];
         if (!advisories.some(advisory => advisory.url === patch.advisory)) continue;
+        if (patch === ZOD_COMPATIBILITY_PATCH) {
+            const proof = verifyZodCompatibilityPatch(root, options, installedPackagePaths);
+            if (proof) verified.push(proof);
+            continue;
+        }
         verified.push(
             patch === BRACES_PATCH
                 ? verifyBracesPatch(root, options)

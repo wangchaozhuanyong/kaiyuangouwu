@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Languages, LoaderCircle, WalletCards } from 'lucide-react';
 import { useState } from 'react';
 
+import { storefrontErrorMessage } from '../../storefront-errors';
 import { Sheet } from '../../storefront-ui/page-shell';
 import { StorefrontLanguage } from '../../types';
 
@@ -77,13 +78,7 @@ export function LocalePreferencesSheet({
             if (draftLanguage !== language) onToggleLanguage();
             onClose();
         } catch (error) {
-            setSaveError(
-                error instanceof Error
-                    ? error.message
-                    : isZh
-                      ? '设置未完成，请核对后重试'
-                      : 'Preferences were not saved. Review and retry.',
-            );
+            setSaveError(storefrontErrorMessage(error, language));
         } finally {
             setSaving(false);
         }

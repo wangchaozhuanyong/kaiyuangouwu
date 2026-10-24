@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { parseShopApiResponse, ShopApiError, ShopApiTimeoutError } from './api/helpers';
-import { storefrontErrorCopy, storefrontErrorMessage } from './storefront-errors';
+import { StorefrontDisplayError, storefrontErrorCopy, storefrontErrorMessage } from './storefront-errors';
 
 describe('customer-facing error language boundary', () => {
     it.each([
@@ -117,6 +117,19 @@ describe('customer-facing error language boundary', () => {
             expect(storefrontErrorMessage(error, 'en')).toBe(storefrontErrorCopy.UNKNOWN.en);
         }
         expect(storefrontErrorMessage(new Error('两次输入的交付邮箱不一致'), 'en')).toContain('do not match');
+    });
+
+    it('translates explicit local feedback while rejecting lookalike server envelopes', () => {
+        const copy = { zh: '本地已确认提示', en: 'Reviewed local feedback' };
+        const error = new StorefrontDisplayError(copy, 'zh');
+        expect(storefrontErrorMessage(error, 'en')).toBe(copy.en);
+        expect(storefrontErrorMessage(error, 'zh')).toBe(copy.zh);
+        expect(storefrontErrorMessage({ message: '/private/internal', ui: copy }, 'en')).toBe(
+            storefrontErrorCopy.UNKNOWN.en,
+        );
+        expect(storefrontErrorMessage(new Error('/private/internal'), 'zh')).toBe(
+            storefrontErrorCopy.UNKNOWN.zh,
+        );
     });
 
     it('prevents pages and hooks from rendering raw exception messages again', () => {
