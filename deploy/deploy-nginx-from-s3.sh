@@ -9,7 +9,7 @@ readonly expected_storefront_sha="${6:-}"
 readonly expected_admin_sha="${7:-}"
 readonly repository=/var/www/kaiyuangouwu
 readonly releases_dir=/var/www/kaiyuangouwu-nginx-releases
-readonly artifact_bucket=yunqiao-vendure-prod-backup-079740175286-apne1
+readonly artifact_bucket=yunqiao-vendure-prod-backup-098208446664-apne1
 readonly controls_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 for sha in "$target_sha" "$expected_backend_sha" "$expected_storefront_sha" "$expected_admin_sha"; do

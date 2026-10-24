@@ -95,13 +95,13 @@ jobs:
                   echo "sha256=$(sha256sum "$RUNNER_TEMP/$name" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
             - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
               with:
-                  role-to-assume: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+                  role-to-assume: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
                   aws-region: ap-northeast-1
                   role-session-name: vendure-frontend-${{ github.run_id }}
             - name: Store immutable frontend artifact
               env:
                   ARCHIVE: ${{ steps.archive.outputs.name }}
-              run: aws s3 cp "$RUNNER_TEMP/$ARCHIVE" "s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/$TARGET_SHA/$ARCHIVE" --only-show-errors
+              run: aws s3 cp "$RUNNER_TEMP/$ARCHIVE" "s3://yunqiao-vendure-prod-backup-098208446664-apne1/deployments/$TARGET_SHA/$ARCHIVE" --only-show-errors
             - name: Deploy and verify the affected public apps
               env:
                   ARCHIVE: ${{ steps.archive.outputs.name }}

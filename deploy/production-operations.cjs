@@ -38,7 +38,7 @@ const BACKUP_DIRECTORY = '/var/backups/vendure-mysql';
 const FILE_BACKUP_DIRECTORY = '/var/backups/vendure-files';
 const FILE_BACKUP_KEEP_COUNT = 3;
 const PRODUCTION_ENVIRONMENT_FILE = '/var/www/kaiyuangouwu/packages/dev-server/.env';
-const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files';
+const OFFSITE_FILE_BACKUP_URI = 's3://yunqiao-vendure-prod-backup-098208446664-apne1/files';
 const OFFSITE_FILE_BACKUP_RETENTION_DAYS = 30;
 const OFFSITE_FILE_BACKUP_SETTINGS = Object.freeze({
     VENDURE_REQUIRE_OFFSITE_FILE_BACKUP: 'true',
@@ -1176,7 +1176,7 @@ function fileBackupRemoteObject(
         },
     } = {},
 ) {
-    const bucket = 'yunqiao-vendure-prod-backup-079740175286-apne1';
+    const bucket = 'yunqiao-vendure-prod-backup-098208446664-apne1';
     const key = `files/${path.basename(file.file)}`;
     const metadata = head(bucket, key);
     assert.equal(metadata.ContentLength, file.sizeBytes, 'Offsite backup size differs');

@@ -22,8 +22,8 @@ import time
 
 
 DEFAULT_DIRECTORY = "/var/backups/vendure-files"
-OFFSITE_URI = "s3://yunqiao-vendure-prod-backup-079740175286-apne1/files"
-OFFSITE_BUCKET = "yunqiao-vendure-prod-backup-079740175286-apne1"
+OFFSITE_URI = "s3://yunqiao-vendure-prod-backup-098208446664-apne1/files"
+OFFSITE_BUCKET = "yunqiao-vendure-prod-backup-098208446664-apne1"
 OFFSITE_PREFIX = "files/"
 OFFSITE_DAYS = 30
 KEEP_COUNT = 3

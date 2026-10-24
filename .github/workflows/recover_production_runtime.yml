@@ -18,9 +18,9 @@ jobs:
         timeout-minutes: 15
         env:
             AWS_REGION: ap-northeast-1
-            AWS_ACCOUNT_ID: '079740175286'
-            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
-            INSTANCE_ID: i-041a146558e432cbf
+            AWS_ACCOUNT_ID: '098208446664'
+            AWS_ROLE_ARN: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-01d6737449bc52460
 
         steps:
             - name: Validate recovery identity

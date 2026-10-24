@@ -8,7 +8,7 @@ readonly repository=/var/www/kaiyuangouwu
 readonly releases_dir=/var/www/kaiyuangouwu-storefront-releases
 readonly current_pointer=/var/www/kaiyuangouwu-storefront-current
 readonly deploy_lock=/run/lock/vendure-production-deploy.lock
-readonly artifact_bucket=yunqiao-vendure-prod-backup-079740175286-apne1
+readonly artifact_bucket=yunqiao-vendure-prod-backup-098208446664-apne1
 
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 [[ "$target_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'Expected full source SHA'
