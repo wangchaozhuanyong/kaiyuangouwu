@@ -26,7 +26,7 @@ import {
 } from '../product-availability';
 import { couponCardFromCustomerCoupon } from '../storefront-coupons';
 import { routeHref } from '../storefront-router';
-import { MarketConfig, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
+import { MarketConfig, OrderLine, StoreCustomerCoupon, StorefrontCart, StorefrontLanguage } from '../types';
 
 import { Sheet } from './page-shell';
 import {
@@ -40,6 +40,7 @@ export function CartGroup({
     title,
     hint,
     lines,
+    checkoutOrder,
     market,
     locale,
     language,
@@ -60,6 +61,7 @@ export function CartGroup({
     title: string;
     hint: string;
     lines: StorefrontCart['lines'];
+    checkoutOrder?: StorefrontCart['checkoutOrder'];
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
@@ -118,30 +120,43 @@ export function CartGroup({
                     ))}
                 </div>
             )}
-            {lines.map(line => (
-                <CartLine
-                    key={line.id}
-                    line={line}
-                    market={market}
-                    locale={locale}
-                    language={language}
-                    loading={loading}
-                    selectionDisabled={selectionDisabled}
-                    open={openActionLineId === line.id}
-                    favorite={
-                        !!line.productVariant?.product.id &&
-                        favoriteProductIds.includes(line.productVariant.product.id)
-                    }
-                    pinned={pinnedLineIds.includes(line.id)}
-                    onSelect={onSelect}
-                    onQuantity={onQuantity}
-                    onRemove={onRemove}
-                    onFavorite={onFavorite}
-                    onPin={onPin}
-                    onShare={onShare}
-                    onActionOpenChange={onActionOpenChange}
-                />
-            ))}
+            {lines.map(line => {
+                // A cart has one line per variant. Only use the matching selected quote at this quantity.
+                // ProductVariant prices remain live catalog prices and must not replace saved order prices.
+                const quoteLine = line.selected
+                    ? checkoutOrder?.lines.find(
+                          quoted =>
+                              quoted.productVariant.id === line.productVariant?.id &&
+                              quoted.quantity === line.quantity,
+                      )
+                    : undefined;
+                return (
+                    <CartLine
+                        key={line.id}
+                        line={line}
+                        quoteLine={quoteLine}
+                        quoteCurrency={checkoutOrder?.currencyCode}
+                        market={market}
+                        locale={locale}
+                        language={language}
+                        loading={loading}
+                        selectionDisabled={selectionDisabled}
+                        open={openActionLineId === line.id}
+                        favorite={
+                            !!line.productVariant?.product.id &&
+                            favoriteProductIds.includes(line.productVariant.product.id)
+                        }
+                        pinned={pinnedLineIds.includes(line.id)}
+                        onSelect={onSelect}
+                        onQuantity={onQuantity}
+                        onRemove={onRemove}
+                        onFavorite={onFavorite}
+                        onPin={onPin}
+                        onShare={onShare}
+                        onActionOpenChange={onActionOpenChange}
+                    />
+                );
+            })}
             {desktop && (
                 <footer className="desktop-cart-group-footer">
                     <span>
@@ -158,6 +173,8 @@ export function CartGroup({
 
 function DesktopCartLine({
     line,
+    quoteLine,
+    quoteCurrency,
     market,
     locale,
     language,
@@ -183,7 +200,10 @@ function DesktopCartLine({
         variant?.product.name ?? name,
         96,
     );
-    const currency = variant?.currencyCode ?? market.currencyCode;
+    const currency = (quoteLine ? quoteCurrency : undefined) ?? variant?.currencyCode ?? market.currencyCode;
+    const unitPrice = quoteLine
+        ? (quoteLine.unitPriceWithTax ?? Math.round(quoteLine.linePriceWithTax / quoteLine.quantity))
+        : (variant?.priceWithTax ?? 0);
     const quoteOnly = variant?.product.customFields?.pricingMode === 'QUOTE_ONLY';
     const quoteLabel = isZh ? '联系客服询价' : 'Request a quote';
     const stockError = quoteOnly
@@ -254,7 +274,7 @@ function DesktopCartLine({
                 )}
             </div>
             <span className="desktop-cart-unit-price">
-                {quoteOnly ? quoteLabel : formatMoney(variant?.priceWithTax ?? 0, currency, locale)}
+                {quoteOnly ? quoteLabel : formatMoney(unitPrice, currency, locale)}
             </span>
             <div className="desktop-cart-quantity">
                 <QuantityControl
@@ -278,7 +298,7 @@ function DesktopCartLine({
             <strong className="desktop-cart-amount">
                 {quoteOnly
                     ? quoteLabel
-                    : formatMoney((variant?.priceWithTax ?? 0) * line.quantity, currency, locale)}
+                    : formatMoney(quoteLine?.linePriceWithTax ?? unitPrice * line.quantity, currency, locale)}
             </strong>
             <div className="desktop-cart-actions">
                 <button
@@ -362,6 +382,8 @@ export const CART_SWIPE_THRESHOLD = 48;
 
 export function SwipeableCartLine({
     line,
+    quoteLine,
+    quoteCurrency,
     market,
     locale,
     language,
@@ -379,6 +401,8 @@ export function SwipeableCartLine({
     onActionOpenChange,
 }: {
     line: StorefrontCart['lines'][number];
+    quoteLine?: OrderLine;
+    quoteCurrency?: string;
     market: MarketConfig;
     locale: string;
     language: StorefrontLanguage;
@@ -397,6 +421,10 @@ export function SwipeableCartLine({
 }) {
     const isZh = language === 'zh';
     const variant = line.productVariant;
+    const currency = (quoteLine ? quoteCurrency : undefined) ?? variant?.currencyCode ?? market.currencyCode;
+    const unitPrice = quoteLine
+        ? (quoteLine.unitPriceWithTax ?? Math.round(quoteLine.linePriceWithTax / quoteLine.quantity))
+        : (variant?.priceWithTax ?? 0);
     const productId = variant?.product.id;
     const quoteOnly = variant?.product.customFields?.pricingMode === 'QUOTE_ONLY';
     const quoteLabel = isZh ? '联系客服询价' : 'Request a quote';
@@ -690,13 +718,7 @@ export function SwipeableCartLine({
                     )}
                 </div>
                 <div className="cart-line-purchase-row">
-                    <b>
-                        {quoteOnly
-                            ? quoteLabel
-                            : variant
-                              ? formatMoney(variant.priceWithTax, variant.currencyCode, locale)
-                              : formatMoney(0, market.currencyCode, locale)}
-                    </b>
+                    <b>{quoteOnly ? quoteLabel : formatMoney(unitPrice, currency, locale)}</b>
                     <div className="cart-line-actions">
                         <QuantityControl
                             compact

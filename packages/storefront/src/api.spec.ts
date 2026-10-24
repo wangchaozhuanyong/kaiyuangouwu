@@ -1902,7 +1902,7 @@ describe('ShopApi storefront mutations', () => {
             variables: Record<string, unknown>;
         };
         expect(request.query).toContain('setOrderCustomFields(input: $input)');
-        expect(request.query).toContain('customFields { customerNote deliveryEmail paymentCurrencyCode }');
+        expect(request.query).toContain('customFields{customerNote deliveryEmail paymentCurrencyCode}');
         expect(request.variables).toEqual({
             input: { customFields: { customerNote: '请放在门口' } },
         });
@@ -2799,8 +2799,11 @@ describe('ShopApi storefront mutations', () => {
         await new ShopApi(market).order('order-32');
 
         const request = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as { query: string };
-        expect(request.query).toContain('taxSummary { description taxRate taxBase taxTotal }');
-        expect(request.query).toContain('discounts { adjustmentSource description amountWithTax }');
+        expect(request.query).toContain('taxSummary{description taxRate taxBase taxTotal}');
+        expect(request.query).toContain('discounts{adjustmentSource description amountWithTax}');
+        expect(request.query).toContain(
+            'id quantity unitPriceWithTax linePriceWithTax proratedUnitPriceWithTax',
+        );
         expect(request.query).toContain('saleableStockLevel');
         expect(request.query).toContain('autoCardAvailableStock');
         expect(request.query).not.toContain('handlerCode');

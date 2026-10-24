@@ -7,7 +7,9 @@ import { ShopApi } from './api';
 import { DesktopLayoutContext } from './desktop-layout';
 import { languageCodeFor } from './i18n';
 import { LogisticsPage, LogisticsTrackingSheet, OrderDetailPage, OrdersPage } from './order-pages';
+import { AccountPage } from './pages/account-page';
 import { createStorefrontQueryClient, storefrontQueryKeys } from './query-client';
+import { AccountPageContext } from './storefront-page-contexts';
 import { DeliveryDetails, deliveryStatus } from './storefront-ui/delivery-details';
 import {
     customerOrderStateLabel,
@@ -115,7 +117,7 @@ function renderOrders(cachedOrders?: Order[], language: StorefrontLanguage = 'zh
     );
 }
 
-function renderLogistics(cachedOrders?: Order[]) {
+function renderLogistics(cachedOrders?: Order[], detailOrder?: Order) {
     const client = createStorefrontQueryClient();
     if (cachedOrders) {
         client.setQueryData(
@@ -133,6 +135,17 @@ function renderLogistics(cachedOrders?: Order[]) {
             },
         );
     }
+    if (detailOrder) {
+        client.setQueryData(
+            storefrontQueryKeys.order(
+                storefrontQueryKeys.market(market),
+                market.defaultLanguageCode,
+                customer.id,
+                detailOrder.id,
+            ),
+            detailOrder,
+        );
+    }
     const page = createElement(LogisticsPage, {
         api: { customerOrders: vi.fn() } as unknown as ShopApi,
         customer,
@@ -141,8 +154,45 @@ function renderLogistics(cachedOrders?: Order[]) {
         language: 'zh' as const,
         onBack: vi.fn(),
         onReturnToRoute: vi.fn(),
+        route: detailOrder ? { name: 'logistics', id: detailOrder.id } : { name: 'logistics' },
     });
     return renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
+}
+
+function renderAccountLogistics(cachedOrders: Order[]) {
+    const client = createStorefrontQueryClient();
+    const accountCustomer = {
+        ...customer,
+        orders: { items: cachedOrders, totalItems: cachedOrders.length },
+    };
+    const page = createElement(
+        AccountPageContext.Provider,
+        {
+            value: {
+                api: {
+                    customerOrderCounts: vi.fn(),
+                    afterSalesRequests: vi.fn(),
+                    referralProgram: vi.fn(),
+                } as unknown as ShopApi,
+                customer: accountCustomer,
+                products: [],
+                market,
+                locale: market.locale,
+                language: 'zh',
+                storefrontName: '测试商城',
+                logoUrl: null,
+                favoriteProductCount: 0,
+                couponCount: 0,
+                onContentTarget: vi.fn(),
+                onLogout: vi.fn(),
+            },
+        },
+        createElement(DesktopLayoutContext.Provider, { value: false }, createElement(AccountPage)),
+    );
+    const markup = renderToStaticMarkup(createElement(QueryClientProvider, { client }, page));
+    const section = markup.match(/<section class="account-latest-logistics[\s\S]*?<\/section>/)?.[0];
+    if (!section) throw new Error('Expected the mobile account logistics section');
+    return section;
 }
 
 describe('OrdersPage route query', () => {
@@ -274,6 +324,59 @@ describe('OrdersPage route query', () => {
 });
 
 describe('LogisticsPage delivery overview', () => {
+    it.each(['AddingItems', 'ArrangingPayment', 'AwaitingManualPayment', 'ArrangingAdditionalPayment'])(
+        'keeps %s without a physical fulfillment out of both logistics surfaces',
+        state => {
+            const unpaid = { ...order, state, fulfillments: [] };
+            const account = renderAccountLogistics([unpaid]);
+            expect(account).toContain('暂无物流动态');
+            expect(account).not.toContain(order.code);
+            const logistics = renderLogistics([unpaid]);
+            expect(logistics).not.toContain(order.code);
+            expect(logistics).not.toContain('订单测试商品');
+            const detail = renderLogistics([unpaid], unpaid);
+            expect(detail).toContain('暂无可查看的配送信息');
+            expect(detail).not.toContain(order.code);
+        },
+    );
+
+    it('keeps a real physical shipment visible while an additional payment is outstanding', () => {
+        const shippingOrder = {
+            ...order,
+            state: 'ArrangingAdditionalPayment',
+            fulfillments: [
+                {
+                    id: 'physical-shipment',
+                    state: 'Shipped',
+                    method: '标准配送',
+                    trackingCode: 'TRACK-20841',
+                    createdAt: '2026-08-17T00:00:00.000Z',
+                    updatedAt: '2026-08-18T03:42:00.000Z',
+                },
+            ],
+        };
+        expect(renderAccountLogistics([shippingOrder])).toContain(order.code);
+        expect(renderLogistics([shippingOrder])).toContain('TRACK-20841');
+    });
+
+    it('classifies a historical order by its fulfillment snapshot after the product changes', () => {
+        const physicalOrder = {
+            ...order,
+            lines: order.lines.map(line => ({
+                ...line,
+                productVariant: {
+                    ...line.productVariant,
+                    customFields: {
+                        ...line.productVariant.customFields,
+                        fulfillmentType: 'digital' as const,
+                    },
+                },
+            })),
+        };
+        expect(renderAccountLogistics([physicalOrder])).toContain(order.code);
+        expect(renderLogistics([physicalOrder])).toContain(order.code);
+    });
+
     it('keeps cancelled deliveries discoverable and states that counts cover loaded orders', () => {
         const markup = renderLogistics([{ ...order, state: 'Cancelled' }]);
         expect(markup).toContain('已取消');

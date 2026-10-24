@@ -5,8 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CartCommandAcknowledgedReadError } from './cart/cart-repository';
+import { DesktopLayoutContext } from './desktop-layout';
 import { CartPage, type CartPageProps } from './pages/cart-page';
 import { CartPageContext } from './storefront-page-contexts';
+import { formatMoney } from './storefront-ui/product-display';
 import { readStorefrontStylesheet } from './test-stylesheet';
 import { MarketConfig, Order, Product, StoreCustomerCoupon, StorefrontCart } from './types';
 
@@ -131,34 +133,126 @@ function renderCart(
     selectionPending = false,
     checkoutPending = false,
     overrides: Partial<CartPageProps> = {},
+    desktop = false,
 ) {
     return renderToStaticMarkup(
         createElement(
-            CartPageContext.Provider,
-            {
-                value: {
-                    cart: value,
-                    customer: null,
-                    products,
-                    market,
-                    locale: market.locale,
-                    language: 'zh' as const,
-                    loading: selectionPending,
-                    selectionPending,
-                    checkoutPending,
-                    error: null,
-                    favoriteProductIds: [],
-                    coupons,
-                    ...callbacks,
-                    ...overrides,
+            DesktopLayoutContext.Provider,
+            { value: desktop },
+            createElement(
+                CartPageContext.Provider,
+                {
+                    value: {
+                        cart: value,
+                        customer: null,
+                        products,
+                        market,
+                        locale: market.locale,
+                        language: 'zh' as const,
+                        loading: selectionPending,
+                        selectionPending,
+                        checkoutPending,
+                        error: null,
+                        favoriteProductIds: [],
+                        coupons,
+                        ...callbacks,
+                        ...overrides,
+                    },
                 },
-            },
-            createElement(CartPage),
+                createElement(CartPage),
+            ),
         ),
     );
 }
 
 describe('CartPage guest cart', () => {
+    describe.each([false, true])('quoted line pricing, desktop=%s', desktop => {
+        function quotedCart(currencyCode = 'CNY', quantity = 1, unit = 3277, subtotal = unit * quantity) {
+            const originalVariant = cart.lines[0].productVariant;
+            if (!originalVariant) throw new Error('Cart fixture requires a variant');
+            const variant = { ...originalVariant, priceWithTax: 3267, currencyCode };
+            return {
+                ...cart,
+                totalQuantity: quantity,
+                selectedQuantity: quantity,
+                lines: [{ ...cart.lines[0], quantity, productVariant: variant }],
+                checkoutOrder: {
+                    ...checkoutOrder,
+                    totalQuantity: quantity,
+                    currencyCode,
+                    subTotalWithTax: subtotal,
+                    totalWithTax: subtotal,
+                    lines: [
+                        {
+                            id: 'quoted-line',
+                            quantity,
+                            unitPriceWithTax: unit,
+                            linePriceWithTax: subtotal,
+                            proratedUnitPriceWithTax: unit,
+                            productVariant: variant,
+                            customFields: { fulfillmentTypeSnapshot: 'physical' as const },
+                        },
+                    ],
+                },
+            };
+        }
+        function prices(value: StorefrontCart, overrides: Partial<CartPageProps> = {}) {
+            const host = document.createElement('div');
+            host.innerHTML = renderCart(value, [], [], false, false, overrides, desktop);
+            return {
+                unit: host.querySelector(desktop ? '.desktop-cart-unit-price' : '.cart-line-purchase-row b')
+                    ?.textContent,
+                subtotal: host.querySelector('.desktop-cart-amount')?.textContent,
+                summary: host.querySelector('.cart-checkout-bar')?.textContent,
+            };
+        }
+        it.each(['CNY', 'MYR'])('uses the saved quote when live %s catalog pricing changes', currency => {
+            const result = prices(quotedCart(currency));
+            expect(result.unit).toContain('32.77');
+            expect(result.summary).toContain('32.77');
+            if (desktop) expect(result.subtotal).toContain('32.77');
+        });
+        it('keeps native line rounding instead of multiplying the displayed rounded unit', () => {
+            const result = prices(quotedCart('CNY', 3, 333, 1000));
+            expect(result.unit).toContain('3.33');
+            expect(result.summary).toContain(formatMoney(1000, 'CNY', market.locale));
+            if (desktop) expect(result.subtotal).toBe(formatMoney(1000, 'CNY', market.locale));
+        });
+        it('shows the base unit and line amounts before the separately listed order discount', () => {
+            const value = quotedCart('CNY', 2, 1000);
+            value.checkoutOrder.lines[0].proratedUnitPriceWithTax = 900;
+            value.checkoutOrder.discounts = [
+                { adjustmentSource: 'promotion', description: 'Offer', amountWithTax: -200 },
+            ];
+            value.checkoutOrder.subTotalWithTax = value.checkoutOrder.totalWithTax = 1800;
+            const result = prices(value);
+            expect(result.unit).toBe(formatMoney(1000, 'CNY', market.locale));
+            expect(result.summary).toContain(formatMoney(1800, 'CNY', market.locale));
+            if (desktop) expect(result.subtotal).toBe(formatMoney(2000, 'CNY', market.locale));
+        });
+        it('uses the same confirmed snapshot as the summary after an unresolved command', () => {
+            const confirmedCart = quotedCart();
+            const changed = quotedCart('CNY', 1, 9999);
+            const result = prices(changed, { commandUnknown: true, confirmedCart });
+            expect(result.unit).toContain('32.77');
+            expect(result.summary).toContain('32.77');
+        });
+        it.each(['unselected', 'different-quantity', 'different-variant', 'guest'])(
+            'does not apply an unrelated quote: %s',
+            scenario => {
+                const value = quotedCart();
+                if (scenario === 'unselected') value.lines[0].selected = false;
+                if (scenario === 'different-quantity') value.checkoutOrder.lines[0].quantity = 2;
+                if (scenario === 'different-variant')
+                    value.checkoutOrder.lines[0].productVariant = {
+                        ...value.checkoutOrder.lines[0].productVariant,
+                        id: 'other-variant',
+                    };
+                const result = prices(scenario === 'guest' ? { ...value, checkoutOrder: null } : value);
+                expect(result.unit).toContain('32.67');
+            },
+        );
+    });
     it.each(['zh', 'en'] as const)(
         'labels retained prices as last confirmed after a failed read: %s',
         language => {
