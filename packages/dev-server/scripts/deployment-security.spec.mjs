@@ -1152,7 +1152,7 @@ void test('OIDC production deployment uses a locked, immutable S3-to-SSM release
     assert.match(workflow, /actions\/download-artifact@[0-9a-f]{40}/u);
     assert.match(workflow, /aws-actions\/configure-aws-credentials@[0-9a-f]{40}/u);
     assert.match(workflow, /yunqiao-vendure-github-deploy/u);
-    assert.match(workflow, /i-041a146558e432cbf/u);
+    assert.match(workflow, /i-01d6737449bc52460/u);
     assert.match(workflow, /AWS-RunShellScript/u);
     assert.match(workflow, /release-plan\.json/u);
     assert.match(workflow, /\.format == 2/u);
@@ -1589,7 +1589,7 @@ void test('production media preflight accepts the exact reviewed Unicode Channel
                 '--',
                 sha,
                 `${sha}-1-1-linux-x64`,
-                `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/${sha}`,
+                `s3://yunqiao-vendure-prod-backup-098208446664-apne1/deployments/${sha}`,
             ],
             {
                 input: preflight,
@@ -1621,7 +1621,7 @@ void test('referral poster release scope rejects unreviewed values before any pr
                 '--',
                 sha,
                 `${sha}-1-1-linux-x64`,
-                `s3://yunqiao-vendure-prod-backup-079740175286-apne1/deployments/${sha}`,
+                `s3://yunqiao-vendure-prod-backup-098208446664-apne1/deployments/${sha}`,
             ],
             {
                 input: preflight,

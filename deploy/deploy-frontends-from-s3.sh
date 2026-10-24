@@ -7,7 +7,7 @@ readonly components="${4:-}"
 readonly staged_nginx="${5:-false}"
 readonly repository=/var/www/kaiyuangouwu
 readonly releases_dir=/var/www/kaiyuangouwu-frontend-releases
-readonly artifact_bucket=yunqiao-vendure-prod-backup-079740175286-apne1
+readonly artifact_bucket=yunqiao-vendure-prod-backup-098208446664-apne1
 readonly controls_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 fail() { printf '%s\n' "$*" >&2; exit 1; }
 [[ "$target_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'Expected full source SHA'

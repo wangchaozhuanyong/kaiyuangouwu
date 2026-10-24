@@ -1408,7 +1408,7 @@ void test('reviewed offsite file-backup configuration preserves secrets and file
         'VENDURE_FILE_BACKUP_S3_URI',
         'VENDURE_FILE_BACKUP_S3_RETENTION_DAYS',
     ]);
-    assert.equal(plan.destination, 's3://yunqiao-vendure-prod-backup-079740175286-apne1/files');
+    assert.equal(plan.destination, 's3://yunqiao-vendure-prod-backup-098208446664-apne1/files');
     assert.equal(plan.retentionDays, 30);
     assert.equal(JSON.stringify(plan).includes('keep-me'), false);
 
@@ -1427,7 +1427,7 @@ void test('reviewed offsite file-backup configuration preserves secrets and file
     assert.match(contents, /^VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true$/mu);
     assert.match(
         contents,
-        /^VENDURE_FILE_BACKUP_S3_URI=s3:\/\/yunqiao-vendure-prod-backup-079740175286-apne1\/files$/mu,
+        /^VENDURE_FILE_BACKUP_S3_URI=s3:\/\/yunqiao-vendure-prod-backup-098208446664-apne1\/files$/mu,
     );
     assert.match(contents, /^VENDURE_FILE_BACKUP_S3_RETENTION_DAYS=30$/mu);
     const after = statSync(environmentFile);
@@ -1598,7 +1598,7 @@ void test('reviewed file-backup cleanup keeps three local sets and requires veri
         environmentFile,
         [
             'VENDURE_REQUIRE_OFFSITE_FILE_BACKUP=true',
-            'VENDURE_FILE_BACKUP_S3_URI=s3://yunqiao-vendure-prod-backup-079740175286-apne1/files',
+            'VENDURE_FILE_BACKUP_S3_URI=s3://yunqiao-vendure-prod-backup-098208446664-apne1/files',
             'VENDURE_FILE_BACKUP_S3_RETENTION_DAYS=30',
             '',
         ].join('\n'),

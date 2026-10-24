@@ -37,7 +37,7 @@ VENDURE_NGINX_HOST`;
 
 export function nginxReceiptFromInvocation(result, { sha, configHash, backendSha, commandId }) {
     assert.equal(result.CommandId, commandId);
-    assert.equal(result.InstanceId, 'i-041a146558e432cbf');
+    assert.equal(result.InstanceId, 'i-01d6737449bc52460');
     assert.equal(result.Comment, `Nginx release ${sha}`);
     assert.equal(result.Status, 'Success', 'Nginx deployment did not complete successfully');
     assert.equal(result.ResponseCode, 0);
@@ -90,7 +90,7 @@ async function main() {
         '--document-name',
         'AWS-RunShellScript',
         '--instance-ids',
-        'i-041a146558e432cbf',
+        'i-01d6737449bc52460',
         '--comment',
         `Nginx release ${sha}`,
         '--parameters',
@@ -108,7 +108,7 @@ async function main() {
                 '--command-id',
                 commandId,
                 '--instance-id',
-                'i-041a146558e432cbf',
+                'i-01d6737449bc52460',
             ]);
         } catch (error) {
             if (!/InvocationDoesNotExist/u.test(String(error.stderr))) throw error;

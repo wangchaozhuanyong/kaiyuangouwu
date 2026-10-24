@@ -19,8 +19,8 @@ import subprocess
 import sys
 
 
-BUCKET = "yunqiao-vendure-prod-backup-079740175286-apne1"
-OWNER = "079740175286"
+BUCKET = "yunqiao-vendure-prod-backup-098208446664-apne1"
+OWNER = "098208446664"
 REGION = "ap-northeast-1"
 SOURCE = "/var/www/kaiyuangouwu/packages/dev-server/.env"
 KEY_NAMES = ("TWO_FACTOR_DASHBOARD_ENCRYPTION_KEY", "ADMIN_TWO_FACTOR_ENCRYPTION_KEY")

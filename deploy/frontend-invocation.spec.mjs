@@ -9,7 +9,7 @@ const commandId = 'aa4285f5-3701-449c-a23b-aa3407cddeb6';
 const sourceSha = '3949cb7468ef0ee53a79eff568305b29d497e642';
 const native = {
     CommandId: commandId,
-    InstanceId: 'i-041a146558e432cbf',
+    InstanceId: 'i-01d6737449bc52460',
     Comment: `Frontend release ${sourceSha}`,
     Status: 'Failed',
     ResponseCode: 1,

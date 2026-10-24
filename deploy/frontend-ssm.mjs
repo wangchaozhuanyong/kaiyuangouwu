@@ -67,7 +67,7 @@ async function main() {
         '--document-name',
         'AWS-RunShellScript',
         '--instance-ids',
-        'i-041a146558e432cbf',
+        'i-01d6737449bc52460',
         '--comment',
         `Frontend release ${sha}`,
         '--parameters',
@@ -85,7 +85,7 @@ async function main() {
                 '--command-id',
                 commandId,
                 '--instance-id',
-                'i-041a146558e432cbf',
+                'i-01d6737449bc52460',
             ]);
         } catch (error) {
             if (!/InvocationDoesNotExist/u.test(String(error.stderr))) throw error;
@@ -111,7 +111,7 @@ async function main() {
     process.stdout.write(summary);
 }
 
-const instanceId = 'i-041a146558e432cbf';
+const instanceId = 'i-01d6737449bc52460';
 
 export function maskedDeploymentLines(value) {
     return String(value ?? '')

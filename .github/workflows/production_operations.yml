@@ -147,9 +147,9 @@ jobs:
             nginx_sha: ${{ steps.operation.outputs.nginx_sha }}
         env:
             AWS_REGION: ap-northeast-1
-            AWS_ACCOUNT_ID: '079740175286'
-            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
-            INSTANCE_ID: i-041a146558e432cbf
+            AWS_ACCOUNT_ID: '098208446664'
+            AWS_ROLE_ARN: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
+            INSTANCE_ID: i-01d6737449bc52460
             OPS_OPERATION: ${{ inputs.operation }}
             OPS_EXPECTED_PLAN_SHA256: ${{ inputs.expected_plan_sha256 }}
             OPS_SOURCE_SHA: ${{ inputs.source_sha || github.sha }}

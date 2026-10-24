@@ -38,12 +38,12 @@ jobs:
         env:
             ACCEPTANCE_RUN_ID: ${{ inputs.acceptance_run_id }}
             APPLY_CHANGES: ${{ inputs.apply }}
-            AWS_ACCOUNT_ID: '079740175286'
+            AWS_ACCOUNT_ID: '098208446664'
             AWS_REGION: ap-northeast-1
-            AWS_ROLE_ARN: arn:aws:iam::079740175286:role/yunqiao-vendure-github-deploy
+            AWS_ROLE_ARN: arn:aws:iam::098208446664:role/yunqiao-vendure-github-deploy
             DEPLOYMENT_RUN_ID: ${{ inputs.deployment_run_id }}
             GH_TOKEN: ${{ github.token }}
-            INSTANCE_ID: i-041a146558e432cbf
+            INSTANCE_ID: i-01d6737449bc52460
             PRODUCTION_SHA: ${{ inputs.production_sha }}
 
         steps:
