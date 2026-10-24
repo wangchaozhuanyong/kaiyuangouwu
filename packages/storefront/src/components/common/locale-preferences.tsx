@@ -132,7 +132,7 @@ export function LocalePreferencesSheet({
                 <fieldset className="locale-preferences-fieldset">
                     <legend>
                         <WalletCards aria-hidden="true" />
-                        {isZh ? '付款货币' : 'Payment currency'}
+                        {isZh ? '货币偏好（以订单为准）' : 'Currency preference'}
                     </legend>
                     <div className="locale-preferences-currencies" role="radiogroup">
                         {availableCurrencies.map(currencyCode => (
