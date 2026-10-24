@@ -162,6 +162,7 @@ export const REQUIRED_RUNTIME_FILES = Object.freeze([
     'production-runtime-audit.mjs',
     'security-vendors.mjs',
     'security-vendor-definitions.mjs',
+    'zod-security-backport.mjs',
     'packages/catalog-management-plugin/dist/index.js',
     'packages/dev-server/dist/index.js',
     'packages/dev-server/dist/index-worker.js',
@@ -614,7 +615,11 @@ async function writeRuntimeRootFiles(stagingRoot, rootManifest, metadata) {
         path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
         path.join(stagingRoot, 'production-runtime-audit.mjs'),
     );
-    for (const file of ['security-vendors.mjs', 'security-vendor-definitions.mjs']) {
+    for (const file of [
+        'security-vendors.mjs',
+        'security-vendor-definitions.mjs',
+        'zod-security-backport.mjs',
+    ]) {
         await cp(
             path.join(repositoryRoot, 'packages/dev-server/scripts', file),
             path.join(stagingRoot, file),

@@ -712,6 +712,7 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         ]) {
             await cp(path.join(repositoryRoot, 'node_modules', name), path.join(root, 'node_modules', name), {
                 recursive: true,
+                dereference: true,
             });
         }
         await cp(
@@ -722,7 +723,11 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
             path.join(repositoryRoot, 'packages/dev-server/scripts/production-runtime-audit.mjs'),
             path.join(root, 'production-runtime-audit.mjs'),
         );
-        for (const file of ['security-vendors.mjs', 'security-vendor-definitions.mjs']) {
+        for (const file of [
+            'security-vendors.mjs',
+            'security-vendor-definitions.mjs',
+            'zod-security-backport.mjs',
+        ]) {
             await cp(path.join(repositoryRoot, 'packages/dev-server/scripts', file), path.join(root, file));
         }
         await writeFile(path.join(root, 'package.json'), '{"name":"fixture-runtime","version":"1.0.0"}\n');
@@ -810,6 +815,7 @@ void test('standalone runtime verifier rechecks pinned patches and preserves raw
         await cp(
             path.join(repositoryRoot, 'node_modules/braces/lib/parse.js'),
             path.join(root, 'node_modules/braces/lib/parse.js'),
+            { dereference: true },
         );
         const critical = structuredClone(report);
         critical.findings[0].severity = 'critical';
@@ -846,6 +852,7 @@ void test('copied runtime CLI validates governance imports and the database driv
             ['production-runtime-audit.mjs', 'production-runtime-audit.mjs'],
             ['security-vendors.mjs', 'security-vendors.mjs'],
             ['security-vendor-definitions.mjs', 'security-vendor-definitions.mjs'],
+            ['zod-security-backport.mjs', 'zod-security-backport.mjs'],
         ]) {
             await cp(
                 path.join(repositoryRoot, 'packages/dev-server/scripts', source),
