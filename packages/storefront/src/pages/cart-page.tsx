@@ -382,6 +382,7 @@ export function CartPage() {
                                         title={isZh ? '普通商品' : 'Physical products'}
                                         hint={isZh ? '配送方式结算时确认' : 'Delivery confirmed at checkout'}
                                         lines={sortPinnedLines(physical)}
+                                        checkoutOrder={amountOrder}
                                         market={market}
                                         locale={locale}
                                         language={language}
@@ -413,6 +414,7 @@ export function CartPage() {
                                                 : 'Processed by the selected delivery method after payment'
                                         }
                                         lines={sortPinnedLines(digital)}
+                                        checkoutOrder={amountOrder}
                                         market={market}
                                         locale={locale}
                                         language={language}

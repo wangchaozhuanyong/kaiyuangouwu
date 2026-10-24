@@ -26,14 +26,14 @@ packaging {
 
 export const cartQuoteFields = `
 id code state orderPlacedAt totalQuantity subTotalWithTax shippingWithTax totalWithTax currencyCode
-customer { id emailAddress }
+customer{id emailAddress}
 payments { id kind method amount state transactionId metadata }
-discounts { adjustmentSource description amountWithTax }
-taxSummary { description taxRate taxBase taxTotal }
+discounts{adjustmentSource description amountWithTax}
+taxSummary{description taxRate taxBase taxTotal}
 couponCodes
-customFields { customerNote deliveryEmail paymentCurrencyCode }
+customFields{customerNote deliveryEmail paymentCurrencyCode}
 lines {
-  id quantity linePriceWithTax proratedUnitPriceWithTax
+  id quantity unitPriceWithTax linePriceWithTax proratedUnitPriceWithTax
   productVariant {
     id name sku priceWithTax currencyCode saleableStockLevel autoCardAvailableStock
     featuredAsset { id preview }

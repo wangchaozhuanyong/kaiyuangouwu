@@ -38,6 +38,7 @@ import {
 import { AccountPageContext } from '../storefront-page-contexts';
 import { routeNavigateOptions } from '../storefront-router';
 import { DailyRecommendationSection } from '../storefront-ui/daily-recommendation-section';
+import { isPhysicalDeliveryOrder } from '../storefront-ui/delivery-details';
 import { orderNotification, orderStateLabel } from '../storefront-ui/order-ui';
 import { AccountShortcut, LegalFooter, SectionHeader, ServiceButton } from '../storefront-ui/page-shell';
 import { formatMoney, OrderImage, ProductVariantImage } from '../storefront-ui/product-display';
@@ -178,13 +179,7 @@ export function AccountPage() {
             referralProgramQuery.isPending ||
             (referralEnabled && referralOverviewQuery.isPending)),
     );
-    const latestLogisticsOrder = orders.find(order =>
-        order.lines.some(
-            line =>
-                line.customFields.fulfillmentTypeSnapshot !== 'digital' &&
-                line.productVariant.customFields.fulfillmentType !== 'digital',
-        ),
-    );
+    const latestLogisticsOrder = orders.find(isPhysicalDeliveryOrder);
     const latestOrder = orders[0];
     const recentVariants = Array.from(
         new Map(

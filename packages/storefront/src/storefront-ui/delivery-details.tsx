@@ -2,6 +2,7 @@ import { Check, Copy, Package } from 'lucide-react';
 import { useState } from 'react';
 
 import { formatBusinessDate } from '../business-time';
+import { isPendingPaymentOrderState } from '../order-refresh';
 import { Order, OrderSummary, StorefrontLanguage } from '../types';
 
 import { SafeImage } from './product-display';
@@ -27,6 +28,15 @@ export function physicalFulfillments<T extends { method: string }>(fulfillments:
                 'auto-card-email',
                 'auto-card-fulfillment',
             ].includes(item.method.trim().toLowerCase()),
+    );
+}
+
+/** Pending payment is not delivery progress, unless a physical package already exists. */
+export function isPhysicalDeliveryOrder(order: OrderSummary): boolean {
+    return (
+        physicalDeliveryLines(order).length > 0 &&
+        (physicalFulfillments(order.fulfillments ?? []).length > 0 ||
+            (order.state !== 'AddingItems' && !isPendingPaymentOrderState(order.state)))
     );
 }
 

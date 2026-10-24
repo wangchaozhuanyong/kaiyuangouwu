@@ -20,6 +20,7 @@ import {
     deliveryLabel,
     deliveryStatus,
     deliveryUpdatedAt,
+    isPhysicalDeliveryOrder,
     physicalDeliveryLines,
     physicalFulfillments,
     type DeliveryFilter,
@@ -102,12 +103,7 @@ export function LogisticsPage({
             (list.data?.pages.flatMap(page => page.items) ?? []).map(order => [order.id, order]),
         ).values(),
     ]
-        .filter(
-            order =>
-                physicalDeliveryLines(order).length &&
-                (!['AddingItems', 'ArrangingPayment'].includes(order.state) ||
-                    physicalFulfillments(order.fulfillments ?? []).length),
-        )
+        .filter(isPhysicalDeliveryOrder)
         .sort((a, b) => Date.parse(deliveryUpdatedAt(b) ?? '') - Date.parse(deliveryUpdatedAt(a) ?? ''));
     const term = route.term?.trim().toLocaleLowerCase() ?? '';
     const visible = orders.filter(
@@ -184,14 +180,14 @@ export function LogisticsPage({
                                 action={zh ? '重试' : 'Retry'}
                                 onAction={() => void detail.refetch({ cancelRefetch: false })}
                             />
-                        ) : !selectedOrder || !physicalDeliveryLines(selectedOrder).length ? (
+                        ) : !selectedOrder || !isPhysicalDeliveryOrder(selectedOrder) ? (
                             <EmptyState
                                 icon={<Package />}
                                 title={zh ? '暂无可查看的配送信息' : 'No delivery information'}
                                 detail={
                                     zh
-                                        ? '该订单不存在或不包含实物商品'
-                                        : 'This order is unavailable or has no physical products'
+                                        ? '该订单尚无实物配送信息'
+                                        : 'This order has no physical delivery information yet'
                                 }
                             />
                         ) : (
@@ -545,14 +541,14 @@ export function LogisticsPage({
                             />
                         ) : detail.isLoading ? (
                             <PageSkeleton label={zh ? '正在加载物流详情' : 'Loading delivery details'} />
-                        ) : !selectedOrder || !physicalDeliveryLines(selectedOrder).length ? (
+                        ) : !selectedOrder || !isPhysicalDeliveryOrder(selectedOrder) ? (
                             <EmptyState
                                 icon={<Package />}
                                 title={zh ? '暂无可查看的配送信息' : 'No delivery information'}
                                 detail={
                                     zh
-                                        ? '该订单不存在或不包含实物商品'
-                                        : 'This order is unavailable or has no physical products'
+                                        ? '该订单尚无实物配送信息'
+                                        : 'This order has no physical delivery information yet'
                                 }
                             />
                         ) : (

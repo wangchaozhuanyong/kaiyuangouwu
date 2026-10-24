@@ -123,6 +123,7 @@ export interface StorefrontCatalogInput {
 export interface OrderLine {
     id: string;
     quantity: number;
+    unitPriceWithTax?: number;
     linePriceWithTax: number;
     proratedUnitPriceWithTax: number;
     productVariant: ProductVariant;
