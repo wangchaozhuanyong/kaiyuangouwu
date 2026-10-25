@@ -297,7 +297,7 @@ describe('announcement query continuity', () => {
             expect(view.host.textContent).not.toContain('Body old-scope');
             act(() => resolve(announcement('new-scope')));
             await settle();
-            expect(view.host.textContent).toContain('Body new-scope');
+            await vi.waitFor(() => expect(view.host.textContent).toContain('Body new-scope'));
             view.list.mockResolvedValueOnce({ totalItems: 1, items: [announcement('new-list')] });
             view.render({ route: { name: 'announcements' } });
             expect(view.host.textContent).not.toContain('Announcement old-scope');
