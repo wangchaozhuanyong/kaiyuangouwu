@@ -1,4 +1,4 @@
-// Document startup feedback only. React owns its queries and local loading states.
+// Document startup and native scroll handoff. React owns SPA queries and loading states.
 (function () {
     if (new URLSearchParams(location.search).get('storefrontPreviewEmbedded') === '1') return;
     var html = document.documentElement;
@@ -6,6 +6,11 @@
     var startupFailed = false;
     var startupTimer;
     var feedbackTimer;
+    function documentScrollRestoration(mode) {
+        try {
+            if ('scrollRestoration' in history) history.scrollRestoration = mode;
+        } catch (e) {}
+    }
     function stopStartupWatch() {
         clearTimeout(startupTimer);
         clearTimeout(feedbackTimer);
@@ -113,8 +118,16 @@
     if (document.readyState === 'loading')
         document.addEventListener('DOMContentLoaded', parsed, { once: true });
     else parsed();
+    window.addEventListener('pagehide', function () {
+        // Router uses manual restoration inside the app. A replacement document
+        // needs native restoration before its first paint, ahead of React startup.
+        documentScrollRestoration('auto');
+    });
     window.addEventListener('pageshow', function (event) {
-        if (event.persisted && html.hasAttribute('data-storefront-app-owned')) finish();
+        if (html.hasAttribute('data-storefront-app-owned')) {
+            documentScrollRestoration('manual');
+            if (event.persisted) finish();
+        }
     });
     // Do not hide the old page on beforeunload. The browser retains it until the
     // next document arrives; cancelled navigation and back/forward stay usable.
