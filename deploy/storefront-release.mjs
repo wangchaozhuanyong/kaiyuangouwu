@@ -11,6 +11,7 @@ import {
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { preserveFrontendAssets } from './frontend-asset-compatibility.mjs';
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { verifyConfiguredProductionStorefronts } from './verify-production-storefronts.mjs';
 
@@ -46,6 +47,7 @@ export function switchStorefront(target, pointer) {
 
 export async function activateStorefront({ candidate, pointer, verify }) {
     const previous = realpathSync(pointer);
+    preserveFrontendAssets(previous, candidate);
     let switched = false;
     const restore = () => {
         if (switched) {

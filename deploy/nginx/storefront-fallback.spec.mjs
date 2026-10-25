@@ -5,13 +5,15 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { preserveFrontendAssets } from '../frontend-asset-compatibility.mjs';
+
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const source = readFileSync(path.join(repo, 'deploy/nginx/damatong.conf'), 'utf8');
 function block(label, after = 0) {
     const start = source.indexOf(label + ' {', after);
     assert.ok(start >= 0, 'Missing production Nginx block: ' + label);
     let depth = 0;
-    for (let index = source.indexOf('{', start); index < source.length; index++) {
+    for (let index = start + label.length + 1; index < source.length; index++) {
         if (source[index] === '{') depth++;
         if (source[index] === '}' && --depth === 0) return source.slice(start, index + 1);
     }
@@ -47,6 +49,13 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '<main>Application shell with recovery navigation</main>',
     );
     writeFileSync(path.join(fixture, 'www/style.css'), 'body { color: black; }');
+    mkdirSync(path.join(fixture, 'prior/assets'), { recursive: true });
+    mkdirSync(path.join(fixture, 'www/assets'), { recursive: true });
+    writeFileSync(path.join(fixture, 'prior/assets/cold-12345678.js'), 'export const version = "old";');
+    writeFileSync(path.join(fixture, 'prior/assets/cold-abcdefgh.css'), '.old { color: blue; }');
+    writeFileSync(path.join(fixture, 'www/assets/current-87654321.js'), 'export const version = "new";');
+    preserveFrontendAssets(path.join(fixture, 'prior'), path.join(fixture, 'www'));
+    rmSync(path.join(fixture, 'prior'), { recursive: true });
     writeFileSync(path.join(fixture, 'proxy_params'), 'proxy_set_header X-Forwarded-Proto $scheme;\n');
     const config = [
         'events {}',
@@ -54,10 +63,11 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'access_log off;',
         'error_log /dev/stderr warn;',
         'default_type text/html;',
-        'types { text/css css; }',
+        'types { text/css css; application/javascript js; }',
         'map $host $customer_vault_frame_origin { default "\'self\'"; }',
         fallbackMap,
         coopMap,
+        block('map "$status|$uri" $build_asset_cache_control'),
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
         'location = /storefront/redirect {',
@@ -67,6 +77,14 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'location = /storefront/html { default_type "text/html; charset=utf-8"; return 200 "Published public page"; }',
         '}',
         'server { listen 8080; root /fixtures/www;',
+        block(
+            source
+                .split('\n')
+                .find(line => line.trim().startsWith('location ~ "^/assets/'))
+                .trim()
+                .replace(/ \{$/u, ''),
+        ),
+        block('location ~* (^|/)\\.'),
         block('location = /index.html'),
         block(
             'location ~ ^/(?:((?:zh|en)(?:/|$)))?(?:home|product|category|search|services|support|legal|guides/[A-Za-z0-9_-]+)?/?$',
@@ -77,6 +95,20 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         '} }',
     ].join('\n');
     writeFileSync(path.join(fixture, 'nginx.conf'), config);
+    docker(
+        'run',
+        '--rm',
+        '--pull=never',
+        '-v',
+        fixture + ':/fixtures:ro',
+        '-v',
+        path.join(fixture, 'nginx.conf') + ':/etc/nginx/nginx.conf:ro',
+        '-v',
+        path.join(fixture, 'proxy_params') + ':/etc/nginx/proxy_params:ro',
+        image,
+        'nginx',
+        '-t',
+    );
     const id = docker(
         'run',
         '-d',
@@ -116,6 +148,22 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         }
         assert.equal((await fetch(origin + '/ACCOUNT/')).status, 200);
     });
+    await t.test(
+        'serves native and retained hashed assets at the original URL without mixing build directories',
+        async () => {
+            for (const file of ['cold-12345678.js', 'cold-abcdefgh.css', 'current-87654321.js']) {
+                const response = await fetch(origin + '/assets/' + file);
+                assert.equal(response.status, 200, file);
+                assert.match(response.headers.get('content-type'), /javascript|css/u);
+                assert.match(response.headers.get('cache-control'), /immutable/u);
+                assert.doesNotMatch(await response.text(), /<html/u);
+            }
+            assert.equal((await fetch(origin + '/.compat-assets/assets/cold-12345678.js')).status, 404);
+            const missing = await fetch(origin + '/assets/missing-12345678.js');
+            assert.equal(missing.status, 404);
+            assert.match(missing.headers.get('cache-control'), /no-store/u);
+        },
+    );
     await t.test('retains 404 with the recovery shell and noindex', async () => {
         for (const route of [
             '/missing-page',
