@@ -1056,7 +1056,7 @@ export function MailQueryPage({
                                                                 title={`mail-body-${mail.id}-${reactId}`}
                                                                 className="mail-iframe"
                                                                 srcDoc={mail.bodyHtml}
-                                                                sandbox="allow-same-origin"
+                                                                sandbox="allow-popups allow-popups-to-escape-sandbox"
                                                             />
                                                         ) : (
                                                             <pre>

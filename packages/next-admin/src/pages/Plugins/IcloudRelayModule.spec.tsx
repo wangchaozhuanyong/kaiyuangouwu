@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
 // @vitest-environment jsdom
 import { ApolloProvider } from '@apollo/client/react';
 import { act } from 'react';
@@ -285,5 +287,13 @@ describe('iCloud admin save interactions against the server schema', () => {
         await click(button('关闭', dialog()));
         expect(fixture.state.historyRepaired).toBe(false);
         expect(fixture.state.requests.filter(r => r.name === 'ReconcileIcloudMailHistory')).toHaveLength(1);
+    });
+});
+
+describe('admin mail preview navigation', () => {
+    it('allows mail links to open without granting scripts or parent-origin access', () => {
+        const source = readFileSync(new NodeURL('./IcloudRelayModule.tsx', import.meta.url), 'utf8');
+        expect(source).toContain('sandbox="allow-popups allow-popups-to-escape-sandbox"');
+        expect(source).not.toContain('sandbox="allow-same-origin"');
     });
 });

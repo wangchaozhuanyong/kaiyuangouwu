@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { URL as NodeURL } from 'node:url';
 // @vitest-environment jsdom
 /* eslint-disable import/order, @typescript-eslint/unbound-method -- Test harness setup */
 import { act } from 'react';
@@ -174,7 +176,8 @@ describe('MailQueryPage', () => {
                     receivedAt: new Date().toISOString(),
                     extractedCode: '739201',
                     bodyText: 'Your verification code is 739201',
-                    bodyHtml: '<p>Your code: 739201</p>',
+                    bodyHtml:
+                        '<p>Your code: 739201</p><a href="https://example.invalid/login" target="_blank" rel="noopener noreferrer">登录</a>',
                     targetEmail: 'test_alias@icloud.com',
                     virtualEmailId: 'v-101',
                 },
@@ -223,6 +226,14 @@ describe('MailQueryPage', () => {
         expect(container.textContent).toContain('739201');
         expect(container.textContent).toContain('Verification System');
         expect(container.textContent).toContain('一键复制');
+
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('.toggle-body-btn')?.click();
+            await Promise.resolve();
+        });
+        const frame = container.querySelector('iframe');
+        expect(frame?.getAttribute('sandbox')).toBe('allow-popups allow-popups-to-escape-sandbox');
+        expect(frame?.getAttribute('srcdoc')).toContain('https://example.invalid/login');
 
         // Check recent queries saved to localStorage
         const stored = localStorage.getItem('icloud_relay_recent_queries:my-malaysia:guest');
@@ -563,5 +574,13 @@ describe('MailQueryPage', () => {
 
         expect(mockApi.queryMails).not.toHaveBeenCalled();
         expect(container.textContent).toContain('请输入专属查询码');
+    });
+});
+
+describe('mail preview navigation', () => {
+    it('allows user-opened windows without inheriting the email sandbox or enabling scripts', () => {
+        const source = readFileSync(new NodeURL('./mail-query-page.tsx', import.meta.url), 'utf8');
+        expect(source).toContain('sandbox="allow-popups allow-popups-to-escape-sandbox"');
+        expect(source).not.toContain('sandbox="allow-same-origin"');
     });
 });
