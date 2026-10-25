@@ -188,7 +188,7 @@ function normalizeStorefrontUrl(value) {
 
 // The public homepage permanently selects one explicit language. Follow only
 // that single same-origin hop; other redirects remain a release failure.
-async function readDirectStorefront(storefront, fetchImpl, timeoutMs) {
+export async function readDirectStorefront(storefront, fetchImpl, timeoutMs) {
     let response = await fetchWithTimeout(fetchImpl, storefront, { redirect: 'manual' }, timeoutMs);
     let localized = false;
     if ([301, 308].includes(response.status)) {

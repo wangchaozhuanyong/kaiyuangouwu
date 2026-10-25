@@ -3,6 +3,10 @@ name: Production Runtime Artifact
 on:
     workflow_call:
         inputs:
+            force_rebuild:
+                required: false
+                default: false
+                type: boolean
             retain_frontends:
                 type: boolean
                 default: false
@@ -261,6 +265,7 @@ jobs:
                   echo "BUN_AUDIT_REPORT=$BUN_AUDIT_REPORT" >> "$GITHUB_ENV"
 
             - name: Reuse compiled output from the verified checks
+              if: ${{ !inputs.force_rebuild }}
               id: compiled
               env:
                   NODE_ENV: production

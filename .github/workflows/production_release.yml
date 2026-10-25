@@ -3,6 +3,10 @@ name: Production Release
 on:
     workflow_call:
         inputs:
+            rebuild_runtime:
+                required: false
+                default: false
+                type: boolean
             target_sha:
                 required: true
                 type: string
@@ -17,6 +21,11 @@ on:
                 type: string
     workflow_dispatch:
         inputs:
+            rebuild_runtime:
+                description: 'Runtime lane: compile fresh binaries from main, ignoring compiled caches'
+                required: false
+                default: false
+                type: boolean
             target_sha:
                 description: 'Full 40-character SHA currently at origin/main'
                 required: true
@@ -235,6 +244,7 @@ jobs:
         if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && needs.route.outputs.lane == 'runtime'
         uses: ./.github/workflows/build_production_runtime.yml
         with:
+            force_rebuild: ${{ inputs.rebuild_runtime || false }}
             retain_frontends: ${{ inputs.retain_frontends || false }}
             ci_run_id: ${{ needs.route.outputs.ci_run_id || github.run_id }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}

@@ -127,7 +127,14 @@ function summarizePublicDocumentRequests(file) {
     return summarizeRecentOrderErrors(
         file,
         (contents, evidence) => {
-            const paths = new Set(['/', '/zh/', '/en/', '/health', '/_storefront/page-data']);
+            const paths = new Set([
+                '/',
+                '/zh/',
+                '/en/',
+                '/health',
+                '/_storefront/page-data',
+                '/storefront/html',
+            ]);
             const requests = [];
             const duration = value => {
                 const values = String(value ?? '')

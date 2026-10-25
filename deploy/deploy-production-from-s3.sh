@@ -1132,6 +1132,12 @@ for attempt in $(seq 1 20); do
 done
 sudo -n systemctl is-active --quiet vendure-nginx-error-log.service
 sudo -n test -S /run/vendure-nginx-log/error.sock
+# Process health is not page readiness: a cold shared public read can still take
+# seconds after /health succeeds. Prepare actual configured home documents before
+# changing frontend pointers; the following public acceptance keeps its 10s limit.
+node "${repository}/deploy/verify-production-storefronts.mjs" \
+    --mode prepare --origin-url http://127.0.0.1:3002 --timeout-ms 20000
+
 # Initialize/switch the frontend before Nginx starts using its independent pointer.
 # Both full releases and the fast lane are covered by the shared deployment lock.
 if [[ "$retain_frontends" == true ]]; then
