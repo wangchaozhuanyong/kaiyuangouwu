@@ -691,7 +691,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
     function renderBodyContent(mail) {
         if (mail.bodyHtml) {
             const doc = escapeAttr(mail.bodyHtml);
-            return '<iframe class="mail-iframe" srcdoc="' + doc + '" sandbox="allow-same-origin"></iframe>';
+            return '<iframe class="mail-iframe" srcdoc="' + doc + '" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>';
         }
         return '<pre>' + escapeHtml(mail.bodyText || '(此邮件无正文内容)') + '</pre>';
     }
