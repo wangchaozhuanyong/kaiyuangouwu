@@ -947,6 +947,7 @@ void test('diagnose reads only the two fixed error logs and makes no screenshot-
         new RegExp(
             String.raw`request\.operation === 'diagnose'\s*\?\s*\{\s*recentOrderErrorSummary:\s*` +
                 String.raw`require\('\.\/production-order-error-summary\.cjs'\)\.inspectRecentOrderErrors\(\)` +
+                String.raw`,\s*publicDocumentLatency:\s*require\('\.\/production-order-error-summary\.cjs'\)\.inspectPublicDocumentRequests\(\)` +
                 String.raw`,?\s*\}\s*:\s*\{\s*\}`,
             'u',
         ),
@@ -983,6 +984,77 @@ void test('error summaries strip private values and dynamic messages, cap catego
     assert.doesNotMatch(JSON.stringify(summary), /PRIVATE|customer@|token=|Object\.call|private\.ts/u);
     assert.equal(readFileSync(f.file, 'utf8'), contents);
     assert.equal(statSync(f.file).mtimeMs, before.mtimeMs);
+});
+
+void test('public transport diagnostics read one fixed ingress log and expose no private fields', t => {
+    const reads = [];
+    const inspected = orderErrorSummary.inspectPublicDocumentRequests(file => {
+        reads.push(file);
+        return { status: 'missing' };
+    });
+    assert.deepEqual(reads, ['/var/log/nginx/moyao-storefront-access.log']);
+    assert.equal(inspected.maxBytes, 8 * 1024 * 1024);
+    const row = {
+        time: '2026-10-25T19:25:00Z',
+        method: 'GET',
+        path: '/zh/',
+        status: 499,
+        request_time: '10.001',
+        upstream_response_time: '0.010, 10.000',
+        host: 'PRIVATE-HOST',
+        remote_addr: 'PRIVATE-IP',
+        query: 'token=PRIVATE-TOKEN',
+        cookie: 'PRIVATE-COOKIE',
+        request_id: 'PRIVATE-ID',
+    };
+    const f = errorLogFixture(
+        t,
+        [
+            'invalid PRIVATE-LOG',
+            JSON.stringify(row),
+            JSON.stringify({ ...row, path: '/customer/PRIVATE-CUSTOMER' }),
+            JSON.stringify({ ...row, method: 'POST' }),
+            JSON.stringify({ ...row, time: 'PRIVATE-INVALID-TIME' }),
+        ].join('\n'),
+    );
+    const before = statSync(f.file);
+    const summary = orderErrorSummary.summarizePublicDocumentRequests(f.file);
+    assert.equal(summary.matchingRequests, 1);
+    assert.deepEqual(summary.slowest[0], {
+        at: '2026-10-25T19:25:00.000Z',
+        path: '/zh/',
+        status: 499,
+        seconds: 10.001,
+        upstreamSeconds: 10,
+    });
+    assert.doesNotMatch(JSON.stringify(summary), /PRIVATE|token=|cookie|remote_addr|request_id/u);
+    assert.equal(statSync(f.file).mtimeMs, before.mtimeMs);
+});
+
+void test('public transport evidence keeps the slowest and latest bounds and refuses links', t => {
+    const f = errorLogFixture(
+        t,
+        Array.from({ length: 50 }, (_, index) =>
+            JSON.stringify({
+                time: new Date(Date.UTC(2026, 9, 25, 19, 0, index)).toISOString(),
+                method: 'HEAD',
+                path: '/health',
+                status: 200,
+                request_time: String(index),
+                upstream_response_time: '-',
+            }),
+        ).join('\n'),
+    );
+    const result = orderErrorSummary.summarizePublicDocumentRequests(f.file);
+    assert.equal(result.matchingRequests, 50);
+    assert.equal(result.slowest.length, 20);
+    assert.equal(result.latest.length, 20);
+    assert.equal(result.slowest[0].seconds, 49);
+    assert.equal(result.latest[0].seconds, 30);
+    assert.equal(result.latest[0].upstreamSeconds, null);
+    const link = path.join(f.root, 'link.log');
+    symlinkSync(f.file, link);
+    assert.deepEqual(orderErrorSummary.summarizePublicDocumentRequests(link), { status: 'symlink-refused' });
 });
 
 void test('error summaries read at most the last 128 KiB and discard the first partial record', t => {

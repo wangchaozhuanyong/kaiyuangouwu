@@ -1570,6 +1570,8 @@ function diagnose(request) {
             ? {
                   recentOrderErrorSummary:
                       require('./production-order-error-summary.cjs').inspectRecentOrderErrors(),
+                  publicDocumentLatency:
+                      require('./production-order-error-summary.cjs').inspectPublicDocumentRequests(),
               }
             : {}),
         releaseSize: readCommand('du', ['-skx', '/var/www/kaiyuangouwu-releases']),
