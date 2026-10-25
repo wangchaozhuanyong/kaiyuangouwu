@@ -429,7 +429,7 @@ export function restorePublicQueryCache(
     now = Date.now(),
 ): boolean {
     try {
-        for (const legacyKey of LEGACY_PUBLIC_QUERY_CACHE_KEYS) storage.removeItem(legacyKey);
+        LEGACY_PUBLIC_QUERY_CACHE_KEYS.forEach(key => storage.removeItem(key));
         const value = storage.getItem(PUBLIC_QUERY_CACHE_KEY);
         if (!value) return false;
         const payload = JSON.parse(value) as PersistedPublicQueryCache;
@@ -444,10 +444,14 @@ export function restorePublicQueryCache(
         }
         // Existing sessions can contain both bootstrap and resolved-market branding.
         // Always load configuration from the Shop API so cleared copy cannot return on reload.
+        // Restore missing reads only. A later local timestamp cannot replace the
+        // document or a completed live read with a previous visit's artwork.
         hydrate(client, {
-            ...payload.state,
             queries: payload.state.queries.filter(
-                query => isReusablePublicQuery(query.queryKey) && isLivePublicQuery(client, query.queryKey),
+                ({ queryKey }) =>
+                    isReusablePublicQuery(queryKey) &&
+                    isLivePublicQuery(client, queryKey) &&
+                    client.getQueryData(queryKey) === undefined,
             ),
         });
         return true;
