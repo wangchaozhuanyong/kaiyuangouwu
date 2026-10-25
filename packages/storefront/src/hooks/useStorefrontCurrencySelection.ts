@@ -7,18 +7,20 @@ import { storefrontErrorMessage } from '../storefront-errors';
 /** Load payment preference coordination only when the customer confirms a selection. */
 export function useStorefrontCurrencySelection(options: CurrencySelectionOptions) {
     const { api, cartController, customerId, language } = options;
-    const owner = useMemo(() => ({}), [api, cartController, customerId]);
+    const owner = useMemo(
+        () => ({ request: null as AbortController | null }),
+        [api, cartController, customerId],
+    );
     const ownerRef = useRef(owner);
     ownerRef.current = owner;
-    const pending = useRef<AbortController | null>(null);
-    useEffect(() => () => pending.current?.abort(), [owner]);
+    useEffect(() => () => owner.request?.abort(), [owner]);
 
     return useCallback(
         async (currencyCode: string) => {
-            if (pending.current || options.cartLoading)
+            if (owner.request || options.cartLoading)
                 throw new Error(language === 'zh' ? '请先核对购物车' : 'Review your cart first.');
             const request = new AbortController();
-            pending.current = request;
+            owner.request = request;
             options.setCartLoading(true);
             try {
                 const { confirmCurrencySelection } = await import('../cart/currency-selection').catch(
@@ -33,8 +35,8 @@ export function useStorefrontCurrencySelection(options: CurrencySelectionOptions
                     () => ownerRef.current === owner,
                 );
             } finally {
-                if (pending.current === request) {
-                    pending.current = null;
+                if (owner.request === request) {
+                    owner.request = null;
                     options.setCartLoading(false);
                 }
             }

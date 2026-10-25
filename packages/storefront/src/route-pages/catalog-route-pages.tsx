@@ -124,7 +124,7 @@ export function HomeRoutePage() {
                 currencySelectorEnabled: runtime.currencySelectorEnabled,
                 displayCurrencyCode: runtime.displayCurrencyCode,
                 currencyLoading: runtime.cartLoading,
-                onCurrencyChange: code => void runtime.switchCurrency(code),
+                onCurrencyChange: runtime.switchCurrency,
                 onNotifications: () => runtime.navigate({ name: 'notifications' }),
                 onToast: runtime.notify,
                 onClaimCoupon: runtime.claimCoupon,

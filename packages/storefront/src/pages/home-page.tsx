@@ -410,7 +410,7 @@ export interface HomePageProps {
     currencySelectorEnabled: boolean;
     displayCurrencyCode: string;
     currencyLoading: boolean;
-    onCurrencyChange: (currencyCode: string) => void;
+    onCurrencyChange: (currencyCode: string) => void | Promise<void>;
     onNotifications: () => void;
     onToast?: (message: string) => void;
     onClaimCoupon: (campaignId: string) => Promise<string | null>;

@@ -7,7 +7,7 @@ import {
     Outlet,
     RouterProvider,
 } from '@tanstack/react-router';
-import { act } from 'react';
+import { act, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 
@@ -22,9 +22,10 @@ it.each([
     { initial: 0, lateReset: false },
     { initial: 400, lateReset: false },
     { initial: 400, lateReset: true },
+    { initial: 400, lateReset: false, immediatePending: true },
 ])(
     'keeps the current TanStack cache at $initial with late target reset $lateReset',
-    async ({ initial, lateReset }) => {
+    async ({ initial, lateReset, immediatePending }) => {
         let y = 0;
         let finish!: () => void;
         const slow = new Promise<void>(resolve => {
@@ -34,6 +35,14 @@ it.each([
         vi.spyOn(window, 'scrollTo').mockImplementation((options: ScrollToOptions | number) => {
             y = typeof options === 'object' ? (options.top ?? 0) : 0;
         });
+        function PendingTarget() {
+            useLayoutEffect(() => {
+                // A shorter destination can clamp window scroll before Router onLoad.
+                y = 0;
+                document.dispatchEvent(new Event('scroll'));
+            }, []);
+            return <article>Preparing target</article>;
+        }
         const rootRoute = createRootRoute({
             component: () => {
                 useStorefrontScrollContinuity();
@@ -54,6 +63,7 @@ it.each([
                 getParentRoute: () => rootRoute,
                 path: '/b',
                 loader: () => slow,
+                pendingComponent: PendingTarget,
                 component: () => <article>Target</article>,
             }),
         ]);
@@ -61,7 +71,8 @@ it.each([
         const router = createRouter({
             routeTree: routes,
             history: createMemoryHistory({ initialEntries: ['/a'] }),
-            defaultPendingMs: Infinity,
+            defaultPendingMs: immediatePending ? 0 : Infinity,
+            defaultPendingMinMs: 0,
             scrollRestoration: true,
             getScrollRestorationKey: location => scroll.getKey(location),
         });
@@ -94,8 +105,14 @@ it.each([
                 navigation = router.navigate({ to: '/b' } as never);
                 await Promise.resolve();
             });
-            expect(host.textContent).toBe('Source');
-            await scrollTo(800);
+            if (immediatePending) {
+                await act(async () => new Promise(resolve => setTimeout(resolve, 20)));
+                expect(host.textContent).toBe('Preparing target');
+                await scrollTo(0);
+            } else {
+                expect(host.textContent).toBe('Source');
+                await scrollTo(800);
+            }
             await act(async () => {
                 finish();
                 await navigation;
@@ -108,7 +125,7 @@ it.each([
                 await new Promise(resolve => setTimeout(resolve, 20));
             });
             expect(host.textContent).toBe('Source');
-            expect(y).toBe(800);
+            expect(y).toBe(immediatePending ? initial : 800);
         } finally {
             finish();
             unlisten();

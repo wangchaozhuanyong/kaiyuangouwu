@@ -1096,6 +1096,17 @@ describe('storefront navigation state', () => {
         expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/cart' }));
     });
 
+    it('uses the same router for managed relative and same-origin absolute URLs', () => {
+        act(() => root.render(<Harness />));
+        for (const type of ['PAGE', 'URL', 'SUPPORT'] as const)
+            for (const target of ['services', '/services', window.location.origin + '/services']) {
+                act(() => value.openContentTarget(type, target));
+                expect(router.navigate).toHaveBeenLastCalledWith(
+                    expect.objectContaining({ to: '/services' }),
+                );
+            }
+    });
+
     it('opens authentication on the still-visible page and replaces an uncommitted destination', async () => {
         authenticated = false;
         router.state.status = 'pending';

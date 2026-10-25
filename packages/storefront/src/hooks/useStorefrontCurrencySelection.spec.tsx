@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { act, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,15 +27,22 @@ describe('shared storefront currency synchronization', () => {
     let root: ReturnType<typeof createRoot>;
     let options: Options;
     let select: ReturnType<typeof useStorefrontCurrencySelection>;
+    let startInLayout = false;
+    let layoutSelection: Promise<void> | undefined;
     const api = { cart: vi.fn(), setPaymentCurrencyForOrder: vi.fn() };
     function Harness() {
         select = useStorefrontCurrencySelection(options);
+        useLayoutEffect(() => {
+            if (startInLayout) layoutSelection = select('MYR');
+        });
         return null;
     }
     const render = () => act(() => root.render(<Harness />));
     const choose = (currencyCode: string) => act(async () => select(currencyCode));
     beforeEach(() => {
         vi.clearAllMocks();
+        startInLayout = false;
+        layoutSelection = undefined;
         api.cart.mockReset();
         api.setPaymentCurrencyForOrder.mockReset();
         options = {
@@ -176,6 +183,20 @@ describe('shared storefront currency synchronization', () => {
         await expect(choose('USDT')).rejects.toThrow('请先核对');
         finish(cart('MYR'));
         await act(async () => pending);
+        expect(api.setPaymentCurrencyForOrder).not.toHaveBeenCalled();
+    });
+    it('does not let the previous owner cleanup cancel a newly mounted owner selection', async () => {
+        options = { ...options, api: { ...api } };
+        api.cart.mockResolvedValue(cart('MYR'));
+        startInLayout = true;
+        await act(async () => {
+            root.render(<Harness />);
+            await vi.dynamicImportSettled();
+        });
+        await act(async () => layoutSelection);
+        expect(api.cart).toHaveBeenCalledOnce();
+        expect(api.cart.mock.calls[0][0].aborted).toBe(false);
+        expect(options.commitPreference).toHaveBeenCalledExactlyOnceWith('MYR');
         expect(api.setPaymentCurrencyForOrder).not.toHaveBeenCalled();
     });
 });

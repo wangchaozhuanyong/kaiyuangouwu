@@ -3,7 +3,7 @@ import { createBrowserHistory, createRouter, useRouter, useRouterState } from '@
 import { useContext } from 'react';
 
 import { MobilePageHeader } from './components/common/mobile-page-header';
-import { publicRouteRewrite } from './public-route-rewrite';
+import { publicRouteRewrite, storefrontRouterSearch } from './public-route-rewrite';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { routeTree } from './routeTree.gen';
 import { goBackInStorefront, registerStorefrontNavigationHistory } from './storefront-navigation-history';
@@ -29,18 +29,7 @@ export const router = createRouter({
     routeTree,
     history: createBrowserHistory(),
     rewrite: publicRouteRewrite,
-    parseSearch: search => Object.fromEntries(new URLSearchParams(search.replace(/^\?/, ''))),
-    stringifySearch: search => {
-        // URLSearchParams coerces the allowed primitives; omit false/empty and non-scalar values.
-        const params = new URLSearchParams(
-            Object.entries(search).filter(
-                ([, value]) =>
-                    value !== '' &&
-                    (typeof value === 'string' || typeof value === 'number' || value === true),
-            ) as Array<[string, string]>,
-        ).toString();
-        return params && '?' + params;
-    },
+    ...storefrontRouterSearch,
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
     // Commit the destination's pending body immediately. App and the shared shell
@@ -108,7 +97,7 @@ function StorefrontPendingPage() {
                     availableCurrencyCodes={context.availableCurrencyCodes}
                     currencyLoading={context.cartLoading}
                     onToggleLanguage={context.toggleLanguage}
-                    onCurrencyChange={code => void context.switchCurrency(code)}
+                    onCurrencyChange={context.switchCurrency}
                     onNotifications={() => context.navigate({ name: 'notifications' })}
                 />
             </div>
