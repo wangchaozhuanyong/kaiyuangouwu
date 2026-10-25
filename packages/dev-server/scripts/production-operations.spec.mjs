@@ -954,6 +954,21 @@ void test('diagnose reads only the two fixed error logs and makes no screenshot-
     );
 });
 
+void test('diagnostic transport compacts whitespace without dropping evidence or raising the SSM ceiling', () => {
+    const report = {
+        observations: Array.from({ length: 200 }, () => ({
+            status: 'available',
+            elapsed: 10,
+            details: { result: 'ok' },
+        })),
+    };
+    assert.ok(Buffer.byteLength(JSON.stringify({ stage: 'before', ...report }, null, 2)) > 18000);
+    const encoded = operations.encodeBeforeReport(report);
+    assert.ok(Buffer.byteLength(encoded) <= 18000);
+    assert.deepEqual(JSON.parse(encoded), { stage: 'before', ...report });
+    assert.throws(() => operations.encodeBeforeReport({ data: 'x'.repeat(18000) }), /SSM evidence limit/u);
+});
+
 void test('error summaries strip private values and dynamic messages, cap categories and permit only shipped frames', t => {
     const secret = 'PRIVATE-ORDER-123 customer@example.invalid token=PRIVATE-TOKEN';
     const known = 'packages/core/dist/service/services/order.service.js';
