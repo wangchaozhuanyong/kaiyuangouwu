@@ -1,5 +1,5 @@
 import { lazyRouteComponent } from '@tanstack/react-router';
-import { Suspense } from 'react';
+import { Profiler, Suspense } from 'react';
 
 import { useStorefrontAppState } from './hooks/useStorefrontAppState';
 import { useStorefrontScrollContinuity } from './hooks/useStorefrontScrollContinuity';
@@ -21,7 +21,25 @@ export function App() {
                 <StorefrontDesignPreview />
             </Suspense>
         );
-    return <StorefrontRuntime />;
+    const runtime = <StorefrontRuntime />;
+    if (import.meta.env.DEV)
+        return (
+            <Profiler
+                id="storefront-runtime"
+                onRender={(_id, phase, actualDuration) => {
+                    if (typeof performance.measure !== 'function') return;
+                    if (performance.getEntriesByName('storefront-runtime-commit').length >= 512)
+                        performance.clearMeasures('storefront-runtime-commit');
+                    performance.measure('storefront-runtime-commit', {
+                        start: Math.max(0, performance.now() - actualDuration),
+                        detail: { phase, actualDuration },
+                    });
+                }}
+            >
+                {runtime}
+            </Profiler>
+        );
+    return runtime;
 }
 
 function StorefrontRuntime() {

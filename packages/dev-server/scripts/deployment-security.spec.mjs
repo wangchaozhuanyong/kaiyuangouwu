@@ -784,7 +784,8 @@ void test('production console serves both dashboard entry and assets through the
         assert.match(body, /root \/var\/www\/kaiyuangouwu-next-admin-current;/u);
         assert.doesNotMatch(body, /proxy_pass|kaiyuangouwu-current/u);
     }
-    assert.match(assetLocation, /try_files \$uri =404;/u);
+    assert.match(assetLocation, /try_files \$uri \/\.compat-assets\$uri =404;/u);
+    assert.doesNotMatch(assetLocation, /\/index\.html/u);
     assert.match(entryLocation, /try_files \$uri \/index\.html =503;/u);
 });
 
