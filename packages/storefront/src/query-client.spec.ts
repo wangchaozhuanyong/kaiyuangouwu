@@ -363,6 +363,69 @@ describe('public React Query session cache', () => {
         );
     });
 
+    it('does not replace already displayed document content with a later-dated session image', async () => {
+        const source = createStorefrontQueryClient();
+        const key = ['storefront', 'shop:CNY', 'zh_Hans', 'content'];
+        allowLive(source, 'shop:CNY', 'zh_Hans');
+        await source.fetchQuery({
+            queryKey: key,
+            queryFn: () => [{ imageUrl: '/previous-visit.webp' }],
+            meta: publicQueryMeta(),
+        });
+        const storage = memoryStorage();
+        persistPublicQueryCache(source, storage, 1_000);
+        const rendered = createStorefrontQueryClient();
+        allowLive(rendered, 'shop:CNY', 'zh_Hans');
+        rendered.setQueryData(key, [{ imageUrl: '/rendered-document.webp' }], { updatedAt: 100 });
+
+        expect(restorePublicQueryCache(rendered, storage, 2_000)).toBe(true);
+        expect(rendered.getQueryData(key)).toEqual([{ imageUrl: '/rendered-document.webp' }]);
+        expect(rendered.getQueryState(key)?.dataUpdatedAt).toBe(100);
+        source.clear();
+        rendered.clear();
+    });
+
+    it.each([{ displayed: [] }, { displayed: null }])(
+        'preserves an already confirmed empty public result: %j',
+        async ({ displayed }) => {
+            const source = createStorefrontQueryClient();
+            const key = ['storefront', 'shop:CNY', 'zh_Hans', 'content'];
+            allowLive(source, 'shop:CNY', 'zh_Hans');
+            await source.fetchQuery({ queryKey: key, queryFn: () => ['old-photo'], meta: publicQueryMeta() });
+            const storage = memoryStorage();
+            persistPublicQueryCache(source, storage, 1_000);
+            const rendered = createStorefrontQueryClient();
+            allowLive(rendered, 'shop:CNY', 'zh_Hans');
+            rendered.setQueryData(key, displayed, { updatedAt: 100 });
+
+            expect(restorePublicQueryCache(rendered, storage, 2_000)).toBe(true);
+            expect(rendered.getQueryData(key)).toEqual(displayed);
+            expect(rendered.getQueryState(key)?.dataUpdatedAt).toBe(100);
+            source.clear();
+            rendered.clear();
+        },
+    );
+
+    it('restores public reads without restoring queued mutations from the stored envelope', async () => {
+        const source = createStorefrontQueryClient();
+        const key = ['storefront', 'shop:CNY', 'zh_Hans', 'content'];
+        allowLive(source, 'shop:CNY', 'zh_Hans');
+        await source.fetchQuery({ queryKey: key, queryFn: () => ['photo'], meta: publicQueryMeta() });
+        const storage = memoryStorage();
+        persistPublicQueryCache(source, storage, 1_000);
+        const payload = JSON.parse(storage.values.get(PUBLIC_QUERY_CACHE_KEY) ?? '{}');
+        payload.state.mutations = [{ mutationKey: ['synthetic-write'], state: { isPaused: true } }];
+        storage.setItem(PUBLIC_QUERY_CACHE_KEY, JSON.stringify(payload));
+        const restored = createStorefrontQueryClient();
+        allowLive(restored, 'shop:CNY', 'zh_Hans');
+
+        expect(restorePublicQueryCache(restored, storage, 2_000)).toBe(true);
+        expect(restored.getQueryData(key)).toEqual(['photo']);
+        expect(restored.getMutationCache().getAll()).toEqual([]);
+        source.clear();
+        restored.clear();
+    });
+
     it('ignores previously persisted branding and fetches cleared copy on every reload', async () => {
         const source = createStorefrontQueryClient();
         const configKey = storefrontQueryKeys.config('cn-mainland:CNY', 'zh_Hans');

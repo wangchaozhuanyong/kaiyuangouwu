@@ -37,7 +37,7 @@ if (!embeddedPreview) {
         if (initialPage) seedPublicPage(storefrontQueryClient, initialPage);
         else if (initialBoot) seedStorefrontBoot(storefrontQueryClient, initialBoot);
         // The exact HTML snapshot owns hydration. Newer session data may be adopted
-        // by bootstrap after the first commit, but must not change that first tree.
+        // by bootstrap only for missing reads, without replacing this document's tree.
         if (!initialPage || appRootElement.dataset.publicRendered !== '1')
             restorePublicQueryCache(storefrontQueryClient);
         watchPublicQueryCache(storefrontQueryClient);
