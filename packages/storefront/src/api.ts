@@ -54,7 +54,6 @@ import {
     createRequestSignal,
     createShopApiTimeoutError,
     ErrorResult,
-    isStorefrontQuery,
     parseShopApiResponse,
     SHOP_API_QUERY_TIMEOUT_MS,
     ShopApiError,
@@ -635,10 +634,7 @@ export class ShopApi {
         onDispatch?: () => void,
     ): Promise<T> {
         const requestUrl = shopApiUrl(this.languageCode, readCurrencyCode ?? this.market.currencyCode);
-        const timeout = createRequestSignal(
-            signal,
-            timeoutMs ?? (isStorefrontQuery(query) ? SHOP_API_QUERY_TIMEOUT_MS : undefined),
-        );
+        const timeout = createRequestSignal(signal, timeoutMs, query);
         const send = async () => {
             // Capture the current identity only once the queued request actually starts.
             const capture = this.#authTokens.createCapture(authenticates);

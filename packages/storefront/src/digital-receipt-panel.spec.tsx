@@ -8,11 +8,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi } from './api';
 import { DigitalReceiptPanel, type DigitalReceiptStatus } from './digital-receipt-panel';
-import {
-    createStorefrontQueryClient,
-    persistPublicQueryCache,
-    refreshStorefrontQueries,
-} from './query-client';
+import { createStorefrontQueryClient, refreshStorefrontQueries } from './query-client';
+import { persistPublicQueryCache } from './query-persistence';
 const market: MarketConfig = {
     code: 'fixture',
     currencyCode: 'CNY',

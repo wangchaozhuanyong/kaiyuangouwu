@@ -1,5 +1,10 @@
+import { publicPageReadDeadline } from '../public-page-transport';
 import { shopAbuseMetadata, type ShopAbuseAction } from '../shop-abuse';
-import { ShopApiGraphQlError } from '../shop-api-errors';
+import {
+    createShopApiTimeoutError,
+    ShopApiGraphQlError,
+    STOREFRONT_READ_TIMEOUT_MS,
+} from '../shop-api-errors';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import {
     AccountRecommendationSettings,
@@ -8,13 +13,14 @@ import {
     StorefrontFlashSale,
     StorefrontSystemAnnouncement,
 } from '../types';
+export { createShopApiTimeoutError, ShopApiTimeoutError } from '../shop-api-errors';
 
 export { ShopApiGraphQlError } from '../shop-api-errors';
 
 export const API_URL = String(import.meta.env.VITE_SHOP_API_URL ?? '/shop-api');
 export const AUTH_TOKEN_HEADER = 'vendure-auth-token';
 export const AUTH_TOKEN_STORAGE_PREFIX = 'vendure-shop-auth-token';
-export const SHOP_API_QUERY_TIMEOUT_MS = 20_000;
+export const SHOP_API_QUERY_TIMEOUT_MS = STOREFRONT_READ_TIMEOUT_MS;
 export const SEND_CLIENT_CHANNEL_TOKEN =
     import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_CLIENT_CHANNEL_SWITCHING !== 'false');
@@ -103,25 +109,6 @@ export class ShopApiError extends Error {
     }
 }
 
-export class ShopApiTimeoutError extends Error {
-    constructor(
-        message: string,
-        public readonly resultUnknown = false,
-    ) {
-        super(message);
-        this.name = 'ShopApiTimeoutError';
-    }
-}
-
-export function createShopApiTimeoutError(resultUnknown: boolean): ShopApiTimeoutError {
-    return new ShopApiTimeoutError(
-        resultUnknown
-            ? '请求超时，提交结果暂时无法确认，请勿更改参数后重复提交'
-            : '请求超时，请检查网络后重试',
-        resultUnknown,
-    );
-}
-
 export function isMissingStorefrontCatalogSchema(error: unknown): boolean {
     if (!(error instanceof Error)) return false;
     return (
@@ -130,7 +117,12 @@ export function isMissingStorefrontCatalogSchema(error: unknown): boolean {
     );
 }
 
-export function createRequestSignal(external?: AbortSignal, timeoutMs?: number) {
+/** Query reads share their operation budget; explicit and write timeouts stay unchanged. */
+export function createRequestSignal(external?: AbortSignal, timeoutMs?: number, query?: string) {
+    if (query && isStorefrontQuery(query) && timeoutMs === undefined) {
+        timeoutMs = external ? publicPageReadDeadline(external) - Date.now() : SHOP_API_QUERY_TIMEOUT_MS;
+        if (timeoutMs <= 0) throw createShopApiTimeoutError(false);
+    }
     if (!timeoutMs) {
         return { signal: external, cleanup: () => undefined, didTimeout: () => false };
     }

@@ -34,6 +34,7 @@ import {
     requestPublicPage,
     takePublicPageBootstrap,
     publicPageReadGeneration,
+    publicPageReadDeadline,
 } from './public-page-transport';
 import {
     isStorefrontScopeAccessDenied,
@@ -324,6 +325,7 @@ export async function fetchPublicPage(
     request: PublicPageRequest = { kind: 'home' },
     expectedChannelCode?: string,
 ): Promise<PublicPageData | undefined> {
+    if (signal?.aborted) throw new DOMException('Request aborted', 'AbortError');
     if (SEND_CLIENT_CHANNEL_TOKEN || typeof window === 'undefined') return;
     if (storefrontPreviewParameters().get('storefrontPreviewEmbedded') === '1') return;
     const normalized = canonicalPublicPageRequest(request);
@@ -334,13 +336,9 @@ export async function fetchPublicPage(
     if (!flight) {
         const promise = (async () => {
             const early = takePublicPageBootstrap(normalized, { languageCode, currencyCode });
-            let value = early
-                ? await early.catch(error => {
-                      // Closure must reach the query owner; retrying it would hide the denial.
-                      if (error instanceof ShopApiGraphQlError && error.status === 403) throw error;
-                      return undefined;
-                  })
-                : undefined;
+            const deadline = publicPageReadDeadline(signal, early);
+            // Early and formal reads are one operation. Query alone owns retries.
+            let value = early ? await early : undefined;
             if (flight && validatedFlights.get(key) !== flight)
                 throw new DOMException('Request aborted', 'AbortError');
             // A first visit may have no preference cookie yet. Only adopt an exact public scope.
@@ -351,7 +349,7 @@ export async function fetchPublicPage(
                     (currencyCode && value.scope.currencyCode !== currencyCode))
             )
                 value = undefined;
-            const responsePage: unknown = value ?? (await requestPublicPage(url));
+            const responsePage: unknown = value ?? (await requestPublicPage(url, deadline));
             if (responsePage === undefined) return undefined;
             // A CLOSED envelope is not hydratable, but its verified identity may close this read's scope.
             if (!validatePublicPageData(responsePage, window.location.host, Date.now(), true))
@@ -393,7 +391,11 @@ export async function fetchPublicPage(
     flight.consumers++;
     let page: PublicPageData | undefined;
     try {
-        page = (await awaitPublicPage(flight.promise, signal)) as PublicPageData | undefined;
+        page = (await awaitPublicPage(
+            flight.promise,
+            signal,
+            publicPageReadDeadline(signal, flight.promise),
+        )) as PublicPageData | undefined;
     } catch (error) {
         if (signal?.aborted || generation !== publicPageReadGeneration())
             throw new DOMException('Request invalidated', 'AbortError');

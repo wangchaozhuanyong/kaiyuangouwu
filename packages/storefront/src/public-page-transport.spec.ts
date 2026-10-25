@@ -1,9 +1,77 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { awaitPublicPage, invalidatePublicPageReads, requestPublicPage } from './public-page-transport';
-import { ShopApiGraphQlError } from './shop-api-errors';
+import {
+    awaitPublicPage,
+    invalidatePublicPageReads,
+    publicPageReadDeadline,
+    requestPublicPage,
+} from './public-page-transport';
+import { createStorefrontQueryClient } from './query-client';
+import { ShopApiGraphQlError, ShopApiTimeoutError } from './shop-api-errors';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+});
+
+it('keeps Query automatic retry and transport inside one 20s budget', async () => {
+    vi.useFakeTimers();
+    const client = createStorefrontQueryClient();
+    let attempts = 0;
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(
+            (_url, options) =>
+                new Promise((_resolve, reject) => {
+                    attempts++;
+                    options.signal.addEventListener(
+                        'abort',
+                        () => reject(new DOMException('aborted', 'AbortError')),
+                        { once: true },
+                    );
+                    if (attempts === 1) setTimeout(() => reject(new TypeError('network failed')), 12_000);
+                }),
+        ),
+    );
+    try {
+        const result = client.fetchQuery({
+            queryKey: ['budget'],
+            retryDelay: 0,
+            queryFn: ({ signal }) =>
+                requestPublicPage(
+                    new URL('https://store.test/_storefront/page-data?budget=1'),
+                    publicPageReadDeadline(signal),
+                ),
+        });
+        const rejection = expect(result).rejects.toBeInstanceOf(ShopApiTimeoutError);
+        await vi.advanceTimersByTimeAsync(20_000);
+        await rejection;
+        expect(attempts).toBe(2);
+    } finally {
+        client.clear();
+    }
+});
+
+it('adopts an early deadline instead of resetting the timeout', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+        'fetch',
+        vi.fn(
+            (_url, options) =>
+                new Promise((_resolve, reject) =>
+                    options.signal.addEventListener('abort', () =>
+                        reject(new DOMException('aborted', 'AbortError')),
+                    ),
+                ),
+        ),
+    );
+    const early = requestPublicPage(new URL('https://store.test/_storefront/page-data?early=1'));
+    const rejection = expect(early).rejects.toBeInstanceOf(ShopApiTimeoutError);
+    await vi.advanceTimersByTimeAsync(19_000);
+    expect(publicPageReadDeadline(new AbortController().signal, early) - Date.now()).toBe(1000);
+    await vi.advanceTimersByTimeAsync(1000);
+    await rejection;
+});
 describe('one public read transport', () => {
     it('preserves structured closure as the same lightweight Shop API error', async () => {
         vi.stubGlobal(
