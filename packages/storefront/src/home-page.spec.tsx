@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { run as checkAccessibility } from 'axe-core';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -894,6 +895,29 @@ describe('HomePage localized trust bar layout', () => {
 });
 
 describe('HomePage public coupon campaigns', () => {
+    it('keeps valid coupon list semantics for pending, empty, error and offers', async () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        try {
+            for (const state of [
+                { couponCampaignsLoading: true },
+                {},
+                { couponCampaignsError: 'Local read failed' },
+                { coupons: [couponCampaign] },
+            ]) {
+                host.innerHTML = renderHome({ contentBlocks: [couponBlock], ...state });
+                const section = host.querySelector<HTMLElement>('.coupon-hub-section');
+                if (!section) throw new Error('Missing published coupon frame');
+                const result = await checkAccessibility(section, {
+                    runOnly: ['aria-required-children', 'aria-required-parent'],
+                });
+                expect(result.violations).toEqual([]);
+            }
+        } finally {
+            host.remove();
+        }
+    });
+
     it.each([false, true])('shows public offers without an account on desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [couponBlock], coupons: [couponCampaign] }, desktop);
         expect(markup).toContain('满100减10');

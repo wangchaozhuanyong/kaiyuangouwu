@@ -307,29 +307,28 @@ const HomepageCouponHub = memo(function HomepageCouponHubContent({
             <div className="coupon-hub-body">
                 <HomepageCouponRail isZh={isZh}>
                     {!coupons.length ? (
-                        readPending ? (
-                            <div
-                                className="coupon-hub-placeholder"
-                                role="status"
-                                aria-label={isZh ? '正在加载优惠' : 'Loading offers'}
-                            />
-                        ) : (
-                            <div className="coupon-hub-query-state" role={readError ? 'alert' : 'status'}>
-                                <p>
-                                    {readError ||
-                                        (isZh ? '暂无可领取的优惠' : 'No offers available right now.')}
-                                </p>
-                                {readError && (
-                                    <button
-                                        type="button"
-                                        className="coupon-hub-more-btn"
-                                        onClick={onReadRetry}
-                                    >
-                                        {isZh ? '重试' : 'Retry'}
-                                    </button>
-                                )}
-                            </div>
-                        )
+                        <div role="listitem">
+                            {readPending ? (
+                                <div
+                                    className="coupon-hub-placeholder"
+                                    role="status"
+                                    aria-label={isZh ? '正在加载优惠' : 'Loading offers'}
+                                />
+                            ) : (
+                                <div className="coupon-hub-query-state" role={readError ? 'alert' : 'status'}>
+                                    <p>{readError || (isZh ? '暂无可领取的优惠' : 'No offers available.')}</p>
+                                    {readError && (
+                                        <button
+                                            type="button"
+                                            className="coupon-hub-more-btn"
+                                            onClick={onReadRetry}
+                                        >
+                                            {isZh ? '重试' : 'Retry'}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         coupons.map(coupon => {
                             const claimAction = (
