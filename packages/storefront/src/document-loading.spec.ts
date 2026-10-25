@@ -9,9 +9,11 @@ const source = readFileSync(join(__dirname, '../public/storefront/document-loadi
 describe('document startup feedback without hiding available content', () => {
     const cleanup: Array<() => void> = [];
     const reload = vi.fn();
+    const history = { scrollRestoration: 'manual' };
     beforeEach(() => {
         vi.useFakeTimers();
         reload.mockClear();
+        history.scrollRestoration = 'manual';
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');
         document.documentElement.lang = 'zh-CN';
         document.body.innerHTML = `
@@ -56,6 +58,7 @@ describe('document startup feedback without hiding available content', () => {
                 ...target(document),
             },
             window: target(window),
+            history,
             location: { search, reload },
             URLSearchParams,
             setTimeout,
@@ -85,6 +88,35 @@ describe('document startup feedback without hiding available content', () => {
         document.documentElement.setAttribute('data-storefront-app-owned', '');
         document.dispatchEvent(new Event('storefront:app-owned'));
     };
+
+    it('hands full-document restoration back to the browser before replacement', () => {
+        start();
+        owned();
+        window.dispatchEvent(new Event('beforeunload'));
+        expect(history.scrollRestoration).toBe('manual');
+        window.dispatchEvent(new Event('pagehide'));
+        expect(history.scrollRestoration).toBe('auto');
+        expect(root().hasChildNodes()).toBe(true);
+        expect(root().inert).not.toBe(true);
+    });
+
+    it('returns a resumed document to Router restoration without replaying startup', () => {
+        start();
+        owned();
+        window.dispatchEvent(new Event('pagehide'));
+        expect(history.scrollRestoration).toBe('auto');
+        window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+        expect(history.scrollRestoration).toBe('manual');
+        expect(active()).toBe(false);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('leaves an unowned document on native restoration until Router starts', () => {
+        start();
+        window.dispatchEvent(new Event('pagehide'));
+        window.dispatchEvent(new PageTransitionEvent('pageshow'));
+        expect(history.scrollRestoration).toBe('auto');
+    });
     function leave(cancelled = false) {
         const event = new Event('beforeunload', { cancelable: true });
         if (cancelled) event.preventDefault();
@@ -264,6 +296,8 @@ describe('document startup feedback without hiding available content', () => {
 
     it('leaves embedded previews to their own lifecycle', () => {
         start('?storefrontPreviewEmbedded=1');
+        window.dispatchEvent(new Event('pagehide'));
+        expect(history.scrollRestoration).toBe('manual');
         expect(active()).toBe(false);
         expect(vi.getTimerCount()).toBe(0);
     });
