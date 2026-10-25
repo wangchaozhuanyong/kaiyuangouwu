@@ -800,11 +800,38 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.hero-media-error')).toBeNull();
         expect(target).not.toHaveBeenCalled();
     });
-    it('only mounts the coupon module while claimable offers are confirmed', async () => {
+    it('retains the enabled coupon frame through pending, offers, empty and failure', async () => {
         const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         const blocks = [...heroes, offers];
         await render(false, blocks, 'en', { couponCampaignsLoading: true });
+        const section = requiredElement(host, '.coupon-hub-section');
+        const wrapper = section.parentElement;
+        expect(section.querySelector('.coupon-hub-placeholder')).not.toBeNull();
+        for (const state of [{ coupons: [homepageOffer] }, {}, { couponCampaignsLoading: true }]) {
+            await render(false, blocks, 'en', state);
+            expect(host.querySelector('.coupon-hub-section')).toBe(section);
+            expect(section.parentElement).toBe(wrapper);
+        }
+        const retry = vi.fn();
+        await render(false, blocks, 'en', {
+            couponCampaignsError: 'Local read failed',
+            onCouponCampaignsRetry: retry,
+        });
+        expect(host.querySelector('.coupon-hub-section')).toBe(section);
+        expect(section.textContent).toContain('Local read failed');
+        await interact(() =>
+            requiredElement<HTMLButtonElement>(host, '.coupon-hub-query-state button').click(),
+        );
+        expect(retry).toHaveBeenCalledOnce();
+        await render(false, [...heroes, { ...offers, enabled: false }], 'en', {});
         expect(host.querySelector('.coupon-hub-section')).toBeNull();
+    });
+
+    it('keeps the published coupon frame when offers become empty or unavailable', async () => {
+        const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        const blocks = [...heroes, offers];
+        await render(false, blocks, 'en', { couponCampaignsLoading: true });
+        expect(host.querySelector('.coupon-hub-placeholder')).not.toBeNull();
         await render(false, blocks, 'en', { coupons: [homepageOffer] });
         const section = requiredElement(host, '.coupon-hub-section');
         const wrapper = section.parentElement;
@@ -818,15 +845,15 @@ describe('HomePage carousel pointer interactions', () => {
             expect(section.querySelector('.coupon-hub-placeholder')).toBeNull();
         }
         await render(false, blocks, 'en', {});
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
-        expect(wrapper?.isConnected).toBe(false);
+        expect(host.querySelector('.coupon-hub-section')).toBe(section);
+        expect(wrapper?.isConnected).toBe(true);
         const retry = vi.fn();
         await render(false, blocks, 'en', {
             couponCampaignsError: 'Local read failed',
             onCouponCampaignsRetry: retry,
         });
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
-        expect(host.textContent).not.toContain('Local read failed');
+        expect(host.querySelector('.coupon-hub-section')).toBe(section);
+        expect(host.textContent).toContain('Local read failed');
         expect(retry).not.toHaveBeenCalled();
         await render(false, [...heroes, { ...offers, enabled: false }], 'en', {
             coupons: [homepageOffer],
@@ -835,7 +862,7 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.coupon-hub-section')).toBeNull();
     });
 
-    it('retains remaining offers, unmounts after the last claim, then accepts a new offer', async () => {
+    it('retains the coupon frame after the last claim and accepts a new offer', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         const second = { ...homepageOffer, id: 'offer-b', name: '本地优惠 B' };
         const blocks = [...heroes, block];
@@ -849,9 +876,9 @@ describe('HomePage carousel pointer interactions', () => {
         await render(false, blocks, 'zh', {
             coupons: [homepageOffer, second].map(coupon => ({ ...coupon, claimed: true, claimable: false })),
         });
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
-        expect(wrapper?.isConnected).toBe(false);
-        expect(host.textContent).not.toContain('暂无可领取的优惠');
+        expect(requiredElement(host, '.coupon-hub-section').parentElement).toBe(wrapper);
+        expect(wrapper?.isConnected).toBe(true);
+        expect(host.textContent).toContain('暂无可领取的优惠');
         await render(false, blocks, 'zh', { coupons: [second] });
         expect(host.querySelector('[aria-label="领取 本地优惠 B"]')).not.toBeNull();
     });
@@ -882,13 +909,14 @@ describe('HomePage carousel pointer interactions', () => {
         expect(toast).not.toHaveBeenCalled();
     });
 
-    it('removes the whole module when the last offer expires', async () => {
+    it('keeps the empty frame when the last offer expires', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         const offer = { ...homepageOffer, claimEndsAt: new Date(Date.now() + 1000).toISOString() };
         await render(false, [...heroes, block], 'zh', { coupons: [offer] });
         expect(host.querySelector('.coupon-hub-section')).not.toBeNull();
         await advance(1000);
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        expect(host.querySelector('.coupon-hub-section')).not.toBeNull();
+        expect(host.textContent).toContain('暂无可领取的优惠');
         expect(host.querySelector('.coupon-claim-btn')).toBeNull();
     });
     it('honors reduced motion while allowing deliberate manual navigation', async () => {
