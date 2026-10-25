@@ -292,12 +292,12 @@ export function useStorefrontNavigation({
                 return;
             }
             if (targetType === 'SUPPORT') {
-                if (!/^(https?:\/\/|mailto:|tel:)/i.test(value)) {
+                if (!/^(?:(?:https?:)?\/\/|mailto:|tel:)/i.test(value)) {
                     navigate({ name: 'support' });
                     return;
                 }
             }
-            if (value.startsWith('/') || /^(mailto:|tel:)/i.test(value)) {
+            if (/^\/(?!\/)|^(mailto:|tel:)/i.test(value)) {
                 window.location.assign(value);
             } else {
                 window.open(value, '_blank', 'noopener,noreferrer');
