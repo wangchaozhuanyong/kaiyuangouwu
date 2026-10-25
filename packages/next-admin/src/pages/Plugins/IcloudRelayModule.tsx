@@ -1572,7 +1572,7 @@ export function IcloudRelayModule() {
                             {mailDetailDialog.bodyHtml ? (
                                 <iframe
                                     srcDoc={mailDetailDialog.bodyHtml}
-                                    sandbox="allow-same-origin"
+                                    sandbox="allow-popups allow-popups-to-escape-sandbox"
                                     className="w-full h-80 rounded-lg border border-slate-200 bg-white"
                                     title="邮件正文"
                                 />
