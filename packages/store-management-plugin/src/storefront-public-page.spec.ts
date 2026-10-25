@@ -429,6 +429,30 @@ describe('public page inline artwork', () => {
         });
         return { ...h, read, authorize };
     }
+    it('retains the anonymous source check if a session appears during the first revision read', async () => {
+        const h = artworkHarness();
+        const revision = h.cache.revision.bind(h.cache);
+        vi.spyOn(h.cache, 'revision').mockImplementationOnce(async channel => {
+            const value = await revision(channel);
+            (h.ctx as { session?: object }).session = {};
+            return value;
+        });
+        await expect(h.service.readForDocument(h.ctx, 'a.test')).rejects.toThrow(
+            'Public page requires anonymous Shop context',
+        );
+    });
+    it('uses the generation validated by the page read after its own publication retry', async () => {
+        const h = artworkHarness();
+        let reads = 0;
+        h.content.mockImplementation(async () => {
+            if (++reads === 1) await h.cache.invalidate('a');
+            return { blocks: [{ type: 'HERO', imageUrl: '/assets/preview/current.webp' }] };
+        });
+        const document = await h.service.readForDocument(h.ctx, 'a.test');
+        expect(document.content).toMatchObject({ blocks: [{ imageUrl: '/assets/preview/current.webp' }] });
+        expect(reads).toBe(2);
+        expect(h.invalidate).toHaveBeenCalledOnce();
+    });
     it('completes document artwork after joining the shorter API read without mutating its response', async () => {
         vi.useFakeTimers();
         const h = artworkHarness();
