@@ -1027,6 +1027,7 @@ void test('public transport diagnostics read one fixed ingress log and expose no
         [
             'invalid PRIVATE-LOG',
             JSON.stringify(row),
+            JSON.stringify({ ...row, path: '/storefront/html' }),
             JSON.stringify({ ...row, path: '/customer/PRIVATE-CUSTOMER' }),
             JSON.stringify({ ...row, method: 'POST' }),
             JSON.stringify({ ...row, time: 'PRIVATE-INVALID-TIME' }),
@@ -1034,7 +1035,8 @@ void test('public transport diagnostics read one fixed ingress log and expose no
     );
     const before = statSync(f.file);
     const summary = orderErrorSummary.summarizePublicDocumentRequests(f.file);
-    assert.equal(summary.matchingRequests, 1);
+    assert.equal(summary.matchingRequests, 2);
+    assert.ok(summary.latest.some(item => item.path === '/storefront/html'));
     assert.deepEqual(summary.slowest[0], {
         at: '2026-10-25T19:25:00.000Z',
         path: '/zh/',

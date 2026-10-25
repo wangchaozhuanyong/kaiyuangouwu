@@ -1263,6 +1263,8 @@ try {
                     await page.goto(origin + '/en/product?id=synthetic-a-product-1');
                     await ready(page);
                     let recover = false;
+                    let heldRequests = 0;
+                    let operationStarted = 0;
                     let release;
                     const barrier = new Promise(resolve => (release = resolve));
                     if (mode !== 'offline')
@@ -1274,6 +1276,8 @@ try {
                                 recover
                             )
                                 return route.fallback();
+                            heldRequests++;
+                            operationStarted ||= Date.now();
                             if (mode === 'request')
                                 return route.fulfill({
                                     status: 503,
@@ -1290,7 +1294,7 @@ try {
                             .locator('a[href="/en/product?id=synthetic-a-product-2"]')
                             .first()
                             .click({ noWaitAfter: true });
-                        const error = page
+                        let error = page
                             .locator('.page-readiness-error,.empty-state')
                             .filter({
                                 hasText:
@@ -1307,6 +1311,26 @@ try {
                             await expect(page.locator('[data-page-readiness]')).toHaveAttribute(
                                 'data-page-readiness',
                                 'preparing',
+                            );
+                        }
+                        let elapsedMs;
+                        if (mode === 'timeout') {
+                            error = page
+                                .locator('.page-readiness-error,.empty-state')
+                                .filter({
+                                    hasText: /请求超时|timed out|timeout|could not be loaded|无法加载/iu,
+                                })
+                                .first();
+                            await expect(error).toBeVisible({ timeout: 12500 });
+                            elapsedMs = Date.now() - operationStarted;
+                            assert.ok(
+                                elapsedMs >= 19500 && elapsedMs < 23000,
+                                'One real read budget: ' + elapsedMs,
+                            );
+                            assert.equal(
+                                heldRequests,
+                                1,
+                                'A timeout must not silently start another transport budget',
                             );
                         }
                         const message = await error.innerText();
@@ -1328,7 +1352,14 @@ try {
                             { timeout: 15_000 },
                         );
                         await ready(page);
-                        return { mode, message, recovered: true, frameCount: frames.length };
+                        return {
+                            mode,
+                            message,
+                            elapsedMs,
+                            heldRequests,
+                            recovered: true,
+                            frameCount: frames.length,
+                        };
                     } catch (error) {
                         await page.screenshot({
                             path: path.join(output, `product-error-${mode}-before-cleanup.png`),

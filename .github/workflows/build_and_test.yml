@@ -732,7 +732,7 @@ jobs:
             - name: Verify storefront navigation continuity
               if: matrix.component == 'storefront'
               working-directory: packages/storefront
-              run: node e2e/seo-public/loading-continuity.mjs --cases=navigation,code-navigation,module-error,race,filter,scroll,cart --widths=390,1440
+              run: node e2e/seo-public/loading-continuity.mjs --cases=navigation,code-navigation,module-error,race,filter,scroll,cart,errors --widths=390,1440
             - name: Package reusable frontend
               env:
                   NODE_ENV: production
