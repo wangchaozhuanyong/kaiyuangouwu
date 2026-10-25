@@ -2,8 +2,8 @@ import { useMutation } from '@apollo/client/react';
 import { CircleDollarSign, RefreshCw, Save, WalletCards } from 'lucide-react';
 import { useState } from 'react';
 import {
+    paymentStateDisplayLabel,
     systemFieldDisplayLabel,
-    systemStatusDisplayLabel,
 } from '../../../../common/src/system-display-labels';
 import { AdminButton, AdminInput, AdminSelect } from '../../components/AdminControls';
 import { AdminField } from '../../components/AdminField';
@@ -566,7 +566,7 @@ export function StoreUsdtPanel() {
                                     <tr key={item.id}>
                                         <td className="p-2">{item.orderCode}</td>
                                         <td>{storePaymentMethodLabel(item.paymentMethodCode)}</td>
-                                        <td>{systemStatusDisplayLabel(item.paymentState)}</td>
+                                        <td>{paymentStateDisplayLabel(item.paymentState)}</td>
                                         <td>{formatMoney(item.amount, item.currencyCode)}</td>
                                         <td>{formatDateTime(item.createdAt)}</td>
                                     </tr>

@@ -108,9 +108,13 @@ function MyStoreSettingsContent() {
                         <Store className="h-5 w-5 text-blue-600" />
                         {standalonePage?.title ?? '我的店铺设置'}
                         <FeatureHelpButton
-                            topic="settings.store-profile"
-                            title="我的店铺设置"
-                            description={'此页只操作当前店铺数据，不包含其他店铺、平台角色或原始支付密钥。'}
+                            topic={standalonePage?.helpTopic ?? 'settings.store-profile'}
+                            title={standalonePage?.title ?? '我的店铺设置'}
+                            description={
+                                standalonePage
+                                    ? undefined
+                                    : '此页只操作当前店铺数据，不包含其他店铺、平台角色或原始支付密钥。'
+                            }
                         />
                     </h1>
                     <p className="text-xs text-slate-500">{storeSettingsSubtitle(standalonePage?.key)}</p>

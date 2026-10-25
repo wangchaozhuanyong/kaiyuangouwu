@@ -294,12 +294,44 @@ export class StorefrontCatalogService {
                 `WHERE catalog_card_config.${escape('channelId')} = :catalogChannelId ` +
                 `AND catalog_card_config.${escape('productVariantId')} = si.productVariantId ` +
                 `AND catalog_card_config.enabled = :catalogCardConfigEnabled)`;
-            qb.andWhere(`CASE WHEN ${autoCardVariant} THEN ${availableCard} ELSE si.inStock END`, {
-                catalogDigitalFulfillment: 'digital',
-                catalogAutoCardMode: 'auto_card',
-                catalogAvailableCardState: 'AVAILABLE',
-                catalogCardConfigEnabled: true,
-            });
+            // Match DigitalProductService's ACTIVE configuration before the legacy index fallback.
+            // Supply bindings keep the same variant IDs and take stock from the source store.
+            // Candidate access control still validates the selling store's authorization separately.
+            const stockChannel =
+                `COALESCE((SELECT catalog_stock_rule.${escape('sourceChannelId')} ` +
+                `FROM ${escape('catalog_sync_binding')} catalog_stock_binding ` +
+                `INNER JOIN ${escape('catalog_sync_rule')} catalog_stock_rule ` +
+                `ON catalog_stock_rule.id = catalog_stock_binding.${escape('ruleId')} ` +
+                `AND catalog_stock_rule.enabled = :catalogCardConfigEnabled ` +
+                `INNER JOIN ${escape('catalog_resource_ownership')} catalog_stock_owner ` +
+                `ON catalog_stock_owner.${escape('resourceId')} = si.productId ` +
+                `AND catalog_stock_owner.${escape('resourceType')} = 'Product' ` +
+                `AND catalog_stock_owner.${escape('ownerChannelId')} = catalog_stock_rule.${escape('sourceChannelId')} ` +
+                `WHERE catalog_stock_binding.${escape('targetChannelId')} = :catalogChannelId ` +
+                `AND catalog_stock_binding.${escape('targetId')} = si.productId ` +
+                `AND catalog_stock_binding.kind = 'PRODUCT' AND catalog_stock_binding.state = 'ACTIVE' ` +
+                `ORDER BY catalog_stock_rule.id ASC LIMIT 1), :catalogChannelId)`;
+            const sourceAvailableCard = availableCard.replace('= :catalogChannelId', `= ${stockChannel}`);
+            const configuredDigitalStock =
+                `(SELECT CASE ` +
+                `WHEN catalog_digital_config.${escape('stockPolicy')} = 'unlimited' THEN 1 ` +
+                `WHEN catalog_digital_config.${escape('stockPolicy')} = 'pool_derived' THEN ${sourceAvailableCard} ` +
+                `ELSE catalog_digital_config.${escape('availableQuantity')} > 0 END ` +
+                `FROM ${escape('digital_variant_config')} catalog_digital_config ` +
+                `WHERE catalog_digital_config.${escape('channelId')} = ${stockChannel} ` +
+                `AND catalog_digital_config.${escape('productVariantId')} = si.productVariantId ` +
+                `AND catalog_digital_config.${escape('migrationState')} = 'ACTIVE')`;
+            qb.andWhere(
+                `CASE WHEN catalog_variant.${escape(fulfillmentColumn.databaseName)} = :catalogDigitalFulfillment ` +
+                    `THEN COALESCE(${configuredDigitalStock}, CASE WHEN ${autoCardVariant} ` +
+                    `THEN ${sourceAvailableCard} ELSE si.inStock END) ELSE si.inStock END`,
+                {
+                    catalogDigitalFulfillment: 'digital',
+                    catalogAutoCardMode: 'auto_card',
+                    catalogAvailableCardState: 'AVAILABLE',
+                    catalogCardConfigEnabled: true,
+                },
+            );
         }
         if (applyPriceBounds && input.minPriceWithTax != null) {
             qb.having('MIN(si.priceWithTax) >= :catalogMinPriceWithTax', {

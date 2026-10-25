@@ -1,5 +1,35 @@
+import type { FeatureHelpTopic } from '../components/feature-help-content';
 import type { RouteModuleKey } from '../route-modules';
 import { getAdminDisplayLanguage } from '../utils/admin-language';
+
+/** Split menu pages own their help topic instead of inheriting their former parent tab. */
+const PAGE_HELP_TOPICS: Readonly<Record<string, FeatureHelpTopic>> = {
+    '/marketing/promotions/coupons': 'marketing.coupons',
+    '/marketing/promotions/flash-sales': 'marketing.flash-sales',
+    '/marketing/promotions/generic': 'marketing.generic-promotions',
+    '/marketing/promotions/report': 'marketing.coupon-report',
+    '/marketing/promotions/ledger': 'marketing.coupon-ledger',
+    '/marketing/promotions/attribution': 'marketing.attribution',
+    '/marketing/referrals/settings': 'marketing.referral-rules',
+    '/marketing/referrals/promoters': 'marketing.promoters',
+    '/marketing/referrals/relationships': 'marketing.invitation-relationships',
+    '/marketing/referrals/rewards': 'marketing.referral-rewards',
+    '/marketing/referrals/ledger': 'marketing.referral-ledger',
+    '/marketing/referrals/withdrawals': 'marketing.referral-withdrawals',
+    '/settings/store-profile/commerce': 'settings.commerce-mode',
+    '/settings/store-profile/domains': 'settings.store-profile',
+    '/settings/store-profile/shipping': 'settings.payment-shipping',
+    '/settings/store-profile/payment': 'settings.payment-shipping',
+    '/settings/store-profile/currency': 'settings.finance',
+    '/settings/store-profile/usdt': 'settings.platform-usdt',
+    '/settings/store-profile/usdt-payments': 'settings.payment-ledger',
+    '/settings/store-profile/usdt-refunds': 'settings.refund-audit',
+    '/settings/store-profile/usdt-intents': 'settings.payment-intents',
+    '/settings/usdt-payments/wallets': 'settings.platform-usdt',
+    '/settings/usdt-payments/payments': 'settings.payment-ledger',
+    '/settings/usdt-payments/refunds': 'settings.refund-audit',
+    '/settings/usdt-payments/intents': 'settings.payment-intents',
+};
 
 export const ADMIN_NAV_SECTIONS = [
     ['dashboard', '网站总览', 'LayoutDashboard'],
@@ -29,6 +59,7 @@ export interface StandaloneAdminPage {
     section: AdminNavSection;
     detail?: string;
     slot?: string;
+    helpTopic?: FeatureHelpTopic;
 }
 
 type PageEntry = [key: string, title: string, section: AdminNavSection, tabKey?: string, detail?: string];
@@ -46,6 +77,7 @@ function pages(
         title,
         section,
         detail,
+        helpTopic: PAGE_HELP_TOPICS[`${sourcePath}/${key}`],
     }));
 }
 

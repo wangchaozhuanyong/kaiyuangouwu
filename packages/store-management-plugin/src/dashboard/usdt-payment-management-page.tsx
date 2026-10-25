@@ -35,6 +35,7 @@ import { useState } from 'react';
 import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
 import {
     paymentMethodDisplayLabel,
+    paymentStateDisplayLabel,
     systemStatusDisplayLabel,
 } from '../../../common/src/system-display-labels';
 
@@ -488,7 +489,7 @@ function PlatformPaymentDetails({
                                 {detail.channelCode} · 订单 {detail.orderCode}
                             </strong>
                             <Badge variant={detail.paymentState === 'Settled' ? 'default' : 'outline'}>
-                                {systemStatusDisplayLabel(detail.paymentState)}
+                                {paymentStateDisplayLabel(detail.paymentState)}
                             </Badge>
                             <Badge variant="outline">
                                 {paymentMethodDisplayLabel(detail.paymentMethodCode)}

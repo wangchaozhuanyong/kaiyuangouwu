@@ -289,9 +289,13 @@ export function PromotionsModule() {
                         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                             {standalonePage?.title ?? '优惠与促销'}
                             <FeatureHelpButton
-                                topic="marketing.promotions"
-                                title="优惠与促销"
-                                description={'优惠券、限时秒杀、经营报表和客户使用流水统一管理'}
+                                topic={standalonePage?.helpTopic ?? 'marketing.promotions'}
+                                title={standalonePage?.title ?? '优惠与促销'}
+                                description={
+                                    standalonePage
+                                        ? undefined
+                                        : '优惠券、限时秒杀、经营报表和客户使用流水统一管理'
+                                }
                             />
                         </h1>
                     </div>
@@ -481,6 +485,14 @@ export function PromotionsModule() {
                 ) : activeTab === 'COUPONS' ? (
                     <CouponList
                         coupons={visibleCoupons}
+                        onResetFilters={
+                            searchTerm.trim() || coupons.length > 0 || couponVisibility !== 'CURRENT'
+                                ? () => {
+                                      setSearchTerm('');
+                                      setCouponVisibility('ALL');
+                                  }
+                                : undefined
+                        }
                         currencyCode={currencyCode}
                         actionPending={actionPending}
                         onCreate={() => setCouponEditorOpen(true)}
@@ -502,6 +514,7 @@ export function PromotionsModule() {
                 ) : activeTab === 'FLASH_SALES' ? (
                     <FlashSaleList
                         sales={visibleFlashSales}
+                        onResetFilters={searchTerm.trim() ? () => setSearchTerm('') : undefined}
                         actionPending={actionPending}
                         onCreate={() => setFlashEditorOpen(true)}
                         onRename={setRenaming}

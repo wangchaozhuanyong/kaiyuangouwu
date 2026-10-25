@@ -1,3 +1,4 @@
+import { paymentStateDisplayLabel } from '../../../../common/src/system-display-labels';
 import { getStatusLabel } from '../../utils/status-labels';
 import { storePaymentMethodLabel } from '../Settings/store-usdt-utils';
 
@@ -236,16 +237,6 @@ const fulfillmentStateLabels: Readonly<Record<string, string>> = {
     Cancelled: '已取消',
 };
 
-const paymentStateLabels: Readonly<Record<string, string>> = {
-    Created: '待支付',
-    Authorized: '已授权',
-    PendingManual: '待客服核款',
-    Settled: '已支付',
-    Declined: '已拒绝',
-    Cancelled: '已取消',
-    Error: '支付错误',
-};
-
 const refundStateLabels: Readonly<Record<string, string>> = {
     Pending: '退款处理中',
     Settled: '退款成功',
@@ -255,7 +246,7 @@ const refundStateLabels: Readonly<Record<string, string>> = {
 export const getFulfillmentStateLabel = (state: string) =>
     fulfillmentStateLabels[state] ?? getStatusLabel(state);
 
-export const getPaymentStateLabel = (state: string) => paymentStateLabels[state] ?? getStatusLabel(state);
+export const getPaymentStateLabel = paymentStateDisplayLabel;
 
 export const getRefundStateLabel = (state: string) => refundStateLabels[state] ?? getStatusLabel(state);
 

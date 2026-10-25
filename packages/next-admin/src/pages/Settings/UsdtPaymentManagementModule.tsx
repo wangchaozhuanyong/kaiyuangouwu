@@ -203,9 +203,13 @@ export function UsdtPaymentManagementModule() {
                             <WalletCards className="h-5 w-5 text-emerald-600" />
                             {standalonePage?.title ?? '支付与 USDT 收款管理'}
                             <FeatureHelpButton
-                                topic="settings.usdt"
-                                title="支付与 USDT 收款管理"
-                                description={'平台级钱包审核、全部支付流水、链上意向和人工退款审计'}
+                                topic={standalonePage?.helpTopic ?? 'settings.usdt'}
+                                title={standalonePage?.title ?? '支付与 USDT 收款管理'}
+                                description={
+                                    standalonePage
+                                        ? undefined
+                                        : '平台级钱包审核、全部支付流水、链上意向和人工退款审计'
+                                }
                             />
                         </h1>
                         <p className="text-xs text-slate-500">支付流水、链上对账与退款证据</p>

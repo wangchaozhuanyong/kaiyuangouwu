@@ -156,6 +156,7 @@ function ReferralManagement() {
                 <div className="mx-auto flex w-full max-w-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <ReferralHeading
                         title={standalonePage?.title}
+                        helpTopic={standalonePage?.helpTopic}
                         subtitle={
                             activeTab === 'LEDGER'
                                 ? '奖励、消费、提款与人工调整'

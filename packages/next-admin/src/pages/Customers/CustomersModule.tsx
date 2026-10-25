@@ -106,6 +106,7 @@ import {
     getOrderStateLabel,
 } from '../Sales/sales-utils';
 import { toCustomerAddressInput } from './customer-address';
+import { customerFilter } from './customer-search';
 import { validateCustomerEmail, validateCustomerPhoneNumber } from './customer-validation';
 
 interface CustomerForm {
@@ -180,19 +181,6 @@ function addressToForm(address: CustomerAddressRecord | null): CustomerAddressFo
 
 function customerName(customer: Pick<CustomerListRecord, 'firstName' | 'lastName' | 'emailAddress'>) {
     return [customer.lastName, customer.firstName].filter(Boolean).join('') || customer.emailAddress;
-}
-
-function customerFilter(searchTerm: string) {
-    const value = searchTerm.trim();
-    if (!value) return undefined;
-    return {
-        _or: [
-            { firstName: { contains: value } },
-            { lastName: { contains: value } },
-            { phoneNumber: { contains: value } },
-            { emailAddress: { contains: value } },
-        ],
-    };
 }
 
 function errorText(error: unknown) {

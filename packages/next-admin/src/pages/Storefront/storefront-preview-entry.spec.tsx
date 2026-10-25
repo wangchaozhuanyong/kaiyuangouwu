@@ -63,6 +63,30 @@ afterEach(() => {
 });
 
 describe('footer decoration settings reach both actual preview merge paths', () => {
+    it('keeps account preview reads inside the isolated document and still forwards public errors', async () => {
+        receiveDraft({ block: null, visible: false, route: '/account', language: 'zh' });
+        const sentBefore = postMessage.mock.calls.length;
+        const account = await window.fetch('/shop-api', {
+            method: 'POST',
+            body: JSON.stringify({ query: 'query { myReferralOverview { wallets { availableBalance } } }' }),
+        });
+        expect(await account.json()).toMatchObject({ data: { myReferralOverview: { wallets: [] } } });
+        expect(postMessage.mock.calls).toHaveLength(sentBefore);
+        const publicRead = window.fetch('/shop-api', {
+            method: 'POST',
+            body: JSON.stringify({ query: 'query { storefrontContent { id } }' }),
+        });
+        const id = (postMessage.mock.calls.at(-1)![0] as { id: string }).id;
+        receive({
+            type: 'decoration-response',
+            id,
+            status: 502,
+            payload: { errors: [{ message: 'Public content unavailable' }] },
+        });
+        const failed = await publicRead;
+        expect(failed.status).toBe(502);
+        expect(await failed.json()).toEqual({ errors: [{ message: 'Public content unavailable' }] });
+    });
     it.each(['zh_Hans', 'en'] as const)(
         'adds configuration for an unsaved disabled footer in the first Shop response (%s)',
         async language => {

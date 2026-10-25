@@ -520,15 +520,24 @@ export function errorText(error: unknown) {
 export function ReferralHeading({
     title = '分销与返利',
     subtitle,
-}: { title?: string; subtitle?: string } = {}) {
+    helpTopic = 'marketing.referrals',
+}: {
+    title?: string;
+    subtitle?: string;
+    helpTopic?: import('../../components/feature-help-content').FeatureHelpTopic;
+} = {}) {
     return (
         <div className="admin-page-title-line">
             <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
                 {title}
                 <FeatureHelpButton
-                    topic="marketing.referrals"
-                    title="分销与返利"
-                    description={'一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理'}
+                    topic={helpTopic}
+                    title={title}
+                    description={
+                        helpTopic === 'marketing.referrals'
+                            ? '一级邀请返利、推广员、奖励、钱包、提现和分享海报统一管理'
+                            : undefined
+                    }
                 />
             </h1>
             {subtitle && <p>{subtitle}</p>}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { featureHelpContent } from '../components/feature-help-content';
 import { REFERRAL_REPORT_FIELDS, REFERRAL_TABS } from '../pages/Marketing/referrals-types';
 import { getRouteModuleKey } from '../route-modules';
 import { hasAnyAdminPermission } from '../utils/admin-permissions';
@@ -13,6 +14,21 @@ import {
 } from './admin-navigation';
 
 describe('standalone administration navigation', () => {
+    it('binds split pages to task-specific help rather than their former parent', () => {
+        expect(getStandaloneAdminPage('/marketing/promotions/ledger')?.helpTopic).toBe(
+            'marketing.coupon-ledger',
+        );
+        expect(getStandaloneAdminPage('/settings/store-profile/usdt-payments')?.helpTopic).toBe(
+            'settings.payment-ledger',
+        );
+        expect(getStandaloneAdminPage('/marketing/referrals/relationships')?.helpTopic).toBe(
+            'marketing.invitation-relationships',
+        );
+        for (const page of STANDALONE_ADMIN_PAGES) {
+            if (page.helpTopic) expect(Object.hasOwn(featureHelpContent, page.helpTopic)).toBe(true);
+        }
+        expect(getStandaloneAdminRedirect('/marketing/referrals', '')).toBe('/marketing/referrals/settings');
+    });
     it('preserves released groups and separates digital and physical operations and unique independently loadable pages', () => {
         expect(ADMIN_NAV_SECTIONS).toHaveLength(14);
         expect(getStandaloneAdminPage('/catalog/inventory/lots')?.section).toBe('physical-inventory');
