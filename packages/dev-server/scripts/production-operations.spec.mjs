@@ -3085,3 +3085,66 @@ void test('Node core maintenance installs only its fixed helper and hardened tim
     assert.match(timer, /^OnUnitActiveSec=15m$/mu);
     assert.equal(nodeCoreRetention.CORE_DIRECTORY, '/var/lib/apport/coredump');
 });
+
+void test('public document failures use the fixed API stdout and copy only bounded diagnostic categories', t => {
+    const reads = [];
+    const inspected = orderErrorSummary.inspectPublicDocumentRequests(
+        () => ({ status: 'missing' }),
+        file => {
+            reads.push(file);
+            return { status: 'missing' };
+        },
+    );
+    assert.deepEqual(reads, ['/home/ubuntu/.pm2/logs/vendure-api-out.log']);
+    assert.deepEqual(inspected.apiPublicDocuments, { status: 'missing' });
+    const f = errorLogFixture(t);
+    const row = {
+        event: 'storefront.public-document.unavailable',
+        stage: 'render-html',
+        reason: 'public-html-render-failed',
+        renderStage: 'renderer-load',
+        errorName: 'Error',
+        errorCode: 'MODULE_NOT_FOUND',
+        durationMs: 123.6,
+        frames: ['.server/public-page-renderer.cjs:1:24', '/secret/PRIVATE-PATH'],
+        requestId: 'PRIVATE-ID',
+        cfRay: 'PRIVATE-RAY',
+        channelId: 'PRIVATE',
+        message: 'token=PRIVATE customer@PRIVATE',
+        host: 'PRIVATE-HOST',
+    };
+    writeFileSync(f.file, Array.from({ length: 5 }, () => '[error] ' + JSON.stringify(row)).join('\n'));
+    const result = orderErrorSummary.summarizePublicDocumentFailures(f.file);
+    assert.equal(result.matchingFailures, 5);
+    assert.equal(result.latest.length, 3);
+    assert.deepEqual(result.latest[0], {
+        stage: 'render-html',
+        reason: 'public-html-render-failed',
+        renderStage: 'renderer-load',
+        errorName: 'Error',
+        errorCode: 'MODULE_NOT_FOUND',
+        durationMs: 124,
+        frames: ['.server/public-page-renderer.cjs:1:24'],
+    });
+    assert.doesNotMatch(JSON.stringify(result), /PRIVATE|token=|customer@/u);
+    writeFileSync(
+        f.file,
+        JSON.stringify({
+            ...row,
+            stage: 'PRIVATE',
+            reason: 'PRIVATE',
+            renderStage: 'PRIVATE',
+            errorName: 'PRIVATE',
+            errorCode: 'PRIVATE',
+            durationMs: 'PRIVATE',
+            frames: ['PRIVATE'],
+        }),
+    );
+    const unknown = orderErrorSummary.summarizePublicDocumentFailures(f.file);
+    assert.equal(unknown.matchingFailures, 1);
+    assert.deepEqual(unknown.latest, [{ frames: [] }]);
+    assert.doesNotMatch(JSON.stringify(unknown), /PRIVATE/u);
+    const link = path.join(f.root, 'public-link.log');
+    symlinkSync(f.file, link);
+    assert.deepEqual(orderErrorSummary.summarizePublicDocumentFailures(link), { status: 'symlink-refused' });
+});

@@ -178,8 +178,118 @@ function summarizePublicDocumentRequests(file) {
     );
 }
 
-function inspectPublicDocumentRequests(read = summarizePublicDocumentRequests) {
-    return { maxBytes: 8 * 1024 * 1024, ingress: read('/var/log/nginx/moyao-storefront-access.log') };
+function summarizePublicDocumentFailures(file) {
+    return summarizeRecentOrderErrors(file, (contents, evidence) => {
+        // Vendure's structured logger writes these events to stdout, not PM2 stderr.
+        // Revalidate every field: the log may also contain private, unrelated messages.
+        const allowed = {
+            stage: new Set([
+                'read-page',
+                'resolve-seo',
+                'required-content',
+                'render-html',
+                'verify-publication',
+                'resolved-seo',
+            ]),
+            reason: new Set([
+                'public-cache-unavailable',
+                'required-content-unavailable',
+                'public-access-changed',
+                'public-page-changed',
+                'public-authority-unavailable',
+                'public-language-changed',
+                'public-authority-changed',
+                'public-seo-unavailable',
+                'public-html-render-failed',
+                'unclassified-service-unavailable',
+            ]),
+            renderStage: new Set([
+                'artifact-root',
+                'renderer-load',
+                'template-read',
+                'route-styles',
+                'body-render',
+                'html-assemble',
+            ]),
+            errorName: new Set([
+                'Error',
+                'TypeError',
+                'RangeError',
+                'ReferenceError',
+                'SyntaxError',
+                'URIError',
+                'ServiceUnavailableException',
+                'QueryFailedError',
+                'UnknownError',
+            ]),
+            errorCode: new Set([
+                'ENOENT',
+                'EACCES',
+                'EIO',
+                'MODULE_NOT_FOUND',
+                'ERR_REQUIRE_ESM',
+                'ETIMEDOUT',
+                'ECONNRESET',
+                'ECONNREFUSED',
+                'ER_LOCK_DEADLOCK',
+                'ER_LOCK_WAIT_TIMEOUT',
+                'ER_BAD_FIELD_ERROR',
+                'ER_NO_SUCH_TABLE',
+            ]),
+        };
+        const records = [];
+        for (const line of contents.split('\n')) {
+            let row;
+            try {
+                row = JSON.parse(line.slice(line.indexOf('{'), line.lastIndexOf('}') + 1));
+            } catch {
+                continue;
+            }
+            if (row?.event !== 'storefront.public-document.unavailable') continue;
+            const value = Object.fromEntries(
+                Object.entries(allowed)
+                    .filter(([key, values]) => values.has(row[key]))
+                    .map(([key]) => [key, row[key]]),
+            );
+            if (
+                typeof row.durationMs === 'number' &&
+                Number.isFinite(row.durationMs) &&
+                row.durationMs >= 0 &&
+                row.durationMs <= 3_600_000
+            )
+                value.durationMs = Math.round(row.durationMs);
+            value.frames = Array.isArray(row.frames)
+                ? row.frames
+                      .filter(
+                          frame =>
+                              typeof frame === 'string' &&
+                              /^(?:\.server|packages\/[a-z0-9-]+\/(?:src|dist))\/[A-Za-z0-9_./-]+\.(?:[cm]?js|tsx?):[1-9][0-9]{0,6}:[1-9][0-9]{0,7}$/u.test(
+                                  frame,
+                              ) &&
+                              !frame.split('/').includes('..'),
+                      )
+                      .slice(0, 3)
+                : [];
+            records.push(value);
+        }
+        return {
+            status: 'available',
+            ...evidence,
+            matchingFailures: records.length,
+            latest: records.slice(-3),
+        };
+    });
+}
+
+function inspectPublicDocumentRequests(
+    read = summarizePublicDocumentRequests,
+    readFailures = summarizePublicDocumentFailures,
+) {
+    return {
+        maxBytes: 8 * 1024 * 1024,
+        ingress: read('/var/log/nginx/moyao-storefront-access.log'),
+        apiPublicDocuments: readFailures('/home/ubuntu/.pm2/logs/vendure-api-out.log'),
+    };
 }
 
 module.exports = {
@@ -187,4 +297,5 @@ module.exports = {
     summarizeRecentOrderErrors,
     inspectPublicDocumentRequests,
     summarizePublicDocumentRequests,
+    summarizePublicDocumentFailures,
 };
