@@ -1177,9 +1177,13 @@ for attempt in $(seq 1 30); do
     sleep 2
 done
 printf 'PRODUCTION_AI_HEALTH_READY phase=post-pointer attempts=%s\n' "${image_health_ready_attempt}"
+storefront_verification_sha="${target_sha}"
+if [[ "${retain_frontends}" == true ]]; then
+    storefront_verification_sha="${expected_storefront_sha}"
+fi
 node "${repository}/deploy/verify-production-storefronts.mjs" \
     --mode release \
-    --release-id "${target_sha}"
+    --release-id "${storefront_verification_sha}"
 if jq -e 'index("storefront-realtime") != null' <<< "${release_affected_checks}" >/dev/null; then
     node "${repository}/deploy/verify-production-storefronts.mjs" \
         --mode realtime \

@@ -779,3 +779,37 @@ test('the actual CLI rejects supplied proof arguments before making any request'
     assert.equal(result.status, 1);
     assert.match(result.stderr, /No external proof arguments are accepted/u);
 });
+
+test('post-switch public checks bind the preserved storefront version during a backend-only release', () => {
+    const start = deploymentScript.indexOf('storefront_verification_sha="${target_sha}"');
+    assert.ok(start >= 0);
+    const command = deploymentScript.slice(start, deploymentScript.indexOf('\nif jq ', start));
+    const backend = 'a'.repeat(40);
+    const frontend = 'b'.repeat(40);
+    for (const retained of ['true', 'false']) {
+        const result = spawnSync(
+            'bash',
+            [
+                '-c',
+                `
+set -Eeuo pipefail
+repository=/synthetic
+target_sha=${backend}
+expected_storefront_sha=${frontend}
+retain_frontends=${retained}
+node() { printf '%s\\n' "$@"; }
+${command}
+`,
+            ],
+            { encoding: 'utf8' },
+        );
+        assert.equal(result.status, 0, result.stderr);
+        assert.deepEqual(result.stdout.trim().split('\n'), [
+            '/synthetic/deploy/verify-production-storefronts.mjs',
+            '--mode',
+            'release',
+            '--release-id',
+            retained === 'true' ? frontend : backend,
+        ]);
+    }
+});
