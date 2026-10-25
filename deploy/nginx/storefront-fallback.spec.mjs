@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +43,9 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
     mkdirSync(cache, { recursive: true });
     const fixture = mkdtempSync(path.join(cache, 'case-'));
     t.after(() => rmSync(fixture, { recursive: true, force: true }));
+    // mkdtemp is 0700. Linux bind mounts retain that mode, so the Nginx
+    // worker needs traversal permission on this public, synthetic fixture root.
+    chmodSync(fixture, 0o755);
     mkdirSync(path.join(fixture, 'www'));
     writeFileSync(
         path.join(fixture, 'www/index.html'),
