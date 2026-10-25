@@ -20,8 +20,7 @@ const frameFiles = new Set([
     'packages/dev-server/index-worker.ts',
 ]);
 
-function summarizeRecentOrderErrors(file) {
-    const byteLimit = 128 * 1024;
+function summarizeRecentOrderErrors(file, summarize, byteLimit = 128 * 1024) {
     let descriptor;
     try {
         descriptor = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -53,6 +52,7 @@ function summarizeRecentOrderErrors(file) {
         let contents = buffer.subarray(0, bytesRead).toString('utf8');
         // Never classify a partial leading record after cutting the byte window.
         if (start > 0) contents = contents.includes('\n') ? contents.slice(contents.indexOf('\n') + 1) : '';
+        if (summarize) return summarize(contents, evidence);
         const categories = [
             [
                 'ORDER_OR_CART',
@@ -123,4 +123,61 @@ function inspectRecentOrderErrors(read = summarizeRecentOrderErrors) {
     };
 }
 
-module.exports = { inspectRecentOrderErrors, summarizeRecentOrderErrors };
+function summarizePublicDocumentRequests(file) {
+    return summarizeRecentOrderErrors(
+        file,
+        (contents, evidence) => {
+            const paths = new Set(['/', '/zh/', '/en/', '/health', '/_storefront/page-data']);
+            const requests = [];
+            const duration = value => {
+                const values = String(value ?? '')
+                    .split(/[,: ]/u)
+                    .filter(part => /^\d{1,6}(?:\.\d{1,6})?$/u.test(part))
+                    .map(Number);
+                return values.length ? Math.max(...values) : null;
+            };
+            for (const line of contents.split('\n')) {
+                let row;
+                try {
+                    row = JSON.parse(line);
+                } catch {
+                    continue;
+                }
+                const at = Date.parse(row?.time);
+                if (!Number.isFinite(at) || !['GET', 'HEAD'].includes(row.method) || !paths.has(row.path))
+                    continue;
+                const status = Number(row.status);
+                if (!Number.isInteger(status) || status < 100 || status > 599) continue;
+                requests.push({
+                    at: new Date(at).toISOString(),
+                    path: row.path,
+                    status,
+                    seconds: duration(row.request_time),
+                    upstreamSeconds: duration(row.upstream_response_time),
+                });
+            }
+            return {
+                status: 'available',
+                ...evidence,
+                matchingRequests: requests.length,
+                firstObserved: requests[0]?.at ?? null,
+                lastObserved: requests.at(-1)?.at ?? null,
+                // No host, IP, query string, cookies, request IDs or arbitrary log messages.
+                slowest: [...requests].sort((a, b) => (b.seconds ?? -1) - (a.seconds ?? -1)).slice(0, 20),
+                latest: requests.slice(-20),
+            };
+        },
+        8 * 1024 * 1024,
+    );
+}
+
+function inspectPublicDocumentRequests(read = summarizePublicDocumentRequests) {
+    return { maxBytes: 8 * 1024 * 1024, ingress: read('/var/log/nginx/moyao-storefront-access.log') };
+}
+
+module.exports = {
+    inspectRecentOrderErrors,
+    summarizeRecentOrderErrors,
+    inspectPublicDocumentRequests,
+    summarizePublicDocumentRequests,
+};
