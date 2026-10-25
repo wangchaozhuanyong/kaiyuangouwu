@@ -91,6 +91,7 @@ function ReceiptContents({ api, order, language, market, confirmationToken }: Re
         queryKey,
         queryFn: ({ signal }) => api.digitalDeliveryStatuses(order.id, confirmationToken, signal),
         staleTime: 0,
+        // @ephemeral-sensitive: delivered private credentials must not survive their receipt owner.
         gcTime: 0,
         refetchInterval: ORDER_STATUS_REFRESH_INTERVAL,
         refetchIntervalInBackground: false,

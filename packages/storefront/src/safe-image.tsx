@@ -354,12 +354,14 @@ function SafeImageSource({
         const svg =
             `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
             `<image width="${width}" height="${height}" preserveAspectRatio="none" href="${preview}"/></svg>`;
-        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        return `data:image/svg+xml,${encodeURIComponent(svg)}`;
     }
     const inlinePreview = inlinePreviewFor(src, previewSourceDimensions);
     const inlineMediaSources = mediaSources?.flatMap(source => {
         const preview = inlinePreviewFor(source.src, source.previewSourceDimensions);
-        return preview ? [{ media: source.media, src: preview }] : [];
+        // Keep every branch when the default preview exists: a missing mobile
+        // preview joins its exact native candidate, never the desktop photograph.
+        return preview || inlinePreview ? [{ ...source, src: preview ?? source.src }] : [];
     });
     const hasInlinePreview = !!(inlinePreview || inlineMediaSources?.length);
     const currentArtworkSource = () =>
@@ -776,7 +778,7 @@ function SafeImageSource({
                                 <span className="page-loading-spinner" />
                             </span>
                         )}
-                        <SafeImageElement mediaSources={inlineMediaSources}>
+                        <SafeImageElement mediaSources={inlineMediaSources} imageKind={imageKind}>
                             <img
                                 ref={previewRef}
                                 className={`safe-image-preview${previewReady ? ' is-ready' : ''}`}

@@ -116,8 +116,8 @@ export function GptRechargePage({
             'config',
         ] as const,
         queryFn: ({ signal }) => client.config(signal),
+        // Availability flags reuse the scoped QueryClient cache across navigation.
         staleTime: 30000,
-        gcTime: 0,
     });
     const config = configQuery.data;
     const configPresentation = storefrontQueryPresentation(configQuery);
@@ -135,6 +135,7 @@ export function GptRechargePage({
                 : Promise.reject(new Error(t('暂无充值任务', 'No recharge task'))),
         enabled: Boolean(task),
         initialData: task ?? undefined,
+        // @ephemeral-sensitive: task results carry a per-attempt recharge credential.
         gcTime: 0,
         staleTime: 30000,
         refetchInterval: queryState =>

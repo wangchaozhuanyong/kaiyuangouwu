@@ -483,6 +483,48 @@ describe('CartPage guest cart', () => {
         host.remove();
     });
 
+    it.each([false, true])(
+        'keeps normal acknowledged selection in place while the cart read completes (desktop=%s)',
+        desktop => {
+            const markup = renderCart(
+                { ...cart, checkoutOrder },
+                [],
+                [],
+                true,
+                false,
+                {
+                    commandAcknowledged: true,
+                    commandUnknown: false,
+                    editingBlocked: true,
+                    confirmedCart: { ...cart, checkoutOrder },
+                },
+                desktop,
+            );
+            expect(markup).not.toContain('cart-recovery-panel');
+            expect(markup).not.toContain('暂时无法读取最新购物车');
+            expect(markup).toContain('32 英寸显示器');
+            const host = document.createElement('div');
+            host.innerHTML = markup;
+            expect(host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(true);
+            expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(true);
+        },
+    );
+
+    it('still presents a genuinely failed acknowledged read even before the unknown flag arrives', () => {
+        const markup = renderCart({ ...cart, checkoutOrder }, [], [], true, false, {
+            commandAcknowledged: true,
+            commandUnknown: false,
+            editingBlocked: true,
+            error: 'Synthetic cart projection read failure',
+        });
+        expect(markup).toContain('cart-recovery-panel');
+        expect(markup).toContain('操作结果已确认');
+        expect(markup).not.toContain('取消待确认操作');
+        const host = document.createElement('div');
+        host.innerHTML = markup;
+        expect(host.querySelector<HTMLButtonElement>('.cart-checkout-bar button')?.disabled).toBe(true);
+    });
+
     it('keeps selection responsive while totals are pending and blocks checkout until confirmed', () => {
         const markup = renderCart({ ...cart, checkoutOrder }, [], [], true);
         expect(markup).toContain('计算中…');

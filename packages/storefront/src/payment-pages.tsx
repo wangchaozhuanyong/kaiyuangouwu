@@ -1358,6 +1358,7 @@ export function OrderConfirmationPage({
         staleTime: 0,
         refetchOnMount: 'always',
         refetchInterval: query => orderStatusRefreshInterval(query.state.data?.state),
+        // @ephemeral-sensitive: confirmation-token results require a new read for each confirmation owner.
         gcTime: 0,
     });
     const order =

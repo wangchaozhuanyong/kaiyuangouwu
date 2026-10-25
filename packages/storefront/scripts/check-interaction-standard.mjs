@@ -14,10 +14,22 @@ const historyReturnOwners = new Set([
 
 export function checkInteractionSource(file, source) {
     const violations = [];
+    if (/content-visibility\s*:\s*auto\b/u.test(source))
+        violations.push('正文不能用估算高度跳过布局；首帧须计算真实几何，避免刷新与滚动回跳');
     if (/\b(?:window\.)?location\.reload\s*\(/u.test(source) && !reloadOwners.has(file))
         violations.push('数据重试不得整页 reload；使用当前作用域 refreshStorefrontQueries');
     const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const visit = node => {
+        if (
+            ts.isPropertyAssignment(node) &&
+            node.name.getText(parsed).replace(/["']/gu, '') === 'gcTime' &&
+            ts.isNumericLiteral(node.initializer) &&
+            Number(node.initializer.text) === 0 &&
+            !/@ephemeral-sensitive:\s*\S.+/u.test(source.slice(node.getFullStart(), node.getStart(parsed)))
+        )
+            violations.push(
+                '普通只读查询不得离开即清除；敏感凭据例外须在 gcTime 前说明 @ephemeral-sensitive 原因并验证隔离',
+            );
         if (
             ts.isJsxAttribute(node) &&
             node.name.text === 'fallback' &&
@@ -74,7 +86,7 @@ function files(directory) {
         const file = path.join(directory, entry.name);
         return entry.isDirectory()
             ? files(file)
-            : /\.[jt]sx?$/u.test(entry.name) && !/\.(spec|test)\./u.test(entry.name)
+            : /\.(?:[jt]sx?|css)$/u.test(entry.name) && !/\.(spec|test)\./u.test(entry.name)
               ? [file]
               : [];
     });

@@ -80,6 +80,7 @@ function AdditionalPayment({ api, order, market, language, confirmationToken }: 
         ],
         queryFn: ({ signal }) => api.orderAdditionalPaymentQuote(order.id, confirmationToken, signal),
         staleTime: 0,
+        // @ephemeral-sensitive: additional payment links must not survive their confirmation owner.
         gcTime: 0,
         retry: false,
         refetchInterval: query =>
