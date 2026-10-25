@@ -1,3 +1,5 @@
+// organize-imports-ignore -- Preserve ESLint type/value import groups.
+import type { StorefrontConfig } from './types';
 import {
     dehydrate,
     hydrate,
@@ -6,7 +8,6 @@ import {
     type QueryClient,
     type QueryKey,
 } from '@tanstack/react-query';
-import type { StorefrontConfig } from './types';
 
 import {
     isLivePersistenceScope,
