@@ -245,7 +245,7 @@ export function CartPage() {
                 </header>
             )}
 
-            {resultNeedsReview && (
+            {resultNeedsReview && (commandUnknown || recoveryPending || Boolean(error)) && (
                 <section className="cart-recovery-panel" aria-label={isZh ? '核对购物车' : 'Review cart'}>
                     <p role="status">
                         {commandAcknowledged

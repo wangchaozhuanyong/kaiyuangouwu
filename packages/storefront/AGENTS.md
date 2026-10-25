@@ -7,9 +7,14 @@
 - 首载没有数据才显示 `PageSkeleton` 或 `AsyncRouteStatePage`；使用 `storefrontQueryPresentation` / `storefrontInitialQueryError` 分离首载失败与后台更新失败。成功的 `[]`、`null`、零条结果都属于已加载，不能按数组长度判断请求成功与否。
 - 刷新保留可用内容、滚动、筛选和草稿。统一状态提示由 `StorefrontQueryFeedback` 提供。只重试当前作用域的查询；`refetch` 与 `fetchNextPage` 使用 `{ cancelRefetch: false }`。不得重放写操作、重新提交表单或自动整页刷新。
 - `queryKey` 必须包含影响查询的店铺、结算币种、语言、客户及筛选条件；复用 `storefrontQueryKeys`。跨作用域 placeholder 使用 `storefrontPlaceholderData` 清空旧内容。私有数据不得进入 public session cache。
+- 普通只读配置和已访问页面复用根 QueryClient 的有界缓存，禁止 `gcTime: 0` 导致每次进入重新首载。充值任务凭据、交付秘密和支付确认等例外必须在该属性前标注 `@ephemeral-sensitive: 原因` 并验证离开后清除；不得借体验优化延长敏感结果寿命。
+- 正文模块不得用 `content-visibility: auto` 与估算高度跳过布局；首帧按真实几何排版，保留现有图片懒加载。CSS 与客户端源码均纳入交互门禁。
+- 刷新／首屏问题需验证 HTML 到 React 接管的实际节点与几何连续性，并覆盖手机视口、冷启动和 A→B→A 往返；未复现的闪跳不能声明恢复。新增功能沿用同一回归要求。
 - 查询向 API 传递 TanStack 提供的 `AbortSignal`，复用现有请求超时、重试与缓存策略；不要新增业务请求 `setInterval`。隐藏窗口不轮询，返回及联网时按过期状态刷新。
+- 响应式图片缺少某断点的预览时不得回落到其他断点图片；复用 SafeImage 的原生 picture 分支和中性占位，新增广告／轮播须覆盖预览不完整的回归。
 - 路由与必要读取使用现有 `PageReadinessBoundary`；首屏媒体由 `SafeImage` 局部管理，不阻塞文档接管。已有 HTML 与已确认壳层持续可见，刷新和站内导航不得重播整页品牌。只有版本更新提示和资源加载错误边界可以整页 reload。
 - 搜索、筛选、分页、页面切换以 URL 为准；中文输入组合期间不查询未完成文字。追加加载保留已有条目，错误留在分页区域。主导航、返回、键盘焦点和移动端交互遵守完整标准。
+- 写入回执已确认、正常读回仍在进行时保留已有布局与 busy，不得临时插入“读取失败／需核对”的异常面板；确实失败、超时或结果不明才进入原恢复界面。购物车勾选与全选须覆盖回执确认到读回完成的中间帧。
 - 表单校验、写操作 busy、防重复提交、成功／失败反馈继续复用所属业务的现有机制。写入成功与后续读取失败必须分开，禁止把刷新失败当成“保存失败”诱导重复写入。
 - 修改后先执行 `bun run check:interaction`、受影响的 Vitest 测试和 `bun run build`。涉及可见交互时使用实际组件做本地浏览器验收，记录模拟数据来源；构建或模拟验收不代表线上验收。
 - 标准门禁测试 `src/interaction-standard.spec.ts` 随既有 `bun run test` 执行。禁止为了通过检查扩大白名单或删除断言；有明确业务例外时先说明实际触发路径、边界和验证。

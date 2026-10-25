@@ -51,7 +51,7 @@ function requiredElement<T extends Element>(host: ParentNode, selector: string):
 }
 
 function requiredInlineSvg(source: string | null): Element {
-    const prefix = 'data:image/svg+xml;charset=utf-8,';
+    const prefix = 'data:image/svg+xml,';
     expect(source?.startsWith(prefix)).toBe(true);
     const document = new DOMParser().parseFromString(
         decodeURIComponent((source ?? '').slice(prefix.length)),
@@ -685,6 +685,41 @@ describe('SafeImage public presentation reuse', () => {
             vi.unstubAllGlobals();
             clearDecodedImageCache();
         }
+    });
+
+    it('does not show desktop artwork when the mobile preview is missing', () => {
+        const desktopPreview = 'data:image/webp;base64,ZGVza3RvcA==';
+        const html = renderToStaticMarkup(
+            <SafeImageMediaProvider
+                media={[mediaDescriptor('/desktop-only.webp', 'hero', { inlinePreview: desktopPreview })]}
+            >
+                <SafeImage
+                    src="/desktop-only.webp"
+                    imageKind="hero"
+                    alt="Responsive artwork"
+                    mediaSources={[{ media: '(max-width: 767px)', src: '/mobile-without-preview.webp' }]}
+                />
+            </SafeImageMediaProvider>,
+        );
+        const host = document.createElement('div');
+        host.innerHTML = html;
+        const preview = requiredElement<HTMLImageElement>(host, '.safe-image-preview');
+        const mobileSource = preview.closest('picture')?.querySelector('source');
+        expect(mobileSource?.getAttribute('media')).toBe('(max-width: 767px)');
+        const nativeSource = host
+            .querySelector('img.safe-image')
+            ?.closest('picture')
+            ?.querySelector('source');
+        expect(mobileSource?.getAttribute('srcset')).toBe(nativeSource?.getAttribute('srcset'));
+        expect(mobileSource?.getAttribute('sizes')).toBe(nativeSource?.getAttribute('sizes'));
+        expect(mobileSource?.getAttribute('srcset')).not.toBe(desktopPreview);
+        expect(
+            host
+                .querySelector('img.safe-image')
+                ?.closest('picture')
+                ?.querySelector('source')
+                ?.getAttribute('srcset'),
+        ).toContain('mobile-without-preview.webp');
     });
 
     it('uses inline native art-direction previews without extra HTTP preview candidates', () => {

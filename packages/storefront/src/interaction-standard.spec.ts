@@ -9,6 +9,7 @@ describe('storefront interaction architecture guard', () => {
     it('rejects page reloads, unscoped placeholders, cancelling refreshes and hidden-page polling in new code', () => {
         for (const source of [
             'window.location.reload()',
+            '.future-module { content-visibility: auto; contain-intrinsic-size: auto 320px; }',
             'query.refetch()',
             'query?.refetch?.()',
             'query.fetchNextPage()',
@@ -19,6 +20,17 @@ describe('storefront interaction architecture guard', () => {
             'window.confirm("discard")',
         ])
             expect(checkInteractionSource('pages/new-page.tsx', source).length).toBeGreaterThan(0);
+    });
+    it('rejects navigation cache eviction except documented sensitive data owners', () => {
+        expect(checkInteractionSource('plugins/new.tsx', 'useQuery({ gcTime: 0 })')).not.toEqual([]);
+        expect(checkInteractionSource('plugins/new.tsx', 'useQuery({ "gcTime": 0 })')).not.toEqual([]);
+        expect(checkInteractionSource('plugins/new.tsx', 'useQuery({ gcTime: 60000 })')).toEqual([]);
+        expect(
+            checkInteractionSource(
+                'plugins/new.tsx',
+                'useQuery({\n// @ephemeral-sensitive: private credential result discarded on exit.\ngcTime: 0 })',
+            ),
+        ).toEqual([]);
     });
     it('rejects text-only lazy fallbacks while accepting shared structural surfaces', () => {
         expect(
