@@ -374,3 +374,21 @@ describe('buyer recent mail display and error states', () => {
         expect(document.body.textContent).not.toContain('实时监听状态');
     });
 });
+
+describe('mail portal linked buttons', () => {
+    it('keeps link targets and allows independent popups while retaining the existing height measurement', async () => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('BUY-SYNTHETIC-MAIL');
+        const data = result('Linked mail', 'VIRTUAL');
+        const html =
+            '<a href="https://example.invalid/confirm?a=1&amp;b=2" target="_blank" rel="noopener noreferrer">确认登录</a>';
+        requests[0].resolve({ ...data, items: [{ ...data.items[0], bodyHtml: html }] });
+        await query;
+        const frame = document.querySelector('iframe.mail-iframe');
+        const sandbox = frame?.getAttribute('sandbox')?.split(' ');
+        expect(sandbox).toEqual(['allow-same-origin', 'allow-popups', 'allow-popups-to-escape-sandbox']);
+        expect(sandbox).not.toContain('allow-scripts');
+        expect(sandbox).not.toContain('allow-forms');
+        expect(frame?.getAttribute('srcdoc')).toBe(html);
+    });
+});
