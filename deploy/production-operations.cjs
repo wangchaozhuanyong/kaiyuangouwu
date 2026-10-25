@@ -474,7 +474,11 @@ function inspectProductionReleases() {
 }
 
 function encodeBeforeReport(report) {
-    const output = `${JSON.stringify({ stage: 'before', ...report }, null, 2)}\n`;
+    const value = { stage: 'before', ...report };
+    const readable = `${JSON.stringify(value, null, 2)}\n`;
+    // Keep every field and the existing SSM ceiling. Whitespace must not make
+    // otherwise bounded diagnostic evidence unavailable.
+    const output = Buffer.byteLength(readable) <= 18000 ? readable : `${JSON.stringify(value)}\n`;
     assert.ok(
         Buffer.byteLength(output) <= 18000,
         'Diagnosis exceeds the SSM evidence limit; retention is blocked',
