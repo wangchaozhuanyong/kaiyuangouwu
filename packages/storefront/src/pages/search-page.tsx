@@ -880,20 +880,24 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                             {categoryLinks}
                         </div>
                     )}
-                    {!searching && !searchError && !results.length && !!relatedProducts.length && (
-                        <ProductSection
-                            className="search-related-products"
-                            title={isZh ? '继续看看' : 'Keep exploring'}
-                            subtitle={isZh ? '店内在售商品' : 'Available in store'}
-                            subtitlePlacement="end"
-                            appearance="plain"
-                            products={relatedProducts}
-                            market={market}
-                            locale={locale}
-                            language={language}
-                            onProduct={product => navigateTo({ name: 'product', id: product.id })}
-                        />
-                    )}
+                    {!searching &&
+                        !searchError &&
+                        !results.length &&
+                        !hasFilters &&
+                        !!relatedProducts.length && (
+                            <ProductSection
+                                className="search-related-products"
+                                title={isZh ? '继续看看' : 'Keep exploring'}
+                                subtitle={isZh ? '店内在售商品' : 'Available in store'}
+                                subtitlePlacement="end"
+                                appearance="plain"
+                                products={relatedProducts}
+                                market={market}
+                                locale={locale}
+                                language={language}
+                                onProduct={product => navigateTo({ name: 'product', id: product.id })}
+                            />
+                        )}
                 </section>
             )}
             {filterOpen && (

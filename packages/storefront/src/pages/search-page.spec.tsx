@@ -168,6 +168,40 @@ describe('search result and product-detail cache separation', () => {
         );
     });
 
+    it.each([false, true])(
+        'keeps unfiltered recommendations outside filtered empty results (desktop=%s)',
+        async desktop => {
+            viewport.desktop = desktop;
+            client.removeQueries({ queryKey: searchKey });
+            const catalog = vi.fn().mockResolvedValue({ items: [], totalItems: 0 });
+            renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi });
+            await vi.waitFor(() =>
+                expect(container.querySelector('.search-related-products')).not.toBeNull(),
+            );
+
+            for (const initialFilters of [
+                { inStockOnly: true },
+                { minPrice: '100' },
+                { collectionId: 'category' },
+            ]) {
+                renderDiscovery({
+                    initialQuery: 'coffee',
+                    initialFilters,
+                    api: { catalog } as unknown as ShopApi,
+                });
+                await vi.waitFor(() => {
+                    expect(container.querySelector('.search-empty')).not.toBeNull();
+                    expect(container.querySelector('.search-related-products')).toBeNull();
+                });
+            }
+            expect(catalog).toHaveBeenCalledWith(
+                expect.objectContaining({ inStockOnly: true }),
+                expect.anything(),
+                'store',
+            );
+        },
+    );
+
     it('renders managed category thumbnails through the shared decoded-image component', () => {
         renderDiscovery({
             collections: [
