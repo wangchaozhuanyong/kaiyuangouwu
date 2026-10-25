@@ -12,12 +12,21 @@ import {
     departmentDisplayLabel,
     eventTypeDisplayLabel,
     paymentMethodDisplayLabel,
+    paymentStateDisplayLabel,
     systemFieldDisplayLabel,
 } from '../../../common/src/system-display-labels';
 import { storefrontClientPluginCatalog } from '../../../storefront-content-plugin/src/client-plugin-manifest';
 import { getClientPluginDisplay } from '../../../storefront-content-plugin/src/shared/client-plugin-display';
 
 describe('shared display language contract', () => {
+    it('uses one payment vocabulary while retaining safe unknown states', () => {
+        expect(paymentStateDisplayLabel('PendingManual')).toBe('待客服核款');
+        expect(paymentStateDisplayLabel('Settled')).toBe('已支付');
+        expect(paymentStateDisplayLabel('Created')).toBe('待支付');
+        for (const state of ['NEW_STATE', '', 'constructor', '__proto__', 'toString']) {
+            expect(paymentStateDisplayLabel(state)).toBe('未知状态');
+        }
+    });
     it.each(['NEW_SERVER_ENUM', '', 'constructor', '__proto__', 'toString'])(
         'never renders unknown or inherited system keys: %s',
         value => {

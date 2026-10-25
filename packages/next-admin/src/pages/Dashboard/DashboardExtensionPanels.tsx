@@ -83,10 +83,10 @@ export function ReferralTodayExtensionWidget() {
                         刷新
                     </AdminButton>
                     <Link
-                        to="/marketing/referrals"
+                        to="/marketing/referrals/relationships"
                         className="inline-flex items-center gap-1 font-bold text-blue-600"
                     >
-                        查看邀请报表
+                        查看邀请关系
                         <ArrowRight className="h-3 w-3" />
                     </Link>
                 </div>

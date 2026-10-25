@@ -1,5 +1,23 @@
 import { getSystemLabel, type DisplayLanguage } from './display-localization';
 
+/** Payment state is distinct from order and fulfilment state. */
+const paymentStateNames: Readonly<Record<string, string>> = {
+    Created: '待支付',
+    Authorized: '已授权',
+    PendingManual: '待客服核款',
+    Settled: '已支付',
+    Declined: '已拒绝',
+    Cancelled: '已取消',
+    Error: '支付错误',
+};
+
+export function paymentStateDisplayLabel(state?: string | null): string {
+    const normalized = state?.trim() ?? '';
+    return Object.prototype.hasOwnProperty.call(paymentStateNames, normalized)
+        ? paymentStateNames[normalized]
+        : systemStatusDisplayLabel(state);
+}
+
 export const departmentDisplayNames: Readonly<Record<string, { zh: string; en: string }>> = {
     EXEC: { zh: '总经办与运营调度中心', en: 'Executive Operations' },
     INTEL: { zh: '市场情报与商业策划部', en: 'Market Intelligence' },

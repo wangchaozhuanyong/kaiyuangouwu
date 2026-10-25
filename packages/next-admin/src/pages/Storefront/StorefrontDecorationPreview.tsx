@@ -394,6 +394,7 @@ export function StorefrontDecorationPreview({
             <p className="p-3 text-xs text-slate-500">
                 客户端完整页面 · {selectedViewport === 'desktop' ? '1440' : '390'}px 等比缩放 ·{' '}
                 {block ? '未保存内容即时预览' : '当前店铺实际内容'}
+                {route === '/account' && ' · 账号、订单及余额为示例预览'}
             </p>
             {!block && (
                 <label className="flex items-center gap-2 px-3 pb-3 text-xs text-slate-600">

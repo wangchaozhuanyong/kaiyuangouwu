@@ -393,24 +393,31 @@ export function EmptyState({
     detail,
     action,
     onAction,
+    onResetFilters,
 }: {
     icon: typeof BadgePercent;
     title: string;
     detail: string;
     action: string;
     onAction: () => void;
+    /** Present only when a search/filter, rather than the underlying dataset, is empty. */
+    onResetFilters?: () => void;
 }) {
     return (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-14 text-center">
             <Icon className="mx-auto h-10 w-10 text-slate-300" />
-            <h3 className="mt-3 text-sm font-bold text-slate-800">{title}</h3>
-            <p className="mt-1 text-xs text-slate-400">{detail}</p>
+            <h3 className="mt-3 text-sm font-bold text-slate-800">
+                {onResetFilters ? '没有匹配的活动' : title}
+            </h3>
+            <p className="mt-1 text-xs text-slate-400">
+                {onResetFilters ? '当前搜索或筛选条件下没有结果，请调整条件后重试。' : detail}
+            </p>
             <AdminButton
                 type="button"
-                onClick={onAction}
+                onClick={onResetFilters ?? onAction}
                 className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white"
             >
-                {action}
+                {onResetFilters ? '清空搜索与筛选' : action}
             </AdminButton>
         </div>
     );

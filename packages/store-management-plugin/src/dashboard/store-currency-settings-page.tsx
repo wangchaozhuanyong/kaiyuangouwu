@@ -36,8 +36,8 @@ import { useEffect, useState } from 'react';
 import { getSystemLabel, serviceMessageDisplay } from '../../../common/src/display-localization';
 import {
     paymentMethodDisplayLabel,
+    paymentStateDisplayLabel,
     systemFieldDisplayLabel,
-    systemStatusDisplayLabel,
 } from '../../../common/src/system-display-labels';
 
 import {
@@ -721,7 +721,7 @@ function StorePaymentDetailList({
                         <div className="flex flex-wrap items-center gap-2">
                             <strong>订单 {detail.orderCode}</strong>
                             <Badge variant={detail.paymentState === 'Settled' ? 'default' : 'outline'}>
-                                {systemStatusDisplayLabel(detail.paymentState)}
+                                {paymentStateDisplayLabel(detail.paymentState)}
                             </Badge>
                             <Badge variant="outline">
                                 {paymentMethodDisplayLabel(detail.paymentMethodCode)}

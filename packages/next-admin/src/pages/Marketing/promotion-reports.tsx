@@ -245,6 +245,7 @@ export function CouponLedger({
                 </div>
                 <div className="flex gap-2">
                     <AdminSelect
+                        aria-label="按优惠券活动筛选流水"
                         value={campaign}
                         onChange={eventValue => setCampaign(eventValue.target.value)}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -257,6 +258,7 @@ export function CouponLedger({
                         ))}
                     </AdminSelect>
                     <AdminSelect
+                        aria-label="按优惠券事件筛选流水"
                         value={event}
                         onChange={eventValue => setEvent(eventValue.target.value)}
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"

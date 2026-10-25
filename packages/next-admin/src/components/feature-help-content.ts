@@ -286,6 +286,66 @@ export const featureHelpContent = {
         example: '例如：创建满 200 减 20 的优惠券，限默认店铺且每人使用一次。',
         impact: '启用后会影响结账价格、活动成本和订单统计。',
     },
+    'marketing.coupons': {
+        purpose: '管理优惠券活动，查看领取与核销汇总，按关键词和活动状态筛选。',
+        requirements: ['先核对活动适用范围与有效期', '搜索无结果时可清空条件查看已有活动'],
+        example: '例如：查找一张已结束的优惠券，再打开详情核对领取情况。',
+        impact: '搜索与查看只读；新建、发券、归档或删除需要对应权限和确认。',
+    },
+    'marketing.flash-sales': {
+        purpose: '查看和管理限时秒杀活动、参与规格、活动时间及价格。',
+        requirements: ['核对参与商品、活动时间和价格', '搜索无匹配结果不表示尚未创建活动'],
+        example: '例如：搜索一个已有活动名称，查看其参与商品规格。',
+        impact: '查看与搜索只读；活动配置生效后会影响商城展示和结算价格。',
+    },
+    'marketing.promoters': {
+        purpose: '查看推广员及其邀请和消费统计。',
+        requirements: ['选择正确店铺', '保持统计币种与范围一致'],
+        example: '例如：查找推广员并核对其邀请人数。',
+        impact: '本页查看统计，不修改返利规则或执行提现。',
+    },
+    'marketing.invitation-relationships': {
+        purpose: '查看邀请人与受邀客户的绑定关系、绑定时间及首购情况。',
+        requirements: ['按当前店铺查看', '核对关系与首购时间的不同含义'],
+        example: '例如：查询一名客户是否已绑定邀请人。',
+        impact: '关系明细为只读，不调整佣金余额。',
+    },
+    'marketing.referral-rewards': {
+        purpose: '查看订单对应的返利金额、等待释放和冲销记录。',
+        requirements: ['核对关联订单与币种', '区分等待释放、已释放与已冲销奖励'],
+        example: '例如：检查一笔退款订单是否产生返利冲销。',
+        impact: '查看返利记录，不执行付款或提现。',
+    },
+    'marketing.referral-ledger': {
+        purpose: '按事件查看佣金钱包的金额变化及关联订单。',
+        requirements: ['核对钱包币种', '结合事件类型和关联记录核对余额'],
+        example: '例如：查询奖励释放和退款扣回的流水。',
+        impact: '本页为只读账本，不改变钱包余额。',
+    },
+    'marketing.referral-withdrawals': {
+        purpose: '查看提现申请，并按权限执行审核及付款结果登记。',
+        requirements: ['核对申请人、金额与收款信息', '审核与实际转账分开核实'],
+        example: '例如：打开待审核申请，核对资料后再决定处理方式。',
+        impact: '审核和结果登记会改变申请状态，不能把登记视为已完成转账。',
+    },
+    'settings.payment-ledger': {
+        purpose: '查看支付记录的订单、支付方式、状态、金额和创建时间。',
+        requirements: ['选择正确店铺和币种', '待客服核款表示尚未确认到账'],
+        example: '例如：将一笔待核款流水与对应订单对照。',
+        impact: '流水查看为只读，不收款、不退款、不修改支付配置。',
+    },
+    'settings.refund-audit': {
+        purpose: '核对人工退款登记、操作记录及相关证据。',
+        requirements: ['核对原支付、退款金额与币种', '登记记录与实际转账分别核实'],
+        example: '例如：查看一笔人工退款登记的处理说明。',
+        impact: '查看只读；新增退款登记属于业务写入，不能代替实际退款凭证。',
+    },
+    'settings.payment-intents': {
+        purpose: '查看链上收款意向及其匹配、到账和待复核状态。',
+        requirements: ['核对网络、币种和原始收款意向', '异常处理前检查匹配证据'],
+        example: '例如：查看一笔待复核意向的对账状态。',
+        impact: '查看不转账；人工处理可能改变对账结果，需要对应权限。',
+    },
     'marketing.coupon-report': {
         purpose: '统计优惠券的领取、核销、退款、优惠成本和带动成交。',
         requirements: ['选择统计时间范围', '对比时保持店铺与币种口径一致'],
@@ -294,8 +354,8 @@ export const featureHelpContent = {
     },
     'marketing.coupon-ledger': {
         purpose: '追踪每张优惠券从领取、锁定、核销到退款或作废的完整流水。',
-        requirements: ['按优惠码、客户或订单筛选', '核对事件时间与状态转换'],
-        example: '例如：查询 SAVE20 在订单 ORD-1008 中从锁定到核销的记录。',
+        requirements: ['按优惠券活动和事件类型筛选', '核对事件时间、客户、关联订单与状态转换'],
+        example: '例如：选择一项优惠券活动及已核销事件，查看对应订单和优惠金额。',
         impact: '只读审计数据，用于客诉、对账和异常排查。',
     },
     'marketing.sku-sale-prices': {

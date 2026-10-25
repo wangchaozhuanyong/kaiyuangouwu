@@ -2,49 +2,9 @@ import React from 'react';
 import type { StoreCouponRecord } from '../../src/graphql/marketing.graphql';
 import { CouponAppearanceDialog } from '../../src/pages/Marketing/promotion-actions';
 import { CouponList } from '../../src/pages/Marketing/promotion-lists';
-import { couponAppearanceOptions } from '../../src/pages/Marketing/promotion-model';
+import { sampleCoupons } from './coupon-appearance-fixture-data';
 
 const noop = () => undefined;
-const sampleCoupons: StoreCouponRecord[] = couponAppearanceOptions.map((option, index) => ({
-    id: `local-coupon-${index}`,
-    createdAt: '2026-10-13T00:00:00.000Z',
-    updatedAt: '2026-10-13T00:00:00.000Z',
-    name: `${option.label}示例券`,
-    couponCode: `LOCAL_COLOR_${index}`,
-    kind: 'ORDER_FIXED',
-    appearanceTheme: option.value === 'default' ? null : option.value,
-    enabled: true,
-    startsAt: null,
-    endsAt: null,
-    minimumSpend: 10_000,
-    discountAmount: 5_000,
-    discountRate: null,
-    collectionIds: [],
-    productVariantIds: [],
-    usageLimit: 100,
-    perCustomerUsageLimit: 1,
-    claimStartsAt: null,
-    claimEndsAt: null,
-    validityDays: 7,
-    issueLimit: 100,
-    perCustomerClaimLimit: 1,
-    stackPolicy: 'EXCLUSIVE',
-    returnOnCancellation: true,
-    returnOnFullRefund: true,
-    archivedAt: null,
-    remainingIssueCount: 99,
-    claimedCount: 1,
-    availableCount: 1,
-    lockedCount: 0,
-    usedCount: 0,
-    returnedCount: 0,
-    expiredCount: 0,
-    revokedCount: 0,
-    redeemedOrderCount: 0,
-    refundedOrderCount: 0,
-    discountAmountTotal: 0,
-    assistedRevenueTotal: 0,
-}));
 
 /** Real list and editor, with only local synthetic state and no API writes. */
 export function CouponAppearanceFixture() {

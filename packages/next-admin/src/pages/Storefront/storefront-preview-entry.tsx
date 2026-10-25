@@ -9,6 +9,7 @@ import { storefrontQueryClient } from '../../../../storefront/src/query-client';
 import { setStorefrontPreviewParameters } from '../../../../storefront/src/storefront-preview-parameters';
 import { StorefrontErrorBoundary } from '../../../../storefront/src/StorefrontErrorBoundary';
 import type { StorefrontContentResponse } from '../../../../storefront/src/types';
+import { decorationPreviewAccountData } from './storefront-preview-account';
 // This preview bundles the client styles; storefront source changes must rebuild the Admin too.
 import '../../../../storefront/src/storefront-styles';
 import {
@@ -62,6 +63,14 @@ window.fetch = async (input, init) => {
         }
         if (!isReadOnlyPreviewQuery(body.query)) return respondWithError('Decoration preview is read only');
         const query = body.query;
+        if (init?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const accountData = decorationPreviewAccountData(query);
+        if (accountData) {
+            return new Response(JSON.stringify({ data: accountData }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            });
+        }
         const id = crypto.randomUUID();
         return new Promise<Response>((resolve, reject) => {
             const signal = init?.signal;

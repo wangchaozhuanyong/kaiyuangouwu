@@ -25,6 +25,7 @@ export function CouponList({
     onRename,
     onAppearance,
     onSensitive,
+    onResetFilters,
 }: {
     coupons: StoreCouponRecord[];
     currencyCode: string;
@@ -36,6 +37,7 @@ export function CouponList({
     onRename: (value: { id: string; name: string }) => void;
     onAppearance: (coupon: StoreCouponRecord) => void;
     onSensitive: (action: SensitiveAction) => void;
+    onResetFilters?: () => void;
 }) {
     if (!coupons.length)
         return (
@@ -45,6 +47,7 @@ export function CouponList({
                 detail="创建第一张优惠券后，领取、核销和退款数据会在这里汇总。"
                 action="新建优惠券"
                 onAction={onCreate}
+                onResetFilters={onResetFilters}
             />
         );
     return (
@@ -257,6 +260,7 @@ export function FlashSaleList({
     onRename,
     onView,
     onSensitive,
+    onResetFilters,
 }: {
     sales: StoreFlashSaleRecord[];
     actionPending: boolean;
@@ -264,6 +268,7 @@ export function FlashSaleList({
     onRename: (value: { id: string; name: string }) => void;
     onView: (sale: StoreFlashSaleRecord) => void;
     onSensitive: (action: SensitiveAction) => void;
+    onResetFilters?: () => void;
 }) {
     if (!sales.length)
         return (
@@ -273,6 +278,7 @@ export function FlashSaleList({
                 detail="秒杀会同时影响商城展示和购物车结算价格。"
                 action="新建秒杀"
                 onAction={onCreate}
+                onResetFilters={onResetFilters}
             />
         );
     return (

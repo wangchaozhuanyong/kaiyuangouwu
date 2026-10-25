@@ -229,10 +229,14 @@ describe('StorefrontCatalogService query construction', () => {
             db.exec(`
                 CREATE TABLE auto_card_config (id INTEGER, channelId TEXT, productVariantId TEXT, enabled INTEGER);
                 CREATE TABLE auto_card_pool_item (configId INTEGER, state TEXT);
+                CREATE TABLE digital_variant_config (channelId TEXT, productVariantId TEXT, stockPolicy TEXT, availableQuantity INTEGER, migrationState TEXT);
+                CREATE TABLE catalog_sync_binding (targetChannelId TEXT, targetId TEXT, ruleId INTEGER, kind TEXT, state TEXT);
+                CREATE TABLE catalog_sync_rule (id INTEGER, sourceChannelId TEXT, enabled INTEGER);
+                CREATE TABLE catalog_resource_ownership (resourceId TEXT, resourceType TEXT, ownerChannelId TEXT);
             `);
             const query = db.prepare(`
                 SELECT ${condition} AS included
-                FROM (SELECT :searchInStock AS inStock, :variantId AS productVariantId) si
+                FROM (SELECT :searchInStock AS inStock, :variantId AS productVariantId, 'product-1' AS productId) si
                 CROSS JOIN (
                     SELECT :fulfillmentType AS fulfillmentType, :deliveryMode AS digitalDeliveryMode
                 ) catalog_variant
@@ -261,6 +265,37 @@ describe('StorefrontCatalogService query construction', () => {
                 );
 
             expect(included()).toBe(0);
+            // An active digital quota overrides a stale positive search-index stock flag.
+            db.exec(
+                `INSERT INTO digital_variant_config VALUES ('channel-1', 'variant-1', 'limited', 0, 'ACTIVE')`,
+            );
+            expect(included({ deliveryMode: 'manual_service' })).toBe(0);
+            expect(included({ deliveryMode: 'file_download' })).toBe(0);
+            expect(included({ fulfillmentType: 'physical', deliveryMode: 'manual_service' })).toBe(1);
+            db.exec(`UPDATE digital_variant_config SET availableQuantity = 3`);
+            expect(included({ deliveryMode: 'manual_service', searchInStock: 0 })).toBe(1);
+            db.exec(`UPDATE digital_variant_config SET stockPolicy = 'unlimited', availableQuantity = 0`);
+            expect(included({ deliveryMode: 'manual_service', searchInStock: 0 })).toBe(1);
+            expect(
+                included({ channelId: 'channel-2', deliveryMode: 'manual_service', searchInStock: 0 }),
+            ).toBe(0);
+            db.exec(`UPDATE digital_variant_config SET stockPolicy = 'pool_derived'`);
+            expect(included()).toBe(0);
+            // A selling store uses the same source stock as the detail reader, never its stale local quota.
+            db.exec(`
+                INSERT INTO digital_variant_config VALUES ('source-store', 'variant-1', 'limited', 0, 'ACTIVE');
+                INSERT INTO catalog_sync_rule VALUES (1, 'source-store', 1);
+                INSERT INTO catalog_resource_ownership VALUES ('product-1', 'Product', 'source-store');
+                INSERT INTO catalog_sync_binding VALUES ('channel-1', 'product-1', 1, 'PRODUCT', 'ACTIVE');
+            `);
+            expect(included({ deliveryMode: 'manual_service' })).toBe(0);
+            db.exec(
+                `UPDATE digital_variant_config SET availableQuantity = 2 WHERE channelId = 'source-store'`,
+            );
+            expect(included({ deliveryMode: 'manual_service', searchInStock: 0 })).toBe(1);
+            db.exec(`UPDATE catalog_sync_binding SET state = 'REMOVED'`);
+            expect(included()).toBe(0);
+            db.exec(`DELETE FROM digital_variant_config`);
             expect(included({ deliveryMode: 'manual_service' })).toBe(1);
             expect(included({ deliveryMode: null })).toBe(1);
             expect(included({ deliveryMode: 'manual_service', searchInStock: 0 })).toBe(0);
@@ -331,173 +366,238 @@ describe('StorefrontCatalogService query construction', () => {
     });
 });
 
-it('uses live product and SKU channel/deletion/enable SQL joins before count and paging', async () => {
-    const db = await new DataSource({
-        type: 'sqljs',
-        synchronize: true,
-        entities: [
-            new EntitySchema<Channel>({
-                name: 'Channel',
-                target: Channel,
-                columns: { id: { type: String, primary: true } },
-            }),
-            new EntitySchema<Product>({
-                name: 'Product',
-                target: Product,
-                columns: {
-                    id: { type: String, primary: true },
-                    enabled: { type: Boolean },
-                    deletedAt: { type: Date, nullable: true },
-                    createdAt: { type: Date },
-                },
-                relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
-            }),
-            new EntitySchema<ProductVariant>({
-                name: 'ProductVariant',
-                target: ProductVariant,
-                columns: {
-                    id: { type: String, primary: true },
-                    enabled: { type: Boolean },
-                    deletedAt: { type: Date, nullable: true },
-                },
-                relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
-            }),
-            new EntitySchema<SearchIndexItem & { id: number }>({
-                name: 'SearchIndexItem',
-                target: SearchIndexItem,
-                columns: {
-                    id: { type: Number, primary: true },
-                    productId: { type: String },
-                    productVariantId: { type: String },
-                    priceWithTax: { type: Number },
-                    productName: { type: String },
-                    enabled: { type: Boolean },
-                    channelId: { type: String },
-                    languageCode: { type: String },
-                },
-            }),
-        ],
-    }).initialize();
-    try {
-        await db.getRepository(Channel).save([{ id: 'a' }, { id: 'b' }]);
-        const createdAt = new Date('2026-10-11T00:00:00Z');
-        await db.getRepository(Product).save(
-            Array.from({ length: 8 }, (_, index) => ({
-                id: `p${index + 1}`,
-                enabled: index !== 1,
-                deletedAt: index === 2 ? createdAt : null,
-                createdAt,
-                channels: [{ id: index === 3 ? 'b' : 'a' }],
-            })),
-        );
-        await db.getRepository(ProductVariant).save(
-            Array.from({ length: 8 }, (_, index) => ({
-                id: `v${index + 1}`,
-                enabled: index !== 4,
-                deletedAt: index === 5 ? createdAt : null,
-                channels: [{ id: index === 6 ? 'b' : 'a' }],
-            })),
-        );
-        await db.getRepository(SearchIndexItem).save(
-            Array.from({ length: 8 }, (_, index) => ({
-                id: index + 1,
-                productId: `p${index + 1}`,
-                productVariantId: `v${index + 1}`,
-                priceWithTax: index === 0 ? 0 : 250,
-                productName: index === 0 ? 'Eligible A' : index === 7 ? 'Eligible B' : `Invalid ${index}`,
+it.each(['sqljs', ...(process.env.CATALOG_TEST_MYSQL === '1' ? ['mysql'] : [])] as Array<'sqljs' | 'mysql'>)(
+    'uses live product and SKU channel/deletion/enable SQL joins before count and paging (%s)',
+    async driver => {
+        const db = await new DataSource({
+            ...(driver === 'mysql'
+                ? {
+                      type: 'mysql' as const,
+                      host: '127.0.0.1',
+                      port: 33564,
+                      username: 'root',
+                      database: 'vendure_moyao_release_test',
+                  }
+                : { type: 'sqljs' as const }),
+            synchronize: true,
+            entities: [
+                new EntitySchema<Channel>({
+                    name: 'Channel',
+                    target: Channel,
+                    columns: { id: { type: String, primary: true } },
+                }),
+                new EntitySchema<Product>({
+                    name: 'Product',
+                    target: Product,
+                    columns: {
+                        id: { type: String, primary: true },
+                        enabled: { type: Boolean },
+                        deletedAt: { type: Date, nullable: true },
+                        createdAt: { type: Date },
+                    },
+                    relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
+                }),
+                new EntitySchema<ProductVariant>({
+                    name: 'ProductVariant',
+                    target: ProductVariant,
+                    columns: {
+                        id: { type: String, primary: true },
+                        enabled: { type: Boolean },
+                        deletedAt: { type: Date, nullable: true },
+                    },
+                    relations: { channels: { type: 'many-to-many', target: 'Channel', joinTable: true } },
+                    embeddeds: {
+                        customFields: {
+                            prefix: false,
+                            schema: new EntitySchema({
+                                name: 'CatalogStockFields',
+                                columns: {
+                                    fulfillmentType: { type: String, default: 'digital' },
+                                    digitalDeliveryMode: { type: String, default: 'manual_service' },
+                                },
+                            }),
+                        },
+                    },
+                }),
+                new EntitySchema<SearchIndexItem & { id: number }>({
+                    name: 'SearchIndexItem',
+                    target: SearchIndexItem,
+                    columns: {
+                        id: { type: Number, primary: true },
+                        productId: { type: String },
+                        productVariantId: { type: String },
+                        priceWithTax: { type: Number },
+                        productName: { type: String },
+                        enabled: { type: Boolean },
+                        channelId: { type: String },
+                        languageCode: { type: String },
+                        inStock: { type: Boolean, default: true },
+                    },
+                }),
+            ],
+        }).initialize();
+        try {
+            await db.getRepository(Channel).save([{ id: 'a' }, { id: 'b' }]);
+            const createdAt = new Date('2026-10-11T00:00:00Z');
+            await db.getRepository(Product).save(
+                Array.from({ length: 8 }, (_, index) => ({
+                    id: `p${index + 1}`,
+                    enabled: index !== 1,
+                    deletedAt: index === 2 ? createdAt : null,
+                    createdAt,
+                    channels: [{ id: index === 3 ? 'b' : 'a' }],
+                })),
+            );
+            await db.getRepository(ProductVariant).save(
+                Array.from({ length: 8 }, (_, index) => ({
+                    id: `v${index + 1}`,
+                    enabled: index !== 4,
+                    deletedAt: index === 5 ? createdAt : null,
+                    channels: [{ id: index === 6 ? 'b' : 'a' }],
+                })),
+            );
+            await db.getRepository(SearchIndexItem).save(
+                Array.from({ length: 8 }, (_, index) => ({
+                    id: index + 1,
+                    productId: `p${index + 1}`,
+                    productVariantId: `v${index + 1}`,
+                    priceWithTax: index === 0 ? 0 : 250,
+                    productName: index === 0 ? 'Eligible A' : index === 7 ? 'Eligible B' : `Invalid ${index}`,
+                    enabled: true,
+                    channelId: 'a',
+                    languageCode: LanguageCode.en,
+                })),
+            );
+            const service = new StorefrontCatalogService(
+                {
+                    rawConnection: db,
+                    getRepository: (_ctx: unknown, entity: any) => db.getRepository(entity),
+                } as never,
+                {
+                    findByIds: (_ctx: unknown, ids: string[]) =>
+                        db.getRepository(Product).findBy({ id: In(ids) }),
+                } as never,
+                {} as never,
+            );
+            const context = {
+                channelId: 'a',
+                languageCode: 'en',
+                currencyCode: 'CNY',
+                channel: { defaultCurrencyCode: 'CNY', customFields: {} },
+            } as never;
+            const first = await service.find(context, { take: 1, sort: 'NAME' });
+            expect(first.totalItems).toBe(2);
+            expect(first.items.map(product => String(product.id))).toEqual(['p1']);
+            const second = await service.find(context, { skip: 1, take: 1, sort: 'NAME' });
+            expect(second.totalItems).toBe(2);
+            expect(second.items.map(product => String(product.id))).toEqual(['p8']);
+            expect(await service.recommendationProductIds(context)).toEqual(['p1', 'p8']);
+            for (const sql of [
+                'CREATE TABLE auto_card_config (id INTEGER, channelId TEXT, productVariantId TEXT, enabled INTEGER)',
+                'CREATE TABLE auto_card_pool_item (configId INTEGER, state TEXT)',
+                'CREATE TABLE digital_variant_config (channelId TEXT, productVariantId TEXT, stockPolicy TEXT, availableQuantity INTEGER, migrationState TEXT)',
+                'CREATE TABLE catalog_sync_binding (targetChannelId TEXT, targetId TEXT, ruleId INTEGER, kind TEXT, state TEXT)',
+                'CREATE TABLE catalog_sync_rule (id INTEGER, sourceChannelId TEXT, enabled INTEGER)',
+                'CREATE TABLE catalog_resource_ownership (resourceId TEXT, resourceType TEXT, ownerChannelId TEXT)',
+                "INSERT INTO digital_variant_config VALUES ('a','v1','limited',0,'ACTIVE'), ('a','v8','limited',1,'ACTIVE')",
+            ])
+                await db.query(sql);
+            const stocked = await service.find(context, { inStockOnly: true, take: 1, sort: 'NAME' });
+            expect(stocked).toMatchObject({ totalItems: 1, items: [{ id: 'p8' }] });
+            expect(
+                await service.find(context, { inStockOnly: true, skip: 1, take: 1, sort: 'NAME' }),
+            ).toEqual({
+                totalItems: 1,
+                items: [],
+            });
+            // A second, unlimited variant makes the product saleable even if its first SKU is depleted.
+            await db
+                .getRepository(ProductVariant)
+                .save({ id: 'v9', enabled: true, deletedAt: null, channels: [{ id: 'a' }] });
+            await db.getRepository(SearchIndexItem).save({
+                id: 9,
+                productId: 'p1',
+                productVariantId: 'v9',
+                priceWithTax: 100,
+                productName: 'Eligible A',
                 enabled: true,
                 channelId: 'a',
                 languageCode: LanguageCode.en,
-            })),
-        );
-        const service = new StorefrontCatalogService(
-            {
-                rawConnection: db,
-                getRepository: (_ctx: unknown, entity: any) => db.getRepository(entity),
-            } as never,
-            {
-                findByIds: (_ctx: unknown, ids: string[]) =>
-                    db.getRepository(Product).findBy({ id: In(ids) }),
-            } as never,
-            {} as never,
-        );
-        const context = {
-            channelId: 'a',
-            languageCode: 'en',
-            currencyCode: 'CNY',
-            channel: { defaultCurrencyCode: 'CNY', customFields: {} },
-        } as never;
-        const first = await service.find(context, { take: 1, sort: 'NAME' });
-        expect(first.totalItems).toBe(2);
-        expect(first.items.map(product => String(product.id))).toEqual(['p1']);
-        const second = await service.find(context, { skip: 1, take: 1, sort: 'NAME' });
-        expect(second.totalItems).toBe(2);
-        expect(second.items.map(product => String(product.id))).toEqual(['p8']);
-        expect(await service.recommendationProductIds(context)).toEqual(['p1', 'p8']);
-        // Restoring the same identity recovers its original query eligibility without deleting associations.
-        await db.getRepository(Product).update({ id: 'p3' }, { deletedAt: null });
-        const restored = await service.find(context, { take: 48, sort: 'NAME' });
-        expect(restored.totalItems).toBe(3);
-        expect(restored.items.map(product => String(product.id))).toContain('p3');
+                inStock: false,
+            } as any);
+            await db.query("INSERT INTO digital_variant_config VALUES ('a','v9','unlimited',0,'ACTIVE')");
+            expect(await service.find(context, { inStockOnly: true, take: 1, sort: 'NAME' })).toMatchObject({
+                totalItems: 2,
+                items: [{ id: 'p1' }],
+            });
+            expect(
+                await service.find(context, { inStockOnly: true, skip: 1, take: 1, sort: 'NAME' }),
+            ).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
+            // Restoring the same identity recovers its original query eligibility without deleting associations.
+            await db.getRepository(Product).update({ id: 'p3' }, { deletedAt: null });
+            const restored = await service.find(context, { take: 48, sort: 'NAME' });
+            expect(restored.totalItems).toBe(3);
+            expect(restored.items.map(product => String(product.id))).toContain('p3');
 
-        // Exercise the real deferred access-control repository, including the
-        // product hydration filter which previously hid rows only after paging.
-        let hiddenIds = ['p1'];
-        const scopedConnection = new TransactionalConnection(
-            db,
-            {} as never,
-            {
-                authOptions: {
-                    entityAccessControlStrategy: {
-                        applyAccessControl: (
-                            qb: SelectQueryBuilder<Product | SearchIndexItem>,
-                            entity: { name: string },
-                        ) => {
-                            if (entity.name !== 'Product' && entity.name !== 'SearchIndexItem') return;
-                            const column = entity.name === 'Product' ? 'id' : 'productId';
-                            qb.andWhere(`${qb.alias}.${column} NOT IN (:...hiddenIds)`, { hiddenIds });
+            // Exercise the real deferred access-control repository, including the
+            // product hydration filter which previously hid rows only after paging.
+            let hiddenIds = ['p1'];
+            const scopedConnection = new TransactionalConnection(
+                db,
+                {} as never,
+                {
+                    authOptions: {
+                        entityAccessControlStrategy: {
+                            applyAccessControl: (
+                                qb: SelectQueryBuilder<Product | SearchIndexItem>,
+                                entity: { name: string },
+                            ) => {
+                                if (entity.name !== 'Product' && entity.name !== 'SearchIndexItem') return;
+                                const column = entity.name === 'Product' ? 'id' : 'productId';
+                                qb.andWhere(`${qb.alias}.${column} NOT IN (:...hiddenIds)`, { hiddenIds });
+                            },
                         },
                     },
-                },
-            } as never,
-        );
-        const scopedContext = new RequestContext({
-            apiType: 'shop',
-            channel: new Channel({
-                id: 'a',
-                code: 'store-a',
-                defaultCurrencyCode: CurrencyCode.CNY,
-                defaultLanguageCode: LanguageCode.en,
-                customFields: {},
-            }),
-            isAuthorized: true,
-            authorizedAsOwnerOnly: false,
-        });
-        const scopedService = new StorefrontCatalogService(
-            scopedConnection,
-            {
-                findByIds: (ctx: RequestContext, ids: string[]) =>
-                    scopedConnection
-                        .getRepository(ctx, Product)
-                        .createQueryBuilder('product')
-                        .where('product.id IN (:...ids)', { ids })
-                        .getMany(),
-            } as never,
-            {} as never,
-        );
-        const visibleFirst = await scopedService.find(scopedContext, { take: 1, sort: 'NAME' });
-        expect(visibleFirst).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
-        const visibleSecond = await scopedService.find(scopedContext, { skip: 1, take: 1, sort: 'NAME' });
-        expect(visibleSecond).toMatchObject({ totalItems: 2, items: [{ id: 'p3' }] });
-        expect(
-            await scopedService.find(scopedContext, { minPriceWithTax: 200, take: 1, sort: 'NAME' }),
-        ).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
-        hiddenIds = ['p1', 'p3', 'p8'];
-        expect(await scopedService.find(scopedContext, { take: 1, sort: 'NAME' })).toEqual({
-            totalItems: 0,
-            items: [],
-        });
-    } finally {
-        await db.destroy();
-    }
-});
+                } as never,
+            );
+            const scopedContext = new RequestContext({
+                apiType: 'shop',
+                channel: new Channel({
+                    id: 'a',
+                    code: 'store-a',
+                    defaultCurrencyCode: CurrencyCode.CNY,
+                    defaultLanguageCode: LanguageCode.en,
+                    customFields: {},
+                }),
+                isAuthorized: true,
+                authorizedAsOwnerOnly: false,
+            });
+            const scopedService = new StorefrontCatalogService(
+                scopedConnection,
+                {
+                    findByIds: (ctx: RequestContext, ids: string[]) =>
+                        scopedConnection
+                            .getRepository(ctx, Product)
+                            .createQueryBuilder('product')
+                            .where('product.id IN (:...ids)', { ids })
+                            .getMany(),
+                } as never,
+                {} as never,
+            );
+            const visibleFirst = await scopedService.find(scopedContext, { take: 1, sort: 'NAME' });
+            expect(visibleFirst).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
+            const visibleSecond = await scopedService.find(scopedContext, { skip: 1, take: 1, sort: 'NAME' });
+            expect(visibleSecond).toMatchObject({ totalItems: 2, items: [{ id: 'p3' }] });
+            expect(
+                await scopedService.find(scopedContext, { minPriceWithTax: 200, take: 1, sort: 'NAME' }),
+            ).toMatchObject({ totalItems: 2, items: [{ id: 'p8' }] });
+            hiddenIds = ['p1', 'p3', 'p8'];
+            expect(await scopedService.find(scopedContext, { take: 1, sort: 'NAME' })).toEqual({
+                totalItems: 0,
+                items: [],
+            });
+        } finally {
+            await db.destroy();
+        }
+    },
+);
