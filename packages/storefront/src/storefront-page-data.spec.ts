@@ -10,12 +10,8 @@ import { mediaDescriptor } from '../../storefront-content-plugin/src/shared/resp
 import { syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { invalidatePublicPageReads as invalidateReads } from './public-page-transport';
-import {
-    PUBLIC_QUERY_STALE_TIME,
-    persistPublicQueryCache,
-    storefrontQueryKeys,
-    watchStorefrontScopeAccess,
-} from './query-client';
+import { PUBLIC_QUERY_STALE_TIME, storefrontQueryKeys, watchStorefrontScopeAccess } from './query-client';
+import { persistPublicQueryCache } from './query-persistence';
 import { ShopApiGraphQlError } from './shop-api-errors';
 import {
     hasFreshPublicPage,

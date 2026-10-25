@@ -4,12 +4,7 @@ import { RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 
-import {
-    persistPublicQueryCache,
-    restorePublicQueryCache,
-    storefrontQueryClient,
-    watchPublicQueryCache,
-} from './query-client';
+import { storefrontQueryClient } from './query-client';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { router } from './router';
 import { readInitialStorefrontBoot, seedStorefrontBoot } from './storefront-boot-data';
@@ -38,16 +33,23 @@ if (!embeddedPreview) {
         else if (initialBoot) seedStorefrontBoot(storefrontQueryClient, initialBoot);
         // The exact HTML snapshot owns hydration. Newer session data may be adopted
         // by bootstrap only for missing reads, without replacing this document's tree.
+        const cache = import('./query-persistence');
         if (!initialPage || appRootElement.dataset.publicRendered !== '1')
-            restorePublicQueryCache(storefrontQueryClient);
-        watchPublicQueryCache(storefrontQueryClient);
-        window.addEventListener('pagehide', () => {
-            try {
-                persistPublicQueryCache(storefrontQueryClient);
-            } catch {
-                // Browsing remains available when session storage is full or disabled.
-            }
-        });
+            void cache
+                .then(({ restorePublicQueryCache }) => restorePublicQueryCache(storefrontQueryClient))
+                .catch(() => undefined);
+        void cache
+            .then(({ watchPublicQueryCache, persistPublicQueryCache }) => {
+                watchPublicQueryCache(storefrontQueryClient);
+                window.addEventListener('pagehide', () => {
+                    try {
+                        persistPublicQueryCache(storefrontQueryClient);
+                    } catch {
+                        /* Optional persistence. */
+                    }
+                });
+            })
+            .catch(() => undefined);
     } catch {
         // sessionStorage can be disabled without preventing the storefront from starting.
     }

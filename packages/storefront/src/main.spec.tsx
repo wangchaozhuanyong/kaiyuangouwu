@@ -15,6 +15,8 @@ const calls = vi.hoisted(() => ({
 }));
 vi.mock('./query-client', () => ({
     storefrontQueryClient: {},
+}));
+vi.mock('./query-persistence', () => ({
     restorePublicQueryCache: calls.restore,
     persistPublicQueryCache: calls.persist,
     watchPublicQueryCache: calls.watch,
@@ -43,6 +45,25 @@ afterEach(() => {
 });
 
 describe('storefront entry persistence boundary', () => {
+    it('does not hold interactive startup behind optional session cache restoration', async () => {
+        vi.resetModules();
+        calls.readInitial.mockReturnValue(undefined);
+        document.body.innerHTML = '<div id="root"></div>';
+        let finish!: () => void;
+        calls.restore.mockReturnValueOnce(
+            new Promise<void>(done => {
+                finish = done;
+            }),
+        );
+        try {
+            await import('./main');
+            await vi.waitFor(() => expect(calls.render).toHaveBeenCalledOnce());
+            expect(calls.load).toHaveBeenCalledOnce();
+        } finally {
+            finish();
+            await Promise.resolve();
+        }
+    });
     it('retains existing HTML until a client-only route has its first match', async () => {
         vi.resetModules();
         calls.readInitial.mockReturnValue(undefined);
@@ -101,10 +122,11 @@ describe('storefront entry persistence boundary', () => {
         const events = vi.spyOn(window, 'addEventListener');
         await import('./main');
         expect(calls.seed).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(calls.restore).toHaveBeenCalledOnce());
         expect(calls.restore.mock.invocationCallOrder[0]).toBeGreaterThan(
             calls.seed.mock.invocationCallOrder[0],
         );
-        expect(calls.watch).toHaveBeenCalledOnce();
+        await vi.waitFor(() => expect(calls.watch).toHaveBeenCalledOnce());
         const pagehide = events.mock.calls.find(([type]) => type === 'pagehide')?.[1] as
             (() => void) | undefined;
         expect(pagehide).toBeTypeOf('function');

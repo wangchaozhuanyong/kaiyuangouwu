@@ -1096,6 +1096,32 @@ describe('storefront navigation state', () => {
         expect(router.navigate).toHaveBeenLastCalledWith(expect.objectContaining({ to: '/cart' }));
     });
 
+    it('uses the same router for managed relative and same-origin absolute URLs', () => {
+        act(() => root.render(<Harness />));
+        for (const type of ['PAGE', 'URL', 'SUPPORT'] as const)
+            for (const target of ['services', '/services', window.location.origin + '/services']) {
+                act(() => value.openContentTarget(type, target));
+                expect(router.navigate).toHaveBeenLastCalledWith(
+                    expect.objectContaining({ to: '/services' }),
+                );
+            }
+    });
+
+    it('keeps protocol-relative external managed links outside the storefront router', () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null);
+        act(() => root.render(<Harness />));
+        for (const type of ['SUPPORT', 'PAGE', 'URL'] as const) {
+            act(() => value.openContentTarget(type, '//support.example.test/help'));
+            expect(open).toHaveBeenLastCalledWith(
+                '//support.example.test/help',
+                '_blank',
+                'noopener,noreferrer',
+            );
+        }
+        expect(router.navigate).not.toHaveBeenCalled();
+        open.mockRestore();
+    });
+
     it('opens authentication on the still-visible page and replaces an uncommitted destination', async () => {
         authenticated = false;
         router.state.status = 'pending';

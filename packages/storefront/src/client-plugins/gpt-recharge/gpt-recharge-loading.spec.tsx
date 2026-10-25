@@ -4,11 +4,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, afterEach, expect, it, vi } from 'vitest';
 
-import {
-    createStorefrontQueryClient,
-    persistPublicQueryCache,
-    storefrontQueryKeys,
-} from '../../query-client';
+import { createStorefrontQueryClient, storefrontQueryKeys } from '../../query-client';
+import { persistPublicQueryCache } from '../../query-persistence';
 
 import { type GptRechargeClient } from './contracts';
 import { GptRechargePage } from './gpt-recharge-page';

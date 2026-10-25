@@ -5,6 +5,21 @@ import {
     publicUnlocalizedPathname,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 
+/** The snapshot and interactive router share the exact first-render search contract. */
+export const storefrontRouterSearch = {
+    parseSearch: (search: string) => Object.fromEntries(new URLSearchParams(search.replace(/^\?/, ''))),
+    stringifySearch: (search: Record<string, unknown>) => {
+        const params = new URLSearchParams(
+            Object.entries(search).filter(
+                ([, value]) =>
+                    value !== '' &&
+                    (typeof value === 'string' || typeof value === 'number' || value === true),
+            ) as Array<[string, string]>,
+        ).toString();
+        return params ? '?' + params : '';
+    },
+};
+
 /** Keep one route tree while the browser exposes stable public language URLs. */
 export const publicRouteRewrite = {
     input: ({ url }: { url: URL }): URL => {

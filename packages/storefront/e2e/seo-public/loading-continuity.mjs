@@ -6,6 +6,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { fixtureData } from '../visual-presets/fixtures.mjs';
+
 import { syntheticPage } from './fixtures.mjs';
 import { startSeoFixtureServer } from './preview-server.mjs';
 
@@ -269,6 +271,34 @@ function transformPage(page, { url }) {
 function observeFrames() {
     const samples = [];
     const events = [];
+    const nativeScrollTo = window.scrollTo.bind(window);
+    window.scrollTo = (...args) => {
+        events.push({ at: performance.now(), type: 'scrollTo', args, stack: new Error().stack });
+        return nativeScrollTo(...args);
+    };
+    const metrics = { longTasks: [], lcpMs: null, cls: 0, interactions: [] };
+    const observers = [];
+    let shiftWindow = { start: 0, last: 0, value: 0 };
+    const observe = (type, record) => {
+        if (!PerformanceObserver.supportedEntryTypes.includes(type)) return;
+        const observer = new PerformanceObserver(list => list.getEntries().forEach(record));
+        observer.observe({ type, buffered: true, ...(type === 'event' ? { durationThreshold: 16 } : {}) });
+        observers.push(observer);
+    };
+    observe('longtask', entry => metrics.longTasks.push({ at: entry.startTime, duration: entry.duration }));
+    observe('largest-contentful-paint', entry => (metrics.lcpMs = entry.startTime));
+    observe('event', entry => {
+        if (entry.interactionId)
+            metrics.interactions.push({ id: entry.interactionId, duration: entry.duration });
+    });
+    observe('layout-shift', entry => {
+        if (entry.hadRecentInput) return;
+        if (entry.startTime - shiftWindow.last > 1000 || entry.startTime - shiftWindow.start > 5000)
+            shiftWindow = { start: entry.startTime, last: entry.startTime, value: 0 };
+        shiftWindow.last = entry.startTime;
+        shiftWindow.value += entry.value;
+        metrics.cls = Math.max(metrics.cls, shiftWindow.value);
+    });
     let stopped = false;
     const box = element => {
         if (!element) return null;
@@ -292,6 +322,7 @@ function observeFrames() {
             route: shell?.dataset.route ?? null,
             ready: document.querySelector('[data-page-readiness]')?.dataset.pageReadiness ?? null,
             adopted: root?.dataset.publicAdopted ?? null,
+            cartBusy: !!document.querySelector('.detail-action-bar [aria-busy=true]'),
             content: box(content),
             header: box(document.querySelector('.proto-desktop-header')),
             page: box(content?.querySelector('main,.page')),
@@ -372,7 +403,16 @@ function observeFrames() {
         },
         finish() {
             stopped = true;
-            return { samples, events };
+            observers.forEach(observer => observer.disconnect());
+            metrics.firstContentMs = samples.find(sample => sample.page)?.at ?? null;
+            metrics.controlsReadyMs =
+                samples.find(sample => sample.ready === 'ready' && sample.adopted === '1')?.at ?? null;
+            return {
+                samples,
+                events,
+                metrics,
+                environment: 'Local Chromium synthetic fixtures; not Malaysian device or RUM p75',
+            };
         },
     };
 }
@@ -400,7 +440,7 @@ async function runCase(id, width, fn, { expectedConsoleErrors = [] } = {}) {
                 ),
             });
     });
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', error => errors.push(error.stack || error.message));
     page.on('console', message => {
         if (message.type() === 'error') {
             const text = message.text();
@@ -837,6 +877,69 @@ try {
                 }
             });
         }
+    if (selected.has('module-error')) {
+        assert.equal(dev, false, 'Module fetch failures use the actual production chunk');
+        const moduleAssets = await readdir(path.join(dist, 'assets'));
+        for (const pattern of [/^business-services-page-.*\.js$/u, /^services-[\w-]{8}\.js$/u]) {
+            const chunk = moduleAssets.find(file => pattern.test(file));
+            assert.ok(chunk);
+            for (const width of widths.filter(value => value === 390 || value === 1440))
+                await runCase(
+                    `module-error-${chunk.startsWith('services-') ? 'wrapper' : 'leaf'}-${width}`,
+                    width,
+                    async page => {
+                        let fail = true;
+                        let documents = 0;
+                        const failedChunks = [];
+                        page.on('request', request => {
+                            if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+                                documents++;
+                        });
+                        await page.route('**/assets/' + chunk, route => {
+                            if (!fail) return route.continue();
+                            failedChunks.push(route.request().url());
+                            return route.fulfill({
+                                status: 503,
+                                body: 'Controlled route module failure',
+                                contentType: 'text/plain',
+                            });
+                        });
+                        await page.goto(origin + '/en/');
+                        await ready(page);
+                        const navigation = page.locator(
+                            width < 1024 ? '.storefront-bottom-nav' : '.proto-nav-links',
+                        );
+                        const services = navigation.locator('a[href="/en/services"]').first();
+                        const home = navigation.locator('a[href="/en/"]').first();
+                        await services.click();
+                        await expect(page.getByRole('button', { name: 'Reload', exact: true })).toBeVisible();
+                        assert.ok(failedChunks.length);
+                        assert.equal(
+                            documents,
+                            1,
+                            'A failed module must never reload the document automatically',
+                        );
+                        await home.click();
+                        await expect(page.locator('.home-page')).toBeVisible();
+                        await services.click();
+                        const retry = page.getByRole('button', { name: 'Reload', exact: true });
+                        await expect(retry).toBeVisible();
+                        fail = false;
+                        await Promise.all([page.waitForEvent('domcontentloaded'), retry.click()]);
+                        await ready(page);
+                        await expect(page.locator('.business-services-page')).toBeVisible();
+                        assert.equal(documents, 2, 'Only the explicit recovery click may reload');
+                        return {
+                            failedChunks,
+                            documents,
+                            recovered: true,
+                            navigationUsableDuringFailure: true,
+                        };
+                    },
+                    { expectedConsoleErrors: [chunk, 'the server responded with a status of 503'] },
+                );
+        }
+    }
     if (selected.has('race'))
         for (const width of widths.filter(value => value === 390 || value === 1440)) {
             await runCase(`product-race-${width}`, width, async page => {
@@ -1266,6 +1369,27 @@ try {
                         catalogReads.push(JSON.parse(url.searchParams.get('input')));
                 });
                 await mark(page, 'filter');
+                if (width === 390) {
+                    const filter = page.getByRole('button', { name: 'Filter', exact: true });
+                    await filter.click();
+                    const dialog = page.getByRole('dialog', { name: 'Filter', exact: true });
+                    await expect(dialog).toBeVisible();
+                    await expect(
+                        dialog.getByRole('spinbutton', { name: 'Minimum price', exact: true }),
+                    ).toBeVisible();
+                    const lockedY = await page.evaluate(() => scrollY);
+                    assert.equal(
+                        await page.evaluate(() => getComputedStyle(document.body).overflow),
+                        'hidden',
+                    );
+                    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+                    await expect(dialog).toHaveCount(0);
+                    await expect(filter).toBeFocused();
+                    assert.ok(
+                        Math.abs((await page.evaluate(() => scrollY)) - lockedY) <= 2,
+                        'Closing filters changed scroll',
+                    );
+                }
                 await page
                     .locator('.category-page button:visible')
                     .filter({ hasText: /^Newest$/u })
@@ -1397,6 +1521,18 @@ try {
                     returnFrames.some(frame => frame.brand || frame.missing),
                     false,
                 );
+                await page.reload();
+                await ready(page);
+                const reloaded = await page.evaluate(() => window.__continuity.read());
+                assert.ok(
+                    Math.abs(reloaded.scrollY - departure.scrollY) <= 2,
+                    'Mid-page hard refresh lost window scroll',
+                );
+                assert.ok(
+                    Math.abs((reloaded.categoryScrollTop ?? 0) - (departure.categoryScrollTop ?? 0)) <= 2,
+                    'Mid-page hard refresh lost list scroll',
+                );
+                result.hardRefresh = reloaded;
                 return result;
             });
         }
@@ -1471,6 +1607,10 @@ try {
                 ).json()
             ).data.storefrontCart;
             const commands = [];
+            let holdReadback = false;
+            let readbackRequested = false;
+            let releaseReadback;
+            let readback = new Promise(resolve => (releaseReadback = resolve));
             const productData = await (
                 await fetch(
                     origin +
@@ -1478,26 +1618,34 @@ try {
                 )
             ).json();
             const variant = productData.product.variants[0];
+            const customer = fixtureData('classic', true, 'normal').activeCustomer;
             await page.route('**/shop-api**', async route => {
+                if (new URL(route.request().url()).pathname !== '/shop-api') return route.fallback();
                 const operation = route.request().postDataJSON();
+                if (operation.query.includes('activeCustomer'))
+                    return route.fulfill({
+                        json: { data: { activeCustomer: customer, myCustomerAvatar: null } },
+                    });
                 if (operation.query.includes('mutation ApplyStorefrontCartCommand')) {
                     const input = operation.variables.input;
                     commands.push(input);
+                    holdReadback = true;
+                    const lineSelected = input.changes.lines?.[0]?.selected ?? true;
                     cart = {
                         ...cart,
                         revision: cart.revision + 1,
                         projectedRevision: cart.revision + 1,
                         totalQuantity: 2,
-                        selectedQuantity: 2,
-                        selectedLineCount: 1,
-                        selectionState: 'ALL',
+                        selectedQuantity: lineSelected ? 2 : 0,
+                        selectedLineCount: lineSelected ? 1 : 0,
+                        selectionState: lineSelected ? 'ALL' : 'NONE',
                         subTotalWithTax: variant.priceWithTax * 2,
-                        selectedSubTotalWithTax: variant.priceWithTax * 2,
+                        selectedSubTotalWithTax: lineSelected ? variant.priceWithTax * 2 : 0,
                         lines: [
                             {
                                 id: 'synthetic-cart-line-a',
                                 quantity: 2,
-                                selected: true,
+                                selected: lineSelected,
                                 available: true,
                                 productVariant: variant,
                             },
@@ -1522,6 +1670,10 @@ try {
                     });
                 }
                 if (operation.query.includes('query StorefrontCart')) {
+                    if (holdReadback) {
+                        readbackRequested = true;
+                        await readback;
+                    }
                     if (!cart) {
                         const response = await route.fetch();
                         cart = (await response.json()).data.storefrontCart;
@@ -1539,17 +1691,27 @@ try {
             await expect(page.locator('.detail-quantity output')).toHaveText('2');
             const settle = await delayedProduct(page, 'synthetic-a-product-2', 650);
             await mark(page, 'cart-navigation');
-            await page
-                .locator('a[href="/en/product?id=synthetic-a-product-2"]')
-                .first()
-                .click({ noWaitAfter: true });
-            await page.evaluate(() => window.scrollTo(0, 0));
-            await page.waitForTimeout(50);
             assert.equal(
                 (await page.evaluate(() => window.__continuity.read())).product,
                 'synthetic-a Synthetic product 1',
             );
-            await page.getByRole('button', { name: 'Add to cart', exact: true }).click({ noWaitAfter: true });
+            const addButton = page.getByRole('button', { name: 'Add to cart', exact: true });
+            const before = await addButton.boundingBox();
+            await addButton.click({ noWaitAfter: true });
+            await expect.poll(() => readbackRequested).toBe(true);
+            const busyButton = page.getByRole('button', { name: 'Adding', exact: true });
+            await expect(busyButton).toBeDisabled();
+            const during = await busyButton.boundingBox();
+            assert.ok(Math.abs(during.width - before.width) <= 1, 'Busy feedback changed button width');
+            await expect(page.locator('.cart-recovery-panel')).toHaveCount(0);
+            // The command has been acknowledged, but the confirmed read is held.
+            // Navigation stays usable and must not replay the command on product B.
+            await page
+                .locator('a[href="/en/product?id=synthetic-a-product-2"]')
+                .first()
+                .click({ noWaitAfter: true });
+            holdReadback = false;
+            releaseReadback();
             await expect.poll(() => commands.length).toBe(1);
             assert.deepEqual(
                 commands[0].changes.add,
@@ -1566,11 +1728,15 @@ try {
                     event => event.type === 'click' && event.href === '/en/product?id=synthetic-a-product-2',
                 );
                 const add = events.find(event => event.type === 'click' && event.text === 'Add to cart');
-                return { navigation, add, elapsed: add?.at - navigation?.at };
+                const busy = window.__continuity.samples.find(frame => frame.at >= add.at && frame.cartBusy);
+                return { navigation, add, feedbackElapsed: busy?.at - add.at };
             });
             assert.ok(
-                timing.add.trusted && timing.navigation.trusted && timing.elapsed < 200,
-                'The actual cart click must occur before the Router pending threshold',
+                timing.add.trusted &&
+                    timing.navigation.trusted &&
+                    timing.feedbackElapsed >= 0 &&
+                    timing.feedbackElapsed < 200,
+                'The actual cart click must display busy feedback within 200ms',
             );
             await expect(page.locator('.detail-action-bar button[aria-label^="Cart"]')).toHaveAttribute(
                 'aria-label',
@@ -1580,14 +1746,81 @@ try {
             await expect(page.locator('#storefront-content')).toContainText(
                 'synthetic-a Synthetic product 1',
             );
+            readbackRequested = false;
+            readback = new Promise(resolve => (releaseReadback = resolve));
+            const selection = page
+                .getByRole('checkbox', { name: /^Select synthetic-a Synthetic product 1/u })
+                .first();
+            await expect(selection).toBeChecked();
+            const beforeSelection = await page.locator('.cart-group').first().boundingBox();
+            await selection.locator('..').click();
+            await expect.poll(() => readbackRequested).toBe(true);
+            await expect(page.locator('.cart-recovery-panel')).toHaveCount(0);
+            await expect(page.locator('.cart-groups')).toContainText('synthetic-a Synthetic product 1');
+            const duringSelection = await page.locator('.cart-group').first().boundingBox();
+            assert.ok(
+                Math.abs(beforeSelection.height - duringSelection.height) <= 2,
+                'Acknowledged selection changed cart geometry while reading',
+            );
+            assert.equal(commands.length, 2, 'One add and one selection command are allowed');
+            holdReadback = false;
+            releaseReadback();
+            await expect(selection).not.toBeChecked();
+            await expect(selection).toBeEnabled();
+            assert.equal(commands.length, 2, 'Confirmed read must never repeat the selection write');
             assert.equal(cart.checkoutOrder, null);
             return {
                 commands,
+                acknowledgedReadback: true,
                 cart,
                 timing,
                 allWrites: 'Intercepted in Playwright and fulfilled locally; no backend mutation or order',
             };
         });
+    if (selected.has('profile')) {
+        assert.ok(dev, 'React commit profiling runs in the development fixture only');
+        await runCase('runtime-render-profile', 390, async page => {
+            await page.goto(origin + '/en/');
+            await ready(page);
+            await page.waitForLoadState('networkidle');
+            const startup = await page.evaluate(() =>
+                performance.getEntriesByName('storefront-runtime-commit').map(e => e.detail),
+            );
+            await page.evaluate(async () => {
+                performance.clearMeasures('storefront-runtime-commit');
+                const { storefrontQueryClient } = await import('/src/query-client.ts');
+                const key = storefrontQueryClient
+                    .getQueryCache()
+                    .getAll()
+                    .find(q => q.queryKey[3] === 'config')
+                    .queryKey.slice(0, 3);
+                for (let i = 0; i < 20; i++)
+                    storefrontQueryClient.setQueryData([...key, 'product', 'unused-' + i], {
+                        id: 'unused-' + i,
+                    });
+            });
+            await page.evaluate(
+                () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+            );
+            const unrelated = await page.evaluate(() =>
+                performance.getEntriesByName('storefront-runtime-commit').map(e => e.detail),
+            );
+            await page.evaluate(() => performance.clearMeasures('storefront-runtime-commit'));
+            await page.locator('.locale-preferences-trigger:visible').first().click();
+            await expect(page.getByRole('dialog')).toBeVisible();
+            const interaction = await page.evaluate(() =>
+                performance.getEntriesByName('storefront-runtime-commit').map(e => e.detail),
+            );
+            assert.ok(interaction.length, 'The control interaction must produce a measured commit');
+            return {
+                startup,
+                unrelated,
+                interaction,
+                workload:
+                    '20 unused product query updates; actual React subtree commits and actualDuration, local synthetic development only',
+            };
+        });
+    }
     if (selected.has('search'))
         for (const width of widths.filter(value => value === 390 || value === 1440)) {
             await runCase(`search-keyboard-filter-history-${width}`, width, async page => {

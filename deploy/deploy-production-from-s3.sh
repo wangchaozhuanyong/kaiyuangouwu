@@ -1138,6 +1138,10 @@ if [[ "$retain_frontends" == true ]]; then
     node "${repository}/scripts/release-preserve-frontends.mjs" verify \
         "$frontend_preservation_receipt" "$expected_storefront_sha" "$expected_admin_sha"
 else
+# Preserve old document/chunk URLs before switching, without touching the new HTML/SSR artifact.
+sudo -n node "${repository}/deploy/frontend-asset-compatibility.mjs" "${candidate}/packages/storefront/dist" "${storefront_pointer}"
+sudo -n node "${repository}/deploy/frontend-asset-compatibility.mjs" "${candidate}/packages/storefront/dist-two-factor" "${two_factor_pointer}"
+sudo -n node "${repository}/deploy/frontend-asset-compatibility.mjs" "${candidate}/packages/next-admin/dist" "${admin_pointer}"
 sudo -n node "${repository}/deploy/storefront-release.mjs" switch \
     "${candidate}/packages/storefront/dist" "${storefront_pointer}"
 storefront_pointer_changed=1

@@ -15,6 +15,7 @@ import {
     type CatalogRouteState,
 } from '../catalog-route-query';
 import { categoryTargetSelection } from '../category-navigation';
+import { internalContentRoute } from '../content-target-href';
 import { goBackInStorefront, returnToStorefrontRoute } from '../storefront-navigation-history';
 import {
     routeFromHash,
@@ -281,25 +282,22 @@ export function useStorefrontNavigation({
                 navigate({ name: 'search', term: value });
                 return;
             }
-            if (targetType === 'PAGE') {
+            const internal = internalContentRoute(value);
+            if (internal) {
+                navigate(internal);
+                return;
+            }
+            if (targetType === 'PAGE' && !/^(?:https?:)?\/\//iu.test(value)) {
                 navigate(routeFromHash(value.startsWith('#') ? value : `#/${value.replace(/^\//, '')}`));
                 return;
             }
             if (targetType === 'SUPPORT') {
-                if (value === '/support' || value === 'support' || value === '#/support') {
+                if (!/^(?:(?:https?:)?\/\/|mailto:|tel:)/i.test(value)) {
                     navigate({ name: 'support' });
-                } else if (/^(mailto:|tel:)/i.test(value)) {
-                    window.location.assign(value);
-                } else if (/^https?:\/\//i.test(value)) {
-                    window.open(value, '_blank', 'noopener,noreferrer');
-                } else {
-                    navigate({ name: 'support' });
+                    return;
                 }
-                return;
             }
-            if (value.startsWith('#/')) {
-                navigate(routeFromHash(value));
-            } else if (value.startsWith('/')) {
+            if (/^\/(?!\/)|^(mailto:|tel:)/i.test(value)) {
                 window.location.assign(value);
             } else {
                 window.open(value, '_blank', 'noopener,noreferrer');

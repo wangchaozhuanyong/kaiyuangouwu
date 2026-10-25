@@ -1,5 +1,22 @@
-// Document startup and native scroll handoff. React owns SPA queries and loading states.
+// Document startup, native scroll handoff and explicit module recovery. React owns SPA data.
 (function () {
+    // TanStack's pinned lazy component reloads once on a native module error.
+    // Mark that same guard as handled before Vite rethrows; the existing route
+    // error boundary then owns recovery without discarding an active document.
+    window.addEventListener('vite:preloadError', function (event) {
+        var error = event.payload;
+        if (
+            !error ||
+            typeof error.message !== 'string' ||
+            !/^(Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed)/.test(
+                error.message,
+            )
+        )
+            return;
+        try {
+            sessionStorage.setItem('tanstack_router_reload:' + error.message, '1');
+        } catch (e) {}
+    });
     if (new URLSearchParams(location.search).get('storefrontPreviewEmbedded') === '1') return;
     var html = document.documentElement;
     var settled = false;

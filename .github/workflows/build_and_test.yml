@@ -87,8 +87,8 @@ jobs:
                       packages/dev-server/scripts/production-release-impact.spec.mjs \
                       packages/dev-server/scripts/production-release-smoke.spec.mjs \
                       packages/dev-server/scripts/production-release-retention.spec.mjs
-                  node --test scripts/release-preserve-frontends.spec.mjs scripts/release-lock.spec.mjs scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/release-recovery.spec.mjs
-                  node --test deploy/nginx-release.spec.mjs
+                  node --test scripts/release-preserve-frontends.spec.mjs scripts/release-lock.spec.mjs scripts/ci-impact.spec.mjs scripts/release-evidence.spec.mjs deploy/frontend-release.spec.mjs deploy/frontend-asset-compatibility.spec.mjs deploy/release-recovery.spec.mjs
+                  node --test deploy/nginx-release.spec.mjs deploy/nginx/storefront-fallback.spec.mjs
                   node --test deploy/frontend-retention.spec.mjs deploy/frontend-disk-guard.spec.mjs deploy/runtime-disk-guard.spec.mjs deploy/file-retention-repair.spec.mjs
                   python3 deploy/systemd/tests/file-backup-retention.spec.py
                   python3 deploy/systemd/tests/file-backup.spec.py
@@ -725,6 +725,14 @@ jobs:
               run: |
                   CI_PLAN="$(node -p 'const plan = JSON.parse(process.env.CI_PLAN); JSON.stringify({...plan, full: plan.full || plan.frontendFull})')" \
                     node scripts/ci-run.mjs frontend "$COMPONENT"
+            - name: Install storefront continuity browser
+              if: matrix.component == 'storefront'
+              working-directory: packages/storefront
+              run: bunx playwright install --with-deps chromium
+            - name: Verify storefront navigation continuity
+              if: matrix.component == 'storefront'
+              working-directory: packages/storefront
+              run: node e2e/seo-public/loading-continuity.mjs --cases=navigation,code-navigation,module-error,race,filter,scroll,cart --widths=390,1440
             - name: Package reusable frontend
               env:
                   NODE_ENV: production

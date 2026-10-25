@@ -1,5 +1,5 @@
 import { useElementScrollRestoration, useRouter, useRouterState } from '@tanstack/react-router';
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 const catalogSelector = '[data-scroll-restoration-id="category-results"]';
 
@@ -8,6 +8,8 @@ export function useStorefrontScrollContinuity() {
     const router = useRouter();
     const pending = useRouterState({ select: state => (state.isLoading ? state.location : null) });
     const displayed = router.state.matches.at(-1);
+    const sourceMatch = useRef(displayed);
+    if (!pending) sourceMatch.current = displayed;
     const getKey = router.options.getScrollRestorationKey;
     const viewport = useElementScrollRestoration({ getElement: () => window, getKey });
     const catalog = useElementScrollRestoration({ id: 'category-results', getKey });
@@ -25,7 +27,9 @@ export function useStorefrontScrollContinuity() {
     );
 
     useLayoutEffect(() => {
-        if (!pending) return;
+        // A destination pending body may mount before isLoading clears. Its
+        // shorter geometry must not overwrite the source entry with a clamped 0.
+        if (!pending || displayed !== sourceMatch.current) return;
         const update = (event: Event) => {
             if (!router.state.isLoading || router.state.matches.at(-1) !== displayed) return;
             if (event.target === document && viewport) {

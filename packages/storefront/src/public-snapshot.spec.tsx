@@ -9,6 +9,8 @@ import {
 import { fixtureKinds, fixtureLanguages, fixtureStores, syntheticPage } from '../e2e/seo-public/fixtures.mjs';
 
 import { renderPublicPage } from './entry-public-server';
+import { storefrontRouterSearch } from './public-route-rewrite';
+import { createPublicSnapshotApp } from './public-snapshot';
 import { ImagePlaceholder } from './safe-image';
 import { StorefrontPageFrame } from './storefront-page-frame';
 import { type StorefrontFlashSale, type StorefrontSystemAnnouncement } from './types';
@@ -39,6 +41,22 @@ afterEach(() => {
 });
 
 describe('anonymous shared public component server render', () => {
+    it.each(['home', 'catalog', 'product'] as const)(
+        '%s shares the first-render URL search contract',
+        async kind => {
+            const page = syntheticPage(fixtureStores[0], 'zh_Hans', kind);
+            page.route += (page.route.includes('?') ? '&' : '?') + 'inStockOnly=true&minPrice=20';
+            const app = await createPublicSnapshotApp(page);
+            try {
+                const state = app.router.state.location;
+                expect(state.search).toMatchObject({ inStockOnly: 'true', minPrice: '20' });
+                expect(state.search).toEqual(storefrontRouterSearch.parseSearch(state.searchStr));
+            } finally {
+                app.dispose();
+            }
+        },
+    );
+
     it.each(['home', 'catalog', 'product'] as const)(
         '%s includes sorting and product-row styles before the first page markup',
         async kind => {

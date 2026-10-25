@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import { lazyRouteComponent } from '@tanstack/react-router';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const source = readFileSync(join(__dirname, '../public/storefront/document-loading.js'), 'utf8');
+vi.mock('@tanstack/router-core/isServer', () => ({ isServer: false }));
 
 describe('document startup feedback without hiding available content', () => {
     const cleanup: Array<() => void> = [];
@@ -13,6 +15,7 @@ describe('document startup feedback without hiding available content', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         reload.mockClear();
+        sessionStorage.clear();
         history.scrollRestoration = 'manual';
         vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');
         document.documentElement.lang = 'zh-CN';
@@ -58,6 +61,7 @@ describe('document startup feedback without hiding available content', () => {
                 ...target(document),
             },
             window: target(window),
+            sessionStorage,
             history,
             location: { search, reload },
             URLSearchParams,
@@ -88,6 +92,41 @@ describe('document startup feedback without hiding available content', () => {
         document.documentElement.setAttribute('data-storefront-app-owned', '');
         document.dispatchEvent(new Event('storefront:app-owned'));
     };
+
+    it.each([
+        'Failed to fetch dynamically imported module: https://store.test/assets/route-12345678.js',
+        'error loading dynamically imported module: https://store.test/assets/route-12345678.js',
+        'Importing a module script failed.',
+    ])(
+        'keeps the actual TanStack lazy component on manual recovery after app ownership: %s',
+        async message => {
+            start();
+            owned();
+            const error = new TypeError(message);
+            const event = Object.assign(new Event('vite:preloadError', { cancelable: true }), {
+                payload: error,
+            });
+            window.dispatchEvent(event);
+            expect(event.defaultPrevented).toBe(false);
+            expect(event.payload).toBe(error);
+            expect(sessionStorage.getItem('tanstack_router_reload:' + message)).toBe('1');
+            const Lazy = lazyRouteComponent(() => Promise.reject<{ default: () => null }>(error));
+            await Lazy.preload?.();
+            expect(() => Lazy({})).toThrow(error);
+            expect(active()).toBe(false);
+            expect(root().hasChildNodes()).toBe(true);
+        },
+    );
+
+    it('does not convert unrelated data errors into module recovery state', () => {
+        start();
+        owned();
+        window.dispatchEvent(
+            Object.assign(new Event('vite:preloadError'), { payload: new Error('Read failed') }),
+        );
+        expect(sessionStorage.length).toBe(0);
+        expect(reload).not.toHaveBeenCalled();
+    });
 
     it('hands full-document restoration back to the browser before replacement', () => {
         start();

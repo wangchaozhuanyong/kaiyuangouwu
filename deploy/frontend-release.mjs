@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 
 import { affectedFrontendsForFile, classifyChanges, STATIC_APPS } from '../scripts/ci-impact.mjs';
 
+import { preserveFrontendAssets } from './frontend-asset-compatibility.mjs';
 import nginxRevision from './nginx-revision.cjs';
 import { loadProductionStorefronts } from './production-storefronts.mjs';
 import { assertServedStorefrontAssets, switchStorefront } from './storefront-release.mjs';
@@ -252,6 +253,7 @@ export async function activateFrontends(releases, verify) {
             throw error;
         }
     });
+    releases.forEach(({ candidate }, index) => preserveFrontendAssets(previous[index], candidate));
     let switched = 0;
     const restore = () => {
         const failures = [];

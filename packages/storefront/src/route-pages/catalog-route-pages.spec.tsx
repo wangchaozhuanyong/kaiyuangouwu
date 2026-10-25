@@ -15,8 +15,10 @@ import { type Product, type StorefrontLanguage } from '../types';
 
 import { HomeRoutePage, ProductRoutePage } from './catalog-route-pages';
 
+let homeInputs: ReturnType<typeof HomePageContext.useValue> | undefined;
 function HomeReadProbe() {
     const value = HomePageContext.useValue();
+    homeInputs = value;
     return (
         <div>
             <output>{String(Boolean(value.managedContentLoading))}</output>
@@ -40,6 +42,40 @@ vi.mock('@tanstack/react-router', async importOriginal => ({
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe('home selection read boundaries', () => {
+    it('passes the currency completion promise through the home adapter before language can change', () => {
+        const client = new QueryClient();
+        const root = createRoot(document.createElement('div'));
+        const completion = Promise.resolve();
+        const switchCurrency = vi.fn(() => completion);
+        const value = {
+            language: 'en',
+            market: enabledMarkets[0],
+            collections: [],
+            catalogTakes: { sales: 16, recommended: 16 },
+            bestSellerProducts: [],
+            recommendationProducts: [],
+            configQuery: {},
+            contentQuery: { data: {} },
+            productsQuery: { data: [] },
+            switchCurrency,
+        } as unknown as StorefrontContextValue;
+        try {
+            act(() =>
+                root.render(
+                    <QueryClientProvider client={client}>
+                        <StorefrontContext.Provider value={value}>
+                            <HomeRoutePage />
+                        </StorefrontContext.Provider>
+                    </QueryClientProvider>,
+                ),
+            );
+            expect(homeInputs?.onCurrencyChange('MYR')).toBe(completion);
+            expect(switchCurrency).toHaveBeenCalledExactlyOnceWith('MYR');
+        } finally {
+            act(() => root.unmount());
+            client.clear();
+        }
+    });
     it.each([
         ['loading', false, '', true],
         ['ready', true, '', true],

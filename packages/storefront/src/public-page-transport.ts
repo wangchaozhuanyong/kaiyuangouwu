@@ -4,8 +4,24 @@ import {
     type PublicPageRequest,
 } from '../../storefront-content-plugin/src/shared/public-page-data';
 
-import { ShopApiGraphQlError } from './shop-api-errors';
+import {
+    createShopApiTimeoutError,
+    ShopApiGraphQlError,
+    STOREFRONT_READ_TIMEOUT_MS,
+} from './shop-api-errors';
 
+const readDeadlines = new WeakMap<AbortSignal, number>();
+const transportDeadlines = new WeakMap<Promise<unknown>, number>();
+/** Query reuses its signal across automatic attempts; these maps hold no response data. */
+export function publicPageReadDeadline(signal?: AbortSignal, early?: Promise<unknown>): number {
+    const deadline = Math.min(
+        Date.now() + STOREFRONT_READ_TIMEOUT_MS,
+        signal ? (readDeadlines.get(signal) ?? Infinity) : Infinity,
+        early ? (transportDeadlines.get(early) ?? Infinity) : Infinity,
+    );
+    if (signal) readDeadlines.set(signal, deadline);
+    return deadline;
+}
 let generation = 0;
 const generationListeners = new Set<() => void>();
 export const publicPageReadGeneration = () => generation;
@@ -31,12 +47,20 @@ export function publicPageUrl(request: PublicPageRequest, languageCode?: string,
 }
 
 /** Only in-flight reads are shared. Resolved data belongs exclusively to TanStack Query. */
-export function requestPublicPage(url: URL): Promise<unknown> {
+export function requestPublicPage(
+    url: URL,
+    deadline = Date.now() + STOREFRONT_READ_TIMEOUT_MS,
+): Promise<unknown> {
+    if (deadline <= Date.now()) return Promise.reject(createShopApiTimeoutError(false));
     const key = `${generation}:${url.href}`;
     const existing = flights.get(key);
     if (existing) return existing.promise;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, deadline - Date.now());
     const promise = fetch(url, {
         credentials: 'omit',
         headers: { Accept: 'application/json' },
@@ -76,10 +100,15 @@ export function requestPublicPage(url: URL): Promise<unknown> {
             }
             return response.json() as Promise<unknown>;
         })
+        .catch(error => {
+            if (timedOut) throw createShopApiTimeoutError(false);
+            throw error;
+        })
         .finally(() => {
             clearTimeout(timeout);
             if (flights.get(key)?.promise === promise) flights.delete(key);
         });
+    transportDeadlines.set(promise, deadline);
     flights.set(key, { promise, controller });
     return promise;
 }
@@ -108,7 +137,7 @@ export function startPublicPageBootstrap(
     void current.promise.catch(() => undefined);
     setTimeout(() => {
         if (bootstrap === current) bootstrap = undefined;
-    }, 20_000);
+    }, STOREFRONT_READ_TIMEOUT_MS * 3);
 }
 
 export function takePublicPageBootstrap(
@@ -128,19 +157,42 @@ export function takePublicPageBootstrap(
 }
 
 /** Cancelling one subscriber cannot cancel another route's shared transport. */
-export function awaitPublicPage(promise: Promise<unknown>, signal?: AbortSignal): Promise<unknown> {
-    if (!signal) return promise;
-    if (signal.aborted) return Promise.reject(new DOMException('Request aborted', 'AbortError'));
+export function awaitPublicPage(
+    promise: Promise<unknown>,
+    signal?: AbortSignal,
+    deadline?: number,
+): Promise<unknown> {
+    if (!signal && deadline === undefined) return promise;
+    if (signal?.aborted) return Promise.reject(new DOMException('Request aborted', 'AbortError'));
     return new Promise((resolve, reject) => {
+        const cleanup = () => {
+            clearTimeout(timer);
+            signal?.removeEventListener('abort', abort);
+        };
         const abort = () => {
-            signal.removeEventListener('abort', abort);
+            cleanup();
             reject(new DOMException('Request aborted', 'AbortError'));
         };
-        signal.addEventListener('abort', abort, { once: true });
-        void promise
-            .then(value => {
-                if (!signal.aborted) resolve(value);
-            }, reject)
-            .finally(() => signal.removeEventListener('abort', abort));
+        const timer =
+            deadline === undefined
+                ? undefined
+                : setTimeout(
+                      () => {
+                          cleanup();
+                          reject(createShopApiTimeoutError(false));
+                      },
+                      Math.max(0, deadline - Date.now()),
+                  );
+        signal?.addEventListener('abort', abort, { once: true });
+        void promise.then(
+            value => {
+                cleanup();
+                resolve(value);
+            },
+            (error: Error) => {
+                cleanup();
+                reject(error);
+            },
+        );
     });
 }

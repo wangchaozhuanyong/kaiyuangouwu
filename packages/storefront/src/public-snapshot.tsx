@@ -21,7 +21,7 @@ import { localeFor, marketForStorefrontConfig } from './i18n';
 import { OverlayHost } from './overlay-host';
 import { PageReadinessBoundary } from './page-readiness';
 import { asListProduct } from './product-summary';
-import { publicRouteRewrite } from './public-route-rewrite';
+import { publicRouteRewrite, storefrontRouterSearch } from './public-route-rewrite';
 import { PageSkeleton, pageSkeletonVariantForPathname } from './route-loading';
 import { isBrowsingStorefrontRoute } from './storefront-access';
 import {
@@ -529,6 +529,7 @@ export async function createPublicSnapshotApp(page: PublicPageData) {
         isServer: true,
         history: createMemoryHistory({ initialEntries: [page.route] }),
         rewrite: publicRouteRewrite,
+        ...storefrontRouterSearch,
         defaultPendingComponent: () => (
             <PageSkeleton variant={pageSkeletonVariantForPathname(routeHref(snapshotRoute(page)))} root />
         ),
@@ -544,5 +545,5 @@ export async function createPublicSnapshotApp(page: PublicPageData) {
             </QueryClientProvider>
         </StrictMode>
     );
-    return { element, dispose: () => queryClient.clear() };
+    return { element, router, dispose: () => queryClient.clear() };
 }

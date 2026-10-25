@@ -7,21 +7,23 @@ import { publicPageReadGeneration } from './public-page-transport';
 import {
     createStorefrontQueryClient,
     isStorefrontScopeAccessDenied,
-    LEGACY_PUBLIC_QUERY_CACHE_KEYS,
     markStorefrontPublicQuerySource,
-    persistPublicQueryCache,
     PUBLIC_QUERY_CACHE_KEY,
-    PUBLIC_QUERY_CACHE_MAX_AGE,
     publicQueryMeta,
-    restorePublicQueryCache,
     restrictStorefrontScopePersistence,
     retryStorefrontRead,
     ROUTE_QUERY_STALE_TIME,
     storefrontQueryKeys,
     storefrontQueryRetry,
     storefrontRefetchPolicy,
-    watchPublicQueryCache,
 } from './query-client';
+import {
+    LEGACY_PUBLIC_QUERY_CACHE_KEYS,
+    persistPublicQueryCache,
+    PUBLIC_QUERY_CACHE_MAX_AGE,
+    restorePublicQueryCache,
+    watchPublicQueryCache,
+} from './query-persistence';
 import { isStorefrontClosedError } from './storefront-access';
 
 function allowLive(
@@ -45,6 +47,45 @@ function memoryStorage() {
 }
 
 describe('public cache persistence work', () => {
+    it('bounds persisted queries, infinite pages and bytes without shrinking live Query data', async () => {
+        const client = createStorefrontQueryClient();
+        allowLive(client, 'my:MYR', 'en');
+        const data = {
+            pages: Array.from({ length: 10 }, (_page, i) => ({
+                items: Array.from({ length: 12 }, (_product, j) => ({
+                    id: `${i}-${j}`,
+                    description: 'x'.repeat(1000),
+                })),
+            })),
+            pageParams: Array.from({ length: 10 }, (_page, i) => i),
+        };
+        for (let i = 0; i < 80; i++)
+            await client.fetchQuery({
+                queryKey: storefrontQueryKeys.catalog('my:MYR', 'en', { term: String(i) }),
+                queryFn: () => data,
+                meta: publicQueryMeta(),
+            });
+        const storage = memoryStorage();
+        const start = performance.now();
+        persistPublicQueryCache(client, storage);
+        const elapsed = performance.now() - start;
+        const serialized = storage.getItem(PUBLIC_QUERY_CACHE_KEY) ?? '';
+        const bytes = new TextEncoder().encode(serialized).byteLength;
+        process.stdout.write('PUBLIC_CACHE_MEASURE ' + JSON.stringify({ elapsedMs: elapsed, bytes }) + '\n');
+        const persisted = JSON.parse(serialized);
+        expect(bytes).toBeLessThanOrEqual(256 * 1024);
+        expect(persisted.state.queries.length).toBeLessThanOrEqual(32);
+        expect(
+            persisted.state.queries.every(
+                (q: { state: { data: typeof data } }) => q.state.data.pages.length <= 3,
+            ),
+        ).toBe(true);
+        expect(
+            client.getQueryData<typeof data>(storefrontQueryKeys.catalog('my:MYR', 'en', { term: '0' }))
+                ?.pages,
+        ).toHaveLength(10);
+        client.clear();
+    });
     it('treats closure as authoritative even with previously cached configuration, without promoting other forbidden operations to closure', async () => {
         const client = createStorefrontQueryClient();
         const queryKey = [...storefrontQueryKeys.config('fixture:CNY', 'zh_Hans'), 'public'];

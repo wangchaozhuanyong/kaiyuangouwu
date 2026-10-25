@@ -24,7 +24,6 @@ import { configureMoneyDisplay } from '../money-display';
 import {
     isStorefrontScopeAccessDenied,
     refreshStorefrontQueries,
-    restorePublicQueryCache,
     storefrontQueryKeys,
     watchStorefrontScopeAccess,
 } from '../query-client';
@@ -357,7 +356,11 @@ export function useStorefrontBootstrap(presentedRoute?: RouteState) {
             storefrontPreviewParameters().get('storefrontPreviewEmbedded') !== '1'
         ) {
             restoredCacheScopes.current.add(cacheScope);
-            restorePublicQueryCache(queryClient);
+            void import('../query-persistence')
+                .then(({ restorePublicQueryCache }) => {
+                    restorePublicQueryCache(queryClient);
+                })
+                .catch(() => restoredCacheScopes.current.delete(cacheScope));
         }
         setStorefrontContextResolved(true);
         const preferenceScope = `${nextStorefrontCode}:${customerAuthenticated}`;
