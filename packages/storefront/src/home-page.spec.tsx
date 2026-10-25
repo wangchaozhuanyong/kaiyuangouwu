@@ -901,31 +901,31 @@ describe('HomePage public coupon campaigns', () => {
         expect(markup).not.toContain('登录后查看专属优惠');
     });
 
-    it.each([false, true])('omits the whole coupon module when no offers exist on desktop=%s', desktop => {
+    it.each([false, true])('keeps the enabled empty coupon frame on desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [couponBlock] }, desktop);
-        expect(markup).not.toContain('coupon-hub-section');
-        expect(markup).not.toContain('专享特惠专区');
-        expect(markup).not.toContain('全部优惠');
-        expect(markup).not.toContain('暂无可领取的优惠');
+        expect(markup).toContain('coupon-hub-section');
+        expect(markup).toContain('专享特惠专区');
+        expect(markup).toContain('全部优惠');
+        expect(markup).toContain('暂无可领取的优惠');
     });
 
-    it('does not reserve a coupon region before offers are confirmed', () => {
+    it('keeps a local loading frame before offers are confirmed', () => {
         const markup = renderHome({ contentBlocks: [couponBlock], couponCampaignsLoading: true });
-        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).toContain('coupon-hub-section');
         expect(markup).not.toContain('暂无可领取的优惠');
     });
 
-    it('omits the whole module when a campaign is sold out', () => {
+    it('keeps the empty frame when a campaign is sold out', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
             coupons: [{ ...couponCampaign, remainingIssueCount: 0, claimable: false }],
         });
 
         expect(markup).not.toContain('满100减10');
-        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).toContain('coupon-hub-section');
     });
 
-    it('omits the whole module after the last campaign is claimed', () => {
+    it('keeps the empty frame after the last campaign is claimed', () => {
         const markup = renderHome({
             contentBlocks: [couponBlock],
             coupons: [
@@ -939,7 +939,7 @@ describe('HomePage public coupon campaigns', () => {
         });
 
         expect(markup).not.toContain('满100减10');
-        expect(markup).not.toContain('coupon-hub-section');
+        expect(markup).toContain('coupon-hub-section');
     });
 
     it('removes a claimed campaign but keeps the module while another campaign is claimable', () => {
@@ -962,18 +962,21 @@ describe('HomePage public coupon campaigns', () => {
         expect(markup).toContain('coupon-hub-section');
     });
 
-    it.each([false, true])('keeps an initial offer failure out of the home module on desktop=%s', desktop => {
-        const markup = renderHome(
-            {
-                contentBlocks: [couponBlock],
-                couponCampaignsError: '优惠活动读取失败',
-            },
-            desktop,
-        );
+    it.each([false, true])(
+        'shows an initial offer failure in the same coupon frame on desktop=%s',
+        desktop => {
+            const markup = renderHome(
+                {
+                    contentBlocks: [couponBlock],
+                    couponCampaignsError: '优惠活动读取失败',
+                },
+                desktop,
+            );
 
-        expect(markup).not.toContain('优惠活动读取失败');
-        expect(markup).not.toContain('coupon-hub-section');
-    });
+            expect(markup).toContain('优惠活动读取失败');
+            expect(markup).toContain('coupon-hub-section');
+        },
+    );
 
     it.each([false, true])(
         'retains valid offers while refreshing or after a background error on desktop=%s',
