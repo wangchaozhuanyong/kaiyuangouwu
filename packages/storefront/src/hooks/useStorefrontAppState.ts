@@ -322,10 +322,17 @@ export function useStorefrontAppState() {
         void api
             .watchRealtime(
                 event => {
-                    void invalidateStorefrontRealtimeQueries(queryClient, event, {
-                        marketCode: storefrontQueryKeys.market(market),
-                        languageCode: vendureLanguageCode,
-                        customerId: customer?.id,
+                    void invalidateStorefrontRealtimeQueries(
+                        queryClient,
+                        event,
+                        {
+                            marketCode: storefrontQueryKeys.market(market),
+                            languageCode: vendureLanguageCode,
+                            customerId: customer?.id,
+                        },
+                        controller.signal,
+                    ).catch(() => {
+                        if (!controller.signal.aborted) scheduler.connection(false);
                     });
                 },
                 controller.signal,

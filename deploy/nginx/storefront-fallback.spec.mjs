@@ -70,6 +70,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'map $host $customer_vault_frame_origin { default "\'self\'"; }',
         fallbackMap,
         coopMap,
+        block('map "$http_authorization|$http_cookie" $storefront_public_coupon_guest'),
         block('map "$status|$uri" $build_asset_cache_control'),
         'upstream vendure_backend { server 127.0.0.1:8081; }',
         'server { listen 8081;',
@@ -77,9 +78,12 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'if ($http_x_storefront_original_uri ~ "^/old-route(?:[?]|$)") { return 301 /en/category; }',
         'if ($http_x_storefront_original_uri ~ "^/backend-failure") { return 503; }',
         'return 404; }',
-        'location = /storefront/html { default_type "text/html; charset=utf-8"; return 200 "Published public page"; }',
+        'location = /storefront/html { default_type "text/html; charset=utf-8";',
+        'return 200 "Published public page; guest=$http_x_storefront_public_coupon_guest; ' +
+            'cookie=$http_cookie; authorization=$http_authorization"; }',
         '}',
         'server { listen 8080; root /fixtures/www;',
+        'location = /__coupon_hint { return 200 $storefront_public_coupon_guest; }',
         block(
             source
                 .split('\n')
@@ -140,6 +144,25 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
                 if (Date.now() >= deadline) throw error;
                 await new Promise(resolve => setTimeout(resolve, 50));
             }
+        }
+    });
+    await t.test('marks only credential-free public preferences as anonymous presentation', async () => {
+        for (const [headers, expected] of [
+            [{}, '1'],
+            [{ 'x-storefront-public-coupon-guest': '0' }, '1'],
+            [{ cookie: 'storefront_public_language=en; storefront_public_currency=MYR' }, '1'],
+            [{ cookie: 'session=synthetic-test-session' }, '0'],
+            [{ authorization: 'Bearer synthetic-test-only' }, '0'],
+            [{ cookie: 'session=synthetic-test-session', 'x-storefront-public-coupon-guest': '1' }, '0'],
+        ]) {
+            const response = await fetch(origin + '/__coupon_hint', { headers });
+            assert.equal(await response.text(), expected);
+            const document = await fetch(origin + '/en', { headers });
+            assert.equal(document.status, 200);
+            assert.equal(
+                await document.text(),
+                `Published public page; guest=${expected}; cookie=; authorization=`,
+            );
         }
     });
     await t.test('covers every current non-error file route', async () => {

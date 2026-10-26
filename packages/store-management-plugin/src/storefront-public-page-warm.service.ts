@@ -258,7 +258,11 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             const cachedHome = await this.pages.peek(ctx, base.host, homeRequest);
             const refreshHome = !cachedHome || Date.now() - cachedHome.generatedAt >= REFRESH_AFTER;
             const home = refreshHome
-                ? await this.pages.read(ctx, base.host, homeRequest, { refresh: true, prepareMedia: true })
+                ? await this.pages.read(ctx, base.host, homeRequest, {
+                      refresh: true,
+                      prepareMedia: true,
+                      prepareCoupons: true,
+                  })
                 : cachedHome;
             if (refreshHome) warmed++;
             if ((await this.registryKey(ctx)) !== key) return { warmed };
@@ -304,7 +308,11 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             }
             const cached = await this.pages.peek(ctx, route.host, route.request);
             if (!cached || Date.now() - cached.generatedAt >= REFRESH_AFTER) {
-                await this.pages.read(ctx, route.host, route.request, { refresh: true, prepareMedia: true });
+                await this.pages.read(ctx, route.host, route.request, {
+                    refresh: true,
+                    prepareMedia: true,
+                    prepareCoupons: true,
+                });
                 warmed++;
             }
             if (route.request.kind === 'home') await this.pages.prepareBootMedia(ctx, route.host);

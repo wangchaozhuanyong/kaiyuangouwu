@@ -118,6 +118,7 @@ describe('account and home coupon dependency recovery', () => {
             bestSellerProducts: [],
             recommendationProducts: [],
             retryAccount: account.retryCustomer,
+            contentBlocks: [{ type: 'COUPONS', enabled: true }],
         };
         return <HomeRoutePage />;
     }
@@ -173,16 +174,16 @@ describe('account and home coupon dependency recovery', () => {
         expect(bootstrap.storefrontContextResolved).toBe(true);
     });
 
-    it('loads public home coupons despite an account failure and retries only those coupons', async () => {
+    it('keeps unknown home coupons unloaded after an identity failure and allows an explicit isolated retry', async () => {
         mocks.customerIdentity.mockRejectedValueOnce(new Error('Synthetic account failure'));
         render();
         await eventually(() => expect(account.customerQuery.isError).toBe(true));
-        await eventually(() => expect(account.couponCampaignsQuery.data).toEqual([]));
-        expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(1);
+        await eventually(() => expect(account.couponCampaignsQuery.data).toBeUndefined());
+        expect(mocks.activeCouponCampaigns).not.toHaveBeenCalled();
         expect(host.querySelector('[role="alert"]')?.textContent).toBe('');
         act(() => clickRetry());
         await eventually(() => expect(account.couponCampaignsError).toBe(''));
-        await eventually(() => expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(2));
+        await eventually(() => expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(1));
         expect(mocks.customerIdentity).toHaveBeenCalledTimes(1);
         expect(account.couponCampaignsQueryKey).toContain('anonymous');
         expect(account.activeCoupons).toEqual([]);
@@ -194,7 +195,7 @@ describe('account and home coupon dependency recovery', () => {
         mocks.customerIdentity.mockRejectedValueOnce(new Error('Synthetic account failure'));
         render();
         await eventually(() => expect(account.customerQuery.isError).toBe(true));
-        await eventually(() => expect(account.couponCampaignsQuery.data).toEqual([]));
+        await eventually(() => expect(account.couponCampaignsQuery.data).toBeUndefined());
         let resolveCoupons!: (value: []) => void;
         mocks.activeCouponCampaigns.mockImplementationOnce(
             () =>
@@ -207,14 +208,14 @@ describe('account and home coupon dependency recovery', () => {
             clickRetry();
         });
         expect(mocks.customerIdentity).toHaveBeenCalledTimes(1);
-        expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(2);
+        expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(1);
         await act(async () => {
             resolveCoupons([]);
             await Promise.resolve();
         });
         await eventually(() => expect(account.couponCampaignsError).toBe(''));
         await eventually(() => expect(account.couponCampaignsQuery.isFetching).toBe(false));
-        expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(2);
+        expect(mocks.activeCouponCampaigns).toHaveBeenCalledTimes(1);
     });
 
     it('does not accept cached customer identity until store configuration is resolved', async () => {

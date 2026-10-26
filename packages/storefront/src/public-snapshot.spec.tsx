@@ -657,3 +657,46 @@ describe('anonymous shared public component server render', () => {
                 });
             }
 });
+
+it.each(['anonymous', 'unknown'] as const)(
+    'uses prepared coupons only for %s request presentation',
+    async audience => {
+        const page = syntheticPage('synthetic-a', 'en', 'home');
+        if (!page.content) throw new Error('Missing fixture content');
+        page.content.blocks.push({
+            ...page.content.blocks[0],
+            id: 'coupons',
+            type: 'COUPONS',
+            title: 'Prepared offers',
+            items: [],
+        });
+        page.content.settings.configuredBlockTypes ??= [];
+        page.content.settings.configuredBlockTypes.push('COUPONS');
+        const input = {
+            ...page,
+            couponAudience: audience,
+            couponCampaigns: [
+                {
+                    id: 'prepared',
+                    name: 'Prepared coupon',
+                    kind: 'ORDER_FIXED',
+                    minimumSpend: 1000,
+                    currencyCode: 'MYR',
+                    discountAmount: 100,
+                    discountRate: null,
+                    validityDays: null,
+                    startsAt: null,
+                    endsAt: null,
+                    claimStartsAt: null,
+                    claimEndsAt: null,
+                    remainingIssueCount: 5,
+                    claimed: false,
+                    claimable: true,
+                },
+            ],
+        };
+        const html = await renderPublicPage(input);
+        expect(html.includes('coupon-hub-section')).toBe(audience === 'anonymous');
+        expect(html).not.toContain('coupon-hub-placeholder');
+    },
+);

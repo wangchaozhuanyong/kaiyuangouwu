@@ -895,142 +895,67 @@ describe('HomePage localized trust bar layout', () => {
 });
 
 describe('HomePage public coupon campaigns', () => {
-    it('keeps valid coupon list semantics for pending, empty, error and offers', async () => {
-        const host = document.createElement('div');
-        document.body.append(host);
-        try {
-            for (const state of [
-                { couponCampaignsLoading: true },
-                {},
-                { couponCampaignsError: 'Local read failed' },
-                { coupons: [couponCampaign] },
-            ]) {
-                host.innerHTML = renderHome({ contentBlocks: [couponBlock], ...state });
-                const section = host.querySelector<HTMLElement>('.coupon-hub-section');
-                if (!section) throw new Error('Missing published coupon frame');
-                const result = await checkAccessibility(section, {
-                    runOnly: ['aria-required-children', 'aria-required-parent'],
-                });
-                expect(result.violations).toEqual([]);
-            }
-        } finally {
-            host.remove();
-        }
-    });
-
-    it.each([false, true])('shows public offers without an account on desktop=%s', desktop => {
+    it.each([false, true])('renders known offers without an account on desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [couponBlock], coupons: [couponCampaign] }, desktop);
-        expect(markup).toContain('满100减10');
         expect(markup).toContain('领取 满100减10');
-        expect(markup).not.toContain('登录后查看专属优惠');
-    });
-
-    it.each([false, true])('keeps the enabled empty coupon frame on desktop=%s', desktop => {
-        const markup = renderHome({ contentBlocks: [couponBlock] }, desktop);
-        expect(markup).toContain('coupon-hub-section');
-        expect(markup).toContain('专享特惠专区');
-        expect(markup).toContain('全部优惠');
-        expect(markup).toContain('暂无可领取的优惠');
-    });
-
-    it('keeps a local loading frame before offers are confirmed', () => {
-        const markup = renderHome({ contentBlocks: [couponBlock], couponCampaignsLoading: true });
-        expect(markup).toContain('coupon-hub-section');
-        expect(markup).not.toContain('暂无可领取的优惠');
-    });
-
-    it('keeps the empty frame when a campaign is sold out', () => {
-        const markup = renderHome({
-            contentBlocks: [couponBlock],
-            coupons: [{ ...couponCampaign, remainingIssueCount: 0, claimable: false }],
-        });
-
-        expect(markup).not.toContain('满100减10');
         expect(markup).toContain('coupon-hub-section');
     });
-
-    it('keeps the empty frame after the last campaign is claimed', () => {
-        const markup = renderHome({
-            contentBlocks: [couponBlock],
-            coupons: [
-                {
-                    ...couponCampaign,
-                    remainingIssueCount: 0,
-                    claimed: true,
-                    claimable: false,
-                },
-            ],
-        });
-
-        expect(markup).not.toContain('满100减10');
-        expect(markup).toContain('coupon-hub-section');
-    });
-
-    it('removes a claimed campaign but keeps the module while another campaign is claimable', () => {
-        const markup = renderHome({
-            contentBlocks: [couponBlock],
-            coupons: [
-                { ...couponCampaign, claimed: true, claimable: false },
-                {
-                    ...couponCampaign,
-                    id: 'campaign-2',
-                    name: '满200减20',
-                    claimed: false,
-                    claimable: true,
-                },
-            ],
-        });
-
-        expect(markup).not.toContain('满100减10');
-        expect(markup).toContain('满200减20');
-        expect(markup).toContain('coupon-hub-section');
-    });
-
     it.each([false, true])(
-        'shows an initial offer failure in the same coupon frame on desktop=%s',
+        'does not reserve empty, pending, error, sold-out, claimed or expired offers on desktop=%s',
         desktop => {
-            const markup = renderHome(
-                {
-                    contentBlocks: [couponBlock],
-                    couponCampaignsError: '优惠活动读取失败',
-                },
-                desktop,
-            );
-
-            expect(markup).toContain('优惠活动读取失败');
-            expect(markup).toContain('coupon-hub-section');
-        },
-    );
-
-    it.each([false, true])(
-        'retains valid offers while refreshing or after a background error on desktop=%s',
-        desktop => {
-            for (const state of [{ couponCampaignsLoading: true }, { couponCampaignsError: '更新失败' }]) {
-                const markup = renderHome(
-                    { contentBlocks: [couponBlock], coupons: [couponCampaign], ...state },
-                    desktop,
-                );
-                expect(markup).toContain('coupon-hub-section');
-                expect(markup).toContain('满100减10');
+            for (const state of [
+                {},
+                { couponCampaignsLoading: true },
+                { couponCampaignsError: 'Read failed' },
+                { coupons: [{ ...couponCampaign, remainingIssueCount: 0 }] },
+                { coupons: [{ ...couponCampaign, claimed: true, claimable: false }] },
+                { coupons: [{ ...couponCampaign, claimEndsAt: '2000-01-01T00:00:00Z' }] },
+            ]) {
+                const markup = renderHome({ contentBlocks: [couponBlock], ...state }, desktop);
+                expect(markup).not.toContain('coupon-hub-section');
+                expect(markup).not.toContain('暂无可领取的优惠');
+                expect(markup).not.toContain('全部优惠');
                 expect(markup).not.toContain('coupon-hub-placeholder');
             }
         },
     );
-
-    it.each([false, true])(
-        'keeps an unpublished coupon module hidden even with offers on desktop=%s',
-        desktop => {
-            const markup = renderHome(
-                {
-                    contentBlocks: [{ ...couponBlock, enabled: false }],
-                    coupons: [couponCampaign],
-                    couponCampaignsLoading: true,
-                },
-                desktop,
-            );
-            expect(markup).not.toContain('coupon-hub-section');
-        },
-    );
+    it('keeps valid list semantics for actual offers', async () => {
+        const host = document.createElement('div');
+        document.body.append(host);
+        try {
+            host.innerHTML = renderHome({ contentBlocks: [couponBlock], coupons: [couponCampaign] });
+            const section = host.querySelector<HTMLElement>('.coupon-hub-section');
+            if (!section) throw new Error('Missing confirmed offers');
+            const result = await checkAccessibility(section, {
+                runOnly: ['aria-required-children', 'aria-required-parent'],
+            });
+            expect(result.violations).toEqual([]);
+        } finally {
+            host.remove();
+        }
+    });
+    it('keeps the remaining eligible campaign and existing cards through pending/error reads', () => {
+        for (const state of [{}, { couponCampaignsLoading: true }, { couponCampaignsError: 'Offline' }]) {
+            const markup = renderHome({
+                contentBlocks: [couponBlock],
+                coupons: [
+                    { ...couponCampaign, claimed: true, claimable: false },
+                    { ...couponCampaign, id: 'second', name: 'Second offer' },
+                ],
+                ...state,
+            });
+            expect(markup).not.toContain('领取 满100减10');
+            expect(markup).toContain('Second offer');
+            expect(markup).not.toContain('coupon-hub-placeholder');
+        }
+    });
+    it('keeps an unpublished module hidden even with offers', () => {
+        const markup = renderHome({
+            contentBlocks: [{ ...couponBlock, enabled: false }],
+            coupons: [couponCampaign],
+        });
+        expect(markup).not.toContain('coupon-hub-section');
+    });
 });
 
 describe('HomePage flash-sale product count', () => {

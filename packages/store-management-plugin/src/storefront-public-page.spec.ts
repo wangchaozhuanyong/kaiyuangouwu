@@ -362,6 +362,10 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE', worker =
             };
         }),
     };
+    const campaigns = {
+        findFlashSales: vi.fn().mockResolvedValue([]),
+        findActiveCoupons: vi.fn().mockResolvedValue([]),
+    };
     const service = new StorefrontPublicPageService(
         cache,
         modules as never,
@@ -373,7 +377,7 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE', worker =
         {} as never,
         {} as never,
         {} as never,
-        { findFlashSales: vi.fn().mockResolvedValue([]) } as never,
+        campaigns as never,
         sources.announcements as never,
         accessActivation as never,
         { isWorker: worker } as never,
@@ -394,6 +398,7 @@ function accessHarness(initial: 'LIVE' | 'PREVIEW' | 'CLOSED' = 'LIVE', worker =
     ).mockResolvedValue([]);
     return {
         service,
+        campaigns,
         cache,
         invalidate,
         raw,
@@ -1797,6 +1802,7 @@ describe('public page optional section budgets', () => {
             const service = new StorefrontPublicPageService(
                 {
                     readThrough: vi.fn((_ctx, _key, _ttl, load: () => Promise<unknown>) => load()),
+                    peek: vi.fn().mockResolvedValue(undefined),
                     runGuarded: (_guard: unknown, load: () => Promise<unknown>) => load(),
                     trackSource: (load: () => Promise<unknown>) => load(),
                 } as never,
@@ -1967,6 +1973,7 @@ describe('public page media assembly', () => {
             const service = new StorefrontPublicPageService(
                 {
                     readThrough: vi.fn((_ctx, _key, _ttl, load: () => Promise<unknown>) => load()),
+                    peek: vi.fn().mockResolvedValue(undefined),
                     runGuarded: (_guard: unknown, load: () => Promise<unknown>) => load(),
                     trackSource: (load: () => Promise<unknown>) => load(),
                 } as never,
@@ -2132,4 +2139,63 @@ it('shares timed-out optional source reads across different public page assembli
     expect(next.failures).toEqual([]);
     expect(getVisual).toHaveBeenCalledTimes(1);
     expect(findFlashSales).toHaveBeenCalledTimes(1);
+});
+
+describe('prepared homepage coupons', () => {
+    it('prepares only anonymous allowlisted fields and reuses the next snapshot', async () => {
+        const h = accessHarness('LIVE', true);
+        h.campaigns.findActiveCoupons.mockResolvedValue([
+            {
+                id: 7,
+                name: 'Prepared coupon',
+                kind: 'ORDER_FIXED',
+                claimed: false,
+                claimable: true,
+                minimumSpend: 1000,
+                discountAmount: 100,
+                currencyCode: 'MYR',
+                remainingIssueCount: 5,
+                customerIds: ['must-not-be-public'],
+                claimedCount: 999,
+            },
+        ]);
+        const page = await h.service.read(
+            h.ctx,
+            'a.test',
+            { kind: 'home' },
+            { refresh: true, prepareCoupons: true },
+        );
+        expect(page.couponCampaigns).toEqual([
+            expect.objectContaining({ id: '7', name: 'Prepared coupon', claimed: false }),
+        ]);
+        expect(JSON.stringify(page.couponCampaigns)).not.toContain('must-not-be-public');
+        expect(JSON.stringify(page.couponCampaigns)).not.toContain('claimedCount');
+        const next = await h.service.read(h.ctx, 'a.test', { kind: 'home' });
+        expect(next.couponCampaigns).toEqual(page.couponCampaigns);
+        expect(h.campaigns.findActiveCoupons).toHaveBeenCalledTimes(1);
+    });
+    it('does not start or wait for coupon origin work on a cold visitor request', async () => {
+        const h = accessHarness();
+        h.campaigns.findActiveCoupons.mockImplementation(() => new Promise(() => undefined));
+        const page = await h.service.read(h.ctx, 'a.test', { kind: 'home' });
+        expect(page.couponCampaigns).toBeUndefined();
+        expect(h.campaigns.findActiveCoupons).not.toHaveBeenCalled();
+    });
+    it('does not wait for a slow prepared-slot lookup', async () => {
+        const h = accessHarness();
+        const original = h.cache.peek.bind(h.cache);
+        vi.spyOn(h.cache, 'peek').mockImplementation((ctx, key) =>
+            key.startsWith('home-coupons:') ? new Promise(() => undefined) : original(ctx, key),
+        );
+        const page = await h.service.read(h.ctx, 'a.test', { kind: 'home' });
+        expect(page.couponCampaigns).toBeUndefined();
+    });
+    it('keeps confirmed empty distinct from unknown and discards a revoked generation', async () => {
+        const h = accessHarness('LIVE', true);
+        const first = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { prepareCoupons: true });
+        expect(first.couponCampaigns).toEqual([]);
+        await h.cache.invalidate('a');
+        const next = await h.service.read(h.ctx, 'a.test', { kind: 'home' });
+        expect(next.couponCampaigns).toBeUndefined();
+    });
 });

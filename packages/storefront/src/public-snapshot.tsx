@@ -338,10 +338,13 @@ function SnapshotPage({ page, components }: { page: PublicPageData; components: 
                         page.content?.settings?.heroAutoplayIntervalSeconds ?? 5,
                     ),
                     configuredBlockTypes: page.content?.settings?.configuredBlockTypes ?? [],
-                    coupons: [],
-                    couponCampaignsLoading: contentBlocks.some(
-                        block => block.type === 'COUPONS' && block.enabled,
-                    ),
+                    coupons:
+                        page.couponAudience === 'anonymous'
+                            ? ((page.couponCampaigns ?? []) as Array<
+                                  import('./types').StorefrontCouponCampaign
+                              >)
+                            : [],
+                    couponCampaignsLoading: false,
                     couponCampaignsError: '',
                     flashSales: (page.flashSales as StorefrontFlashSale[]) ?? [],
                     systemAnnouncements: page.content?.systemAnnouncements ?? [],

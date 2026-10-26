@@ -112,13 +112,13 @@ describe('customer query boundaries', () => {
             customer = identity;
             const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
             const options = mocks.useQuery.mock.calls.map(([input]) => input);
-            expect(options.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(true);
+            expect(options.find(input => input.queryKey.includes('coupon-campaigns')).enabled).toBe(false);
             expect(options.find(input => input.queryKey.at(-1) === 'coupons').enabled).toBe(false);
             expect(options.find(input => input.queryKey.includes('coupon-usage-records')).enabled).toBe(
                 false,
             );
             expect(options.find(input => input.queryKey.at(-1) === 'cart').enabled).toBe(false);
-            expect(result.couponCampaignsLoading).toBe(true);
+            expect(result.couponCampaignsLoading).toBe(false);
         },
     );
 
@@ -138,7 +138,7 @@ describe('customer query boundaries', () => {
         identityError = new Error('Account unavailable');
         const result = read('CNY', true, { activeRoute: 'home', homepageCoupons: true });
         expect(result.couponCampaignsError).toBe('');
-        expect(result.couponCampaignsLoading).toBe(true);
+        expect(result.couponCampaignsLoading).toBe(false);
     });
 
     it('loads public home campaigns for guests but holds cards until identity is resolved', () => {
@@ -156,7 +156,7 @@ describe('customer query boundaries', () => {
             mocks.useQuery.mock.calls
                 .map(([options]) => options)
                 .find(options => options.queryKey.includes('coupon-campaigns')).enabled,
-        ).toBe(true);
+        ).toBe(false);
         expect(pending.activeCoupons).toEqual([]);
         customer = null;
         expect(read('CNY', true, { activeRoute: 'home', homepageCoupons: true }).activeCoupons).toEqual(

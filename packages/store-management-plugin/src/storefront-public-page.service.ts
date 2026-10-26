@@ -282,7 +282,7 @@ export class StorefrontPublicPageService {
         ctx: RequestContext,
         host: string,
         request: PublicPageRequest = { kind: 'home' },
-        options: { refresh?: boolean; prepareMedia?: boolean } = {},
+        options: { refresh?: boolean; prepareMedia?: boolean; prepareCoupons?: boolean } = {},
         onResolvedRevision?: (revision: string | undefined) => void,
     ): Promise<StorefrontPageData> {
         if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop')
@@ -364,7 +364,7 @@ export class StorefrontPublicPageService {
         ctx: RequestContext,
         host: string,
         request: PublicPageRequest,
-        options: { refresh?: boolean; prepareMedia?: boolean },
+        options: { refresh?: boolean; prepareMedia?: boolean; prepareCoupons?: boolean },
         onResolvedRevision?: (revision: string | undefined) => void,
     ): Promise<StorefrontPageData> {
         for (let attempt = 0; attempt < 2; attempt++) {
@@ -396,7 +396,13 @@ export class StorefrontPublicPageService {
                     mode === 'LIVE' && options.refresh
                         ? this.cache.revision(ctx.channelId)
                         : Promise.resolve(undefined);
-                const commonData = this.assemble(ctx, host, request.kind === 'home', mode);
+                const commonData = this.assemble(
+                    ctx,
+                    host,
+                    request.kind === 'home',
+                    mode,
+                    options.prepareCoupons === true && this.processContext?.isWorker === true,
+                );
                 const routeData = this.cache.trackSource(() =>
                     request.kind === 'catalog'
                         ? (async () => {
@@ -752,6 +758,7 @@ export class StorefrontPublicPageService {
         host: string,
         home: boolean,
         mode: 'LIVE' | 'PREVIEW',
+        prepareCoupons = false,
     ): Promise<StorefrontPageData> {
         const section = <T>(key: string, ttl: number, load: () => Promise<T>) =>
             mode === 'PREVIEW' ? this.cache.loadUncached(load) : this.cache.readThrough(ctx, key, ttl, load);
@@ -774,6 +781,41 @@ export class StorefrontPublicPageService {
                   () => undefined,
               )
             : Promise.resolve(undefined);
+        // Visitor reads only peek the prepared slot; coupon origin work belongs to the worker.
+        const couponsPromise = home
+            ? prepareCoupons
+                ? section(`home-coupons:${host}`, 30_000, async () =>
+                      (await this.campaigns.findActiveCoupons(ctx)).map(coupon => ({
+                          ...publicFields(coupon, [
+                              'name',
+                              'kind',
+                              'appearanceTheme',
+                              'startsAt',
+                              'endsAt',
+                              'claimStartsAt',
+                              'claimEndsAt',
+                              'validityDays',
+                              'minimumSpend',
+                              'currencyCode',
+                              'discountAmount',
+                              'discountRate',
+                              'customerEligibility',
+                              'remainingIssueCount',
+                          ] as const),
+                          id: String(coupon.id),
+                          claimed: false,
+                          claimable: coupon.claimable,
+                      })),
+                  )
+                : this.cache.peek<unknown[]>(ctx, `home-coupons:${host}`)
+            : Promise.resolve(undefined);
+        let preparedCoupons: unknown[] | undefined;
+        if (!prepareCoupons)
+            void couponsPromise
+                .then(value => {
+                    preparedCoupons = value;
+                })
+                .catch(() => undefined);
         const [config, sections] = await Promise.all([
             configPromise,
             Promise.allSettled([
@@ -809,6 +851,7 @@ export class StorefrontPublicPageService {
                     index === 0 ? promise : publicSectionWithinBudget<unknown>(promise),
                 ),
                 bestSellersPromise,
+                prepareCoupons ? publicSectionWithinBudget(couponsPromise) : Promise.resolve(undefined),
             ]),
         ]);
         const names = [
@@ -818,14 +861,16 @@ export class StorefrontPublicPageService {
             'visualPreset',
             'flashSales',
             'bestSellers',
+            'couponCampaigns',
         ] as const;
         const values: Record<string, unknown> = {};
         const failures: StorefrontPageData['failures'] = [];
         sections.forEach((result, index) => {
             if (names[index] === 'bestSellers' && (!home || !values.content)) return;
             if (result.status === 'fulfilled') values[names[index]] = result.value;
-            else failures.push(names[index]);
+            else if (names[index] !== 'couponCampaigns') failures.push(names[index]);
         });
+        if (!prepareCoupons && preparedCoupons !== undefined) values.couponCampaigns = preparedCoupons;
         const generatedAt = Date.now();
         const payload = { config, ...values, media: [], failures };
         return {
