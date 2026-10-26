@@ -39,23 +39,12 @@ function fixture(type = 'manual-digital-delivery') {
 }
 describe('Safe digital notification send-time authorization', () => {
     it.each(['manual-digital-delivery', 'auto-card-delivery'])(
-        'rejects a missing current %s entitlement before validating its receipt',
-        async type => {
-            const f = fixture(type);
-            f.queuedEmailPayload.mockResolvedValue(null);
-            f.notificationPayload.mockResolvedValue(null);
-            await expect(f.guard(f.injector, f.ctx, f.email)).rejects.toThrow('数字交付通知领取入口已失效');
-            expect(f.verifyToken).not.toHaveBeenCalled();
-        },
-    );
-    it.each(['manual-digital-delivery', 'auto-card-delivery'])(
         'accepts a current safe %s entry',
         async type => {
             const f = fixture(type);
             await expect(f.guard(f.injector, f.ctx, f.email)).resolves.toBeUndefined();
-            expect(
-                type === 'manual-digital-delivery' ? f.queuedEmailPayload : f.notificationPayload,
-            ).toHaveBeenCalledWith(f.ctx, 'delivery-1');
+            expect(f.queuedEmailPayload).toHaveBeenCalledWith(f.ctx, 'delivery-1');
+            expect(f.notificationPayload).not.toHaveBeenCalled();
         },
     );
     it.each(['packages', 'credentials', 'attachments'])(
@@ -105,10 +94,28 @@ describe('Safe digital notification send-time authorization', () => {
         f.queuedEmailPayload.mockRejectedValue(new Error('synthetic revoked grant'));
         await expect(f.guard(f.injector, f.ctx, f.email)).rejects.toThrow('revoked grant');
     });
-    it('leaves unrelated email handlers unchanged', async () => {
-        const f = fixture('email-verification');
-        await f.guard(f.injector, f.ctx, f.email);
+    it.each(['email-verification', 'password-reset', 'email-address-change'])(
+        'leaves %s unchanged',
+        async type => {
+            const f = fixture(type);
+            await f.guard(f.injector, f.ctx, f.email);
+            expect(f.queuedEmailPayload).not.toHaveBeenCalled();
+            expect(f.notificationPayload).not.toHaveBeenCalled();
+        },
+    );
+    it('consumes an old order confirmation without resolving delivery data', async () => {
+        const f = fixture('order-confirmation');
+        await expect(f.guard(f.injector, f.ctx, f.email)).resolves.toBe(false);
         expect(f.queuedEmailPayload).not.toHaveBeenCalled();
-        expect(f.notificationPayload).not.toHaveBeenCalled();
+        expect(f.verifyToken).not.toHaveBeenCalled();
     });
+    it.each(['manual-digital-delivery', 'auto-card-delivery'])(
+        'skips a no-longer-ready %s without attempting transport',
+        async type => {
+            const f = fixture(type);
+            f.queuedEmailPayload.mockResolvedValue(null);
+            await expect(f.guard(f.injector, f.ctx, f.email)).resolves.toBe(false);
+            expect(f.verifyToken).not.toHaveBeenCalled();
+        },
+    );
 });

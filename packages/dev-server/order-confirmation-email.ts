@@ -2,8 +2,9 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 
 export type OrderFulfillmentType = 'PHYSICAL' | 'DIGITAL' | 'MIXED';
 
-export function shouldSendOrderConfirmation(fulfillmentType: OrderFulfillmentType): boolean {
-    return fulfillmentType !== 'DIGITAL';
+export function shouldSendOrderConfirmation(_fulfillmentType: OrderFulfillmentType): boolean {
+    // Customer order mail is sent only by the delivery-ready handlers.
+    return false;
 }
 
 export function normalizeDeliveryEmail(value: string | null | undefined): string | undefined {

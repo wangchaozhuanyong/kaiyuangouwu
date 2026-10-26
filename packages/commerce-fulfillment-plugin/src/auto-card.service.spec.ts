@@ -320,6 +320,7 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
     delivery.order.payments ??= [{ state: 'Settled', amount: 1000, refunds: [] }];
     delivery.orderLine ??= autoCardLine(delivery.quantity);
     delivery.order.salesChannelId ??= delivery.channelId;
+    delivery.order.customFields ??= { deliveryEmail: 'delivery@example.invalid' };
     delivery.order.state ??= 'PaymentSettled';
     delivery.order.payments ??= [{ state: 'Settled', amount: 1000, refunds: [] }];
     delivery.orderLine ??= autoCardLine(delivery.quantity);
@@ -432,6 +433,71 @@ function createHarness(input: { delivery?: any; candidates?: any[]; affected?: n
 }
 
 describe('AutoCardService allocation invariants', () => {
+    it.each(['WAITING_STOCK', 'SENT', 'MANUAL_REVIEW'])(
+        'consumes an obsolete queued notification for %s without producing a payload',
+        async state => {
+            const test = createHarness({ delivery: { state, quantity: 2, poolItems: [] } });
+            await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toBeNull();
+            expect(test.eventBus.publish).not.toHaveBeenCalled();
+        },
+    );
+    it('retains the authorization error for a revoked paid entitlement', async () => {
+        const test = createHarness({
+            delivery: {
+                state: 'ALLOCATED',
+                quantity: 2,
+                poolItems: [{ state: 'ASSIGNED' }, { state: 'ASSIGNED' }],
+            },
+        });
+        test.delivery.order.state = 'Cancelled';
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
+            '当前领取资格已暂停或撤销',
+        );
+        expect(test.eventBus.publish).not.toHaveBeenCalled();
+    });
+    it('does not announce readiness when fewer cards are assigned than the paid quantity', async () => {
+        const test = createHarness({
+            delivery: { state: 'ALLOCATED', quantity: 2, poolItems: [{ state: 'ASSIGNED' }] },
+        });
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toBeNull();
+    });
+    it.each(['ALLOCATED', 'RETRYING'])(
+        'uses the confirmed order delivery email for a ready %s notification',
+        async state => {
+            const test = createHarness({
+                delivery: {
+                    state,
+                    quantity: 2,
+                    poolItems: [{ state: 'ASSIGNED' }, { state: 'ASSIGNED' }],
+                    recipientEmail: 'old-account@example.invalid',
+                },
+            });
+            test.delivery.order.customFields.deliveryEmail = ' Chosen@Example.Invalid ';
+            test.delivery.order.customer = { emailAddress: 'account@example.invalid' };
+            await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toMatchObject({
+                recipientEmail: 'chosen@example.invalid',
+            });
+        },
+    );
+    it('never substitutes the account or saved recipient when the order delivery email is missing', async () => {
+        const test = createHarness({
+            delivery: {
+                state: 'ALLOCATED',
+                quantity: 2,
+                poolItems: [{ state: 'ASSIGNED' }, { state: 'ASSIGNED' }],
+                recipientEmail: 'old-account@example.invalid',
+            },
+        });
+        test.delivery.order.customFields = {};
+        test.delivery.order.customer = { emailAddress: 'account@example.invalid' };
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
+            '有效的交付邮箱',
+        );
+        await expect(
+            test.service.allocateSettledOrder(test.ctx, { ...test.delivery.order, lines: [autoCardLine()] }),
+        ).rejects.toThrow('有效的交付邮箱');
+        expect(test.eventBus.publish).not.toHaveBeenCalled();
+    });
     it('never reconciles append-only event rows from a stale delivery snapshot', () => {
         const relation = getMetadataArgsStorage().relations.find(
             item => item.target === AutoCardDelivery && item.propertyName === 'events',

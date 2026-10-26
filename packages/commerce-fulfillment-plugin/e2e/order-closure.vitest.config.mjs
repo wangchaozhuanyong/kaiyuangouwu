@@ -22,6 +22,10 @@ export default defineConfig({
     resolve: {
         alias: [
             {
+                find: /^@vendure\/email-plugin$/,
+                replacement: path.join(root, 'packages/email-plugin/index.ts'),
+            },
+            {
                 find: '@vendure/store-management-plugin/currency-conversion',
                 replacement: path.join(
                     root,

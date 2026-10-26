@@ -4,10 +4,10 @@ import { normalizeDeliveryEmail, shouldSendOrderConfirmation } from './order-con
 
 describe('customer order email policy', () => {
     it.each([
-        ['PHYSICAL', true],
-        ['MIXED', true],
+        ['PHYSICAL', false],
+        ['MIXED', false],
         ['DIGITAL', false],
-    ] as const)('sends the standard confirmation for %s orders: %s', (fulfillmentType, expected) => {
+    ] as const)('suppresses payment confirmation for %s orders', (fulfillmentType, expected) => {
         expect(shouldSendOrderConfirmation(fulfillmentType)).toBe(expected);
     });
 

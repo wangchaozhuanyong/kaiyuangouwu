@@ -3,7 +3,10 @@
     "compilerOptions": {
         "noEmit": true,
         "types": ["node", "vitest/globals"],
-        "lib": ["es2019", "dom", "dom.iterable"]
+        "lib": ["es2019", "dom", "dom.iterable"],
+        "paths": {
+            "@vendure/email-plugin": ["../../email-plugin/index.ts"]
+        }
     },
     "include": [
         "./order-processing-closure.e2e-spec.ts",
