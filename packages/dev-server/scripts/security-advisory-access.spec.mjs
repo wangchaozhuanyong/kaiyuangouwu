@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { readFile } from 'node:fs/promises';
 import https from 'node:https';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
@@ -65,3 +66,16 @@ test('origin registry errors retain the HTTP status and endpoint without provide
         return true;
     });
 });
+
+for (const name of ['Audit monorepo dependencies', 'Build and verify production runtime']) {
+    test(`${name} passes the existing restricted CI token into the actual audit invocation`, async () => {
+        const workflow = await readFile(
+            new URL('../../../.github/workflows/build_production_runtime.yml', import.meta.url),
+            'utf8',
+        );
+        const block = workflow.split(`            - name: ${name}\n`)[1]?.split('\n            - name:')[0];
+        assert.ok(block, 'Missing actual runtime audit step');
+        const environment = block.split('              env:\n')[1]?.split('              run:')[0];
+        assert.ok(environment?.split('\n').some(line => line.trim() === 'GH_TOKEN: ${{ github.token }}'));
+    });
+}
