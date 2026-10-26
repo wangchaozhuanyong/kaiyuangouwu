@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
+import YAML from 'yaml';
 
 import { classifyChanges } from './ci-impact.mjs';
 import {
@@ -22,6 +23,92 @@ const packages = [
     { directory: 'store-management-plugin', name: '@vendure/store-management-plugin' },
     { directory: 'next-admin', name: '@vendure/next-admin', devDependencies: { '@vendure/dev-server': '*' } },
 ];
+
+for (const [fresh, cacheHit] of [
+    [true, true],
+    [false, true],
+    [false, false],
+]) {
+    test(`frontend compilation respects fresh=${fresh} with cacheHit=${cacheHit}`, () => {
+        const workflow = YAML.parse(readFileSync('.github/workflows/deploy_frontends.yml', 'utf8'));
+        const source = workflow.jobs.deploy.steps.find(
+            step => step.name === 'Reuse checked frontend artifacts or build only missing artifacts',
+        ).run;
+        const directory = path.resolve('.runtime/functional-repairs/fresh-frontend-tests');
+        mkdirSync(directory, { recursive: true });
+        const temporary = mkdtempSync(path.join(directory, 'case-'));
+        try {
+            const bin = path.join(temporary, 'bin');
+            const calls = path.join(temporary, 'calls.log');
+            mkdirSync(bin);
+            for (const [name, script] of Object.entries({
+                git: '#!/bin/bash\nexit 0\n',
+                bun: '#!/bin/bash\nprintf "bun:%s\\n" "$*" >> "$CALLS"\n',
+                node: '#!/bin/bash\nprintf "node:%s\\n" "$*" >> "$CALLS"\nif [[ "$2" == restore ]]; then printf "restored=%s\\n" "$FAKE_CACHE"; fi\n',
+            })) {
+                const file = path.join(bin, name);
+                writeFileSync(file, script);
+                chmodSync(file, 0o755);
+            }
+            const result = spawnSync(
+                'bash',
+                [
+                    '-eu',
+                    '-o',
+                    'pipefail',
+                    '-c',
+                    source.replaceAll('${{ inputs.force_rebuild }}', String(fresh)),
+                ],
+                {
+                    encoding: 'utf8',
+                    env: {
+                        ...process.env,
+                        PATH: `${bin}:${process.env.PATH}`,
+                        CALLS: calls,
+                        FAKE_CACHE: String(cacheHit),
+                        RUNNER_TEMP: temporary,
+                        COMPONENTS: 'storefront,next-admin',
+                        CI_RUN_ID: '111',
+                        TARGET_SHA: 'a'.repeat(40),
+                    },
+                },
+            );
+            assert.equal(result.status, 0, result.stderr);
+            const executed = readFileSync(calls, 'utf8').split('\n');
+            const builds = executed.filter(line =>
+                /^bun:run --cwd packages\/(storefront|next-admin) build$/u.test(line),
+            );
+            assert.equal(builds.length, fresh || !cacheHit ? 2 : 0);
+            assert.equal(
+                executed.filter(line => line.startsWith('node:deploy/frontend-artifact.mjs restore')).length,
+                fresh ? 0 : 2,
+            );
+            assert.equal(
+                executed.filter(line => line === 'bun:install --frozen-lockfile --linker=hoisted').length,
+                fresh || !cacheHit ? 1 : 0,
+            );
+            assert.equal(
+                executed.filter(line => line === 'bun:run build:core-common').length,
+                fresh || !cacheHit ? 1 : 0,
+            );
+            assert.equal(
+                executed.filter(line => line.startsWith('node:deploy/frontend-artifact.mjs stage')).length,
+                2,
+            );
+        } finally {
+            rmSync(temporary, { recursive: true });
+        }
+    });
+}
+test('the existing exact-main rebuild switch reaches both release lanes', () => {
+    const workflow = YAML.parse(readFileSync('.github/workflows/production_release.yml', 'utf8'));
+    const frontend = YAML.parse(readFileSync('.github/workflows/deploy_frontends.yml', 'utf8'));
+    assert.equal(workflow.jobs.frontend.with.force_rebuild, '${{ inputs.rebuild_runtime || false }}');
+    assert.equal(workflow.jobs.build.with.force_rebuild, '${{ inputs.rebuild_runtime || false }}');
+    assert.equal(frontend.on.workflow_call.inputs.force_rebuild.type, 'boolean');
+    assert.equal(frontend.on.workflow_call.inputs.force_rebuild.default, false);
+    assert.equal(frontend.jobs.deploy.steps[0].with.ref, '${{ inputs.target_sha }}');
+});
 test('retain mode checks the mailbox backend while leaving unrelated frontend changes unpublished', () => {
     const files = [
         'packages/icloud-relay-plugin/src/services/icloud-idle.service.ts',

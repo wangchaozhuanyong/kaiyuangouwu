@@ -2,6 +2,10 @@ name: Deploy Affected Frontends
 on:
     workflow_call:
         inputs:
+            force_rebuild:
+                required: false
+                default: false
+                type: boolean
             target_sha:
                 required: true
                 type: string
@@ -73,7 +77,12 @@ jobs:
                   installed=false
                   IFS=',' read -r -a apps <<< "$COMPONENTS"
                   for app in "${apps[@]}"; do
-                      node deploy/frontend-artifact.mjs restore "$app" "$RUNNER_TEMP/frontend-input-$app" "$CI_RUN_ID" > "$RUNNER_TEMP/restore-$app.txt"
+                      if [[ '${{ inputs.force_rebuild }}' == true ]]; then
+                          printf 'restored=false\nreason=fresh-compilation-requested\n' > "$RUNNER_TEMP/restore-$app.txt"
+                          echo "FRONTEND_FRESH_BUILD component=$app source=$TARGET_SHA"
+                      else
+                          node deploy/frontend-artifact.mjs restore "$app" "$RUNNER_TEMP/frontend-input-$app" "$CI_RUN_ID" > "$RUNNER_TEMP/restore-$app.txt"
+                      fi
                       if ! grep -qx 'restored=true' "$RUNNER_TEMP/restore-$app.txt"; then
                           if [[ "$installed" == false ]]; then
                               bun install --frozen-lockfile --linker=hoisted
