@@ -76,6 +76,21 @@ Resend 也支持 `587` + `SMTP_SECURE=false` 的 STARTTLS 组合。当前默认�
 
 注册验证、重置密码和修改邮箱链接统一使用 24 小时有效期。上线验收需至少覆盖 Gmail、Outlook/Hotmail 和一个中国大陆常用邮箱，并检查垃圾箱、SPF、DKIM、DMARC 与邮件内链接。
 
+### 多店铺发信域名隔离
+
+全局 `VENDURE_EMAIL_FROM` 和 `SMTP_PASSWORD` 仍是未配置店铺的现有发信身份。需要独立发信域名的店铺可通过 `VENDURE_EMAIL_SENDERS` 配置精确的 Store Domain 主域名；发件地址和 SMTP 密钥会同时按该店铺解析。显示名称仍使用该 Channel 的店铺名称，正文链接及图片继续使用该店铺的主域名。
+
+```dotenv
+VENDURE_EMAIL_SENDERS='{"shop.example.com":{"from":"noreply@shop.example.com","passwordEnv":"SMTP_PASSWORD_STORE_ONE"}}'
+SMTP_PASSWORD_STORE_ONE=<domain-restricted-sending-only-key>
+```
+
+启用前必须在 Resend 认证对应 From 域名，按 Resend 实际生成的 DNS 值配置 SPF、DKIM，并检查 DMARC 对齐；每个店铺使用对应域名的发送密钥，不扩大现有店铺密钥的权限。JSON 只引用 Secret 环境变量名称，不填写密钥。新配置须同时提供给 API Server 和 Worker；只修改模板 From 而保留其他域名受限密钥会导致发送失败。
+
+切换发信身份前，核对 `send-email` 队列中是否仍有旧配置生成的待发送或重试邮件；先完成既有任务，再同时切换 API Server 和 Worker，避免旧 From 地址搭配新域名密钥而发送失败。邮件模块初始化时没有店铺上下文，应只返回基础传输设置；实际发送任务才按店铺解析密钥。
+
+上线后通过一次新的注册邮件核对实际 From、SPF/DKIM/DMARC、原始按钮地址，以及 iCloud/Gmail/Outlook 的收件箱和垃圾箱。Resend 的 `Delivered` 表示收件服务接受邮件，不能作为进入收件箱的证据；域名认证和对齐也不能保证所有收件方永远不判垃圾邮件。
+
 ### P0：建立生产基础设施
 
 - 使用独立的生产 MySQL/MariaDB 或 PostgreSQL，不使用仓库内 SQLite 文件。

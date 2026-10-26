@@ -85,6 +85,13 @@ import { contentTranslationOptions } from './content-translation-config';
 import { customerImageConfiguration } from './customer-image-config';
 import { storefrontEmailFromAddress, storefrontEmailLogoForChannel } from './email-branding';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
+import {
+    createStorefrontSmtpTransport,
+    emailSenderForStorefront,
+    parseStorefrontEmailSenders,
+    productionEmailSmtpTransport,
+    StorefrontEmailSender,
+} from './email-sender-routing';
 import { createManualDeliveryEmailGuard } from './manual-delivery-email-guard';
 import { devServerMigrations } from './migrations';
 import {
@@ -397,13 +404,22 @@ async function storefrontUrlForChannel(
     return primaryDomain ? `https://${primaryDomain.domain}` : storefrontFallbackUrl;
 }
 
-async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAddress: string) {
+async function emailTemplateVars(
+    ctx: RequestContext,
+    injector: Injector,
+    fromAddress: string,
+    senders: ReadonlyMap<string, StorefrontEmailSender>,
+) {
     const connection = injector.get(TransactionalConnection);
     const storefrontUrl = await storefrontUrlForChannel(ctx, connection);
     const brandLogoUrl = await storefrontEmailLogoForChannel(ctx, injector, storefrontUrl);
     return {
         ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields),
-        fromAddress: storefrontEmailFromAddress(fromAddress, ctx.languageCode, ctx.channel.customFields),
+        fromAddress: storefrontEmailFromAddress(
+            emailSenderForStorefront(senders, storefrontUrl)?.from ?? fromAddress,
+            ctx.languageCode,
+            ctx.channel.customFields,
+        ),
         brandLogoUrl,
         storefrontUrl,
         accountTokenExpiryHours: ACCOUNT_TOKEN_EXPIRY_HOURS,
@@ -415,6 +431,7 @@ async function emailTemplateVars(ctx: RequestContext, injector: Injector, fromAd
 
 function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
     const fromAddress = configuredValue('VENDURE_EMAIL_FROM', '"Yunqiao Ai" <noreply@example.com>');
+    const senders = parseStorefrontEmailSenders(process.env.VENDURE_EMAIL_SENDERS, process.env);
     const commonOptions = {
         handlers: localizedEmailHandlers,
         templateLoader: new FileBasedTemplateLoader(path.join(serverRoot, 'email-templates')),
@@ -422,7 +439,7 @@ function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
             storefrontUrlForChannel(ctx, injector.get(TransactionalConnection)),
         ),
         globalTemplateVars: (ctx: RequestContext, injector: Injector) =>
-            emailTemplateVars(ctx, injector, fromAddress),
+            emailTemplateVars(ctx, injector, fromAddress, senders),
     };
     if (!IS_PRODUCTION) {
         return {
@@ -433,40 +450,19 @@ function emailPluginOptions(): EmailPluginOptions | EmailPluginDevModeOptions {
         };
     }
 
-    const smtpUser = process.env.SMTP_USER?.trim();
-    const smtpPassword = process.env.SMTP_PASSWORD?.trim();
-    if (!smtpUser || !smtpPassword) {
-        throw new Error('SMTP_USER and SMTP_PASSWORD must both be configured in production');
-    }
-
-    const smtpHost = configuredValue('SMTP_HOST', '127.0.0.1');
-    const smtpPort = configuredPort('SMTP_PORT', 1025);
-    const smtpSecure = configuredBoolean('SMTP_SECURE', false);
-    if (smtpHost.toLowerCase() === 'smtp.resend.com') {
-        const validTlsMode =
-            (smtpSecure && (smtpPort === 465 || smtpPort === 2465)) ||
-            (!smtpSecure && (smtpPort === 25 || smtpPort === 587 || smtpPort === 2587));
-        if (smtpUser !== 'resend') {
-            throw new Error('SMTP_USER must be resend when SMTP_HOST is smtp.resend.com');
-        }
-        if (!validTlsMode) {
-            throw new Error('SMTP_PORT and SMTP_SECURE do not form a supported Resend TLS configuration');
-        }
-    }
-
     return {
         ...commonOptions,
-        transport: {
-            type: 'smtp',
-            host: smtpHost,
-            port: smtpPort,
-            secure: smtpSecure,
-            requireTLS: !smtpSecure,
-            auth: {
-                user: smtpUser,
-                pass: smtpPassword,
-            },
-        },
+        transport: createStorefrontSmtpTransport(
+            productionEmailSmtpTransport(
+                configuredValue('SMTP_HOST', '127.0.0.1'),
+                configuredPort('SMTP_PORT', 1025),
+                configuredBoolean('SMTP_SECURE', false),
+                process.env.SMTP_USER?.trim(),
+                process.env.SMTP_PASSWORD?.trim(),
+            ),
+            senders,
+            (injector, ctx) => storefrontUrlForChannel(ctx, injector.get(TransactionalConnection)),
+        ),
     };
 }
 

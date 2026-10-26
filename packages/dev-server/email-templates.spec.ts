@@ -1,9 +1,15 @@
 import { Injector, RequestContext, TransactionalConnection } from '@vendure/core';
-import { FileBasedTemplateLoader, HandlebarsMjmlGenerator } from '@vendure/email-plugin';
+import {
+    FileBasedTemplateLoader,
+    HandlebarsMjmlGenerator,
+    type SMTPTransportOptions,
+} from '@vendure/email-plugin';
 import { StorefrontMediaManifestService, StoreProfile } from '@vendure/store-management-plugin';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { EmailProcessor } from '../email-plugin/src/email-processor';
 
 import { ACCOUNT_TOKEN_EXPIRY_HOURS, buildAccountActionUrl } from './account-auth';
 import {
@@ -12,6 +18,12 @@ import {
     storefrontEmailLogoUrl,
 } from './email-branding';
 import { emailLanguageVariables } from './email-localization';
+import {
+    createStorefrontSmtpTransport,
+    emailSenderForStorefront,
+    parseStorefrontEmailSenders,
+    productionEmailSmtpTransport,
+} from './email-sender-routing';
 
 const templatePath = path.join(__dirname, 'email-templates');
 const templateLoader = new FileBasedTemplateLoader(templatePath);
@@ -95,6 +107,189 @@ async function renderTemplate(
         ...branding,
     });
 }
+
+describe('store-scoped verified email senders', () => {
+    it.each([
+        [465, true],
+        [2465, true],
+        [25, false],
+        [587, false],
+        [2587, false],
+    ])('preserves supported Resend TLS mode on port %s', (port, secure) => {
+        expect(
+            productionEmailSmtpTransport(
+                'smtp.resend.com',
+                Number(port),
+                Boolean(secure),
+                'resend',
+                'synthetic-key',
+            ),
+        ).toMatchObject({
+            host: 'smtp.resend.com',
+            port,
+            secure,
+            requireTLS: !secure,
+        });
+    });
+
+    it('continues to reject missing credentials, incorrect Resend users and invalid TLS combinations', () => {
+        expect(() =>
+            productionEmailSmtpTransport('smtp.resend.com', 465, true, undefined, undefined),
+        ).toThrow('SMTP_USER and SMTP_PASSWORD');
+        expect(() =>
+            productionEmailSmtpTransport('smtp.resend.com', 465, true, 'wrong-user', 'synthetic-key'),
+        ).toThrow('SMTP_USER must be resend');
+        expect(() =>
+            productionEmailSmtpTransport('smtp.resend.com', 465, false, 'resend', 'synthetic-key'),
+        ).toThrow('supported Resend TLS configuration');
+        expect(() =>
+            productionEmailSmtpTransport('smtp.resend.com', 587, true, 'resend', 'synthetic-key'),
+        ).toThrow('supported Resend TLS configuration');
+    });
+
+    const profiles = {
+        'shop.example.com': { from: 'noreply@shop.example.com', passwordEnv: 'SMTP_PASSWORD_STORE_ONE' },
+        'other.example.net': {
+            from: 'notify@mail.other.example.net',
+            passwordEnv: 'SMTP_PASSWORD_STORE_TWO',
+        },
+    };
+    const environment = {
+        SMTP_PASSWORD_STORE_ONE: 'synthetic-one',
+        SMTP_PASSWORD_STORE_TWO: 'synthetic-two',
+    };
+
+    it('pairs each exact storefront identity with its own sending credential', async () => {
+        const senders = parseStorefrontEmailSenders(JSON.stringify(profiles), environment);
+        const first = emailSenderForStorefront(senders, 'https://shop.example.com');
+        const second = emailSenderForStorefront(senders, 'https://other.example.net');
+        expect(first).toEqual({ from: 'noreply@shop.example.com', smtpPassword: 'synthetic-one' });
+        expect(second).toEqual({ from: 'notify@mail.other.example.net', smtpPassword: 'synthetic-two' });
+        if (!first) throw new Error('Expected the configured storefront sender');
+        const email = await renderTemplate('email-verification', 'en', false, false, {
+            fromAddress: storefrontEmailFromAddress(first.from, 'en', { storefrontNameEn: 'Own Store' }),
+        });
+        expect(email.from).toBe('"Own Store" <noreply@shop.example.com>');
+        expect(email.body).not.toContain('synthetic-one');
+        expect(email.body).not.toContain('synthetic-two');
+    });
+
+    it('leaves unconfigured stores on the existing global sender without parent or sibling fallback', () => {
+        const senders = parseStorefrontEmailSenders(JSON.stringify(profiles), environment);
+        for (const url of [
+            'https://unconfigured.test',
+            'https://sub.shop.example.com',
+            'https://shop.example.com.evil.test',
+        ]) {
+            expect(emailSenderForStorefront(senders, url)).toBeUndefined();
+        }
+        expect(parseStorefrontEmailSenders(undefined, {}).size).toBe(0);
+        expect(parseStorefrontEmailSenders('', {}).size).toBe(0);
+        expect(parseStorefrontEmailSenders('{}', {}).size).toBe(0);
+    });
+
+    it.each([
+        'not-json',
+        'null',
+        '[]',
+        JSON.stringify({ 'https://shop.example.com': profiles['shop.example.com'] }),
+        JSON.stringify({ 'shop.example.com/path': profiles['shop.example.com'] }),
+        JSON.stringify({ 'shop.example.com:443': profiles['shop.example.com'] }),
+        JSON.stringify({
+            'shop.example.com': { ...profiles['shop.example.com'], from: 'notify@another.test' },
+        }),
+        JSON.stringify({
+            'shop.example.com': {
+                ...profiles['shop.example.com'],
+                from: 'a@shop.example.com,b@shop.example.com',
+            },
+        }),
+        JSON.stringify({
+            'shop.example.com': {
+                ...profiles['shop.example.com'],
+                from: 'a@shop.example.com\r\nBcc: victim@example.test',
+            },
+        }),
+        JSON.stringify({ 'shop.example.com': { ...profiles['shop.example.com'], passwordEnv: 'HOME' } }),
+        JSON.stringify({
+            'shop.example.com': {
+                ...profiles['shop.example.com'],
+                smtpPassword: 'synthetic-embedded-secret',
+            },
+        }),
+        JSON.stringify({ 'shop.example.com': null }),
+    ])('rejects malformed or misaligned sender profiles without echoing their values', configured => {
+        expect(() => parseStorefrontEmailSenders(configured, environment)).toThrow(
+            'Invalid VENDURE_EMAIL_SENDERS configuration',
+        );
+    });
+
+    it('fails before sending if a configured store credential is missing', () => {
+        expect(() => parseStorefrontEmailSenders(JSON.stringify(profiles), {})).toThrow(
+            'A configured storefront SMTP password is missing',
+        );
+    });
+
+    const fallback: SMTPTransportOptions = {
+        type: 'smtp',
+        host: 'smtp.example.test',
+        port: 465,
+        secure: true,
+        auth: { user: 'synthetic-user', pass: 'synthetic-global' },
+    };
+
+    it('initializes the real email processor without a channel even when store senders are enabled', async () => {
+        const senders = parseStorefrontEmailSenders(JSON.stringify(profiles), environment);
+        const resolveUrl = vi.fn().mockRejectedValue(new Error('No request exists during startup'));
+        const transport = createStorefrontSmtpTransport(fallback, senders, resolveUrl);
+        const processor = new EmailProcessor(
+            { transport, templateLoader } as ConstructorParameters<typeof EmailProcessor>[0],
+            {} as ConstructorParameters<typeof EmailProcessor>[1],
+            {} as ConstructorParameters<typeof EmailProcessor>[2],
+        );
+        await expect(processor.init()).resolves.toBeUndefined();
+        expect(await processor.getTransportSettings()).toEqual(fallback);
+        expect(resolveUrl).not.toHaveBeenCalled();
+    });
+
+    it('routes job credentials independently, preserves TLS settings and does not mutate the global transport', async () => {
+        const senders = parseStorefrontEmailSenders(JSON.stringify(profiles), environment);
+        const resolveUrl = vi
+            .fn()
+            .mockResolvedValueOnce('https://shop.example.com')
+            .mockResolvedValueOnce('https://other.example.net')
+            .mockResolvedValueOnce('https://unconfigured.test');
+        const transport = createStorefrontSmtpTransport(fallback, senders, resolveUrl);
+        const injector = {} as Injector;
+        const ctx = { channelId: 'synthetic-channel' } as RequestContext;
+        expect(await transport(injector, ctx)).toEqual({
+            ...fallback,
+            auth: { user: 'synthetic-user', pass: 'synthetic-one' },
+        });
+        expect(await transport(injector, ctx)).toEqual({
+            ...fallback,
+            auth: { user: 'synthetic-user', pass: 'synthetic-two' },
+        });
+        expect(await transport(injector, ctx)).toEqual(fallback);
+        expect(fallback.auth?.pass).toBe('synthetic-global');
+        expect(resolveUrl).toHaveBeenCalledWith(injector, ctx);
+    });
+
+    it('does not silently fall back to another sender if a job domain lookup fails', async () => {
+        const senders = parseStorefrontEmailSenders(JSON.stringify(profiles), environment);
+        const transport = createStorefrontSmtpTransport(
+            fallback,
+            senders,
+            vi.fn().mockRejectedValue(new Error('Synthetic domain lookup failed')),
+        );
+        await expect(transport({} as Injector, {} as RequestContext)).rejects.toThrow(
+            'Synthetic domain lookup failed',
+        );
+        await expect(transport(undefined, {} as RequestContext)).rejects.toThrow(
+            'Storefront SMTP routing requires an injector',
+        );
+    });
+});
 
 describe('store-owned email branding', () => {
     it('resolves the event channel logo against that store public-media policy', async () => {
