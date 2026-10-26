@@ -595,12 +595,7 @@ export class ShopApi {
 
     setPaymentCurrencyForOrder = (currencyCode: string, signal?: AbortSignal) =>
         this.cartCheckoutApi.setPaymentCurrencyForOrder(currencyCode, signal);
-    eligiblePaymentMethods = (signal?: AbortSignal, orderId?: string) =>
-        this.cartCheckoutApi.eligiblePaymentMethods(signal, orderId);
-    prefetchEligiblePaymentMethods = (orderId: string) =>
-        this.cartCheckoutApi.prefetchEligiblePaymentMethods(orderId);
-    cachedEligiblePaymentMethods = (orderId: string) =>
-        this.cartCheckoutApi.cachedEligiblePaymentMethods(orderId);
+    eligiblePaymentMethods = (signal?: AbortSignal) => this.cartCheckoutApi.eligiblePaymentMethods(signal);
 
     async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {
         return this.cartCheckoutApi.createUsdtCheckoutQuote(signal);

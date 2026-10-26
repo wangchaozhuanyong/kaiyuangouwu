@@ -1,0 +1,343 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Kuala_Lumpur",
+  "baseline": "0a07e2c193f6d16cf38035e3e1926c18f07a9795",
+  "status": "local code and listed validations complete; no push/deployment; sandbox and production acceptance pending",
+  "records": [
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/baseline-final-storefront.log",
+      "result": "expected failure",
+      "sha256": "896a5e6ff2fb8855516bf41fa71e1aab8181bdcad91345c966a8fbc1b9b3baf1",
+      "summary": [
+        "⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯",
+        "Test Files  4 failed (4)",
+        "Tests  18 failed | 47 passed (65)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/baseline-final-admin.log",
+      "result": "expected failure",
+      "sha256": "623b59dcd284ebf70ddbc8cfe21b647ecbc6ddc71f6527f2fc93e7a32c131b61",
+      "summary": [
+        "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯",
+        "Test Files  2 failed (2)",
+        "Tests  9 failed | 42 passed (51)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/orders-before-final.log",
+      "result": "expected failure",
+      "sha256": "8aeeb02386c683b0f78b6cbb67223914eeb87567f8a45d481e043ea1cc13a7e9",
+      "summary": [
+        "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed (2)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/payment-late-before-final.log",
+      "result": "expected failure",
+      "sha256": "959828c9a6a1813c1e411c177dfe6fb5e505e164241ba996aab321e3ed90b8bb",
+      "summary": [
+        "⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 4 skipped (5)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/storefront-after.log",
+      "result": "passed",
+      "sha256": "bfa0d46de0b284d1613effff8ffc1d2c50ba93a74ac6b218728bb05033cddcaa",
+      "summary": [
+        "Test Files  6 passed (6)",
+        "Tests  235 passed (235)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/storefront-final-component.log",
+      "result": "passed",
+      "sha256": "bb48ee8d34d13d08fe0948aae9d241c4ba202c2098a6ab5474d833158c0bab4e",
+      "summary": [
+        "Test Files  6 passed (6)",
+        "Tests  139 passed (139)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/storefront-regression.log",
+      "result": "passed",
+      "sha256": "af04be57afdffc089106810f51c42ba81c6a0e471d40f7514e4adfb1fa61bd16",
+      "summary": [
+        "Test Files  5 passed (5)",
+        "Tests  68 passed (68)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/payment-acceptance-final2.log",
+      "result": "passed",
+      "sha256": "94fad6bbf03feb4311994ec23a5232ae94ec471c9e08d49796d8baaf58c191bc",
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/admin-regression.log",
+      "result": "passed",
+      "sha256": "767314e14b07fa9f7a60c4b0ac689203a587e719e67e6a25dd8c4433a94fb138",
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  60 passed (60)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/catalog-after-final.log",
+      "result": "passed",
+      "sha256": "ce30f93aff5edd4617262b04bbf57c194a022574a97039837f7b6ebb8193e172",
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  4 passed | 39 skipped (43)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/orders-after.log",
+      "result": "passed",
+      "sha256": "1504f13d153e8fecc8d5bd02a892bb9f3cac143a7ddcfef1493a7df283c86f6c",
+      "summary": [
+        "Test Files  3 passed (3)",
+        "Tests  18 passed (18)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/orders-final.log",
+      "result": "passed",
+      "sha256": "42d65d490070913bea7428f4c956b0a7401809765883194722599499dc184b56",
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/role-permission-regression.log",
+      "result": "passed",
+      "sha256": "96a486ae69cbede875326fea0d9e202f55d4e823ac360e1719ee74f579decc01",
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 32 skipped (33)"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/storefront-build.log",
+      "result": "passed",
+      "sha256": "6098b31515e3606206557d38f946dd5585d877e44d0270da46ccaf2b3db717b5",
+      "summary": [
+        "Typography check passed: 450 source files, 93 shared tokens.",
+        "✓ built in 7.37s",
+        "Display localization audit passed (779 source files)",
+        "Verified storefront performance budgets: entry 378 KiB; critical CSS 375 KiB; largest lazy route CSS 27 KiB",
+        "Verified initial route resource closures: startup JS 732037 B / CSS 382985 B; home JS 995822 B / CSS 382985 B; catalog JS 954879 B / CSS 389627 B; product JS 965594 B / CSS 423742 B; services JS 792883 B / CSS 392167 B; login JS 792629 B / CSS 396884 B",
+        "✓ built in 5.10s",
+        "✓ built in 2.78s"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/admin-build.log",
+      "result": "passed",
+      "sha256": "9c8d69805e0897084fb2b99acc4f7af18d46864ef0fb942850a5993ebbb80cc5",
+      "summary": [
+        "../../../../node_modules/@tanstack/react-query/build/modern/useSuspenseQueries.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../node_modules/@tanstack/react-query/build/modern/useSuspenseQueries.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/Asset.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/Asset.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/CatchBoundary.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/CatchBoundary.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/Match.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/Match.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/link.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/link.js\" was ignored.",
+        "../../../../node_modules/@tanstack/react-query/build/modern/useBaseQuery.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../node_modules/@tanstack/react-query/build/modern/useBaseQuery.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/matchContext.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/matchContext.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/nonRouteComponentContext.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/nonRouteComponentContext.js\" was ignored.",
+        "../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/Transitioner.js (1:0): Module level directives cause errors when bundled, \"use client\" in \"../../../../packages/storefront/node_modules/@tanstack/react-router/dist/esm/Transitioner.js\" was ignored.",
+        "✓ built in 15.04s",
+        "Display localization audit passed (779 source files)",
+        "Verified next-admin production mount: /dashboard/ with same-origin /admin-api; entry 156 KiB"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/core-typecheck.log",
+      "result": "passed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "summary": []
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/lint-package-final.log",
+      "result": "passed",
+      "sha256": "9b02ef247fa3c807f868dfe1dba40dc0f4ea2092b67bbe075bc9839e16637841",
+      "summary": [
+        "Lint check passed for 24 changed source files since 0a07e2c193f6d16cf38035e3e1926c18f07a9795"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/storefront-final-typecheck.log",
+      "result": "passed",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "summary": []
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/storefront-interaction.log",
+      "result": "passed",
+      "sha256": "cf409aa99c57d7017fd1db73a31dd48ea60353cebab53c8690a5f777277e5d12",
+      "summary": [
+        "Storefront interaction standard passed"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/store-unification.log",
+      "result": "passed",
+      "sha256": "75d3119f4944dd7e03e201601c9dda256d0812c38c4aeaba40d74a9d6109d509",
+      "summary": []
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/browser-final2.log",
+      "result": "passed",
+      "sha256": "a9b8b82bf6df90393c100d05695f0a6fa7db18dc511301189c9673c9fc58feef",
+      "summary": [
+        "\"checks\": 21,",
+        "\"pageErrors\": 0,"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/browser-journey-final2.log",
+      "result": "passed",
+      "sha256": "ca5b5322d3c40d663b3b74ef3851e194f15f778b5bd24ad17806fbcb15e41f1d",
+      "summary": [
+        "{\"checks\":8,\"errors\":0}"
+      ]
+    },
+    {
+      "log": "packages/storefront/test-results/functional-repairs-20261026/final-lint-delta-passed2.log",
+      "result": "passed: 0 errors, 0 warnings",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "summary": [
+        "Delta ESLint after final test and browser-helper edits: exit 0"
+      ]
+    }
+  ],
+  "source_sha256": {
+    "packages/core/src/service/services/order-list-sorting.spec.ts": "d8ff968d6ce878e8850c44096416eb19f254d0da26f80984e93e9a156f8a10bc",
+    "packages/core/src/service/services/order.service.ts": "f6a61cef430c6c8205d5ffabdd9a814e6dc7bc472761bbb4f6c8a572303b324d",
+    "packages/next-admin/src/pages/Catalog/CatalogModule.spec.tsx": "3cfacef6b6091988a46008865606ecebe139e132ee5d0d0b019c685d12bfaea7",
+    "packages/next-admin/src/pages/Catalog/CatalogModule.tsx": "bcd74a3151f2276f9dd42d1e5cd5fdff6349d79caa183bb78df7f5e547ffcea2",
+    "packages/next-admin/src/pages/Settings/RolesModule.counts.spec.tsx": "508d15e8f08d6092aa77a1aa347c735f598809cfedf45fd4b4ce471fb0e7276f",
+    "packages/next-admin/src/pages/Settings/RolesModule.tsx": "faf5a16299e81103492b0af60077414e052504cc53489b65f659f6f8ef28f0a2",
+    "packages/storefront/e2e/catalog-sync/fixture.tsx": "cf13402fb93689d54629a1c20f362c7f8833858006d2c82d9a8a2c077960bbe3",
+    "packages/storefront/e2e/checkout-state-repair/fixture.tsx": "669a9429b29674af93ee115dc1267a9be74621822da12aab4d0dc98ca3244c0a",
+    "packages/storefront/e2e/checkout-state-repair/index.html": "ee8d174abfd2a18dbd33a9ee9d973ada81358a86a55868b85466f76df663957b",
+    "packages/storefront/e2e/checkout-state-repair/verify-journey.mjs": "aab9e60bb1a8c2d92fd2397306102e78f430a26adf090f87d5700b117913f25a",
+    "packages/storefront/e2e/checkout-state-repair/verify.mjs": "32d483477036fed24edf83d320606eb3f1dfcc16fbd5936a5cafbbde4dd2f437",
+    "packages/storefront/src/api.spec.ts": "814f7280756fc7a36a22e7816a67d722bfd0b740cfd09162d60948bce85e05c5",
+    "packages/storefront/src/api.ts": "e81a889319515ab8ca5e9a366bac7b0e70e6a2c30676d1881767cb2e5041c12c",
+    "packages/storefront/src/api/cart-checkout.ts": "92e3e01aa20d91ad3585e915942b9fc8bdaf624a38f3d1fd6f096c00b3ed225e",
+    "packages/storefront/src/checkout-page.spec.tsx": "8cc8fa357ce9ef10b959d3fe96eb0790421ee91878817a44dca04b528c4b8424",
+    "packages/storefront/src/checkout-page.tsx": "dbf407b229dd48bb7e0f2f1c0167682456dc6dba8b411fbf8f98e4b898b6e938",
+    "packages/storefront/src/customer-service-feedback-page.spec.tsx": "e8f330320784802ab2f4d4b8cadff7b616b1565eb7f91bc889f9d7584ebbf09a",
+    "packages/storefront/src/hooks/useStorefrontAppState.ts": "b72ed2da89646d8b72cf930d50c3c66c88705b5d2e20437e09c0d5a7e166b9a5",
+    "packages/storefront/src/hooks/useStorefrontCurrencySelection.spec.tsx": "9503c39c793a7ecb3b02472270b376f1ba9e2bea168b11e1466ad581abcd1f16",
+    "packages/storefront/src/pages/support-page.tsx": "02508bcb3384572528188141a26ae3990916c73b0066fc1c3c8b1b3d7fe23e0e",
+    "packages/storefront/src/payment-method-cache.spec.tsx": "8f8fc9e0da5a9f2055df112e3afa3a3fefb374e2832f0d8ab69981ed8b651b99",
+    "packages/storefront/src/payment-pages.tsx": "02afca9cd8eff58edee55f6b1fbd6e6c698097bb750218b27aad7834a870e5b6",
+    "packages/storefront/src/query-client.ts": "66945b236b7cf635e9baca50e2dd00d3f44458556b35df8055420078ea85229c",
+    "packages/storefront/src/route-pages/gpt-recharge-route-page.spec.tsx": "0e14371453d3c16c2c46f1863cbeda33a4e6a815b9dcc3d1a0134ef70b405c51",
+    "packages/storefront/src/route-pages/gpt-recharge-route-page.tsx": "694f516c38e981db69091b46fa7550301479997c8455b27bb1e5882eab8536f6"
+  },
+  "paired_evidence": {
+    "email": "same object control passes, same-ID replacement loses new/saved email on baseline; fixed controls and replacements pass",
+    "payment": "currency replacement fails on baseline; late request reads 1 instead of expected 2. Candidate 5 tests pass with actual QueryClient/ShopApi/SSE/retry UI",
+    "recent_orders": {
+      "graphql_coerced_sort_keys": [
+        "id",
+        "orderPlacedAt"
+      ],
+      "baseline_desc": [
+        90,
+        11,
+        10
+      ],
+      "candidate_desc": [
+        11,
+        10,
+        90
+      ],
+      "baseline_asc": [
+        10,
+        11,
+        90
+      ],
+      "candidate_asc": [
+        90,
+        10,
+        11
+      ],
+      "database": "in-memory SQL.js with actual OrderService/ListQueryBuilder"
+    },
+    "catalog": "URL page99 remains on baseline, candidate corrects to page2 while retaining all filters",
+    "roles": "baseline query omits manageableAdministrators; candidate reads only existing manageable scope and distinguishes true empty from unread/failure",
+    "recharge": "baseline synthetic-draft becomes empty after language change; candidate preserves draft",
+    "support": "baseline renders same rating error twice; candidate renders once"
+  },
+  "original_main_wip": {
+    "original_modified_files": 30,
+    "changed_files": []
+  },
+  "unverified": [
+    "actual production issues newly reproduced",
+    "real admin browser detail/paging matrix",
+    "full AppState and backend reopen chain",
+    "payment sandbox settlement/refund",
+    "real mail/delivery",
+    "three live store domains",
+    "post-deployment old-tab/CDN recovery",
+    "real-device performance trace"
+  ],
+  "code_commits": [
+    {
+      "sha": "7d53cd947df44933f0f1c8667aedeee97a4b3a0f",
+      "message": "fix(storefront): Preserve checkout drafts and scope payment method reads",
+      "files": [
+        "packages/storefront/e2e/catalog-sync/fixture.tsx",
+        "packages/storefront/e2e/checkout-state-repair/fixture.tsx",
+        "packages/storefront/e2e/checkout-state-repair/index.html",
+        "packages/storefront/e2e/checkout-state-repair/verify-journey.mjs",
+        "packages/storefront/e2e/checkout-state-repair/verify.mjs",
+        "packages/storefront/src/api.spec.ts",
+        "packages/storefront/src/api.ts",
+        "packages/storefront/src/api/cart-checkout.ts",
+        "packages/storefront/src/checkout-page.spec.tsx",
+        "packages/storefront/src/checkout-page.tsx",
+        "packages/storefront/src/customer-service-feedback-page.spec.tsx",
+        "packages/storefront/src/hooks/useStorefrontAppState.ts",
+        "packages/storefront/src/hooks/useStorefrontCurrencySelection.spec.tsx",
+        "packages/storefront/src/pages/support-page.tsx",
+        "packages/storefront/src/payment-method-cache.spec.tsx",
+        "packages/storefront/src/payment-pages.tsx",
+        "packages/storefront/src/query-client.ts",
+        "packages/storefront/src/route-pages/gpt-recharge-route-page.spec.tsx",
+        "packages/storefront/src/route-pages/gpt-recharge-route-page.tsx"
+      ]
+    },
+    {
+      "sha": "9317142248c0b4e23fef6e2214f95d470ad359ba",
+      "message": "fix(core): Order recent orders after GraphQL sort coercion",
+      "files": [
+        "packages/core/src/service/services/order-list-sorting.spec.ts",
+        "packages/core/src/service/services/order.service.ts"
+      ]
+    },
+    {
+      "sha": "3d11ab74eca7afeb0923687602524ccb993ce673",
+      "message": "fix(admin): Correct catalog pages and scoped role member counts",
+      "files": [
+        "packages/next-admin/src/pages/Catalog/CatalogModule.spec.tsx",
+        "packages/next-admin/src/pages/Catalog/CatalogModule.tsx",
+        "packages/next-admin/src/pages/Settings/RolesModule.counts.spec.tsx",
+        "packages/next-admin/src/pages/Settings/RolesModule.tsx"
+      ]
+    }
+  ],
+  "code_head": "3d11ab74eca7afeb0923687602524ccb993ce673"
+}

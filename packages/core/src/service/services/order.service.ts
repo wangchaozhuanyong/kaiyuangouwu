@@ -258,6 +258,12 @@ export class OrderService {
         options?: OrderListOptions,
         relations?: RelationPaths<Order>,
     ): Promise<PaginatedList<Order>> {
+        // GraphQL coerces input fields into schema order (id precedes orderPlacedAt).
+        // For the explicit placement-time/ID pair, establish precedence after coercion.
+        const sort = options?.sort;
+        if (sort?.orderPlacedAt && sort.id && Object.keys(sort).length === 2) {
+            options = { ...options, sort: { orderPlacedAt: sort.orderPlacedAt, id: sort.id } };
+        }
         const query = this.listQueryBuilder.build(Order, options, {
             ctx,
             relations: relations ?? [

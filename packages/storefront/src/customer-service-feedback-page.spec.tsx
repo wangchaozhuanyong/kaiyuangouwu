@@ -65,9 +65,11 @@ describe('customer service feedback page', () => {
     afterEach(() => {
         act(() => root.unmount());
         host.remove();
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
     });
 
-    async function render(api: ShopApi) {
+    async function render(api: ShopApi, orderCode?: string, onNotify?: (message: string) => void) {
         await act(async () => {
             root.render(
                 <SupportContent
@@ -75,6 +77,8 @@ describe('customer service feedback page', () => {
                     customer={{ id: 'customer-1' } as ActiveCustomer}
                     content={content}
                     language="zh"
+                    orderCode={orderCode}
+                    onNotify={onNotify}
                 />,
             );
             await Promise.resolve();
@@ -146,5 +150,82 @@ describe('customer service feedback page', () => {
         });
         expect(submit).not.toHaveBeenCalled();
         expect(host.querySelector('[role="alert"]')?.textContent).toContain('请先选择服务评分');
+        expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1);
+        await act(async () => {
+            host.querySelector<HTMLButtonElement>('[aria-label="5 star"]')?.click();
+            await Promise.resolve();
+        });
+        expect(host.querySelectorAll('[role="alert"]')).toHaveLength(0);
+    });
+
+    it('ends loading on storage failure and recovers by reading without submitting', async () => {
+        const storage = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new Error('storage denied');
+        });
+        const read = vi.fn().mockResolvedValue(null);
+        const submit = vi.fn();
+        await render({
+            contentReviewsApi: { currentCustomerServiceReview: read, submitCustomerServiceReview: submit },
+        } as unknown as ShopApi);
+        expect(host.querySelector('[data-loading]')?.getAttribute('data-loading')).toBe('false');
+        expect(host.textContent).toContain('无法取得访客标识');
+        expect(host.querySelector<HTMLButtonElement>('.support-evaluation-submit-btn')?.disabled).toBe(true);
+        storage.mockRestore();
+        await act(async () => {
+            [...host.querySelectorAll('button')].find(button => button.textContent === '重新检查')?.click();
+            await Promise.resolve();
+        });
+        expect(read).toHaveBeenCalledOnce();
+        expect(submit).not.toHaveBeenCalled();
+        expect(host.querySelector<HTMLButtonElement>('.support-evaluation-submit-btn')?.disabled).toBe(false);
+    });
+
+    it('reports copying only after the clipboard confirms it', async () => {
+        let finish!: () => void;
+        const writeText = vi.fn(
+            () =>
+                new Promise<void>(resolve => {
+                    finish = resolve;
+                }),
+        );
+        vi.stubGlobal('navigator', { clipboard: { writeText } });
+        const notify = vi.fn();
+        await render(
+            {
+                contentReviewsApi: { currentCustomerServiceReview: vi.fn().mockResolvedValue(null) },
+            } as unknown as ShopApi,
+            'TEST-ORDER',
+            notify,
+        );
+        await act(async () => {
+            host.querySelector<HTMLButtonElement>('.support-order-banner-copy')?.click();
+            await Promise.resolve();
+        });
+        expect(notify).not.toHaveBeenCalled();
+        await act(async () => {
+            finish();
+            await Promise.resolve();
+        });
+        expect(notify).toHaveBeenCalledExactlyOnceWith('订单号已复制：TEST-ORDER');
+    });
+
+    it.each([true, false])('reports clipboard failure (API available: %s)', async available => {
+        vi.stubGlobal(
+            'navigator',
+            available ? { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } } : {},
+        );
+        const notify = vi.fn();
+        await render(
+            {
+                contentReviewsApi: { currentCustomerServiceReview: vi.fn().mockResolvedValue(null) },
+            } as unknown as ShopApi,
+            'TEST-ORDER',
+            notify,
+        );
+        await act(async () => {
+            host.querySelector<HTMLButtonElement>('.support-order-banner-copy')?.click();
+            await Promise.resolve();
+        });
+        expect(notify).toHaveBeenCalledExactlyOnceWith('复制失败，请选中订单号手动复制');
     });
 });

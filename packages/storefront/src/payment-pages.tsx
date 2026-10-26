@@ -299,13 +299,11 @@ export function PaymentPage({
             storefrontQueryKeys.market(market),
             languageCodeFor(language),
             order?.id ?? '',
+            paymentCurrencyCode,
+            customer?.id ?? '',
         ),
-        queryFn: ({ signal }) => api.eligiblePaymentMethods(signal, order?.id),
+        queryFn: ({ signal }) => api.eligiblePaymentMethods(signal),
         enabled: isPending,
-        initialData:
-            order && typeof api.cachedEligiblePaymentMethods === 'function'
-                ? api.cachedEligiblePaymentMethods(order.id)
-                : undefined,
         staleTime: ROUTE_QUERY_STALE_TIME,
         gcTime: PUBLIC_QUERY_GC_TIME,
     });
@@ -1056,6 +1054,13 @@ export function PaymentPage({
                     )}
                     <section className="payment-method-section">
                         <h2>{isZh ? '支付方式' : 'Payment method'}</h2>
+                        {!loading && methodLoadError && methods.length > 0 && (
+                            <InlineError
+                                message={methodLoadError}
+                                action={isZh ? '重试' : 'Retry'}
+                                onAction={() => void methodsQuery.refetch({ cancelRefetch: false })}
+                            />
+                        )}
                         {loading ? (
                             <PageSkeleton label={isZh ? '正在加载支付方式' : 'Loading payment methods'} />
                         ) : methodLoadError && !methods.length ? (

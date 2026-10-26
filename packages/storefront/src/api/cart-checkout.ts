@@ -35,7 +35,7 @@ import {
     customerCouponFields,
     orderFields,
 } from './fragments';
-import { ShopApiError, ShopApiGraphQlError, type ErrorResult } from './helpers';
+import { SHOP_API_QUERY_TIMEOUT_MS, ShopApiError, ShopApiGraphQlError, type ErrorResult } from './helpers';
 
 type CommandReceipt = Omit<CartCommandResult, 'cart' | 'session'> & {
     cart: Pick<StorefrontCart, 'id' | 'revision'>;
@@ -45,10 +45,6 @@ type CommandReceipt = Omit<CartCommandResult, 'cart' | 'session'> & {
 export class CartCheckoutApi extends BaseDomainApi {
     controller?: CartController;
     private readonly acknowledgedCommands = new Map<string, CommandReceipt>();
-    private readonly paymentMethodRequests = new Map<
-        string,
-        { expiresAt: number; promise: Promise<PaymentMethod[]>; data?: PaymentMethod[] }
-    >();
 
     connect(controller: CartController): void {
         this.controller = controller;
@@ -956,15 +952,15 @@ export class CartCheckoutApi extends BaseDomainApi {
             `,
             { currencyCode },
             signal,
+            SHOP_API_QUERY_TIMEOUT_MS,
+            true,
         );
         signal?.throwIfAborted();
         return result.setStorefrontPaymentCurrency;
     }
 
-    async eligiblePaymentMethods(signal?: AbortSignal, orderId?: string): Promise<PaymentMethod[]> {
-        const cached = orderId ? this.paymentMethodRequests.get(orderId) : undefined;
-        if (cached && cached.expiresAt > Date.now()) return cached.promise;
-        const promise = this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
+    async eligiblePaymentMethods(signal?: AbortSignal): Promise<PaymentMethod[]> {
+        const result = await this.request<{ eligiblePaymentMethods: PaymentMethod[] }>(
             `
                 query EligibleStorefrontPaymentMethods {
                     eligiblePaymentMethods {
@@ -980,34 +976,10 @@ export class CartCheckoutApi extends BaseDomainApi {
             `,
             undefined,
             signal,
-        ).then(result => {
-            const methods = result.eligiblePaymentMethods.filter(
-                method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
-            );
-            if (orderId) {
-                const current = this.paymentMethodRequests.get(orderId);
-                if (current?.promise === promise) current.data = methods;
-            }
-            return methods;
-        });
-        if (orderId) {
-            const entry = { expiresAt: Date.now() + 30_000, promise };
-            this.paymentMethodRequests.set(orderId, entry);
-            void promise.catch(() => {
-                if (this.paymentMethodRequests.get(orderId) === entry)
-                    this.paymentMethodRequests.delete(orderId);
-            });
-        }
-        return promise;
-    }
-
-    prefetchEligiblePaymentMethods(orderId: string): Promise<PaymentMethod[]> {
-        return this.eligiblePaymentMethods(undefined, orderId);
-    }
-
-    cachedEligiblePaymentMethods(orderId: string): PaymentMethod[] | undefined {
-        const cached = this.paymentMethodRequests.get(orderId);
-        return cached && cached.expiresAt > Date.now() ? cached.data : undefined;
+        );
+        return result.eligiblePaymentMethods.filter(
+            method => method.code !== 'referral-balance' && method.code !== 'referral-balance-payment',
+        );
     }
 
     async createUsdtCheckoutQuote(signal?: AbortSignal): Promise<StorefrontUsdtCheckoutQuote> {

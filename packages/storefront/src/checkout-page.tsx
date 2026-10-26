@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import {
     ChevronDown,
@@ -14,11 +15,13 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 
 import { provinceDisplayName } from './address-region-options';
 import { ShopApi, ShopApiError } from './api';
+import { CartCommandAcknowledgedReadError } from './cart/cart-repository';
 import { checkoutAddress, isCompleteShippingAddress, shippingAddressInput } from './checkout-address';
 import { QuantityControl } from './components/common/quantity-control';
-import { compactUiCopy } from './i18n';
+import { compactUiCopy, languageCodeFor } from './i18n';
 import { formatDisplayMoney } from './money-display';
 import { variantCanIncreaseQuantity } from './product-availability';
+import { storefrontQueryKeys } from './query-client';
 import { preloadStorefrontRouteComponent } from './route-component-preload';
 import { appliedCouponLabel } from './storefront-coupons';
 import { storefrontErrorMessage } from './storefront-errors';
@@ -114,6 +117,7 @@ export function CheckoutPage({
     onApplyCoupon: (customerCouponId: string) => Promise<string | null>;
     onRemoveCoupon: (customerCouponId: string) => Promise<string | null>;
 }) {
+    const queryClient = useQueryClient();
     const order =
         confirmedOrder && cartPending && cart
             ? {
@@ -184,6 +188,7 @@ export function CheckoutPage({
     const [noteDraft, setNoteDraft] = useState('');
     const [noteSaving, setNoteSaving] = useState(false);
     const [noteError, setNoteError] = useState<string | null>(null);
+    const [noteReceipt, setNoteReceipt] = useState<{ scope: string; note: string } | null>(null);
     const formRef = useRef<HTMLFormElement>(null);
     const hasCheckoutContent = Boolean(
         order && cart && (cartPending || (order.totalQuantity > 0 && order.lines.length > 0)),
@@ -342,14 +347,42 @@ export function CheckoutPage({
         selectedAddressId,
         isZh,
     ]);
-    const [deliveryEmails, setDeliveryEmails] = useState<CustomerDeliveryEmail[]>([]);
-    const [selectedDeliveryEmailId, setSelectedDeliveryEmailId] = useState('');
+    const deliveryScope = JSON.stringify([market.code, customer?.id ?? '', order?.id ?? '']);
+    const initialDeliveryDraft = () => ({
+        scope: deliveryScope,
+        selectedId: '',
+        email:
+            order?.customFields.deliveryEmail ??
+            customer?.emailAddress ??
+            order?.customer?.emailAddress ??
+            '',
+        confirmation: '',
+        save: true,
+        isDefault: false,
+        edited: false,
+        initialized: false,
+    });
+    const [deliveryDraft, setDeliveryDraft] = useState(initialDeliveryDraft);
+    if (deliveryDraft.scope !== deliveryScope) setDeliveryDraft(initialDeliveryDraft());
+    const currentDeliveryDraft =
+        deliveryDraft.scope === deliveryScope ? deliveryDraft : initialDeliveryDraft();
+    const [deliveryEmailBook, setDeliveryEmailBook] = useState({
+        scope: deliveryScope,
+        items: [] as CustomerDeliveryEmail[],
+    });
+    const deliveryEmails = deliveryEmailBook.scope === deliveryScope ? deliveryEmailBook.items : [];
+    const selectedDeliveryEmailId = currentDeliveryDraft.selectedId;
+    const editDeliveryDraft = (update: Partial<typeof deliveryDraft>) =>
+        setDeliveryDraft(previous => ({
+            ...(previous.scope === deliveryScope ? previous : initialDeliveryDraft()),
+            ...update,
+            edited: true,
+        }));
     const [deliveryEmailPickerOpen, setDeliveryEmailPickerOpen] = useState(false);
 
     useEffect(() => {
-        if (!customer || !hasDigitalProducts) {
-            setDeliveryEmails([]);
-            setSelectedDeliveryEmailId('');
+        if (!customer?.id || !hasDigitalProducts) {
+            setDeliveryEmailBook({ scope: deliveryScope, items: [] });
             setDeliveryEmailPickerOpen(false);
             return;
         }
@@ -357,19 +390,25 @@ export function CheckoutPage({
         void api
             .myDeliveryEmails(controller.signal)
             .then(items => {
-                setDeliveryEmails(items);
+                if (controller.signal.aborted) return;
+                setDeliveryEmailBook({ scope: deliveryScope, items });
                 const matching = items.find(item => item.emailAddress === order?.customFields.deliveryEmail);
-                setSelectedDeliveryEmailId(
-                    order?.customFields.deliveryEmail
-                        ? (matching?.id ?? '')
-                        : (items.find(item => item.isDefault)?.id ?? ''),
+                setDeliveryDraft(previous =>
+                    previous.scope !== deliveryScope || previous.edited || previous.initialized
+                        ? previous
+                        : {
+                              ...previous,
+                              initialized: true,
+                              selectedId: order?.customFields.deliveryEmail
+                                  ? (matching?.id ?? '')
+                                  : (items.find(item => item.isDefault)?.id ?? ''),
+                          },
                 );
             })
-            .catch(() => {
-                if (!controller.signal.aborted) setDeliveryEmails([]);
-            });
+            // A failed background read must not discard a usable contact or draft.
+            .catch(() => undefined);
         return () => controller.abort();
-    }, [api, customer, hasDigitalProducts, order?.customFields.deliveryEmail]);
+    }, [api, customer?.id, hasDigitalProducts, deliveryScope]);
 
     const updateDirectQuantity = async (productVariantId: string, quantity: number) => {
         if (!cart || quantity < 1) return;
@@ -395,11 +434,18 @@ export function CheckoutPage({
     const saveOrderNote = async (event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         const customerNote = noteDraft.trim();
+        if (noteSaving) return;
+        let acknowledged = noteReceipt?.scope === deliveryScope && noteReceipt.note === customerNote;
         setNoteSaving(true);
         setNoteError(null);
         try {
-            await api.setOrderNote(customerNote);
+            if (!acknowledged) {
+                await api.setOrderNote(customerNote);
+                acknowledged = true;
+                setNoteReceipt({ scope: deliveryScope, note: customerNote });
+            }
             onCartChange(await api.cart());
+            setNoteReceipt(null);
             setNoteOpen(false);
             onNotify(
                 customerNote
@@ -411,12 +457,20 @@ export function CheckoutPage({
                       : 'Order note cleared',
             );
         } catch (requestError) {
+            if (requestError instanceof CartCommandAcknowledgedReadError) {
+                acknowledged = true;
+                setNoteReceipt({ scope: deliveryScope, note: customerNote });
+            }
             setNoteError(
-                requestError instanceof Error
-                    ? storefrontErrorMessage(requestError, language)
-                    : isZh
-                      ? '订单备注保存失败'
-                      : 'Could not save the order note',
+                acknowledged
+                    ? isZh
+                        ? '订单备注已保存，但读取更新失败。请重试读取，无需重复保存。'
+                        : 'Order note saved, but refresh failed. Retry reading without saving again.'
+                    : requestError instanceof Error
+                      ? storefrontErrorMessage(requestError, language)
+                      : isZh
+                        ? '订单备注保存失败'
+                        : 'Could not save the order note',
             );
         } finally {
             setNoteSaving(false);
@@ -593,9 +647,22 @@ export function CheckoutPage({
                 signal.throwIfAborted();
                 if (!isCurrent()) return;
                 onSessionChange(session);
-                if (typeof api.prefetchEligiblePaymentMethods === 'function') {
-                    void api.prefetchEligiblePaymentMethods(session.order.id).catch(() => undefined);
-                }
+                const paymentMethodsKey = storefrontQueryKeys.paymentMethods(
+                    storefrontQueryKeys.market(market),
+                    languageCodeFor(language),
+                    session.order.id,
+                    session.order.customFields.paymentCurrencyCode ||
+                        paymentCurrencyCode ||
+                        session.order.currencyCode,
+                    customer.id,
+                );
+                await queryClient.cancelQueries({ queryKey: paymentMethodsKey, exact: true });
+                if (!isCurrent()) return;
+                void queryClient.prefetchQuery({
+                    queryKey: paymentMethodsKey,
+                    queryFn: ({ signal: querySignal }) => api.eligiblePaymentMethods(querySignal),
+                    staleTime: 0,
+                });
                 onNotify(
                     isZh
                         ? '订单已准备，请继续选择支付方式'
@@ -788,7 +855,7 @@ export function CheckoutPage({
                                     open={deliveryEmailPickerOpen}
                                     language={language}
                                     onOpenChange={setDeliveryEmailPickerOpen}
-                                    onSelect={setSelectedDeliveryEmailId}
+                                    onSelect={selectedId => editDeliveryDraft({ selectedId })}
                                 />
                             )}
                             {!selectedDeliveryEmailId && (
@@ -800,11 +867,9 @@ export function CheckoutPage({
                                             type="email"
                                             inputMode="email"
                                             autoComplete="email"
-                                            defaultValue={
-                                                order.customFields.deliveryEmail ??
-                                                customer?.emailAddress ??
-                                                order.customer?.emailAddress ??
-                                                ''
+                                            value={currentDeliveryDraft.email}
+                                            onChange={event =>
+                                                editDeliveryDraft({ email: event.currentTarget.value })
                                             }
                                             required
                                         />
@@ -816,6 +881,10 @@ export function CheckoutPage({
                                             type="email"
                                             inputMode="email"
                                             autoComplete="email"
+                                            value={currentDeliveryDraft.confirmation}
+                                            onChange={event =>
+                                                editDeliveryDraft({ confirmation: event.currentTarget.value })
+                                            }
                                             required
                                         />
                                     </label>
@@ -829,12 +898,26 @@ export function CheckoutPage({
                                                 <input
                                                     name="saveDeliveryEmail"
                                                     type="checkbox"
-                                                    defaultChecked
+                                                    checked={currentDeliveryDraft.save}
+                                                    onChange={event =>
+                                                        editDeliveryDraft({
+                                                            save: event.currentTarget.checked,
+                                                        })
+                                                    }
                                                 />{' '}
                                                 {isZh ? '保存为交付邮箱' : 'Save to delivery emails'}
                                             </label>
                                             <label>
-                                                <input name="defaultDeliveryEmail" type="checkbox" />{' '}
+                                                <input
+                                                    name="defaultDeliveryEmail"
+                                                    type="checkbox"
+                                                    checked={currentDeliveryDraft.isDefault}
+                                                    onChange={event =>
+                                                        editDeliveryDraft({
+                                                            isDefault: event.currentTarget.checked,
+                                                        })
+                                                    }
+                                                />{' '}
                                                 {isZh ? '设为默认邮箱' : 'Set as default'}
                                             </label>
                                         </div>
@@ -975,7 +1058,11 @@ export function CheckoutPage({
                         <button
                             type="button"
                             onClick={() => {
-                                setNoteDraft(order.customFields.customerNote ?? '');
+                                setNoteDraft(
+                                    noteReceipt?.scope === deliveryScope
+                                        ? noteReceipt.note
+                                        : (order.customFields.customerNote ?? ''),
+                                );
                                 setNoteError(null);
                                 setNoteOpen(true);
                             }}
@@ -1258,7 +1345,18 @@ export function CheckoutPage({
                                 type="submit"
                                 disabled={noteSaving}
                             >
-                                {noteSaving ? (isZh ? '保存中' : 'Saving') : isZh ? '保存备注' : 'Save note'}
+                                {noteSaving
+                                    ? isZh
+                                        ? '处理中'
+                                        : 'Processing'
+                                    : noteReceipt?.scope === deliveryScope &&
+                                        noteReceipt.note === noteDraft.trim()
+                                      ? isZh
+                                          ? '重试读取'
+                                          : 'Retry refresh'
+                                      : isZh
+                                        ? '保存备注'
+                                        : 'Save note'}
                             </button>
                         </div>
                     </form>

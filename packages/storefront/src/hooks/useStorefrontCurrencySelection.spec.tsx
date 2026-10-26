@@ -3,6 +3,7 @@ import { act, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ShopApi } from '../api';
 import { CartController } from '../cart/cart-controller';
 import { Order, StorefrontCart } from '../types';
 
@@ -102,6 +103,50 @@ describe('shared storefront currency synchronization', () => {
         api.cart.mockResolvedValueOnce(cart('MYR'));
         await choose('MYR');
         expect(api.setPaymentCurrencyForOrder).toHaveBeenCalledTimes(1);
+    });
+
+    it('releases busy after a real mutation timeout and reconciles the saved result before retrying', async () => {
+        vi.useFakeTimers();
+        let server = cart('CNY');
+        let writes = 0;
+        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+            if (typeof init?.body !== 'string') throw new Error('Expected a JSON request');
+            const request = JSON.parse(init.body);
+            if (request.query.includes('SetStorefrontPaymentCurrency')) {
+                writes++;
+                server = cart('CNY', 'USDT');
+                return await new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('timeout', 'AbortError')),
+                    );
+                });
+            }
+            return new Response(JSON.stringify({ data: { storefrontCart: server } }));
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        options.api = new ShopApi({
+            code: 'fixture',
+            currencyCode: 'CNY',
+            defaultLanguageCode: 'zh_Hans',
+        } as never);
+        render();
+        try {
+            const rejection = expect(choose('USDT')).rejects.toMatchObject({
+                name: 'ShopApiTimeoutError',
+                resultUnknown: true,
+            });
+            await vi.dynamicImportSettled();
+            await vi.advanceTimersByTimeAsync(20_000);
+            await rejection;
+            expect(options.setCartLoading).toHaveBeenLastCalledWith(false);
+            expect(options.commitPreference).not.toHaveBeenCalled();
+            await choose('USDT');
+            expect(writes).toBe(1);
+            expect(options.commitPreference).toHaveBeenCalledWith('USDT');
+        } finally {
+            vi.useRealTimers();
+            vi.unstubAllGlobals();
+        }
     });
 
     it('keeps USDT payment separate from the backing fiat order', async () => {

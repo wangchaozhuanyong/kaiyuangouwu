@@ -28,7 +28,7 @@ export function GptRechargeRoutePage() {
     );
     return (
         <GptRechargePage
-            key={`${runtime.market.code}:${runtime.language}`}
+            key={runtime.market.code}
             marketKey={`${runtime.market.code}:${runtime.market.currencyCode}`}
             client={client}
             language={runtime.language}
