@@ -444,13 +444,26 @@ export function CatalogModule() {
         setNotification({ type, message });
     };
 
-    const totalItems = isAssignmentFilter
-        ? (assignmentQuery.data?.catalogProductChannelAssignments.totalItems ?? 0)
-        : (data?.products?.totalItems ?? 0);
+    const resolvedTotalItems = isAssignmentFilter
+        ? assignmentQuery.data?.catalogProductChannelAssignments.totalItems
+        : data?.products?.totalItems;
+    const totalItems = resolvedTotalItems ?? 0;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const hasConfirmedPageTotal =
+        Boolean(activeChannel) &&
+        !activeChannelQuery.loading &&
+        !loading &&
+        !error &&
+        deferredSearchTerm === searchTerm &&
+        typeof resolvedTotalItems === 'number' &&
+        Number.isFinite(resolvedTotalItems);
+    const correctingPage = hasConfirmedPageTotal && page >= totalPages;
+    useEffect(() => {
+        if (correctingPage) setPage(totalPages - 1);
+    }, [correctingPage, setPage, totalPages]);
     const productList = useMemo(
-        () => (isAssignmentFilter && (loading || !assignmentIds.length) ? [] : (data?.products?.items ?? [])),
-        [assignmentIds, data?.products?.items, isAssignmentFilter, loading],
+        () => (isAssignmentFilter && !assignmentIds.length ? [] : (data?.products?.items ?? [])),
+        [assignmentIds, data?.products?.items, isAssignmentFilter],
     );
     const displayProducts = useMemo(() => {
         if (!isAssignmentFilter) return productList;
@@ -899,7 +912,7 @@ export function CatalogModule() {
                     {/* Table Data / Loading / Empty State */}
                     <div className="overflow-x-auto flex-1 relative">
                         {/* 加载态：骨架屏 */}
-                        {loading && (isAssignmentFilter || !data) && (
+                        {loading && !data && (
                             <div className="p-8 space-y-4">
                                 {[1, 2, 3, 4, 5].map(i => (
                                     <div
@@ -916,7 +929,7 @@ export function CatalogModule() {
                         )}
 
                         {/* 空状态：真实无数据 */}
-                        {!loading && !error && displayProducts.length === 0 && (
+                        {!loading && !error && !correctingPage && displayProducts.length === 0 && (
                             <div className="flex flex-col items-center justify-center px-6 py-8 text-center space-y-3">
                                 <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
                                     <Package className="w-6 h-6" />

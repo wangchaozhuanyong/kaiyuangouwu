@@ -5,7 +5,7 @@ import { ApolloProvider } from '@apollo/client/react';
 import { buildSchema, GraphQLError, print, validate } from 'graphql';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { digitalProductAdminSchema } from '../../../../commerce-fulfillment-plugin/src/digital-product.schema';
@@ -50,6 +50,10 @@ async function renderCatalog({
     productTotal = 1,
     assignmentTotal = 1,
     requests,
+    respectPage = false,
+    onProductRead,
+    onAssignmentRead,
+    onNavigate,
 }: {
     empty?: boolean;
     initialEntry?: string;
@@ -73,7 +77,11 @@ async function renderCatalog({
     onClient?: (client: ApolloClient, rerender: () => Promise<void>) => void;
     listed?: boolean;
     productEnabled?: boolean;
-    productTotal?: number;
+    respectPage?: boolean;
+    onProductRead?: (options: { skip: number }, respond: () => void) => void;
+    onAssignmentRead?: (respond: () => void) => void;
+    productTotal?: number | ((options: any) => number);
+    onNavigate?: (navigate: NavigateFunction) => void;
     assignmentTotal?: number;
     requests?: Array<{ name: string; variables: Record<string, unknown> }>;
 } = {}) {
@@ -145,61 +153,83 @@ async function renderCatalog({
                         return;
                     }
                     if (operation.operationName === 'GetProducts') {
-                        if (empty) {
-                            observer.next({ data: { products: { totalItems: 0, items: [] } } });
-                            observer.complete();
-                            return;
-                        }
-                        observer.next({
-                            data: {
-                                products: {
-                                    totalItems: productTotal,
-                                    items: [
-                                        {
-                                            id: 'product-1',
-                                            createdAt: '2026-09-07T00:00:00.000Z',
-                                            updatedAt: '2026-09-07T00:00:00.000Z',
-                                            enabled: productEnabled,
-                                            name: '白利群2',
-                                            slug: 'white-liqun-2',
-                                            description: '',
-                                            customFields: {
-                                                fulfillmentType: digital ? 'digital' : 'physical',
-                                                pricingMode: 'FIXED',
-                                                refundPolicy: null,
-                                                manualDeliverySlaMinutes: null,
-                                            },
-                                            featuredAsset: null,
-                                            facetValues: [],
-                                            variants: Array.from({ length: variantCount }, (_, index) => ({
-                                                id: `variant-${index + 1}`,
+                        const respondProducts = () => {
+                            const currentProductTotal =
+                                typeof productTotal === 'function'
+                                    ? productTotal(operation.variables.options)
+                                    : productTotal;
+                            if (
+                                empty ||
+                                (respectPage && operation.variables.options.skip >= currentProductTotal)
+                            ) {
+                                observer.next({
+                                    data: {
+                                        products: { totalItems: empty ? 0 : currentProductTotal, items: [] },
+                                    },
+                                });
+                                observer.complete();
+                                return;
+                            }
+                            observer.next({
+                                data: {
+                                    products: {
+                                        totalItems: currentProductTotal,
+                                        items: [
+                                            {
+                                                id: 'product-1',
+                                                createdAt: '2026-09-07T00:00:00.000Z',
+                                                updatedAt: '2026-09-07T00:00:00.000Z',
+                                                enabled: productEnabled,
                                                 name: '白利群2',
-                                                sku: 'WHITE-LIQUN-2',
-                                                price: 19000,
-                                                currencyCode: 'MYR',
-                                                stockLevel:
-                                                    stockAllocated >= 105 ? 'OUT_OF_STOCK' : 'IN_STOCK',
-                                                stockOnHand: stockUnavailable ? null : 105,
-                                                stockAllocated,
-                                                enabled: true,
-                                                trackInventory: 'TRUE',
-                                                autoCardAvailableStock: autoCardStock,
+                                                slug: 'white-liqun-2',
+                                                description: '',
                                                 customFields: {
                                                     fulfillmentType: digital ? 'digital' : 'physical',
                                                     pricingMode: 'FIXED',
-                                                    digitalDeliveryMode: deliveryMode,
-                                                    digitalStockPolicy: null,
+                                                    refundPolicy: null,
+                                                    manualDeliverySlaMinutes: null,
                                                 },
-                                            })),
-                                            collections: [
-                                                { ...tobacco, parent: rootCollection },
-                                                { ...cigarettes, parent: tobacco },
-                                            ],
-                                        },
-                                    ],
+                                                featuredAsset: null,
+                                                facetValues: [],
+                                                variants: Array.from(
+                                                    { length: variantCount },
+                                                    (_, index) => ({
+                                                        id: `variant-${index + 1}`,
+                                                        name: '白利群2',
+                                                        sku: 'WHITE-LIQUN-2',
+                                                        price: 19000,
+                                                        currencyCode: 'MYR',
+                                                        stockLevel:
+                                                            stockAllocated >= 105
+                                                                ? 'OUT_OF_STOCK'
+                                                                : 'IN_STOCK',
+                                                        stockOnHand: stockUnavailable ? null : 105,
+                                                        stockAllocated,
+                                                        enabled: true,
+                                                        trackInventory: 'TRUE',
+                                                        autoCardAvailableStock: autoCardStock,
+                                                        customFields: {
+                                                            fulfillmentType: digital ? 'digital' : 'physical',
+                                                            pricingMode: 'FIXED',
+                                                            digitalDeliveryMode: deliveryMode,
+                                                            digitalStockPolicy: null,
+                                                        },
+                                                    }),
+                                                ),
+                                                collections: [
+                                                    { ...tobacco, parent: rootCollection },
+                                                    { ...cigarettes, parent: tobacco },
+                                                ],
+                                            },
+                                        ],
+                                    },
                                 },
-                            },
-                        });
+                            });
+                            observer.complete();
+                        };
+                        if (onProductRead) onProductRead(operation.variables.options, respondProducts);
+                        else respondProducts();
+                        return;
                     } else if (operation.operationName === 'GetCollections') {
                         observer.next({
                             data: {
@@ -340,37 +370,48 @@ async function renderCatalog({
                             },
                         });
                     } else if (operation.operationName === 'GetCatalogChannelAssignments') {
-                        const channel = {
-                            id: 'channel-1',
-                            code: currentChannelCode,
-                            displayName: '本店',
-                            isDefault: false,
-                        };
-                        observer.next({
-                            data: {
-                                catalogProductChannelAssignments: {
-                                    totalItems: assignmentTotal,
-                                    channels: [channel],
-                                    scopeChannel: channel,
-                                    summary: {
+                        const respondAssignments = () => {
+                            const channel = {
+                                id: 'channel-1',
+                                code: currentChannelCode,
+                                displayName: '本店',
+                                isDefault: false,
+                            };
+                            observer.next({
+                                data: {
+                                    catalogProductChannelAssignments: {
                                         totalItems: assignmentTotal,
-                                        unassignedItems: 0,
-                                        multiChannelItems: 0,
-                                        channelCounts: [{ channelId: 'channel-1', count: assignmentTotal }],
+                                        channels: [channel],
+                                        scopeChannel: channel,
+                                        summary: {
+                                            totalItems: assignmentTotal,
+                                            unassignedItems: 0,
+                                            multiChannelItems: 0,
+                                            channelCounts: [
+                                                { channelId: 'channel-1', count: assignmentTotal },
+                                            ],
+                                        },
+                                        items:
+                                            assignmentTotal &&
+                                            (!respectPage ||
+                                                operation.variables.options.skip < assignmentTotal)
+                                                ? [
+                                                      {
+                                                          id: 'product-1',
+                                                          name: '白利群2',
+                                                          enabled: true,
+                                                          channels: [channel],
+                                                      },
+                                                  ]
+                                                : [],
                                     },
-                                    items: assignmentTotal
-                                        ? [
-                                              {
-                                                  id: 'product-1',
-                                                  name: '白利群2',
-                                                  enabled: true,
-                                                  channels: [channel],
-                                              },
-                                          ]
-                                        : [],
                                 },
-                            },
-                        });
+                            });
+                            observer.complete();
+                        };
+                        if (onAssignmentRead) onAssignmentRead(respondAssignments);
+                        else respondAssignments();
+                        return;
                     } else {
                         observer.error(new Error(`Unexpected operation: ${operation.operationName}`));
                         return;
@@ -404,7 +445,7 @@ async function renderCatalog({
                         initialEntries={[initialEntry]}
                     >
                         <FeatureHelpProvider>
-                            <CurrentCatalogPath />
+                            <CurrentCatalogPath onNavigate={onNavigate} />
                             {managedWorkspace ? (
                                 <AdminPageWorkspace page="/catalog/list" active>
                                     <CatalogModule />
@@ -423,9 +464,11 @@ async function renderCatalog({
     return container;
 }
 
-function CurrentCatalogPath() {
+function CurrentCatalogPath({ onNavigate }: { onNavigate?: (navigate: NavigateFunction) => void }) {
     const location = useLocation();
-    return <output data-current-catalog-path={location.pathname} />;
+    const navigate = useNavigate();
+    onNavigate?.(navigate);
+    return <output data-current-catalog-path={location.pathname + location.search} />;
 }
 
 function stockCell(container: HTMLElement) {
@@ -1067,4 +1110,175 @@ describe('CatalogModule filtered empty results', () => {
             expect(container.textContent).not.toContain('当前暂无商品。');
         },
     );
+});
+
+describe('CatalogModule authoritative page bounds', () => {
+    it.each(['ALL', 'MULTI', 'UNASSIGNED'])(
+        'corrects a deep linked out-of-range page for %s, preserving filters',
+        async channel => {
+            const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+            const container = await renderCatalog({
+                initialEntry: `/?page=99&pageSize=20&search=白利群&category=tobacco&channel=${channel}&sort=name&direction=ASC`,
+                productTotal: 25,
+                assignmentTotal: 25,
+                respectPage: true,
+                requests,
+            });
+            await act(async () => {
+                await vi.waitFor(() => {
+                    const path = container.querySelector('output')?.getAttribute('data-current-catalog-path');
+                    expect(new URLSearchParams(path?.split('?')[1]).get('page')).toBe('2');
+                });
+            });
+            const params = new URLSearchParams(
+                container.querySelector('output')?.getAttribute('data-current-catalog-path')?.split('?')[1],
+            );
+            for (const [key, value] of Object.entries({
+                search: '白利群',
+                category: 'tobacco',
+                channel,
+                sort: 'name',
+                direction: 'ASC',
+            }))
+                expect(params.get(key)).toBe(value);
+            expect(container.textContent).toContain('白利群2');
+            expect(container.textContent).not.toContain('暂无匹配的商品');
+            const name = channel === 'ALL' ? 'GetProducts' : 'GetCatalogChannelAssignments';
+            expect(
+                requests
+                    .filter(
+                        request =>
+                            request.name === name &&
+                            (channel === 'ALL' || 'assignmentFilter' in request.variables),
+                    )
+                    .at(-1)?.variables,
+            ).toMatchObject({ options: { skip: 20, take: 20 } });
+        },
+    );
+
+    it('corrects a confirmed zero total to the first page', async () => {
+        const container = await renderCatalog({ initialEntry: '/?page=99&search=无结果', empty: true });
+        await act(async () => {
+            await vi.waitFor(() =>
+                expect(
+                    container.querySelector('output')?.getAttribute('data-current-catalog-path'),
+                ).not.toContain('page='),
+            );
+        });
+        expect(container.textContent).toContain('暂无匹配的商品');
+        expect(container.querySelector('output')?.getAttribute('data-current-catalog-path')).toContain(
+            'search=',
+        );
+    });
+});
+
+it('keeps assignment products visible during a same-scope delayed refresh', async () => {
+    let hold = false;
+    const pending: Array<() => void> = [];
+    let client!: ApolloClient;
+    const container = await renderCatalog({
+        initialEntry: '/?channel=MULTI',
+        onClient: value => {
+            client = value;
+        },
+        onAssignmentRead: respond => {
+            if (hold) pending.push(respond);
+            else respond();
+        },
+    });
+    expect(container.textContent).toContain('白利群2');
+    hold = true;
+    let refresh!: Promise<unknown>;
+    await act(async () => {
+        refresh = client.refetchQueries({ include: ['GetCatalogChannelAssignments'] });
+    });
+    expect(pending.length).toBeGreaterThan(0);
+    expect(container.textContent).toContain('白利群2');
+    expect(container.textContent).not.toContain('暂无匹配的商品');
+    await act(async () => {
+        pending.splice(0).forEach(resolve => resolve());
+        await refresh;
+    });
+    expect(container.textContent).toContain('白利群2');
+});
+
+it('does not clamp an unread page before its delayed total arrives', async () => {
+    let resolveOld!: () => void;
+    const requests: Array<{ name: string; variables: Record<string, unknown> }> = [];
+    const container = await renderCatalog({
+        initialEntry: '/?page=3',
+        productTotal: 25,
+        respectPage: true,
+        requests,
+        onProductRead: (options, respond) => {
+            if (options.skip === 40) resolveOld = respond;
+            else respond();
+        },
+    });
+    expect(container.querySelector('output')?.getAttribute('data-current-catalog-path')).toContain('page=3');
+    const previous = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+        button => button.textContent?.trim() === '上一页',
+    );
+    expect(previous?.disabled).toBe(true);
+    await act(async () => resolveOld());
+    await act(async () => {
+        await vi.waitFor(() =>
+            expect(container.querySelector('output')?.getAttribute('data-current-catalog-path')).toContain(
+                'page=2',
+            ),
+        );
+    });
+    expect(container.textContent).toContain('白利群2');
+});
+
+it('keeps the current URL and data when an old search response arrives late', async () => {
+    let navigate!: NavigateFunction;
+    let resolveOld!: () => void;
+    const container = await renderCatalog({
+        initialEntry: '/?page=3&search=old',
+        respectPage: true,
+        productTotal: options => (options.filter?.name?.contains === 'old' ? 0 : 25),
+        onNavigate: value => {
+            navigate = value;
+        },
+        onProductRead: (options: any, respond) => {
+            if (options.filter?.name?.contains === 'old') resolveOld = respond;
+            else respond();
+        },
+    });
+    await act(async () => {
+        void navigate('/?page=2&search=白利群');
+    });
+    expect(container.textContent).toContain('白利群2');
+    await act(async () => resolveOld());
+    expect(container.querySelector('output')?.getAttribute('data-current-catalog-path')).toContain('page=2');
+    expect(container.textContent).toContain('白利群2');
+    expect(container.textContent).not.toContain('暂无匹配的商品');
+});
+
+it('corrects the last page after the same-scope total shrinks, retaining the search', async () => {
+    let total = 25;
+    let client!: ApolloClient;
+    const container = await renderCatalog({
+        initialEntry: '/?page=2&search=白利群',
+        respectPage: true,
+        productTotal: () => total,
+        onClient: value => {
+            client = value;
+        },
+    });
+    expect(container.querySelector('output')?.getAttribute('data-current-catalog-path')).toContain('page=2');
+    total = 20;
+    await act(async () => {
+        await client.refetchQueries({ include: ['GetProducts'] });
+    });
+    await act(async () => {
+        await vi.waitFor(() =>
+            expect(
+                container.querySelector('output')?.getAttribute('data-current-catalog-path'),
+            ).not.toContain('page='),
+        );
+    });
+    expect(container.querySelector('output')?.getAttribute('data-current-catalog-path')).toContain('search=');
+    expect(container.textContent).toContain('白利群2');
 });

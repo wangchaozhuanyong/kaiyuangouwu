@@ -65,6 +65,7 @@ export function RolesModule() {
                   'activeAdministrator',
                   'myAdministratorAccess',
                   'manageableRoles',
+                  'manageableAdministrators',
                   'manageableChannels',
                   'permissionPolicyCatalog',
               ])
@@ -250,9 +251,12 @@ export function RolesModule() {
                     <RolesTable
                         roles={filteredRoles}
                         memberCount={roleId =>
-                            members.filter(member => member.user.roles.some(role => role.id === roleId))
-                                .length
+                            query.error || !Array.isArray(query.data?.manageableAdministrators)
+                                ? null
+                                : members.filter(member => member.user.roles.some(role => role.id === roleId))
+                                      .length
                         }
+                        memberCountUnavailable={query.error ? '读取失败' : '未获取'}
                         onEdit={setRoleEditor}
                     />
                 )}
@@ -598,10 +602,12 @@ function MembersTable({
 function RolesTable({
     roles,
     memberCount,
+    memberCountUnavailable,
     onEdit,
 }: {
     roles: RoleRecord[];
-    memberCount: (id: string) => number;
+    memberCount: (id: string) => number | null;
+    memberCountUnavailable: string;
     onEdit: (role: RoleRecord) => void;
 }) {
     return (
@@ -699,7 +705,9 @@ function RolesTable({
                                         data-label="关联员工"
                                         className="h-[52px] whitespace-nowrap px-3 py-0"
                                     >
-                                        {memberCount(role.id)} 人
+                                        {memberCount(role.id) == null
+                                            ? memberCountUnavailable
+                                            : `${memberCount(role.id)} 人`}
                                     </td>
                                     <td
                                         data-label="操作"
