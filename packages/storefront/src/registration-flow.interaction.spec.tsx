@@ -46,7 +46,7 @@ function deferred() {
 function completeRegistrationInput() {
     element<HTMLInputElement>('input[name="fullName"]').value = '本地测试';
     element<HTMLInputElement>('input[name="emailAddress"]').value = 'local@example.invalid';
-    act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+    expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
 }
 function completePasswordInput(password = 'local-synthetic-password') {
     element<HTMLInputElement>('input[name="password"]').value = password;
@@ -117,7 +117,7 @@ describe('registration and verification ownership', () => {
                 element<HTMLInputElement>('input[name="fullName"]').value = 'Local Example';
             if (mode === 'auto')
                 element<HTMLInputElement>('input[name="password"]').value = 'local-synthetic-password';
-            act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+            expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
             await settle(submit);
 
             expect(registerCustomerAccount).toHaveBeenCalledOnce();
@@ -222,7 +222,7 @@ describe('registration and verification ownership', () => {
                 element<HTMLInputElement>('input[name="fullName"]').value = 'Local Example';
             if (mode === 'auto')
                 element<HTMLInputElement>('input[name="password"]').value = 'local-synthetic-password';
-            act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+            expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
             await settle(submit);
             expect(host.querySelector('.auth-existing-account')).not.toBeNull();
             if (mode !== 'auto') {
@@ -274,7 +274,7 @@ describe('registration and verification ownership', () => {
         const password = element<HTMLInputElement>('input[name="password"]');
         element<HTMLInputElement>('input[name="emailAddress"]').value = 'local@example.invalid';
         password.value = 'local-synthetic-password';
-        act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+        expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
         await settle(submit);
         expect(password.getAttribute('aria-invalid')).toBe('true');
         await settle(() => {
@@ -326,6 +326,7 @@ describe('registration and verification ownership', () => {
             await settle(submit);
             element<HTMLInputElement>('input[name="fullName"]').value = '';
             act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+            expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(false);
             const action = element<HTMLButtonElement>(
                 destination === 'login'
                     ? '.auth-existing-account__primary'
@@ -447,7 +448,7 @@ describe('registration and verification ownership', () => {
             if (mode === 'register') element<HTMLInputElement>('input[name="fullName"]').value = '本地测试';
             if (mode === 'auto')
                 element<HTMLInputElement>('input[name="password"]').value = 'local-synthetic-password';
-            act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+            expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(true);
             await settle(submit);
             expect(api.registerCustomerAccount).toHaveBeenCalledOnce();
             expect(email.disabled).toBe(false);
@@ -559,6 +560,8 @@ describe('registration and verification ownership', () => {
         );
         element<HTMLInputElement>('input[name="emailAddress"]').value = 'local@example.invalid';
         element<HTMLInputElement>('input[name="password"]').value = 'local-synthetic-password';
+        act(() => element<HTMLInputElement>('.auth-registration-consent input').click());
+        expect(element<HTMLInputElement>('.auth-registration-consent input').checked).toBe(false);
         await settle(submit);
         expect(registerCustomerAccount).not.toHaveBeenCalled();
         expect(element('[role="alert"]').textContent).toContain('请核对邮箱和密码');

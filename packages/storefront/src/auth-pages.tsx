@@ -526,7 +526,7 @@ export function LoginPage({
     const [existingAccount, setExistingAccount] = useState(false);
     const existingAccountNoticeId = useId();
     const [rememberMe, setRememberMe] = useState(true);
-    const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
+    const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(true);
     const challenge = useShopAbuseChallenge(api, language);
     const googleChallenge = useShopAbuseChallenge(api, language);
     const [registerStage, setRegisterStage] = useState<string | null>(null);
@@ -818,7 +818,7 @@ export function RegisterPage({
     const [inviteExpanded, setInviteExpanded] = useState(false);
     const [inviteSource, setInviteSource] = useState<ReferralSource>('CODE');
     const [inviteStatus, setInviteStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
-    const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(false);
+    const [registrationConsentAccepted, setRegistrationConsentAccepted] = useState(true);
     const challenge = useShopAbuseChallenge(api, language);
     const googleChallenge = useShopAbuseChallenge(api, language);
     const quickRegistration = authSettings.emailQuickRegistrationEnabled;
