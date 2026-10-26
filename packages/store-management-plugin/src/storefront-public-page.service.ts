@@ -283,11 +283,12 @@ export class StorefrontPublicPageService {
         host: string,
         request: PublicPageRequest = { kind: 'home' },
         options: { refresh?: boolean; prepareMedia?: boolean } = {},
+        onResolvedRevision?: (revision: string | undefined) => void,
     ): Promise<StorefrontPageData> {
         if (ctx.activeUserId || ctx.session || ctx.apiType !== 'shop')
             throw new Error('Public page requires anonymous Shop context');
         request = canonicalPublicPageRequest(request);
-        return this.readAuthorized(ctx, host, request, options);
+        return this.readAuthorized(ctx, host, request, options, onResolvedRevision);
     }
 
     /** Complete this document's first-screen artwork without extending API or worker reads. */
@@ -305,9 +306,13 @@ export class StorefrontPublicPageService {
         if (mode === 'CLOSED') throw new StorefrontClosedError();
         // Preview and shared-cache outages retain their existing anonymous short-read path.
         if (mode !== 'LIVE') return this.read(ctx, host, request);
-        const revision = await this.cache.revision(ctx.channelId);
+        let revision = await this.cache.revision(ctx.channelId);
         if (!revision) return this.read(ctx, host, request);
-        const page = await this.read(ctx, host, request);
+        // The existing guarded read can legitimately retry into a newer generation.
+        // Bind additional document work to its validated result, not a pre-read token.
+        const page = await this.read(ctx, host, request, {}, resolved => {
+            revision = resolved;
+        });
         const assertCurrent = async () => {
             try {
                 await this.assertMode(ctx, mode);
@@ -316,6 +321,7 @@ export class StorefrontPublicPageService {
                 throw new ServiceUnavailableException('Public access changed; retry the document');
             }
             if (
+                !revision ||
                 identity() !== scope ||
                 page.scope.host !== host ||
                 page.scope.channelCode !== ctx.channel.code ||
@@ -359,6 +365,7 @@ export class StorefrontPublicPageService {
         host: string,
         request: PublicPageRequest,
         options: { refresh?: boolean; prepareMedia?: boolean },
+        onResolvedRevision?: (revision: string | undefined) => void,
     ): Promise<StorefrontPageData> {
         for (let attempt = 0; attempt < 2; attempt++) {
             const mode = await this.getAccessMode(ctx);
@@ -497,6 +504,7 @@ export class StorefrontPublicPageService {
                         : await this.cache.runGuarded(assertReusable, async () => {
                               const pageCacheOptions = {
                                   ...options,
+                                  onResolvedRevision,
                                   shouldCache: (value: StorefrontPageData, current?: StorefrontPageData) => {
                                       const allowed = mediaAuthorizations.get(value);
                                       if (

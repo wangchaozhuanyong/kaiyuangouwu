@@ -39,6 +39,44 @@ const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 afterEach(() => vi.useRealTimers());
 
 describe('public cache boundaries', () => {
+    it('hands off only the finally validated generation on a retried fill and cache hit', async () => {
+        const { service } = harness();
+        const original = await service.revision('a');
+        let generation = 0;
+        const resolved = vi.fn();
+        const result = await service.readThrough(
+            ctx,
+            'page',
+            30_000,
+            async () => {
+                if (++generation === 1) await service.invalidate('a');
+                return generation;
+            },
+            { onResolvedRevision: resolved },
+        );
+        const current = await service.revision('a');
+        expect(result).toBe(2);
+        expect(current).not.toBe(original);
+        expect(resolved.mock.calls).toEqual([[current]]);
+        resolved.mockClear();
+        expect(
+            await service.readThrough(ctx, 'page', 30_000, () => Promise.resolve(3), {
+                onResolvedRevision: resolved,
+            }),
+        ).toBe(2);
+        expect(resolved.mock.calls).toEqual([[current]]);
+        resolved.mockClear();
+        await expect(
+            service.runGuarded(
+                () => Promise.reject(new Error('access revoked')),
+                () =>
+                    service.readThrough(ctx, 'page', 30_000, () => Promise.resolve(3), {
+                        onResolvedRevision: resolved,
+                    }),
+            ),
+        ).rejects.toThrow('access revoked');
+        expect(resolved).not.toHaveBeenCalled();
+    });
     it('reconciles a concurrent CAS winner without replacing fresh content or extending its TTL', async () => {
         const h = harness();
         const winner = { content: 'earlier-content', media: 'ready' };

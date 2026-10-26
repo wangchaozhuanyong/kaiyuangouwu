@@ -173,12 +173,15 @@ export class StorefrontPublicCacheService {
             refresh?: boolean;
             shouldCache?: (value: T, current?: T) => boolean | Promise<boolean>;
             invalidateOnConflict?: (value: T) => boolean;
+            /** Synchronous handoff of this result's final, guarded generation. */
+            onResolvedRevision?: (revision: string | undefined) => void;
         } = {},
     ): Promise<T> {
         if (ctx.activeUserId) throw new Error('Public cache requires an anonymous request context');
         const access = this.accessContext.getStore();
         if (access?.uncached) {
             this.metrics.bypasses++;
+            options.onResolvedRevision?.(undefined);
             return this.loadUncached(loader);
         }
         const ttl = Math.min(60_000, Math.max(1, ttlMs));
@@ -199,6 +202,7 @@ export class StorefrontPublicCacheService {
                 await access?.assertReusable?.();
                 if (revision === (await this.revision(ctx.channelId))) {
                     this.metrics.hits++;
+                    options.onResolvedRevision?.(revision);
                     return cached.value as T;
                 }
             }
@@ -214,6 +218,7 @@ export class StorefrontPublicCacheService {
                 initialFallback !== this.fallbackRevision
             )
                 throw this.unavailable();
+            options.onResolvedRevision?.(revision);
             return value;
         }
         if (this.inFlight.size >= MAX_LOADERS + MAX_QUEUED) throw this.unavailable();
@@ -229,7 +234,10 @@ export class StorefrontPublicCacheService {
                 if (!before || !after) {
                     if (options.requireSharedRevision) throw this.unavailable();
                     // Authoritative, uncached fallback is concurrency bounded. Never persist it.
-                    if (!before && !after && fallbackBefore === this.fallbackRevision) return value;
+                    if (!before && !after && fallbackBefore === this.fallbackRevision) {
+                        options.onResolvedRevision?.(undefined);
+                        return value;
+                    }
                     this.metrics.superseded++;
                     this.requestCache?.clear(ctx);
                     continue;
@@ -298,6 +306,7 @@ export class StorefrontPublicCacheService {
                     this.requestCache?.clear(ctx);
                     continue;
                 }
+                options.onResolvedRevision?.(before);
                 return value;
             }
             throw this.unavailable();

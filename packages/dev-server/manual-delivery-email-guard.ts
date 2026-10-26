@@ -31,6 +31,9 @@ export function createManualDeliveryEmailGuard(
             email.type === 'manual-digital-delivery'
                 ? await injector.get(ManualDigitalDeliveryService).queuedEmailPayload(ctx, id)
                 : await injector.get(AutoCardService).notificationPayload(ctx, id);
+        if (!current) {
+            throw new UserInputError('数字交付通知领取入口已失效，请重新发送');
+        }
         let receipt: URL;
         try {
             receipt = new URL(String(vars.receiptUrl));
