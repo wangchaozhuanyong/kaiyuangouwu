@@ -800,89 +800,35 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.hero-media-error')).toBeNull();
         expect(target).not.toHaveBeenCalled();
     });
-    it('retains the enabled coupon frame through pending, offers, empty and failure', async () => {
-        const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
-        const blocks = [...heroes, offers];
-        await render(false, blocks, 'en', { couponCampaignsLoading: true });
-        const section = requiredElement(host, '.coupon-hub-section');
-        const wrapper = section.parentElement;
-        expect(section.querySelector('.coupon-hub-placeholder')).not.toBeNull();
-        for (const state of [{ coupons: [homepageOffer] }, {}, { couponCampaignsLoading: true }]) {
-            await render(false, blocks, 'en', state);
-            expect(host.querySelector('.coupon-hub-section')).toBe(section);
-            expect(section.parentElement).toBe(wrapper);
-        }
-        const retry = vi.fn();
-        await render(false, blocks, 'en', {
-            couponCampaignsError: 'Local read failed',
-            onCouponCampaignsRetry: retry,
-        });
-        expect(host.querySelector('.coupon-hub-section')).toBe(section);
-        expect(section.textContent).toContain('Local read failed');
-        await interact(() =>
-            requiredElement<HTMLButtonElement>(host, '.coupon-hub-query-state button').click(),
-        );
-        expect(retry).toHaveBeenCalledOnce();
-        await render(false, [...heroes, { ...offers, enabled: false }], 'en', {});
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
-    });
-
-    it('keeps the published coupon frame when offers become empty or unavailable', async () => {
-        const offers = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
-        const blocks = [...heroes, offers];
-        await render(false, blocks, 'en', { couponCampaignsLoading: true });
-        expect(host.querySelector('.coupon-hub-placeholder')).not.toBeNull();
-        await render(false, blocks, 'en', { coupons: [homepageOffer] });
-        const section = requiredElement(host, '.coupon-hub-section');
-        const wrapper = section.parentElement;
-        for (const state of [
-            { couponCampaignsLoading: true },
-            { couponCampaignsError: 'Local read failed' },
-        ]) {
-            await render(false, blocks, 'en', { coupons: [homepageOffer], ...state });
-            expect(host.querySelector('.coupon-hub-section')).toBe(section);
-            expect(section.parentElement).toBe(wrapper);
-            expect(section.querySelector('.coupon-hub-placeholder')).toBeNull();
-        }
-        await render(false, blocks, 'en', {});
-        expect(host.querySelector('.coupon-hub-section')).toBe(section);
-        expect(wrapper?.isConnected).toBe(true);
-        const retry = vi.fn();
-        await render(false, blocks, 'en', {
-            couponCampaignsError: 'Local read failed',
-            onCouponCampaignsRetry: retry,
-        });
-        expect(host.querySelector('.coupon-hub-section')).toBe(section);
-        expect(host.textContent).toContain('Local read failed');
-        expect(retry).not.toHaveBeenCalled();
-        await render(false, [...heroes, { ...offers, enabled: false }], 'en', {
-            coupons: [homepageOffer],
-            couponCampaignsLoading: true,
-        });
-        expect(host.querySelector('.coupon-hub-section')).toBeNull();
-    });
-
-    it('retains the coupon frame after the last claim and accepts a new offer', async () => {
+    it('retains initial cards through background reads and hides confirmed empty results', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
-        const second = { ...homepageOffer, id: 'offer-b', name: '本地优惠 B' };
-        const blocks = [...heroes, block];
-        await render(false, blocks, 'zh', { coupons: [homepageOffer, second] });
-        const wrapper = requiredElement(host, '.coupon-hub-section').parentElement;
-        await render(false, blocks, 'zh', {
-            coupons: [{ ...homepageOffer, claimed: true, claimable: false }, second],
-        });
-        expect(host.querySelector('[aria-label="领取 本地优惠 A"]')).toBeNull();
-        expect(requiredElement(host, '.coupon-hub-section').parentElement).toBe(wrapper);
-        await render(false, blocks, 'zh', {
-            coupons: [homepageOffer, second].map(coupon => ({ ...coupon, claimed: true, claimable: false })),
-        });
-        expect(requiredElement(host, '.coupon-hub-section').parentElement).toBe(wrapper);
-        expect(wrapper?.isConnected).toBe(true);
-        expect(host.textContent).toContain('暂无可领取的优惠');
-        await render(false, blocks, 'zh', { coupons: [second] });
-        expect(host.querySelector('[aria-label="领取 本地优惠 B"]')).not.toBeNull();
+        await render(false, [...heroes, block], 'en', { coupons: [homepageOffer] });
+        const section = requiredElement(host, '.coupon-hub-section');
+        for (const state of [{ couponCampaignsLoading: true }, { couponCampaignsError: 'Offline' }]) {
+            await render(false, [...heroes, block], 'en', { coupons: [homepageOffer], ...state });
+            expect(host.querySelector('.coupon-hub-section')).toBe(section);
+        }
+        await render(false, [...heroes, block], 'en', {});
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
     });
-
+    it('never inserts late offers after an unknown first frame', async () => {
+        const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        await render(false, [...heroes, block], 'en', { couponCampaignsLoading: true });
+        await render(false, [...heroes, block], 'en', { coupons: [homepageOffer] });
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+    });
+    it('removes the entire shell after the last claim and can show a later eligible campaign', async () => {
+        const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
+        await render(false, [...heroes, block], 'zh', { coupons: [homepageOffer] });
+        const shell = requiredElement(host, '.coupon-hub-section').parentElement;
+        await render(false, [...heroes, block], 'zh', {
+            coupons: [{ ...homepageOffer, claimed: true, claimable: false }],
+        });
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        expect(shell?.isConnected).toBe(false);
+        await render(false, [...heroes, block], 'zh', { coupons: [homepageOffer] });
+        expect(host.querySelector('.coupon-claim-btn')).not.toBeNull();
+    });
     it('blocks rapid duplicate clicks and leaves success notifications to the shared claim flow', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         let resolve!: (error: string | null) => void;
@@ -909,15 +855,15 @@ describe('HomePage carousel pointer interactions', () => {
         expect(toast).not.toHaveBeenCalled();
     });
 
-    it('keeps the empty frame when the last offer expires', async () => {
+    it('removes the entire coupon shell when the final offer expires', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
-        const offer = { ...homepageOffer, claimEndsAt: new Date(Date.now() + 1000).toISOString() };
-        await render(false, [...heroes, block], 'zh', { coupons: [offer] });
-        expect(host.querySelector('.coupon-hub-section')).not.toBeNull();
+        await render(false, [...heroes, block], 'zh', {
+            coupons: [{ ...homepageOffer, claimEndsAt: new Date(Date.now() + 1000).toISOString() }],
+        });
+        const shell = requiredElement(host, '.coupon-hub-section').parentElement;
         await advance(1000);
-        expect(host.querySelector('.coupon-hub-section')).not.toBeNull();
-        expect(host.textContent).toContain('暂无可领取的优惠');
-        expect(host.querySelector('.coupon-claim-btn')).toBeNull();
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        expect(shell?.isConnected).toBe(false);
     });
     it('honors reduced motion while allowing deliberate manual navigation', async () => {
         reducedMotion = true;

@@ -337,6 +337,10 @@ export interface StorefrontPageData<
         pinnedProducts: Product[];
         candidateCount: number;
     };
+    /** Anonymous, allowlisted campaigns prepared by the existing worker. Missing means unknown. */
+    couponCampaigns?: unknown[];
+    /** Request-local presentation hint, never authentication or a cache key. */
+    couponAudience?: 'anonymous' | 'unknown';
     flashSales?: unknown[];
     catalog?: { items: Product[]; totalItems: number };
     product?: Product | null;

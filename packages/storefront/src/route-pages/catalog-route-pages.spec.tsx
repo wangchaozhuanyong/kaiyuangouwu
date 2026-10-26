@@ -51,12 +51,15 @@ describe('home selection read boundaries', () => {
             language: 'en',
             market: enabledMarkets[0],
             collections: [],
+            contentBlocks: [],
             catalogTakes: { sales: 16, recommended: 16 },
             bestSellerProducts: [],
             recommendationProducts: [],
             configQuery: {},
             contentQuery: { data: {} },
             productsQuery: { data: [] },
+            activeCoupons: [],
+            couponCampaignsQuery: { data: undefined },
             switchCurrency,
         } as unknown as StorefrontContextValue;
         try {
@@ -77,13 +80,13 @@ describe('home selection read boundaries', () => {
         }
     });
     it.each([
-        ['loading', false, '', true],
-        ['ready', true, '', true],
+        ['loading', false, '', false],
+        ['ready', true, '', false],
         ['ready', false, '', false],
         ['error', false, '', false],
         ['ready', true, 'Offline', false],
     ] as const)(
-        'reserves coupon space for identity=%s / pending=%s / error=%s',
+        'never reserves unknown coupon space for identity=%s / pending=%s / error=%s',
         (identity, pending, error, expected) => {
             const client = new QueryClient();
             const host = document.createElement('div');
@@ -93,12 +96,15 @@ describe('home selection read boundaries', () => {
                     language: 'zh',
                     market: enabledMarkets[0],
                     collections: [],
+                    contentBlocks: [],
                     catalogTakes: { sales: 16, recommended: 16 },
                     bestSellerProducts: [],
                     recommendationProducts: [],
                     configQuery: {},
                     contentQuery: { data: {} },
                     productsQuery: { data: [] },
+                    activeCoupons: [],
+                    couponCampaignsQuery: { data: undefined },
                     customerLoadState: identity,
                     couponCampaignsLoading: pending,
                     couponCampaignsError: error,
@@ -139,6 +145,7 @@ describe('home selection read boundaries', () => {
                     language: 'zh',
                     market: enabledMarkets[0],
                     collections: [],
+                    contentBlocks: [],
                     catalogTakes: { sales: 16, recommended: 16 },
                     bestSellerProducts: [],
                     recommendationProducts: [],
@@ -146,6 +153,8 @@ describe('home selection read boundaries', () => {
                     contentQuery: { data: {} },
                     customerQuery: { data: null },
                     productsQuery: { data: [] },
+                    activeCoupons: [],
+                    couponCampaignsQuery: { data: undefined },
                     managedContentLoading: false,
                     managedContentProductsQuery: {
                         data,
@@ -437,3 +446,134 @@ describe('product detail read states', () => {
         expect(page.host.querySelector('[aria-busy="true"]')).toBeNull();
     });
 });
+
+it('keeps late coupon responses hidden until a natural home remount, and isolates account changes', () => {
+    const client = new QueryClient();
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    const coupon = { id: 'coupon', claimable: true, claimed: false, remainingIssueCount: 1 };
+    const value = {
+        language: 'en',
+        market: enabledMarkets[0],
+        collections: [],
+        contentBlocks: [],
+        catalogTakes: { sales: 16, recommended: 16 },
+        bestSellerProducts: [],
+        recommendationProducts: [],
+        configQuery: {},
+        contentQuery: { data: {} },
+        productsQuery: { data: [] },
+        activeCoupons: [],
+        couponCampaignsQuery: { data: undefined, dataUpdatedAt: 0 },
+        customerLoadState: 'loading',
+        customer: null,
+    } as unknown as StorefrontContextValue;
+    const show = (key: string) =>
+        act(() =>
+            root.render(
+                <QueryClientProvider client={client}>
+                    <StorefrontContext.Provider value={value}>
+                        <HomeRoutePage key={key} />
+                    </StorefrontContext.Provider>
+                </QueryClientProvider>,
+            ),
+        );
+    try {
+        show('initial');
+        expect(homeInputs?.coupons).toEqual([]);
+        Object.assign(value, {
+            customerLoadState: 'ready',
+            activeCoupons: [coupon],
+            couponCampaignsQuery: { data: [coupon], dataUpdatedAt: Date.now() },
+        });
+        show('initial');
+        expect(homeInputs?.coupons).toEqual([]);
+        show('next-visit');
+        expect(homeInputs?.coupons).toEqual([coupon]);
+        Object.assign(value, { language: 'zh' });
+        show('next-visit');
+        expect(homeInputs?.coupons).toEqual([]);
+        expect(
+            client.getQueryData(
+                storefrontQueryKeys.couponCampaigns(
+                    storefrontQueryKeys.market(value.market),
+                    'zh_Hans',
+                    null,
+                ),
+            ),
+        ).toBeUndefined();
+        Object.assign(value, { language: 'en' });
+        Object.assign(value, { customer: { id: 'another-customer' } });
+        show('next-visit');
+        expect(homeInputs?.coupons).toEqual([]);
+    } finally {
+        act(() => root.unmount());
+        client.clear();
+    }
+});
+
+it.each([
+    ['anonymous', 'en', null, true],
+    ['unknown', 'en', null, false],
+    ['anonymous', 'zh_Hans', null, false],
+    ['anonymous', 'en', 'customer-1', false],
+] as const)(
+    'adopts only matching anonymous first-frame coupons: %s / %s / %s',
+    async (audience, languageCode, customerId, visible) => {
+        const client = new QueryClient();
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const coupon = { id: 'prepared-coupon', claimable: true, claimed: false, remainingIssueCount: 1 };
+        const market = enabledMarkets[0];
+        const snapshot = {
+            generatedAt: Date.now(),
+            scope: { channelCode: market.code, currencyCode: market.currencyCode, languageCode },
+            couponAudience: audience,
+            couponCampaigns: [coupon],
+        } as unknown as PublicPageData;
+        const read = vi.spyOn(await import('../storefront-page-data'), 'readInitialPublicPage');
+        read.mockReturnValue(snapshot);
+        const value = {
+            language: 'en',
+            market,
+            collections: [],
+            contentBlocks: [],
+            catalogTakes: { sales: 16, recommended: 16 },
+            bestSellerProducts: [],
+            recommendationProducts: [],
+            configQuery: {},
+            contentQuery: { data: {} },
+            productsQuery: { data: [] },
+            activeCoupons: [],
+            couponCampaignsQuery: { data: undefined, dataUpdatedAt: 0 },
+            customerLoadState: customerId ? 'ready' : 'loading',
+            customer: customerId ? { id: customerId } : null,
+        } as unknown as StorefrontContextValue;
+        try {
+            act(() =>
+                root.render(
+                    <QueryClientProvider client={client}>
+                        <StorefrontContext.Provider value={value}>
+                            <HomeRoutePage />
+                        </StorefrontContext.Provider>
+                    </QueryClientProvider>,
+                ),
+            );
+            expect(homeInputs?.coupons).toEqual(visible ? [coupon] : []);
+            if (customerId || languageCode !== 'en')
+                expect(
+                    client.getQueryData(
+                        storefrontQueryKeys.couponCampaigns(
+                            storefrontQueryKeys.market(market),
+                            'en',
+                            customerId,
+                        ),
+                    ),
+                ).toBeUndefined();
+        } finally {
+            act(() => root.unmount());
+            client.clear();
+            read.mockRestore();
+        }
+    },
+);

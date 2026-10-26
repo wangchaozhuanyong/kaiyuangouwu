@@ -173,7 +173,19 @@ export class StorefrontSeoController {
             ]);
             stage = 'resolve-seo';
             const page = await measure('seo', () =>
-                this.publicSeo.enrich(ctx, verified.host, documentPage, prepared),
+                this.publicSeo.enrich(
+                    ctx,
+                    verified.host,
+                    {
+                        ...documentPage,
+                        couponAudience:
+                            trustedPublicPageHeaders(req) &&
+                            req.headers['x-storefront-public-coupon-guest'] === '1'
+                                ? 'anonymous'
+                                : 'unknown',
+                    },
+                    prepared,
+                ),
             );
             stage = 'required-content';
             if (page.failures.includes('content'))

@@ -124,6 +124,32 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         vi.spyOn(Logger, 'error').mockImplementation(errorLog);
     });
     afterEach(() => vi.restoreAllMocks());
+    it.each([
+        [true, '1', 'anonymous'],
+        [true, '0', 'unknown'],
+        [true, undefined, 'unknown'],
+        [false, '1', 'unknown'],
+    ] as const)(
+        'keeps coupon audience request-local for trusted=%s / hint=%s',
+        async (trusted, hint, expected) => {
+            const test = fixture();
+            const request = test.req('/en', trusted);
+            request.query.path = '/en';
+            if (hint !== undefined) request.headers['x-storefront-public-coupon-guest'] = hint;
+            const response = responseMock();
+            await test.controller.document(request, response as unknown as Response);
+            expect(test.publicSeo.enrich).toHaveBeenCalledWith(
+                test.ctx,
+                'synthetic-store.invalid',
+                { ...test.page, couponAudience: expected },
+                test.prepared,
+            );
+            expect(test.page).not.toHaveProperty('couponAudience');
+            expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, no-store');
+            expect(response.status).toHaveBeenCalledWith(200);
+        },
+    );
+
     it.each(['page', 'prepare'] as const)(
         'starts document and SEO preparation together and waits when %s finishes first',
         async first => {
@@ -159,7 +185,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
             expect(test.publicSeo.enrich).toHaveBeenCalledWith(
                 test.ctx,
                 'synthetic-store.invalid',
-                test.page,
+                { ...test.page, couponAudience: 'unknown' },
                 test.prepared,
             );
             expect(test.seo.publishedConfiguration).toHaveBeenCalledOnce();
@@ -220,7 +246,7 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
             id: 'product-1',
         });
         expect(test.pages.read).not.toHaveBeenCalled();
-        expect(test.html.render).toHaveBeenCalledWith(preparedPage);
+        expect(test.html.render).toHaveBeenCalledWith({ ...preparedPage, couponAudience: 'unknown' });
         expect(response.status).toHaveBeenCalledWith(200);
     });
 

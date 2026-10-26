@@ -25,7 +25,7 @@ export interface StorefrontRealtimeEvent {
     entityIds?: string[];
 }
 
-interface StorefrontRealtimeScope {
+export interface StorefrontRealtimeScope {
     marketCode: string;
     languageCode: string;
     customerId?: string;
@@ -196,44 +196,18 @@ export function parseStorefrontRealtimeFrameFields(frame: string): {
     return { eventName, data };
 }
 
-export async function invalidateStorefrontRealtimeQueries(
+/** Fence synchronously; load the batching coordinator with realtime work, outside the initial page closure. */
+export function invalidateStorefrontRealtimeQueries(
     queryClient: QueryClient,
     event: StorefrontRealtimeEvent,
     scope: StorefrontRealtimeScope,
+    signal?: AbortSignal,
 ): Promise<void> {
-    if (event.topics.some(topic => ['catalog', 'content', 'config'].includes(topic))) {
-        // A publication event invalidates any older transport, even if it is still downloading.
+    if (signal?.aborted) return Promise.resolve();
+    if (event.topics.some(topic => ['catalog', 'content', 'config', 'coupons'].includes(topic)))
         invalidatePublicPageReads();
-        await queryClient.cancelQueries({
-            predicate: query =>
-                matchesPrefix(query.queryKey, ['storefront', scope.marketCode, scope.languageCode]) &&
-                query.queryKey[3] !== 'private' &&
-                (query.meta?.publicAggregatePart === true ||
-                    query.queryKey[3] === 'config' ||
-                    storefrontRealtimeQueryMatches(query, event, scope)),
-        });
-    }
-    // Aggregate sections share config's read owner. Mark their cached values stale without
-    // launching independent content/visual/collection requests.
-    await queryClient.invalidateQueries({
-        predicate: query =>
-            storefrontRealtimeQueryMatches(query, event, scope) && query.meta?.publicAggregatePart === true,
-        refetchType: 'none',
-    });
-    await queryClient.invalidateQueries(
-        {
-            predicate: query =>
-                query.meta?.publicAggregatePart !== true &&
-                (storefrontRealtimeQueryMatches(query, event, scope) ||
-                    (matchesPrefix(query.queryKey, [
-                        'storefront',
-                        scope.marketCode,
-                        scope.languageCode,
-                        'config',
-                    ]) &&
-                        event.topics.some(topic => ['catalog', 'content', 'config'].includes(topic)))),
-        },
-        { cancelRefetch: false },
+    return import('./realtime-refresh').then(({ enqueueStorefrontRealtimeQueries }) =>
+        enqueueStorefrontRealtimeQueries(queryClient, event, scope, signal),
     );
 }
 

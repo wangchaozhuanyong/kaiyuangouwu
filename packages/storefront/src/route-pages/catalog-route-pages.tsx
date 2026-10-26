@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazyRouteComponent } from '@tanstack/react-router';
 import { ShoppingBag } from 'lucide-react';
 import { useState } from 'react';
@@ -15,7 +15,7 @@ import { storefrontErrorMessage } from '../storefront-errors';
 import { HomePageContext, ProductDetailPageContext, SearchPageContext } from '../storefront-page-contexts';
 import { readInitialPublicPage } from '../storefront-page-data';
 import { EmptyState, Subpage } from '../storefront-ui/page-shell';
-import { CollectionSummary, Product, ProductVariant } from '../types';
+import { CollectionSummary, Product, ProductVariant, StorefrontCouponCampaign } from '../types';
 
 import '../commerce-styles';
 import { registerRoutePreload, useRouteRuntime as useRuntime } from './shared';
@@ -30,7 +30,58 @@ export function HomeRoutePage() {
     const runtime = useRuntime();
     const readMarket = storefrontQueryKeys.market(runtime.market);
     const readLanguage = languageCodeFor(runtime.language);
-    const [initialRenderTime] = useState(() => readInitialPublicPage()?.generatedAt);
+    const [initialPage] = useState(() =>
+        document.getElementById('root')?.dataset.publicAdopted !== '1' ? readInitialPublicPage() : undefined,
+    );
+    const initialRenderTime = initialPage?.generatedAt;
+    const couponScope = `${readMarket}:${readLanguage}`;
+    const matchingSnapshot =
+        initialPage &&
+        `${initialPage.scope.channelCode}:${initialPage.scope.currencyCode}:${initialPage.scope.languageCode}` ===
+            couponScope;
+    useQuery({
+        queryKey: storefrontQueryKeys.couponCampaigns(readMarket, readLanguage, runtime.customer?.id ?? null),
+        queryFn: ({ signal }) => runtime.api.activeCouponCampaigns(signal),
+        enabled:
+            runtime.customerLoadState === 'ready' &&
+            runtime.contentBlocks.some(block => block.type === 'COUPONS' && block.enabled),
+        initialData:
+            runtime.customer || !matchingSnapshot
+                ? undefined
+                : (initialPage?.couponCampaigns as StorefrontCouponCampaign[] | undefined),
+        initialDataUpdatedAt: initialPage?.generatedAt,
+        staleTime: 30_000,
+    });
+    const [couponVisit] = useState(() => {
+        const page = initialPage;
+        if (page)
+            return {
+                owner: null,
+                scope: couponScope,
+                coupons:
+                    matchingSnapshot && page.couponAudience === 'anonymous'
+                        ? ((page.couponCampaigns ?? []) as StorefrontCouponCampaign[])
+                        : [],
+            };
+        return {
+            owner: runtime.customer?.id ?? null,
+            scope: couponScope,
+            coupons:
+                runtime.customerLoadState === 'ready' &&
+                runtime.couponCampaignsQuery.data !== undefined &&
+                Date.now() - runtime.couponCampaignsQuery.dataUpdatedAt < 30_000
+                    ? runtime.activeCoupons
+                    : [],
+        };
+    });
+    const couponOwnerChanged =
+        runtime.customerLoadState !== 'loading' && (runtime.customer?.id ?? null) !== couponVisit.owner;
+    const visitCoupons =
+        couponVisit.coupons.length && !couponOwnerChanged && couponVisit.scope === couponScope
+            ? runtime.couponCampaignsQuery.data !== undefined && runtime.customerLoadState !== 'loading'
+                ? runtime.activeCoupons
+                : couponVisit.coupons
+            : [];
     const { language, configQuery, contentQuery, productsQuery } = runtime;
     usePageReadiness(
         contentQuery.isPending,
@@ -81,11 +132,8 @@ export function HomeRoutePage() {
                 initialRenderTime,
                 heroAutoplayIntervalSeconds: runtime.heroAutoplayIntervalSeconds,
                 configuredBlockTypes: runtime.configuredBlockTypes,
-                coupons: runtime.activeCoupons,
-                // Offers can finish before identity; keep their local space until both settle.
-                couponCampaignsLoading:
-                    runtime.customerLoadState === 'loading' ||
-                    (runtime.couponCampaignsLoading && !runtime.couponCampaignsError),
+                coupons: visitCoupons,
+                couponCampaignsLoading: false,
                 couponCampaignsError: runtime.couponCampaignsError,
                 flashSales: runtime.activeFlashSales,
                 systemAnnouncements: runtime.systemAnnouncements,

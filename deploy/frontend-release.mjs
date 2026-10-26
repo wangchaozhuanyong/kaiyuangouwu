@@ -253,7 +253,10 @@ export async function activateFrontends(releases, verify) {
             throw error;
         }
     });
-    releases.forEach(({ candidate }, index) => preserveFrontendAssets(previous[index], candidate));
+    releases.forEach(({ candidate }, index) => {
+        preserveFrontendAssets(previous[index], candidate);
+        if (previous[index]) preserveFrontendAssets(candidate, previous[index]);
+    });
     let switched = 0;
     const restore = () => {
         const failures = [];

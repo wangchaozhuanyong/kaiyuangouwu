@@ -35,6 +35,8 @@ export function switchStorefront(target, pointer) {
     } catch (error) {
         if (error.code !== 'ENOENT') throw error;
     }
+    // Manual switches and rollbacks must also serve chunks of the document being left.
+    preserveFrontendAssets(previous, destination);
     const temporary = `${pointer}.new-${process.pid}`;
     symlinkSync(destination, temporary);
     try {
@@ -48,6 +50,8 @@ export function switchStorefront(target, pointer) {
 export async function activateStorefront({ candidate, pointer, verify }) {
     const previous = realpathSync(pointer);
     preserveFrontendAssets(previous, candidate);
+    // Prepare recovery before B becomes visible, so rollback needs no new resource copies.
+    preserveFrontendAssets(candidate, previous);
     let switched = false;
     const restore = () => {
         if (switched) {

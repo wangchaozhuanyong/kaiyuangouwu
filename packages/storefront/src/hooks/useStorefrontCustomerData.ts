@@ -132,9 +132,8 @@ export function useStorefrontCustomerData({
     ];
     const publicHomepageCoupons = activeRoute === 'home' && homepageCoupons;
     const needsCoupons = couponRoutes.includes(activeRoute) || publicHomepageCoupons;
-    const couponCampaignsEnabled = publicHomepageCoupons
-        ? storefrontContextResolved
-        : Boolean(customer) && needsCoupons;
+    // The home route owns its prepared first-frame read; this observer still shares its scoped data.
+    const couponCampaignsEnabled = !publicHomepageCoupons && Boolean(customer) && needsCoupons;
 
     const couponCampaignsQueryKey = storefrontQueryKeys.couponCampaigns(
         storefrontQueryKeys.market(market),
