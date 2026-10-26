@@ -111,6 +111,9 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     // Preview identity belongs to this iframe document, not a changing route query string.
     const [previewParameters] = useState(storefrontPreviewParameters);
     const [requireInitialRouteCommit] = useState(() => Boolean(readInitialPublicPage()));
+    const [authOverlayReady, setAuthOverlayReady] = useState(false);
+    // Public SSR leaves this host empty. Open deep-linked dialogs after adoption, before paint.
+    useLayoutEffect(() => setAuthOverlayReady(true), []);
     const previewEmbedded = previewParameters.get('storefrontPreviewEmbedded') === '1';
     const previewScenario = previewEmbedded ? previewParameters.get('storefrontPreviewScenario') : null;
     const previewSession = previewEmbedded ? previewParameters.get('storefrontPreviewSession') : null;
@@ -409,7 +412,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                                 routeHref({ ...displayedRoute, publicLanguage: 'en' }),
                             ])}
                         >
-                            {storefrontContextValue.authOverlay && (
+                            {authOverlayReady && storefrontContextValue.authOverlay && (
                                 <Suspense fallback={null}>
                                     <AuthenticationOverlay request={storefrontContextValue.authOverlay} />
                                 </Suspense>
