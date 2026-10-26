@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { QueryClient } from '@tanstack/react-query';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -6,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ShopApi, ShopApiError } from './api';
 import { CartController } from './cart/cart-controller';
+import { CartCommandAcknowledgedReadError } from './cart/cart-repository';
 import { CheckoutPage, selectBestShippingMethod } from './checkout-page';
 import { checkoutPageStyles } from './tailwind/checkout-page-styles';
 import {
     ActiveCustomer,
+    CustomerDeliveryEmail,
     MarketConfig,
     Order,
     OrderLine,
@@ -22,6 +25,12 @@ import {
 
 const navigate = vi.hoisted(() => vi.fn());
 const preloadRoute = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const paymentQueries = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+vi.mock('@tanstack/react-query', async importOriginal => ({
+    ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+    useQueryClient: () => paymentQueries,
+}));
+beforeEach(() => paymentQueries.clear());
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: preloadRoute }));
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -523,7 +532,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
             prepareShipping,
             cart: vi.fn().mockResolvedValue(cartFor(order)),
             preparePayment: vi.fn().mockResolvedValue({ cart: cartFor(order), order }),
-            prefetchEligiblePaymentMethods: vi.fn().mockResolvedValue([]),
+            eligiblePaymentMethods: vi.fn().mockResolvedValue([]),
             runWithinDeadline: vi.fn((callback: (signal: AbortSignal) => Promise<unknown>) =>
                 callback(new AbortController().signal),
             ),
@@ -672,7 +681,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(api.setShippingAddress).not.toHaveBeenCalled();
         expect(api.prepareShipping).toHaveBeenCalledTimes(1);
         expect(api.cart).toHaveBeenCalledTimes(1);
-        expect(api.prefetchEligiblePaymentMethods).toHaveBeenCalledWith('order-1');
+        expect(api.eligiblePaymentMethods).toHaveBeenCalledWith(expect.any(AbortSignal));
         expect(preloadRoute).toHaveBeenCalledWith('payment');
         expect(navigate).toHaveBeenCalledWith({ to: '/payment', search: {}, replace: true });
     });
@@ -720,7 +729,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
                         }, 10_000);
                     }),
             );
-            api.prefetchEligiblePaymentMethods.mockImplementation(
+            api.eligiblePaymentMethods.mockImplementation(
                 () =>
                     new Promise(resolve => {
                         setTimeout(() => {
@@ -798,7 +807,7 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         await flush(() => resolvePayment({ cart: cartFor(order), order }));
         expect(props.onSessionChange).not.toHaveBeenCalled();
         expect(navigate).not.toHaveBeenCalled();
-        expect(api.prefetchEligiblePaymentMethods).not.toHaveBeenCalled();
+        expect(api.eligiblePaymentMethods).not.toHaveBeenCalled();
     });
 
     it('keeps the form on a preparation error without issuing another recovery read', async () => {
@@ -1038,6 +1047,208 @@ describe('CheckoutPage automatic delivery and drawer', () => {
         expect(container.querySelectorAll('.saved-address')).toHaveLength(1);
         expect(submitButton().disabled).toBe(false);
     });
+});
+
+describe('CheckoutPage delivery drafts and saved note recovery', () => {
+    let host: HTMLDivElement;
+    let root: ReturnType<typeof createRoot>;
+    let order: Order;
+    let customer: ActiveCustomer;
+    let api: {
+        myDeliveryEmails: ReturnType<typeof vi.fn<ShopApi['myDeliveryEmails']>>;
+        setOrderNote: ReturnType<typeof vi.fn<ShopApi['setOrderNote']>>;
+        cart: ReturnType<typeof vi.fn<ShopApi['cart']>>;
+    };
+    const emails = [
+        { id: 'default', emailAddress: 'default@example.test', isDefault: true },
+        { id: 'work', emailAddress: 'work@example.test', isDefault: false },
+    ] as CustomerDeliveryEmail[];
+    const notify = vi.fn();
+    const onCartChange = vi.fn();
+    const interact = async (action: () => void) => {
+        await act(async () => {
+            action();
+            await Promise.resolve();
+        });
+    };
+    const render = () =>
+        interact(() =>
+            root.render(
+                createElement(CheckoutPage, {
+                    api: api as unknown as ShopApi,
+                    order,
+                    cart: cartFor(order),
+                    customer,
+                    market,
+                    locale: market.locale,
+                    language: 'zh',
+                    onBack: vi.fn(),
+                    onSessionChange: vi.fn(),
+                    onCartChange,
+                    onNotify: notify,
+                    coupons: [],
+                    onApplyCoupon: vi.fn(),
+                    onRemoveCoupon: vi.fn(),
+                }),
+            ),
+        );
+    const fill = (selector: string, value: string) =>
+        interact(() => {
+            const input = required(document.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector));
+            const prototype =
+                input instanceof HTMLTextAreaElement
+                    ? HTMLTextAreaElement.prototype
+                    : HTMLInputElement.prototype;
+            const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+            if (!descriptor?.set) throw new Error('Expected native input setter');
+            descriptor.set.call(input, value);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+    const selectEmail = async (label: string) => {
+        await interact(() =>
+            required(host.querySelector<HTMLButtonElement>('[aria-haspopup="dialog"]')).click(),
+        );
+        await interact(() =>
+            required(
+                [...document.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(item =>
+                    item.textContent?.includes(label),
+                ),
+            ).click(),
+        );
+    };
+    function required<T>(value: T | null | undefined): T {
+        if (value == null) throw new Error('Expected checkout control');
+        return value;
+    }
+    const submitNote = () =>
+        interact(() =>
+            required(required(document.querySelector('textarea')).closest('form')).dispatchEvent(
+                new Event('submit', { bubbles: true, cancelable: true }),
+            ),
+        );
+    beforeEach(() => {
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        order = orderFor('DIGITAL');
+        customer = {
+            id: 'customer-a',
+            emailAddress: 'account@example.test',
+            addresses: [],
+        } as unknown as ActiveCustomer;
+        api = {
+            myDeliveryEmails: vi.fn().mockResolvedValue(emails),
+            setOrderNote: vi.fn().mockResolvedValue(order),
+            cart: vi.fn().mockResolvedValue(cartFor(order)),
+        };
+        notify.mockClear();
+        onCartChange.mockClear();
+    });
+    afterEach(() => {
+        act(() => root.unmount());
+        host.remove();
+    });
+
+    it.each([false, true])(
+        'keeps a new email, confirmation and options after refresh (new customer object: %s)',
+        async newObject => {
+            await render();
+            await selectEmail('使用新邮箱');
+            await fill('[name="deliveryEmail"]', 'new@example.test');
+            await fill('[name="confirmDeliveryEmail"]', 'new@example.test');
+            await interact(() =>
+                required(host.querySelector<HTMLInputElement>('[name="saveDeliveryEmail"]')).click(),
+            );
+            if (newObject) customer = { ...customer };
+            await render();
+            expect(host.querySelector<HTMLInputElement>('[name="deliveryEmail"]')?.value).toBe(
+                'new@example.test',
+            );
+            expect(host.querySelector<HTMLInputElement>('[name="confirmDeliveryEmail"]')?.value).toBe(
+                'new@example.test',
+            );
+            expect(host.querySelector<HTMLInputElement>('[name="saveDeliveryEmail"]')?.checked).toBe(false);
+        },
+    );
+
+    it.each([false, true])(
+        'keeps a non-default saved email after refresh (new customer object: %s)',
+        async newObject => {
+            await render();
+            await selectEmail('work@example.test');
+            if (newObject) customer = { ...customer };
+            await render();
+            expect(host.querySelector('[aria-haspopup="dialog"]')?.textContent).toContain(
+                'work@example.test',
+            );
+            expect(host.querySelector('[name="deliveryEmail"]')).toBeNull();
+        },
+    );
+
+    it('does not let a late initial read overwrite typing', async () => {
+        let finish!: (items: CustomerDeliveryEmail[]) => void;
+        api.myDeliveryEmails.mockImplementationOnce(
+            () =>
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+        );
+        await render();
+        await fill('[name="deliveryEmail"]', 'typing@example.test');
+        await interact(() => finish(emails));
+        expect(host.querySelector<HTMLInputElement>('[name="deliveryEmail"]')?.value).toBe(
+            'typing@example.test',
+        );
+    });
+
+    it('clears drafts and rejects late results when the customer or order changes', async () => {
+        let finish!: (items: CustomerDeliveryEmail[]) => void;
+        api.myDeliveryEmails.mockImplementationOnce(
+            () =>
+                new Promise(resolve => {
+                    finish = resolve;
+                }),
+        );
+        await render();
+        await fill('[name="deliveryEmail"]', 'old@example.test');
+        customer = { ...customer, id: 'customer-b', emailAddress: 'other@example.test' };
+        order = { ...order, id: 'order-b' };
+        api.myDeliveryEmails.mockResolvedValue([]);
+        await render();
+        await interact(() => finish(emails));
+        expect(host.querySelector<HTMLInputElement>('[name="deliveryEmail"]')?.value).toBe(
+            'other@example.test',
+        );
+        expect(host.querySelector('[name="confirmDeliveryEmail"]')).toHaveProperty('value', '');
+        expect(host.textContent).not.toContain('default@example.test');
+    });
+
+    it.each([false, true])(
+        'retries only reading a saved note (acknowledged read error: %s)',
+        async acknowledgedError => {
+            if (acknowledgedError)
+                api.setOrderNote.mockRejectedValueOnce(
+                    new CartCommandAcknowledgedReadError('note-command', 'read failed', new Error('offline')),
+                );
+            else api.cart.mockRejectedValueOnce(new Error('offline'));
+            await render();
+            await interact(() =>
+                required(
+                    [...host.querySelectorAll('button')].find(button =>
+                        button.textContent?.includes('订单备注'),
+                    ),
+                ).click(),
+            );
+            await fill('textarea', 'Synthetic note');
+            await submitNote();
+            expect(document.body.textContent).toContain('订单备注已保存，但读取更新失败');
+            expect(notify).not.toHaveBeenCalled();
+            await submitNote();
+            expect(api.setOrderNote).toHaveBeenCalledOnce();
+            expect(onCartChange).toHaveBeenCalledOnce();
+            expect(notify).toHaveBeenCalledWith('订单备注已保存');
+        },
+    );
 });
 
 describe('CheckoutPage submission authentication and recovery', () => {

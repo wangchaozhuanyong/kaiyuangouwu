@@ -1790,28 +1790,66 @@ describe('ShopApi storefront mutations', () => {
         expect(request.query).toContain('isEligible');
     });
 
-    it('reuses payment methods prefetched for the prepared order', async () => {
-        const fetchMock = mockGraphQlResponse({
-            eligiblePaymentMethods: [
-                {
-                    id: 'payment-1',
-                    code: 'card',
-                    name: 'Card',
-                    description: '',
-                    isEligible: true,
-                    eligibilityMessage: null,
-                },
-            ],
+    it.each([
+        ['card', 'usdt-trc20'],
+        ['usdt-trc20', 'card'],
+    ])(
+        'reads fresh payment methods after switching from %s to %s on the same order',
+        async (before, after) => {
+            let method = before;
+            const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+                await Promise.resolve();
+                const body = JSON.parse(jsonRequestBody(init));
+                if (body.query.includes('SetStorefrontPaymentCurrency')) {
+                    method = after;
+                    return new Response(
+                        JSON.stringify({
+                            data: {
+                                setStorefrontPaymentCurrency: {
+                                    id: 'same-order',
+                                    customFields: { paymentCurrencyCode: body.variables.currencyCode },
+                                },
+                            },
+                        }),
+                    );
+                }
+                return new Response(
+                    JSON.stringify({
+                        data: {
+                            eligiblePaymentMethods: [{ code: method, isEligible: true }],
+                        },
+                    }),
+                );
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            const api = new ShopApi(market);
+            expect(await api.eligiblePaymentMethods()).toEqual([expect.objectContaining({ code: before })]);
+            await api.setPaymentCurrencyForOrder(after === 'card' ? 'CNY' : 'USDT');
+            expect(await api.eligiblePaymentMethods()).toEqual([expect.objectContaining({ code: after })]);
+            expect(fetchMock).toHaveBeenCalledTimes(3);
+        },
+    );
+
+    it('bounds payment currency writes and marks a timed-out outcome as unknown', async () => {
+        vi.useFakeTimers();
+        const fetchMock = vi.fn(
+            (_url: string, init?: RequestInit) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('Aborted', 'AbortError')),
+                    );
+                }),
+        );
+        vi.stubGlobal('fetch', fetchMock);
+        const rejection = expect(
+            new ShopApi(market).setPaymentCurrencyForOrder('USDT'),
+        ).rejects.toMatchObject({
+            name: 'ShopApiTimeoutError',
+            resultUnknown: true,
         });
-        const api = new ShopApi(market);
-
-        await api.prefetchEligiblePaymentMethods('order-1');
-        await expect(api.eligiblePaymentMethods(undefined, 'order-1')).resolves.toHaveLength(1);
-
+        await vi.advanceTimersByTimeAsync(SHOP_API_QUERY_TIMEOUT_MS);
+        await rejection;
         expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(api.cachedEligiblePaymentMethods('order-1')).toEqual([
-            expect.objectContaining({ code: 'card', isEligible: true }),
-        ]);
     });
 
     it('submits payment metadata and returns the placed order', async () => {

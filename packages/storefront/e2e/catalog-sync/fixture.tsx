@@ -172,7 +172,7 @@ function Fixture() {
                     Promise.reject(
                         new Error(en ? 'Payment is disabled in this local fixture' : '本地验收不提供付款'),
                     ),
-                prefetchEligiblePaymentMethods: () => Promise.resolve([]),
+                eligiblePaymentMethods: () => Promise.resolve([]),
                 runWithinDeadline: async (callback: (signal: AbortSignal) => Promise<unknown>) =>
                     callback(new AbortController().signal),
             }) as unknown as ShopApi,

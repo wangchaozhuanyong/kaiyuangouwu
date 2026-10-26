@@ -815,6 +815,24 @@ export function useStorefrontAppState() {
 
     const commitCurrencyPreference = useCallback(
         (currencyCode: string) => {
+            const orderId = cart?.checkoutOrder?.id;
+            if (orderId) {
+                const filters = {
+                    predicate: (query: { queryKey: readonly unknown[] }) => {
+                        const key = query.queryKey;
+                        return (
+                            key[0] === 'storefront' &&
+                            key[1] === storefrontQueryKeys.market(market) &&
+                            key[3] === 'private' &&
+                            key[4] === 'order' &&
+                            key[5] === orderId &&
+                            key[6] === 'payment-methods'
+                        );
+                    },
+                };
+                void queryClient.cancelQueries(filters);
+                queryClient.removeQueries(filters);
+            }
             writeStoredCurrency(market.code, currencyCode);
             writeStoredSettlementCurrency(market.code, currencyCode);
             setDisplayCurrencyCode(currencyCode);
@@ -834,6 +852,8 @@ export function useStorefrontAppState() {
             );
         },
         [
+            cart?.checkoutOrder?.id,
+            queryClient,
             language,
             market,
             maximumPrice,

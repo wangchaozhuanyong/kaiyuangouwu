@@ -434,12 +434,20 @@ export const storefrontQueryKeys = {
         ] as const,
     orderByCode: (marketCode: string, languageCode: string, code: string) =>
         [...storefrontQueryKeys.privateScope(marketCode, languageCode), 'order-by-code', code] as const,
-    paymentMethods: (marketCode: string, languageCode: string, orderId: string) =>
+    paymentMethods: (
+        marketCode: string,
+        languageCode: string,
+        orderId: string,
+        paymentCurrencyCode: string,
+        customerId: string,
+    ) =>
         [
             ...storefrontQueryKeys.privateScope(marketCode, languageCode),
             'order',
             orderId,
             'payment-methods',
+            customerId,
+            paymentCurrencyCode,
         ] as const,
 };
 
