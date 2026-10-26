@@ -39,6 +39,16 @@ function fixture(type = 'manual-digital-delivery') {
 }
 describe('Safe digital notification send-time authorization', () => {
     it.each(['manual-digital-delivery', 'auto-card-delivery'])(
+        'rejects a missing current %s entitlement before validating its receipt',
+        async type => {
+            const f = fixture(type);
+            f.queuedEmailPayload.mockResolvedValue(null);
+            f.notificationPayload.mockResolvedValue(null);
+            await expect(f.guard(f.injector, f.ctx, f.email)).rejects.toThrow('数字交付通知领取入口已失效');
+            expect(f.verifyToken).not.toHaveBeenCalled();
+        },
+    );
+    it.each(['manual-digital-delivery', 'auto-card-delivery'])(
         'accepts a current safe %s entry',
         async type => {
             const f = fixture(type);
