@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import './security-advisory-access.spec.mjs';
 import './security-http-regressions.spec.mjs';
 import './security-vendors.spec.mjs';
 import './zod-security-backport.spec.mjs';

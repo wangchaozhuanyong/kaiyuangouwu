@@ -133,7 +133,11 @@ function requestAdvisoryJson(options, payload) {
             response.on('error', reject);
             response.on('end', () => {
                 if (response.statusCode !== 200)
-                    return reject(new Error('Origin advisory registry HTTP failure'));
+                    return reject(
+                        new Error(
+                            `Origin advisory registry HTTP ${response.statusCode} from ${options.hostname}`,
+                        ),
+                    );
                 try {
                     resolve(JSON.parse(text));
                 } catch {
@@ -169,11 +173,16 @@ function requestOriginAdvisory(advisoryUrl) {
         advisoryUrl,
     );
     assert.ok(identity, 'Invalid known origin advisory URL');
+    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
     return requestAdvisoryJson({
         hostname: 'api.github.com',
         path: '/advisories/' + identity[1],
         method: 'GET',
-        headers: { accept: 'application/vnd.github+json', 'user-agent': 'vendure-origin-advisory-audit' },
+        headers: {
+            accept: 'application/vnd.github+json',
+            'user-agent': 'vendure-origin-advisory-audit',
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
     });
 }
 
