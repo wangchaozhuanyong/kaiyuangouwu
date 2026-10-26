@@ -261,8 +261,9 @@ describe('auth password visibility controls', () => {
             }),
         );
 
-        expect(markup).toContain('class="google-auth-button google-auth-button-disabled"');
-        expect(markup).toContain('请先勾选同意条款与隐私政策，再使用 Google 继续');
+        expect(markup).toContain('class="google-auth-button"');
+        expect(markup).not.toContain('class="google-auth-button google-auth-button-disabled"');
+        expect(markup).toMatch(/type="checkbox"[^>]*checked=""/);
         expect(markup).not.toContain('class="auth-account-form"');
         expect(markup).not.toContain('暂未开启注册方式');
     });

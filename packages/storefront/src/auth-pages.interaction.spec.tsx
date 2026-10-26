@@ -32,7 +32,8 @@ function requiredElement<T extends Element>(selector: string): T {
 }
 
 function acceptRegistrationConsent(): void {
-    act(() => requiredElement<HTMLInputElement>('.auth-registration-consent input').click());
+    const checkbox = requiredElement<HTMLInputElement>('.auth-registration-consent input');
+    if (!checkbox.checked) act(() => checkbox.click());
 }
 
 async function settle(action: () => void) {
@@ -355,7 +356,10 @@ describe('storefront configurable authentication methods', () => {
         expect(legalButtons).toHaveLength(1);
         act(() => legalButtons[0].click());
         expect(baseProps.onContentTarget).toHaveBeenCalledWith('PAGE', 'privacy');
-        expect(requiredElement<HTMLInputElement>('input[type="checkbox"]').checked).toBe(false);
+        const consent = requiredElement<HTMLInputElement>('input[type="checkbox"]');
+        expect(consent.checked).toBe(true);
+        act(() => consent.click());
+        expect(consent.checked).toBe(false);
         requiredElement<HTMLInputElement>('input[name="fullName"]').value = '李测试';
         requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'layout@example.invalid';
         expect(host.querySelector('input[name="password"]')).toBeNull();
@@ -420,6 +424,13 @@ describe('storefront configurable authentication methods', () => {
         );
         requiredElement<HTMLInputElement>('input[name="emailAddress"]').value = 'new@example.com';
         requiredElement<HTMLInputElement>('input[name="password"]').value = 'secure-password';
+        const consent = requiredElement<HTMLInputElement>('.auth-registration-consent input');
+        expect(consent.checked).toBe(true);
+        act(() => consent.click());
+        expect(consent.checked).toBe(false);
+        await settle(() => submit(requiredElement<HTMLFormElement>('form')));
+        expect(registerCustomerAccount).not.toHaveBeenCalled();
+        expect(requiredElement('[role="alert"]').textContent).toContain('请先同意条款与隐私政策');
         acceptRegistrationConsent();
 
         await act(async () => {
@@ -554,7 +565,11 @@ describe('storefront configurable authentication methods', () => {
                 />,
             ),
         );
-        expect(requiredElement<HTMLInputElement>('.auth-registration-consent input').checked).toBe(false);
+        const consent = requiredElement<HTMLInputElement>('.auth-registration-consent input');
+        expect(consent.checked).toBe(true);
+        expect(host.querySelector('.google-auth-button > [inert]')).toBeNull();
+        act(() => consent.click());
+        expect(consent.checked).toBe(false);
         expect(host.querySelector('.google-auth-button > [inert]')).not.toBeNull();
         expect(host.textContent).toContain('请先勾选同意条款与隐私政策，再使用 Google 继续');
         await settle(() => credentialCallback?.({ credential: 'qa-id-token', state }));
