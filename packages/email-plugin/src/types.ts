@@ -127,14 +127,15 @@ export interface EmailPluginOptions {
      */
     emailSender?: EmailSender;
     /**
-     * Revalidates queued email immediately before each send attempt, including retries.
+     * Revalidates queued email on each attempt, before template rendering and transport resolution.
      * Throwing prevents delivery and publishes the usual failed EmailSendEvent.
+     * Returning false consumes an obsolete email without transport or an EmailSendEvent.
      */
     beforeSend?: (
         injector: Injector,
         ctx: RequestContext,
         email: Readonly<IntermediateEmailDetails>,
-    ) => void | Promise<void>;
+    ) => boolean | void | Promise<boolean | void>;
     /**
      * @description
      * An optional allowed EmailGenerator, used to allow custom email generation functionality to

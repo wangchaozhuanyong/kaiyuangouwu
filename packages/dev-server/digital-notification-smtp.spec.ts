@@ -77,6 +77,7 @@ async function fixture(type: string, language: string) {
         authorizedAsOwnerOnly: false,
     });
     let revoked = false;
+    let ready = true;
     const current = {
         orderId: '1',
         orderCode: 'SYNTHETIC-SMTP',
@@ -91,7 +92,7 @@ async function fixture(type: string, language: string) {
                     queuedEmailPayload: () => {
                         return Promise.resolve().then(() => {
                             if (revoked) throw new Error('Synthetic revoked entitlement');
-                            return current;
+                            return ready ? current : null;
                         });
                     },
                     notificationPayload: () => {
@@ -149,9 +150,24 @@ async function fixture(type: string, language: string) {
         revoke: () => {
             revoked = true;
         },
+        markNotReady: () => {
+            ready = false;
+        },
     };
 }
 describe('digital notification rendered and transported over local SMTP', () => {
+    it.each(['order-confirmation', 'manual-digital-delivery', 'auto-card-delivery'])(
+        'consumes obsolete %s without SMTP or success/failure events',
+        async type => {
+            const f = await fixture(type, 'zh_Hans');
+            f.markNotReady();
+            f.email.templateFile = 'obsolete-template.hbs';
+            const before = messages.length;
+            await expect(f.processor.process(f.email)).resolves.toBe(false);
+            expect(messages).toHaveLength(before);
+            expect(f.events).toHaveLength(0);
+        },
+    );
     it.each([
         ['manual-digital-delivery', 'zh_Hans'],
         ['auto-card-delivery', 'en'],

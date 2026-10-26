@@ -23,6 +23,7 @@ import { In, IsNull, LessThan, LessThanOrEqual } from 'typeorm';
 
 import { AutoCardCipherService } from './auto-card-cipher.service';
 import { readSoldAutoCardsPermission } from './auto-card.constants';
+import { normalizeDeliveryEmail } from './customer-delivery-email.service';
 import { DeliveryRecoveryCursors, scanDeliveryRecoveryPage } from './delivery-recovery-scan';
 import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { DigitalProductService } from './digital-product.service';
@@ -92,10 +93,7 @@ export class ManualDigitalDeliveryService {
             return [];
         }
         assertOrderSalesChannel(ctx, order);
-        const recipientEmail = order.customFields?.deliveryEmail?.trim();
-        if (!recipientEmail) {
-            throw new Error('人工虚拟交付订单缺少交付邮箱');
-        }
+        const recipientEmail = normalizeDeliveryEmail(order.customFields?.deliveryEmail ?? '');
         const repository = this.connection.getRepository(ctx, ManualDigitalDelivery);
         const deliveries: ManualDigitalDelivery[] = [];
         for (const line of manualServiceLines) {
@@ -411,7 +409,7 @@ export class ManualDigitalDeliveryService {
         return {
             deliveryId: String(delivery.id),
             orderId: String(delivery.orderId),
-            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
+            recipientEmail: normalizeDeliveryEmail(delivery.order.customFields?.deliveryEmail ?? ''),
             orderCode: delivery.order.code,
             productName: delivery.productName,
             sku: delivery.sku,
@@ -435,6 +433,7 @@ export class ManualDigitalDeliveryService {
 
         return {
             deliveryId: String(delivery.id),
+            // Receipt readers retain the historical snapshot; mail uses notificationPayload instead.
             recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
             orderCode: delivery.order.code,
             productName: delivery.productName,
@@ -449,13 +448,12 @@ export class ManualDigitalDeliveryService {
 
     async queuedEmailPayload(ctx: RequestContext, id: ID) {
         const delivery = await this.ownedDelivery(ctx, id);
-        if (
-            !['SENDING', 'EMAIL_FAILED'].includes(delivery.state) ||
-            delivery.order.state === 'Cancelled' ||
-            delivery.orderLine.quantity === 0
-        ) {
-            throw new UserInputError('人工交付任务已关闭或当前状态不能发送邮件');
-        }
+        if (!['SENDING', 'EMAIL_FAILED'].includes(delivery.state)) return null;
+        const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
+        // Preserve the existing authorization error; only obsolete readiness is a policy skip.
+        if (!eligible) throw new UserInputError('当前领取资格已暂停或撤销');
+        const packages = this.readPackages(delivery);
+        if (packages.length !== delivery.quantity || packages.length < eligible) return null;
         return this.notificationPayload(ctx, id);
     }
 

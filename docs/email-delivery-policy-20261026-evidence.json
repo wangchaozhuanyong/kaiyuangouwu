@@ -1,0 +1,128 @@
+{
+    "schema": "email-delivery-policy-isolated-evidence-v1",
+    "baseline": "0c2e13d1ee5b9acb6459011b84daee2b27030858",
+    "evidence_class": "isolated actual API/services/SQL queue/MIME/SMTP/receipt; no external payment or email",
+    "source_sha256": {
+        "packages/commerce-fulfillment-plugin/e2e/digital-order-closure.e2e-spec.ts": "86414f205df25ce00a96e51c9585cb0b8ca9fec6261885d6813d286a3dd87b9b",
+        "packages/commerce-fulfillment-plugin/e2e/local-smtp-sink.ts": "f6ddd5d46d517a9592b0e8884c27701a4cb1d709b67c0f87f47bb9ba345064c6",
+        "packages/commerce-fulfillment-plugin/e2e/order-closure.vitest.config.mjs": "46c3a84f12bb58b7d79df1e529eea769a30e55f22928ce40a6db53d5db9603db",
+        "packages/commerce-fulfillment-plugin/e2e/tsconfig.order-closure.json": "0bee4caa4b02b30e04854dcfa080538b7b78883ec1bac5191b8425af3d63d110",
+        "packages/commerce-fulfillment-plugin/src/auto-card.service.spec.ts": "a178ba2ee6ee4087cf7376372929cf5c02c3e33916c8e309eb5026a58e22ec7e",
+        "packages/commerce-fulfillment-plugin/src/auto-card.service.ts": "2235d1d7329bf741a8f3204d307ff1f716d59da8782be13e763208fae3deb14a",
+        "packages/commerce-fulfillment-plugin/src/customer-delivery-email.service.ts": "7a302d06c6573e075460f6b2d7e74b44ea94ab719cb576cd3aa0dd4dda58b783",
+        "packages/commerce-fulfillment-plugin/src/manual-digital-delivery.service.spec.ts": "5a1a63e697744322b33c14a5d69203c6146e40f03d01d65fbf5f0de22d71c646",
+        "packages/commerce-fulfillment-plugin/src/manual-digital-delivery.service.ts": "ea0b7f71c1a2a8d5d010a4c50112ac01e34b78f4a0083d4dc1318862aed0efbc",
+        "packages/dev-server/dev-config.ts": "ad319c86990c19c436858e2618ac3006b66b9bd86cfb60e64cd078bb64cecead",
+        "packages/dev-server/digital-delivery-email-handlers.ts": "3d3732097ad228b6fd24bb68a6a63e02cfc860e9349ae4528bce7474bb589561",
+        "packages/dev-server/digital-notification-smtp.spec.ts": "ef5cab9ce386b69c08883015805bfd07f8b356a0dd56211a4247e09a1ff540eb",
+        "packages/dev-server/manual-delivery-email-guard.spec.ts": "8d801236c690ef9a9febe8e55325f19b06734963cda5ea8a9249928306edc9c9",
+        "packages/dev-server/manual-delivery-email-guard.ts": "512269c2c12b5c8294c976e80da2c3133159eb3cc6a5dfe540808c2a55a064fa",
+        "packages/dev-server/order-confirmation-email.spec.ts": "dcdc8430baf0ac2499b426a157e4fdd6bf86b7da5fb761c8f72edd200f222228",
+        "packages/dev-server/order-confirmation-email.ts": "1cd1a8ca06cd2c29c8c402e1199c01518574fcdbbd6a31f34213ac9614b6bb7b",
+        "packages/email-plugin/src/email-processor.ts": "1e6a14259ead16081c4dab44d2ef31ec8e3123471b5ff5668b2b57424d855a6d",
+        "packages/email-plugin/src/plugin.spec.ts": "6f00b3b432381d77f455ca8f7dcd39e752bbef0ea1422b5c29a7ef1e49d05596",
+        "packages/email-plugin/src/types.ts": "90dac5364204866e63b45e99d3dc42949644cab57a941b6bcec3239f4e06c565"
+    },
+    "mail_policy": {
+        "passed": 74
+    },
+    "email_plugin": {
+        "passed": 57,
+        "existing_conditional_skipped": 5,
+        "type_errors": 0
+    },
+    "delivery_services": {
+        "passed": 99
+    },
+    "dev_server": {
+        "passed": 55
+    },
+    "next_admin_plugin": {
+        "passed": 73
+    },
+    "final_mysql": {
+        "passed": 15,
+        "errors": 0,
+        "receipt": 0
+    },
+    "local_checks": {
+        "lint-ready": {
+            "command": ["node", "scripts/lint-check.mjs", "--base", "origin/main"],
+            "exit": 0
+        },
+        "production-build-final": {
+            "command": ["node", "scripts/ci-run.mjs", "build"],
+            "exit": 0
+        },
+        "mail-regression-final": {
+            "command": [
+                "bun",
+                "x",
+                "vitest",
+                "run",
+                "--config",
+                "vitest.config.mts",
+                "order-confirmation-email.spec.ts",
+                "manual-delivery-email-guard.spec.ts",
+                "digital-notification-smtp.spec.ts",
+                "email-templates.spec.ts"
+            ],
+            "exit": 0
+        },
+        "email-plugin-final": {
+            "command": ["bun", "run", "test"],
+            "exit": 0
+        },
+        "dev-server-standard": {
+            "command": ["bun", "run", "test"],
+            "exit": 0
+        },
+        "next-admin-plugin-final": {
+            "command": ["bun", "run", "test"],
+            "exit": 0
+        },
+        "dev-server-types-final": {
+            "command": ["bun", "run", "typecheck"],
+            "exit": 0
+        },
+        "commerce-types-final": {
+            "command": ["bun", "run", "check-types"],
+            "exit": 0
+        },
+        "api-test-types-final": {
+            "command": [
+                "bun",
+                "x",
+                "tsc",
+                "-p",
+                "packages/commerce-fulfillment-plugin/e2e/tsconfig.order-closure.json",
+                "--noEmit"
+            ],
+            "exit": 0
+        },
+        "architecture-final": {
+            "command": ["node", "scripts/architecture-debt-audit.mjs", "--check"],
+            "exit": 0
+        },
+        "migration-registry-final": {
+            "command": ["node", "scripts/check-migration-registry.mjs"],
+            "exit": 0
+        },
+        "diff-final": {
+            "command": ["git", "diff", "--check"],
+            "exit": 0
+        }
+    },
+    "first_commerce_package_run": {
+        "passed": 754,
+        "failed": 1,
+        "unchanged_projection_threshold_ms": 800,
+        "contended_p95_ms": 1247
+    },
+    "projection_isolated": {
+        "passed": 3,
+        "assertion_changed": false
+    },
+    "external_email_sent": false,
+    "external_payment_provider": false
+}

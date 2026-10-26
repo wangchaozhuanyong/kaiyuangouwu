@@ -3,11 +3,7 @@ import { OnApplicationBootstrap } from '@nestjs/common';
 import { AssetServerPlugin, SharpAssetPreviewStrategy } from '@vendure/asset-server-plugin';
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
 import {
-    AutoCardDeliveryReadyEvent,
-    AutoCardService,
     CommerceFulfillmentPlugin,
-    ManualDigitalDeliveryReadyEvent,
-    ManualDigitalDeliveryService,
     OrderConfirmationTokenService,
     summarizeOrderFulfillment,
 } from '@vendure/commerce-fulfillment-plugin';
@@ -36,7 +32,6 @@ import {
 } from '@vendure/core';
 import {
     defaultEmailHandlers,
-    EmailEventListener,
     EmailPlugin,
     FileBasedTemplateLoader,
     type EmailEventHandlerWithAsyncData,
@@ -83,6 +78,7 @@ import { catalogAdminApiMiddleware } from './catalog-admin-api-middleware';
 import { createCatalogImageTransformStrategies } from './catalog-asset-access-strategy';
 import { contentTranslationOptions } from './content-translation-config';
 import { customerImageConfiguration } from './customer-image-config';
+import { createDigitalDeliveryEmailHandlers } from './digital-delivery-email-handlers';
 import { storefrontEmailFromAddress, storefrontEmailLogoForChannel } from './email-branding';
 import { emailLanguageVariables, localizedEmailSubjects, localizedEmailText } from './email-localization';
 import { createManualDeliveryEmailGuard } from './manual-delivery-email-guard';
@@ -132,48 +128,11 @@ const dashboardAppDir = path.join(serverRoot, '../next-admin/dist');
 const corsOrigins = process.env.VENDURE_CORS_ORIGINS?.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
-const autoCardDeliveryEmailHandler = new EmailEventListener('auto-card-delivery')
-    .on(AutoCardDeliveryReadyEvent)
-    .loadData(async ({ event, injector }) => {
-        const data = await injector.get(AutoCardService).notificationPayload(event.ctx, event.deliveryId);
-        const storefrontUrl = await storefrontUrlForChannel(event.ctx, injector.get(TransactionalConnection));
-        return { ...data, receiptUrl: `${storefrontUrl}${data.receiptPath}` };
-    })
-    .setRecipient(event => event.data.recipientEmail)
-    .setFrom('{{ fromAddress }}')
-    .setSubject(event =>
-        event.data.isChinese ? '您购买的数字商品可以领取了' : 'Your digital item is ready to claim',
-    )
-    .setTemplateVars(event => event.data)
-    .setMetadata(event => ({
-        type: 'auto-card-delivery',
-        deliveryId: event.data.deliveryId,
-    }));
-
-const manualDigitalDeliveryEmailHandler = new EmailEventListener('manual-digital-delivery')
-    .on(ManualDigitalDeliveryReadyEvent)
-    .loadData(async ({ event, injector }) => {
-        const data = await injector
-            .get(ManualDigitalDeliveryService)
-            .notificationPayload(event.ctx, event.deliveryId);
-        const storefrontUrl = await storefrontUrlForChannel(event.ctx, injector.get(TransactionalConnection));
-        return { ...data, receiptUrl: `${storefrontUrl}${data.receiptPath}` };
-    })
-    .setRecipient(event => event.data.recipientEmail)
-    .setFrom('{{ fromAddress }}')
-    .setSubject(event =>
-        event.data.isChinese ? '您购买的数字商品可以领取了' : 'Your digital item is ready to claim',
-    )
-    .setTemplateVars(event => event.data)
-    .setMetadata(event => ({
-        type: 'manual-digital-delivery',
-        deliveryId: event.data.deliveryId,
-    }));
-
 const localizedEmailHandlers = [
     ...defaultEmailHandlers,
-    autoCardDeliveryEmailHandler,
-    manualDigitalDeliveryEmailHandler,
+    ...createDigitalDeliveryEmailHandlers((ctx, injector) =>
+        storefrontUrlForChannel(ctx, injector.get(TransactionalConnection)),
+    ),
 ].map(handler => {
     if (handler.type === 'order-confirmation') {
         type DefaultOrderEmailData = { shippingLines: ShippingLine[] };

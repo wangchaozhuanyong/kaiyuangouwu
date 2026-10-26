@@ -50,6 +50,7 @@ Headless e-commerce framework. Lerna monorepo with fixed versioning.
 
 ## Release execution
 
+- Current AWS access must follow the account, Region, role and instance in `.github/workflows/production_operations.yml`, not an old local profile name. Prefer the existing GitHub Actions OIDC release/operations identity over repeated browser logins. See `docs/production-access-20261026.md`; keep credentials in system/platform storage and preserve unrelated profiles.
 - Keep one release ledger: target revision, production component revisions, changed files, required checks, reused evidence, artifact, and acceptance result. Use `scripts/release-evidence.mjs` and `deploy/release-route.mjs`; do not improvise another full test or deployment sequence.
 - Finish the selected local checks and consolidate their fixes before pushing a release candidate. A failed local gate is a reason to fix locally, not to push successive incomplete candidates and use CI as the debugger.
 - Reuse successful checks when their inputs match. Do not rerun passed business/DB checks after a control-only fix, manually start full CI, or run the same acceptance again after its committed receipt is verified. Perform additional checks only for changed inputs, a failure, or a specific unresolved concern.

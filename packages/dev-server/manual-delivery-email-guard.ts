@@ -11,6 +11,8 @@ export function createManualDeliveryEmailGuard(
     storefrontUrlForChannel: (ctx: RequestContext, injector: Injector) => Promise<string>,
 ): NonNullable<EmailPluginOptions['beforeSend']> {
     return async (injector, ctx, email) => {
+        // Also consume confirmations queued before the delivery-only policy was enabled.
+        if (email.type === 'order-confirmation') return false;
         if (!['manual-digital-delivery', 'auto-card-delivery'].includes(email.type)) return;
         const id = email.metadata?.deliveryId;
         const vars = email.templateVars;
@@ -30,10 +32,8 @@ export function createManualDeliveryEmailGuard(
         const current =
             email.type === 'manual-digital-delivery'
                 ? await injector.get(ManualDigitalDeliveryService).queuedEmailPayload(ctx, id)
-                : await injector.get(AutoCardService).notificationPayload(ctx, id);
-        if (!current) {
-            throw new UserInputError('数字交付通知领取入口已失效，请重新发送');
-        }
+                : await injector.get(AutoCardService).queuedEmailPayload(ctx, id);
+        if (!current) return false;
         let receipt: URL;
         try {
             receipt = new URL(String(vars.receiptUrl));

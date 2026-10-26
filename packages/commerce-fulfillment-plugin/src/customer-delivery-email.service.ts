@@ -51,8 +51,8 @@ export class CustomerDeliveryEmailService {
         input: SaveCustomerDeliveryEmailInput,
     ): Promise<CustomerDeliveryEmail> {
         const customer = await this.activeCustomer(ctx);
-        const emailAddress = normalizeEmail(input.emailAddress);
-        const confirmation = normalizeEmail(input.confirmEmailAddress);
+        const emailAddress = normalizeDeliveryEmail(input.emailAddress);
+        const confirmation = normalizeDeliveryEmail(input.confirmEmailAddress);
         if (emailAddress !== confirmation) {
             throw new UserInputError('两次输入的交付邮箱不一致');
         }
@@ -156,8 +156,8 @@ export class CustomerDeliveryEmailService {
             contact = await this.ownedEmail(ctx, input.contactId);
             emailAddress = contact.emailAddress;
         } else {
-            emailAddress = normalizeEmail(input.emailAddress ?? '');
-            if (emailAddress !== normalizeEmail(input.confirmEmailAddress ?? '')) {
+            emailAddress = normalizeDeliveryEmail(input.emailAddress ?? '');
+            if (emailAddress !== normalizeDeliveryEmail(input.confirmEmailAddress ?? '')) {
                 throw new UserInputError('两次输入的交付邮箱不一致');
             }
             if (input.saveToAddressBook && ctx.activeUserId) {
@@ -187,7 +187,7 @@ export class CustomerDeliveryEmailService {
     }
 }
 
-function normalizeEmail(value: string): string {
+export function normalizeDeliveryEmail(value: string): string {
     const normalized = value?.trim().toLowerCase();
     if (!normalized || normalized.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(normalized)) {
         throw new UserInputError('请输入有效的交付邮箱');

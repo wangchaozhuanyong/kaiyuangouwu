@@ -54,6 +54,10 @@ export class EmailProcessor {
         const ctx = RequestContext.deserialize(data.ctx);
         let emailDetails: EmailDetails = {} as any;
         try {
+            if ((await this.options.beforeSend?.(new Injector(this.moduleRef), ctx, data)) === false) {
+                Logger.info(`Skipped ${data.type} email by send policy`, loggerCtx);
+                return false;
+            }
             const bodySource = await this.options.templateLoader.loadTemplate(
                 new Injector(this.moduleRef),
                 ctx,
@@ -78,7 +82,6 @@ export class EmailProcessor {
                 replyTo: data.replyTo,
             };
             const transportSettings = await this.getTransportSettings(ctx);
-            await this.options.beforeSend?.(new Injector(this.moduleRef), ctx, data);
             await this.emailSender.send(emailDetails, transportSettings);
             await this.eventBus.publish(
                 new EmailSendEvent(ctx, emailDetails, true, undefined, data.metadata),

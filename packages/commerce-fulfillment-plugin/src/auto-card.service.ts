@@ -54,6 +54,7 @@ import {
     manageAutoCardSecretsPermission,
     readSoldAutoCardsPermission,
 } from './auto-card.constants';
+import { normalizeDeliveryEmail } from './customer-delivery-email.service';
 import { DeliveryRecoveryCursors, scanDeliveryRecoveryPage } from './delivery-recovery-scan';
 import { digitalDeliverableQuantity } from './digital-order-entitlement';
 import { DigitalProductService } from './digital-product.service';
@@ -682,11 +683,7 @@ export class AutoCardService implements OnApplicationBootstrap, OnModuleDestroy 
         }
         assertOrderSalesChannel(ctx, order);
         if (!order.lines.some(isAutoCardOrderLine)) return [];
-        const recipientEmail =
-            order.customFields?.deliveryEmail?.trim() || order.customer?.emailAddress?.trim();
-        if (!recipientEmail) {
-            throw new Error('自动发卡订单缺少交付邮箱');
-        }
+        const recipientEmail = normalizeDeliveryEmail(order.customFields?.deliveryEmail ?? '');
         const deliveries: AutoCardDelivery[] = [];
         for (const line of order.lines.filter(isAutoCardOrderLine)) {
             const source = await this.supply.forPaidLine(ctx, order, line);
@@ -770,13 +767,22 @@ export class AutoCardService implements OnApplicationBootstrap, OnModuleDestroy 
         return {
             deliveryId: String(delivery.id),
             orderId: String(delivery.orderId),
-            recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
+            recipientEmail: normalizeDeliveryEmail(delivery.order.customFields?.deliveryEmail ?? ''),
             orderCode: delivery.order.code,
             productName: delivery.productName,
             sku: delivery.sku,
             isChinese: delivery.languageCode === 'zh_Hans',
             receiptPath: `/order-confirmation?id=${encodeURIComponent(delivery.order.code)}&token=${encodeURIComponent(proof.token)}`,
         };
+    }
+
+    async queuedEmailPayload(ctx: RequestContext, id: ID) {
+        const delivery = await this.deliveryOrThrow(ctx, id);
+        if (!['ALLOCATED', 'RETRYING'].includes(delivery.state)) return null;
+        const eligible = digitalDeliverableQuantity(delivery.order, delivery.orderLine);
+        if (!eligible) throw new UserInputError('当前领取资格已暂停或撤销');
+        if (delivery.poolItems.filter(item => item.state === 'ASSIGNED').length < eligible) return null;
+        return this.notificationPayload(ctx, id);
     }
 
     async emailPayload(ctx: RequestContext, deliveryId: ID): Promise<AutoCardEmailPayload> {
@@ -789,6 +795,7 @@ export class AutoCardService implements OnApplicationBootstrap, OnModuleDestroy 
         const isChinese = delivery.languageCode === 'zh_Hans';
         return {
             deliveryId: String(delivery.id),
+            // Receipt readers retain the historical snapshot; mail uses notificationPayload instead.
             recipientEmail: delivery.order.customFields?.deliveryEmail?.trim() || delivery.recipientEmail,
             orderCode: delivery.order.code,
             productName: delivery.productName,

@@ -1,5 +1,6 @@
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 import { CatalogManagementPlugin } from '@vendure/catalog-management-plugin';
+import { summarizeOrderFulfillment } from '@vendure/commerce-fulfillment-plugin';
 import { CurrencyCode, GlobalFlag, LanguageCode, Permission } from '@vendure/common/lib/generated-types';
 import { ContentTranslationPlugin } from '@vendure/content-translation-plugin';
 import {
@@ -7,11 +8,14 @@ import {
     ChannelService,
     Ctx,
     CustomerService,
+    DefaultJobQueuePlugin,
     DefaultLogger,
     EventBus,
     Fulfillment,
     ID,
+    JobQueueService,
     LogLevel,
+    ModuleRef,
     Order,
     OrderLine,
     OrderService,
@@ -20,6 +24,7 @@ import {
     PaymentMethodHandler,
     PaymentMethodService,
     PluginCommonModule,
+    ProcessContext,
     ProductService,
     ProductVariantService,
     Refund,
@@ -36,22 +41,35 @@ import {
     VendurePlugin,
     mergeConfig,
 } from '@vendure/core';
-import { EmailSendEvent } from '@vendure/email-plugin';
+import {
+    EmailPlugin,
+    EmailSendEvent,
+    FileBasedTemplateLoader,
+    InitializedEmailPluginOptions,
+    orderConfirmationHandler,
+} from '@vendure/email-plugin';
 import { OperationsDashboardPlugin } from '@vendure/operations-dashboard-plugin';
 import { StoreDomain, StoreDomainPlugin } from '@vendure/store-domain-plugin';
 import { StorefrontCartPlugin } from '@vendure/storefront-cart-plugin';
 import { SimpleGraphQLClient, createTestEnvironment } from '@vendure/testing';
 import { print } from 'graphql';
 import gql from 'graphql-tag';
+import { simpleParser } from 'mailparser';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Subscription } from 'rxjs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
 import { TEST_SETUP_TIMEOUT_MS, testConfig } from '../../../e2e-common/test-config';
+import { createDigitalDeliveryEmailHandlers } from '../../dev-server/digital-delivery-email-handlers';
+import { emailLanguageVariables } from '../../dev-server/email-localization';
+import { createManualDeliveryEmailGuard } from '../../dev-server/manual-delivery-email-guard';
+import { shouldSendOrderConfirmation } from '../../dev-server/order-confirmation-email';
+import { EmailProcessor } from '../../email-plugin/src/email-processor';
 import { AdministratorAccessService } from '../../store-management-plugin/src/administrator-access.service';
 import { ReferralWalletUsage } from '../../store-management-plugin/src/entities/referral-wallet-usage.entity';
 import { ReferralWallet } from '../../store-management-plugin/src/entities/referral-wallet.entity';
@@ -84,8 +102,12 @@ import { ManualDigitalDelivery } from '../src/entities/manual-digital-delivery.e
 import { ManualDigitalDeliveryReadyEvent } from '../src/manual-digital-delivery.event';
 import { OrderConfirmationTokenService } from '../src/order-confirmation-token.service';
 
+import { localSmtpSink } from './local-smtp-sink';
 import { closureDatabase } from './order-closure-db';
 // All payment providers and identities are synthetic; production database access is refused.
+const { JSDOM } = createRequire(__filename)('jsdom') as {
+    JSDOM: new (html: string) => { window: { document: Document } };
+};
 const root = path.resolve(__dirname, '../../../');
 const fixtureRoot = path.join(root, 'reports/digital-order-closure-e2e');
 const database = closureDatabase(path.join(fixtureRoot, 'sqljs-' + randomUUID()));
@@ -200,6 +222,7 @@ const config = mergeConfig(testConfig(), {
     defaultLanguageCode: LanguageCode.zh_Hans,
     logger: new SyntheticDiagnosticLogger({ level: LogLevel.Error }),
     paymentOptions: { paymentMethodHandlers: [settledProvider, pendingProvider] },
+    jobQueueOptions: { activeQueues: ['send-email'] },
     customFields: {
         Channel: [
             { name: 'usdtDisplayEnabled', type: 'boolean', defaultValue: true },
@@ -213,6 +236,7 @@ const config = mergeConfig(testConfig(), {
         ],
     },
     plugins: [
+        DefaultJobQueuePlugin.init({ useDatabaseForBuffer: true }),
         OperationsDashboardPlugin,
         CatalogManagementPlugin,
         StorefrontCartPlugin,
@@ -745,6 +769,7 @@ async function checkout(
     provider = settledProvider.code,
     physicalId?: ID,
     authenticatedClient?: SimpleGraphQLClient,
+    deliveryRecipient?: string,
 ) {
     const client = authenticatedClient ?? shop();
     const result = (
@@ -873,7 +898,13 @@ async function checkout(
                 }
             }
         `,
-        { input: { emailAddress: email, confirmEmailAddress: email, saveToAddressBook: false } },
+        {
+            input: {
+                emailAddress: deliveryRecipient ?? email,
+                confirmEmailAddress: deliveryRecipient ?? email,
+                saveToAddressBook: false,
+            },
+        },
     );
     const beginPayment = gql`
         mutation {
@@ -1009,10 +1040,15 @@ async function claim(fixture: PaidFixture) {
         })
     ).claimDigitalDelivery;
 }
-async function manualFixture(quantity = 2, provider = settledProvider.code, mixed = false) {
+async function manualFixture(
+    quantity = 2,
+    provider = settledProvider.code,
+    mixed = false,
+    deliveryRecipient?: string,
+) {
     const product = await variant('manual_service');
     const physical = mixed ? await physicalVariant() : undefined;
-    const paid = await checkout(product.id, quantity, provider, physical?.id);
+    const paid = await checkout(product.id, quantity, provider, physical?.id, undefined, deliveryRecipient);
     const delivery = await connection
         .getRepository(own, ManualDigitalDelivery)
         .findOneByOrFail({ orderLineId: paid.line.id });
@@ -2407,6 +2443,138 @@ describe('digital order closure through real local API and SQLjs', () => {
                         .length,
             )
             .toBeGreaterThanOrEqual(2);
+    });
+    it('runs actual paid manual/card delivery through production handlers, queue, SMTP and receipt claim', async () => {
+        const smtp = await localSmtpSink();
+        const eventBus = server.app.get(EventBus);
+        const moduleRef = server.app.get(ModuleRef);
+        const queues = server.app.get(JobQueueService);
+        const storefront = (ctx: RequestContext) =>
+            Promise.resolve(`https://${ctx.channel.code}.example.invalid`);
+        const options: InitializedEmailPluginOptions = {
+            handlers: [
+                orderConfirmationHandler.filter(event =>
+                    shouldSendOrderConfirmation(summarizeOrderFulfillment(event.order).fulfillmentType),
+                ),
+                ...createDigitalDeliveryEmailHandlers(storefront),
+            ],
+            templateLoader: new FileBasedTemplateLoader(
+                path.resolve(__dirname, '../../dev-server/email-templates'),
+            ),
+            transport: { type: 'smtp', host: '127.0.0.1', port: smtp.port, secure: false, ignoreTLS: true },
+            beforeSend: createManualDeliveryEmailGuard(storefront),
+            globalTemplateVars: ctx =>
+                Promise.resolve({
+                    ...emailLanguageVariables(ctx.languageCode, ctx.channel.customFields),
+                    fromAddress: 'synthetic-sender@example.invalid',
+                }),
+        };
+        // Actual production plugin and job service on the existing real test application.
+        // Only payment-provider responses and the SMTP endpoint are synthetic.
+        const processor = new EmailProcessor(options, moduleRef, eventBus);
+        const processSpy = vi.spyOn(processor, 'process');
+        const plugin = new EmailPlugin(
+            eventBus,
+            moduleRef,
+            processor,
+            queues,
+            server.app.get(ProcessContext),
+            options,
+        );
+        try {
+            await plugin.onApplicationBootstrap();
+            await queues.start();
+            const manual = await manualFixture(
+                1,
+                settledProvider.code,
+                true,
+                'confirmed-manual@example.invalid',
+            );
+            expect(manual.delivery.state).toBe('WAITING_PROCESSING');
+            expect(smtp.messages).toHaveLength(0);
+            expect(processSpy).not.toHaveBeenCalled();
+            await publish(manual);
+            await expect.poll(() => smtp.messages.length).toBe(1);
+            await expect
+                .poll(
+                    async () =>
+                        (
+                            await connection
+                                .getRepository(own, ManualDigitalDelivery)
+                                .findOneByOrFail({ id: manual.delivery.id })
+                        ).state,
+                )
+                .toBe('SENT');
+            const mail = await simpleParser(smtp.messages[0]);
+            const recipients = Array.isArray(mail.to) ? mail.to.flatMap(item => item.value) : mail.to?.value;
+            expect(recipients?.map(item => item.address)).toEqual([manual.order.customFields.deliveryEmail]);
+            const body = String(mail.html || mail.text);
+            expect(body).not.toContain('SYNTHETIC-PASSWORD');
+            const document = new JSDOM(body).window.document;
+            const link = document.querySelector<HTMLAnchorElement>('a[href*="/order-confirmation?"]')?.href;
+            expect(link).toBeDefined();
+            const receipt = new URL(requireFixture(link));
+            expect(receipt.origin).toBe(`https://${own.channel.code}.example.invalid`);
+            expect(receipt.searchParams.get('id')).toBe(manual.order.code);
+            const token = requireFixture(receipt.searchParams.get('token'));
+            expect(server.app.get(OrderConfirmationTokenService).verifyToken(token)?.orderId).toBe(
+                String(manual.order.id),
+            );
+            const recipient = { ...manual, client: shop(), token };
+            expect((await status(recipient)).claimedQuantity).toBe(0);
+            expect((await claim(recipient)).claimedQuantity).toBe(1);
+            expect((await claim(recipient)).claimedQuantity).toBe(1);
+            const card = await variant('auto_card');
+            await addCards(card.id, 1);
+            const paid = await checkout(
+                card.id,
+                1,
+                settledProvider.code,
+                undefined,
+                undefined,
+                'confirmed-card@example.invalid',
+            );
+            await expect.poll(() => smtp.messages.length).toBe(2);
+            const cardMail = await simpleParser(smtp.messages[1]);
+            const cardRecipients = Array.isArray(cardMail.to)
+                ? cardMail.to.flatMap(item => item.value)
+                : cardMail.to?.value;
+            expect(cardRecipients?.map(item => item.address)).toEqual(['confirmed-card@example.invalid']);
+            expect(String(cardMail.html || cardMail.text)).not.toContain('SYNTHETIC-PASSWORD');
+            const delivery = await connection
+                .getRepository(own, AutoCardDelivery)
+                .findOneByOrFail({ orderLineId: paid.line.id });
+            await expect
+                .poll(
+                    async () =>
+                        (
+                            await connection
+                                .getRepository(own, AutoCardDelivery)
+                                .findOneByOrFail({ id: delivery.id })
+                        ).state,
+                )
+                .toBe('SENT');
+            expect((await claim(paid)).claimedQuantity).toBe(1);
+            // A stale ready event must not transport a message after its task ceases to be ready.
+            await connection
+                .getRepository(own, AutoCardDelivery)
+                .update(delivery.id, { state: 'WAITING_STOCK' });
+            const processed = processSpy.mock.calls.length;
+            await eventBus.publish(new AutoCardDeliveryReadyEvent(own, String(delivery.id)));
+            await expect.poll(() => processSpy.mock.calls.length).toBe(processed + 1);
+            await expect(processSpy.mock.results[processed].value).resolves.toBe(false);
+            expect(smtp.messages).toHaveLength(2);
+            await expect(Promise.all(processSpy.mock.results.map(result => result.value))).resolves.toEqual([
+                true,
+                true,
+                false,
+            ]);
+        } finally {
+            await queues.onModuleDestroy();
+            await plugin.onApplicationShutdown();
+            processSpy.mockRestore();
+            await smtp.close();
+        }
     });
 });
 

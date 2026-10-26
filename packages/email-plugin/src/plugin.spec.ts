@@ -125,6 +125,30 @@ describe('EmailPlugin', () => {
         }
     });
 
+    it('consumes a policy skip without sending or publishing a failed result', async () => {
+        const ctx = RequestContext.deserialize({
+            _channel: { code: DEFAULT_CHANNEL_CODE },
+            _languageCode: LanguageCode.en,
+        } as any);
+        const handler = new EmailEventListener('test')
+            .on(MockEvent)
+            .setFrom('fixture@example.invalid')
+            .setRecipient(() => 'recipient@example.invalid')
+            .setSubject('Fixture');
+        const beforeSend = vi.fn(() => false);
+        await initPluginWithHandlers([handler], { beforeSend });
+        const outcomes: boolean[] = [];
+        const subscription = eventBus.ofType(EmailSendEvent).subscribe(event => outcomes.push(event.success));
+        try {
+            await eventBus.publish(new MockEvent(ctx, true));
+            await vi.waitFor(() => expect(beforeSend).toHaveBeenCalledOnce());
+            expect(onSend).not.toHaveBeenCalled();
+            expect(outcomes).toEqual([]);
+        } finally {
+            subscription.unsubscribe();
+        }
+    });
+
     it('setting from, recipient, subject', async () => {
         const ctx = RequestContext.deserialize({
             _channel: { code: DEFAULT_CHANNEL_CODE },

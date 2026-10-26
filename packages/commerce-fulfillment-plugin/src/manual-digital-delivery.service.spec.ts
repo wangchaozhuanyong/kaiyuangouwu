@@ -29,6 +29,7 @@ function createHarness(state: ManualDigitalDelivery['state'] = 'DRAFT') {
         order: {
             id: 'order-1',
             code: 'ORDER-1',
+            customFields: { deliveryEmail: 'buyer@example.com' },
             salesChannelId: 'channel-1',
             state: 'PaymentSettled',
             active: false,
@@ -185,7 +186,7 @@ describe('ManualDigitalDeliveryService invariants', () => {
             await expect(test.service.retry(test.ctx, test.delivery.id)).rejects.toThrow('正在退款');
             test.delivery.state = 'SENDING';
             await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
-                '领取资格已暂停',
+                '当前领取资格已暂停或撤销',
             );
             expect(test.eventBus.publish).not.toHaveBeenCalled();
         },
@@ -234,15 +235,64 @@ describe('ManualDigitalDeliveryService invariants', () => {
         },
     );
 
-    it.each(['CANCELLED', 'SENT', 'DRAFT', 'MANUAL_REVIEW'] as const)(
+    it.each(['WAITING_PROCESSING', 'CANCELLED', 'SENT', 'DRAFT', 'MANUAL_REVIEW'] as const)(
         'blocks queued mail for %s',
         async state => {
             const test = createHarness(state);
-            await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
-                '不能发送邮件',
-            );
+            await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toBeNull();
+            expect(test.eventBus.publish).not.toHaveBeenCalled();
         },
     );
+
+    it('does not notify after creating a paid-order task or saving a draft', async () => {
+        const test = createHarness('WAITING_PROCESSING');
+        await test.service.createSettledOrderTasks(test.ctx, {
+            ...test.delivery.order,
+            lines: [test.delivery.orderLine],
+        } as any);
+        await test.service.saveDraft(test.ctx, { id: test.delivery.id, packages: test.packages });
+        expect(test.delivery.state).toBe('DRAFT');
+        expect(
+            test.eventBus.publish.mock.calls.filter(
+                ([event]) => event instanceof ManualDigitalDeliveryReadyEvent,
+            ),
+        ).toHaveLength(0);
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toBeNull();
+    });
+    it('notifies only after exact finished content is published, to the confirmed delivery email', async () => {
+        const test = createHarness();
+        test.delivery.order.customFields = { deliveryEmail: ' Chosen@Example.Invalid ' };
+        await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toMatchObject({
+            recipientEmail: 'chosen@example.invalid',
+        });
+        expect(
+            test.eventBus.publish.mock.calls.filter(
+                ([event]) => event instanceof ManualDigitalDeliveryReadyEvent,
+            ),
+        ).toHaveLength(1);
+    });
+    it('skips a queued notification whose finished content is missing', async () => {
+        const test = createHarness('SENDING');
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toBeNull();
+    });
+    it('skips published content that no longer covers the paid order quantity', async () => {
+        const test = createHarness();
+        await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
+        test.delivery.orderLine.quantity = 3;
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).resolves.toBeNull();
+    });
+    it('does not fall back to the account or an old recipient without the confirmed order email', async () => {
+        const test = createHarness();
+        await test.service.publish(test.ctx, { id: test.delivery.id, packages: test.packages });
+        test.delivery.order.customFields = {};
+        const receipt = await test.service.emailPayload(test.ctx, test.delivery.id);
+        expect(receipt.packages).toHaveLength(2);
+        expect(receipt.recipientEmail).toBe(test.delivery.recipientEmail);
+        await expect(test.service.queuedEmailPayload(test.ctx, test.delivery.id)).rejects.toThrow(
+            '有效的交付邮箱',
+        );
+    });
 
     it('rejects public product assets as delivery attachments before draft persistence', async () => {
         const test = createHarness();
