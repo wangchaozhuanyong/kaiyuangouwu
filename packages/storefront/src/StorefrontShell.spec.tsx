@@ -1,14 +1,19 @@
 // @vitest-environment jsdom
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AuthEmailDraftContext } from './auth-presentation';
+import { GptRechargePage } from './client-plugins/gpt-recharge/gpt-recharge-page';
 import { Overlay } from './overlay-host';
+import { createStorefrontQueryClient } from './query-client';
+import { GptRechargeRoutePage } from './route-pages/gpt-recharge-route-page';
 import { StorefrontContext } from './StorefrontContext';
 import { mountStorefrontEnhancements, StorefrontShell } from './StorefrontShell';
 
 const viewport = vi.hoisted(() => ({ desktop: false }));
+const rechargeRoute = vi.hoisted(() => ({ active: false }));
 const deferredModules = vi.hoisted(() => ({ updates: 0, privacy: 0 }));
 const enhancements = vi.hoisted(() => ({
     start: vi.fn(),
@@ -59,9 +64,12 @@ vi.mock('./components/common/desktop-account-navigation', async importOriginal =
 vi.mock('@tanstack/react-router', () => ({
     useRouter: () => ({ state: { status: 'idle' } }),
     useRouterState: () => '/',
+    useSearch: () => ({}),
+    useNavigate: () => vi.fn(),
     Outlet: () => {
         const context = useContext(StorefrontContext);
         const draft = useContext(AuthEmailDraftContext);
+        if (rechargeRoute.active) return <GptRechargeRoutePage />;
         return (
             <div>
                 PAGE_CONTENT <span data-testid="address-count">{context?.customer?.addresses?.length}</span>
@@ -76,21 +84,23 @@ vi.mock('@tanstack/react-router', () => ({
         );
     },
     lazyRouteComponent: (_loader: unknown, name: string) =>
-        name === 'AuthenticationOverlay'
-            ? function FixtureAuthenticationOverlay() {
-                  const runtime = useContext(StorefrontContext);
-                  if (!runtime) throw new Error('Missing fixture storefront context');
-                  return (
-                      <Overlay onClose={runtime.closeAuthOverlay}>
-                          <div role="dialog">
-                              <input name="retained-auth-draft" />
-                          </div>
-                      </Overlay>
-                  );
-              }
-            : name === 'LoginRoutePage'
-              ? () => <div>SIGN_IN_FORM</div>
-              : () => <div>LAZY_SHELL_CONTENT</div>,
+        name === 'GptRechargePage'
+            ? GptRechargePage
+            : name === 'AuthenticationOverlay'
+              ? function FixtureAuthenticationOverlay() {
+                    const runtime = useContext(StorefrontContext);
+                    if (!runtime) throw new Error('Missing fixture storefront context');
+                    return (
+                        <Overlay onClose={runtime.closeAuthOverlay}>
+                            <div role="dialog">
+                                <input name="retained-auth-draft" />
+                            </div>
+                        </Overlay>
+                    );
+                }
+              : name === 'LoginRoutePage'
+                ? () => <div>SIGN_IN_FORM</div>
+                : () => <div>LAZY_SHELL_CONTENT</div>,
 }));
 vi.mock('./components/common/bottom-navigation', async importOriginal => ({
     ...(await importOriginal<typeof import('./components/common/bottom-navigation')>()),
@@ -109,6 +119,7 @@ describe('catalog rendering boundary', () => {
     let element: HTMLDivElement;
     let root: ReturnType<typeof createRoot>;
     let enhancementsStarted: Promise<void>;
+    let queryClient: ReturnType<typeof createStorefrontQueryClient>;
     beforeEach(() => {
         // Each case owns idle delivery; a slow prior case must not preload the
         // deferred modules before the explicit readiness/idle assertions below.
@@ -124,11 +135,14 @@ describe('catalog rendering boundary', () => {
         });
         window.history.replaceState(null, '', '/');
         viewport.desktop = false;
+        rechargeRoute.active = false;
+        queryClient = createStorefrontQueryClient();
         element = document.createElement('div');
         root = createRoot(element);
     });
     afterEach(() => {
         act(() => root.unmount());
+        queryClient.clear();
         enhancements.didStart = undefined;
         vi.restoreAllMocks();
         vi.unstubAllGlobals();
@@ -156,7 +170,13 @@ describe('catalog rendering boundary', () => {
             configQuery: { isError: false, isFetching: false },
             ...(state.storefrontContextValue as Record<string, unknown>),
         };
-        act(() => root.render(<StorefrontShell state={state as never} />));
+        act(() =>
+            root.render(
+                <QueryClientProvider client={queryClient}>
+                    <StorefrontShell state={state as never} />
+                </QueryClientProvider>,
+            ),
+        );
     };
     it('starts deferred browser enhancements after reconnect and retains installed features through later disconnects', async () => {
         let online = false;
@@ -529,6 +549,62 @@ describe('catalog rendering boundary', () => {
         expect(document.querySelector('[name=retained-auth-draft]')).toBeNull();
         expect(closeAuthOverlay).toHaveBeenCalledOnce();
     });
+    it.each([false, true])(
+        'retains the real recharge draft while translated brand data is pending (desktop=%s)',
+        async desktop => {
+            viewport.desktop = desktop;
+            rechargeRoute.active = true;
+            const api = {
+                request: vi.fn().mockResolvedValue({
+                    gptRechargeConfig: { enabled: true, maintenance: false },
+                }),
+            };
+            const present = (language: 'zh' | 'en', storefrontCode: string, currencyCode = 'MYR') =>
+                render({
+                    language,
+                    isZh: language === 'zh',
+                    displayedRoute: { name: 'gpt-recharge' },
+                    pageDataPending: !storefrontCode,
+                    storefrontContextValue: {
+                        api,
+                        language,
+                        storefrontCode,
+                        market: { code: 'fixture-store', currencyCode },
+                        displayCurrencyCode: currencyCode,
+                        availableCurrencyCodes: [currencyCode],
+                        collections: [],
+                        contentBlocks: [],
+                    },
+                });
+            present('zh', 'fixture-store');
+            await act(async () => {
+                await Promise.resolve();
+            });
+            const input = element.querySelector<HTMLInputElement>('#gpt-code');
+            expect(input).not.toBeNull();
+            if (!input) throw new Error('Expected real recharge input');
+            const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+            act(() => {
+                descriptor?.set?.call(input, 'synthetic-shell-draft');
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            for (const [language, storefrontCode] of [
+                ['en', ''],
+                ['en', 'fixture-store'],
+                ['zh', ''],
+                ['zh', 'fixture-store'],
+            ] as const) {
+                present(language, storefrontCode);
+                expect(element.querySelector('#gpt-code')).toBe(input);
+                expect(input.value).toBe('synthetic-shell-draft');
+            }
+            present('zh', 'fixture-store', 'CNY');
+            expect(element.querySelector<HTMLInputElement>('#gpt-code')?.value).toBe('');
+            expect(
+                api.request.mock.calls.every(([query]) => query.startsWith('query GptRechargeConfig')),
+            ).toBe(true);
+        },
+    );
 });
 
 describe('deferred enhancement recovery ownership', () => {

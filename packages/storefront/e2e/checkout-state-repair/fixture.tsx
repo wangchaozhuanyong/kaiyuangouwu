@@ -1,7 +1,13 @@
 // Synthetic in-memory data only; this entry never connects to a Shop API.
 import { QueryClientProvider } from '@tanstack/react-query';
-import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router';
-import { Suspense, useMemo, useRef, useState } from 'react';
+import {
+    createMemoryHistory,
+    createRootRoute,
+    createRoute,
+    createRouter,
+    RouterProvider,
+} from '@tanstack/react-router';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { type ShopApi } from '../../src/api';
@@ -16,6 +22,7 @@ import { GptRechargeRoutePage } from '../../src/route-pages/gpt-recharge-route-p
 import { SupportPageContext } from '../../src/storefront-page-contexts';
 import '../../src/storefront-styles';
 import { StorefrontContext, type StorefrontContextValue } from '../../src/StorefrontContext';
+import { StorefrontShell } from '../../src/StorefrontShell';
 import {
     type ActiveCustomer,
     type Order,
@@ -107,6 +114,69 @@ applyStorefrontVisualPreset(
     document.documentElement,
     params.get('preset') === 'classic' ? 'classic' : 'neo-minimalist',
 );
+
+// Only the arrival of translated public branding is controlled here. The shell,
+// route, locale sheet, QueryClient and recharge form are the production components.
+function RechargeShellFixture() {
+    const [language, setLanguage] = useState<'zh' | 'en'>('zh');
+    const [brandReady, setBrandReady] = useState(true);
+    const api = useMemo(
+        () => ({
+            request: (query: string) => {
+                if (!query.startsWith('query GptRechargeConfig'))
+                    return Promise.reject(new Error('This fixture permits config reads only.'));
+                return Promise.resolve({ gptRechargeConfig: { enabled: true, maintenance: false } });
+            },
+        }),
+        [],
+    );
+    const runtime = {
+        market,
+        language,
+        api,
+        route: { name: 'gpt-recharge' },
+        storefrontCode: brandReady ? market.code : '',
+        storefrontName: brandReady ? 'Synthetic recharge store' : '',
+        storefrontContextResolved: true,
+        configQuery: { isError: false, isFetching: !brandReady },
+        displayCurrencyCode: 'CNY',
+        currencySelectorEnabled: true,
+        availableCurrencyCodes: ['CNY'],
+        collections: [],
+        contentBlocks: [],
+        toggleLanguage: () => {
+            setBrandReady(false);
+            setLanguage(value => (value === 'zh' ? 'en' : 'zh'));
+        },
+        switchCurrency: () => undefined,
+        goBack: () => undefined,
+    };
+    return (
+        <>
+            <button data-testid="resolve-brand" disabled={brandReady} onClick={() => setBrandReady(true)}>
+                Resolve translated branding
+            </button>
+            <StorefrontShell
+                state={
+                    {
+                        storefrontContextValue: runtime,
+                        displayedRoute: { name: 'gpt-recharge' },
+                        language,
+                        isZh: language === 'zh',
+                        online: true,
+                        customer: null,
+                        customerLoadState: 'ready',
+                        storefrontUnavailable: false,
+                        storefrontAccessMode: 'LIVE',
+                        pageDataPending: !brandReady,
+                        retryAccount: () => undefined,
+                        retryPageLoad: () => undefined,
+                    } as never
+                }
+            />
+        </>
+    );
+}
 
 function Fixture() {
     const desktop = useDesktopViewport();
@@ -318,9 +388,24 @@ function Fixture() {
     );
 }
 
-const rootRoute = createRootRoute({ component: Fixture });
+function RechargeRouteProbe() {
+    const [committed, setCommitted] = useState(false);
+    useEffect(() => setCommitted(true), []);
+    return (
+        <>
+            <span hidden data-testid="recharge-route-ready" data-committed={committed} />
+            <GptRechargeRoutePage />
+        </>
+    );
+}
+const rootRoute = createRootRoute({ component: view === 'gpt-shell' ? RechargeShellFixture : Fixture });
+const rechargeRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/',
+    component: RechargeRouteProbe,
+});
 const router = createRouter({
-    routeTree: rootRoute,
+    routeTree: view === 'gpt-shell' ? rootRoute.addChildren([rechargeRoute]) : rootRoute,
     history: createMemoryHistory({ initialEntries: ['/'] }),
 });
 const rootElement = document.getElementById('root');

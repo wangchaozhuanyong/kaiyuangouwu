@@ -305,7 +305,8 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             <AuthEmailDraftBoundary
                                 active={!customer && authRoute}
                                 ownerKey={JSON.stringify([
-                                    storefrontContextValue.storefrontCode,
+                                    storefrontContextValue.storefrontCode ||
+                                        storefrontContextValue.market.code,
                                     storefrontContextValue.market.code,
                                     storefrontContextValue.market.currencyCode,
                                 ])}
