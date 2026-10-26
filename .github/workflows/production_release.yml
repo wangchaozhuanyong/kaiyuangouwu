@@ -22,7 +22,7 @@ on:
     workflow_dispatch:
         inputs:
             rebuild_runtime:
-                description: 'Runtime lane: compile fresh binaries from main, ignoring compiled caches'
+                description: 'Compile fresh runtime or static frontends from main, ignoring compiled caches'
                 required: false
                 default: false
                 type: boolean
@@ -224,6 +224,7 @@ jobs:
         if: always() && !cancelled() && needs.preflight.result == 'success' && needs.route.result == 'success' && needs.ready.result == 'success' && (needs.route.outputs.lane == 'frontend' || needs.route.outputs.lane == 'frontend-nginx')
         uses: ./.github/workflows/deploy_frontends.yml
         with:
+            force_rebuild: ${{ inputs.rebuild_runtime || false }}
             base_sha: ${{ needs.preflight.outputs.deployed_sha }}
             target_sha: ${{ inputs.target_sha || github.sha }}
             components: ${{ needs.route.outputs.components }}
