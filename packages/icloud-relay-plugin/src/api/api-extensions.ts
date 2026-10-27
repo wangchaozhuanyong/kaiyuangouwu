@@ -180,13 +180,13 @@ export const adminApiExtensions = gql`
         deleteIcloudPrimaryAccount(id: ID!): Boolean!
         testIcloudConnection(id: ID!): IcloudTestConnectionResult!
         syncIcloudAccount(id: ID!): IcloudSyncResult!
-        resetIcloudMasterCode(id: ID!): IcloudPrimaryAccountView!
+        resetIcloudMasterCode(id: ID!, codeResetIntervalDays: Int): IcloudPrimaryAccountView!
 
         createIcloudVirtualEmail(input: CreateIcloudVirtualEmailInput!): IcloudVirtualEmailView!
         batchCreateIcloudVirtualEmails(input: BatchCreateIcloudVirtualEmailsInput!): IcloudBatchCreateResult!
         updateIcloudVirtualEmail(input: UpdateIcloudVirtualEmailInput!): IcloudVirtualEmailView!
         deleteIcloudVirtualEmail(id: ID!): Boolean!
-        resetIcloudVirtualEmailCode(id: ID!): IcloudVirtualEmailView!
+        resetIcloudVirtualEmailCode(id: ID!, codeResetIntervalDays: Int): IcloudVirtualEmailView!
 
         reassignIcloudMail(mailId: ID!, virtualEmailId: ID!): IcloudReceivedMailView!
         deleteIcloudMail(mailId: ID!): Boolean!

@@ -130,8 +130,12 @@ export class IcloudAdminResolver {
     @Mutation()
     @Transaction()
     @Allow(manageIcloudRelayPermission.Update)
-    resetIcloudMasterCode(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.adminService.resetMasterCode(ctx, id);
+    resetIcloudMasterCode(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('codeResetIntervalDays') codeResetIntervalDays?: number,
+    ) {
+        return this.adminService.resetMasterCode(ctx, id, codeResetIntervalDays);
     }
 
     // ==========================================
@@ -170,8 +174,12 @@ export class IcloudAdminResolver {
     @Mutation()
     @Transaction()
     @Allow(manageIcloudRelayPermission.Update)
-    resetIcloudVirtualEmailCode(@Ctx() ctx: RequestContext, @Args('id') id: ID) {
-        return this.adminService.resetVirtualEmailCode(ctx, id);
+    resetIcloudVirtualEmailCode(
+        @Ctx() ctx: RequestContext,
+        @Args('id') id: ID,
+        @Args('codeResetIntervalDays') codeResetIntervalDays?: number,
+    ) {
+        return this.adminService.resetVirtualEmailCode(ctx, id, codeResetIntervalDays);
     }
 
     // ==========================================

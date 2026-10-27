@@ -115,14 +115,14 @@ mutation ReassignIcloudMail($mailId: ID!, $virtualEmailId: ID!) {
     }
 }
 
-mutation ResetIcloudMasterCode($id: ID!) {
-    resetIcloudMasterCode(id: $id) {
+mutation ResetIcloudMasterCode($id: ID!, $codeResetIntervalDays: Int) {
+    resetIcloudMasterCode(id: $id, codeResetIntervalDays: $codeResetIntervalDays) {
         ...IcloudPrimaryAccountFields
     }
 }
 
-mutation ResetIcloudVirtualEmailCode($id: ID!) {
-    resetIcloudVirtualEmailCode(id: $id) {
+mutation ResetIcloudVirtualEmailCode($id: ID!, $codeResetIntervalDays: Int) {
+    resetIcloudVirtualEmailCode(id: $id, codeResetIntervalDays: $codeResetIntervalDays) {
         ...IcloudVirtualEmailFields
     }
 }

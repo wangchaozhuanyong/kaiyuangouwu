@@ -31,9 +31,7 @@ export class IcloudAccessCodeService {
         if (!days || days <= 0) {
             return null;
         }
-        const now = new Date();
-        now.setDate(now.getDate() + days);
-        return now;
+        return new Date(Date.now() + days * 86_400_000);
     }
 
     /**
