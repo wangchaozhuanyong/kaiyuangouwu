@@ -247,7 +247,12 @@ export class IcloudAdminService {
         return result;
     }
 
-    async resetMasterCode(ctx: RequestContext, id: ID): Promise<PrimaryAccountView> {
+    async resetMasterCode(
+        ctx: RequestContext,
+        id: ID,
+        codeResetIntervalDays?: number | null,
+    ): Promise<PrimaryAccountView> {
+        if (codeResetIntervalDays != null) this.validate({ codeResetIntervalDays });
         const repo = this.connection.getRepository(ctx, IcloudPrimaryAccount);
         const account = await repo.findOne({ where: { id } });
         if (!account) {
@@ -259,7 +264,10 @@ export class IcloudAdminService {
             account,
             {
                 masterQueryCode: this.codeService.generateCode('MSTR'),
-                codeExpiresAt: this.codeService.calculateExpiration(account.codeResetIntervalDays),
+                codeResetIntervalDays: codeResetIntervalDays ?? account.codeResetIntervalDays,
+                codeExpiresAt: this.codeService.calculateExpiration(
+                    codeResetIntervalDays ?? account.codeResetIntervalDays,
+                ),
             },
             ['masterQueryCode', 'codeExpiresAt', 'codeResetIntervalDays'],
         );
@@ -448,7 +456,12 @@ export class IcloudAdminService {
         return true;
     }
 
-    async resetVirtualEmailCode(ctx: RequestContext, id: ID): Promise<VirtualEmailView> {
+    async resetVirtualEmailCode(
+        ctx: RequestContext,
+        id: ID,
+        codeResetIntervalDays?: number | null,
+    ): Promise<VirtualEmailView> {
+        if (codeResetIntervalDays != null) this.validate({ codeResetIntervalDays });
         const repo = this.connection.getRepository(ctx, IcloudVirtualEmail);
         const item = await repo.findOne({
             where: { id },
@@ -463,7 +476,10 @@ export class IcloudAdminService {
             item,
             {
                 buyerQueryCode: this.codeService.generateCode('BUY'),
-                codeExpiresAt: this.codeService.calculateExpiration(item.codeResetIntervalDays),
+                codeResetIntervalDays: codeResetIntervalDays ?? item.codeResetIntervalDays,
+                codeExpiresAt: this.codeService.calculateExpiration(
+                    codeResetIntervalDays ?? item.codeResetIntervalDays,
+                ),
             },
             ['buyerQueryCode', 'codeExpiresAt', 'codeResetIntervalDays'],
         );

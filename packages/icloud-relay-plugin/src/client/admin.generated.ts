@@ -205,10 +205,12 @@ export type MutationReconcileIcloudMailHistoryArgs = {
 };
 
 export type MutationResetIcloudMasterCodeArgs = {
+    codeResetIntervalDays?: InputMaybe<Scalars['Int']['input']>;
     id: Scalars['ID']['input'];
 };
 
 export type MutationResetIcloudVirtualEmailCodeArgs = {
+    codeResetIntervalDays?: InputMaybe<Scalars['Int']['input']>;
     id: Scalars['ID']['input'];
 };
 
@@ -516,6 +518,7 @@ export type ReassignIcloudMailMutation = {
 
 export type ResetIcloudMasterCodeMutationVariables = Exact<{
     id: Scalars['ID']['input'];
+    codeResetIntervalDays?: InputMaybe<Scalars['Int']['input']>;
 }>;
 
 export type ResetIcloudMasterCodeMutation = {
@@ -542,6 +545,7 @@ export type ResetIcloudMasterCodeMutation = {
 
 export type ResetIcloudVirtualEmailCodeMutationVariables = Exact<{
     id: Scalars['ID']['input'];
+    codeResetIntervalDays?: InputMaybe<Scalars['Int']['input']>;
 }>;
 
 export type ResetIcloudVirtualEmailCodeMutation = {
@@ -1369,6 +1373,11 @@ export const ResetIcloudMasterCodeDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'codeResetIntervalDays' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -1381,6 +1390,14 @@ export const ResetIcloudMasterCodeDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'id' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'codeResetIntervalDays' },
+                                value: {
+                                    kind: 'Variable',
+                                    name: { kind: 'Name', value: 'codeResetIntervalDays' },
+                                },
                             },
                         ],
                         selectionSet: {
@@ -1441,6 +1458,11 @@ export const ResetIcloudVirtualEmailCodeDocument = {
                         type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'codeResetIntervalDays' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -1453,6 +1475,14 @@ export const ResetIcloudVirtualEmailCodeDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'id' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'codeResetIntervalDays' },
+                                value: {
+                                    kind: 'Variable',
+                                    name: { kind: 'Name', value: 'codeResetIntervalDays' },
+                                },
                             },
                         ],
                         selectionSet: {

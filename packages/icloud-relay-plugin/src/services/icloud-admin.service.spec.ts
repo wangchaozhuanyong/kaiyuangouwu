@@ -279,3 +279,73 @@ describe('received mail ownership integrity', () => {
         expect(execute).toHaveBeenCalledOnce();
     });
 });
+
+describe('query code validity on reset', () => {
+    function fixture(kind: 'primary' | 'virtual', conflict = false) {
+        const record: Record<string, unknown> = {
+            id: 'mailbox-1',
+            email: 'owner@example.invalid',
+            aliasEmail: 'alias@example.invalid',
+            masterQueryCode: 'MSTR-OLD-TEST',
+            buyerQueryCode: 'BUY-OLD-TEST',
+            codeResetIntervalDays: 30,
+            codeExpiresAt: new Date('2020-01-01'),
+        };
+        const repo = {
+            findOne: vi.fn(() => Promise.resolve({ ...record })),
+            update: vi.fn((_where: unknown, patch: Record<string, unknown>) => {
+                if (conflict) return Promise.resolve({ affected: 0 });
+                Object.assign(record, patch);
+                return Promise.resolve({ affected: 1 });
+            }),
+            findOneByOrFail: vi.fn(() => Promise.resolve(record)),
+            findOneOrFail: vi.fn(() => Promise.resolve(record)),
+            count: vi.fn().mockResolvedValue(0),
+        };
+        const service = new IcloudAdminService(
+            { getRepository: () => repo } as unknown as TransactionalConnection,
+            {} as IcloudCipherService,
+            new IcloudAccessCodeService(),
+            {} as IcloudImapSyncService,
+            {} as IcloudMailHistoryService,
+            new IcloudOtpExtractorService(),
+        );
+        const reset = (days?: number) =>
+            kind === 'primary'
+                ? service.resetMasterCode({} as RequestContext, 'mailbox-1', days)
+                : service.resetVirtualEmailCode({} as RequestContext, 'mailbox-1', days);
+        return { repo, reset, record };
+    }
+    for (const kind of ['primary', 'virtual'] as const) {
+        it.each([30, 90, 180, 365])(
+            `persists the selected %i-day cycle and new code atomically for ${kind}`,
+            async days => {
+                const { reset, repo, record } = fixture(kind);
+                const before = Date.now();
+                const result = await reset(days);
+                expect(result.codeResetIntervalDays).toBe(days);
+                const expiresAt = result.codeExpiresAt;
+                if (!expiresAt) throw new Error('Expected a finite reset expiration');
+                expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + days * 86_400_000);
+                expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + days * 86_400_000);
+                expect(repo.update).toHaveBeenCalledOnce();
+                expect(repo.update.mock.calls[0][0]).toMatchObject({ codeResetIntervalDays: 30 });
+                expect(record[kind === 'primary' ? 'masterQueryCode' : 'buyerQueryCode']).not.toContain(
+                    'OLD',
+                );
+                await reset();
+                expect(record.codeResetIntervalDays).toBe(days);
+            },
+        );
+        it.each([-1, 1.5, 36501])(`rejects invalid cycle %s without writing for ${kind}`, async days => {
+            const { reset, repo } = fixture(kind);
+            await expect(reset(days)).rejects.toThrow('查询码重置周期');
+            expect(repo.update).not.toHaveBeenCalled();
+        });
+        it(`rejects a concurrent code or cycle change for ${kind}`, async () => {
+            const { reset, record } = fixture(kind, true);
+            await expect(reset(365)).rejects.toThrow('邮箱记录已发生变化');
+            expect(record.codeResetIntervalDays).toBe(30);
+        });
+    }
+});
