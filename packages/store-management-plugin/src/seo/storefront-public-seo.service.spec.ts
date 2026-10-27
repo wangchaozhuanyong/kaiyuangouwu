@@ -78,6 +78,79 @@ function fixture() {
 }
 
 describe('request-local public SEO preparation', () => {
+    it.each(['terms', 'privacy'] as const)(
+        'uses the published %s item body when the legal block overview is empty',
+        async kind => {
+            const test = fixture();
+            test.page.request = { kind: 'page', id: kind };
+            test.page.content = {
+                blocks: [
+                    {
+                        type: 'LEGAL',
+                        code: 'store-legal',
+                        title: 'Legal documents',
+                        subtitle: '',
+                        body: '',
+                        items: [
+                            {
+                                targetType: 'PAGE',
+                                targetValue: 'terms',
+                                label: 'Terms of use',
+                                description: 'Published terms body',
+                            },
+                            {
+                                targetType: 'PAGE',
+                                targetValue: 'privacy',
+                                label: 'Privacy Policy',
+                                description: 'Published privacy body',
+                            },
+                        ],
+                    },
+                ],
+            };
+            const enriched = await test.service.enrich(test.ctx, test.host, test.page);
+            expect(enriched.seo).toMatchObject({
+                indexable: true,
+                title: `${kind === 'terms' ? 'Terms of use' : 'Privacy Policy'} | Published store`,
+                description: `Published ${kind} body`,
+                reasons: [],
+            });
+        },
+    );
+
+    it.each(['missing-document', 'different-host'])(
+        'keeps legal pages excluded when the matching document is unavailable: %s',
+        async reason => {
+            const test = fixture();
+            test.page.request = { kind: 'page', id: 'terms' };
+            test.page.content = {
+                blocks: [
+                    {
+                        type: 'LEGAL',
+                        code: 'store-legal',
+                        title: 'Legal documents',
+                        subtitle: '',
+                        body: '',
+                        items: [
+                            {
+                                targetType: 'PAGE',
+                                targetValue: reason === 'missing-document' ? 'privacy' : 'terms',
+                                label: 'Published document',
+                                description:
+                                    reason === 'different-host'
+                                        ? 'Applies to other-store.invalid only.'
+                                        : 'Published privacy body',
+                            },
+                        ],
+                    },
+                ],
+            };
+            const enriched = await test.service.enrich(test.ctx, test.host, test.page);
+            expect(enriched.seo?.indexable).toBe(false);
+            expect(enriched.seo?.robots).toContain('noindex');
+        },
+    );
+
     it('starts independent document and profile reads while configuration is still pending', async () => {
         const test = fixture();
         let resolveConfiguration!: (value: typeof test.configuration) => void;

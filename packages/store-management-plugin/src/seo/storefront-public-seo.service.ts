@@ -16,7 +16,9 @@ import {
 import { StoreDomain } from '@vendure/store-domain-plugin';
 import {
     publicPageRequestKey,
+    resolveManagedLegalDocument,
     StorefrontContentService,
+    type ManagedLegalContentBlock,
     type PublicPageRequest,
     type StorefrontPageData,
 } from '@vendure/storefront-content-plugin';
@@ -41,7 +43,7 @@ type PublicConfig = {
     legalEntityName?: string;
     supportEmail?: string;
 };
-type PublicBlock = { type: string; title?: string; body?: string; subtitle?: string };
+type PublicBlock = ManagedLegalContentBlock;
 export type StorefrontPublicSeoInitial = {
     configuration: Awaited<ReturnType<StorefrontSeoService['publishedConfiguration']>>;
     primary: string | null;
@@ -333,18 +335,26 @@ export class StorefrontPublicSeoService {
                 citation: document.article.sources.map(source => source.url),
             });
         } else if (request.kind === 'page') {
+            const legalKind = request.id === 'terms' || request.id === 'privacy' ? request.id : null;
             const type =
                 request.id === 'support' ? 'SUPPORT' : request.id === 'services' ? 'CLIENT_PLUGINS' : 'LEGAL';
             const block = blocks.find(item => item.type === type);
-            title = block?.title ?? '';
-            description = plain(block?.body ?? block?.subtitle);
-            if (block && plain(block.body || block.title)) {
-                // findPublished enforces real translations, schedules and publication for this locale.
+            const legalDocument = legalKind ? resolveManagedLegalDocument(blocks, legalKind, '', host) : null;
+            title = legalKind ? (legalDocument?.title ?? '') : (block?.title ?? '');
+            description = plain(legalKind ? legalDocument?.body : (block?.body ?? block?.subtitle));
+            if (legalKind ? Boolean(legalDocument) : block && plain(block.body || block.title)) {
+                // Use the same selected legal document and host guard as the rendered page.
                 completeLanguages = storeLanguages.includes(code) ? [code] : [];
                 for (const alternative of storeLanguages.filter(item => item !== code)) {
                     const alternateCtx = ctx.copy({ languageCode: alternative as LanguageCode });
                     const alternateBlocks = await this.content.findPublished(alternateCtx);
-                    if (alternateBlocks.some(item => item.type === type && plain(item.body || item.title)))
+                    if (
+                        legalKind
+                            ? resolveManagedLegalDocument(alternateBlocks, legalKind, '', host)
+                            : alternateBlocks.some(
+                                  item => item.type === type && plain(item.body || item.title),
+                              )
+                    )
                         completeLanguages.push(alternative);
                 }
             }

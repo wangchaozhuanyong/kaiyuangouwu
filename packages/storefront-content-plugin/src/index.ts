@@ -72,3 +72,6 @@ export {
 export { StorefrontAccountSettingsService } from './storefront-account-settings';
 export { StorefrontVisualPresetService } from './storefront-visual-preset.service';
 export { isStorefrontVisualPresetId } from './visual-presets';
+
+export { resolveManagedLegalDocument } from './shared/legal-content';
+export type { ManagedLegalContentBlock } from './shared/legal-content';
