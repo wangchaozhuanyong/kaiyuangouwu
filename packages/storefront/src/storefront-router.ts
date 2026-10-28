@@ -193,9 +193,11 @@ export function createStorefrontScrollRestorationKey(
         isLoading: boolean;
         location?: ScrollRestorationLocation;
         resolvedLocation?: ScrollRestorationLocation;
+        matches?: ReadonlyArray<{ id: string; status: string }>;
     },
 ) {
     let displayed: ScrollRestorationLocation | undefined;
+    let pendingMatch: string | undefined;
     const commit = (location: ScrollRestorationLocation) => {
         displayed = location;
     };
@@ -203,9 +205,18 @@ export function createStorefrontScrollRestorationKey(
         commit,
         getKey(location: ScrollRestorationLocation): string {
             const state = readState();
+            const leaf = state.matches?.at(-1);
+            // A pending-0 leaf already replaces the source with its own body,
+            // even while Router keeps isLoading true. Advance once per lane;
+            // a newer URL alone must not move the still-visible pending owner.
+            if (leaf?.status === 'pending' && leaf.id !== pendingMatch) {
+                pendingMatch = leaf.id;
+                commit(state.location ?? location);
+            }
             // isLoading clears in the same batch that publishes matches. status and
             // resolvedLocation may still describe the previous page at onRendered.
             if (!state.isLoading) {
+                pendingMatch = undefined;
                 // Router also asks for the previous key during restoration. That
                 // lookup must not move the displayed owner back to the old page.
                 commit(state.location ?? location);

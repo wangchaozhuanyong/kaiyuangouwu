@@ -182,7 +182,10 @@ export async function startSeoFixtureServer(
         transformPage,
         renderPage = renderPublicPage,
         transformHtml,
+        transformDocument,
         transformGraphQlData,
+        beforeRequest,
+        readOnly = false,
         serveAssets,
         listenHost = '::',
     } = {},
@@ -198,6 +201,7 @@ export async function startSeoFixtureServer(
             if (!/^(?:127\.0\.0\.1|localhost):\d+$/u.test(host ?? ''))
                 return json(response, { error: 'Synthetic host only' }, 400);
             const url = new URL(request.url, `http://${host}`);
+            if (await beforeRequest?.(request, response, url)) return;
             requests.push({ host, path: url.pathname + url.search, method: request.method });
             if (url.pathname === '/__qa/requests') return json(response, requests);
             if (url.pathname === '/_storefront/page-data') return json(response, pageFor(url, host));
@@ -205,6 +209,16 @@ export async function startSeoFixtureServer(
                 let requestBody = '';
                 for await (const chunk of request) requestBody += chunk.toString();
                 const operation = JSON.parse(requestBody || '{}');
+                if (readOnly) {
+                    const { parse } = require('graphql');
+                    const document = parse(operation.query ?? '');
+                    if (
+                        document.definitions.some(
+                            item => item.kind === 'OperationDefinition' && item.operation !== 'query',
+                        )
+                    )
+                        return json(response, { errors: [{ message: 'Read-only local fixture' }] }, 405);
+                }
                 const referrer = new URL(request.headers.referer ?? `http://${host}/en/`);
                 if (url.searchParams.has('languageCode'))
                     referrer.searchParams.set('languageCode', url.searchParams.get('languageCode'));
@@ -251,9 +265,10 @@ export async function startSeoFixtureServer(
                 'cache-control': 'no-store',
             });
             const htmlTemplate =
-                (await transformHtml?.(url.pathname)) ??
+                (await transformHtml?.(url.pathname, page)) ??
                 (template ??= await readFile(path.join(dist, 'index.html'), 'utf8'));
-            response.end(assembleFixtureHtml(page, body, htmlTemplate));
+            const html = assembleFixtureHtml(page, body, htmlTemplate);
+            response.end((await transformDocument?.(html, { page, url })) ?? html);
         } catch (error) {
             json(response, { error: error.message }, 500);
         }

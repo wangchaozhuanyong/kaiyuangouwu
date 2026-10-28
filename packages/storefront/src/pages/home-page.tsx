@@ -464,11 +464,8 @@ export function HomePage() {
     const isZh = language === 'zh';
     const noticeBlock = contentBlocks.find(block => block.type === 'NOTICE');
     const managedHeroes = useMemo(
-        () =>
-            contentBlocks
-                .filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim()))
-                .map(block => heroContentForViewport(block, !phoneHero, language)),
-        [contentBlocks, phoneHero, language],
+        () => contentBlocks.filter(block => block.type === 'HERO' && Boolean(block.imageUrl?.trim())),
+        [contentBlocks],
     );
     const quickBlock = contentBlocks.find(block => block.type === 'QUICK_LINKS');
     const couponBlock = contentBlocks.find(block => block.type === 'COUPONS');
@@ -566,7 +563,7 @@ export function HomePage() {
     const heroInteractiveIndex =
         heroMotion?.phase === 'settling' && heroMotion.completed ? heroMotion.nextIndex : heroIndex;
     const managedHero = managedHeroes[heroIndex];
-    const heroImage = managedHero?.imageUrl ?? '';
+    const heroImage = heroImageForViewport(managedHero, !phoneHero).imageUrl;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language, initialRenderTime);
     const openNoticeItem = noticeItems.find(item => item.id === openNoticeId);
     const showFooter = !footerConfigured && (Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL'));
@@ -660,7 +657,7 @@ export function HomePage() {
             const transitionId = ++heroTransitionRef.current;
             clearHeroMotionSchedule();
             if (nextIndex === heroIndex) return;
-            const nextImage = nextHero.imageUrl ?? '';
+            const nextImage = heroImageForViewport(nextHero, !phoneHero).imageUrl;
             setHeroMediaError(false);
             try {
                 await decodeStorefrontImage(nextImage, 'hero');
@@ -711,7 +708,7 @@ export function HomePage() {
                 });
             });
         },
-        [clearHeroMotionSchedule, heroIndex, managedHeroes, settleHeroMotion, updateHeroMotion],
+        [clearHeroMotionSchedule, heroIndex, managedHeroes, phoneHero, settleHeroMotion, updateHeroMotion],
     );
 
     useEffect(() => {
@@ -860,9 +857,9 @@ export function HomePage() {
         const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
         const nextHero = managedHeroes[nextIndex];
         if (!nextHero) return;
-        const nextImage = nextHero.imageUrl ?? '';
+        const nextImage = heroImageForViewport(nextHero, !phoneHero).imageUrl;
         void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
-    }, [heroCount, heroImage, heroIndex, managedHeroes, readyHeroImage]);
+    }, [heroCount, heroImage, heroIndex, managedHeroes, phoneHero, readyHeroImage]);
 
     useEffect(() => {
         if (heroIndex >= heroCount) setHeroIndex(0);
@@ -1258,12 +1255,11 @@ export function HomePage() {
                                                         : neighbor
                                                           ? `calc(${direction * 100}% + ${offset}px)`
                                                           : `${offset}px`;
-                                                    const slideImage = slide.imageUrl ?? '';
-                                                    const artwork =
-                                                        contentBlocks.find(block => block.id === slide.id) ??
-                                                        slide;
-                                                    const desktopImage = heroImageForViewport(artwork, true);
-                                                    const mobileImage = heroImageForViewport(artwork, false);
+                                                    const desktopImage = heroImageForViewport(slide, true);
+                                                    const mobileImage = heroImageForViewport(slide, false);
+                                                    const slideImage = (
+                                                        phoneHero ? mobileImage : desktopImage
+                                                    ).imageUrl;
                                                     return (
                                                         <div
                                                             key={slide.id}
@@ -1290,6 +1286,11 @@ export function HomePage() {
                                                                         ) === 'overlay')
                                                                 }
                                                                 content={slide}
+                                                                mobileContent={heroContentForViewport(
+                                                                    slide,
+                                                                    false,
+                                                                    language,
+                                                                )}
                                                                 mediaOverlay={
                                                                     heroCount > 0 ? (
                                                                         <div className="hero-overlay-controls">
@@ -1435,6 +1436,7 @@ export function HomePage() {
 
                             {hasHomepageModule('QUICK_LINKS') && quickLinks.length > 0 ? (
                                 <nav
+                                    data-content-reveal
                                     className={[
                                         'quick-grid',
                                         `quick-grid-${quickLinks.length}`,
@@ -1578,6 +1580,7 @@ export function HomePage() {
                         {coreCategoriesBlock ? (
                             <div
                                 className="homepage-module-shell"
+                                data-content-reveal
                                 style={{ order: homepageModuleOrder('CORE_CATEGORIES') }}
                             >
                                 <HomeDualCategoryShowcase
@@ -1592,6 +1595,7 @@ export function HomePage() {
                             <div
                                 key={block.id}
                                 className={homepageSectionShellClassName}
+                                data-content-reveal
                                 style={{ order: homepageModuleOrder(block.type, block.id) }}
                             >
                                 <ManagedContentSection
@@ -1650,6 +1654,7 @@ export function HomePage() {
                         {hasHomepageModule('FLASH_SALE') && flashSaleItems.length ? (
                             <div
                                 className={homepageSectionShellClassName}
+                                data-content-reveal
                                 style={{ order: homepageModuleOrder('FLASH_SALE') }}
                             >
                                 <FlashSaleSection
@@ -1673,6 +1678,7 @@ export function HomePage() {
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('BEST_SELLERS') }}
                                 data-home-catalog="sales"
+                                data-content-reveal
                             >
                                 <ProductSection
                                     kind="best-sellers"
@@ -1704,6 +1710,7 @@ export function HomePage() {
                                 className={homepageSectionShellClassName}
                                 style={{ order: homepageModuleOrder('RECOMMENDATIONS') }}
                                 data-home-catalog="recommended"
+                                data-content-reveal
                             >
                                 <ProductSection
                                     kind="recommendations"

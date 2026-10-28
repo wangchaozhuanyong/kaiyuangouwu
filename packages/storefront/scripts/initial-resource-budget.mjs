@@ -37,7 +37,11 @@ export function staticModuleImports(source) {
 export const initialRouteRoots = {
     home: [/^index-[\w-]{8}\.js$/u, /^catalog-route-pages-.*\.js$/u, /^home-page-.*\.js$/u],
     catalog: [/^category-[\w-]{8}\.js$/u, /^category-route-page-.*\.js$/u],
-    product: [/^product-[\w-]{8}\.js$/u, /^catalog-route-pages-.*\.js$/u, /^product-detail-page-.*\.js$/u],
+    product: [
+        /^product-[\w-]{8}\.js$/u,
+        /^catalog-detail-route-pages-.*\.js$/u,
+        /^product-detail-page-.*\.js$/u,
+    ],
     services: [
         /^services-[\w-]{8}\.js$/u,
         /^content-route-pages-.*\.js$/u,

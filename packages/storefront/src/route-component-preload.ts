@@ -18,13 +18,14 @@ function preload<T extends string>(
 }
 
 const catalogRoutes = () => import('./route-pages/catalog-route-pages');
+const catalogDetailRoutes = () => import('./route-pages/catalog-detail-route-pages');
 const contentRoutes = () => import('./route-pages/content-route-pages');
 
 const routePreloaders = {
     home: preload(catalogRoutes, 'Home', importHomePage),
     category: preload(() => import('./route-pages/category-route-page'), 'Category'),
-    product: preload(catalogRoutes, 'Product', importProductDetailPage),
-    search: preload(catalogRoutes, 'Search'),
+    product: preload(catalogDetailRoutes, 'Product', importProductDetailPage),
+    search: preload(catalogDetailRoutes, 'Search'),
     services: preload(contentRoutes, 'Services'),
     support: preload(contentRoutes, 'Support'),
     legal: preload(() => import('./route-pages/legal-route-page'), 'Legal'),

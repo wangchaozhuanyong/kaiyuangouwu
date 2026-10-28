@@ -286,7 +286,7 @@ export function ProductDetailPage() {
         ? `${isZh ? '查看优惠券，' : 'View coupon, '}${couponQuantityLabel} ${formatMoney(couponPrice.priceWithTax, displayedCurrencyCode, locale)}`
         : undefined;
     const summary = (
-        <section className="detail-summary">
+        <section className="detail-summary" data-content-reveal>
             <h1>{product.name}</h1>
             <div className="detail-price-line">
                 <div className="detail-price-stack">
@@ -393,7 +393,7 @@ export function ProductDetailPage() {
         </section>
     );
     const options = (
-        <section className="detail-options">
+        <section className="detail-options" data-content-reveal>
             <header>
                 <strong>{isZh ? '选择规格' : 'Choose an option'}</strong>
                 <span>

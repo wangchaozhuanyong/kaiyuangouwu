@@ -25,9 +25,14 @@ describe('cold public route code loading', () => {
                 finishPage = resolve;
             });
             vi.doMock('./route-pages/catalog-route-pages', async () => {
-                imports.started.push('routes');
+                imports.started.push('home-routes');
                 await imports.routes;
-                return { preloadHomeRoutePage: imports.home, preloadProductRoutePage: imports.product };
+                return { preloadHomeRoutePage: imports.home };
+            });
+            vi.doMock('./route-pages/catalog-detail-route-pages', async () => {
+                imports.started.push('product-routes');
+                await imports.routes;
+                return { preloadProductRoutePage: imports.product };
             });
             vi.doMock('./pages/home-page', async () => {
                 imports.started.push('home');
@@ -43,9 +48,10 @@ describe('cold public route code loading', () => {
             const loading = preloadStorefrontRouteComponent(route);
             try {
                 await vi.waitFor(() =>
-                    expect(imports.started).toEqual(expect.arrayContaining(['routes', route])),
+                    expect(imports.started).toEqual(expect.arrayContaining([`${route}-routes`, route])),
                 );
                 expect(imports.started).not.toContain(route === 'home' ? 'product' : 'home');
+                expect(imports.started).not.toContain(route === 'home' ? 'product-routes' : 'home-routes');
                 expect(imports[route]).not.toHaveBeenCalled();
             } finally {
                 finishPage();

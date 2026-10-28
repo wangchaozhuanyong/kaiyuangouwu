@@ -810,6 +810,7 @@ export function CategoryPage() {
                     ) : categoryLoading ? (
                         <ListSkeleton
                             className="category-product-list desktop-product-grid"
+                            data-content-reveal
                             layout="products"
                             responsiveRow
                             count={12}
@@ -830,7 +831,7 @@ export function CategoryPage() {
                         />
                     ) : categoryProducts.length ? (
                         <>
-                            <div className="category-product-list desktop-product-grid">
+                            <div className="category-product-list desktop-product-grid" data-content-reveal>
                                 {visibleProducts.map((product, index) => (
                                     <ProductCard
                                         key={product.id}

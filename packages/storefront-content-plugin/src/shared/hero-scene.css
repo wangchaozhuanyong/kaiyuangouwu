@@ -119,6 +119,19 @@
     display: contents;
 }
 
+/* Copy is selected by CSS in the first HTML frame. Keep the hidden variant out
+   of layout, keyboard navigation and the accessibility tree at every skin. */
+@media (max-width: 767px) {
+    .hero.hero-image-overlay .hero-scene-wrapper > .hero-rich-content[data-hero-copy-viewport='desktop'] {
+        display: none;
+    }
+}
+@media (min-width: 768px) {
+    .hero.hero-image-overlay .hero-scene-wrapper > .hero-rich-content[data-hero-copy-viewport='phone'] {
+        display: none;
+    }
+}
+
 .hero-rich-content {
     pointer-events: none;
     position: relative;

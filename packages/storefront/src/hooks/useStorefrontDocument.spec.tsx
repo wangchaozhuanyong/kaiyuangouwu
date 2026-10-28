@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { act, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { publicPageRequestKey } from '../../../storefront-content-plugin/src/shared/public-page-data';
 import { type PublicSeoDocument } from '../../../storefront-content-plugin/src/shared/public-seo';
@@ -20,6 +20,7 @@ const presetStyles = readFileSync(path.join(__dirname, '../styles/visual-presets
 function Fixture({
     logo,
     product,
+    isZh = true,
     background,
     primary,
     presetId = 'classic',
@@ -31,6 +32,7 @@ function Fixture({
 }: {
     logo: string | null;
     product?: Product;
+    isZh?: boolean;
     background?: string;
     primary?: string;
     presetId?: StorefrontVisualPresetId;
@@ -52,7 +54,7 @@ function Fixture({
         presetId,
     );
     useStorefrontMetadata({
-        isZh: true,
+        isZh,
         route: route ?? { name: product ? 'product' : 'home' },
         selectedProduct: product,
         storefrontDescription: '',
@@ -70,8 +72,45 @@ afterEach(() => {
     window.history.replaceState({}, '', '/');
     sessionStorage.clear();
 });
+const settleMetadata = () => act(async () => void (await vi.dynamicImportSettled()));
 describe('runtime channel branding', () => {
-    it('uses a published scoped server document and removes it on another route or preview', () => {
+    it.each([false, true])('keeps fallback share URLs and image labels after deferral, zh=%s', async isZh => {
+        window.history.replaceState({}, '', '/zh/');
+        const root = createRoot(host);
+        const product = {
+            name: 'Published product',
+            description: 'Published description',
+            featuredAsset: { id: 'asset', preview: 'images/product.png' },
+            assets: [],
+        } as unknown as Product;
+        try {
+            act(() => root.render(<Fixture logo="images/logo.png" isZh={isZh} product={product} />));
+            expect(document.title).toBe('Published product · 当前店铺');
+            expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
+                'Published description',
+            );
+            expect(document.querySelector('meta[property="og:image"]')).toBeNull();
+            await settleMetadata();
+            expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe(
+                new URL('/zh/images/product.png', window.location.origin).href,
+            );
+            expect(document.querySelector('meta[name="twitter:image:alt"]')?.getAttribute('content')).toBe(
+                product.name,
+            );
+            act(() => root.render(<Fixture logo="images/logo.png" isZh={isZh} />));
+            await settleMetadata();
+            expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe(
+                new URL('/zh/images/logo.png', window.location.origin).href,
+            );
+            expect(document.querySelector('meta[property="og:image:alt"]')?.getAttribute('content')).toBe(
+                isZh ? '当前店铺精选商品' : 'Featured products from 当前店铺',
+            );
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
+    it('uses a published scoped server document and removes it on another route or preview', async () => {
         window.history.replaceState({}, '', '/zh/product?id=p-1&utm_source=ad');
         const seo: PublicSeoDocument = {
             schemaVersion: 1,
@@ -108,14 +147,18 @@ describe('runtime channel branding', () => {
                 ),
             );
             expect(document.title).toBe(seo.title);
+            expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
+                seo.description,
+            );
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(seo.robots);
+            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(seo.canonical);
+            await settleMetadata();
             expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).toBe(
                 '已发布分享标题',
             );
             expect(document.querySelector('meta[name="twitter:description"]')?.getAttribute('content')).toBe(
                 '已发布分享摘要',
             );
-            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(seo.robots);
-            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(seo.canonical);
             expect(document.querySelector('link[hreflang="en"]')).not.toBeNull();
             expect(document.querySelector('script[data-storefront-seo]')?.textContent).toContain('实际商品');
             act(() => root.render(<Fixture logo={null} scope="store-a" seo={seo} accessMode="PREVIEW" />));
@@ -221,7 +264,7 @@ describe('runtime channel branding', () => {
         expect(html.style.getPropertyValue('--store-background')).toBe('');
     });
 
-    it('updates merchant images while keeping classic controls identical across stores', () => {
+    it('updates merchant images while keeping classic controls identical across stores', async () => {
         document.head.innerHTML = [
             '<meta property="og:image" content="/moyao.jpg">',
             '<meta name="twitter:image" content="/moyao.jpg">',
@@ -234,11 +277,12 @@ describe('runtime channel branding', () => {
         expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#292d32');
         act(() => root.render(<Fixture logo="/store-b.png" background="#fedcba" primary="#654321" />));
         expect(document.documentElement.style.getPropertyValue('--brand-primary')).toBe('#292d32');
-        expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
-            '/store-b.png',
-        );
         expect(document.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
             '/store-b.png?storefront-icon=2',
+        );
+        await settleMetadata();
+        expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
+            '/store-b.png',
         );
         const migratedLogo = '/assets/preview/6e/store-icon__preview__webp_migrated_502.webp';
         act(() => root.render(<Fixture logo={migratedLogo} />));
@@ -249,6 +293,7 @@ describe('runtime channel branding', () => {
             `${migratedLogo}?v=webp-readable-1&preset=storefront-thumbnail-fit-320&format=png&q=82&storefront-icon=2`,
         );
         act(() => root.render(<Fixture logo={null} />));
+        await settleMetadata();
         expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toContain(
             '/storefront/neutral-social.png',
         );
@@ -306,7 +351,7 @@ describe('runtime channel branding', () => {
         }
     });
 
-    it('removes sensitive parameters from metadata and prevents private routes from being indexed', () => {
+    it('removes sensitive parameters from metadata and prevents private routes from being indexed', async () => {
         document.head.innerHTML = [
             '<meta name="robots" content="index, follow, max-image-preview:large">',
             '<meta property="og:url" content="/">',
@@ -324,8 +369,9 @@ describe('runtime channel branding', () => {
             expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
                 'noindex, nofollow, noarchive',
             );
-            expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(safeUrl);
             expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(safeUrl);
+            await settleMetadata();
+            expect(document.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(safeUrl);
             expect(document.head.innerHTML).not.toContain('audit-secret');
 
             window.history.replaceState({}, '', '/product?id=6');
@@ -338,6 +384,104 @@ describe('runtime channel branding', () => {
             );
         } finally {
             act(() => root.unmount());
+        }
+    });
+
+    it.each(['store', 'navigation', 'url', 'unmount'] as const)(
+        'cancels late secondary metadata after %s changes',
+        async change => {
+            window.history.replaceState({}, '', '/zh/');
+            const seo: PublicSeoDocument = {
+                schemaVersion: 1,
+                published: true,
+                indexable: true,
+                host: window.location.host,
+                channelCode: 'store-a',
+                languageCode: 'zh_Hans',
+                requestKey: publicPageRequestKey({ kind: 'home' }),
+                title: '旧页面已发布标题',
+                description: '旧页面已发布摘要',
+                canonical: new URL('/zh/', window.location.origin).href,
+                robots: 'index, follow',
+                image: '/old-share.png',
+                alternates: [{ language: 'en', href: new URL('/en/', window.location.origin).href }],
+                structuredData: [{ '@type': 'WebSite', name: 'Old scoped document' }],
+                reasons: [],
+                version: 1,
+            };
+            const root = createRoot(host);
+            let mounted = true;
+            try {
+                act(() =>
+                    root.render(<Fixture logo="/store-a.png" scope="store-a" seo={seo} accessMode="LIVE" />),
+                );
+                // Core SEO and icons do not wait for the optional module.
+                expect(document.title).toBe(seo.title);
+                expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+                    seo.robots,
+                );
+                expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+                    seo.canonical,
+                );
+                expect(document.querySelector('link[rel="icon"]')?.getAttribute('href')).toContain(
+                    '/store-a.png',
+                );
+                expect(document.querySelector('script[data-storefront-seo]')).toBeNull();
+                if (change === 'store') {
+                    act(() =>
+                        root.render(
+                            <Fixture logo="/store-b.png" scope="store-b" seo={seo} accessMode="LIVE" />,
+                        ),
+                    );
+                } else if (change === 'unmount') {
+                    act(() => root.unmount());
+                    mounted = false;
+                } else {
+                    window.history.replaceState({}, '', '/zh/product?id=next');
+                    if (change === 'navigation')
+                        act(() =>
+                            root.render(
+                                <Fixture
+                                    logo="/store-a.png"
+                                    scope="store-a"
+                                    seo={seo}
+                                    accessMode="LIVE"
+                                    route={{ name: 'product', id: 'next' }}
+                                />,
+                            ),
+                        );
+                }
+                await settleMetadata();
+                expect(document.querySelector('script[data-storefront-seo]')).toBeNull();
+                expect(document.querySelector('link[hreflang]')).toBeNull();
+                expect(document.querySelector('meta[property="og:title"]')?.getAttribute('content')).not.toBe(
+                    seo.title,
+                );
+            } finally {
+                if (mounted) act(() => root.unmount());
+            }
+        },
+    );
+
+    it('keeps core metadata when the optional writer cannot load', async () => {
+        vi.doMock('./storefront-secondary-metadata', () => {
+            throw new Error('Optional metadata module unavailable');
+        });
+        const root = createRoot(host);
+        try {
+            act(() => root.render(<Fixture logo={null} route={{ name: 'home' }} />));
+            expect(document.title).toBe('店铺 · 在线商城');
+            expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe(
+                'noindex, nofollow, noarchive',
+            );
+            expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(
+                new URL('/', window.location.origin).href,
+            );
+            await settleMetadata();
+            expect(document.querySelector('meta[property="og:title"]')).toBeNull();
+        } finally {
+            act(() => root.unmount());
+            vi.doUnmock('./storefront-secondary-metadata');
         }
     });
 });

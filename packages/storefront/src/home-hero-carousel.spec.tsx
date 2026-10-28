@@ -315,8 +315,20 @@ describe('HomePage carousel pointer interactions', () => {
     function activeSlide() {
         return requiredElement(host, '.hero-carousel-slide:not(.is-neighbor)');
     }
+    function activeCopy() {
+        // JSDOM does not apply media queries. Inspect the CSS-selected branch;
+        // the real-browser continuity check also verifies computed visibility.
+        return (
+            activeSlide().querySelector(
+                `[data-hero-copy-viewport="${viewportWidth <= 767 ? 'phone' : 'desktop'}"]`,
+            ) ?? requiredElement(activeSlide(), '.hero-rich-content')
+        );
+    }
     function activeButton(selector: string) {
-        return requiredElement<HTMLButtonElement>(activeSlide(), selector);
+        return requiredElement<HTMLButtonElement>(
+            selector === '.hero-rich-cta-btn' ? activeCopy() : activeSlide(),
+            selector,
+        );
     }
 
     const viewportHero: StorefrontContentBlock = {
@@ -377,10 +389,10 @@ describe('HomePage carousel pointer interactions', () => {
         async ({ width, language, title, body, action }) => {
             viewportWidth = width;
             await render(width >= 1024, [viewportHero], language);
-            expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe(title);
-            expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(body);
+            expect(requiredElement(activeCopy(), '.hero-rich-title').textContent).toBe(title);
+            expect(requiredElement(activeCopy(), '.hero-rich-desc').textContent).toBe(body);
             expect(activeButton('.hero-rich-cta-btn').textContent).toBe(action);
-            const copy = requiredElement(activeSlide(), '.hero-rich-copy-region');
+            const copy = requiredElement(activeCopy(), '.hero-rich-copy-region');
             expect(copy.hasAttribute('role')).toBe(width < 1024);
             expect(copy.hasAttribute('tabindex')).toBe(width < 1024);
             const artwork = requiredElement(
@@ -392,26 +404,29 @@ describe('HomePage carousel pointer interactions', () => {
                 activeSlide().querySelector('source[media="(max-width: 767px)"]')?.getAttribute('srcset'),
             ).toContain('phone-hero.jpg');
             if (width <= 767) {
-                expect(activeSlide().querySelector('.hero-rich-pill')).toBeNull();
-                expect(artwork.getAttribute('width')).toBe('1600');
-                expect(artwork.getAttribute('height')).toBe('900');
+                expect(activeCopy().querySelector('.hero-rich-pill')).toBeNull();
+                const source = activeSlide().querySelector('source[media="(max-width: 767px)"]');
+                expect(source?.getAttribute('width')).toBe('1600');
+                expect(source?.getAttribute('height')).toBe('900');
             } else {
-                expect(requiredElement(activeSlide(), '.hero-rich-pill').textContent).toBe(
-                    'Desktop subtitle',
-                );
+                expect(requiredElement(activeCopy(), '.hero-rich-pill').textContent).toBe('Desktop subtitle');
             }
         },
     );
 
-    it('updates phone presentation across 767/768 without changing the tablet desktop-layout context', async () => {
+    it('retains both copy nodes and the native artwork across the phone breakpoint', async () => {
         viewportWidth = 767;
         await render(false, [viewportHero]);
-        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe('手机标题');
+        const phone = activeCopy();
+        const desktopCopy = requiredElement(activeSlide(), '[data-hero-copy-viewport="desktop"]');
+        const image = requiredElement(activeSlide(), '.hero-rich-image-link img:not([aria-hidden="true"])');
+        expect(requiredElement(phone, '.hero-rich-title').textContent).toBe('手机标题');
         await interact(() => {
             viewportWidth = 768;
             phoneViewportListeners.forEach(listener => listener());
         });
-        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe('Desktop title');
+        expect(activeCopy()).toBe(desktopCopy);
+        expect(requiredElement(activeCopy(), '.hero-rich-title').textContent).toBe('Desktop title');
         expect(
             requiredElement(
                 activeSlide(),
@@ -422,8 +437,12 @@ describe('HomePage carousel pointer interactions', () => {
             viewportWidth = 767;
             phoneViewportListeners.forEach(listener => listener());
         });
-        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe('手机标题');
-        expect(activeSlide().querySelector('.hero-rich-pill')).toBeNull();
+        expect(activeCopy()).toBe(phone);
+        expect(requiredElement(activeCopy(), '.hero-rich-title').textContent).toBe('手机标题');
+        expect(activeCopy().querySelector('.hero-rich-pill')).toBeNull();
+        expect(activeSlide().querySelector('.hero-rich-image-link img:not([aria-hidden="true"])')).toBe(
+            image,
+        );
     });
 
     it.each([
@@ -459,8 +478,8 @@ describe('HomePage carousel pointer interactions', () => {
         expect(
             requiredElement(activeSlide(), '.hero-scene-wrapper').getAttribute('data-hero-artwork-layout'),
         ).toBe('editorial');
-        expect(requiredElement(activeSlide(), '.hero-rich-title').textContent).toBe(copy.title);
-        expect(requiredElement(activeSlide(), '.hero-rich-desc').textContent).toBe(copy.body);
+        expect(requiredElement(activeCopy(), '.hero-rich-title').textContent).toBe(copy.title);
+        expect(requiredElement(activeCopy(), '.hero-rich-desc').textContent).toBe(copy.body);
         expect(activeButton('.hero-rich-cta-btn').textContent).toBe(copy.action);
         expect(
             requiredElement(

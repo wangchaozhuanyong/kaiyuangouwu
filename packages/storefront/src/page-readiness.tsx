@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { BrandLoadingIndicator } from './brand-loading';
+import { createDeferredContentReveal } from './content-reveal';
 import { offlineLoadError } from './loading-state';
 
 export const PAGE_DATA_TIMEOUT_MS = 10_000;
@@ -170,6 +171,48 @@ function useLoadingCycle(waiting: boolean, scope: string | undefined, key: strin
     };
 }
 
+/** Retain only the outgoing picture; readiness and interaction change immediately. */
+function InitialLoadingSurface({
+    active,
+    busy,
+    retain,
+    children,
+}: {
+    active: boolean;
+    busy: boolean;
+    retain: boolean;
+    children: ReactNode;
+}) {
+    const previous = useRef<ReactNode>(null);
+    const [present, setPresent] = useState(active);
+    useLayoutEffect(() => {
+        if (active) previous.current = retain ? children : null;
+    });
+    useLayoutEffect(() => {
+        if (active) {
+            setPresent(true);
+            return;
+        }
+        if (!previous.current) return;
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            setPresent(false);
+            return;
+        }
+        const timer = window.setTimeout(() => setPresent(false), 120);
+        return () => clearTimeout(timer);
+    }, [active]);
+    return active || (present && previous.current !== null) ? (
+        <main
+            className={`page-readiness-initial${active ? '' : ' is-exiting'}`}
+            aria-busy={active && busy}
+            aria-hidden={!active || undefined}
+            inert={!active || undefined}
+        >
+            {active ? children : previous.current}
+        </main>
+    ) : null;
+}
+
 /** Initial empty pages may fill the viewport; existing content remains usable on later reads. */
 export function PageReadinessBoundary({
     children,
@@ -186,6 +229,9 @@ export function PageReadinessBoundary({
     initialError = false,
     requireInitialRouteCommit = false,
 }: PageReadinessProps) {
+    const stage = useRef<HTMLDivElement>(null);
+    const [entrance] = useState(createDeferredContentReveal);
+    const initialEntranceKey = useRef(requireInitialRouteCommit ? (navigationKey ?? requestKey) : undefined);
     const [initialRouteCommitted, setInitialRouteCommitted] = useState(false);
     const commitRoute = useCallback(() => {
         const root = document.getElementById('root');
@@ -253,6 +299,19 @@ export function PageReadinessBoundary({
               : 'ready';
     const navigationPhase: ReadinessPhase = navigationPreparing ? (!online ? 'error' : 'preparing') : 'ready';
     const presentedPhase = navigationPreparing && !initial ? navigationPhase : phase;
+
+    useLayoutEffect(() => {
+        if (!stage.current) return;
+        entrance.update(
+            stage.current,
+            navigationKey ?? requestKey,
+            !pending && !navigationPreparing && !failedInitialRead,
+            (navigationKey ?? requestKey) === initialEntranceKey.current,
+            !online || failedInitialRead,
+            tokens.current,
+        );
+    });
+    useLayoutEffect(() => () => entrance.dispose(), [entrance]);
 
     useLayoutEffect(() => {
         // A rendered public snapshot is adopted only by its real route commit.
@@ -347,24 +406,31 @@ export function PageReadinessBoundary({
                         data-navigation-readiness={navigationPreparing ? navigationPhase : undefined}
                         aria-busy={presentedPhase === 'preparing' || undefined}
                     >
-                        <div className="page-readiness-stage" hidden={initial} inert={initial || undefined}>
+                        <div
+                            ref={stage}
+                            className="page-readiness-stage"
+                            hidden={initial}
+                            inert={initial || undefined}
+                        >
                             {children}
                         </div>
-                        {initial && (
-                            <main className="page-readiness-initial" aria-busy={phase === 'preparing'}>
-                                {phase === 'preparing' && !loadingState.slow && showProgress && (
-                                    <div role="status" aria-live="polite" aria-label={loadingLabel}>
-                                        <BrandLoadingIndicator language={language} />
-                                    </div>
-                                )}
-                                {(phase === 'error' || loadingState.slow) && (
-                                    <>
-                                        <BrandLoadingIndicator language={language} pending={false} />
-                                        <PageReadinessError state={loadingState} />
-                                    </>
-                                )}
-                            </main>
-                        )}
+                        <InitialLoadingSurface
+                            active={initial}
+                            busy={phase === 'preparing'}
+                            retain={phase === 'preparing' && !loadingState.slow && showProgress}
+                        >
+                            {phase === 'preparing' && !loadingState.slow && showProgress && (
+                                <div role="status" aria-live="polite" aria-label={loadingLabel}>
+                                    <BrandLoadingIndicator language={language} />
+                                </div>
+                            )}
+                            {(phase === 'error' || loadingState.slow) && (
+                                <>
+                                    <BrandLoadingIndicator language={language} pending={false} />
+                                    <PageReadinessError state={loadingState} />
+                                </>
+                            )}
+                        </InitialLoadingSurface>
                         {!initial &&
                             !inlineLoadingRegions &&
                             presentedPhase === 'preparing' &&

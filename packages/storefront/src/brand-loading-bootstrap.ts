@@ -16,17 +16,10 @@ export interface InitialLoadingBrand {
     secondaryName?: string;
 }
 
-/** Private routes may brand their loader using public configuration only. */
-export function initialLoadingBrandForBootData(
-    value: unknown,
-    scope: { host: string; languageCode?: string; currencyCode?: string; now?: number },
-): InitialLoadingBrand | undefined {
-    if (!validateStorefrontBootData(value, scope)) return;
-    const config = value.config as {
-        logoUrl?: unknown;
-        customFields: { storefrontNameZh?: unknown; storefrontNameEn?: unknown };
-    };
-    const language = value.scope.languageCode as 'en' | 'zh_Hans';
+function loadingBrandForConfig(
+    config: { logoUrl?: unknown; customFields: { storefrontNameZh?: unknown; storefrontNameEn?: unknown } },
+    language: InitialLoadingBrand['language'],
+): InitialLoadingBrand {
     const name =
         language === 'en' ? config.customFields.storefrontNameEn : config.customFields.storefrontNameZh;
     return {
@@ -38,6 +31,19 @@ export function initialLoadingBrandForBootData(
                 : '',
         logoUrl: typeof config.logoUrl === 'string' ? normalizeStorefrontAssetUrl(config.logoUrl) : '',
     };
+}
+
+/** Private routes may brand their loader using public configuration only. */
+export function initialLoadingBrandForBootData(
+    value: unknown,
+    scope: { host: string; languageCode?: string; currencyCode?: string; now?: number },
+): InitialLoadingBrand | undefined {
+    if (!validateStorefrontBootData(value, scope)) return;
+    const config = value.config as {
+        logoUrl?: unknown;
+        customFields: { storefrontNameZh?: unknown; storefrontNameEn?: unknown };
+    };
+    return loadingBrandForConfig(config, value.scope.languageCode as InitialLoadingBrand['language']);
 }
 
 /** The parser-time loader uses only the current host's reusable public snapshot. */
@@ -98,21 +104,10 @@ export function initialLoadingBrandForSnapshot(
         !Array.isArray(page.failures)
     )
         return;
-    const language = page.scope.languageCode;
-    const name =
-        language === 'zh_Hans'
-            ? page.config.customFields.storefrontNameZh
-            : page.config.customFields.storefrontNameEn;
-    return {
-        language,
-        storefrontName: typeof name === 'string' ? name.trim() : '',
-        secondaryName:
-            language === 'zh_Hans' && typeof page.config.customFields.storefrontNameEn === 'string'
-                ? page.config.customFields.storefrontNameEn.trim()
-                : '',
-        logoUrl:
-            typeof page.config.logoUrl === 'string' ? normalizeStorefrontAssetUrl(page.config.logoUrl) : '',
-    };
+    return loadingBrandForConfig(
+        { logoUrl: page.config.logoUrl, customFields: page.config.customFields },
+        page.scope.languageCode,
+    );
 }
 
 let initialBrandGeneration = 0;

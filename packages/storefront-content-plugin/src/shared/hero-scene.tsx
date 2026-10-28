@@ -45,6 +45,7 @@ export interface HeroSceneData extends HeroThemeData {
 /** The carousel and its draft preview share unaltered artwork and managed copy colors. */
 export function HeroScene({
     content,
+    mobileContent,
     image,
     mediaOverlay,
     copyScrollable = false,
@@ -53,6 +54,8 @@ export function HeroScene({
     onOpen,
 }: {
     content: HeroSceneData;
+    /** Both copy variants share one native picture; CSS selects before hydration. */
+    mobileContent?: HeroSceneData;
     image: ReactNode;
     mediaOverlay?: ReactNode;
     copyScrollable?: boolean;
@@ -62,28 +65,30 @@ export function HeroScene({
 }) {
     const preset = normalizedHeroThemePreset(content.settings?.themePreset);
     const warm = preset === 'warm';
-    const items = content.items.filter(item => item.enabled !== false);
-    const title = content.title.trim();
-    const subtitle = content.subtitle.trim();
-    const body = content.body.trim();
-    const ctaLabel = content.ctaLabel.trim();
     const artworkLayout = resolveHeroArtworkLayout(content.settings);
     const [sampledTone, setSampledTone] = useState<{ imageUrl: typeof content.imageUrl; tone: ImageTone }>();
     // Overlaid copy uses the published theme from the first HTML. Sampling a
     // photograph after hydration must not repaint already-visible text.
-    const adaptiveStyle = heroThemeStyle(
-        content,
+    const imageTone =
         artworkLayout === 'editorial'
             ? sampledTone?.imageUrl === content.imageUrl
                 ? sampledTone?.tone
                 : undefined
             : preset === 'bright'
               ? 'light'
-              : 'dark',
-    );
+              : 'dark';
+    const adaptiveStyle = heroThemeStyle(content, imageTone);
     const sampledSource = useRef('');
     const mediaRef = useRef<HTMLDivElement>(null);
     const [overlayHeight, setOverlayHeight] = useState<number>();
+    const responsiveCopy =
+        mobileContent &&
+        ((['title', 'subtitle', 'body', 'ctaLabel', 'textColor'] as const).some(
+            field => mobileContent[field] !== content[field],
+        ) ||
+            mobileContent.items.length !== content.items.length ||
+            mobileContent.settings?.secondaryTextColor !== content.settings?.secondaryTextColor);
+    const copyVariants = responsiveCopy && mobileContent ? [content, mobileContent] : [content];
 
     const sampleRenderedImage = useCallback(
         (artworkElement: HTMLImageElement) => {
@@ -147,50 +152,69 @@ export function HeroScene({
                 </button>
                 {mediaOverlay}
             </div>
-            <div className={`hero-rich-content ${warm ? 'is-vip' : ''}`}>
-                <div
-                    className="hero-rich-copy-region"
-                    role={copyScrollable ? 'region' : undefined}
-                    aria-label={copyScrollable ? title || imageLabel : undefined}
-                    tabIndex={copyScrollable ? 0 : undefined}
-                >
-                    <div className="hero-rich-copy-surface">
-                        {subtitle && (
-                            <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
-                                {warm ? <ShieldCheck aria-hidden="true" /> : <Zap aria-hidden="true" />}
-                                <ContentText as="span">{subtitle}</ContentText>
-                            </div>
-                        )}
-                        <h1 className="hero-rich-title">{title}</h1>
-                        {body && <ContentText className="hero-rich-desc">{body}</ContentText>}
-                    </div>
-                    {items.length > 0 && (
-                        <div className="hero-rich-stats-row">
-                            {items.map((item, index) => (
-                                <div
-                                    className={`hero-stat-badge${warm ? ' is-vip' : ''}`}
-                                    key={`${item.label}-${index}`}
-                                >
-                                    <span className="stat-num">{item.label}</span>
-                                    <ContentText as="span" className="stat-lbl">
-                                        {item.description}
-                                    </ContentText>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-                {ctaLabel && content.targetType !== 'NONE' && (
-                    <button
-                        type="button"
-                        className={`hero-rich-cta-btn ${warm ? 'is-vip-btn' : ''}`}
-                        onClick={onOpen}
+            {copyVariants.map((value, index) => {
+                const viewport = responsiveCopy ? (index ? 'phone' : 'desktop') : undefined;
+                const title = value.title.trim();
+                const subtitle = value.subtitle.trim();
+                const body = value.body.trim();
+                const ctaLabel = value.ctaLabel.trim();
+                const items = value.items.filter(item => item.enabled !== false);
+                return (
+                    <div
+                        key={viewport ?? 'shared'}
+                        className={`hero-rich-content ${warm ? 'is-vip' : ''}`}
+                        data-hero-copy-viewport={viewport}
+                        style={viewport === 'phone' ? heroThemeStyle(value, imageTone) : undefined}
                     >
-                        <span className="hero-rich-cta-label">{ctaLabel}</span>
-                        <ChevronRight aria-hidden="true" />
-                    </button>
-                )}
-            </div>
+                        <div
+                            className="hero-rich-copy-region"
+                            role={copyScrollable ? 'region' : undefined}
+                            aria-label={copyScrollable ? title || imageLabel : undefined}
+                            tabIndex={copyScrollable ? 0 : undefined}
+                        >
+                            <div className="hero-rich-copy-surface">
+                                {subtitle && (
+                                    <div className={`hero-rich-pill ${warm ? 'is-vip-pill' : ''}`}>
+                                        {warm ? (
+                                            <ShieldCheck aria-hidden="true" />
+                                        ) : (
+                                            <Zap aria-hidden="true" />
+                                        )}
+                                        <ContentText as="span">{subtitle}</ContentText>
+                                    </div>
+                                )}
+                                <h1 className="hero-rich-title">{title}</h1>
+                                {body && <ContentText className="hero-rich-desc">{body}</ContentText>}
+                            </div>
+                            {items.length > 0 && (
+                                <div className="hero-rich-stats-row">
+                                    {items.map((item, itemIndex) => (
+                                        <div
+                                            className={`hero-stat-badge${warm ? ' is-vip' : ''}`}
+                                            key={`${item.label}-${itemIndex}`}
+                                        >
+                                            <span className="stat-num">{item.label}</span>
+                                            <ContentText as="span" className="stat-lbl">
+                                                {item.description}
+                                            </ContentText>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        {ctaLabel && value.targetType !== 'NONE' && (
+                            <button
+                                type="button"
+                                className={`hero-rich-cta-btn ${warm ? 'is-vip-btn' : ''}`}
+                                onClick={onOpen}
+                            >
+                                <span className="hero-rich-cta-label">{ctaLabel}</span>
+                                <ChevronRight aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+                );
+            })}
         </div>
     );
 }

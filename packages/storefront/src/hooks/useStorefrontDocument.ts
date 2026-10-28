@@ -16,12 +16,13 @@ import {
 import { type StorefrontVisualPresetId } from '../../../storefront-content-plugin/src/visual-presets';
 import { productDescriptionText } from '../rich-text';
 import { applyStorefrontIcons } from '../storefront-icons';
-import { NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from '../storefront-images';
 import { storefrontDocumentUrl } from '../storefront-preview-parameters';
 import { type RouteName, type RouteState } from '../storefront-router';
 import { cacheStorefrontTheme } from '../storefront-theme-cache';
-import { productImage, setMetaContent, trimText } from '../storefront-utils';
+import { setMetaContent, trimText } from '../storefront-utils';
 import { type Product, type StorefrontConfig } from '../types';
+
+import { type SecondaryMetadata } from './storefront-secondary-metadata';
 
 export function useStorefrontBrandColors(
     config: StorefrontConfig | undefined,
@@ -122,57 +123,17 @@ export function useStorefrontMetadata({
         document
             .querySelectorAll('link[rel="alternate"][hreflang], script[data-storefront-seo]')
             .forEach(node => node.remove());
+        setMetaContent('meta[name="application-name"]', storefrontName);
         if (validSeo && publicSeo) {
-            const share = publicSeo as PublicSeoDocument & { shareTitle?: string; shareDescription?: string };
-            const shareTitle = share.shareTitle || publicSeo.title;
-            const shareDescription = share.shareDescription || publicSeo.description;
             document.title = publicSeo.title;
             setMetaContent('meta[name="description"]', publicSeo.description);
-            setMetaContent('meta[name="application-name"]', storefrontName);
+
             setMetaContent(
                 'meta[name="robots"]',
                 publicSeo.indexable === true ? publicSeo.robots : 'noindex, follow',
             );
-            setMetaContent('meta[property="og:site_name"]', storefrontName);
-            setMetaContent('meta[property="og:type"]', 'website');
-            setMetaContent('meta[property="og:title"]', shareTitle);
-            setMetaContent('meta[property="og:description"]', shareDescription);
-            setMetaContent('meta[property="og:url"]', publicSeo.canonical);
-            setMetaContent('meta[property="og:locale"]', isZh ? 'zh_CN' : 'en');
-            setMetaContent('meta[name="twitter:title"]', shareTitle);
-            setMetaContent('meta[name="twitter:description"]', shareDescription);
-            setMetaContent('meta[name="twitter:card"]', publicSeo.image ? 'summary_large_image' : 'summary');
-            if (publicSeo.image) {
-                setMetaContent('meta[property="og:image"]', publicSeo.image);
-                setMetaContent('meta[name="twitter:image"]', publicSeo.image);
-            } else {
-                document.querySelector('meta[property="og:image"]')?.remove();
-                document.querySelector('meta[name="twitter:image"]')?.remove();
-                document.querySelector('meta[property="og:image:alt"]')?.remove();
-                document.querySelector('meta[name="twitter:image:alt"]')?.remove();
-            }
-            let publicCanonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-            if (!publicCanonical) {
-                publicCanonical = document.createElement('link');
-                publicCanonical.rel = 'canonical';
-                document.head.append(publicCanonical);
-            }
-            publicCanonical.href = publicSeo.canonical;
-            for (const alternate of publicSeo.alternates) {
-                const link = document.createElement('link');
-                link.rel = 'alternate';
-                link.hreflang = alternate.language;
-                link.href = alternate.href;
-                document.head.append(link);
-            }
-            for (const data of publicSeo.structuredData) {
-                const script = document.createElement('script');
-                script.type = 'application/ld+json';
-                script.dataset.storefrontSeo = '';
-                script.textContent = JSON.stringify(data);
-                document.head.append(script);
-            }
-            return;
+            setCanonical(publicSeo.canonical);
+            return deferMetadata({ publicSeo, storefrontName, isZh });
         }
         const routeLabels: Partial<Record<RouteName, string>> = {
             category: isZh ? '商品' : 'Shop',
@@ -229,14 +190,6 @@ export function useStorefrontMetadata({
             route.name === 'product' && selectedProduct?.description.trim()
                 ? trimText(productDescriptionText(selectedProduct.description), 150)
                 : storeSummary;
-        const imagePath = storefrontShareImage(route.name, selectedProduct, logoUrl);
-        const image = new URL(imagePath, storefrontDocumentUrl()).href;
-        const imageAlt =
-            route.name === 'product' && selectedProduct
-                ? selectedProduct.name
-                : isZh
-                  ? `${storefrontName}精选商品`
-                  : `Featured products from ${storefrontName}`;
         const canonicalUrl = new URL(storefrontDocumentUrl());
         canonicalUrl.hash = '';
         canonicalUrl.search = '';
@@ -253,27 +206,18 @@ export function useStorefrontMetadata({
         document.title = title;
         setMetaContent('meta[name="description"]', description);
         setMetaContent('meta[name="robots"]', 'noindex, nofollow, noarchive');
-        setMetaContent('meta[name="application-name"]', storefrontName);
-        setMetaContent('meta[property="og:type"]', route.name === 'product' ? 'product' : 'website');
-        setMetaContent('meta[property="og:site_name"]', storefrontName);
-        setMetaContent('meta[property="og:title"]', title);
-        setMetaContent('meta[property="og:description"]', description);
-        setMetaContent('meta[property="og:image"]', image);
-        document.querySelector('meta[property="og:image:width"]')?.remove();
-        document.querySelector('meta[property="og:image:height"]')?.remove();
-        setMetaContent('meta[property="og:image:alt"]', imageAlt);
-        setMetaContent('meta[property="og:url"]', canonicalUrl.href);
-        setMetaContent('meta[name="twitter:title"]', title);
-        setMetaContent('meta[name="twitter:description"]', description);
-        setMetaContent('meta[name="twitter:image"]', image);
-        setMetaContent('meta[name="twitter:image:alt"]', imageAlt);
-        let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-        if (!canonical) {
-            canonical = document.createElement('link');
-            canonical.rel = 'canonical';
-            document.head.append(canonical);
-        }
-        canonical.href = canonicalUrl.href;
+
+        setCanonical(canonicalUrl.href);
+        return deferMetadata({
+            route,
+            storefrontName,
+            title,
+            description,
+            product: selectedProduct,
+            logoUrl,
+            isZh,
+            canonical: canonicalUrl.href,
+        });
     }, [
         isZh,
         route,
@@ -297,10 +241,26 @@ export function useStorefrontMetadata({
     }, [logoUrl, brandingReady, brandingScopeKey]);
 }
 
-export function storefrontShareImage(
-    route: RouteName,
-    product: Product | null | undefined,
-    logoUrl: string | null,
-): string {
-    return (route === 'product' ? productImage(product) : null) || logoUrl || NEUTRAL_STOREFRONT_SOCIAL_IMAGE;
+/** A superseded route/store or changed browser URL cannot publish late metadata. */
+function deferMetadata(input: SecondaryMetadata) {
+    let active = true;
+    const href = storefrontDocumentUrl();
+    void import('./storefront-secondary-metadata')
+        .then(module => {
+            if (active && href === storefrontDocumentUrl()) module.applySecondaryMetadata(input, href);
+        })
+        .catch(() => undefined);
+    return () => {
+        active = false;
+    };
+}
+
+function setCanonical(href: string) {
+    let link = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!link) {
+        link = document.createElement('link');
+        link.rel = 'canonical';
+        document.head.append(link);
+    }
+    link.href = href;
 }

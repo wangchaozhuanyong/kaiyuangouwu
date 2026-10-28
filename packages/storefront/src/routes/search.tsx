@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { SearchRoutePage } from '../route-pages/catalog-route-pages';
+import { SearchRoutePage } from '../route-pages/catalog-detail-route-pages';
 import { publicPageRouteLoader } from '../storefront-page-data';
 import { normalizeRouteSearch } from '../storefront-router';
 

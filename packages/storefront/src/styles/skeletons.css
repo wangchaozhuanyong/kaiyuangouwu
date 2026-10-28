@@ -248,26 +248,25 @@
 .route-transition-mark .safe-image-fallback {
     display: none;
 }
-.brand-loading-name {
+.brand-loading-name,
+.brand-loading-subtitle {
     width: 100%;
     max-width: 100%;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+.brand-loading-name {
     font-size: var(--type-page-size);
     line-height: var(--type-page-leading);
     min-height: var(--type-page-leading);
     font-weight: var(--font-weight-semibold);
-    text-align: center;
-    overflow-wrap: anywhere;
 }
 .brand-loading-subtitle {
-    width: 100%;
-    max-width: 100%;
     color: var(--muted);
     font-size: var(--type-meta-size);
     line-height: var(--type-meta-leading);
     min-height: var(--type-meta-leading);
     letter-spacing: var(--tracking-eyebrow);
-    text-align: center;
-    overflow-wrap: anywhere;
 }
 .brand-loading-caption {
     display: flex;
@@ -365,6 +364,10 @@
     }
 }
 @media (prefers-reduced-motion: reduce) {
+    .page-readiness-initial.is-exiting {
+        display: none;
+        animation: none;
+    }
     .brand-loading-bar > i {
         animation: none;
         transform: translateX(108%);
@@ -387,8 +390,16 @@
     opacity: 0;
     pointer-events: none;
 }
+@media (prefers-reduced-motion: no-preference) {
+    #storefront-boot-loading {
+        transition:
+            opacity var(--experience-motion-fast) var(--experience-ease-standard),
+            visibility 0s linear var(--experience-motion-fast);
+    }
+}
 #root:empty + #storefront-boot-loading:not([aria-hidden='true']),
 html[data-storefront-boot-pending] #storefront-boot-loading {
+    transition: none;
     visibility: visible;
     opacity: 1;
     pointer-events: auto;

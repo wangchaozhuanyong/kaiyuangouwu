@@ -62,6 +62,9 @@ test('initial budgets deduplicate vendor cycles and attach only selected route C
         assert.equal(costs.startup.cssBytes, 6);
         assert.equal(costs.services.cssBytes, 13);
         assert.equal(costs.home.cssBytes, 6);
+        assert.equal(costs.home.assets.includes('catalog-detail-route-pages-12345678.js'), false);
+        assert.equal(costs.product.assets.includes('catalog-detail-route-pages-12345678.js'), true);
+        assert.equal(costs.product.assets.includes('catalog-route-pages-12345678.js'), false);
         assert.equal(costs.services.assets.includes('unselected-12345678.js'), false);
         await rm(path.join(root, 'assets', 'vendor-12345678.js'));
         await assert.rejects(() => initialResourceCosts(root, html), /Missing initial resource/u);

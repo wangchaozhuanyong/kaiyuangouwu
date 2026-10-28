@@ -86,7 +86,7 @@ vi.mock('./routeTree.gen', async () => {
     };
 });
 vi.mock('./App', () => ({ App: () => null }));
-vi.mock('./route-pages/catalog-route-pages', () => ({
+vi.mock('./route-pages/catalog-detail-route-pages', () => ({
     ProductRoutePage: () => null,
     preloadProductRoutePage: () => Promise.resolve(),
 }));

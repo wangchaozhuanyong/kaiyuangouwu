@@ -13,7 +13,8 @@ import { seedPublicPage, type PublicPageData } from '../storefront-page-data';
 import { StorefrontContext, type StorefrontContextValue } from '../StorefrontContext';
 import { type Product, type StorefrontLanguage } from '../types';
 
-import { HomeRoutePage, ProductRoutePage } from './catalog-route-pages';
+import { ProductRoutePage } from './catalog-detail-route-pages';
+import { HomeRoutePage } from './catalog-route-pages';
 
 let homeInputs: ReturnType<typeof HomePageContext.useValue> | undefined;
 function HomeReadProbe() {

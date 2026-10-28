@@ -7,8 +7,10 @@ import { type RouteState } from '../storefront-router';
 import { StorefrontContext } from '../StorefrontContext';
 import { type StorefrontContentBlock, type StorefrontContentItem, type StorefrontLanguage } from '../types';
 
-import couponArtwork from './artwork/coupon.svg';
-import supportArtwork from './artwork/support.svg';
+// Keep optional artwork out of the catalog's JavaScript parse path. The existing
+// sized picture loads the same cacheable SVG only when that entry is displayed.
+import couponArtwork from './artwork/coupon.svg?no-inline';
+import supportArtwork from './artwork/support.svg?no-inline';
 
 export const clientPluginPlacements = [
     'AFTER_HEADER',

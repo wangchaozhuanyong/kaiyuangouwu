@@ -41,6 +41,64 @@ describe('explicit route readiness', () => {
         vi.useRealTimers();
     });
     const retry = vi.fn();
+    it('reveals newly ready regions after child registration without waiting for the animation', async () => {
+        const animate = vi.fn(() => ({ cancel: vi.fn(), finished: new Promise(() => undefined) }));
+        const previousAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+        Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+        const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+            top: 0,
+            bottom: 100,
+            width: 200,
+            height: 100,
+        } as DOMRect);
+        function Region({ pending }: { pending: boolean }) {
+            usePageReadiness(pending);
+            return pending ? (
+                <div data-page-pending="data">Loading</div>
+            ) : (
+                <section data-content-reveal>
+                    <button>Continue</button>
+                </section>
+            );
+        }
+        const boundary = (pending: boolean, navigationPreparing = false) => (
+            <PageReadinessBoundary
+                pending={false}
+                online
+                language="en"
+                onRetry={retry}
+                onBack={retry}
+                navigationKey="new-page"
+                navigationPreparing={navigationPreparing}
+                requestKey={navigationPreparing ? 'next-page' : 'new-page'}
+            >
+                <Region pending={pending} />
+            </PageReadinessBoundary>
+        );
+        try {
+            act(() => root.render(boundary(true)));
+            await act(async () => {
+                await vi.dynamicImportSettled();
+            });
+            expect(animate).not.toHaveBeenCalled();
+            act(() => root.render(boundary(false)));
+            expect(animate).toHaveBeenCalledOnce();
+            expect(host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness')).toBe(
+                'ready',
+            );
+            expect(host.querySelector('button')?.closest('[inert], [hidden]')).toBeNull();
+            // Programmatic navigation has no pointer/keyboard event to cancel the old entrance.
+            act(() => root.render(boundary(false, true)));
+            expect(animate.mock.results[0].value.cancel).toHaveBeenCalledOnce();
+            act(() => root.render(boundary(true)));
+            act(() => root.render(boundary(false)));
+            expect(animate).toHaveBeenCalledOnce();
+        } finally {
+            geometry.mockRestore();
+            if (previousAnimate) Object.defineProperty(HTMLElement.prototype, 'animate', previousAnimate);
+            else delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+        }
+    });
     it('hands startup to React after route commit even while a local coupon is still loading', () => {
         const owned = vi.fn();
         const ready = vi.fn();
@@ -571,7 +629,7 @@ describe('store-scoped initial loading and recovery', () => {
             await vi.advanceTimersByTimeAsync(ms);
         });
     const stage = () => host.querySelector<HTMLElement>('.page-readiness-stage');
-    const initial = () => host.querySelector('.page-readiness-initial');
+    const initial = () => host.querySelector('.page-readiness-initial:not(.is-exiting)');
     const phase = () => host.querySelector('[data-page-readiness]')?.getAttribute('data-page-readiness');
 
     it('keeps the shell mounted but hidden from first paint, revealing one centered brand after 200 ms', async () => {
@@ -592,16 +650,40 @@ describe('store-scoped initial loading and recovery', () => {
         expect(stage()?.hidden).toBe(false);
         expect(stage()?.hasAttribute('inert')).toBe(false);
         expect(phase()).toBe('ready');
+        const outgoing = host.querySelector('.page-readiness-initial.is-exiting');
+        expect(outgoing?.getAttribute('aria-hidden')).toBe('true');
+        expect(outgoing?.getAttribute('aria-busy')).toBe('false');
+        expect(outgoing?.hasAttribute('inert')).toBe(true);
+        expect(outgoing?.textContent).toContain('store-a');
+        expect(host.querySelector('header button')?.closest('[hidden], [inert]')).toBeNull();
+        await advance(120);
+        expect(host.querySelector('.page-readiness-initial')).toBeNull();
     });
 
     it('does not force a brand animation when required data is ready before the delay', async () => {
         render();
         await advance(100);
         render({ loading: false });
+        expect(host.querySelector('.page-readiness-initial')).toBeNull();
         await advance(200);
         expect(initial()).toBeNull();
         expect(host.querySelector('.brand-loading')).toBeNull();
         expect(host.textContent).toContain('Available content');
+    });
+    it('removes the outgoing picture immediately when reduced motion is requested', async () => {
+        const matchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+        window.matchMedia = vi.fn(() => ({ matches: true }) as MediaQueryList);
+        try {
+            render();
+            await advance(200);
+            render({ loading: false });
+            expect(host.querySelector('.page-readiness-initial')).toBeNull();
+            expect(stage()?.hidden).toBe(false);
+            expect(phase()).toBe('ready');
+        } finally {
+            if (matchMedia) Object.defineProperty(window, 'matchMedia', matchMedia);
+            else delete (window as Partial<Window>).matchMedia;
+        }
     });
     it('continues an already-visible document brand without a blank 200ms handoff', () => {
         const boot = document.createElement('main');
