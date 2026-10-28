@@ -4,7 +4,8 @@ import {
 } from '../../storefront-content-plugin/src/visual-presets';
 
 // v3 owns the graphite/champagne classic palette; v2 still contains classic blue.
-// Keep the versioned key in sync with the parser-blocking restore-theme.js.
+// Keep the versioned key compatible with restore-theme.js for older cached documents.
+// Current public HTML owns its first-frame theme and does not load that legacy entry.
 const THEME_CACHE_KEY = '__storefront_theme_v3__';
 const RESTORED_COLOR_PROPERTY = new RegExp(
     '^--(?:store-(?:background|primary|highlight|foreground)|auth-store-(?:background|foreground)' +

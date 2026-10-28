@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +13,74 @@ afterEach(() => {
 });
 
 describe('shared hero content layout', () => {
+    it('includes phone copy and colors in SSR and adopts both variants without replacing artwork', () => {
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe = vi.fn();
+                disconnect = vi.fn();
+            },
+        );
+        const content: HeroSceneData = {
+            title: 'Desktop promotion',
+            subtitle: 'Desktop label',
+            body: 'Desktop description',
+            ctaLabel: 'Browse',
+            targetType: 'URL',
+            imageUrl: '/desktop.jpg',
+            items: [{ label: 'Desktop statistic', description: 'Published statistic' }],
+        };
+        const mobileContent = {
+            ...content,
+            title: '手机推广标题',
+            subtitle: '',
+            body: '手机描述',
+            ctaLabel: '查看',
+            textColor: '#604823',
+            settings: { secondaryTextColor: '#503711' },
+            items: [],
+        };
+        const scene = (
+            <HeroScene
+                content={content}
+                mobileContent={mobileContent}
+                image={
+                    <picture>
+                        <source media="(max-width: 767px)" srcSet="/phone.jpg" />
+                        <img src="/desktop.jpg" alt="Artwork" />
+                    </picture>
+                }
+                imageLabel="Open promotion"
+            />
+        );
+        const host = document.createElement('div');
+        host.innerHTML = renderToString(scene);
+        document.body.append(host);
+        const phone = host.querySelector<HTMLElement>('[data-hero-copy-viewport="phone"]');
+        const desktop = host.querySelector('[data-hero-copy-viewport="desktop"]');
+        const image = host.querySelector('img');
+        expect(phone?.querySelector('.hero-rich-title')?.textContent).toBe('手机推广标题');
+        expect(phone?.querySelector('.hero-rich-pill')).toBeNull();
+        expect(phone?.querySelector('.hero-rich-stats-row')).toBeNull();
+        expect(phone?.style.getPropertyValue('--hero-image-copy-foreground')).toBe('#604823');
+        expect(phone?.style.getPropertyValue('--hero-image-body-foreground')).toBe('#503711');
+        expect(desktop?.textContent).toContain('Desktop statistic');
+        expect(host.querySelectorAll('img')).toHaveLength(1);
+        const onRecoverableError = vi.fn();
+        let root: ReturnType<typeof hydrateRoot> | undefined;
+        try {
+            act(() => {
+                root = hydrateRoot(host, scene, { onRecoverableError });
+            });
+            expect(host.querySelector('[data-hero-copy-viewport="phone"]')).toBe(phone);
+            expect(host.querySelector('[data-hero-copy-viewport="desktop"]')).toBe(desktop);
+            expect(host.querySelector('img')).toBe(image);
+            expect(onRecoverableError).not.toHaveBeenCalled();
+        } finally {
+            act(() => root?.unmount());
+            host.remove();
+        }
+    });
     it.each(['overlay', 'campaign'] as const)(
         'keeps %s copy colors stable from SSR through native image load',
         layout => {

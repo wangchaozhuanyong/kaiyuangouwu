@@ -28,6 +28,8 @@
     --experience-motion-fast: 120ms;
     --experience-motion-standard: 180ms;
     --experience-motion-emphasized: 240ms;
+    --experience-motion-stagger: 60ms;
+    --experience-reveal-distance: 6px;
     --experience-ease-standard: cubic-bezier(0.2, 0, 0, 1);
     --experience-ease-emphasized: cubic-bezier(0.2, 0, 0, 1.2);
     font-family: var(--font-ui);
@@ -146,6 +148,12 @@
     color: var(--text);
     background: var(--bg);
     accent-color: var(--accent);
+}
+
+@media (max-width: 767px) {
+    :root {
+        --experience-reveal-distance: 4px;
+    }
 }
 
 @media (min-width: 1024px) {

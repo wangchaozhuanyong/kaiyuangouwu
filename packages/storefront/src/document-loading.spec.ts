@@ -345,6 +345,7 @@ describe('document startup feedback without hiding available content', () => {
         const html = readFileSync(join(__dirname, '../index.html'), 'utf8');
         const css = readFileSync(join(__dirname, './styles/skeletons.css'), 'utf8');
         expect(html).toMatch(/<script defer src="\/storefront\/document-loading\.js\?v=[^"]+">/u);
+        expect(html).not.toContain('src="/storefront/restore-theme.js"');
         expect(html.indexOf('<div id="root">')).toBeLessThan(html.indexOf('id="storefront-boot-loading"'));
         expect(html + css).not.toMatch(/boot-pending[^{}]*#root\s*\{[^}]*visibility:\s*hidden/u);
         expect(source).not.toMatch(/root\.inert\s*=\s*true/u);

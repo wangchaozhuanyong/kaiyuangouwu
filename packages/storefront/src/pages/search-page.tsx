@@ -432,7 +432,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
     });
     const Page = embedded ? 'div' : 'main';
     const categoryLinks = (
-        <section className="search-browse">
+        <section className="search-browse" data-content-reveal>
             <header>
                 <h2>{isZh ? '分类直达' : 'Browse categories'}</h2>
                 <span>{isZh ? '按商品分类浏览' : 'Explore the range'}</span>
@@ -669,7 +669,7 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                     />
                 </div>
             ) : (
-                <section className="search-results">
+                <section className="search-results" data-content-reveal>
                     <header className="search-results-heading">
                         <h2>{isZh ? '“' + term + '”的结果' : 'Results for “' + term + '”'}</h2>
                         <span role="status">

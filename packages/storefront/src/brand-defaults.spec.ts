@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { storefrontShareImage } from './hooks/useStorefrontDocument';
+import { storefrontShareImage } from './hooks/storefront-secondary-metadata';
 import { NEUTRAL_STOREFRONT_IMAGE, NEUTRAL_STOREFRONT_SOCIAL_IMAGE } from './storefront-images';
 import { DEFAULT_STOREFRONT_NAMES } from './storefront-utils';
 import { type Product } from './types';
