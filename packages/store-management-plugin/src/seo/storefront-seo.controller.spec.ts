@@ -6,6 +6,7 @@ import type { StorefrontPageData } from '@vendure/storefront-content-plugin';
 import type { Request, Response } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { measurePublicDocument, recordPublicDocumentCache } from '../performance/public-document-timing';
 import { StorefrontClosedError } from '../storefront-activation.service';
 
 import { PublicHtmlRenderError } from './public-render-diagnostics';
@@ -124,6 +125,65 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
         vi.spyOn(Logger, 'error').mockImplementation(errorLog);
     });
     afterEach(() => vi.restoreAllMocks());
+    it('appends request-local subphases and cache outcomes while preserving the response', async () => {
+        const first = fixture();
+        const second = fixture();
+        const gate = deferred<StorefrontPageData>();
+        first.pages.readForDocument.mockImplementation(() =>
+            measurePublicDocument('page-read', async () => {
+                recordPublicDocumentCache('miss');
+                return gate.promise;
+            }),
+        );
+        second.pages.readForDocument.mockImplementation(() =>
+            measurePublicDocument('page-document-media', () => {
+                recordPublicDocumentCache('hit');
+                return Promise.resolve(second.page);
+            }),
+        );
+        const a = responseMock();
+        const b = responseMock();
+        const pending = first.controller.document(first.req('/en'), a as unknown as Response);
+        await vi.waitFor(() => expect(first.pages.readForDocument).toHaveBeenCalledOnce());
+        await second.controller.document(second.req('/en'), b as unknown as Response);
+        gate.resolve(first.page);
+        await pending;
+        const header = (response: ReturnType<typeof responseMock>) =>
+            response.setHeader.mock.calls.find(([name]) => name === 'Server-Timing')?.[1] as string;
+        expect(header(a)).toContain('storefront-page-read;dur=');
+        expect(header(a)).toContain('storefront-page-cache;desc="miss"');
+        expect(header(a)).not.toContain('page-document-media');
+        expect(header(b)).toContain('storefront-page-document-media;dur=');
+        expect(header(b)).toContain('storefront-page-cache;desc="hit"');
+        expect(header(b)).not.toContain('page-read;');
+        for (const response of [a, b]) {
+            expect(response.status).toHaveBeenCalledWith(200);
+            expect(response.send).toHaveBeenCalledWith('<html>synthetic public body</html>');
+            expect(header(response)).not.toMatch(/synthetic|product-1|cookie|authorization/u);
+        }
+    });
+
+    it('reports a failed subphase without leaking its error or changing the 503 response', async () => {
+        const test = fixture();
+        test.pages.readForDocument.mockImplementation(() =>
+            measurePublicDocument('page-read', () => {
+                recordPublicDocumentCache('miss');
+                return Promise.reject(new ServiceUnavailableException('private synthetic source'));
+            }),
+        );
+        const response = responseMock();
+        await test.controller.document(test.req('/en'), response as unknown as Response);
+        const header = response.setHeader.mock.calls.find(
+            ([name]) => name === 'Server-Timing',
+        )?.[1] as string;
+        expect(header).toContain('storefront-page-read;dur=');
+        expect(header).toContain('storefront-page;dur=');
+        expect(header).not.toMatch(/private|synthetic/u);
+        expect(response.status).toHaveBeenCalledWith(503);
+        expect(response.send).toHaveBeenCalledWith('Public page temporarily unavailable');
+        expect(test.html.render).not.toHaveBeenCalled();
+    });
+
     it.each([
         [true, '1', 'anonymous'],
         [true, '0', 'unknown'],

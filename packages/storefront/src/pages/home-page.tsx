@@ -20,27 +20,17 @@ import {
 import {
     memo,
     ReactNode,
-    PointerEvent as ReactPointerEvent,
-    useCallback,
     useEffect,
     useInsertionEffect,
     useLayoutEffect,
     useMemo,
     useRef,
     useState,
-    useSyncExternalStore,
 } from 'react';
 
 import { normalizedHomepageVisualStyle } from '../../../storefront-content-plugin/src/content-visuals';
 import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
-import {
-    heroContentForViewport,
-    heroImageForViewport,
-} from '../../../storefront-content-plugin/src/shared/hero-image';
-import {
-    HeroScene,
-    resolveHeroArtworkLayout,
-} from '../../../storefront-content-plugin/src/shared/hero-scene';
+import { heroImageForViewport } from '../../../storefront-content-plugin/src/shared/hero-image';
 import { CommercePageStyles } from '../commerce-styles';
 import { DesktopCouponTicket } from '../components/common/desktop-coupon-ticket';
 import { HomeNoticeTicker } from '../components/common/home-notice-ticker';
@@ -49,14 +39,6 @@ import { ProductCard, ProductCardSkeleton } from '../components/common/product-c
 import { contentTargetHref, interceptContentNavigation } from '../content-target-href';
 import { claimableCouponCampaigns } from '../coupon-campaign-eligibility';
 import { useDesktopLayout } from '../desktop-layout';
-import {
-    HERO_HEIGHT_TRANSITION_MS,
-    HERO_TRANSITION_MS,
-    heroDirectionBetweenSlides,
-    heroIndexAfterManualMove,
-    heroSwipeAxis,
-    isCompletedHeroSwipe,
-} from '../hero-carousel';
 import { selectCategoryPromotionProducts, selectManagedProducts } from '../home-merchandising';
 import { homepageModuleEntries } from '../homepage-module-order';
 import { resolveManagedContentCopy } from '../managed-content-copy';
@@ -64,7 +46,6 @@ import { managedContentStyle } from '../managed-content-style';
 import { PageSkeleton } from '../route-loading';
 import { couponCardsFromCampaigns, StorefrontCouponCard } from '../storefront-coupons';
 import { HomePageContext } from '../storefront-page-contexts';
-import { storefrontPreviewParameters } from '../storefront-preview-parameters';
 import { routeNavigateOptions, type RouteState } from '../storefront-router';
 import {
     aggregateFlashSaleProducts,
@@ -84,11 +65,9 @@ import {
 import {
     contentNumberSetting,
     contentStringArraySetting,
-    decodeStorefrontImage,
     productImage,
     renderColorfulQuickIcon,
     SafeImage,
-    shouldPrefetchMedia,
     trimText,
 } from '../storefront-ui/product-display';
 import { ProductSection } from '../storefront-ui/product-section';
@@ -104,6 +83,7 @@ import {
     StorefrontSystemAnnouncement,
 } from '../types';
 
+import { HomeHeroCarousel } from './home-hero-carousel';
 import { HomepageCouponRail } from './homepage-coupon-rail';
 
 // TODO: Import other internal components like BrandLogo, ProductSection
@@ -117,6 +97,7 @@ interface HomepageCouponHubProps {
     onToast?: (message: string) => void;
 }
 
+const emptyProducts: Product[] = [];
 const homepageSectionShellClassName = 'homepage-module-shell is-section-start';
 function isColorfulHomepageStyle(value: unknown) {
     return normalizedHomepageVisualStyle(value) === 'colorful';
@@ -391,11 +372,6 @@ export interface HomePageProps {
 }
 
 const phoneHeroQuery = '(max-width: 767px)';
-function subscribeToPhoneHero(onChange: () => void) {
-    const query = window.matchMedia(phoneHeroQuery);
-    query.addEventListener('change', onChange);
-    return () => query.removeEventListener('change', onChange);
-}
 
 export function HomePage() {
     useInsertionEffect(() => {
@@ -405,11 +381,6 @@ export function HomePage() {
         const commonStyle = document.head.querySelector('link[rel="stylesheet"], style[data-vite-dev-id]');
         if (homeStyle && commonStyle) document.head.insertBefore(homeStyle, commonStyle);
     }, []);
-    const phoneHero = useSyncExternalStore(
-        subscribeToPhoneHero,
-        () => window.matchMedia(phoneHeroQuery).matches,
-        () => false,
-    );
     const navigate = useNavigate();
     const desktop = useDesktopLayout();
     const navigateTo = (route: RouteState) => void navigate(routeNavigateOptions(route) as never);
@@ -481,7 +452,10 @@ export function HomePage() {
     const footerConfigured =
         configuredBlockTypes.includes('FOOTER') || contentBlocks.some(block => block.type === 'FOOTER');
     const bestSellersTitle = resolveManagedContentCopy(bestSellersBlock, 'title', '');
-    const homepageModules = homepageModuleEntries(contentBlocks, configuredBlockTypes);
+    const homepageModules = useMemo(
+        () => homepageModuleEntries(contentBlocks, configuredBlockTypes),
+        [contentBlocks, configuredBlockTypes],
+    );
     const homepageModuleOrder = (type: StorefrontContentBlock['type'], blockId?: string) =>
         homepageModules.findIndex(
             entry => entry.type === type && (blockId === undefined || entry.block?.id === blockId),
@@ -492,78 +466,30 @@ export function HomePage() {
             ? [entry.block]
             : [],
     );
-    const managedIds = new Set(
-        contentBlocks.flatMap(block => [
-            ...contentStringArraySetting(block.settings?.selectedProductIds),
-            ...contentStringArraySetting(block.settings?.pinnedProductIds),
-            ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
-            ...block.items.flatMap(item =>
-                item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
-            ),
-        ]),
-    );
-    const managedContentProductPool = Array.from(
-        new Map(
-            [
-                ...products.filter(product => !managedContentResolved || !managedIds.has(product.id)),
-                ...managedContentProducts,
-            ].map(product => [product.id, product]),
-        ).values(),
-    );
-    const [heroIndex, setHeroIndex] = useState(0);
-    const [readyHeroImage, setReadyHeroImage] = useState('');
-    const [heroMediaError, setHeroMediaError] = useState(false);
+    const managedContentProductPool = useMemo(() => {
+        const managedIds = new Set(
+            contentBlocks.flatMap(block => [
+                ...contentStringArraySetting(block.settings?.selectedProductIds),
+                ...contentStringArraySetting(block.settings?.pinnedProductIds),
+                ...(block.targetType === 'PRODUCT' && block.targetValue ? [block.targetValue] : []),
+                ...block.items.flatMap(item =>
+                    item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
+                ),
+            ]),
+        );
+        return Array.from(
+            new Map(
+                [
+                    ...products.filter(product => !managedContentResolved || !managedIds.has(product.id)),
+                    ...managedContentProducts,
+                ].map(product => [product.id, product]),
+            ).values(),
+        );
+    }, [contentBlocks, products, managedContentProducts, managedContentResolved]);
     const [quickPage, setQuickPage] = useState(0);
-    const [heroInteractionPaused, setHeroInteractionPaused] = useState(false);
     const [openNoticeId, setOpenNoticeId] = useState<string | null>(null);
-    const [heroGestureActive, setHeroGestureActive] = useState(false);
-    const [heroMotion, setHeroMotion] = useState<{
-        nextIndex: number;
-        direction: -1 | 1;
-        offset: number;
-        phase: 'dragging' | 'prepared' | 'settling';
-        completed: boolean;
-        crossfade?: boolean;
-    } | null>(null);
-    const heroMotionRef = useRef(heroMotion);
-    const heroMotionTimerRef = useRef<number | null>(null);
-    const heroMotionFrameRef = useRef<number | null>(null);
-    const heroViewportRef = useRef<HTMLElement>(null);
-    const heroStageRef = useRef<HTMLDivElement>(null);
-    const [heroStageHeight, setHeroStageHeight] = useState<number>();
-    const [heroCopyScrollable, setHeroCopyScrollable] = useState(false);
-    const heroStageHeightRef = useRef<number | undefined>(undefined);
-    const heroHeightGrowthDeadlineRef = useRef(0);
-    const heroQueuedSelectionRef = useRef<{ index: number; direction?: -1 | 1 } | null>(null);
-    const [heroAutoplayStopped, setHeroAutoplayStopped] = useState(false);
-    useEffect(() => {
-        const focusId = storefrontPreviewParameters().get('storefrontPreviewBlockId');
-        if (!focusId) return;
-        const index = managedHeroes.findIndex(block => block.id === focusId);
-        if (index >= 0) {
-            setHeroIndex(index);
-            setHeroAutoplayStopped(true);
-        }
-    }, [managedHeroes]);
     const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-    const reducedMotionRef = useRef(prefersReducedMotion);
-    reducedMotionRef.current = prefersReducedMotion;
     const [pageVisible, setPageVisible] = useState(true);
-    const heroGestureRef = useRef({
-        active: false,
-        horizontal: false,
-        suppressClick: false,
-        startX: 0,
-        startY: 0,
-        pointerId: -1,
-        width: 0,
-    });
-    const heroTransitionRef = useRef(0);
-    const heroCount = managedHeroes.length;
-    const heroInteractiveIndex =
-        heroMotion?.phase === 'settling' && heroMotion.completed ? heroMotion.nextIndex : heroIndex;
-    const managedHero = managedHeroes[heroIndex];
-    const heroImage = heroImageForViewport(managedHero, !phoneHero).imageUrl;
     const noticeItems = buildHomeNoticeItems(systemAnnouncements, noticeBlock, language, initialRenderTime);
     const openNoticeItem = noticeItems.find(item => item.id === openNoticeId);
     const showFooter = !footerConfigured && (Boolean(legalBlock) || !configuredBlockTypes.includes('LEGAL'));
@@ -620,193 +546,6 @@ export function HomePage() {
         Math.max(3, contentNumberSetting(noticeBlock?.settings?.scrollIntervalSeconds, 5)),
     );
 
-    const updateHeroMotion = useCallback((motion: typeof heroMotion) => {
-        heroMotionRef.current = motion;
-        setHeroMotion(motion);
-    }, []);
-
-    const clearHeroMotionSchedule = useCallback(() => {
-        if (heroMotionTimerRef.current !== null) window.clearTimeout(heroMotionTimerRef.current);
-        if (heroMotionFrameRef.current !== null) window.cancelAnimationFrame(heroMotionFrameRef.current);
-        heroMotionTimerRef.current = null;
-        heroMotionFrameRef.current = null;
-    }, []);
-
-    const settleHeroMotion = useCallback(
-        (motion: NonNullable<typeof heroMotion>) => {
-            clearHeroMotionSchedule();
-            const finish = () => {
-                heroMotionTimerRef.current = null;
-                if (motion.completed) setHeroIndex(motion.nextIndex);
-                updateHeroMotion(null);
-            };
-            if (reducedMotionRef.current) {
-                finish();
-                return;
-            }
-            updateHeroMotion({ ...motion, offset: 0, phase: 'settling' });
-            heroMotionTimerRef.current = window.setTimeout(finish, HERO_TRANSITION_MS);
-        },
-        [clearHeroMotionSchedule, updateHeroMotion],
-    );
-
-    const showPreparedHero = useCallback(
-        async (nextIndex: number, direction?: -1 | 1) => {
-            const nextHero = managedHeroes[nextIndex];
-            if (!nextHero || heroMotionRef.current?.phase === 'settling') return;
-            const transitionId = ++heroTransitionRef.current;
-            clearHeroMotionSchedule();
-            if (nextIndex === heroIndex) return;
-            const nextImage = heroImageForViewport(nextHero, !phoneHero).imageUrl;
-            setHeroMediaError(false);
-            try {
-                await decodeStorefrontImage(nextImage, 'hero');
-            } catch {
-                if (heroTransitionRef.current !== transitionId) return;
-                setHeroMediaError(true);
-                setHeroAutoplayStopped(true);
-                const current = heroMotionRef.current;
-                if (current) settleHeroMotion({ ...current, completed: false });
-                return;
-            }
-            if (heroTransitionRef.current !== transitionId) return;
-            const dragging = heroMotionRef.current?.phase === 'dragging';
-            const motion: NonNullable<typeof heroMotion> = {
-                nextIndex,
-                direction:
-                    direction ?? heroDirectionBetweenSlides(heroIndex, nextIndex, managedHeroes.length),
-                offset: dragging ? (heroMotionRef.current?.offset ?? 0) : 0,
-                phase: 'prepared',
-                completed: true,
-                crossfade: !dragging,
-            };
-            if (reducedMotionRef.current) {
-                settleHeroMotion(motion);
-                return;
-            }
-            updateHeroMotion(motion);
-            const start = (): void => {
-                const remainingGrowth = Math.max(0, heroHeightGrowthDeadlineRef.current - performance.now());
-                if (remainingGrowth > 0) {
-                    heroMotionTimerRef.current = window.setTimeout(() => {
-                        heroMotionTimerRef.current = null;
-                        if (heroTransitionRef.current === transitionId) start();
-                    }, remainingGrowth);
-                } else {
-                    settleHeroMotion(motion);
-                }
-            };
-            if (dragging) {
-                start();
-                return;
-            }
-            // Paint both starting positions before applying their coordinated transition.
-            heroMotionFrameRef.current = window.requestAnimationFrame(() => {
-                heroMotionFrameRef.current = window.requestAnimationFrame(() => {
-                    heroMotionFrameRef.current = null;
-                    if (heroTransitionRef.current === transitionId) start();
-                });
-            });
-        },
-        [clearHeroMotionSchedule, heroIndex, managedHeroes, phoneHero, settleHeroMotion, updateHeroMotion],
-    );
-
-    useEffect(() => {
-        ++heroTransitionRef.current;
-        clearHeroMotionSchedule();
-        heroGestureRef.current.active = false;
-        heroGestureRef.current.horizontal = false;
-        heroQueuedSelectionRef.current = null;
-        const viewport = heroViewportRef.current;
-        const pointerId = heroGestureRef.current.pointerId;
-        if (pointerId >= 0 && viewport?.hasPointerCapture(pointerId))
-            viewport.releasePointerCapture(pointerId);
-        setHeroGestureActive(false);
-        updateHeroMotion(null);
-        setHeroIndex(index => (index < managedHeroes.length ? index : 0));
-        return () => {
-            ++heroTransitionRef.current;
-            clearHeroMotionSchedule();
-        };
-    }, [managedHeroes, clearHeroMotionSchedule, updateHeroMotion]);
-
-    useLayoutEffect(() => {
-        const stage = heroStageRef.current;
-        const viewport = heroViewportRef.current;
-        if (!stage || !viewport) return;
-        const heightSurfaces = Array.from(
-            stage.querySelectorAll<HTMLElement>(desktop ? '.hero-rich-content' : '.hero-scene-wrapper'),
-        );
-        const carousel = viewport.closest<HTMLElement>('.hero-carousel');
-        const gallery = desktop
-            ? carousel
-                  ?.closest('.home-intro-grid.is-grouped-intro')
-                  ?.querySelector<HTMLElement>('.quick-grid')
-            : null;
-        let active = true;
-        const measure = () => {
-            if (!active) return;
-            const paired =
-                gallery &&
-                carousel &&
-                window.getComputedStyle(gallery).gridRowStart ===
-                    window.getComputedStyle(carousel).gridRowStart;
-            setHeroCopyScrollable(Boolean(paired));
-            // The right-hand gallery owns the fixed desktop frame. Neither artwork
-            // dimensions nor overflowing copy can change its height between slides.
-            const height = paired
-                ? gallery.getBoundingClientRect().height
-                : Math.ceil(
-                      Math.max(
-                          Number.parseFloat(window.getComputedStyle(viewport).minHeight) || 0,
-                          ...heightSurfaces.map(surface => {
-                              const frameHeight = surface.getBoundingClientRect().height;
-                              // Mobile overlay copy scrolls inside the fixed CSS frame.
-                              // Its overflow must never resize the carousel stage.
-                              return !desktop && surface.dataset.heroArtworkLayout === 'overlay'
-                                  ? frameHeight
-                                  : Math.max(frameHeight, surface.scrollHeight);
-                          }),
-                      ),
-                  );
-            if (height <= 0 || height === heroStageHeightRef.current) return;
-            const previous = heroStageHeightRef.current ?? stage.getBoundingClientRect().height;
-            heroStageHeightRef.current = height;
-            // Make room for the taller copy before its final horizontal entrance.
-            heroHeightGrowthDeadlineRef.current =
-                !paired && height > previous && !reducedMotionRef.current
-                    ? performance.now() + HERO_HEIGHT_TRANSITION_MS
-                    : 0;
-            setHeroStageHeight(height);
-        };
-        const observer = new ResizeObserver(measure);
-        heightSurfaces.forEach(surface => observer.observe(surface));
-        observer.observe(viewport);
-        if (gallery) observer.observe(gallery);
-        window.addEventListener('resize', measure);
-        measure();
-        return () => {
-            active = false;
-            observer.disconnect();
-            window.removeEventListener('resize', measure);
-        };
-    }, [desktop, heroIndex, heroMotion?.nextIndex, managedHeroes]);
-
-    useEffect(() => {
-        const queued = heroQueuedSelectionRef.current;
-        if (heroMotion || !queued) return;
-        heroQueuedSelectionRef.current = null;
-        void showPreparedHero(queued.index, queued.direction);
-    }, [heroIndex, heroMotion, showPreparedHero]);
-
-    useEffect(() => {
-        const motion = heroMotionRef.current;
-        if (!prefersReducedMotion || !motion || motion.phase === 'dragging') return;
-        clearHeroMotionSchedule();
-        if (motion.completed) setHeroIndex(motion.nextIndex);
-        updateHeroMotion(null);
-    }, [prefersReducedMotion, clearHeroMotionSchedule, updateHeroMotion]);
-
     useEffect(() => {
         const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
         const updateMotionPreference = () => setPrefersReducedMotion(mediaQuery.matches);
@@ -821,178 +560,6 @@ export function HomePage() {
         document.addEventListener('visibilitychange', updatePageVisibility);
         return () => document.removeEventListener('visibilitychange', updatePageVisibility);
     }, []);
-
-    useEffect(() => {
-        if (
-            heroCount < 2 ||
-            heroInteractionPaused ||
-            heroGestureActive ||
-            heroMotion ||
-            heroAutoplayStopped ||
-            prefersReducedMotion ||
-            !pageVisible
-        ) {
-            return;
-        }
-        const timer = window.setTimeout(
-            () => void showPreparedHero(heroIndexAfterManualMove(heroIndex, heroCount, 1)),
-            heroAutoplayIntervalSeconds * 1000,
-        );
-        return () => window.clearTimeout(timer);
-    }, [
-        heroAutoplayIntervalSeconds,
-        heroAutoplayStopped,
-        heroCount,
-        heroGestureActive,
-        heroMotion,
-        heroIndex,
-        heroInteractionPaused,
-        pageVisible,
-        prefersReducedMotion,
-        showPreparedHero,
-    ]);
-
-    useEffect(() => {
-        if (heroCount < 2 || readyHeroImage !== heroImage || !shouldPrefetchMedia()) return;
-        const nextIndex = heroIndexAfterManualMove(heroIndex, heroCount, 1);
-        const nextHero = managedHeroes[nextIndex];
-        if (!nextHero) return;
-        const nextImage = heroImageForViewport(nextHero, !phoneHero).imageUrl;
-        void decodeStorefrontImage(nextImage, 'hero').catch(() => undefined);
-    }, [heroCount, heroImage, heroIndex, managedHeroes, phoneHero, readyHeroImage]);
-
-    useEffect(() => {
-        if (heroIndex >= heroCount) setHeroIndex(0);
-    }, [heroCount, heroIndex]);
-
-    const selectHeroManually = (index: number, direction?: -1 | 1) => {
-        setHeroAutoplayStopped(true);
-        if (heroMotionRef.current?.phase === 'settling' || heroMotionRef.current?.phase === 'prepared') {
-            heroQueuedSelectionRef.current = { index, direction };
-            return;
-        }
-        heroQueuedSelectionRef.current = null;
-        void showPreparedHero(index, direction);
-    };
-
-    const openHero = (slide: StorefrontContentBlock) => {
-        if (slide.targetType !== 'NONE' && slide.targetValue) {
-            onContentTarget(slide.targetType, slide.targetValue);
-        } else {
-            navigateTo({ name: 'category' });
-        }
-    };
-
-    const handleHeroImageOpen = (slide: StorefrontContentBlock) => {
-        if (heroGestureRef.current.suppressClick) {
-            heroGestureRef.current.suppressClick = false;
-            return;
-        }
-        openHero(slide);
-    };
-
-    const beginHeroSwipe = (event: ReactPointerEvent<HTMLElement>) => {
-        const interactiveTarget =
-            event.target instanceof Element ? event.target.closest('button, a, input, label') : null;
-        const isHeroImageLink = interactiveTarget?.classList.contains('hero-rich-image-link');
-        if (
-            heroCount < 2 ||
-            event.button !== 0 ||
-            event.isPrimary === false ||
-            heroGestureRef.current.active ||
-            heroMotionRef.current ||
-            (interactiveTarget && !isHeroImageLink)
-        ) {
-            return;
-        }
-        ++heroTransitionRef.current;
-        heroGestureRef.current = {
-            active: true,
-            horizontal: false,
-            suppressClick: false,
-            startX: event.clientX,
-            startY: event.clientY,
-            pointerId: event.pointerId,
-            width: event.currentTarget.getBoundingClientRect().width,
-        };
-        setHeroGestureActive(true);
-    };
-
-    const moveHeroSwipe = (event: ReactPointerEvent<HTMLElement>) => {
-        const gesture = heroGestureRef.current;
-        if (!gesture.active || gesture.pointerId !== event.pointerId) return;
-        const deltaX = event.clientX - gesture.startX;
-        const deltaY = event.clientY - gesture.startY;
-        if (!gesture.horizontal) {
-            const axis = heroSwipeAxis(deltaX, deltaY);
-            if (axis === 'vertical') {
-                gesture.active = false;
-                setHeroGestureActive(false);
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                }
-                return;
-            }
-            if (axis !== 'horizontal') return;
-            gesture.horizontal = true;
-            event.currentTarget.setPointerCapture(event.pointerId);
-        }
-        const direction = deltaX < 0 ? 1 : -1;
-        updateHeroMotion({
-            nextIndex: heroIndexAfterManualMove(heroIndex, heroCount, direction),
-            direction,
-            offset: Math.max(-gesture.width, Math.min(gesture.width, deltaX)),
-            phase: 'dragging',
-            completed: false,
-        });
-        event.preventDefault();
-    };
-
-    const finishHeroSwipe = (event: ReactPointerEvent<HTMLElement>, cancelled = false) => {
-        const gesture = heroGestureRef.current;
-        if ((!gesture.active && !gesture.horizontal) || gesture.pointerId !== event.pointerId) return;
-        const deltaX = event.clientX - gesture.startX;
-        const deltaY = event.clientY - gesture.startY;
-        const completed = !cancelled && gesture.horizontal && isCompletedHeroSwipe(deltaX, deltaY);
-        const suppressClick = gesture.horizontal;
-        gesture.active = false;
-        gesture.horizontal = false;
-        gesture.suppressClick = suppressClick;
-        setHeroGestureActive(false);
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        if (completed) {
-            const direction = deltaX < 0 ? 1 : -1;
-            selectHeroManually(heroIndexAfterManualMove(heroIndex, heroCount, direction), direction);
-        } else if (heroMotionRef.current) {
-            settleHeroMotion({ ...heroMotionRef.current, completed: false });
-        }
-        if (suppressClick) {
-            window.setTimeout(() => {
-                gesture.suppressClick = false;
-            }, 0);
-        }
-    };
-
-    useEffect(() => {
-        const cancelGesture = () => {
-            const gesture = heroGestureRef.current;
-            gesture.active = false;
-            gesture.horizontal = false;
-            heroQueuedSelectionRef.current = null;
-            const viewport = heroViewportRef.current;
-            if (gesture.pointerId >= 0 && viewport?.hasPointerCapture(gesture.pointerId))
-                viewport.releasePointerCapture(gesture.pointerId);
-            ++heroTransitionRef.current;
-            clearHeroMotionSchedule();
-            updateHeroMotion(null);
-            setHeroGestureActive(false);
-        };
-        if (!pageVisible) cancelGesture();
-        window.addEventListener('blur', cancelGesture);
-        return () => window.removeEventListener('blur', cancelGesture);
-    }, [pageVisible, clearHeroMotionSchedule, updateHeroMotion]);
 
     const quickLinks: Array<{
         id: string;
@@ -1157,281 +724,18 @@ export function HomePage() {
                             className={`home-intro-grid${groupedIntro ? ' is-grouped-intro' : ''}`}
                             style={groupedIntro ? { order: Math.min(...introOrders) } : undefined}
                         >
-                            {hasHomepageModule('HERO') && heroCount > 0 && (
-                                <div
-                                    className="hero-carousel"
-                                    style={{ order: homepageModuleOrder('HERO') }}
-                                    onMouseEnter={() => setHeroInteractionPaused(true)}
-                                    onMouseLeave={() => setHeroInteractionPaused(false)}
-                                    onFocus={() => setHeroInteractionPaused(true)}
-                                    onBlur={event => {
-                                        if (!event.currentTarget.contains(event.relatedTarget)) {
-                                            setHeroInteractionPaused(false);
-                                        }
-                                    }}
-                                >
-                                    <section
-                                        ref={heroViewportRef}
-                                        className={[
-                                            'hero hero-image-overlay',
-                                            heroCount > 1 ? 'is-swipeable' : '',
-                                            heroMotion?.phase === 'dragging' ? 'is-dragging' : '',
-                                            desktop && heroCount > 0 ? 'has-page-picker' : '',
-                                        ]
-                                            .filter(Boolean)
-                                            .join(' ')}
-                                        role="region"
-                                        aria-label={
-                                            managedHeroes[heroInteractiveIndex]?.title ||
-                                            (isZh ? '精选推荐' : 'Featured')
-                                        }
-                                        aria-roledescription={isZh ? '轮播' : 'carousel'}
-                                        onScrollCapture={event => {
-                                            if (
-                                                !desktop &&
-                                                event.target instanceof HTMLElement &&
-                                                event.target.matches(
-                                                    '.hero-rich-copy-region, .hero-rich-copy-surface, .hero-rich-stats-row',
-                                                )
-                                            )
-                                                setHeroAutoplayStopped(true);
-                                        }}
-                                        onPointerDown={beginHeroSwipe}
-                                        onPointerMove={moveHeroSwipe}
-                                        onPointerUp={event => finishHeroSwipe(event)}
-                                        onPointerCancel={event => finishHeroSwipe(event, true)}
-                                        onPointerLeave={event => {
-                                            if (!heroGestureRef.current.horizontal)
-                                                finishHeroSwipe(event, true);
-                                        }}
-                                        onLostPointerCapture={event => {
-                                            // Transferring implicit touch capture from a child also bubbles here.
-                                            if (event.target === event.currentTarget)
-                                                finishHeroSwipe(event, true);
-                                        }}
-                                        onClickCapture={event => {
-                                            if (!heroGestureRef.current.suppressClick) return;
-                                            heroGestureRef.current.suppressClick = false;
-                                            event.preventDefault();
-                                            event.stopPropagation();
-                                        }}
-                                        onDragStart={event => event.preventDefault()}
-                                        onKeyDown={event => {
-                                            if (
-                                                !desktop ||
-                                                heroCount < 2 ||
-                                                !['ArrowLeft', 'ArrowRight'].includes(event.key)
-                                            )
-                                                return;
-                                            event.preventDefault();
-                                            selectHeroManually(
-                                                heroIndexAfterManualMove(
-                                                    heroInteractiveIndex,
-                                                    heroCount,
-                                                    event.key === 'ArrowLeft' ? -1 : 1,
-                                                ),
-                                                event.key === 'ArrowLeft' ? -1 : 1,
-                                            );
-                                        }}
-                                    >
-                                        <div
-                                            ref={heroStageRef}
-                                            className={`hero-carousel-stage${heroMotion?.phase === 'settling' ? ' is-settling' : ''}`}
-                                            style={heroStageHeight ? { height: heroStageHeight } : undefined}
-                                        >
-                                            {[heroIndex, ...(heroMotion ? [heroMotion.nextIndex] : [])].map(
-                                                (slideIndex, position) => {
-                                                    const slide = managedHeroes[slideIndex];
-                                                    if (!slide) return null;
-                                                    const neighbor = position > 0;
-                                                    const completing =
-                                                        heroMotion?.phase === 'settling' &&
-                                                        heroMotion.completed;
-                                                    const inactive = completing ? !neighbor : neighbor;
-                                                    const offset = heroMotion?.offset ?? 0;
-                                                    const direction = heroMotion?.direction ?? 1;
-                                                    const translation = completing
-                                                        ? `${neighbor ? 0 : -direction * 100}%`
-                                                        : neighbor
-                                                          ? `calc(${direction * 100}% + ${offset}px)`
-                                                          : `${offset}px`;
-                                                    const desktopImage = heroImageForViewport(slide, true);
-                                                    const mobileImage = heroImageForViewport(slide, false);
-                                                    const slideImage = (
-                                                        phoneHero ? mobileImage : desktopImage
-                                                    ).imageUrl;
-                                                    return (
-                                                        <div
-                                                            key={slide.id}
-                                                            className={`hero-carousel-slide${neighbor ? ' is-neighbor' : ''}`}
-                                                            style={{
-                                                                transform: heroMotion?.crossfade
-                                                                    ? 'none'
-                                                                    : `translate3d(${translation}, 0, 0)`,
-                                                                opacity: heroMotion?.crossfade
-                                                                    ? inactive
-                                                                        ? 0
-                                                                        : 1
-                                                                    : undefined,
-                                                            }}
-                                                            aria-hidden={inactive || undefined}
-                                                            inert={inactive || undefined}
-                                                        >
-                                                            <HeroScene
-                                                                copyScrollable={
-                                                                    heroCopyScrollable ||
-                                                                    (!desktop &&
-                                                                        resolveHeroArtworkLayout(
-                                                                            slide.settings,
-                                                                        ) === 'overlay')
-                                                                }
-                                                                content={slide}
-                                                                mobileContent={heroContentForViewport(
-                                                                    slide,
-                                                                    false,
-                                                                    language,
-                                                                )}
-                                                                mediaOverlay={
-                                                                    heroCount > 0 ? (
-                                                                        <div className="hero-overlay-controls">
-                                                                            <div
-                                                                                className="hero-page-picker"
-                                                                                role="group"
-                                                                                aria-label={
-                                                                                    isZh
-                                                                                        ? '选择轮播图片'
-                                                                                        : 'Choose a slide'
-                                                                                }
-                                                                            >
-                                                                                {heroCount === 1 ? (
-                                                                                    <span
-                                                                                        className="hero-page-static-number"
-                                                                                        aria-current="true"
-                                                                                        aria-label={
-                                                                                            isZh
-                                                                                                ? '当前第 1 张图片'
-                                                                                                : 'Current slide 1'
-                                                                                        }
-                                                                                    >
-                                                                                        1
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    managedHeroes.map(
-                                                                                        (item, index) => (
-                                                                                            <button
-                                                                                                key={item.id}
-                                                                                                type="button"
-                                                                                                aria-label={
-                                                                                                    isZh
-                                                                                                        ? `切换到第 ${index + 1} 张图片`
-                                                                                                        : `Show slide ${index + 1}`
-                                                                                                }
-                                                                                                aria-current={
-                                                                                                    index ===
-                                                                                                    heroInteractiveIndex
-                                                                                                        ? 'true'
-                                                                                                        : undefined
-                                                                                                }
-                                                                                                onClick={() =>
-                                                                                                    selectHeroManually(
-                                                                                                        index,
-                                                                                                    )
-                                                                                                }
-                                                                                            >
-                                                                                                <span className="hero-page-number">
-                                                                                                    {index +
-                                                                                                        1}
-                                                                                                </span>
-                                                                                            </button>
-                                                                                        ),
-                                                                                    )
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    ) : undefined
-                                                                }
-                                                                imageLabel={`${isZh ? '查看推荐内容' : 'Open featured content'}：${slide.title || storefrontName}`}
-                                                                onImageOpen={() => handleHeroImageOpen(slide)}
-                                                                onOpen={() => openHero(slide)}
-                                                                image={
-                                                                    <SafeImage
-                                                                        src={desktopImage.imageUrl}
-                                                                        previewSourceDimensions={
-                                                                            desktopImage.imageAsset
-                                                                        }
-                                                                        mediaSources={
-                                                                            mobileImage.imageUrl !==
-                                                                            desktopImage.imageUrl
-                                                                                ? [
-                                                                                      {
-                                                                                          media: phoneHeroQuery,
-                                                                                          src: mobileImage.imageUrl,
-                                                                                          sizes: 'calc(100vw - 20px)',
-                                                                                          width: mobileImage
-                                                                                              .imageAsset
-                                                                                              ?.width,
-                                                                                          height: mobileImage
-                                                                                              .imageAsset
-                                                                                              ?.height,
-                                                                                          previewSourceDimensions:
-                                                                                              mobileImage.imageAsset,
-                                                                                      },
-                                                                                  ]
-                                                                                : undefined
-                                                                        }
-                                                                        alt={
-                                                                            slide.title ||
-                                                                            (isZh
-                                                                                ? `${storefrontName}精选`
-                                                                                : `${storefrontName} Featured`)
-                                                                        }
-                                                                        className="hero-rich-backdrop"
-                                                                        imageKind="hero"
-                                                                        width={
-                                                                            slide.imageAsset?.width ||
-                                                                            undefined
-                                                                        }
-                                                                        height={
-                                                                            slide.imageAsset?.height ||
-                                                                            undefined
-                                                                        }
-                                                                        loading="eager"
-                                                                        fetchPriority={
-                                                                            !neighbor && heroIndex === 0
-                                                                                ? 'high'
-                                                                                : 'auto'
-                                                                        }
-                                                                        onImageReady={() => {
-                                                                            if (!neighbor)
-                                                                                setReadyHeroImage(slideImage);
-                                                                        }}
-                                                                    />
-                                                                }
-                                                            />
-                                                        </div>
-                                                    );
-                                                },
-                                            )}
-                                        </div>
-                                        {heroMediaError && (
-                                            <span className="hero-media-error" role="status">
-                                                {isZh
-                                                    ? '图片暂时无法加载，请重试'
-                                                    : 'Image unavailable. Please retry.'}
-                                            </span>
-                                        )}
-                                        <span
-                                            className="visually-hidden"
-                                            aria-live={heroAutoplayStopped ? 'polite' : 'off'}
-                                        >
-                                            {heroAutoplayStopped
-                                                ? isZh
-                                                    ? `自动轮播已停止，当前为第 ${heroInteractiveIndex + 1} 张广告`
-                                                    : `Autoplay stopped. Promotion ${heroInteractiveIndex + 1} is active.`
-                                                : ''}
-                                        </span>
-                                    </section>
-                                </div>
+                            {hasHomepageModule('HERO') && managedHeroes.length > 0 && (
+                                <HomeHeroCarousel
+                                    managedHeroes={managedHeroes}
+                                    desktop={desktop}
+                                    language={language}
+                                    storefrontName={storefrontName}
+                                    heroAutoplayIntervalSeconds={heroAutoplayIntervalSeconds}
+                                    pageVisible={pageVisible}
+                                    prefersReducedMotion={prefersReducedMotion}
+                                    order={homepageModuleOrder('HERO')}
+                                    onContentTarget={onContentTarget}
+                                />
                             )}
 
                             {hasHomepageModule('QUICK_LINKS') && quickLinks.length > 0 ? (
@@ -1903,12 +1207,15 @@ function ManagedContentSection({
                 products.some(product => product.id === item.targetValue)),
     );
     const displayCount = Math.min(50, Math.max(1, contentNumberSetting(block.settings?.displayCount, 8)));
-    const selectedProductIds = contentStringArraySetting(block.settings?.selectedProductIds);
-    const selectedProducts = selectManagedProducts({
-        productIds: selectedProductIds,
-        products,
-        count: displayCount,
-    });
+    const selectedProducts = useMemo(
+        () =>
+            selectManagedProducts({
+                productIds: contentStringArraySetting(block.settings?.selectedProductIds),
+                products,
+                count: displayCount,
+            }),
+        [block.settings?.selectedProductIds, products, displayCount],
+    );
     const itemProductIds = new Set(
         block.items.flatMap(item =>
             item.targetType === 'PRODUCT' && item.targetValue ? [item.targetValue] : [],
@@ -1936,7 +1243,7 @@ function ManagedContentSection({
         return (
             <FeaturedCollectionSection
                 block={block}
-                products={loading && !productsResolved ? [] : selectedProducts}
+                products={loading && !productsResolved ? emptyProducts : selectedProducts}
                 loading={loading}
                 error={error}
                 onRetry={onRetry}
@@ -2243,11 +1550,18 @@ function FeaturedCollectionSection({
         configuredProductIds.length || 50,
     );
     const mosaicRef = useRef<HTMLDivElement>(null);
+    const adoptedGeometry = useRef<string | undefined>(undefined);
 
     useLayoutEffect(() => {
         const mosaic = mosaicRef.current;
         const supporting = mosaic?.querySelector<HTMLDivElement>('.featured-collection-supporting-products');
-        if (!mosaic || !supporting || typeof ResizeObserver === 'undefined') return;
+        if (!mosaic) return;
+        const resetColumns = () => mosaic.style.removeProperty('grid-template-columns');
+        if (!supporting) {
+            resetColumns();
+            return;
+        }
+        if (typeof ResizeObserver === 'undefined') return;
         const details = [...supporting.querySelectorAll<HTMLElement>('.product-card-content')];
         let fallbackWidth: number | undefined;
         const alignMedia = () => {
@@ -2258,7 +1572,7 @@ function FeaturedCollectionSection({
             const grid = getComputedStyle(supporting);
             const columns = grid.gridTemplateColumns.split(' ').length;
             if (window.matchMedia(phoneHeroQuery).matches || Math.ceil(details.length / columns) !== 2) {
-                mosaic.style.removeProperty('grid-template-columns');
+                resetColumns();
                 return;
             }
             // Both images stay square. Include the first row's actual text and spacing
@@ -2266,15 +1580,26 @@ function FeaturedCollectionSection({
             const detailHeight = Math.max(
                 ...details.slice(0, columns).map(item => item.getBoundingClientRect().height),
             );
+            const geometry = `${width}:${columns}:${detailHeight}`;
+            // Already painted SSR columns own the initial geometry. Re-align only
+            // after a real container or copy-size change, never solely for hydration.
+            if (
+                adoptedGeometry.current === undefined &&
+                mosaic.closest('[data-public-rendered="1"]') &&
+                !document.documentElement.hasAttribute('data-storefront-app-owned')
+            )
+                adoptedGeometry.current = geometry;
+            if (adoptedGeometry.current === geometry) return;
+            adoptedGeometry.current = '';
             const mediaWidth =
                 width - parseFloat(layout.columnGap) - (columns - 1) * parseFloat(grid.columnGap);
             const leadWidth =
                 (2 * mediaWidth + columns * (detailHeight + parseFloat(grid.rowGap))) / (columns + 2);
             // Extremely long copy may make square-media alignment impossible.
             // Keep the normal responsive columns until the available width changes.
-            if (!Number.isFinite(leadWidth) || leadWidth <= 0 || leadWidth >= mediaWidth) {
+            if (!(leadWidth > 0 && leadWidth < mediaWidth)) {
                 fallbackWidth = width;
-                mosaic.style.removeProperty('grid-template-columns');
+                resetColumns();
                 return;
             }
             const leading = mosaic.firstElementChild;
@@ -2288,7 +1613,6 @@ function FeaturedCollectionSection({
         details.forEach(item => observer.observe(item));
         return () => {
             observer.disconnect();
-            mosaic.style.removeProperty('grid-template-columns');
         };
     }, [products, placeholderCount, loading]);
 

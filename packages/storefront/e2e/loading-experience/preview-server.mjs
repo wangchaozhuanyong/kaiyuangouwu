@@ -1,6 +1,6 @@
 /** Synthetic same-origin acceptance UI. Start the browser with CUA; this does not automate it. */
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,32 @@ import { buildPublicPage } from '../client-loading/preview-server.mjs';
 import { startSeoFixtureServer } from '../seo-public/preview-server.mjs';
 
 import { applyCouponScenario, preparedCampaigns } from './coupon-fixture.mjs';
+import {
+    applyReviewedHomeStructure,
+    inheritScenario,
+    reportRoot,
+    requestScenario,
+    resolveDistRoot,
+    syntheticAnnouncements,
+} from './scenario-fixture.mjs';
+import { compressionModes, installTextCompression } from './text-compression.mjs';
+
+/** Reuse the selected production renderer's route decision, including its legacy absence. */
+export async function publicRouteModulePreloadLinks(renderer, page, assetNames, htmlTemplate, readSource) {
+    const preloadFiles = (await renderer.getPublicRouteScriptPreloads?.(page, assetNames, readSource)) ?? [];
+    const existing = new Set(
+        [...htmlTemplate.matchAll(/(?:src|href)=["']([^"']+)["']/gu)].map(match => match[1]),
+    );
+    return preloadFiles
+        .flatMap(file => {
+            const href = '/assets/' + file;
+            if (existing.has(href)) return [];
+            existing.add(href);
+            const priority = /^(?:home-page|commerce-styles)-/u.test(file) ? 'low' : 'auto';
+            return [`<link rel="modulepreload" crossorigin fetchpriority="${priority}" href="${href}">`];
+        })
+        .join('');
+}
 
 const project = path.resolve(fileURLToPath(new URL('../../../../', import.meta.url)));
 const args = new URLSearchParams(
@@ -25,8 +51,10 @@ const args = new URLSearchParams(
 );
 const label = args.get('label') ?? 'candidate';
 if (!/^[a-zA-Z0-9_-]{1,64}$/u.test(label)) throw new Error('Invalid evidence label');
-const dist = path.join(project, 'packages/storefront/dist');
-const output = path.join(project, 'docs/local-validation/soft-loading-release-20261028', label);
+const compression = args.get('compression') ?? 'auto';
+if (!compressionModes.includes(compression)) throw new Error('Invalid compression mode');
+const dist = resolveDistRoot(project, args.get('dist-root') ?? undefined);
+const output = path.join(project, reportRoot, label);
 await mkdir(output, { recursive: true });
 const require = createRequire(import.meta.url);
 const caseKey = Symbol('local-fixture-case');
@@ -39,6 +67,8 @@ const files = [
 ];
 const artifact = {
     label,
+    dist,
+    compression,
     capturedAt: new Date().toISOString(),
     note: 'Exact existing dist inputs; not proof of the current source tree or production.',
     files: await Promise.all(
@@ -49,8 +79,36 @@ const artifact = {
                 .digest('hex'),
         })),
     ),
+    toolFiles: await Promise.all(
+        [
+            'preview-server.mjs',
+            'scenario-fixture.mjs',
+            'coupon-fixture.mjs',
+            'observe.js',
+            'text-compression.mjs',
+            '../seo-public/preview-server.mjs',
+            '../seo-public/fixtures.mjs',
+            '../client-loading/preview-server.mjs',
+            '../visual-presets/fixtures.mjs',
+        ].map(async file => ({
+            file,
+            sha256: createHash('sha256')
+                .update(await readFile(new URL('./' + file, import.meta.url)))
+                .digest('hex'),
+        })),
+    ),
 };
+artifact.id = createHash('sha256')
+    .update(JSON.stringify({ dist, compression, files: artifact.files, toolFiles: artifact.toolFiles }))
+    .digest('hex')
+    .slice(0, 16);
+artifact.toolsetSha256 = createHash('sha256').update(JSON.stringify(artifact.toolFiles)).digest('hex');
 await writeFile(path.join(output, 'artifact-inputs.json'), JSON.stringify(artifact, null, 2));
+await writeFile(path.join(output, `artifact-${artifact.id}.json`), JSON.stringify(artifact, null, 2), {
+    flag: 'wx',
+}).catch(error => {
+    if (error.code !== 'EEXIST') throw error;
+});
 
 const dashboard = `<!doctype html>
 <html lang="zh-CN">
@@ -75,8 +133,11 @@ background:white;
 padding:12px}
 nav{margin-bottom:12px}</style>
 <h1>商城加载本地验收</h1>
-<p>合成数据 · 真实 SSR 与客户端构建 · 不连接生产 · 每次文档采样 12 秒</p>
+<p>合成模块顺序与内容密度 · 真实 SSR 与客户端构建 · 不连接生产 · 图片像素须配合CUA截图</p>
 <nav>
+<label>模式 <select id="mode"><option value="performance">低干扰性能</option><option value="geometry">逐帧几何诊断</option></select></label>
+<label>时长 <select id="duration"><option value="12000">12秒</option><option value="30000">30秒（仅性能模式）</option></select></label>
+<label>图片缓存 <select id="cache"><option value="cold">不缓存</option><option value="warm">允许5分钟缓存</option></select></label>
 <label>视口 <select id="width">
 <option>390</option>
 <option>1440</option>
@@ -86,7 +147,9 @@ nav{margin-bottom:12px}</style>
 <option value="home">正常首页</option>
 <option value="slow">慢交互入口</option>
 <option value="cold">无SSR慢数据首进</option>
-<option value="images">慢图片</option>
+<option value="images">所有图片慢2秒</option>
+<option value="product-images">仅商品图片慢2秒</option>
+<option value="image-error">商品图片失败</option>
 <option value="coupons">无券</option>
 <option value="old">旧快照缺优惠字段</option>
 <option value="targeted">已准备公开券，身份未知</option>
@@ -102,6 +165,7 @@ nav{margin-bottom:12px}</style>
 <button id="sample">开始导航采样</button>
 <button id="back">后退</button>
 <button id="forward">前进</button>
+<button id="marker">标记截图时刻</button>
 </nav>
 <pre id="status">等待选择场景</pre>
 <div id="frame-shell">
@@ -116,11 +180,13 @@ site.width=width;
 site.style.transform=width>innerWidth-50?'scale('+((innerWidth-50)/width)+')':'';
 const scenario=document.getElementById('scenario').value;
 const params=new URLSearchParams({
-qaLabel:${JSON.stringify(label)},qaCase:scenario,qaPreset:scenario==='dark'?'neo-minimalist':'classic'
+qaLabel:${JSON.stringify(label)},qaCase:scenario,qaMode:document.getElementById('mode').value,
+qaDuration:document.getElementById('duration').value,qaImageCache:document.getElementById('cache').value,
+qaPreset:scenario==='dark'?'neo-minimalist':'classic'
 });
 if(scenario==='slow')params.set('qaCodeDelay','1600');
 if(scenario==='cold'||scenario==='late')params.set('qaDataDelay','1200');
-if(scenario==='images')params.set('qaImageDelay','2000');
+if(scenario==='images'||scenario==='product-images')params.set('qaImageDelay','2000');
 if(['coupons','old','targeted','prepared','late'].includes(scenario))params.set('qaCoupons','enabled');
 site.src='/zh/?'+params;
 document.getElementById('status').textContent='采样中：'+width+'px / '+scenario;
@@ -134,6 +200,7 @@ document.getElementById('sample').onclick=()=>{site.contentWindow.postMessage({t
 document.getElementById('status').textContent='导航采样中，请操作商城导航'};
 document.getElementById('back').onclick=()=>site.contentWindow.history.back();
 document.getElementById('forward').onclick=()=>site.contentWindow.history.forward();
+let marker=0;document.getElementById('marker').onclick=()=>site.contentWindow.postMessage({type:'screenshot-marker',label:'cua-'+(++marker)},location.origin);
 addEventListener('message',event=>{
 if(event.origin===location.origin&&event.source===site.contentWindow&&event.data.type==='loading-experience-report')
 document.getElementById('status').textContent=JSON.stringify(event.data.summary,null,2)});
@@ -149,6 +216,7 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
     listenHost: '127.0.0.1',
     readOnly: true,
     async beforeRequest(req, res, url) {
+        installTextCompression(req, res, compression);
         res.setHeader(
             'Content-Security-Policy',
             [
@@ -183,13 +251,24 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
             let body = '';
             for await (const part of req) {
                 body += part;
-                if (body.length > 2_000_000) {
+                if (body.length > 12_000_000) {
                     json(res, { error: 'Report too large' }, 413);
                     return true;
                 }
             }
-            const report = JSON.parse(body);
-            if (report.fixture !== 'loading-experience-synthetic-v1' || !Array.isArray(report.samples)) {
+            let report;
+            try {
+                report = JSON.parse(body);
+            } catch {
+                json(res, { error: 'Invalid JSON report' }, 400);
+                return true;
+            }
+            if (
+                !['loading-experience-synthetic-v1', 'loading-experience-synthetic-v2'].includes(
+                    report.fixture,
+                ) ||
+                !Array.isArray(report.samples)
+            ) {
                 json(res, { error: 'Invalid synthetic report' }, 400);
                 return true;
             }
@@ -198,32 +277,34 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
                     .replace(/[^a-zA-Z0-9_-]/gu, '')
                     .slice(0, 40) || 'home';
             const width = Number(report.viewport?.width) || 0;
-            const filename = `${Date.now()}-${name}-${width}.json`;
+            const mode = report.mode === 'geometry' ? 'geometry' : 'performance';
+            const filename = `${Date.now()}-${name}-${width}-${mode}.json`;
+            report.artifactId = artifact.id;
+            report.toolsetSha256 = artifact.toolsetSha256;
+            report.compression = compression;
             await writeFile(path.join(output, filename), JSON.stringify(report, null, 2));
             json(res, { saved: filename });
             return true;
         }
-        const reference = new URL(req.headers.referer ?? url.href);
-        for (const key of ['qaCase', 'qaPreset', 'qaCoupons', 'qaCodeDelay', 'qaImageDelay', 'qaDataDelay']) {
-            if (!url.searchParams.has(key) && reference.searchParams.has(key))
-                url.searchParams.set(key, reference.searchParams.get(key));
-        }
-        if (url.pathname === '/_storefront/page-data' || url.pathname === '/shop-api')
-            await pause(Math.min(5000, Math.max(0, Number(url.searchParams.get('qaDataDelay')) || 0)));
-        if (url.pathname.startsWith('/assets/') && url.pathname.endsWith('.js'))
-            await pause(Math.min(5000, Math.max(0, Number(reference.searchParams.get('qaCodeDelay')) || 0)));
-        if (
-            url.pathname.startsWith('/qa/hero-') ||
-            /^\/assets\/preview\/[a-z0-9_-]+\.svg$/iu.test(url.pathname)
-        ) {
-            await pause(Math.min(5000, Math.max(0, Number(reference.searchParams.get('qaImageDelay')) || 0)));
+        inheritScenario(url, req.headers.referer);
+        const scenario = requestScenario(url);
+        await pause(scenario.delay);
+        if (scenario.syntheticImage) {
             const phone = url.pathname.includes('mobile');
-            res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' });
+            const product = scenario.productImage;
+            const variant = Number(/-(\d+)\.svg$/u.exec(url.pathname)?.[1] ?? 1);
+            const colors = ['#173e56', '#59406f', '#274a3d'];
+            res.writeHead(scenario.failImage ? 503 : 200, {
+                'content-type': 'image/svg+xml',
+                'cache-control': scenario.cache,
+            });
             res.end(
-                `<svg xmlns="http://www.w3.org/2000/svg" width="${phone ? 600 : 1600}" height="${phone ? 600 : 640}">
-<rect width="100%" height="100%" fill="${phone ? '#173e56' : '#274a3d'}"/>
-<circle cx="70%" cy="55%" r="160" fill="#d9b985"/>
-<text x="10%" y="85%" fill="white" font-size="30">Synthetic local artwork</text></svg>`,
+                scenario.failImage
+                    ? 'Synthetic image failure'
+                    : `<svg xmlns="http://www.w3.org/2000/svg" width="${phone || product ? 600 : 1600}" height="${phone || product ? 600 : 640}">
+<rect width="100%" height="100%" fill="${product ? '#596886' : colors[(variant - 1) % colors.length]}"/>
+<circle cx="${55 + (variant % 3) * 10}%" cy="55%" r="${120 + (variant % 3) * 20}" fill="#d9b985"/>
+<text x="8%" y="85%" fill="white" font-size="25">Synthetic local artwork ${variant}</text></svg>`,
             );
             return true;
         }
@@ -254,70 +335,22 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
         page[caseKey] = url.searchParams.get('qaCase');
         page.seo.channelCode = page.scope.channelCode;
         page.seo.requestKey = page.requestKey;
-        const hero = page.content.blocks.find(block => block.type === 'HERO');
-        if (hero) {
-            hero.title = '桌面首页：轻柔呈现';
-            hero.subtitle = '桌面独立文案';
-            hero.imageUrl = '/qa/hero-desktop.svg';
-            hero.imageAsset = { width: 1600, height: 640 };
-            hero.items = [
-                {
-                    id: 'qa-stat',
-                    enabled: true,
-                    position: 0,
-                    label: '12',
-                    description: '合成商品',
-                    targetType: 'NONE',
-                    targetValue: null,
-                    imageUrl: null,
-                    settings: {},
-                },
-            ];
-            hero.settings = {
-                ...hero.settings,
-                mobileImageUrl: '/qa/hero-mobile.svg',
-                mobileImageWidth: 600,
-                mobileImageHeight: 600,
-                mobileHeroTextColor: '#ffffff',
-                mobileHeroHideStats: true,
-                mobileHeroTranslations: [
-                    {
-                        languageCode: 'zh_Hans',
-                        title: '手机首页：轻柔呈现',
-                        subtitle: '手机独立文案',
-                        body: '此页面仅使用本地合成数据',
-                        ctaLabel: '查看合成商品',
-                    },
-                ],
-            };
+        applyReviewedHomeStructure(page);
+        for (const hero of page.content.blocks.filter(block => block.type === 'HERO'))
             page.media.push(
                 mediaDescriptor(hero.imageUrl, 'hero'),
-                mediaDescriptor('/qa/hero-mobile.svg', 'hero'),
+                mediaDescriptor(hero.settings.mobileImageUrl, 'hero'),
             );
-            page.content.blocks.push({
-                ...hero,
-                id: 'qa-featured',
-                code: 'qa-featured',
-                type: 'FEATURED_COLLECTION',
-                title: '本地精选商品',
-                subtitle: '用于连续性与滚动恢复验收',
-                body: '',
-                imageUrl: null,
-                imageAsset: null,
-                position: 20,
-                items: [],
-                settings: {
-                    selectedProductIds: (page.products ?? []).map(product => product.id),
-                    displayCount: 12,
-                },
-            });
-            page.content.settings.configuredBlockTypes.push('FEATURED_COLLECTION');
-        }
         applyCouponScenario(page, url.searchParams.get('qaCase'), url.pathname === '/_storefront/page-data');
     },
     async transformGraphQlData(data, { operation, referrer }) {
-        if (/activeStorefrontCouponCampaigns/u.test(operation.query ?? ''))
-            data.activeStorefrontCouponCampaigns = ['prepared', 'targeted', 'late'].includes(
+        data.activeSystemAnnouncements = syntheticAnnouncements();
+        data.storefrontDailyRecommendations = {
+            ...data.storefrontDailyRecommendations,
+            items: data.products?.items ?? [],
+        };
+        if (/activeStorefrontCoupons/u.test(operation.query ?? ''))
+            data.activeStorefrontCoupons = ['prepared', 'targeted', 'late'].includes(
                 referrer.searchParams.get('qaCase'),
             )
                 ? preparedCampaigns()
@@ -327,6 +360,33 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
             const items = (data.products?.items ?? []).filter(product => ids.includes(product.id));
             data.products = { items, totalItems: items.length };
         }
+    },
+    async serveAssets(req, res) {
+        const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+        if (!/^\/(?:assets\/|storefront\/|legacy-browser-guard\.js|sw\.js)/u.test(pathname)) return false;
+        const file = path.resolve(dist, '.' + decodeURIComponent(pathname));
+        if (
+            !file.startsWith(dist + path.sep) ||
+            !(await stat(file)
+                .then(item => item.isFile())
+                .catch(() => false))
+        ) {
+            res.writeHead(404);
+            res.end('Missing selected artifact asset');
+            return true;
+        }
+        const types = {
+            '.js': 'text/javascript',
+            '.css': 'text/css',
+            '.svg': 'image/svg+xml',
+            '.webp': 'image/webp',
+            '.png': 'image/png',
+            '.woff2': 'font/woff2',
+            '.json': 'application/json',
+        };
+        res.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'application/octet-stream' });
+        res.end(await readFile(file));
+        return true;
     },
     renderPage: page =>
         page[caseKey] === 'cold'
@@ -341,6 +401,15 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
     async transformHtml(route, page) {
         const currentTemplate = await readFile(path.join(dist, 'index.html'), 'utf8');
         const emitted = await readdir(path.join(dist, 'assets'));
+        const renderer = require(path.join(dist, '.server/public-page-renderer.cjs'));
+        const scriptPreloads =
+            page[caseKey] === 'cold'
+                ? ''
+                : await publicRouteModulePreloadLinks(renderer, page, emitted, currentTemplate, file => {
+                      if (!/^[\w-]+\.js$/u.test(file) || !emitted.includes(file))
+                          throw new Error('Preload source must be an emitted JavaScript basename');
+                      return readFile(path.join(dist, 'assets', file), 'utf8');
+                  });
         const prefixes = route.includes('/product')
             ? ['product-detail-page-']
             : /\/(category|search)/u.test(route)
@@ -369,7 +438,9 @@ const server = await startSeoFixtureServer(Number(args.get('port') ?? 5198), {
             .replace('<head>', '<head><script src="/__qa/observe.js"></script>')
             .replace(
                 '</head>',
-                styles.map(file => `<link rel="stylesheet" href="/assets/${file}">`).join('') + '</head>',
+                styles.map(file => `<link rel="stylesheet" href="/assets/${file}">`).join('') +
+                    scriptPreloads +
+                    '</head>',
             );
     },
 });

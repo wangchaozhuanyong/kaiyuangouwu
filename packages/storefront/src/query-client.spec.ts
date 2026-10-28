@@ -47,6 +47,56 @@ function memoryStorage() {
 }
 
 describe('public cache persistence work', () => {
+    it('flushes public data on pagehide and releases that listener with the subscription', async () => {
+        const client = createStorefrontQueryClient();
+        allowLive(client, 'my:MYR', 'en');
+        await client.fetchQuery({
+            queryKey: storefrontQueryKeys.product('my:MYR', 'en', '1'),
+            queryFn: () => ({ id: '1' }),
+            meta: publicQueryMeta(),
+        });
+        const storage = memoryStorage();
+        const writes = vi.spyOn(storage, 'setItem');
+        const target = new EventTarget();
+        vi.stubGlobal('window', target);
+        const stop = watchPublicQueryCache(client, storage);
+        try {
+            target.dispatchEvent(new Event('pagehide'));
+            expect(writes).toHaveBeenCalledOnce();
+            stop();
+            target.dispatchEvent(new Event('pagehide'));
+            expect(writes).toHaveBeenCalledOnce();
+        } finally {
+            stop();
+            client.clear();
+            vi.unstubAllGlobals();
+        }
+    });
+    it('catches up deferred subscriptions through the same bounded persistence scheduler', async () => {
+        const client = createStorefrontQueryClient();
+        allowLive(client, 'my:MYR', 'en');
+        const key = storefrontQueryKeys.product('my:MYR', 'en', '1');
+        await client.fetchQuery({ queryKey: key, queryFn: () => ({ id: '1' }), meta: publicQueryMeta() });
+        const storage = memoryStorage();
+        const writes = vi.spyOn(storage, 'setItem');
+        vi.useFakeTimers();
+        const stop = watchPublicQueryCache(client, storage, true);
+        try {
+            expect(writes).not.toHaveBeenCalled();
+            client.setQueryData(key, { id: '1', name: 'Latest before idle' });
+            await vi.advanceTimersByTimeAsync(150);
+            expect(writes).toHaveBeenCalledOnce();
+            expect(storage.values.get(PUBLIC_QUERY_CACHE_KEY)).toContain('Latest before idle');
+            const cancelInitial = watchPublicQueryCache(client, storage, true);
+            cancelInitial();
+            await vi.advanceTimersByTimeAsync(150);
+            expect(writes).toHaveBeenCalledOnce();
+        } finally {
+            stop();
+            client.clear();
+            vi.useRealTimers();
+        }
+    });
     it('bounds persisted queries, infinite pages and bytes without shrinking live Query data', async () => {
         const client = createStorefrontQueryClient();
         allowLive(client, 'my:MYR', 'en');

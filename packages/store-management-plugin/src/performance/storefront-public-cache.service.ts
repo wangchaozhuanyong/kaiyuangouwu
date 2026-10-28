@@ -1,3 +1,5 @@
+// organize-imports-ignore -- Preserve ESLint type/value import groups.
+import type { PublicCacheReadOutcome } from './public-document-timing';
 import { Injectable, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { CacheService, ConfigService, ID, RequestContext, RequestContextCacheService } from '@vendure/core';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -175,11 +177,21 @@ export class StorefrontPublicCacheService {
             invalidateOnConflict?: (value: T) => boolean;
             /** Synchronous handoff of this result's final, guarded generation. */
             onResolvedRevision?: (revision: string | undefined) => void;
+            /** Optional request diagnostics; never stored with the cached value. */
+            observeRead?: (outcome: PublicCacheReadOutcome) => void;
         } = {},
     ): Promise<T> {
         if (ctx.activeUserId) throw new Error('Public cache requires an anonymous request context');
+        const observe = (outcome: PublicCacheReadOutcome) => {
+            try {
+                options.observeRead?.(outcome);
+            } catch {
+                // Diagnostics cannot affect cache authority or the response.
+            }
+        };
         const access = this.accessContext.getStore();
         if (access?.uncached) {
+            observe('bypass');
             this.metrics.bypasses++;
             options.onResolvedRevision?.(undefined);
             return this.loadUncached(loader);
@@ -188,7 +200,10 @@ export class StorefrontPublicCacheService {
         const revision = await this.revision(ctx.channelId);
         const initialFallback = this.fallbackRevision;
         if (!revision && options.requireSharedRevision) throw this.unavailable();
-        if (!revision) this.metrics.bypasses++;
+        if (!revision) {
+            this.metrics.bypasses++;
+            observe('bypass');
+        }
         const key = this.key(ctx, scopeKey, revision ?? `uncached:${this.fallbackRevision}`);
         // A proactive refresh keeps the existing snapshot readable until its guarded replacement is ready.
         if (revision && !options.refresh) {
@@ -202,6 +217,7 @@ export class StorefrontPublicCacheService {
                 await access?.assertReusable?.();
                 if (revision === (await this.revision(ctx.channelId))) {
                     this.metrics.hits++;
+                    observe('hit');
                     options.onResolvedRevision?.(revision);
                     return cached.value as T;
                 }
@@ -209,6 +225,7 @@ export class StorefrontPublicCacheService {
         }
         const existing = this.inFlight.get(key);
         if (existing) {
+            observe('join');
             const value = await (existing as Promise<T>);
             await access?.assertReusable?.();
             // A joined result has no independent fill ownership. Conservatively retry the read
@@ -223,6 +240,7 @@ export class StorefrontPublicCacheService {
         }
         if (this.inFlight.size >= MAX_LOADERS + MAX_QUEUED) throw this.unavailable();
         this.metrics.misses++;
+        if (revision) observe('miss');
         const result = this.withLoaderPermit(async () => {
             for (let attempt = 0; attempt < 2; attempt++) {
                 const before = await this.revision(ctx.channelId);

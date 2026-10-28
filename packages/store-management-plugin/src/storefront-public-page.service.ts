@@ -39,6 +39,7 @@ import {
 import { createHash } from 'node:crypto';
 import { clearTimeout, setTimeout } from 'node:timers';
 
+import { measurePublicDocument, recordPublicDocumentCache } from './performance/public-document-timing';
 import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import {
@@ -302,54 +303,59 @@ export class StorefrontPublicPageService {
         const identity = () =>
             JSON.stringify([host, ctx.channelId, ctx.channel.code, ctx.languageCode, ctx.currencyCode]);
         const scope = identity();
-        const mode = await this.getAccessMode(ctx);
+        const mode = await measurePublicDocument('page-access', () => this.getAccessMode(ctx));
         if (mode === 'CLOSED') throw new StorefrontClosedError();
         // Preview and shared-cache outages retain their existing anonymous short-read path.
-        if (mode !== 'LIVE') return this.read(ctx, host, request);
-        let revision = await this.cache.revision(ctx.channelId);
-        if (!revision) return this.read(ctx, host, request);
+        if (mode !== 'LIVE') return measurePublicDocument('page-read', () => this.read(ctx, host, request));
+        let revision = await measurePublicDocument('page-revision', () => this.cache.revision(ctx.channelId));
+        if (!revision) return measurePublicDocument('page-read', () => this.read(ctx, host, request));
         // The existing guarded read can legitimately retry into a newer generation.
         // Bind additional document work to its validated result, not a pre-read token.
-        const page = await this.read(ctx, host, request, {}, resolved => {
-            revision = resolved;
-        });
-        const assertCurrent = async () => {
-            try {
-                await this.assertMode(ctx, mode);
-            } catch (error) {
-                if (!(error instanceof PublicPageAccessChangedError)) throw error;
-                throw new ServiceUnavailableException('Public access changed; retry the document');
-            }
-            if (
-                !revision ||
-                identity() !== scope ||
-                page.scope.host !== host ||
-                page.scope.channelCode !== ctx.channel.code ||
-                page.scope.languageCode !== String(ctx.languageCode) ||
-                page.scope.currencyCode !== String(ctx.currencyCode) ||
-                revision !== (await this.cache.revision(ctx.channelId))
-            )
-                throw new ServiceUnavailableException('Public page changed; retry the document');
-        };
+        const page = await measurePublicDocument('page-read', () =>
+            this.read(ctx, host, request, {}, resolved => {
+                revision = resolved;
+            }),
+        );
+        const assertCurrent = () =>
+            measurePublicDocument('page-document-check', async () => {
+                try {
+                    await this.assertMode(ctx, mode);
+                } catch (error) {
+                    if (!(error instanceof PublicPageAccessChangedError)) throw error;
+                    throw new ServiceUnavailableException('Public access changed; retry the document');
+                }
+                if (
+                    !revision ||
+                    identity() !== scope ||
+                    page.scope.host !== host ||
+                    page.scope.channelCode !== ctx.channel.code ||
+                    page.scope.languageCode !== String(ctx.languageCode) ||
+                    page.scope.currencyCode !== String(ctx.currencyCode) ||
+                    revision !== (await this.cache.revision(ctx.channelId))
+                )
+                    throw new ServiceUnavailableException('Public page changed; retry the document');
+            });
         await assertCurrent();
         const deadline = Date.now() + 500;
-        const media = await this.publicMedia(ctx, host, page, false, new Set(), new Set(), undefined, {
-            existing: page.media,
-            deadline,
-            run: (load, fallback) =>
-                publicSectionWithinBudget(
-                    this.cache.runGuarded(assertCurrent, () =>
-                        this.cache.readThrough(
-                            ctx,
-                            `document-media:${host}:${publicPageRequestKey(canonicalPublicPageRequest(request))}:${page.version}`,
-                            1,
-                            () => (Date.now() >= deadline ? Promise.resolve(fallback) : load()),
-                            { shouldCache: () => false },
+        const media = await measurePublicDocument('page-document-media', () =>
+            this.publicMedia(ctx, host, page, false, new Set(), new Set(), undefined, {
+                existing: page.media,
+                deadline,
+                run: (load, fallback) =>
+                    publicSectionWithinBudget(
+                        this.cache.runGuarded(assertCurrent, () =>
+                            this.cache.readThrough(
+                                ctx,
+                                `document-media:${host}:${publicPageRequestKey(canonicalPublicPageRequest(request))}:${page.version}`,
+                                1,
+                                () => (Date.now() >= deadline ? Promise.resolve(fallback) : load()),
+                                { shouldCache: () => false },
+                            ),
                         ),
-                    ),
-                    Math.max(0, deadline - Date.now()),
-                ).catch(() => fallback),
-        });
+                        Math.max(0, deadline - Date.now()),
+                    ).catch(() => fallback),
+            }),
+        );
         await assertCurrent();
         if (media === page.media) return page;
         const { version: _, ...payload } = page;
@@ -449,14 +455,16 @@ export class StorefrontPublicPageService {
                 const rejectedMedia = new Set<string>();
                 const mediaPreparation = { deferred: false };
                 const [prepared, previous, revision] = await Promise.all([
-                    this.publicMedia(
-                        ctx,
-                        host,
-                        combined,
-                        mode === 'LIVE' && options.prepareMedia === true && this.processContext?.isWorker,
-                        authorizedMedia,
-                        rejectedMedia,
-                        mediaPreparation,
+                    measurePublicDocument('page-loader-media', () =>
+                        this.publicMedia(
+                            ctx,
+                            host,
+                            combined,
+                            mode === 'LIVE' && options.prepareMedia === true && this.processContext?.isWorker,
+                            authorizedMedia,
+                            rejectedMedia,
+                            mediaPreparation,
+                        ),
                     ),
                     mode === 'LIVE' && options.refresh
                         ? this.cache.peekEntry<StorefrontPageData>(ctx, this.key(host, request))
@@ -503,14 +511,17 @@ export class StorefrontPublicPageService {
                     deferredMedia.add(result);
                 return result;
             };
+            const timedLoad = () => measurePublicDocument('page-loader', load);
             try {
+                if (mode === 'PREVIEW') recordPublicDocumentCache('bypass');
                 const page =
                     mode === 'PREVIEW'
-                        ? await this.cache.runUncached(load)
+                        ? await this.cache.runUncached(timedLoad)
                         : await this.cache.runGuarded(assertReusable, async () => {
                               const pageCacheOptions = {
                                   ...options,
                                   onResolvedRevision,
+                                  observeRead: recordPublicDocumentCache,
                                   shouldCache: (value: StorefrontPageData, current?: StorefrontPageData) => {
                                       const allowed = mediaAuthorizations.get(value);
                                       if (
@@ -565,7 +576,7 @@ export class StorefrontPublicPageService {
                                   ctx,
                                   this.key(host, request),
                                   PAGE_TTL,
-                                  load,
+                                  timedLoad,
                                   pageCacheOptions,
                               );
                               if (!isReusablePublicPageData(result)) {
@@ -575,7 +586,7 @@ export class StorefrontPublicPageService {
                                       ctx,
                                       this.key(host, request),
                                       PAGE_TTL,
-                                      load,
+                                      timedLoad,
                                       { ...pageCacheOptions, refresh: true },
                                   );
                               }
@@ -763,24 +774,30 @@ export class StorefrontPublicPageService {
         const section = <T>(key: string, ttl: number, load: () => Promise<T>) =>
             mode === 'PREVIEW' ? this.cache.loadUncached(load) : this.cache.readThrough(ctx, key, ttl, load);
         // Optional sections fail independently. No failed response is converted to an empty success.
-        const configPromise = section(`config:${host}`, 60_000, () => this.loadConfig(ctx));
-        const contentPromise = section(`content:${host}`, 60_000, () => this.loadContent(ctx));
+        const configPromise = measurePublicDocument('page-loader-config', () =>
+            section(`config:${host}`, 60_000, () => this.loadConfig(ctx)),
+        );
+        const contentPromise = measurePublicDocument('page-loader-content', () =>
+            section(`content:${host}`, 60_000, () => this.loadContent(ctx)),
+        );
         // Ranked data depends on published content, not on the other optional sections.
         // Start its existing budget when that dependency is ready so independent waits overlap.
-        const bestSellersPromise = home
-            ? contentPromise.then(
-                  content =>
-                      content
-                          ? publicSectionWithinBudget(
-                                section(`home-best-sellers:${host}`, 30_000, () =>
-                                    this.loadHomeBestSellers(ctx, content),
-                                ),
-                            )
-                          : undefined,
-                  // The required content result below owns this failure; no ranked read ran.
-                  () => undefined,
-              )
-            : Promise.resolve(undefined);
+        const bestSellersPromise = measurePublicDocument('page-loader-best-sellers', () =>
+            home
+                ? contentPromise.then(
+                      content =>
+                          content
+                              ? publicSectionWithinBudget(
+                                    section(`home-best-sellers:${host}`, 30_000, () =>
+                                        this.loadHomeBestSellers(ctx, content),
+                                    ),
+                                )
+                              : undefined,
+                      // The required content result below owns this failure; no ranked read ran.
+                      () => undefined,
+                  )
+                : Promise.resolve(undefined),
+        );
         // Visitor reads only peek the prepared slot; coupon origin work belongs to the worker.
         const couponsPromise = home
             ? prepareCoupons
@@ -816,6 +833,12 @@ export class StorefrontPublicPageService {
                     preparedCoupons = value;
                 })
                 .catch(() => undefined);
+        const optionalPhases = [
+            'page-loader-products',
+            'page-loader-collections',
+            'page-loader-visual',
+            'page-loader-flash',
+        ] as const;
         const [config, sections] = await Promise.all([
             configPromise,
             Promise.allSettled([
@@ -848,7 +871,11 @@ export class StorefrontPublicPageService {
                 ].map((promise, index) =>
                     // Published body is required by server-rendered documents. A cold read must
                     // finish before output; only optional recommendations may be deferred.
-                    index === 0 ? promise : publicSectionWithinBudget<unknown>(promise),
+                    index === 0
+                        ? promise
+                        : measurePublicDocument(optionalPhases[index - 1], () =>
+                              publicSectionWithinBudget<unknown>(promise),
+                          ),
                 ),
                 bestSellersPromise,
                 prepareCoupons ? publicSectionWithinBudget(couponsPromise) : Promise.resolve(undefined),

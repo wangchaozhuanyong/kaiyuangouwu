@@ -82,6 +82,10 @@
     pointer-events: none;
 }
 
+.hero-page-picker button[aria-busy='true'] .hero-page-number {
+    opacity: 0.55;
+}
+
 .hero-page-number {
     /* Match the optical center of short Latin digits to the trust labels. */
     transform: translateY(1px);
@@ -804,11 +808,31 @@
 
 .hero-media-error {
     position: absolute;
-    inset: auto var(--space-12) var(--space-12);
+    inset: var(--space-12) var(--space-12) auto auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    max-width: calc(100% - var(--space-24));
     padding: var(--space-8);
     border-radius: var(--skin-control-radius);
     background: var(--surface-elevated);
     color: var(--muted);
+}
+
+.hero-media-error button {
+    min-width: var(--experience-control-min, 44px);
+    min-height: var(--experience-control-min, 44px);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.hero-media-pending {
+    pointer-events: none;
 }
 
 .coupon-hub-scroll {

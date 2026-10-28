@@ -45,6 +45,63 @@ describe('shared speculative image queue', () => {
         vi.useRealTimers();
     });
 
+    it('prioritizes deliberate preparation and cancels only its own image and timeout', async () => {
+        vi.useFakeTimers();
+        const { decodeStorefrontImage } = await import('./storefront-image-prefetch');
+        const controller = new AbortController();
+        const preparing = decodeStorefrontImage('/assets/preview/manual.png', 'hero', undefined, {
+            signal: controller.signal,
+            priority: 'high',
+        });
+        const rejected = expect(preparing).rejects.toMatchObject({ name: 'AbortError' });
+        expect(images[0].fetchPriority).toBe('high');
+        controller.abort();
+        await rejected;
+        expect(images[0].src).toBe('');
+        expect(images[0].srcset).toBe('');
+        expect(vi.getTimerCount()).toBe(0);
+        await expect(
+            decodeStorefrontImage('/assets/preview/cancelled.png', 'hero', undefined, {
+                signal: controller.signal,
+            }),
+        ).rejects.toMatchObject({ name: 'AbortError' });
+        expect(images).toHaveLength(1);
+    });
+
+    it('lets a reused speculative request be promoted and removes abort listeners after completion', async () => {
+        const { decodeStorefrontImage } = await import('./storefront-image-prefetch');
+        const controller = new AbortController();
+        const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+        let created: HTMLImageElement | undefined;
+        const preparing = decodeStorefrontImage('/assets/preview/next.png', 'hero', undefined, {
+            signal: controller.signal,
+            onCreate: image => {
+                created = image;
+            },
+        });
+        expect(created?.fetchPriority).toBe('low');
+        if (created) created.fetchPriority = 'high';
+        expect(images[0].fetchPriority).toBe('high');
+        images[0].finish();
+        await preparing;
+        expect(removeListener).toHaveBeenCalledWith('abort', expect.any(Function));
+        controller.abort();
+        expect(images[0].src).not.toBe('');
+    });
+
+    it('fails a deliberate preparation after the existing 15 second bound and releases its source', async () => {
+        vi.useFakeTimers();
+        const { decodeStorefrontImage } = await import('./storefront-image-prefetch');
+        const preparing = decodeStorefrontImage('/assets/preview/manual.png', 'hero', undefined, {
+            priority: 'high',
+        });
+        const rejected = expect(preparing).rejects.toThrow('Image preparation timed out');
+        await vi.advanceTimersByTimeAsync(15_000);
+        await rejected;
+        expect(images[0].src).toBe('');
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('deduplicates simultaneous and recently completed candidates with two active downloads', async () => {
         const { prefetchStorefrontImage } = await import('./storefront-image-prefetch');
         prefetchStorefrontImage('/assets/preview/a.png', 'detail');

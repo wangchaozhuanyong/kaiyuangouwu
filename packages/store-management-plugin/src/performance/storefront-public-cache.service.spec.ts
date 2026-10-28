@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+    publicDocumentTimingHeader,
+    recordPublicDocumentCache,
+    withPublicDocumentTiming,
+} from './public-document-timing';
 import { StorefrontPublicCacheService } from './storefront-public-cache.service';
 
 vi.mock('@vendure/core', () => ({
@@ -39,6 +44,58 @@ const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 afterEach(() => vi.useRealTimers());
 
 describe('public cache boundaries', () => {
+    it('reports the actual miss, joined read and hit to each document without sharing diagnostics', async () => {
+        const { service } = harness();
+        let finish!: (value: object) => void;
+        const value = {};
+        const loader = vi.fn(
+            () =>
+                new Promise<object>(resolve => {
+                    finish = resolve;
+                }),
+        );
+        const observed: string[] = [];
+        const read = () =>
+            withPublicDocumentTiming(async () => {
+                const result = await service.readThrough(ctx, 'private-host:page', 30_000, loader, {
+                    observeRead: outcome => {
+                        observed.push(outcome);
+                        recordPublicDocumentCache(outcome);
+                    },
+                });
+                return { result, timing: publicDocumentTimingHeader() };
+            });
+        const owner = read();
+        await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+        const joined = read();
+        await vi.waitFor(() => expect(observed).toContain('join'));
+        finish(value);
+        const [a, b] = await Promise.all([owner, joined]);
+        const c = await read();
+        expect(a.timing).toEqual(['storefront-page-cache;desc="miss"']);
+        expect(b.timing).toEqual(['storefront-page-cache;desc="join"']);
+        expect(c.timing).toEqual(['storefront-page-cache;desc="hit"']);
+        expect(a.result).toBe(value);
+        expect(b.result).toBe(value);
+        expect(c.result).toBe(value);
+        expect(loader).toHaveBeenCalledOnce();
+    });
+
+    it('does not let a diagnostic observer failure change cache results or failures', async () => {
+        const { service } = harness();
+        const options = {
+            observeRead: () => {
+                throw new Error('broken observer');
+            },
+        };
+        expect(await service.readThrough(ctx, 'timed', 30_000, () => Promise.resolve(7), options)).toBe(7);
+        expect(await service.readThrough(ctx, 'timed', 30_000, () => Promise.resolve(8), options)).toBe(7);
+        const error = new Error('origin failed');
+        await expect(
+            service.readThrough(ctx, 'failed', 30_000, () => Promise.reject(error), options),
+        ).rejects.toBe(error);
+    });
+
     it('hands off only the finally validated generation on a retried fill and cache hit', async () => {
         const { service } = harness();
         const original = await service.revision('a');

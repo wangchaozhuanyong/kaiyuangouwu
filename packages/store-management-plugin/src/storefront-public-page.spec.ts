@@ -8,6 +8,7 @@ import {
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { publicDocumentTimingHeader, withPublicDocumentTiming } from './performance/public-document-timing';
 import { StorefrontMediaManifestService } from './performance/storefront-media-manifest.service';
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import { PUBLIC_CATALOG_READER as PUBLIC_CATALOG_ROUTE_READER } from './public-catalog-reader';
@@ -434,6 +435,28 @@ describe('public page inline artwork', () => {
         });
         return { ...h, read, authorize };
     }
+    it('times real document reads without adding diagnostics to shared or rendered data', async () => {
+        const h = artworkHarness();
+        const read = () =>
+            withPublicDocumentTiming(async () => {
+                const page = await h.service.readForDocument(h.ctx, 'a.test');
+                return { page, header: publicDocumentTimingHeader().join(', ') };
+            });
+        const cold = await read();
+        const warm = await read();
+        expect(cold.header).toContain('storefront-page-loader;dur=');
+        expect(cold.header).toContain('storefront-page-loader-content;dur=');
+        expect(cold.header).toContain('storefront-page-loader-media;dur=');
+        expect(cold.header).toContain('storefront-page-cache;desc="miss"');
+        expect(warm.header).toContain('storefront-page-cache;desc="hit"');
+        expect(warm.header).toContain('storefront-page-document-check;dur=');
+        expect(warm.header).not.toContain('page-loader;');
+        expect(cold.header).not.toMatch(/a\.test|hero\.webp/u);
+        expect(warm.page).toBe(cold.page);
+        expect(JSON.stringify(cold.page)).not.toMatch(/storefront-page-loader|durations|page-cache/u);
+        expect(h.content).toHaveBeenCalledOnce();
+    });
+
     it('retains the anonymous source check if a session appears during the first revision read', async () => {
         const h = artworkHarness();
         const revision = h.cache.revision.bind(h.cache);

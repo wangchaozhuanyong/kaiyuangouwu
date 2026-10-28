@@ -208,9 +208,31 @@ export function restorePublicQueryCache(
 export function watchPublicQueryCache(
     client: QueryClient,
     storage: Pick<Storage, 'setItem'> = sessionStorage,
+    persistInitial = false,
 ): () => void {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let idle: number | undefined;
+    const persist = () => {
+        try {
+            persistPublicQueryCache(client, storage);
+        } catch {
+            /* In-memory Query remains usable. */
+        }
+    };
+    const schedule = () => {
+        if (timer) clearTimeout(timer);
+        if (idle !== undefined) window.cancelIdleCallback(idle);
+        timer = setTimeout(() => {
+            timer = undefined;
+            const runIdle = () => {
+                idle = undefined;
+                persist();
+            };
+            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function')
+                idle = window.requestIdleCallback(runIdle, { timeout: 1000 });
+            else persist();
+        }, 100);
+    };
     const unsubscribe = client.getQueryCache().subscribe(event => {
         if (
             event.query.queryKey[3] !== 'config' &&
@@ -225,26 +247,16 @@ export function watchPublicQueryCache(
             (event.type === 'added' && event.query.state.status === 'success') ||
             (event.type === 'updated' && ['success', 'setState'].includes(event.action.type));
         if (!changed) return;
-        if (timer) clearTimeout(timer);
-        if (idle !== undefined) window.cancelIdleCallback(idle);
-        timer = setTimeout(() => {
-            timer = undefined;
-            const persist = () => {
-                idle = undefined;
-                try {
-                    persistPublicQueryCache(client, storage);
-                } catch {
-                    /* In-memory Query remains usable. */
-                }
-            };
-            if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function')
-                idle = window.requestIdleCallback(persist, { timeout: 1000 });
-            else persist();
-        }, 100);
+        schedule();
     });
+    // Catch changes made before a deferred SSR subscription using the same
+    // bounded, idle persistence path as later updates.
+    if (persistInitial) schedule();
+    if (typeof window !== 'undefined') window.addEventListener('pagehide', persist);
     return () => {
         if (timer) clearTimeout(timer);
         if (idle !== undefined) window.cancelIdleCallback(idle);
+        if (typeof window !== 'undefined') window.removeEventListener('pagehide', persist);
         unsubscribe();
     };
 }
