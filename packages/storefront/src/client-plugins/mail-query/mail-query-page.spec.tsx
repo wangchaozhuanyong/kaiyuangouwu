@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ShopApi } from '../../api';
 import type { MailStreamCallbacks } from '../../api/mail-events';
-import { MailQueryPage } from './mail-query-page';
+import { cleanCode, MailQueryPage } from './mail-query-page';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -240,6 +240,148 @@ describe('MailQueryPage', () => {
         expect(stored).not.toBeNull();
         expect(stored).toContain('BUY-ABCD-1234');
     });
+
+    it('queries workspace buyer codes without changing their case and keeps HTML links usable', async () => {
+        const code = 'AbCdEfGhJkMnPqRsTuV2';
+        const watchMailEvents = vi.fn<ShopApi['watchMailEvents']>((_code, callbacks) => {
+            callbacks.onStatus('denied');
+            return Promise.resolve();
+        });
+        const html =
+            '<a href="https://shop.example.invalid/verify?token=synthetic&amp;proof=synthetic.signature" target="_blank">验证电子邮箱</a>';
+        const queryMails = vi.fn().mockResolvedValue({
+            success: true,
+            targetType: 'MANAGED',
+            aliasEmail: 'buyer@example.invalid',
+            totalEmails: 1,
+            items: [
+                {
+                    id: 'managed-fixture',
+                    fromAddress: 'sender@example.invalid',
+                    subject: '验证电子邮箱',
+                    receivedAt: '2026-10-26T07:18:50.000Z',
+                    bodyHtml: html,
+                    bodyText: '验证电子邮箱',
+                },
+            ],
+        });
+        await act(async () => {
+            root.render(
+                <MailQueryPage
+                    api={{ queryMails, watchMailEvents } as unknown as ShopApi}
+                    marketCode="store-a"
+                    initialCode={code}
+                />,
+            );
+            await Promise.resolve();
+        });
+        expect(queryMails).toHaveBeenCalledExactlyOnceWith(code, expect.any(AbortSignal));
+        expect(watchMailEvents).not.toHaveBeenCalled();
+        expect(container.querySelector<HTMLInputElement>('#liveUpdatesToggle')?.disabled).toBe(true);
+        expect(container.querySelector<HTMLInputElement>('#liveUpdatesToggle')?.checked).toBe(false);
+        expect(container.textContent).toContain('请手动刷新收件结果');
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('.toggle-body-btn')?.click();
+            await Promise.resolve();
+        });
+        expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toBe(html);
+        expect(container.querySelector('iframe')?.getAttribute('sandbox')).toBe(
+            'allow-popups allow-popups-to-escape-sandbox',
+        );
+        expect(cleanCode(` ${code} `)).toBe(code);
+        expect(cleanCode('buy-abcd-1234')).toBe('BUY-ABCD-1234');
+    });
+
+    it('keeps an empty managed inbox available for manual refresh without starting a local stream', async () => {
+        const code = 'AbCdEfGhJkMnPqRsTuV2';
+        const queryMails = vi.fn().mockResolvedValue({
+            success: true,
+            targetType: 'MANAGED',
+            aliasEmail: 'buyer@example.invalid',
+            totalEmails: 0,
+            items: [],
+        });
+        const watchMailEvents = vi.fn();
+        await act(async () => {
+            root.render(
+                <MailQueryPage
+                    api={{ queryMails, watchMailEvents } as unknown as ShopApi}
+                    marketCode="store-a"
+                    initialCode={code}
+                />,
+            );
+            await Promise.resolve();
+        });
+        expect(container.querySelector('#emptyAutoRefreshBtn')).toBeNull();
+        expect(container.querySelector('#emptyRefreshBtn')).not.toBeNull();
+        await act(async () => {
+            container.querySelector<HTMLButtonElement>('#emptyRefreshBtn')?.click();
+            await Promise.resolve();
+        });
+        expect(queryMails).toHaveBeenCalledTimes(2);
+        expect(queryMails).toHaveBeenLastCalledWith(code, expect.any(AbortSignal));
+        expect(watchMailEvents).not.toHaveBeenCalled();
+        expect(container.textContent).not.toContain('查询授权已失效');
+    });
+
+    it.each(['zh', 'en'] as const)(
+        'counts down the server cooldown in %s without resubmitting or changing code case',
+        async language => {
+            const code = 'AbCdEfGhJkMnPqRsTuV2';
+            const queryMails = vi
+                .fn()
+                .mockResolvedValueOnce({
+                    success: false,
+                    message: '查询过于频繁，请 60 秒后再试。',
+                    retryAfterSeconds: 60,
+                    items: [],
+                    totalEmails: 0,
+                })
+                .mockResolvedValue({ success: true, targetType: 'MANAGED', items: [], totalEmails: 0 });
+            const api = { queryMails } as unknown as ShopApi;
+            await act(async () => {
+                root.render(
+                    <MailQueryPage api={api} marketCode="store-a" language={language} initialCode={code} />,
+                );
+                await Promise.resolve();
+            });
+            const input = container.querySelector<HTMLInputElement>('#codeInput');
+            const button = container.querySelector<HTMLButtonElement>('#queryBtn');
+            const retry = container.querySelector<HTMLButtonElement>('.msg-actions button');
+            if (!input || !button || !retry) throw new Error('Query cooldown controls were not rendered');
+            expect(input.value).toBe(code);
+            expect(input.getAttribute('autocapitalize')).toBe('none');
+            expect(input.getAttribute('autocorrect')).toBe('off');
+            expect(button.disabled).toBe(true);
+            expect(retry.disabled).toBe(true);
+            expect(button.textContent).toContain('60');
+            expect(container.querySelector('#msgBox')?.textContent).toContain('60');
+            await act(async () => {
+                button.click();
+                retry.click();
+                input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+                vi.advanceTimersByTime(45_000);
+                await Promise.resolve();
+            });
+            expect(queryMails).toHaveBeenCalledExactlyOnceWith(code, expect.any(AbortSignal));
+            expect(button.textContent).toContain('15');
+            expect(container.querySelector('#msgBox')?.textContent).toContain('15');
+            await act(async () => {
+                vi.advanceTimersByTime(15_000);
+                await Promise.resolve();
+            });
+            expect(button.disabled).toBe(false);
+            expect(retry.disabled).toBe(false);
+            expect(queryMails).toHaveBeenCalledTimes(1);
+            await act(async () => {
+                retry.click();
+                await Promise.resolve();
+            });
+            expect(queryMails).toHaveBeenCalledTimes(2);
+            expect(queryMails).toHaveBeenLastCalledWith(code, expect.any(AbortSignal));
+            expect(container.querySelector('#resultSection')).not.toBeNull();
+        },
+    );
 
     it('displays error toast when query returns unsuccessful', async () => {
         const mockQueryMails = vi.fn().mockResolvedValue({

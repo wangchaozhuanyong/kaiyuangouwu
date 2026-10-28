@@ -1,7 +1,7 @@
 import { ForbiddenError, RequestContext } from '@vendure/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { IcloudPublicQueryService } from '../services/icloud-public-query.service';
+import { IcloudUnifiedQueryService } from '../services/icloud-unified-query.service';
 
 import { IcloudPublicResolver } from './icloud-public.resolver';
 
@@ -11,7 +11,7 @@ describe('public mail client address', () => {
         [{ socket: { remoteAddress: '127.0.0.1' } }, '127.0.0.1'],
     ])('uses the framework address or socket fallback, never raw headers', async (address, expected) => {
         const queryByCode = vi.fn().mockResolvedValue({ success: true });
-        const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudPublicQueryService);
+        const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudUnifiedQueryService);
         const req = {
             ...address,
             headers: {
@@ -27,7 +27,7 @@ describe('public mail client address', () => {
 
     it('uses the ID Business client address only for an API key with mailbox read permission', async () => {
         const queryByCode = vi.fn().mockResolvedValue({ success: true });
-        const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudPublicQueryService);
+        const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudUnifiedQueryService);
         const ctx = {
             req: {
                 ip: '198.51.100.10',
@@ -51,7 +51,7 @@ describe('public mail client address', () => {
         [{ authenticationStrategy: 'apikey' }, true, 'invalid, 203.0.113.25'],
     ])('ignores an untrusted ID Business address', async (session, permitted, forwardedClientIp) => {
         const queryByCode = vi.fn().mockResolvedValue({ success: true });
-        const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudPublicQueryService);
+        const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudUnifiedQueryService);
         const ctx = {
             req: {
                 ip: '198.51.100.10',
@@ -73,7 +73,9 @@ describe('public mail client address', () => {
         'rejects a request without a framework or socket address',
         async req => {
             const queryByCode = vi.fn();
-            const resolver = new IcloudPublicResolver({ queryByCode } as unknown as IcloudPublicQueryService);
+            const resolver = new IcloudPublicResolver({
+                queryByCode,
+            } as unknown as IcloudUnifiedQueryService);
             await expect(
                 resolver.icloudQueryMails({ req } as unknown as RequestContext, 'BUY-TEST-TEST'),
             ).rejects.toBeInstanceOf(ForbiddenError);

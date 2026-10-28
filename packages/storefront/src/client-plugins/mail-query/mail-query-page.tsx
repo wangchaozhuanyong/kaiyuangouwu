@@ -26,10 +26,8 @@ export function cleanCode(str: string): string {
     if (!str) return '';
     const match = str.match(/(?:BUY|MSTR)-[A-Za-z0-9]{3,8}-[A-Za-z0-9]{3,8}/i);
     if (match) return match[0].toUpperCase();
-    return str
-        .trim()
-        .toUpperCase()
-        .replace(/[^A-Z0-9-]/g, '');
+    // Workspace buyer codes are case-sensitive; only BUY/MSTR codes use uppercase.
+    return str.trim();
 }
 
 function loadRecentQueries(storageKey: string): RecentQueryRecord[] {
@@ -105,6 +103,8 @@ export function MailQueryPage({
     const [refreshing, setRefreshing] = useState(false);
     const [shakeInput, setShakeInput] = useState(false);
     const [toast, setToast] = useState<ToastState | null>(null);
+    const [retryAvailableAt, setRetryAvailableAt] = useState(0);
+    const [cooldownSeconds, setCooldownSeconds] = useState(0);
     const [recentQueries, setRecentQueries] = useState<RecentQueryRecord[]>(() =>
         loadRecentQueries(storageKey),
     );
@@ -160,6 +160,37 @@ export function MailQueryPage({
         [triggerShake],
     );
 
+    // This timer only updates the UI; reaching the deadline never submits a query.
+    useEffect(() => {
+        if (!retryAvailableAt) return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const update = () => {
+            const remaining = Math.max(0, Math.ceil((retryAvailableAt - Date.now()) / 1000));
+            setCooldownSeconds(remaining);
+            if (remaining > 0) timer = setTimeout(update, 1000);
+        };
+        update();
+        return () => clearTimeout(timer);
+    }, [retryAvailableAt]);
+
+    const beginCooldown = useCallback(
+        (data: IcloudQueryResult): boolean => {
+            const seconds = data.retryAfterSeconds;
+            if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) return false;
+            const remaining = Math.ceil(seconds);
+            setRetryAvailableAt(Date.now() + remaining * 1000);
+            setCooldownSeconds(remaining);
+            showToast(
+                'info',
+                isZh ? '可以重新查询' : 'Ready to retry',
+                isZh ? '冷却已结束，请手动重新查询。' : 'The cooldown has ended. You can retry now.',
+                'retry',
+            );
+            return true;
+        },
+        [isZh, showToast],
+    );
+
     const handleBackClick = useCallback(() => {
         if (onBack) {
             onBack();
@@ -180,6 +211,7 @@ export function MailQueryPage({
 
     const executeQuery = useCallback(
         async (rawCode: string) => {
+            if (Date.now() < retryAvailableAt) return;
             const code = cleanCode(rawCode);
             if (!code) {
                 showToast(
@@ -231,6 +263,7 @@ export function MailQueryPage({
                 if (controller.signal.aborted) return;
 
                 if (!data.success) {
+                    if (beginCooldown(data)) return;
                     showToast(
                         'error',
                         isZh ? '查询未完成' : 'Query Failed',
@@ -245,7 +278,7 @@ export function MailQueryPage({
                 setResult(data);
                 setFilterVirtualId('');
                 setExpandedMails(new Set());
-                setLiveEnabled(true);
+                setLiveEnabled(data.targetType !== 'MANAGED');
 
                 // Update recent queries
                 const newRecord: RecentQueryRecord = {
@@ -276,7 +309,7 @@ export function MailQueryPage({
                 }
             }
         },
-        [api, isZh, showToast, storageKey],
+        [api, beginCooldown, isZh, retryAvailableAt, showToast, storageKey],
     );
 
     // Manual and event reads share one request. Events arriving during a read cause
@@ -305,6 +338,7 @@ export function MailQueryPage({
                             setStreamStatus('denied');
                             setResult(null);
                             setCurrentQueryCode('');
+                            if (beginCooldown(data)) return;
                             showToast(
                                 'error',
                                 isZh ? '查询授权已失效' : 'Mail access expired',
@@ -338,7 +372,7 @@ export function MailQueryPage({
             refreshPromiseRef.current = work;
             return work;
         },
-        [api, currentQueryCode, isZh, showToast],
+        [api, beginCooldown, currentQueryCode, isZh, showToast],
     );
     const refreshRef = useRef(handleRefresh);
     refreshRef.current = handleRefresh;
@@ -574,6 +608,18 @@ export function MailQueryPage({
         ? mails.filter(m => String(m.virtualEmailId) === filterVirtualId)
         : mails;
 
+    const visibleToast: ToastState | null =
+        cooldownSeconds > 0
+            ? {
+                  type: 'warning',
+                  title: isZh ? '查询暂缓' : 'Please wait',
+                  message: isZh
+                      ? `查询过于频繁，请 ${cooldownSeconds} 秒后再试。`
+                      : `Too many attempts. Try again in ${cooldownSeconds} seconds.`,
+                  action: 'retry',
+              }
+            : toast;
+
     return (
         <main className="page subpage mail-query-page" aria-label={isZh ? '邮箱查询服务' : 'Email lookup'}>
             <SubHeader
@@ -609,8 +655,10 @@ export function MailQueryPage({
                                             placeholder={isZh ? '输入或粘贴查询码' : 'Enter query code'}
                                             aria-describedby="queryDescription"
                                             aria-invalid={toast?.type === 'error' || undefined}
-                                            maxLength={25}
+                                            maxLength={64}
                                             autoComplete="off"
+                                            autoCapitalize="none"
+                                            autoCorrect="off"
                                             spellCheck={false}
                                             value={inputCode}
                                             readOnly={loading}
@@ -645,7 +693,7 @@ export function MailQueryPage({
                                         type="button"
                                         className="query-btn"
                                         id="queryBtn"
-                                        disabled={loading}
+                                        disabled={loading || cooldownSeconds > 0}
                                         onClick={() => {
                                             void executeQuery(inputCode);
                                         }}
@@ -655,19 +703,29 @@ export function MailQueryPage({
                                                 <span className="btn-spinner"></span>
                                                 <span>{isZh ? '正在查询邮件...' : 'Querying mails...'}</span>
                                             </>
+                                        ) : cooldownSeconds > 0 ? (
+                                            <span>
+                                                {isZh
+                                                    ? `${cooldownSeconds} 秒后重试`
+                                                    : `Retry in ${cooldownSeconds}s`}
+                                            </span>
                                         ) : (
                                             <span>{isZh ? '查询邮件' : 'Look up emails'}</span>
                                         )}
                                     </button>
                                 </div>
                                 {/* Toast Message */}
-                                {toast ? (
-                                    <div className={`toast-msg ${toast.type}`} id="msgBox" role="status">
-                                        <div className="msg-header">{toast.title}</div>
-                                        <div className="msg-body">{toast.message}</div>
-                                        {toast.action ? (
+                                {visibleToast ? (
+                                    <div
+                                        className={`toast-msg ${visibleToast.type}`}
+                                        id="msgBox"
+                                        role="status"
+                                    >
+                                        <div className="msg-header">{visibleToast.title}</div>
+                                        <div className="msg-body">{visibleToast.message}</div>
+                                        {visibleToast.action ? (
                                             <div className="msg-actions">
-                                                {toast.action === 'paste' ? (
+                                                {visibleToast.action === 'paste' ? (
                                                     <button
                                                         type="button"
                                                         className="msg-action-btn btn-secondary"
@@ -678,7 +736,7 @@ export function MailQueryPage({
                                                         📋 {isZh ? '从剪贴板粘贴' : 'Paste from clipboard'}
                                                     </button>
                                                 ) : null}
-                                                {toast.action === 'clear' ? (
+                                                {visibleToast.action === 'clear' ? (
                                                     <button
                                                         type="button"
                                                         className="msg-action-btn btn-secondary"
@@ -687,10 +745,11 @@ export function MailQueryPage({
                                                         {isZh ? '清空重输' : 'Clear'}
                                                     </button>
                                                 ) : null}
-                                                {toast.action === 'retry' ? (
+                                                {visibleToast.action === 'retry' ? (
                                                     <button
                                                         type="button"
                                                         className="msg-action-btn btn-secondary"
+                                                        disabled={loading || cooldownSeconds > 0}
                                                         onClick={() => {
                                                             void executeQuery(inputCode);
                                                         }}
@@ -783,34 +842,39 @@ export function MailQueryPage({
                                             id="liveUpdatesToggle"
                                             aria-label={isZh ? '实时收信' : 'Live updates'}
                                             checked={liveEnabled}
+                                            disabled={result.targetType === 'MANAGED'}
                                             onChange={e => setLiveEnabled(e.target.checked)}
                                         />
                                         <span className="slider"></span>
                                     </label>
                                     <span className="mail-stream-status type-meta" role="status">
-                                        {streamStatus === 'live'
+                                        {result.targetType === 'MANAGED'
                                             ? isZh
-                                                ? '已连接'
-                                                : 'Connected'
-                                            : streamStatus === 'connecting'
+                                                ? '请手动刷新收件结果'
+                                                : 'Refresh mail results manually'
+                                            : streamStatus === 'live'
                                               ? isZh
-                                                  ? '连接中'
-                                                  : 'Connecting'
-                                              : streamStatus === 'reconnecting'
+                                                  ? '已连接'
+                                                  : 'Connected'
+                                              : streamStatus === 'connecting'
                                                 ? isZh
-                                                    ? '正在重连'
-                                                    : 'Reconnecting'
-                                                : streamStatus === 'unavailable'
+                                                    ? '连接中'
+                                                    : 'Connecting'
+                                                : streamStatus === 'reconnecting'
                                                   ? isZh
-                                                      ? '实时收信不可用，请手动刷新结果'
-                                                      : 'Live updates unavailable. Refresh results manually.'
-                                                  : streamStatus === 'denied'
+                                                      ? '正在重连'
+                                                      : 'Reconnecting'
+                                                  : streamStatus === 'unavailable'
                                                     ? isZh
-                                                        ? '授权已失效'
-                                                        : 'Access expired'
-                                                    : isZh
-                                                      ? '已暂停'
-                                                      : 'Paused'}
+                                                        ? '实时收信不可用，请手动刷新结果'
+                                                        : 'Live updates unavailable. Refresh results manually.'
+                                                    : streamStatus === 'denied'
+                                                      ? isZh
+                                                          ? '授权已失效'
+                                                          : 'Access expired'
+                                                      : isZh
+                                                        ? '已暂停'
+                                                        : 'Paused'}
                                     </span>
                                 </div>
                             </div>
@@ -968,7 +1032,7 @@ export function MailQueryPage({
                                             >
                                                 🔄 {isZh ? '刷新收件结果' : 'Refresh results'}
                                             </button>
-                                            {!liveEnabled ? (
+                                            {!liveEnabled && result.targetType !== 'MANAGED' ? (
                                                 <button
                                                     type="button"
                                                     className="empty-autorefresh-btn"

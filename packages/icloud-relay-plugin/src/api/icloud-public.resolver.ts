@@ -10,11 +10,11 @@ import {
 import { isIP } from 'node:net';
 
 import { ID_BUSINESS_CLIENT_IP_HEADER, manageIcloudRelayPermission } from '../constants';
-import { IcloudPublicQueryService } from '../services/icloud-public-query.service';
+import { IcloudUnifiedQueryService } from '../services/icloud-unified-query.service';
 
 @Resolver()
 export class IcloudPublicResolver {
-    constructor(private readonly publicQueryService: IcloudPublicQueryService) {}
+    constructor(private readonly publicQueryService: IcloudUnifiedQueryService) {}
 
     @Query()
     @Allow(Permission.Public)

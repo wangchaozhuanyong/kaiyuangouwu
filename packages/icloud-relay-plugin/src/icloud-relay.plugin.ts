@@ -21,9 +21,11 @@ import { IcloudMailEventsService } from './services/icloud-mail-events.service';
 import { IcloudMailHealthService } from './services/icloud-mail-health.service';
 import { IcloudMailHistoryService } from './services/icloud-mail-history.service';
 import { IcloudMailSanitizerService } from './services/icloud-mail-sanitizer.service';
+import { IcloudManagedMailboxClient } from './services/icloud-managed-mailbox.client';
 import { IcloudOtpExtractorService } from './services/icloud-otp-extractor.service';
 import { IcloudPublicQueryService } from './services/icloud-public-query.service';
 import { IcloudStorefrontEventsService } from './services/icloud-storefront-events.service';
+import { IcloudUnifiedQueryService } from './services/icloud-unified-query.service';
 import { IcloudRelayPluginOptions } from './types';
 
 /**
@@ -76,6 +78,8 @@ import { IcloudRelayPluginOptions } from './types';
         IcloudMailHealthService,
         IcloudAdminService,
         IcloudPublicQueryService,
+        IcloudManagedMailboxClient,
+        IcloudUnifiedQueryService,
         IcloudJobService,
         IcloudMailEventsService,
         IcloudStorefrontEventsService,

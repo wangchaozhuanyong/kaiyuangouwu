@@ -21,6 +21,63 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
     let activeRequest = null;
     let countdownInterval = null;
     let countdownSeconds = 10;
+    let cooldownDeadline = 0;
+    let cooldownTimer = null;
+    let cooldownSurface = 'query';
+
+    function cooldownRemaining() {
+        return Math.max(0, Math.ceil((cooldownDeadline - Date.now()) / 1000));
+    }
+
+    function renderCooldown() {
+        if (cooldownTimer) clearTimeout(cooldownTimer);
+        cooldownTimer = null;
+        const seconds = cooldownRemaining();
+        const message = seconds > 0
+            ? '查询过于频繁，请 ' + seconds + ' 秒后再试。'
+            : '冷却已结束，可以重新查询。';
+        if (cooldownSurface === 'refresh') {
+            setRefreshMessage(message);
+        } else {
+            const body = document.querySelector('#msgBox .msg-body');
+            if (body) body.textContent = message;
+        }
+        if (seconds === 0) {
+            cooldownDeadline = 0;
+            if (cooldownSurface === 'query') showMsg(message, 'info', {
+                title: '可以重新查询',
+                actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 重新查询</button>'
+            });
+        } else {
+            cooldownTimer = setTimeout(renderCooldown, 1000);
+        }
+        resetRequestButtons();
+    }
+
+    function startCooldown(data, surface) {
+        const seconds = data.retryAfterSeconds;
+        if (!Number.isSafeInteger(seconds) || seconds <= 0) return false;
+        cooldownDeadline = Date.now() + seconds * 1000;
+        cooldownSurface = surface;
+        stopAutoRefresh();
+        if (surface === 'query') showMsg('', 'warning', {
+            title: '查询暂缓',
+            actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry" disabled>🔄 重新查询</button>'
+        });
+        renderCooldown();
+        return true;
+    }
+
+    window.addEventListener('pagehide', () => {
+        if (cooldownTimer) clearTimeout(cooldownTimer);
+        cooldownTimer = null;
+    });
+    window.addEventListener('pageshow', () => {
+        if (cooldownDeadline) renderCooldown();
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && cooldownDeadline) renderCooldown();
+    });
 
     // Initialize on DOM load
     document.addEventListener('DOMContentLoaded', () => {
@@ -77,12 +134,15 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         const input = document.getElementById('codeInput');
         const btnText = document.getElementById('btnText');
         const refreshBtn = document.getElementById('refreshNowBtn');
-        if (btn) btn.disabled = false;
-        if (input) input.readOnly = false;
-        if (btnText) btnText.textContent = '查 询 邮 件';
+        const seconds = cooldownRemaining();
+        if (btn) btn.disabled = !!activeRequest || seconds > 0;
+        if (input) input.readOnly = !!activeRequest;
+        if (btnText && !activeRequest) btnText.textContent = seconds > 0 ? seconds + ' 秒后重试' : '查 询 邮 件';
+        const retryBtn = document.querySelector('#msgBox [data-action="retry"]');
+        if (retryBtn) retryBtn.disabled = !!activeRequest || seconds > 0;
         if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.innerHTML = '<span>🔄</span> 立即刷新';
+            refreshBtn.disabled = !!activeRequest || seconds > 0;
+            if (!activeRequest) refreshBtn.textContent = seconds > 0 ? seconds + ' 秒后重试' : '🔄 立即刷新';
         }
     }
 
@@ -278,7 +338,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
         // Extract BUY-XXXX-XXXX or MSTR-XXXX-XXXX or clean raw string
         const match = str.match(/(?:BUY|MSTR)-[A-Za-z0-9]{3,8}-[A-Za-z0-9]{3,8}/i);
         if (match) return match[0].toUpperCase();
-        return str.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        return str.trim();
     }
 
     // ====== Paste Feature ======
@@ -387,6 +447,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     // ====== Query Execution ======
     window.doQuery = async function(customCode) {
+        if (cooldownRemaining() > 0) return;
         const input = document.getElementById('codeInput');
         const rawCode = customCode || (input ? input.value : '');
         const code = cleanCode(rawCode);
@@ -450,7 +511,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 body: JSON.stringify({
                     query: \`query QueryMails($code: String!) {
                         icloudQueryMails(queryCode: $code) {
-                            success message targetType aliasEmail primaryEmail
+                            success message retryAfterSeconds targetType aliasEmail primaryEmail
                             codeExpiresAt remainingDays totalEmails
                             items {
                                 id fromAddress fromName subject receivedAt
@@ -467,6 +528,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
             if (activeRequest !== request || request.signal.aborted) return;
 
             if (!data.success) {
+                if (startCooldown(data, 'query')) return;
                 showMsg(data.message || '邮件查询未成功，请稍后重试。', 'error', {
                     title: '查询未完成',
                     actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry">🔄 重新查询</button>'
@@ -507,7 +569,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
     };
 
     window.refreshCurrentQuery = async function() {
-        if (!currentQueryCode || activeRequest ||
+        if (!currentQueryCode || activeRequest || cooldownRemaining() > 0 ||
             document.getElementById('resultSection').style.display !== 'block') return;
         const request = new AbortController();
         activeRequest = request;
@@ -526,7 +588,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 body: JSON.stringify({
                     query: \`query RefreshMails($code: String!) {
                         icloudQueryMails(queryCode: $code) {
-                            success message targetType aliasEmail primaryEmail
+                            success message retryAfterSeconds targetType aliasEmail primaryEmail
                             codeExpiresAt remainingDays totalEmails
                             items {
                                 id fromAddress fromName subject receivedAt
@@ -547,6 +609,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
                 showResults(data);
             } else {
                 stopAutoRefresh();
+                if (startCooldown(data, 'refresh')) return;
                 setRefreshMessage(data.message || '邮件查询未成功，请稍后重试。');
             }
         } catch (err) {
@@ -563,6 +626,13 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
     // ====== Display Results ======
     function showResults(data) {
+        const autoToggle = document.getElementById('autoRefreshToggle');
+        if (autoToggle) autoToggle.disabled = data.targetType === 'MANAGED';
+        if (data.targetType === 'MANAGED') {
+            stopAutoRefresh();
+            const countdown = document.getElementById('countdownText');
+            if (countdown) countdown.textContent = '请手动刷新收件结果';
+        }
         document.getElementById('queryCard').style.display = 'none';
         const recentSec = document.getElementById('recentSection');
         if (recentSec) recentSec.style.display = 'none';
@@ -776,6 +846,12 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
 
         document.getElementById('queryCard').style.display = 'block';
         document.getElementById('resultSection').style.display = 'none';
+        if (cooldownRemaining() > 0) {
+            cooldownSurface = 'query';
+            showMsg('', 'warning', { title: '查询暂缓',
+                actions: '<button type="button" class="msg-action-btn btn-secondary" data-action="retry" disabled>🔄 重新查询</button>' });
+            renderCooldown();
+        }
         renderRecentQueries();
     };
 
@@ -900,6 +976,7 @@ export const PORTAL_JS = `// iCloud Relay Mail Query Portal Script
     }
 
     function hideMsg() {
+        if (cooldownRemaining() > 0) return;
         const box = document.getElementById('msgBox');
         if (!box) return;
         box.className = 'toast-msg';

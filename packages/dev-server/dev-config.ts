@@ -941,6 +941,10 @@ export const devConfig: VendureConfig = {
             realtimeEnabled: true,
             mailWebhookUrl: process.env.ICLOUD_MAIL_WEBHOOK_URL,
             mailWebhookSecret: process.env.ICLOUD_MAIL_WEBHOOK_SECRET,
+            // Reviewed public endpoint of the connected ID service; deployments can override it.
+            managedMailboxQueryUrl:
+                process.env.ICLOUD_MANAGED_MAILBOX_QUERY_URL?.trim() ||
+                (IS_PRODUCTION ? 'https://54-249-61-238.sslip.io/api/public/mailbox/query' : undefined),
             retentionDays: 30,
         }),
         ...(!BOOTSTRAP_BASE_SCHEMA

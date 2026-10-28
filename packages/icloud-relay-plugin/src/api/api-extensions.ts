@@ -216,6 +216,7 @@ export const shopApiExtensions = gql`
     type IcloudPublicMailQueryResult {
         success: Boolean!
         message: String
+        retryAfterSeconds: Int
         targetType: String
         aliasEmail: String
         primaryEmail: String

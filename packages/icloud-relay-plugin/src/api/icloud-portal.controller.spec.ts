@@ -35,6 +35,11 @@ describe('IcloudPortalController', () => {
         expect(sentBody).toContain('邮件验证码实时查询中心');
         expect(sentBody).toContain('常见问题与使用指南');
         expect(sentBody).toContain('返回商城服务');
+        const codeInput = sentBody.match(/<input[^>]*id="codeInput"[^>]*>/)?.[0];
+        expect(codeInput).toContain('autocapitalize="none"');
+        expect(codeInput).toContain('autocorrect="off"');
+        expect(sentBody).toMatch(/\.code-input\s*\{[^}]*text-transform:\s*none;/);
+        expect(sentBody).not.toMatch(/\.code-input\s*\{[^}]*text-transform:\s*uppercase;/);
     });
 
     it('serves portal JavaScript with clipboard and recent query features', () => {

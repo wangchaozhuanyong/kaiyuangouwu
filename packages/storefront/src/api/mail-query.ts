@@ -25,6 +25,7 @@ export interface IcloudVirtualEmailItem {
 export interface IcloudQueryResult {
     success: boolean;
     message: string | null;
+    retryAfterSeconds?: number | null;
     targetType: string;
     aliasEmail: string | null;
     primaryEmail: string | null;
@@ -55,6 +56,7 @@ export class MailQueryApi extends BaseDomainApi {
                     icloudQueryMails(queryCode: $code) {
                         success
                         message
+                        retryAfterSeconds
                         targetType
                         aliasEmail
                         primaryEmail
