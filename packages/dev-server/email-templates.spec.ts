@@ -288,6 +288,9 @@ describe('localized email templates', () => {
         expect(result.body).toContain('测试店铺');
         expect(result.body).toContain(bodyCopy);
         expect(result.body).toContain(actionCopy);
+        if (type === 'email-verification') {
+            expect(result.body).toContain('如果这不是您本人发起的注册，请忽略此邮件。');
+        }
     });
 
     it.each([
@@ -303,6 +306,9 @@ describe('localized email templates', () => {
         expect(result.body).toContain(bodyCopy);
         expect(result.body).toContain(actionCopy);
         expect(result.body).not.toContain('明集市');
+        if (type === 'email-verification') {
+            expect(result.body).toContain('If you did not request this account, you can ignore this email.');
+        }
     });
 
     it('renders encoded account action tokens and their expiry', async () => {
