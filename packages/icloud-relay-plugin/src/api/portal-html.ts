@@ -264,7 +264,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
             border-radius: var(--radius);
             outline: none;
             transition: all 0.2s ease;
-            text-transform: uppercase;
+            text-transform: none;
         }
         .code-input::placeholder {
             font-size: 14px;
@@ -919,7 +919,7 @@ export const PORTAL_HTML = `<!DOCTYPE html>
                 <span class="input-icon">🔍</span>
                 <input type="text" id="codeInput" class="code-input"
                        placeholder="输入查询码或点击右侧粘贴"
-                       maxlength="25" autocomplete="off" spellcheck="false">
+                       maxlength="25" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
                 <div class="input-actions">
                     <button type="button" class="clear-btn" id="clearBtn" title="清空">✕</button>
                     <button type="button" class="paste-btn" id="pasteBtn" title="从剪贴板粘贴">

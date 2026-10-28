@@ -105,7 +105,7 @@
         box-shadow var(--experience-motion-standard) var(--experience-ease-standard),
         opacity var(--experience-motion-standard) var(--experience-ease-standard),
         transform var(--experience-motion-standard) var(--experience-ease-standard);
-    text-transform: uppercase;
+    text-transform: none;
 }
 
 .mail-query-page .code-input::placeholder {

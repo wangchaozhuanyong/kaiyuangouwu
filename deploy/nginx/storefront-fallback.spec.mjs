@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { get } from 'node:http';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -67,6 +68,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'error_log /dev/stderr warn;',
         'default_type text/html;',
         'types { text/css css; application/javascript js; }',
+        'limit_req_zone $binary_remote_addr zone=vendure_shop_api:1m rate=100r/s;',
         'map $host $customer_vault_frame_origin { default "\'self\'"; }',
         fallbackMap,
         coopMap,
@@ -81,8 +83,11 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         'location = /storefront/html { default_type "text/html; charset=utf-8";',
         'return 200 "Published public page; guest=$http_x_storefront_public_coupon_guest; ' +
             'cookie=$http_cookie; authorization=$http_authorization"; }',
+        'location = /mail-query { return 200 "Legacy standalone mail portal"; }',
+        'location = /mail-query/portal.js { default_type application/javascript; return 200 "/* Legacy mail portal script */"; }',
         '}',
         'server { listen 8080; root /fixtures/www;',
+        block('location = /mail-query/portal.js'),
         'location = /__coupon_hint { return 200 $storefront_public_coupon_guest; }',
         block(
             source
@@ -99,6 +104,10 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         block('location /', source.indexOf('location = /index.html')),
         block('location @storefront_legacy_redirect'),
         block('location @storefront_unknown_route_redirect'),
+        '}',
+        'server { listen 8080; server_name console.fixture;',
+        block('location ^~ /mail-query'),
+        'location / { return 404; }',
         '} }',
     ].join('\n');
     writeFileSync(path.join(fixture, 'nginx.conf'), config);
@@ -200,6 +209,7 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
             '/not-found',
             '/zh/cart',
             '/missing-file.js',
+            '/mail-query/missing',
         ]) {
             const response = await fetch(origin + route);
             assert.equal(response.status, 404, route);
@@ -212,6 +222,39 @@ test('real Nginx keeps application routes and legacy redirects while unknown rou
         assert.equal(head.status, 404);
         assert.equal(await head.text(), '');
     });
+    await t.test(
+        'mail document refresh uses the storefront shell while legacy scripts and console stay compatible',
+        async () => {
+            for (const route of ['/mail-query', '/mail-query/', '/mail-query?fixture=1']) {
+                const response = await fetch(origin + route);
+                assert.equal(response.status, 200, route);
+                assert.match(await response.text(), /Application shell with recovery navigation/, route);
+                assert.match(response.headers.get('cache-control'), /no-store/, route);
+            }
+            const head = await fetch(origin + '/mail-query', { method: 'HEAD' });
+            assert.equal(head.status, 200);
+            assert.equal(await head.text(), '');
+            const script = await fetch(origin + '/mail-query/portal.js?v=fixture');
+            assert.equal(script.status, 200);
+            assert.match(script.headers.get('content-type'), /application\/javascript/);
+            assert.match(await script.text(), /Legacy mail portal script/);
+            for (const route of ['/mail-query', '/mail-query/portal.js?v=fixture']) {
+                // Native fetch can replace Host with the URL authority. HTTP sends the
+                // explicit host so this exercises the real console virtual host.
+                const response = await new Promise((resolve, reject) => {
+                    get(origin + route, { headers: { Host: 'console.fixture' } }, upstream => {
+                        let body = '';
+                        upstream.setEncoding('utf8');
+                        upstream.on('data', chunk => (body += chunk));
+                        upstream.on('end', () => resolve({ status: upstream.statusCode, body }));
+                        upstream.on('error', reject);
+                    }).on('error', reject);
+                });
+                assert.equal(response.status, 200, route);
+                assert.match(response.body, /Legacy (?:standalone mail portal|mail portal script)/, route);
+            }
+        },
+    );
     await t.test('preserves published redirects and does not hide backend failure', async () => {
         const redirect = await fetch(origin + '/old-route?utm_source=fixture', { redirect: 'manual' });
         assert.equal(redirect.status, 301);

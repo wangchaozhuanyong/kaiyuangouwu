@@ -157,7 +157,7 @@ describe('shared public mail authorization', () => {
     it('shares invalid-code lockout and records rate-limit audit entries', async () => {
         const f = fixture();
         for (let i = 0; i < 5; i++) await f.authorize();
-        expect((await f.authorize()).error).toContain('15');
+        expect((await f.authorize()).error).toContain('秒后再试');
         expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(5);
         expect(f.repos.IcloudQueryAuditLog.save.mock.calls.at(-1)[0].result).toBe('RATE_LIMITED');
     });
@@ -211,7 +211,7 @@ describe('bounded public mail failed-source tracking', () => {
         for (let i = 0; i < 4; i++) await f.authorize();
         vi.advanceTimersByTime(RATE_LIMIT_LOCKOUT_MS);
         for (let i = 0; i < 5; i++) expect((await f.authorize()).error).toContain('无效');
-        expect((await f.authorize()).error).toContain('15');
+        expect((await f.authorize()).error).toContain('秒后再试');
         expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(9);
     });
 
@@ -228,13 +228,49 @@ describe('bounded public mail failed-source tracking', () => {
     it('keeps the fifth-failure lockout until its exact deadline without extending blocked requests', async () => {
         const f = fixture();
         for (let i = 0; i < 5; i++) await f.authorize();
-        vi.advanceTimersByTime(RATE_LIMIT_LOCKOUT_MS - 1);
-        expect((await f.read()).message).toContain('15');
+        expect(await f.read()).toMatchObject({
+            success: false,
+            message: '查询过于频繁，请 60 秒后再试。',
+            retryAfterSeconds: 60,
+            items: [],
+        });
+        vi.advanceTimersByTime(20_001);
+        expect(await f.authorize()).toEqual({
+            error: '查询过于频繁，请 40 秒后再试。',
+            retryAfterSeconds: 40,
+        });
+        vi.advanceTimersByTime(RATE_LIMIT_LOCKOUT_MS - 20_002);
+        expect(await f.read()).toMatchObject({ retryAfterSeconds: 1 });
         expect(f.repos.IcloudReceivedMail.find).not.toHaveBeenCalled();
         vi.advanceTimersByTime(1);
-        expect((await f.authorize()).error).toContain('无效');
+        expect(await f.authorize()).toEqual({ error: '无效的查询码，请检查后重试。' });
         expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(6);
         expect(f.records.get(source(0))?.count).toBe(1);
+    });
+
+    it('keeps ordinary errors out of the invalid-code counter and clears failures on an empty successful query', async () => {
+        const f = fixture();
+        await f.authorize();
+        await f.authorize();
+        const buyer = { id: 'v1', aliasEmail: 'alias@example.test', primaryAccount: { status: 'ACTIVE' } };
+        f.repos.IcloudVirtualEmail.findOne.mockResolvedValue({ ...buyer, status: 'DISABLED' });
+        for (let i = 0; i < 5; i++) {
+            const denied = await f.read();
+            expect(denied.message).toContain('已禁用');
+            expect(denied.retryAfterSeconds).toBeUndefined();
+        }
+        f.repos.IcloudVirtualEmail.findOne.mockResolvedValue({ ...buyer, codeExpiresAt: new Date(0) });
+        expect((await f.read()).message).toContain('已过期');
+        expect(f.records.get(source(0))?.count).toBe(2);
+        f.repos.IcloudVirtualEmail.findOne.mockRejectedValueOnce(new Error('Database unavailable'));
+        await expect(f.read()).rejects.toThrow('Database unavailable');
+        expect(f.records.get(source(0))?.count).toBe(2);
+
+        f.repos.IcloudVirtualEmail.findOne.mockResolvedValue(buyer);
+        const result = await f.read();
+        expect(result).toMatchObject({ success: true, totalEmails: 0, items: [] });
+        expect(result.retryAfterSeconds).toBeUndefined();
+        expect(f.records.has(source(0))).toBe(false);
     });
 
     it.each(['read', 'subscription'] as const)(
@@ -246,7 +282,7 @@ describe('bounded public mail failed-source tracking', () => {
                 else await f.authorize();
             }
             const denied = entry === 'read' ? (await f.authorize()).error : (await f.read()).message;
-            expect(denied).toContain('15');
+            expect(denied).toContain('秒后再试');
             expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(5);
             expect(f.repos.IcloudQueryAuditLog.save.mock.calls.at(-1)?.[0].result).toBe('RATE_LIMITED');
             expect(f.repos.IcloudReceivedMail.find).not.toHaveBeenCalled();
@@ -259,10 +295,10 @@ describe('bounded public mail failed-source tracking', () => {
         for (let i = 0; i < 4; i++) await f.authorize(source(0));
         const lookupCount = f.repos.IcloudVirtualEmail.findOne.mock.calls.length;
         for (let i = capacity; i < capacity + 100; i++) {
-            expect((await f.authorize(source(i))).error).toContain('15');
+            expect((await f.authorize(source(i))).error).toContain('秒后再试');
         }
-        expect((await f.read(source(capacity))).message).toContain('15');
-        expect((await f.authorize(source(0))).error).toContain('15');
+        expect((await f.read(source(capacity))).message).toContain('秒后再试');
+        expect((await f.authorize(source(0))).error).toContain('秒后再试');
         expect(f.records.size).toBe(capacity);
         expect(f.records.get(source(0))?.count).toBe(5);
         expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(lookupCount);
@@ -270,12 +306,12 @@ describe('bounded public mail failed-source tracking', () => {
         const buyer = { id: 'v1', aliasEmail: 'alias@example.test', primaryAccount: { status: 'ACTIVE' } };
         f.repos.IcloudVirtualEmail.findOne.mockResolvedValue(buyer);
         // Saturation also rejects a valid owner from a new source until a tracked slot is freed.
-        expect((await f.authorize(source(capacity))).error).toContain('15');
+        expect((await f.authorize(source(capacity))).error).toContain('秒后再试');
         expect(f.repos.IcloudVirtualEmail.findOne).toHaveBeenCalledTimes(lookupCount);
         expect((await f.authorize(source(1))).virtual).toBe(buyer);
         expect(f.records.size).toBe(capacity - 1);
         expect((await f.authorize(source(capacity))).virtual).toBe(buyer);
-        expect((await f.authorize(source(0))).error).toContain('15');
+        expect((await f.authorize(source(0))).error).toContain('秒后再试');
 
         vi.advanceTimersByTime(RATE_LIMIT_LOCKOUT_MS);
         f.repos.IcloudVirtualEmail.findOne.mockResolvedValue(null);
@@ -294,7 +330,7 @@ describe('bounded public mail failed-source tracking', () => {
         const pending = [f.authorize(source(capacity)), f.authorize(source(capacity + 1))];
         release();
         const results = await Promise.all(pending);
-        expect(results.filter(result => result.error?.includes('15'))).toHaveLength(1);
+        expect(results.filter(result => result.retryAfterSeconds !== undefined)).toHaveLength(1);
         expect(results.filter(result => result.error?.includes('无效'))).toHaveLength(1);
         expect(f.records.size).toBe(capacity);
         expect(f.repos.IcloudQueryAuditLog.save.mock.calls.at(-1)?.[0].result).toBe('RATE_LIMITED');
@@ -312,16 +348,16 @@ describe('bounded public mail failed-source tracking', () => {
         const pending = Array.from({ length: 6 }, () => f.authorize());
         releases.slice(0, 5).forEach(release => release());
         await Promise.all(pending.slice(0, 5));
-        vi.advanceTimersByTime(60_000);
+        vi.advanceTimersByTime(1_000);
         releases[5]();
-        expect((await pending[5]).error).toContain('15');
-        vi.advanceTimersByTime(RATE_LIMIT_LOCKOUT_MS - 60_000);
+        expect((await pending[5]).error).toContain('秒后再试');
+        vi.advanceTimersByTime(RATE_LIMIT_LOCKOUT_MS - 1_000);
         f.repos.IcloudVirtualEmail.findOne.mockResolvedValue(null);
         expect((await f.authorize()).error).toContain('无效');
         expect(f.records.get(source(0))?.count).toBe(1);
     });
 
-    it('bounds full-map scans under repeated new sources while capacity is saturated', async () => {
+    it('bounds full-map scans and reclaims expired capacity for new sources', async () => {
         const f = fixture();
         await f.fill(capacity);
         const scans = vi.spyOn(f.records, Symbol.iterator);
@@ -330,6 +366,6 @@ describe('bounded public mail failed-source tracking', () => {
         vi.advanceTimersByTime(60_000);
         for (let i = 0; i < 100; i++) await f.authorize(source(capacity + i));
         expect(scans).toHaveBeenCalledTimes(1);
-        expect(f.records.size).toBe(capacity);
+        expect(f.records.size).toBe(100);
     });
 });

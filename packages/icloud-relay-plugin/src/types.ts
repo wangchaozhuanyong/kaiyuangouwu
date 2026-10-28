@@ -23,6 +23,7 @@ export enum IcloudAuditResult {
 export enum IcloudQueryTargetType {
     PRIMARY = 'PRIMARY',
     VIRTUAL = 'VIRTUAL',
+    MANAGED = 'MANAGED',
 }
 
 export interface IcloudRelayPluginOptions {
@@ -42,6 +43,8 @@ export interface IcloudRelayPluginOptions {
     /** HTTPS endpoint in the ID system. Both systems configure the same dedicated secret. */
     mailWebhookUrl?: string;
     mailWebhookSecret?: string;
+    /** ID system's existing HTTPS /api/public/mailbox/query endpoint. */
+    managedMailboxQueryUrl?: string;
     /**
      * Email retention period in days. Emails older than this will be pruned.
      * Default: 30 days (0 = keep forever).
@@ -119,6 +122,7 @@ export interface PublicMailItem {
 export interface PublicMailQueryResult {
     success: boolean;
     message?: string;
+    retryAfterSeconds?: number;
     targetType?: IcloudQueryTargetType;
     aliasEmail?: string;
     primaryEmail?: string;

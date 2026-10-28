@@ -20,7 +20,6 @@ import { IcloudOtpExtractorService } from './icloud-otp-extractor.service';
 
 const MAX_FAILED_IP_RECORDS = 10_000;
 const FAILED_IP_CLEANUP_INTERVAL_MS = 60_000;
-const rateLimitMessage = '查询过于频繁，请 15 分钟后再试。';
 
 @Injectable()
 export class IcloudPublicQueryService {
@@ -44,7 +43,16 @@ export class IcloudPublicQueryService {
         userAgent?: string,
     ): Promise<PublicMailQueryResult> {
         const target = await this.authorizeQueryTarget(ctx, queryCode, clientIp, userAgent);
-        if (target.error) return { success: false, message: target.error, totalEmails: 0, items: [] };
+        if (target.error)
+            return {
+                success: false,
+                message: target.error,
+                ...(target.retryAfterSeconds !== undefined
+                    ? { retryAfterSeconds: target.retryAfterSeconds }
+                    : {}),
+                totalEmails: 0,
+                items: [],
+            };
         const code = queryCode.trim().toUpperCase();
         const auditRepo = this.connection.getRepository(ctx, IcloudQueryAuditLog);
         const virtualRepo = this.connection.getRepository(ctx, IcloudVirtualEmail);
@@ -154,6 +162,7 @@ export class IcloudPublicQueryService {
         virtual?: IcloudVirtualEmail;
         primary?: IcloudPrimaryAccount;
         error?: string;
+        retryAfterSeconds?: number;
     }> {
         const code = queryCode.trim().toUpperCase();
         const auditRepo = this.connection.getRepository(ctx, IcloudQueryAuditLog);
@@ -167,7 +176,7 @@ export class IcloudPublicQueryService {
                 userAgent ?? null,
                 IcloudAuditResult.RATE_LIMITED,
             );
-            return { error: rateLimitMessage };
+            return this.rateLimitError(clientIp);
         }
         const virtual = await this.connection.getRepository(ctx, IcloudVirtualEmail).findOne({
             where: { buyerQueryCode: code },
@@ -191,7 +200,7 @@ export class IcloudPublicQueryService {
                 userAgent ?? null,
                 recorded ? IcloudAuditResult.INVALID_CODE : IcloudAuditResult.RATE_LIMITED,
             );
-            return { error: recorded ? '无效的查询码，请检查后重试。' : rateLimitMessage };
+            return recorded ? { error: '无效的查询码，请检查后重试。' } : this.rateLimitError(clientIp);
         }
         const type = virtual ? IcloudQueryTargetType.VIRTUAL : IcloudQueryTargetType.PRIMARY;
         if (
@@ -232,6 +241,20 @@ export class IcloudPublicQueryService {
     // ==========================================
     // Rate Limiting (in-memory, lightweight)
     // ==========================================
+
+    private rateLimitError(ip: string): { error: string; retryAfterSeconds: number } {
+        const record = this.failedAttempts.get(ip);
+        // Untracked sources at capacity retry after the next bounded cleanup. A tracked
+        // source always receives its own deadline, never a fresh cooldown on retry.
+        const retryAt = record
+            ? record.lastAttemptAt + RATE_LIMIT_LOCKOUT_MS
+            : this.nextFailedAttemptCleanupAt;
+        const retryAfterSeconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
+        return {
+            error: `查询过于频繁，请 ${retryAfterSeconds} 秒后再试。`,
+            retryAfterSeconds,
+        };
+    }
 
     private checkRateLimit(ip: string): boolean {
         const now = Date.now();

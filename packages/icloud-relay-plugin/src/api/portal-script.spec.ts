@@ -5,7 +5,7 @@ import { PORTAL_HTML } from './portal-html';
 import { PORTAL_JS } from './portal-script';
 
 type PortalWindow = Window &
-    typeof globalThis & {
+    Omit<typeof globalThis, 'setTimeout' | 'clearTimeout'> & {
         doQuery: (code: string) => Promise<void>;
         refreshCurrentQuery: () => Promise<void>;
         goBack: () => void;
@@ -17,7 +17,10 @@ const { JSDOM } = createRequire(`${process.cwd()}/package.json`)('jsdom') as {
     JSDOM: new (html: string, options: { url: string; runScripts: 'outside-only' }) => PortalDom;
 };
 const windows: PortalDom[] = [];
-afterEach(() => windows.splice(0).forEach(dom => dom.window.close()));
+afterEach(() => {
+    vi.restoreAllMocks();
+    windows.splice(0).forEach(dom => dom.window.close());
+});
 
 async function portal(
     branding: unknown = {
@@ -90,6 +93,38 @@ function result(subject: string, targetType = 'PRIMARY') {
 }
 
 describe('mail portal failure feedback', () => {
+    it('preserves workspace code case and keeps unsupported live refresh disabled', async () => {
+        const { window, document, requests } = await portal();
+        const code = 'AbCdEfGhJkMnPqRsTuV2';
+        const fetch = vi.spyOn(window, 'fetch');
+        const query = window.doQuery(code);
+        requests[0].resolve(result('Workspace mail', 'MANAGED'));
+        await query;
+        const request = fetch.mock.calls.find(
+            ([_url, init]) => typeof init?.body === 'string' && init.body.includes('query QueryMails'),
+        );
+        const body = request?.[1]?.body;
+        if (typeof body !== 'string') throw new Error('Expected a JSON request body');
+        expect(JSON.parse(body).variables.code).toBe(code);
+        expect((document.getElementById('autoRefreshToggle') as HTMLInputElement).disabled).toBe(true);
+        expect(document.getElementById('countdownText')?.textContent).toContain('手动刷新');
+    });
+
+    it('opens collected HTML action buttons outside the mail sandbox', async () => {
+        const { window, document, requests } = await portal();
+        const query = window.doQuery('MSTR-TEST-TEST');
+        const data = result('Verify email');
+        const bodyHtml =
+            '<a href="https://shop.example.invalid/verify?token=synthetic&amp;proof=synthetic.signature" target="_blank">Verify email</a>';
+        requests[0].resolve({ ...data, items: [{ ...data.items[0], bodyHtml }], totalEmails: 1 });
+        await query;
+        const frame = document.querySelector('iframe');
+        expect(frame?.getAttribute('srcdoc')).toBe(bodyHtml);
+        expect(frame?.getAttribute('sandbox')).toBe(
+            'allow-same-origin allow-popups allow-popups-to-escape-sandbox',
+        );
+    });
+
     it.each([
         [
             Response.json({
@@ -137,6 +172,72 @@ describe('mail portal failure feedback', () => {
         await query;
         expect(document.getElementById('msgBox')?.textContent).toContain('网络连接失败');
         expect((document.getElementById('codeInput') as HTMLInputElement).value).toBe('MSTR-TEST-TEST');
+    });
+
+    it('counts down the server deadline and blocks buttons, Enter and direct retries without automatic reads', async () => {
+        const { window, document, requests } = await portal();
+        let now = 1_000;
+        let tick: (() => void) | undefined;
+        vi.spyOn(window.Date, 'now').mockImplementation(() => now);
+        vi.spyOn(window, 'setTimeout').mockImplementation(handler => {
+            if (typeof handler === 'function') tick = handler as () => void;
+            return 1;
+        });
+        vi.spyOn(window, 'clearTimeout').mockImplementation(() => undefined);
+        const query = window.doQuery('MSTR-TEST-TEST');
+        requests[0].resolve({ success: false, retryAfterSeconds: 3, message: '请等待', items: [] });
+        await query;
+        const button = document.getElementById('queryBtn') as HTMLButtonElement;
+        expect(button.disabled).toBe(true);
+        expect(button.textContent).toContain('3 秒后重试');
+        expect(document.querySelector<HTMLButtonElement>('#msgBox [data-action="retry"]')?.disabled).toBe(
+            true,
+        );
+        button.click();
+        document
+            .getElementById('codeInput')
+            ?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+        await window.doQuery('BUY-OTHER-TEST');
+        expect(requests).toHaveLength(1);
+        now += 2_001;
+        tick?.();
+        expect(document.getElementById('msgBox')?.textContent).toContain('1 秒后再试');
+        now += 999;
+        tick?.();
+        expect(button.disabled).toBe(false);
+        expect(document.getElementById('msgBox')?.textContent).toContain('冷却已结束');
+        expect(requests).toHaveLength(1);
+        const retry = window.doQuery('MSTR-TEST-TEST');
+        expect(requests).toHaveLength(2);
+        requests[1].resolve(result('recovered'));
+        await retry;
+        expect(document.getElementById('resultSection')?.style.display).toBe('block');
+    });
+
+    it('preserves previous mail during an upstream cooldown and resumes manual refresh at its deadline', async () => {
+        const { window, document, requests } = await portal();
+        let now = 1_000;
+        let tick: (() => void) | undefined;
+        vi.spyOn(window.Date, 'now').mockImplementation(() => now);
+        vi.spyOn(window, 'setTimeout').mockImplementation(handler => {
+            if (typeof handler === 'function') tick = handler as () => void;
+            return 1;
+        });
+        vi.spyOn(window, 'clearTimeout').mockImplementation(() => undefined);
+        const query = window.doQuery('MSTR-TEST-TEST');
+        requests[0].resolve(result('previous mail'));
+        await query;
+        const refresh = window.refreshCurrentQuery();
+        requests[1].resolve({ success: false, retryAfterSeconds: 3, items: [] });
+        await refresh;
+        expect(document.getElementById('mailList')?.textContent).toContain('previous mail');
+        expect((document.getElementById('refreshNowBtn') as HTMLButtonElement).disabled).toBe(true);
+        await window.refreshCurrentQuery();
+        expect(requests).toHaveLength(2);
+        now += 3_000;
+        tick?.();
+        expect((document.getElementById('refreshNowBtn') as HTMLButtonElement).disabled).toBe(false);
+        expect(requests).toHaveLength(2);
     });
 
     it('keeps the previous mail list visible on a failed refresh, then clears the error on recovery', async () => {

@@ -229,7 +229,7 @@ describe('iCloud admin contract persistence', () => {
             method: 'POST',
             headers: { 'content-type': 'application/json', ...headers },
             body: JSON.stringify({
-                query: 'query ($code: String!) { icloudQueryMails(queryCode: $code) { success message targetType totalEmails items { id subject } } }',
+                query: 'query ($code: String!) { icloudQueryMails(queryCode: $code) { success message retryAfterSeconds targetType totalEmails items { id subject } } }',
                 variables: { code },
             }),
         });
@@ -1257,7 +1257,12 @@ describe('iCloud admin contract persistence', () => {
                     'x-forwarded-for': '203.0.113.99',
                     'x-real-ip': '198.51.100.99',
                 }),
-            ).toMatchObject({ success: false, items: [], message: expect.stringContaining('15 分钟') });
+            ).toMatchObject({
+                success: false,
+                items: [],
+                message: expect.stringContaining('秒后再试'),
+                retryAfterSeconds: expect.any(Number),
+            });
         } finally {
             // Advance only the rate limiter clock and clear this fixture's lockout through a real request.
             const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + RATE_LIMIT_LOCKOUT_MS + 1);
@@ -1288,7 +1293,12 @@ describe('iCloud admin contract persistence', () => {
                     'x-forwarded-for': '203.0.113.99, 198.51.100.60',
                     'x-real-ip': '203.0.113.98',
                 }),
-            ).toMatchObject({ success: false, items: [], message: expect.stringContaining('15 分钟') });
+            ).toMatchObject({
+                success: false,
+                items: [],
+                message: expect.stringContaining('秒后再试'),
+                retryAfterSeconds: expect.any(Number),
+            });
             expect(
                 await publicQuery(masterCode, {
                     'x-forwarded-for': '203.0.113.99, 198.51.100.61',
