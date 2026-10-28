@@ -30,7 +30,7 @@ export function DesktopHeaderSearchPlaceholder({ language }: { language: Storefr
     );
 }
 
-/** Reserve the existing desktop header while the anonymous snapshot hands over to runtime. */
+/** Public controls inside the persistent header owned by StorefrontPageFrame. */
 export function ResponsiveHomeHeaderPlaceholder({
     name,
     logoUrl,
@@ -52,62 +52,60 @@ export function ResponsiveHomeHeaderPlaceholder({
         item => item.routeName !== 'cart',
     );
     return (
-        <header className="responsive-home-header-placeholder proto-desktop-header">
-            <div className="proto-header-inner">
-                <div className="proto-header-left">
-                    <a
-                        className="proto-brand"
-                        href={routeHref({ name: 'home', publicLanguage: language })}
-                        aria-label={name}
-                    >
-                        <BrandLogo url={logoUrl} name={name} className="proto-brand-badge" />
-                        <span className="proto-brand-text">{name}</span>
-                    </a>
-                    <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main navigation'}>
-                        {navigation.map(item =>
-                            isPublicStorefrontRoute(item.routeName) ? (
-                                <a
-                                    key={item.key}
-                                    href={routeHref({ name: item.routeName, publicLanguage: language })}
-                                    className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
-                                    aria-current={activeRoute === item.routeName ? 'page' : undefined}
-                                >
-                                    {item.label}
-                                </a>
-                            ) : (
-                                <span
-                                    key={item.key}
-                                    className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
-                                    aria-hidden="true"
-                                    inert
-                                >
-                                    {item.label}
-                                </span>
-                            ),
-                        )}
-                    </nav>
-                </div>
-                <div className="proto-header-search">
-                    <DesktopHeaderSearchPlaceholder language={language} />
-                </div>
-                <div className="proto-header-right" aria-hidden="true" inert>
-                    <LocalePreferencesTrigger
-                        className="proto-header-action"
-                        language={language}
-                        currencyCode={currencyCode}
-                        expanded={false}
-                        onClick={() => undefined}
-                    />
-                    <span className="proto-cart-link proto-header-action">
-                        <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
-                        <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
-                    </span>
-                    <span className="proto-login-btn proto-header-action">
-                        <UserRound aria-hidden="true" />
-                        {isZh ? '登录' : 'Sign in'}
-                    </span>
-                </div>
+        <div className="proto-header-inner">
+            <div className="proto-header-left">
+                <a
+                    className="proto-brand"
+                    href={routeHref({ name: 'home', publicLanguage: language })}
+                    aria-label={name}
+                >
+                    <BrandLogo url={logoUrl} name={name} className="proto-brand-badge" />
+                    <span className="proto-brand-text">{name}</span>
+                </a>
+                <nav className="proto-nav-links" aria-label={isZh ? '主导航' : 'Main navigation'}>
+                    {navigation.map(item =>
+                        isPublicStorefrontRoute(item.routeName) ? (
+                            <a
+                                key={item.key}
+                                href={routeHref({ name: item.routeName, publicLanguage: language })}
+                                className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
+                                aria-current={activeRoute === item.routeName ? 'page' : undefined}
+                            >
+                                {item.label}
+                            </a>
+                        ) : (
+                            <span
+                                key={item.key}
+                                className={`proto-nav-link ${activeRoute === item.routeName ? 'is-active' : ''}`}
+                                aria-hidden="true"
+                                inert
+                            >
+                                {item.label}
+                            </span>
+                        ),
+                    )}
+                </nav>
             </div>
-        </header>
+            <div className="proto-header-search">
+                <DesktopHeaderSearchPlaceholder language={language} />
+            </div>
+            <div className="proto-header-right" aria-hidden="true" inert>
+                <LocalePreferencesTrigger
+                    className="proto-header-action"
+                    language={language}
+                    currencyCode={currencyCode}
+                    expanded={false}
+                    onClick={() => undefined}
+                />
+                <span className="proto-cart-link proto-header-action">
+                    <ShoppingCart className="proto-cart-icon" aria-hidden="true" />
+                    <span className="proto-cart-text">{isZh ? '购物车' : 'Cart'}</span>
+                </span>
+                <span className="proto-login-btn proto-header-action">
+                    <UserRound aria-hidden="true" />
+                    {isZh ? '登录' : 'Sign in'}
+                </span>
+            </div>
+        </div>
     );
 }

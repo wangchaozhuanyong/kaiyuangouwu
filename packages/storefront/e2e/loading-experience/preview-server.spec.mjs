@@ -192,10 +192,21 @@ test('performance summary never turns unmeasured geometry or images into success
     });
     assert.equal(summary.firstOwned, 250);
     assert.equal(summary.geometryMeasured, false);
+    assert.equal(summary.headerReplaced, null);
     assert.equal(summary.heroReplaced, null);
     assert.equal(summary.couponAppearedAfterFirstHomeFrame, null);
     assert.equal(summary.couponPlaceholderFrames, null);
     assert.deepEqual(summary.imageCandidates, []);
+});
+
+test('header continuity distinguishes retained, replaced and unmeasured nodes', () => {
+    const report = states => ({
+        mode: 'geometry',
+        samples: states.map(headerSame => ({ at: 1, scrollY: 0, headerSame })),
+    });
+    assert.equal(summarizeReport(report([true, true])).headerReplaced, false);
+    assert.equal(summarizeReport(report([true, false])).headerReplaced, true);
+    assert.equal(summarizeReport(report([null])).headerReplaced, null);
 });
 
 test('image summary joins candidate-specific resource timing without claiming real pixels', () => {
