@@ -9,11 +9,11 @@
         {{#if isChinese}}
             <mj-text padding="0 0 16px">感谢您注册 {{ brandName }}。请点击下方按钮验证电子邮箱并完成注册。</mj-text>
             <mj-button href="{{ verifyEmailAddressActionUrl }}">验证电子邮箱</mj-button>
-            <mj-text color="#66727c" padding="16px 0 0">此链接将在 {{ accountTokenExpiryHours }} 小时后失效。</mj-text>
+            <mj-text color="#66727c" padding="16px 0 0">此链接将在 {{ accountTokenExpiryHours }} 小时后失效。如果这不是您本人发起的注册，请忽略此邮件。</mj-text>
         {{else}}
             <mj-text padding="0 0 16px">Thank you for creating a {{ brandName }} account. Verify your email address to complete registration.</mj-text>
             <mj-button href="{{ verifyEmailAddressActionUrl }}">Verify email address</mj-button>
-            <mj-text color="#66727c" padding="16px 0 0">This link expires in {{ accountTokenExpiryHours }} hours.</mj-text>
+            <mj-text color="#66727c" padding="16px 0 0">This link expires in {{ accountTokenExpiryHours }} hours. If you did not request this account, you can ignore this email.</mj-text>
         {{/if}}
     </mj-column>
 </mj-section>
