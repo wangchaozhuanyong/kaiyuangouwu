@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const calls = vi.hoisted(() => ({
     restore: vi.fn(),
@@ -12,6 +12,7 @@ const calls = vi.hoisted(() => ({
     load: vi.fn().mockResolvedValue(undefined),
     preload: vi.fn().mockResolvedValue(undefined),
     hydrate: vi.fn(),
+    diagnostics: vi.fn(),
 }));
 vi.mock('./query-client', () => ({
     storefrontQueryClient: {},
@@ -26,6 +27,10 @@ vi.mock('./router', () => ({
 }));
 vi.mock('./route-component-preload', () => ({ preloadStorefrontRouteComponent: calls.preload }));
 vi.mock('./storefront-styles', () => ({}));
+vi.mock('./performance-entry', () => {
+    calls.diagnostics();
+    return {};
+});
 vi.mock('./storefront-icons', () => ({ restoreStorefrontIcons: vi.fn() }));
 vi.mock('./storefront-page-data', () => ({
     readInitialPublicPage: calls.readInitial,
@@ -37,7 +42,18 @@ vi.mock('react-dom/client', () => ({
     createRoot: () => ({ render: calls.render }),
     hydrateRoot: calls.hydrate,
 }));
+const listeners: Array<() => void> = [];
+beforeEach(() => {
+    const add = document.addEventListener.bind(document);
+    vi.spyOn(document, 'addEventListener').mockImplementation((type, listener, options) => {
+        if (type === 'storefront:app-owned')
+            listeners.push(() => document.removeEventListener(type, listener));
+        add(type, listener, options);
+    });
+});
 afterEach(() => {
+    listeners.splice(0).forEach(remove => remove());
+    document.documentElement.removeAttribute('data-storefront-app-owned');
     vi.restoreAllMocks();
     vi.clearAllMocks();
     window.history.replaceState({}, '', '/');
@@ -45,6 +61,18 @@ afterEach(() => {
 });
 
 describe('storefront entry persistence boundary', () => {
+    it('keeps optional diagnostics off the route download path until ownership', async () => {
+        vi.resetModules();
+        calls.readInitial.mockReturnValue(undefined);
+        document.body.innerHTML = '<div id="root"></div>';
+        await import('./main');
+        await vi.waitFor(() => expect(calls.render).toHaveBeenCalledOnce());
+        window.dispatchEvent(new Event('load'));
+        await Promise.resolve();
+        expect(calls.diagnostics).not.toHaveBeenCalled();
+        document.dispatchEvent(new Event('storefront:app-owned'));
+        await vi.waitFor(() => expect(calls.diagnostics).toHaveBeenCalledOnce());
+    });
     it('does not hold interactive startup behind optional session cache restoration', async () => {
         vi.resetModules();
         calls.readInitial.mockReturnValue(undefined);
@@ -99,19 +127,38 @@ describe('storefront entry persistence boundary', () => {
         await vi.waitFor(() => expect(calls.hydrate).toHaveBeenCalledOnce());
         expect(calls.restore).not.toHaveBeenCalled();
         expect(calls.render).not.toHaveBeenCalled();
+        expect(calls.watch).not.toHaveBeenCalled();
+        document.dispatchEvent(new Event('storefront:page-ready'));
+        await Promise.resolve();
+        expect(calls.watch).not.toHaveBeenCalled();
+        document.dispatchEvent(new Event('storefront:app-owned'));
+        document.dispatchEvent(new Event('storefront:app-owned'));
+        await vi.waitFor(() => expect(calls.watch).toHaveBeenCalledOnce());
+        expect(calls.watch).toHaveBeenCalledWith({}, undefined, true);
+        expect(calls.restore).not.toHaveBeenCalled();
+    });
+    it('installs persistence once when the first commit signal has already been recorded', async () => {
+        vi.resetModules();
+        document.body.innerHTML = '<div id="root" data-public-rendered="1">Published content</div>';
+        document.documentElement.setAttribute('data-storefront-app-owned', '');
+        calls.readInitial.mockReturnValue({ generatedAt: Date.now() });
+        await import('./main');
+        await vi.waitFor(() => expect(calls.watch).toHaveBeenCalledOnce());
+        document.dispatchEvent(new Event('storefront:app-owned'));
+        await Promise.resolve();
+        expect(calls.watch).toHaveBeenCalledOnce();
+        expect(calls.restore).not.toHaveBeenCalled();
     });
     it('never restores, subscribes, or persists embedded preview public data', async () => {
         vi.resetModules();
         window.history.replaceState({}, '', '/?storefrontPreviewEmbedded=1');
         document.body.innerHTML = '<div id="root"></div>';
-        const events = vi.spyOn(window, 'addEventListener');
         await import('./main');
         await vi.waitFor(() => expect(calls.render).toHaveBeenCalled());
         expect(calls.installPreview).toHaveBeenCalledOnce();
         expect(calls.restore).not.toHaveBeenCalled();
         expect(calls.readInitial).not.toHaveBeenCalled();
         expect(calls.watch).not.toHaveBeenCalled();
-        expect(events.mock.calls.some(([type]) => type === 'pagehide')).toBe(false);
         expect(calls.persist).not.toHaveBeenCalled();
     });
 
@@ -119,7 +166,6 @@ describe('storefront entry persistence boundary', () => {
         vi.resetModules();
         document.body.innerHTML = '<div id="root"></div>';
         calls.readInitial.mockReturnValue({ config: { accessMode: 'LIVE' } });
-        const events = vi.spyOn(window, 'addEventListener');
         await import('./main');
         expect(calls.seed).toHaveBeenCalledOnce();
         await vi.waitFor(() => expect(calls.restore).toHaveBeenCalledOnce());
@@ -127,11 +173,6 @@ describe('storefront entry persistence boundary', () => {
             calls.seed.mock.invocationCallOrder[0],
         );
         await vi.waitFor(() => expect(calls.watch).toHaveBeenCalledOnce());
-        const pagehide = events.mock.calls.find(([type]) => type === 'pagehide')?.[1] as
-            (() => void) | undefined;
-        expect(pagehide).toBeTypeOf('function');
-        pagehide?.();
-        expect(calls.persist).toHaveBeenCalledOnce();
-        if (pagehide) window.removeEventListener('pagehide', pagehide);
+        expect(calls.watch).toHaveBeenCalledWith({}, undefined, false);
     });
 });

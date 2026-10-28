@@ -3,12 +3,13 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
+import * as productCards from './components/common/product-card';
 import { DesktopLayoutContext } from './desktop-layout';
 import { HERO_HEIGHT_TRANSITION_MS, HERO_TRANSITION_MS } from './hero-carousel';
 import { HomePage, type HomePageProps } from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
 import * as productDisplay from './storefront-ui/product-display';
-import { type MarketConfig, type StorefrontContentBlock } from './types';
+import { type MarketConfig, type Product, type StorefrontContentBlock } from './types';
 
 vi.mock('@tanstack/react-router', async importOriginal => ({
     ...(await importOriginal<typeof import('@tanstack/react-router')>()),
@@ -804,6 +805,350 @@ describe('HomePage carousel pointer interactions', () => {
             expect(requiredElement(host, '.hero').textContent).not.toContain('自动轮播已停止');
         },
     );
+    it('renders carousel motion without rerendering the homepage products or reobserving existing overlays', async () => {
+        const cardRender = vi.spyOn(productCards, 'ProductCard');
+        const product: Product = {
+            id: 'catalog-product',
+            createdAt: '2026-08-25T00:00:00.000Z',
+            name: 'Catalog product',
+            slug: 'catalog-product',
+            description: '',
+            featuredAsset: null,
+            assets: [],
+            collections: [],
+            variants: [],
+        };
+        await render(
+            false,
+            [
+                ...heroes,
+                { ...heroBlock, id: 'best-sellers', type: 'BEST_SELLERS' },
+                { ...heroBlock, id: 'recommendations', type: 'RECOMMENDATIONS' },
+            ],
+            'zh',
+            {
+                bestSellerProducts: [product],
+                recommendationProducts: [product],
+            },
+        );
+        expect(cardRender).toHaveBeenCalled();
+        const renders = cardRender.mock.calls.length;
+        const overlay = requiredElement(activeSlide(), '.hero-overlay-controls');
+        const observer = resizeObservers.find(record => record.elements.has(overlay));
+        expect(observer).toBeDefined();
+        await pointer('pointerdown', 250);
+        await pointer('pointermove', 150);
+        const observersAfterDragStart = resizeObservers.length;
+        await pointer('pointermove', 130);
+        await pointer('pointermove', 110);
+        expect(resizeObservers).toHaveLength(observersAfterDragStart);
+        expect(observer?.elements.has(overlay)).toBe(true);
+        await pointer('pointerup', 110);
+        await advance();
+        expect(activeSlide().textContent).toContain('Second slide');
+        expect(cardRender).toHaveBeenCalledTimes(renders);
+    });
+
+    it('preserves painted SSR mosaic columns until the actual container or copy size changes', async () => {
+        viewportWidth = 1440;
+        host.dataset.publicRendered = '1';
+        document.documentElement.removeAttribute('data-storefront-app-owned');
+        let width = 1280;
+        const bounds = host.getBoundingClientRect();
+        boundsMock.mockImplementation(function (this: Element) {
+            return {
+                ...bounds,
+                width: this.matches('.featured-collection-mosaic') ? width : 360,
+                height: 100,
+            };
+        });
+        const computed = window.getComputedStyle.bind(window);
+        vi.spyOn(window, 'getComputedStyle').mockImplementation(element => {
+            const style = computed(element);
+            if (element.matches('.featured-collection-mosaic, .featured-collection-supporting-products')) {
+                Object.defineProperties(style, {
+                    columnGap: { value: '12px', configurable: true },
+                    rowGap: { value: '20px', configurable: true },
+                    gridTemplateColumns: { value: '1fr 1fr 1fr', configurable: true },
+                });
+            }
+            return style;
+        });
+        const products = Array.from({ length: 7 }, (_, index) => ({
+            id: `ssr-${index}`,
+            name: `Product ${index}`,
+            slug: `ssr-${index}`,
+            createdAt: '',
+            description: '',
+            featuredAsset: null,
+            assets: [],
+            collections: [],
+            variants: [],
+        }));
+        const blocks = [
+            ...heroes,
+            {
+                ...heroBlock,
+                id: 'ssr-featured',
+                type: 'FEATURED_COLLECTION' as const,
+                settings: { selectedProductIds: products.map(product => product.id), displayCount: 7 },
+            },
+        ];
+        await render(true, blocks, 'zh', {
+            products,
+            managedContentProducts: products,
+            managedContentResolved: true,
+        });
+        const mosaic = requiredElement(host, '.featured-collection-mosaic');
+        const observer = resizeObservers.find(record => record.elements.has(mosaic));
+        expect(mosaic.style.gridTemplateColumns).toBe('');
+        document.documentElement.setAttribute('data-storefront-app-owned', '');
+        try {
+            await interact(() => observer?.notify());
+            expect(mosaic.style.gridTemplateColumns).toBe('');
+            width = 1100;
+            await interact(() => observer?.notify());
+            expect(mosaic.style.gridTemplateColumns).not.toBe('');
+        } finally {
+            document.documentElement.removeAttribute('data-storefront-app-owned');
+        }
+    });
+
+    it('keeps unchanged featured measurements and releases columns when five products become one', async () => {
+        const products: Product[] = Array.from({ length: 5 }, (_, index) => ({
+            id: `product-${index}`,
+            createdAt: '2026-08-25T00:00:00.000Z',
+            name: `Product ${index}`,
+            slug: `product-${index}`,
+            description: '',
+            featuredAsset: null,
+            assets: [],
+            collections: [],
+            variants: [],
+        }));
+        const blocks: StorefrontContentBlock[] = [
+            ...heroes,
+            {
+                ...heroBlock,
+                id: 'featured',
+                type: 'FEATURED_COLLECTION',
+                settings: { selectedProductIds: products.map(product => product.id), displayCount: 5 },
+            },
+        ];
+        const overrides = { products, managedContentProducts: products, managedContentResolved: true };
+        await render(true, blocks, 'zh', overrides);
+        const mosaic = requiredElement(host, '.featured-collection-mosaic');
+        const observer = resizeObservers.find(record => record.elements.has(mosaic));
+        expect(observer).toBeDefined();
+        const initialObservers = resizeObservers.filter(record => record.elements.has(mosaic));
+        await render(true, blocks, 'zh', { ...overrides, storefrontTagline: 'Updated store tagline' });
+        expect(resizeObservers.filter(record => record.elements.has(mosaic))).toEqual(initialObservers);
+        expect(observer?.elements.has(mosaic)).toBe(true);
+        // JSDOM has no grid layout; retain the two-column result of the preceding desktop measurement.
+        mosaic.style.gridTemplateColumns = 'minmax(0, 300px) minmax(0, 1fr)';
+        await render(true, blocks, 'zh', { ...overrides, managedContentProducts: products.slice(0, 1) });
+        expect(requiredElement(host, '.featured-collection-mosaic')).toBe(mosaic);
+        expect(mosaic.querySelector('.featured-collection-supporting-products')).toBeNull();
+        expect(mosaic.style.gridTemplateColumns).toBe('');
+    });
+
+    it('keeps manual feedback through cached preparation until the target starts entering', async () => {
+        await render(true);
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        expect(host.querySelector('.is-neighbor')).not.toBeNull();
+        expect(host.querySelector('.is-settling')).toBeNull();
+        expect(activeButton('[aria-label="切换到第 2 张图片"]').getAttribute('aria-current')).toBeNull();
+        expect(activeButton('[aria-label="切换到第 2 张图片"]').getAttribute('aria-busy')).toBe('true');
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+        await advance(40);
+        const entering = requiredElement(host, '.hero-carousel-slide:not([inert])');
+        const selected = requiredElement(entering, '[aria-label="切换到第 2 张图片"]');
+        expect(selected.getAttribute('aria-current')).toBe('true');
+        expect(selected.getAttribute('aria-busy')).toBeNull();
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+    });
+
+    it('does not show a loading message while a prepared image waits for its entering frame', async () => {
+        await render(true);
+        // Hold the existing paint handoff, without adding a runtime waiting period.
+        const frames: FrameRequestCallback[] = [];
+        vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+            frames.push(callback);
+            return frames.length;
+        });
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await advance(500);
+        expect(host.querySelector('.is-settling')).toBeNull();
+        expect(activeButton('[aria-label="切换到第 2 张图片"]').getAttribute('aria-busy')).toBe('true');
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+        await interact(() => frames[0](performance.now()));
+        await interact(() => frames[1](performance.now()));
+        expect(host.querySelector('.is-settling')).not.toBeNull();
+        expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    });
+
+    it('preserves a newer pending intention when the prepared slide starts entering', async () => {
+        await render(true);
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await interact(() => activeButton('[aria-label="切换到第 3 张图片"]').click());
+        await advance(40);
+        const entering = requiredElement(host, '.hero-carousel-slide:not([inert])');
+        expect(
+            requiredElement(entering, '[aria-label="切换到第 2 张图片"]').getAttribute('aria-current'),
+        ).toBe('true');
+        expect(requiredElement(entering, '[aria-label="切换到第 3 张图片"]').getAttribute('aria-busy')).toBe(
+            'true',
+        );
+        await advance();
+        await advance();
+        expect(activeSlide().textContent).toContain('Third slide');
+        expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    });
+
+    it('deduplicates repeat clicks on the same pending target and skips waiting UI on a fast response', async () => {
+        await render(true);
+        let finish = () => undefined as void;
+        vi.mocked(productDisplay.decodeStorefrontImage).mockImplementation(
+            () =>
+                new Promise<void>(resolve => {
+                    finish = resolve;
+                }),
+        );
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        expect(productDisplay.decodeStorefrontImage).toHaveBeenCalledTimes(1);
+        await advance(100);
+        await interact(finish);
+        await advance();
+        expect(activeSlide().textContent).toContain('Second slide');
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+        expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    });
+
+    it('acknowledges manual selection immediately and only shows local waiting after 150ms', async () => {
+        await render(true);
+        let finish = () => undefined as void;
+        vi.mocked(productDisplay.decodeStorefrontImage).mockImplementation(
+            () =>
+                new Promise<void>(resolve => {
+                    finish = resolve;
+                }),
+        );
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        expect(activeButton('[aria-label="切换到第 2 张图片"]').getAttribute('aria-busy')).toBe('true');
+        expect(productDisplay.decodeStorefrontImage).toHaveBeenLastCalledWith(
+            '/second.jpg',
+            'hero',
+            'calc(100vw - 20px)',
+            expect.objectContaining({ priority: 'high', signal: expect.any(AbortSignal) }),
+        );
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+        await advance(149);
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+        await advance(1);
+        expect(host.querySelector('.hero-media-pending')?.textContent).toContain('正在准备图片');
+        expect(activeSlide().textContent).toContain('First slide');
+        await interact(() => activeButton('.hero-rich-cta-btn').click());
+        expect(target).toHaveBeenCalledExactlyOnceWith('URL', '/first');
+        await interact(finish);
+        expect(host.querySelector('.hero-media-pending')).toBeNull();
+        expect(activeButton('[aria-label="切换到第 2 张图片"]').getAttribute('aria-busy')).toBe('true');
+        await advance();
+        expect(activeSlide().textContent).toContain('Second slide');
+        expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+    });
+
+    it('cancels obsolete preparation and lets only the latest numbered intent enter', async () => {
+        await render(true);
+        const requests: Array<{ finish: () => void; signal?: AbortSignal }> = [];
+        vi.mocked(productDisplay.decodeStorefrontImage).mockImplementation(
+            (_src, _kind, _sizes, options) =>
+                new Promise<void>(resolve => {
+                    requests.push({ finish: resolve, signal: options?.signal });
+                }),
+        );
+        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await interact(() => activeButton('[aria-label="切换到第 3 张图片"]').click());
+        expect(requests[0].signal?.aborted).toBe(true);
+        expect(requests[1].signal?.aborted).toBe(false);
+        await interact(requests[0].finish);
+        await advance();
+        expect(activeSlide().textContent).toContain('First slide');
+        await interact(requests[1].finish);
+        await advance();
+        expect(activeSlide().textContent).toContain('Third slide');
+        expect(host.querySelector('.hero-media-error')).toBeNull();
+    });
+
+    it('pauses outside the viewport and restarts a full interval when visible', async () => {
+        let visibility = (_visible: boolean) => undefined as void;
+        vi.stubGlobal(
+            'IntersectionObserver',
+            class {
+                constructor(callback: IntersectionObserverCallback) {
+                    visibility = visible =>
+                        callback(
+                            [
+                                {
+                                    target: requiredElement(host, '.hero'),
+                                    isIntersecting: visible,
+                                } as IntersectionObserverEntry,
+                            ],
+                            this as unknown as IntersectionObserver,
+                        );
+                }
+                observe = vi.fn();
+                disconnect = vi.fn();
+            },
+        );
+        await render();
+        await advance(4_000);
+        await interact(() => visibility(false));
+        await advance(10_000);
+        expect(productDisplay.decodeStorefrontImage).not.toHaveBeenCalled();
+        await interact(() => visibility(true));
+        await advance(4_999);
+        expect(productDisplay.decodeStorefrontImage).not.toHaveBeenCalled();
+        await advance(1);
+        await advance();
+        expect(activeSlide().textContent).toContain('Second slide');
+    });
+
+    it.each(['hidden', 'breakpoint', 'slides', 'unmount'] as const)(
+        'cancels pending manual preparation on %s without applying a late response',
+        async reason => {
+            await render(true);
+            let finish = () => undefined as void;
+            let signal: AbortSignal | undefined;
+            vi.mocked(productDisplay.decodeStorefrontImage).mockImplementation(
+                (_src, _kind, _sizes, options) => {
+                    signal = options?.signal;
+                    return new Promise<void>(resolve => {
+                        finish = resolve;
+                    });
+                },
+            );
+            await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+            if (reason === 'hidden') {
+                vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+                await interact(() => document.dispatchEvent(new Event('visibilitychange')));
+            } else if (reason === 'breakpoint') {
+                viewportWidth = 1024;
+                await interact(() => phoneViewportListeners.forEach(listener => listener()));
+            } else if (reason === 'slides') {
+                await render(true, [{ ...heroes[0], title: 'Updated first slide' }]);
+            } else {
+                await interact(() => root.render(null));
+            }
+            expect(signal?.aborted).toBe(true);
+            await interact(finish);
+            await advance();
+            expect(host.querySelector('.is-neighbor')).toBeNull();
+            expect(host.querySelector('.hero-media-error')).toBeNull();
+            expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+        },
+    );
+
     it('keeps the available slide after decode failure and allows a successful retry', async () => {
         await render(true);
         vi.mocked(productDisplay.decodeStorefrontImage).mockRejectedValue(new Error('Image unavailable'));
@@ -813,7 +1158,7 @@ describe('HomePage carousel pointer interactions', () => {
         expect(host.querySelector('.is-neighbor')).toBeNull();
         expect(host.querySelector('.hero-media-error')?.textContent).toContain('图片暂时无法加载');
         vi.mocked(productDisplay.decodeStorefrontImage).mockResolvedValue(undefined);
-        await interact(() => activeButton('[aria-label="切换到第 2 张图片"]').click());
+        await interact(() => requiredElement<HTMLButtonElement>(host, '.hero-media-error button').click());
         await advance();
         expect(activeSlide().textContent).toContain('Second slide');
         expect(host.querySelector('.hero-media-error')).toBeNull();
@@ -955,6 +1300,9 @@ describe('HomePage carousel pointer interactions', () => {
             activeButton('[aria-label="切换到第 2 张图片"]').click();
             activeButton('[aria-label="切换到第 1 张图片"]').click();
         });
+        expect(vi.mocked(productDisplay.decodeStorefrontImage).mock.calls.at(-1)?.[3]?.signal?.aborted).toBe(
+            true,
+        );
         await interact(() => finishDecode());
         await advance();
         expect(activeSlide().textContent).toContain('First slide');

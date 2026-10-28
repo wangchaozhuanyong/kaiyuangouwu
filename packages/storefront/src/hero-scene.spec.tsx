@@ -138,6 +138,70 @@ describe('shared hero content layout', () => {
             }
         },
     );
+    it('observes actual overlay hosts across rerenders and still reacts to resizing and replacement', () => {
+        const observers: Array<{
+            callback: () => void;
+            observe: ReturnType<typeof vi.fn>;
+            disconnect: ReturnType<typeof vi.fn>;
+        }> = [];
+        vi.stubGlobal(
+            'ResizeObserver',
+            class {
+                observe = vi.fn();
+                disconnect = vi.fn();
+                constructor(callback: ResizeObserverCallback) {
+                    observers.push({
+                        callback: () => callback([], this as unknown as ResizeObserver),
+                        observe: this.observe,
+                        disconnect: this.disconnect,
+                    });
+                }
+            },
+        );
+        let height = 44;
+        const measure = vi
+            .spyOn(Element.prototype, 'getBoundingClientRect')
+            .mockImplementation(() => ({ height }) as DOMRect);
+        const content: HeroSceneData = {
+            title: 'Slide',
+            subtitle: '',
+            body: '',
+            ctaLabel: '',
+            targetType: 'NONE',
+            items: [],
+        };
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const scene = (replacement = false) => (
+            <HeroScene
+                content={content}
+                image={<img src="/image.jpg" alt="Artwork" />}
+                imageLabel="Open"
+                mediaOverlay={replacement ? <aside>Replacement controls</aside> : <div>Controls</div>}
+            />
+        );
+        try {
+            act(() => root.render(scene()));
+            expect(observers).toHaveLength(1);
+            const reads = measure.mock.calls.length;
+            act(() => root.render(scene()));
+            act(() => root.render(scene()));
+            expect(observers).toHaveLength(1);
+            expect(measure).toHaveBeenCalledTimes(reads);
+            height = 88;
+            act(observers[0].callback);
+            expect(
+                (host.firstElementChild as HTMLElement).style.getPropertyValue('--hero-overlay-height'),
+            ).toBe('88px');
+            act(() => root.render(scene(true)));
+            expect(observers).toHaveLength(2);
+            expect(observers[0].disconnect).toHaveBeenCalledTimes(1);
+        } finally {
+            act(() => root.unmount());
+        }
+        expect(observers[1].disconnect).toHaveBeenCalledTimes(1);
+    });
+
     it('leaves the server-rendered pager reservation to CSS before measuring its actual height', () => {
         const content: HeroSceneData = {
             title: 'Published store promotion',

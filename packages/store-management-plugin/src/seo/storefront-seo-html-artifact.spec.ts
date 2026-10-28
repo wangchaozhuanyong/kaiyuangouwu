@@ -2,7 +2,7 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { load } from 'cheerio';
 import { createHash } from 'node:crypto';
-import { copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -12,8 +12,9 @@ import {
     fixtureStores,
     syntheticPage,
 } from '../../../storefront/e2e/seo-public/fixtures.mjs';
+import { publicDocumentTimingHeader, withPublicDocumentTiming } from '../performance/public-document-timing';
 
-import { StorefrontSeoHtmlService } from './storefront-seo-html.service';
+import { assemblePublicHtml, StorefrontSeoHtmlService } from './storefront-seo-html.service';
 
 describe('public HTML renderer failure diagnostics', () => {
     afterEach(() => vi.restoreAllMocks());
@@ -25,10 +26,15 @@ describe('public HTML renderer failure diagnostics', () => {
             throw cause;
         });
 
-        await expect(service.render({} as never)).rejects.toMatchObject({
-            status: 503,
-            renderStage: 'artifact-root',
-            cause,
+        await withPublicDocumentTiming(async () => {
+            await expect(service.render({} as never)).rejects.toMatchObject({
+                status: 503,
+                renderStage: 'artifact-root',
+                cause,
+            });
+            const header = publicDocumentTimingHeader().join(', ');
+            expect(header).toMatch(/^storefront-render-artifact;dur=\d+\.\d$/u);
+            expect(header).not.toContain(cause.message);
         });
         await expect(service.render({} as never)).rejects.toMatchObject({
             response: {
@@ -36,6 +42,135 @@ describe('public HTML renderer failure diagnostics', () => {
                 message: 'Public storefront rendering is temporarily unavailable',
             },
         });
+    });
+});
+
+describe('public HTML optional route script hints', () => {
+    const home = 'home-page-12345678.js';
+    const wrapper = 'catalog-route-pages-12345678.js';
+    const shell =
+        '<html><head><script type="module" src="/assets/index-12345678.js"></script></head>' +
+        '<body><div id="root"></div></body></html>';
+    const payload = () => syntheticPage(fixtureStores[0], 'en', 'home');
+    const hints = (html: string) => {
+        const dom = load(html);
+        return dom('head link[rel="modulepreload"]')
+            .map((_index, element) => dom(element).attr('href'))
+            .get();
+    };
+    const artifactService = async (provider: string, assets?: string[]) => {
+        const output = path.resolve(__dirname, '../../../../tmp/public-route-script-preloads');
+        await mkdir(output, { recursive: true });
+        const root = await mkdtemp(path.join(output, 'artifact-'));
+        await mkdir(path.join(root, '.server'));
+        await writeFile(path.join(root, 'index.html'), shell);
+        await writeFile(
+            path.join(root, '.server/public-page-renderer.cjs'),
+            `exports.renderPublicPage = async () => '<main>Matching renderer body</main>';\n${provider}`,
+        );
+        if (assets) {
+            await mkdir(path.join(root, 'assets'));
+            await Promise.all(assets.map(file => writeFile(path.join(root, 'assets', file), 'export {};')));
+        }
+        const service = new StorefrontSeoHtmlService();
+        vi.spyOn(service as unknown as { artifactRoot(): string }, 'artifactRoot').mockReturnValue(root);
+        return service;
+    };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('uses the loaded renderer and its own asset directory without executing hinted scripts', async () => {
+        const service = await artifactService(
+            `exports.getPublicRouteScriptPreloads = async (page, assets, readSource) => {
+                if (page.request.kind !== 'home' || !assets.includes('${home}')) throw new Error('Wrong inputs');
+                if (await readSource('${home}') !== 'export {};') throw new Error('Wrong artifact source');
+                return ['${home}', '${wrapper}', '${home}', 'vendor-12345678.js', 'index-12345678.js'];
+            };`,
+            [home, wrapper, 'vendor-12345678.js', 'index-12345678.js'],
+        );
+        const html = await withPublicDocumentTiming(async () => {
+            const result = await service.render(payload());
+            expect(publicDocumentTimingHeader().join(', ')).toMatch(/storefront-render-styles;dur=\d+\.\d/u);
+            return result;
+        });
+        const dom = load(html);
+        expect(hints(html)).toEqual([`/assets/${home}`, `/assets/${wrapper}`, '/assets/vendor-12345678.js']);
+        expect(dom('head link[rel="modulepreload"][crossorigin][fetchpriority="low"]')).toHaveLength(1);
+        expect(dom('head link[rel="modulepreload"][crossorigin][fetchpriority="auto"]')).toHaveLength(2);
+        expect(dom('script[src]')).toHaveLength(1);
+        expect(dom('#root').text()).toBe('Matching renderer body');
+    });
+
+    it('keeps older renderers compatible without requiring an asset directory', async () => {
+        const service = await artifactService('');
+        const html = await service.render(payload());
+        expect(hints(html)).toEqual([]);
+        expect(load(html)('#root').text()).toBe('Matching renderer body');
+    });
+
+    it('does not call the home hint provider for another public route', async () => {
+        const service = await artifactService(
+            "exports.getPublicRouteScriptPreloads = () => { throw new Error('Home only'); };",
+        );
+        const html = await service.render(syntheticPage(fixtureStores[0], 'en', 'article'));
+        expect(hints(html)).toEqual([]);
+        expect(load(html)('#root').text()).toBe('Matching renderer body');
+    });
+
+    it.each([
+        ['missing assets', `exports.getPublicRouteScriptPreloads = () => ['${home}'];`],
+        [
+            'provider failure',
+            "exports.getPublicRouteScriptPreloads = () => { throw new Error('Hint failure'); };",
+        ],
+    ])('does not fail a valid document on optional %s', async (_label, provider) => {
+        const service = await artifactService(provider);
+        const html = await service.render(payload());
+        expect(hints(html)).toEqual([]);
+        expect(load(html)('#root').text()).toBe('Matching renderer body');
+    });
+
+    it.each(['../outside.js', 'missing-12345678.js', `${home}?version=1`])(
+        'does not allow the renderer source callback to read %s',
+        async file => {
+            const service = await artifactService(
+                `exports.getPublicRouteScriptPreloads = async (_page, _assets, readSource) => {
+                    await readSource('${file}');
+                    return ['${home}'];
+                };`,
+                [home, wrapper],
+            );
+            const html = await service.render(payload());
+            expect(hints(html)).toEqual([]);
+            expect(load(html)('#root').text()).toBe('Matching renderer body');
+        },
+    );
+
+    it('omits the entire group when a renderer returns a missing asset', async () => {
+        const service = await artifactService(
+            `exports.getPublicRouteScriptPreloads = () => ['${home}', 'missing-12345678.js'];`,
+            [home, wrapper],
+        );
+        expect(hints(await service.render(payload()))).toEqual([]);
+    });
+
+    it('deduplicates existing scripts and links and rejects unsafe names', () => {
+        const template = shell.replace(
+            '</head>',
+            `<script type="module" src="/assets/${home}"></script>` +
+                `<link rel="modulepreload" crossorigin href="/assets/${wrapper}"></head>`,
+        );
+        const html = assemblePublicHtml(
+            template,
+            payload(),
+            '<main>Body</main>',
+            [],
+            [home, wrapper, home, '../outside.js', 'home-page-1234"678.js'],
+        );
+        const dom = load(html);
+        expect(hints(html)).toEqual([`/assets/${wrapper}`]);
+        expect(dom(`script[src="/assets/${home}"]`)).toHaveLength(1);
+        expect(dom('script[src]')).toHaveLength(2);
     });
 });
 
@@ -148,6 +283,30 @@ describe.runIf(process.env.SEO_HTML_ARTIFACT_SMOKE === '1')(
                             expect(html.indexOf('data-href="storefront-home-showcase"')).toBeLessThan(
                                 html.indexOf('href="/assets/index-'),
                             );
+                            const routeScripts = (await readdir(path.join(artifact, 'assets'))).filter(file =>
+                                /^(?:catalog-route-pages|home-page)-[\w-]{8}\.js$/u.test(file),
+                            );
+                            expect(routeScripts).toHaveLength(2);
+                            for (const file of routeScripts) {
+                                expect(
+                                    dom(
+                                        `head link[rel="modulepreload"][crossorigin][href="/assets/${file}"]`,
+                                    ),
+                                ).toHaveLength(1);
+                                expect(dom(`script[src="/assets/${file}"]`)).toHaveLength(0);
+                            }
+                            for (const prefix of ['commerce-styles-', 'vendor-react-'])
+                                expect(
+                                    dom(
+                                        `head link[rel="modulepreload"][crossorigin][href^="/assets/${prefix}"]`,
+                                    ),
+                                ).toHaveLength(1);
+                            expect(
+                                dom(
+                                    'head link[rel="modulepreload"][href^="/assets/query-persistence-"], ' +
+                                        'head link[rel="modulepreload"][href^="/assets/Feedback-"]',
+                                ),
+                            ).toHaveLength(0);
                         }
                         expect(html).not.toContain('<!--# include');
                         for (const other of fixtureStores) {

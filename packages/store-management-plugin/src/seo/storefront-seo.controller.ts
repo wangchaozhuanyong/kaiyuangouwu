@@ -12,6 +12,7 @@ import { publicPageRequestFromUrl, publicPageRouteHref } from '@vendure/storefro
 import type { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 
+import { publicDocumentTimingHeader, withPublicDocumentTiming } from '../performance/public-document-timing';
 import { StorefrontPromotionAccessService } from '../promotion/storefront-promotion-access.service';
 import { StorefrontClosedHttpFilter } from '../storefront-closed-http.filter';
 import { StorefrontPublicPageService } from '../storefront-public-page.service';
@@ -73,6 +74,10 @@ export class StorefrontSeoController {
 
     @Get('html')
     async document(@Req() req: Request, @Res() res: Response) {
+        return withPublicDocumentTiming(() => this.renderDocument(req, res));
+    }
+
+    private async renderDocument(req: Request, res: Response) {
         const started = performance.now();
         const timings = new Map<string, number>();
         const measure = async <T>(name: string, read: () => Promise<T>): Promise<T> => {
@@ -87,9 +92,12 @@ export class StorefrontSeoController {
             timings.set('total', performance.now() - started);
             res.setHeader(
                 'Server-Timing',
-                [...timings]
-                    .map(([name, duration]) => `storefront-${name};dur=${duration.toFixed(1)}`)
-                    .join(', '),
+                [
+                    ...[...timings].map(
+                        ([name, duration]) => `storefront-${name};dur=${duration.toFixed(1)}`,
+                    ),
+                    ...publicDocumentTimingHeader(),
+                ].join(', '),
             );
         };
         res.setHeader('Cache-Control', 'private, no-store');

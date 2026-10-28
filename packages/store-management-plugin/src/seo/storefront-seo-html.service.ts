@@ -14,12 +14,21 @@ import { readFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
+import { measurePublicDocument, measurePublicDocumentSync } from '../performance/public-document-timing';
 import { renderStorefrontIconLinks } from '../storefront-lcp-preload.service';
 
 import { PublicHtmlRenderError, type PublicHtmlRenderStage } from './public-render-diagnostics';
 
-type Renderer = { renderPublicPage(page: StorefrontPageData): Promise<string> };
+type Renderer = {
+    renderPublicPage(page: StorefrontPageData): Promise<string>;
+    getPublicRouteScriptPreloads?(
+        page: StorefrontPageData,
+        assetNames: readonly string[],
+        readSource: (file: string) => Promise<string>,
+    ): string[] | Promise<string[]>;
+};
 const loadRenderer = createRequire(__filename);
+const scriptAssetName = /^[\w-]+\.js$/u;
 
 /** Replaces metadata without disturbing the matching artifact's styles, icons or script entry. */
 export function assemblePublicHtml(
@@ -27,6 +36,7 @@ export function assemblePublicHtml(
     page: StorefrontPageData,
     body: string,
     styles: string[] = [],
+    scriptPreloads: string[] = [],
 ): string {
     const seo = page.seo;
     if (!seo) throw new Error('Missing public SEO resolution');
@@ -106,6 +116,23 @@ export function assemblePublicHtml(
         if (!/^[a-zA-Z0-9_-]+\.css$/u.test(style)) throw new Error('Invalid public stylesheet');
         document('head').append(`<link rel="stylesheet" href="/assets/${style}">`);
     }
+    const linkedResources = new Set(
+        document('script[src], link[href]')
+            .map((_index, element) => document(element).attr('src') ?? document(element).attr('href'))
+            .get(),
+    );
+    for (const script of scriptPreloads) {
+        if (!scriptAssetName.test(script)) continue;
+        const href = `/assets/${script}`;
+        if (linkedResources.has(href)) continue;
+        // Keep the two large presentation modules behind first-paint resources;
+        // small static dependencies should not queue behind optional late downloads.
+        const priority = /^(?:home-page|commerce-styles)-/u.test(script) ? 'low' : 'auto';
+        document('head').append(
+            `<link rel="modulepreload" crossorigin fetchpriority="${priority}" href="${href}">`,
+        );
+        linkedResources.add(href);
+    }
     document('#root').attr('data-public-rendered', '1').html(body);
     // Match the client cascade before hydration: shared commerce presentation
     // precedes common overrides; page-specific resources follow them.
@@ -141,15 +168,20 @@ export class StorefrontSeoHtmlService {
     async render(page: StorefrontPageData): Promise<string> {
         let stage: PublicHtmlRenderStage = 'artifact-root';
         try {
-            const root = this.artifactRoot();
-            stage = 'renderer-load';
-            const rendererPath = realpathSync(resolve(root, '.server/public-page-renderer.cjs'));
-            if (this.lastRendererPath && this.lastRendererPath !== rendererPath)
-                delete loadRenderer.cache[this.lastRendererPath];
-            const renderer = loadRenderer(rendererPath) as Renderer;
-            this.lastRendererPath = rendererPath;
+            const { root, renderer } = measurePublicDocumentSync('render-artifact', () => {
+                const artifactRoot = this.artifactRoot();
+                stage = 'renderer-load';
+                const rendererPath = realpathSync(resolve(artifactRoot, '.server/public-page-renderer.cjs'));
+                if (this.lastRendererPath && this.lastRendererPath !== rendererPath)
+                    delete loadRenderer.cache[this.lastRendererPath];
+                const artifactRenderer = loadRenderer(rendererPath) as Renderer;
+                this.lastRendererPath = rendererPath;
+                return { root: artifactRoot, renderer: artifactRenderer };
+            });
             stage = 'template-read';
-            const template = await readFile(resolve(root, 'index.html'), 'utf8');
+            const template = await measurePublicDocument('render-template', () =>
+                readFile(resolve(root, 'index.html'), 'utf8'),
+            );
             stage = 'route-styles';
             const prefixes =
                 page.request?.kind === 'product'
@@ -160,17 +192,45 @@ export class StorefrontSeoHtmlService {
                             ...(page.request.path === '/search' ? ['search-loading-', 'search-page-'] : []),
                         ]
                       : [];
-            const assets = prefixes.length ? await readdir(resolve(root, 'assets')) : [];
+            const preloadScripts =
+                page.request?.kind === 'home' && typeof renderer.getPublicRouteScriptPreloads === 'function';
+            const assets: string[] = await measurePublicDocument('render-styles', () =>
+                prefixes.length || preloadScripts
+                    ? readdir(resolve(root, 'assets')).catch(error => {
+                          if (prefixes.length) throw error;
+                          // An optional download hint must not make an otherwise valid HTML response fail.
+                          return [];
+                      })
+                    : Promise.resolve([]),
+            );
             const styles = prefixes.flatMap(prefix =>
                 assets.filter(file => file.endsWith('.css') && file.startsWith(prefix)).sort(),
             );
             if (prefixes.some(prefix => !styles.some(file => file.startsWith(prefix))))
                 throw new Error('Missing public route stylesheet');
+            let scriptPreloads: string[] = [];
+            if (preloadScripts) {
+                try {
+                    const hints = await measurePublicDocument('render-styles', async () =>
+                        renderer.getPublicRouteScriptPreloads?.(page, assets, async file => {
+                            if (!scriptAssetName.test(file) || !assets.includes(file))
+                                throw new Error('Invalid public script asset');
+                            return readFile(resolve(root, 'assets', file), 'utf8');
+                        }),
+                    );
+                    if (hints?.every(file => scriptAssetName.test(file) && assets.includes(file)))
+                        scriptPreloads = hints;
+                } catch {
+                    // Older or incompatible optional hint providers retain the existing rendering path.
+                }
+            }
             stage = 'body-render';
-            const body = await renderer.renderPublicPage(page);
+            const body = await measurePublicDocument('render-react', () => renderer.renderPublicPage(page));
             if (!body.trim()) throw new Error('Public renderer produced empty HTML');
             stage = 'html-assemble';
-            return assemblePublicHtml(template, page, body, styles);
+            return measurePublicDocumentSync('render-assemble', () =>
+                assemblePublicHtml(template, page, body, styles, scriptPreloads),
+            );
         } catch (error) {
             // A broken/missing render artifact is temporary, never an indexable empty 200 page.
             throw new PublicHtmlRenderError(stage, error);

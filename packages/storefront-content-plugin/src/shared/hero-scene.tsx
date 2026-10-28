@@ -81,6 +81,7 @@ export function HeroScene({
     const sampledSource = useRef('');
     const mediaRef = useRef<HTMLDivElement>(null);
     const [overlayHeight, setOverlayHeight] = useState<number>();
+    const overlayMeasurement = useRef<{ elements: Element[]; observer: ResizeObserver } | null>(null);
     const responsiveCopy =
         mobileContent &&
         ((['title', 'subtitle', 'body', 'ctaLabel', 'textColor'] as const).some(
@@ -115,15 +116,34 @@ export function HeroScene({
             '.hero-rich-image-link img:not([aria-hidden="true"])',
         );
         if (artworkElement) sampleRenderedImage(artworkElement);
-        const overlays = Array.from(media.children).slice(1);
+    }, [sampleRenderedImage]);
+
+    // React nodes change on every drag frame; only a changed DOM host needs a new observer.
+    useLayoutEffect(() => {
+        const elements = Array.from(mediaRef.current?.children ?? []).slice(1);
+        const previous = overlayMeasurement.current;
+        if (
+            previous &&
+            elements.length === previous.elements.length &&
+            elements.every((element, index) => element === previous.elements[index])
+        )
+            return;
+        previous?.observer.disconnect();
         const measure = () => {
-            setOverlayHeight(Math.max(0, ...overlays.map(child => child.getBoundingClientRect().height)));
+            setOverlayHeight(Math.max(0, ...elements.map(element => element.getBoundingClientRect().height)));
         };
         const observer = new ResizeObserver(measure);
-        overlays.forEach(child => observer.observe(child));
+        elements.forEach(element => observer.observe(element));
+        overlayMeasurement.current = { elements, observer };
         measure();
-        return () => observer.disconnect();
-    }, [mediaOverlay, sampleRenderedImage]);
+    });
+    useLayoutEffect(
+        () => () => {
+            overlayMeasurement.current?.observer.disconnect();
+            overlayMeasurement.current = null;
+        },
+        [],
+    );
 
     return (
         <div

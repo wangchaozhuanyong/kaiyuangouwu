@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { firstValueFrom, of } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -45,7 +46,7 @@ beforeEach(() => {
 describe('public storefront browsing boundary', () => {
     it('keeps the catalog resolvers public browsing contract aligned with the anonymous gate', () => {
         const source = readFileSync(
-            new URL('../../storefront-catalog-plugin/src/storefront-catalog.resolver.ts', import.meta.url),
+            join(__dirname, '../../storefront-catalog-plugin/src/storefront-catalog.resolver.ts'),
             'utf8',
         );
         const queries = [...source.matchAll(/@Query\(\)\s+@Allow\(Permission\.Public\)\s+(\w+)\(/gu)].map(

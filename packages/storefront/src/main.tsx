@@ -33,23 +33,24 @@ if (!embeddedPreview) {
         else if (initialBoot) seedStorefrontBoot(storefrontQueryClient, initialBoot);
         // The exact HTML snapshot owns hydration. Newer session data may be adopted
         // by bootstrap only for missing reads, without replacing this document's tree.
-        const cache = import('./query-persistence');
-        if (!initialPage || appRootElement.dataset.publicRendered !== '1')
+        const adoptingSnapshot = !!initialPage && appRootElement.dataset.publicRendered === '1';
+        const startPersistence = () => {
+            const cache = import('./query-persistence');
+            if (!adoptingSnapshot)
+                void cache
+                    .then(({ restorePublicQueryCache }) => restorePublicQueryCache(storefrontQueryClient))
+                    .catch(() => undefined);
             void cache
-                .then(({ restorePublicQueryCache }) => restorePublicQueryCache(storefrontQueryClient))
+                .then(({ watchPublicQueryCache }) => {
+                    watchPublicQueryCache(storefrontQueryClient, undefined, adoptingSnapshot);
+                })
                 .catch(() => undefined);
-        void cache
-            .then(({ watchPublicQueryCache, persistPublicQueryCache }) => {
-                watchPublicQueryCache(storefrontQueryClient);
-                window.addEventListener('pagehide', () => {
-                    try {
-                        persistPublicQueryCache(storefrontQueryClient);
-                    } catch {
-                        /* Optional persistence. */
-                    }
-                });
-            })
-            .catch(() => undefined);
+        };
+        // A valid SSR document already owns the public data. Download and subscribe
+        // only after its first interactive commit, without joining route readiness.
+        if (adoptingSnapshot && !document.documentElement.hasAttribute('data-storefront-app-owned'))
+            document.addEventListener('storefront:app-owned', startPersistence, { once: true });
+        else startPersistence();
     } catch {
         // sessionStorage can be disabled without preventing the storefront from starting.
     }
@@ -103,8 +104,8 @@ void mountStorefront().catch(error => {
 });
 
 // CWV uses buffered performance entries, so diagnostics never join the critical rendering path.
-window.addEventListener(
-    'load',
+document.addEventListener(
+    'storefront:app-owned',
     () => {
         void import('./performance-entry').catch(() => undefined);
     },

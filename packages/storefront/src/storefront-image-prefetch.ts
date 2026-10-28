@@ -13,27 +13,46 @@ export async function decodeStorefrontImage(
     src: string,
     imageKind: StorefrontImageKind,
     sizes?: string,
+    options: {
+        signal?: AbortSignal;
+        priority?: 'low' | 'high';
+        onCreate?: (image: HTMLImageElement) => void;
+    } = {},
 ): Promise<void> {
+    const { signal, priority = 'low' } = options;
+    const aborted = () => new DOMException('Image preparation cancelled', 'AbortError');
+    if (signal?.aborted) throw aborted();
     const sources = imageSources(src, imageKind, sizes);
     const image = new Image();
-    image.fetchPriority = 'low';
+    image.fetchPriority = priority;
+    options.onCreate?.(image);
     if (sources.srcSet) image.srcset = sources.srcSet;
     if (sources.sizes) image.sizes = sources.sizes;
     image.src = sources.src;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancel: (() => void) | undefined;
+    const release = () => {
+        image.removeAttribute('srcset');
+        image.removeAttribute('src');
+    };
     try {
         await Promise.race([
             decodeImageElement(image),
             new Promise<never>((_, reject) => {
+                cancel = () => {
+                    release();
+                    reject(aborted());
+                };
+                signal?.addEventListener('abort', cancel, { once: true });
                 timer = setTimeout(() => {
-                    image.removeAttribute('srcset');
-                    image.removeAttribute('src');
-                    reject(new Error('Speculative image timed out'));
+                    release();
+                    reject(new Error('Image preparation timed out'));
                 }, IMAGE_REQUEST_TIMEOUT_MS);
             }),
         ]);
     } finally {
         clearTimeout(timer);
+        if (cancel) signal?.removeEventListener('abort', cancel);
     }
 }
 
