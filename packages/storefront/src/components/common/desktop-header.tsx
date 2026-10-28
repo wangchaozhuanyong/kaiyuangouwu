@@ -100,7 +100,7 @@ export function DesktopHeader({
     const activeRoute = activeNavigationRoute(visibleRoute.name);
 
     return (
-        <header className={`proto-desktop-header${visibleRoute.name === 'search' ? ' is-search-page' : ''}`}>
+        <>
             <div className="proto-header-inner">
                 <div className="proto-header-left">
                     <Link
@@ -214,6 +214,6 @@ export function DesktopHeader({
                     onClose={() => setPreferencesOpen(false)}
                 />
             ) : null}
-        </header>
+        </>
     );
 }

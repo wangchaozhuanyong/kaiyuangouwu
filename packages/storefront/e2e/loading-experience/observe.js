@@ -25,7 +25,7 @@
         stopped = false,
         sent = false,
         scheduled;
-    let firstRoot, firstHero, firstTitle, firstCoupon, activeInput;
+    let firstRoot, firstHeader, firstHero, firstTitle, firstCoupon, activeInput;
     let appOwnedAtDocumentTime = null;
     const round = value => Math.round(value * 100) / 100;
     const now = () => round(performance.now());
@@ -196,9 +196,11 @@
     function sample() {
         const state = lightState();
         if (mode !== 'geometry') return state;
+        const header = firstVisible(selectors.header);
         const hero = firstVisible('.hero-carousel-stage');
         const title = firstVisible('.hero-carousel h1, .hero-carousel h2');
         const coupon = firstVisible('.coupon-hub-section');
+        if (header && !firstHeader) firstHeader = header;
         if (hero && !firstHero) firstHero = hero;
         if (title && !firstTitle) firstTitle = title;
         if (coupon && !firstCoupon) firstCoupon = coupon;
@@ -206,6 +208,7 @@
             ...state,
             documentHeight: document.documentElement.scrollHeight,
             bootVisible: visible(document.getElementById('storefront-boot-loading')),
+            headerSame: firstHeader ? header === firstHeader : null,
             heroSame: firstHero ? hero === firstHero : null,
             titleSame: firstTitle ? title === firstTitle : null,
             title: title?.textContent?.trim() ?? null,
@@ -477,7 +480,7 @@
         sampleStarted = performance.now();
         startedAt = Date.now();
         stopped = sent = false;
-        firstRoot = firstHero = firstTitle = firstCoupon = undefined;
+        firstRoot = firstHeader = firstHero = firstTitle = firstCoupon = undefined;
         imageStates = new WeakMap();
         for (const list of [
             samples,

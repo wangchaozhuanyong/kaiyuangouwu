@@ -60,6 +60,7 @@ export function StorefrontPageFrame({
         'support',
         'legal',
     ].includes(routeName);
+    const headerClass = `${desktop ? '' : 'responsive-home-header-placeholder '}proto-desktop-header${desktop && routeName === 'search' ? ' is-search-page' : ''}`;
     return (
         <ImageLanguageContext.Provider value={language}>
             <SafeImageMediaProvider media={publicMedia} scope={publicMediaScope}>
@@ -90,17 +91,22 @@ export function StorefrontPageFrame({
                             </span>
                         </aside>
                     )}
-                    {!desktop && responsiveCommerce && isBrowsingStorefrontRoute(routeName) && (
-                        <ResponsiveHomeHeaderPlaceholder
-                            name={storefrontName}
-                            logoUrl={logoUrl}
-                            language={language}
-                            currencyCode={displayCurrencyCode}
-                            routeName={routeName}
-                            navigationBlock={navigationBlock}
-                        />
+                    {(desktop ? header : responsiveCommerce && isBrowsingStorefrontRoute(routeName)) && (
+                        <header className={headerClass}>
+                            {desktop ? (
+                                header
+                            ) : (
+                                <ResponsiveHomeHeaderPlaceholder
+                                    name={storefrontName}
+                                    logoUrl={logoUrl}
+                                    language={language}
+                                    currencyCode={displayCurrencyCode}
+                                    routeName={routeName}
+                                    navigationBlock={navigationBlock}
+                                />
+                            )}
+                        </header>
                     )}
-                    {header}
                     {deferred}
                     <div
                         className={

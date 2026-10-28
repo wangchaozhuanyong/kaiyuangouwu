@@ -124,6 +124,7 @@ export function summarizeReport(report) {
                 : null,
         steadyLongTasks: longTasksSupported ? steadyLongTasks : null,
         rootReplaced: replaced('rootSame'),
+        headerReplaced: geometryMeasured ? replaced('headerSame') : null,
         heroReplaced: geometryMeasured ? replaced('heroSame') : null,
         titleReplaced: geometryMeasured ? replaced('titleSame') : null,
         couponPresentAtFirstHomeFrame: firstHome?.couponPresent ?? null,

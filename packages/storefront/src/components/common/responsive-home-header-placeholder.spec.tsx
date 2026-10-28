@@ -49,14 +49,16 @@ const navigationBlock: StorefrontContentBlock = {
 
 function header(language: 'zh' | 'en') {
     return (
-        <ResponsiveHomeHeaderPlaceholder
-            name="A storefront with a long merchant supplied name"
-            logoUrl={null}
-            language={language}
-            currencyCode="MYR"
-            routeName="category"
-            navigationBlock={navigationBlock}
-        />
+        <header>
+            <ResponsiveHomeHeaderPlaceholder
+                name="A storefront with a long merchant supplied name"
+                logoUrl={null}
+                language={language}
+                currencyCode="MYR"
+                routeName="category"
+                navigationBlock={navigationBlock}
+            />
+        </header>
     );
 }
 
