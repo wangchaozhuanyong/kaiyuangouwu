@@ -21,7 +21,7 @@ import {
     shouldShowStorefrontUpdatePrompt,
     useDeferredStorefrontUi,
 } from './storefront-deferred-ui';
-import { readInitialPublicPage } from './storefront-page-data';
+import { publicMediaOrigin, readInitialPublicPage } from './storefront-page-data';
 import { StorefrontPageFrame } from './storefront-page-frame';
 import { storefrontPreviewParameters } from './storefront-preview-parameters';
 import { routeHref, storefrontRouteNames, type RouteName } from './storefront-router';
@@ -284,6 +284,7 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             displayCurrencyCode={storefrontContextValue.displayCurrencyCode}
                             navigationBlock={navigationBlock}
                             publicMedia={storefrontContextValue.publicMedia}
+                            publicMediaHost={publicMediaOrigin(storefrontContextValue.publicMedia)?.[1].host}
                             publicMediaScope={
                                 storefrontContextValue.storefrontContextResolved
                                     ? JSON.stringify([

@@ -16,6 +16,19 @@ export { type ResponsiveImageSources, type StorefrontImageKind };
 
 export const normalizeStorefrontAssetUrl = normalizeAssetUrl;
 
+/** Relative and absolute hints share pixels only inside the verified public host. */
+export function publicMediaKey(source: string, kind?: StorefrontImageKind, host?: string) {
+    let identity = normalizeAssetUrl(source);
+    if (host) {
+        try {
+            identity = new URL(identity, `https://${host}`).href;
+        } catch {
+            /* Preserve opaque sources without inventing an alias. */
+        }
+    }
+    return `${identity}\u0000${kind ?? ''}`;
+}
+
 export function responsiveImageSources(
     source: string,
     kind: StorefrontImageKind,
