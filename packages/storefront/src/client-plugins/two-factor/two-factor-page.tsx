@@ -53,6 +53,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
     const [now, setNow] = useState(() => Date.now());
     const [codes, setCodes] = useState<Record<string, string>>({});
     const [quickInput, setQuickInput] = useState('');
+    const [showQuickSecret, setShowQuickSecret] = useState(false);
     const [quickSecret, setQuickSecret] = useState<string | null>(null);
     const [quickCode, setQuickCode] = useState<string | null>(null);
     const [quickError, setQuickError] = useState('');
@@ -78,6 +79,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
         sensitiveRevision.current++;
         setCodes({});
         setQuickInput('');
+        setShowQuickSecret(false);
         setQuickSecret(null);
         setQuickCode(null);
         setQuickError('');
@@ -204,10 +206,10 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
         }
     };
 
-    const copyCode = async (code: string): Promise<boolean> => {
+    const copyCode = async (code: string, successMessage: string = copy.copied): Promise<boolean> => {
         try {
             await navigator.clipboard.writeText(code);
-            onNotify(copy.copied);
+            onNotify(successMessage);
             return true;
         } catch {
             onNotify(copy.copyFailed);
@@ -384,7 +386,7 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                             <input
                                 id="storefront-two-factor-secret"
                                 className={`${inputClass} [font-family:var(--font-code)]`}
-                                type="password"
+                                type={showQuickSecret ? 'text' : 'password'}
                                 maxLength={1024}
                                 autoComplete="off"
                                 spellCheck={false}
@@ -397,14 +399,53 @@ function TwoFactorPageSession({ customer, language, onBack, onNotify }: Readonly
                                     setQuickError('');
                                 }}
                             />
-                            <button
-                                className="two-factor-paste"
-                                type="button"
-                                onClick={() => void pasteSecret()}
-                            >
-                                <ClipboardPaste className="size-4" aria-hidden="true" />
-                                {copy.paste}
-                            </button>
+                            <div className="two-factor-secret-actions">
+                                <button type="button" onClick={() => void pasteSecret()}>
+                                    <ClipboardPaste className="size-4" aria-hidden="true" />
+                                    {copy.paste}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!quickInput}
+                                    onClick={() => {
+                                        sensitiveRevision.current++;
+                                        setQuickInput('');
+                                        setShowQuickSecret(false);
+                                        setQuickSecret(null);
+                                        setQuickCode(null);
+                                        setQuickError('');
+                                        setQuerying(false);
+                                        document.getElementById('storefront-two-factor-secret')?.focus();
+                                    }}
+                                >
+                                    <Trash2 className="size-4" aria-hidden="true" />
+                                    {copy.clearSecret}
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label={copy.copySecret}
+                                    disabled={!quickInput.trim()}
+                                    onClick={() => void copyCode(quickInput, copy.secretCopied)}
+                                >
+                                    <Copy className="size-4" aria-hidden="true" />
+                                    {copy.copy}
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-controls="storefront-two-factor-secret"
+                                    aria-label={showQuickSecret ? copy.hide : copy.reveal}
+                                    aria-pressed={showQuickSecret}
+                                    disabled={!quickInput}
+                                    onClick={() => setShowQuickSecret(value => !value)}
+                                >
+                                    {showQuickSecret ? (
+                                        <EyeOff className="size-4" aria-hidden="true" />
+                                    ) : (
+                                        <Eye className="size-4" aria-hidden="true" />
+                                    )}
+                                    {showQuickSecret ? copy.hideValue : copy.showValue}
+                                </button>
+                            </div>
                         </div>
                         {quickError ? (
                             <p className="m-0 type-body weight-semibold text-[var(--danger)]" role="alert">
@@ -1115,6 +1156,10 @@ function copyFor(language: StorefrontLanguage) {
         querying: isZh ? '生成中' : 'Generating',
         currentCode: isZh ? '当前动态码' : 'Current code',
         copy: isZh ? '复制' : 'Copy',
+        copySecret: isZh ? '复制密钥' : 'Copy secret',
+        clearSecret: isZh ? '清空' : 'Clear',
+        showValue: isZh ? '显示' : 'Show',
+        hideValue: isZh ? '隐藏' : 'Hide',
         save: isZh ? '保存到列表' : 'Save to list',
         seconds: isZh ? '秒' : 'sec',
         privacyTitle: isZh ? '数据与隐私' : 'Data and privacy',
@@ -1179,7 +1224,8 @@ function copyFor(language: StorefrontLanguage) {
         accountLimit: isZh ? '最多可保存 100 个账号' : 'You can save up to 100 accounts',
         pasteFailed: isZh ? '无法读取剪贴板，请手动粘贴' : 'Could not read the clipboard. Paste manually.',
         copied: isZh ? '动态码已复制' : 'Code copied',
-        copyFailed: isZh ? '复制失败，请手动复制' : 'Could not copy the code',
+        secretCopied: isZh ? '密钥已复制' : 'Secret copied',
+        copyFailed: isZh ? '复制失败，请手动复制' : 'Could not copy. Please copy manually.',
         accountAdded: isZh ? '账号已添加' : 'Account added',
         accountUpdated: isZh ? '账号已更新' : 'Account updated',
         accountDeleted: isZh ? '账号已删除' : 'Account deleted',
