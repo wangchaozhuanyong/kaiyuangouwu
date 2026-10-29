@@ -448,7 +448,7 @@ describe('product detail read states', () => {
     });
 });
 
-it('shows late scoped coupon responses, hides a successful empty refresh and isolates account changes', () => {
+it('defers late scoped coupons to the next visit while keeping reads and account isolation', () => {
     const client = new QueryClient();
     const host = document.createElement('div');
     const root = createRoot(host);
@@ -494,7 +494,12 @@ it('shows late scoped coupon responses, hides a successful empty refresh and iso
             );
         });
         show('initial');
-        expect(homeInputs?.coupons).toEqual([coupon]);
+        expect(homeInputs?.coupons).toEqual([]);
+        expect(
+            client.getQueryData(
+                storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
+            ),
+        ).toEqual([coupon]);
         Object.assign(value, { activeCoupons: [], couponCampaignsQuery: { data: [] } });
         act(() => {
             client.setQueryData(
@@ -508,6 +513,24 @@ it('shows late scoped coupon responses, hides a successful empty refresh and iso
             activeCoupons: [coupon],
             couponCampaignsQuery: { data: [coupon], dataUpdatedAt: Date.now() },
         });
+        act(() => {
+            client.setQueryData(
+                storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
+                [coupon],
+            );
+        });
+        show('next-visit');
+        expect(homeInputs?.coupons).toEqual([coupon]);
+        Object.assign(value, { activeCoupons: [] });
+        act(() => {
+            client.setQueryData(
+                storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
+                [],
+            );
+        });
+        show('next-visit');
+        expect(homeInputs?.coupons).toEqual([]);
+        Object.assign(value, { activeCoupons: [coupon] });
         act(() => {
             client.setQueryData(
                 storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
@@ -543,6 +566,8 @@ it('shows late scoped coupon responses, hides a successful empty refresh and iso
             );
         });
         show('next-visit');
+        expect(homeInputs?.coupons).toEqual([]);
+        show('next-visit-with-current-customer');
         expect(homeInputs?.coupons).toEqual([coupon]);
     } finally {
         act(() => root.unmount());

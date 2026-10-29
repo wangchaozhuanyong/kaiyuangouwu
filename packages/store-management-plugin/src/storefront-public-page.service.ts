@@ -225,7 +225,7 @@ export class StorefrontPublicPageService {
         }
     }
 
-    /** Called by the existing worker only, using content already warmed under the same revision. */
+    /** Called by the background cache owner, using content warmed under the same revision. */
     async prepareBootMedia(ctx: RequestContext, host: string): Promise<void> {
         if (
             ctx.activeUserId ||
@@ -407,7 +407,8 @@ export class StorefrontPublicPageService {
                     host,
                     request.kind === 'home',
                     mode,
-                    options.prepareCoupons === true && this.processContext?.isWorker === true,
+                    options.prepareCoupons === true &&
+                        (this.processContext?.isWorker === true || this.cache.sharedVersions === false),
                 );
                 const routeData = this.cache.trackSource(() =>
                     request.kind === 'catalog'
@@ -803,7 +804,8 @@ export class StorefrontPublicPageService {
                   )
                 : Promise.resolve(undefined),
         );
-        // Visitor reads only peek the prepared slot; coupon origin work belongs to the worker.
+        // Visitors only peek. The explicit internal warm option prepares this slot
+        // in the worker or the serving owner of a process-local cache.
         const couponsPromise = home
             ? prepareCoupons
                 ? section(`home-coupons:${host}`, 30_000, async () =>

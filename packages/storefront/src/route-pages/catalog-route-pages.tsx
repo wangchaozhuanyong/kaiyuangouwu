@@ -3,6 +3,7 @@ import { lazyRouteComponent } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { importHomePage } from '../catalog-page-imports';
+import { claimableCouponCampaigns } from '../coupon-campaign-eligibility';
 import { languageCodeFor } from '../i18n';
 import { offlineLoadError } from '../loading-state';
 import { usePageReadiness, usePageRouteCommit } from '../page-readiness';
@@ -48,38 +49,36 @@ export function HomeRoutePage() {
         staleTime: 0,
     });
     const [couponVisit] = useState(() => {
-        const page = initialPage;
-        if (page)
-            return {
-                owner: null,
-                scope: couponScope,
-                coupons:
-                    matchingSnapshot && page.couponAudience === 'anonymous'
-                        ? ((page.couponCampaigns ?? []) as StorefrontCouponCampaign[])
-                        : [],
-            };
-        return {
-            owner: runtime.customer?.id ?? null,
-            scope: couponScope,
-            coupons:
-                runtime.customerLoadState === 'ready' &&
+        const coupons = initialPage
+            ? matchingSnapshot && initialPage.couponAudience === 'anonymous'
+                ? ((initialPage.couponCampaigns ?? []) as StorefrontCouponCampaign[])
+                : []
+            : runtime.customerLoadState === 'ready' &&
                 runtime.couponCampaignsQuery.data !== undefined &&
                 Date.now() - runtime.couponCampaignsQuery.dataUpdatedAt < 30_000
-                    ? runtime.activeCoupons
-                    : [],
+              ? runtime.activeCoupons
+              : [];
+        return {
+            owner: initialPage ? null : (runtime.customer?.id ?? null),
+            scope: couponScope,
+            coupons,
+            admitted: claimableCouponCampaigns(coupons, initialRenderTime).length > 0,
         };
     });
     const couponOwnerChanged =
         runtime.customerLoadState !== 'loading' && (runtime.customer?.id ?? null) !== couponVisit.owner;
     const [couponVisitCommitted, setCouponVisitCommitted] = useState(false);
     useEffect(() => setCouponVisitCommitted(true), []);
-    // Preserve the prepared HTML for adoption, then follow the current scoped read, including [].
+    // A late read still updates the scoped Query cache for the next visit. Only
+    // an admitted first-frame section may follow updates during this visit.
     const visitCoupons =
-        couponVisitCommitted && runtime.customerLoadState === 'ready' && campaignsQuery.data !== undefined
-            ? runtime.activeCoupons
-            : !couponOwnerChanged && couponVisit.scope === couponScope
-              ? couponVisit.coupons
-              : [];
+        !couponVisit.admitted || couponOwnerChanged || couponVisit.scope !== couponScope
+            ? []
+            : couponVisitCommitted &&
+                runtime.customerLoadState === 'ready' &&
+                campaignsQuery.data !== undefined
+              ? runtime.activeCoupons
+              : couponVisit.coupons;
     const { language, configQuery, contentQuery, productsQuery } = runtime;
     usePageReadiness(
         contentQuery.isPending,
