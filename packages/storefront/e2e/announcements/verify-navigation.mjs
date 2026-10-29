@@ -37,12 +37,9 @@ async function indexOf(page) {
     return page.evaluate(() => window.fixtureNavigation.index);
 }
 
-async function returnFromDetail(page, zh, desktop) {
-    if (desktop)
-        await page
-            .getByRole('button', { name: zh ? '返回全部公告' : 'Back to announcements', exact: true })
-            .click();
-    else await page.locator('.subpage-header button').click();
+async function returnFromDetail(page) {
+    assert.equal(await page.locator('.page-back-button:visible').count(), 1);
+    await page.locator('.subpage-header .page-back-button').click();
 }
 
 async function returnFromList(page) {
@@ -87,7 +84,7 @@ try {
                     await rows.nth(Number(id) - 13).click();
                     await routeIs(page, 'announcements', { id, page: 2 });
                     await page.locator('.announcement-article h1').waitFor();
-                    await returnFromDetail(page, zh, width >= 1024);
+                    await returnFromDetail(page);
                     await routeIs(page, 'announcements', { page: 2 });
                     assert.equal(
                         await indexOf(page),
@@ -138,7 +135,7 @@ try {
         await routeIs(page, 'announcements');
         await page.goForward();
         await routeIs(page, 'announcements', { id: '1' });
-        await returnFromDetail(page, true, false);
+        await returnFromDetail(page);
         await routeIs(page, 'announcements');
         await returnFromList(page);
         await routeIs(page, source);
@@ -149,7 +146,7 @@ try {
         await page.reload();
         await routeIs(page, 'announcements', { id: '2' });
         const refreshedIndex = await indexOf(page);
-        await returnFromDetail(page, true, false);
+        await returnFromDetail(page);
         await routeIs(page, 'announcements');
         assert.equal(
             await indexOf(page),
@@ -175,7 +172,7 @@ try {
                 .getByRole('button', { name: '返回全部公告', exact: true })
                 .filter({ visible: true })
                 .click();
-        else await returnFromDetail(page, true, false);
+        else await returnFromDetail(page);
         await routeIs(page, 'announcements', { page: 3 });
         await page.locator('.notification-list > button').first().filter({ hasText: '25' }).waitFor();
         await returnFromList(page);
