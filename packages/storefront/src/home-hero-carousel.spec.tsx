@@ -849,7 +849,7 @@ describe('HomePage carousel pointer interactions', () => {
         expect(cardRender).toHaveBeenCalledTimes(renders);
     });
 
-    it('preserves painted SSR mosaic columns until the actual container or copy size changes', async () => {
+    it.each([true, false])('adopts SSR mosaic columns only when already aligned (%s)', async aligned => {
         viewportWidth = 1440;
         host.dataset.publicRendered = '1';
         document.documentElement.removeAttribute('data-storefront-app-owned');
@@ -858,7 +858,7 @@ describe('HomePage carousel pointer interactions', () => {
         boundsMock.mockImplementation(function (this: Element) {
             return {
                 ...bounds,
-                width: this.matches('.featured-collection-mosaic') ? width : 360,
+                width: this.matches('.featured-collection-mosaic') ? width : aligned ? 569.6 : 557.9,
                 height: 100,
             };
         });
@@ -901,14 +901,16 @@ describe('HomePage carousel pointer interactions', () => {
         });
         const mosaic = requiredElement(host, '.featured-collection-mosaic');
         const observer = resizeObservers.find(record => record.elements.has(mosaic));
-        expect(mosaic.style.gridTemplateColumns).toBe('');
+        if (aligned) expect(mosaic.style.gridTemplateColumns).toBe('');
+        else expect(mosaic.style.gridTemplateColumns).toBe('minmax(0, 569.6px) minmax(0, 1fr)');
+        const initialColumns = mosaic.style.gridTemplateColumns;
         document.documentElement.setAttribute('data-storefront-app-owned', '');
         try {
             await interact(() => observer?.notify());
-            expect(mosaic.style.gridTemplateColumns).toBe('');
+            expect(mosaic.style.gridTemplateColumns).toBe(initialColumns);
             width = 1100;
             await interact(() => observer?.notify());
-            expect(mosaic.style.gridTemplateColumns).not.toBe('');
+            expect(mosaic.style.gridTemplateColumns).not.toBe(initialColumns);
         } finally {
             document.documentElement.removeAttribute('data-storefront-app-owned');
         }

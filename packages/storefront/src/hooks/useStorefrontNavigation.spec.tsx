@@ -53,6 +53,8 @@ vi.mock('../route-component-preload', () => ({
     preloadStorefrontRouteComponent: vi.fn(() => Promise.resolve()),
 }));
 vi.mock('../route-media-intent', () => ({ prepareRouteMedia: vi.fn() }));
+// An unfinished code download must never delay opening, changing or closing the dialog URL.
+vi.mock('../auth-overlay-preload', () => ({ preloadAuthOverlay: vi.fn(() => new Promise(() => undefined)) }));
 
 const routerInstance = {
     ...router,
@@ -1330,12 +1332,12 @@ describe('storefront navigation state', () => {
     });
 
     it.each(['open', 'close'] as const)(
-        'preserves a current %s action when the optional chunk cannot be applied',
+        'keeps the background and current %s action when optional dialog preparation fails',
         async action => {
-            const actions = await import('../auth-overlay-navigation-actions');
-            const fail = vi.spyOn(actions, 'applyAuthOverlayNavigation').mockImplementationOnce(() => {
-                throw new Error('Optional action chunk unavailable');
-            });
+            const preparation = await import('../auth-overlay-preload');
+            const fail = vi
+                .spyOn(preparation, 'preloadAuthOverlay')
+                .mockRejectedValue(new Error('Optional dialog download unavailable'));
             if (action === 'close')
                 router.state.location = {
                     pathname: '/category',
@@ -1352,12 +1354,16 @@ describe('storefront navigation state', () => {
                 expect(router.state.location).toMatchObject(
                     action === 'open'
                         ? {
-                              pathname: '/login',
-                              search: { returnTo: 'purchase', id: 'variant-7', quantity: 3 },
+                              pathname: '/category',
+                              search: {
+                                  collectionId: 'first',
+                                  auth: 'login',
+                                  authTarget: '/purchase?id=variant-7&quantity=3',
+                              },
                           }
                         : { pathname: '/category', search: { collectionId: 'chosen' } },
                 );
-                expect(router.state.location.search).not.toHaveProperty('auth');
+                if (action === 'close') expect(router.state.location.search).not.toHaveProperty('auth');
             } finally {
                 fail.mockRestore();
             }

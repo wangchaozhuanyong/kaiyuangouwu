@@ -2,6 +2,7 @@ import { lazyRouteComponent, Outlet, useRouter, useRouterState } from '@tanstack
 import { clsx } from 'clsx';
 import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react';
 
+import { prepareAuthOverlay } from './auth-overlay-navigation-actions';
 import { AuthEmailDraftBoundary } from './auth-presentation';
 import { BottomNavigation, shouldShowBottomNavigation } from './components/common/bottom-navigation';
 import {
@@ -161,6 +162,21 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
     const deferredUiReady = useDeferredStorefrontUi(
         previewEmbedded || !state.storefrontUnavailable,
         readinessIdentity,
+    );
+
+    useEffect(() => {
+        if (deferredUiReady && !customer) {
+            void AuthenticationOverlay.preload?.();
+            prepareAuthOverlay();
+        }
+    }, [deferredUiReady, customer]);
+
+    const authFeedback = (reload?: () => void) => (
+        <aside className="storefront-query-feedback" role={reload ? 'alert' : 'status'}>
+            <span>{isZh ? (reload ? '加载失败' : '正在打开…') : reload ? 'Load failed' : 'Opening…'}</span>
+            {reload && <button onClick={reload}>{isZh ? '重新加载' : 'Reload'}</button>}
+            <button onClick={storefrontContextValue.closeAuthOverlay}>{isZh ? '取消' : 'Cancel'}</button>
+        </aside>
     );
 
     useEffect(() => {
@@ -413,9 +429,11 @@ export function StorefrontShell({ state }: StorefrontShellProps) {
                             ])}
                         >
                             {authOverlayReady && storefrontContextValue.authOverlay && (
-                                <Suspense fallback={null}>
-                                    <AuthenticationOverlay request={storefrontContextValue.authOverlay} />
-                                </Suspense>
+                                <StorefrontErrorBoundary fallback={authFeedback}>
+                                    <Suspense fallback={authFeedback()}>
+                                        <AuthenticationOverlay request={storefrontContextValue.authOverlay} />
+                                    </Suspense>
+                                </StorefrontErrorBoundary>
                             )}
                         </OverlayHost>
 

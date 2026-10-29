@@ -21,6 +21,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('./route-component-preload', () => ({
     preloadStorefrontRouteComponent: vi.fn(() => Promise.resolve()),
 }));
+vi.mock('./auth-overlay-preload', () => ({ preloadAuthOverlay: vi.fn(() => Promise.resolve()) }));
 vi.mock('./lazy-auth-pages', async () => {
     const { useContext } = await import('react');
     const { AuthPresentationContext } = await import('./auth-presentation');

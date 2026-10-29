@@ -1,8 +1,11 @@
 import type { useNavigate, useRouter } from '@tanstack/react-router';
 
 import { readAuthOverlay, type AuthOverlayRequest } from './auth-overlay-navigation';
-import { preloadStorefrontRouteComponent } from './route-component-preload';
-import { isCheckoutRoute, routeHref, routeNavigateOptions, type RouteState } from './storefront-router';
+import { routeHref, routeNavigateOptions, type RouteState } from './storefront-router';
+
+export function prepareAuthOverlay(): void {
+    void import('./auth-overlay-preload').then(module => module.preloadAuthOverlay()).catch(() => undefined);
+}
 
 export function withoutAuthOverlay(search: Record<string, unknown>): Record<string, unknown> {
     const { auth: _auth, authTarget: _target, ...background } = search;
@@ -17,14 +20,7 @@ export function withAuthOverlay(search: Record<string, unknown>, request: AuthOv
     };
 }
 
-export function authOverlayLoginRoute(request: AuthOverlayRequest): RouteState {
-    const target = request.target;
-    return target && isCheckoutRoute(target.name)
-        ? { name: 'login', returnTo: target.name, id: target.id, quantity: target.quantity }
-        : { name: 'login' };
-}
-
-/** Loaded only for an explicit authentication action; query rendering stays synchronous. */
+/** Commit the dialog request immediately; its code prepares in parallel. */
 export function applyAuthOverlayNavigation(
     router: ReturnType<typeof useRouter>,
     navigate: ReturnType<typeof useNavigate>,
@@ -35,7 +31,7 @@ export function applyAuthOverlayNavigation(
     const location = router.state.location;
     const existing = readAuthOverlay(location.search);
     if (request) {
-        void preloadStorefrontRouteComponent(request.mode);
+        prepareAuthOverlay();
         const options = background
             ? routeNavigateOptions(background)
             : { to: location.pathname, search: location.search };

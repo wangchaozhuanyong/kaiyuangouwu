@@ -8,6 +8,7 @@ import {
     type AuthOverlayMode,
     type AuthOverlayRequest,
 } from '../auth-overlay-navigation';
+import { applyAuthOverlayNavigation } from '../auth-overlay-navigation-actions';
 import {
     catalogRouteSearch,
     catalogRouteState,
@@ -176,30 +177,26 @@ export function useStorefrontNavigation({
     );
 
     const applyAuthAction = useCallback(
-        (request: AuthOverlayRequest | null, fallback: RouteState, replace = false) => {
+        (request: AuthOverlayRequest | null, replace = false) => {
             const intent = ++navigationIntent.current;
             const location = router.state.location;
             // A new action belongs to the page the customer can still see, not
             // an unfinished destination whose URL has already moved ahead.
             const background = request && isNavigationPending ? route : undefined;
             const isCurrent = () => navigationIntent.current === intent && router.state.location === location;
-            void import('../auth-overlay-navigation-actions')
-                .then(({ applyAuthOverlayNavigation }) => {
-                    if (isCurrent())
-                        applyAuthOverlayNavigation(
-                            router,
-                            tanstackNavigate,
-                            request,
-                            replace || !!background,
-                            background,
-                        );
-                })
-                .catch(() => {
-                    // Preserve the existing standalone route if the optional action chunk fails to load.
-                    if (isCurrent()) navigatePage(fallback, request ? replace : true);
-                });
+            // Coalesce superseding clicks in this turn, without waiting for a network import.
+            queueMicrotask(() => {
+                if (!isCurrent()) return;
+                applyAuthOverlayNavigation(
+                    router,
+                    tanstackNavigate,
+                    request,
+                    replace || !!background,
+                    background,
+                );
+            });
         },
-        [navigatePage, router, tanstackNavigate, isNavigationPending, route],
+        [router, tanstackNavigate, isNavigationPending, route],
     );
 
     const navigate = useCallback(
@@ -214,7 +211,7 @@ export function useStorefrontNavigation({
                 current.name !== 'reset-password' &&
                 current.name !== 'verify-account'
             ) {
-                applyAuthAction(request, next, replace);
+                applyAuthAction(request, replace);
                 return;
             }
             navigatePage(next, replace);
@@ -228,9 +225,8 @@ export function useStorefrontNavigation({
     );
 
     const closeAuthOverlay = useCallback(() => {
-        const location = router.state.location;
-        applyAuthAction(null, routeFromRouterLocation(location.pathname, location.search));
-    }, [applyAuthAction, router]);
+        applyAuthAction(null);
+    }, [applyAuthAction]);
 
     const goBack = useCallback(() => {
         navigationIntent.current++;
