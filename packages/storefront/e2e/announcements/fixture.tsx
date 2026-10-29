@@ -18,7 +18,10 @@ import {
     semanticPaletteCssVariables,
     storefrontSkinCssVariables,
 } from '../../../storefront-content-plugin/src/shared/storefront-semantic-palette';
-import { DesktopAccountNavigation } from '../../src/components/common/desktop-account-navigation';
+import {
+    DesktopAccountNavigation,
+    isDesktopAccountRoute,
+} from '../../src/components/common/desktop-account-navigation';
 import { DesktopHeader } from '../../src/components/common/desktop-header';
 import { DesktopLayoutContext, useDesktopViewport } from '../../src/desktop-layout';
 import { AccountPage } from '../../src/pages/account-page';
@@ -177,7 +180,15 @@ function Fixture() {
         language,
         locale: market.locale,
         market,
-        customer: null,
+        customer:
+            params.get('signedIn') === '1'
+                ? {
+                      id: 'local-user',
+                      firstName: 'Preview',
+                      lastName: '',
+                      emailAddress: 'preview@example.test',
+                  }
+                : null,
         supportContent: undefined,
         reviewSettingsStatus: 'enabled',
         navigate,
@@ -227,11 +238,13 @@ function Fixture() {
                     <div
                         className={
                             desktop
-                                ? `desktop-shell-frame${route.name === 'home' ? '' : ' desktop-account-layout'}`
+                                ? `desktop-shell-frame${context.customer && isDesktopAccountRoute(route.name) ? ' desktop-account-layout' : ''}`
                                 : undefined
                         }
                     >
-                        {desktop && route.name !== 'home' && <DesktopAccountNavigation />}
+                        {desktop && context.customer && isDesktopAccountRoute(route.name) && (
+                            <DesktopAccountNavigation />
+                        )}
                         <div id="storefront-content">
                             {route.name === 'home' ? (
                                 <HomePageContext.Provider

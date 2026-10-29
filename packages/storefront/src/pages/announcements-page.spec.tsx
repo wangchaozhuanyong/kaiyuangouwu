@@ -127,6 +127,8 @@ describe('all announcements and detail navigation', () => {
         await settle();
         expect(view.props.route).toMatchObject({ name: 'announcements', page: 3, id: '25' });
         expect(view.host.querySelector('.announcement-body')?.textContent).toBe('Body 25');
+        expect(view.host.querySelectorAll('.page-back-button')).toHaveLength(1);
+        expect(view.host.querySelector('.subpage-header .page-back-button')).toBe(view.button('返回'));
         await view.click('返回');
         expect(view.props.onReturnToRoute).toHaveBeenLastCalledWith({ name: 'announcements', page: 3 });
         expect(view.props.route.page).toBe(3);
@@ -141,6 +143,7 @@ describe('all announcements and detail navigation', () => {
         expect(view.list).not.toHaveBeenCalled();
         expect(view.detail).toHaveBeenCalledWith('shared-id', expect.any(AbortSignal));
         expect(view.host.querySelector('.announcement-article')?.textContent).toContain(item.title);
+        expect(view.host.querySelectorAll('.page-back-button')).toHaveLength(1);
         await view.click('前往相关页面');
         expect(view.props.onContentTarget).toHaveBeenCalledWith('URL', '/support');
         await view.click('返回');
