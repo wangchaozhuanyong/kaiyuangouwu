@@ -525,8 +525,6 @@ export function HomePage() {
                 items.findIndex(candidate => candidate.campaignId === coupon.campaignId) === index,
         );
     }, [coupons, couponNow, language, market.currencyCode, displayCurrencyCode]);
-    // A hidden first frame stays hidden for this visit; later data belongs to the next natural entry.
-    const [initialCouponCards] = useState(() => couponCards.length > 0);
     const rawFlashSaleItems = flashSales
         .flatMap(sale => sale.items)
         .filter(
@@ -862,24 +860,21 @@ export function HomePage() {
 
                         {trustBar}
 
-                        {couponBlock?.enabled &&
-                            hasHomepageModule('COUPONS') &&
-                            initialCouponCards &&
-                            couponCards.length > 0 && (
-                                <div
-                                    className={homepageSectionShellClassName}
-                                    style={{ order: homepageModuleOrder('COUPONS') }}
-                                >
-                                    <HomepageCouponHub
-                                        block={couponBlock}
-                                        coupons={couponCards}
-                                        language={language}
-                                        loading={couponLoading}
-                                        onClaim={onClaimCoupon}
-                                        onToast={onToast}
-                                    />
-                                </div>
-                            )}
+                        {couponBlock?.enabled && hasHomepageModule('COUPONS') && couponCards.length > 0 && (
+                            <div
+                                className={homepageSectionShellClassName}
+                                style={{ order: homepageModuleOrder('COUPONS') }}
+                            >
+                                <HomepageCouponHub
+                                    block={couponBlock}
+                                    coupons={couponCards}
+                                    language={language}
+                                    loading={couponLoading}
+                                    onClaim={onClaimCoupon}
+                                    onToast={onToast}
+                                />
+                            </div>
+                        )}
 
                         {coreCategoriesBlock ? (
                             <div

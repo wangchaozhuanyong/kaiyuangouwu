@@ -448,7 +448,7 @@ describe('product detail read states', () => {
     });
 });
 
-it('keeps late coupon responses hidden until a natural home remount, and isolates account changes', () => {
+it('shows late scoped coupon responses, hides a successful empty refresh and isolates account changes', () => {
     const client = new QueryClient();
     const host = document.createElement('div');
     const root = createRoot(host);
@@ -487,8 +487,33 @@ it('keeps late coupon responses hidden until a natural home remount, and isolate
             activeCoupons: [coupon],
             couponCampaignsQuery: { data: [coupon], dataUpdatedAt: Date.now() },
         });
+        act(() => {
+            client.setQueryData(
+                storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
+                [coupon],
+            );
+        });
+        show('initial');
+        expect(homeInputs?.coupons).toEqual([coupon]);
+        Object.assign(value, { activeCoupons: [], couponCampaignsQuery: { data: [] } });
+        act(() => {
+            client.setQueryData(
+                storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
+                [],
+            );
+        });
         show('initial');
         expect(homeInputs?.coupons).toEqual([]);
+        Object.assign(value, {
+            activeCoupons: [coupon],
+            couponCampaignsQuery: { data: [coupon], dataUpdatedAt: Date.now() },
+        });
+        act(() => {
+            client.setQueryData(
+                storefrontQueryKeys.couponCampaigns(storefrontQueryKeys.market(value.market), 'en', null),
+                [coupon],
+            );
+        });
         show('next-visit');
         expect(homeInputs?.coupons).toEqual([coupon]);
         Object.assign(value, { language: 'zh' });
@@ -507,6 +532,18 @@ it('keeps late coupon responses hidden until a natural home remount, and isolate
         Object.assign(value, { customer: { id: 'another-customer' } });
         show('next-visit');
         expect(homeInputs?.coupons).toEqual([]);
+        act(() => {
+            client.setQueryData(
+                storefrontQueryKeys.couponCampaigns(
+                    storefrontQueryKeys.market(value.market),
+                    'en',
+                    'another-customer',
+                ),
+                [coupon],
+            );
+        });
+        show('next-visit');
+        expect(homeInputs?.coupons).toEqual([coupon]);
     } finally {
         act(() => root.unmount());
         client.clear();

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { lazyRouteComponent } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { importHomePage } from '../catalog-page-imports';
 import { languageCodeFor } from '../i18n';
@@ -33,7 +33,7 @@ export function HomeRoutePage() {
         initialPage &&
         `${initialPage.scope.channelCode}:${initialPage.scope.currencyCode}:${initialPage.scope.languageCode}` ===
             couponScope;
-    useQuery({
+    const campaignsQuery = useQuery({
         queryKey: storefrontQueryKeys.couponCampaigns(readMarket, readLanguage, runtime.customer?.id ?? null),
         queryFn: ({ signal }) => runtime.api.activeCouponCampaigns(signal),
         enabled:
@@ -44,7 +44,8 @@ export function HomeRoutePage() {
                 ? undefined
                 : (initialPage?.couponCampaigns as StorefrontCouponCampaign[] | undefined),
         initialDataUpdatedAt: initialPage?.generatedAt,
-        staleTime: 30_000,
+        // Recheck the prepared list on entry so an empty snapshot cannot suppress fresh offers.
+        staleTime: 0,
     });
     const [couponVisit] = useState(() => {
         const page = initialPage;
@@ -70,12 +71,15 @@ export function HomeRoutePage() {
     });
     const couponOwnerChanged =
         runtime.customerLoadState !== 'loading' && (runtime.customer?.id ?? null) !== couponVisit.owner;
+    const [couponVisitCommitted, setCouponVisitCommitted] = useState(false);
+    useEffect(() => setCouponVisitCommitted(true), []);
+    // Preserve the prepared HTML for adoption, then follow the current scoped read, including [].
     const visitCoupons =
-        couponVisit.coupons.length && !couponOwnerChanged && couponVisit.scope === couponScope
-            ? runtime.couponCampaignsQuery.data !== undefined && runtime.customerLoadState !== 'loading'
-                ? runtime.activeCoupons
-                : couponVisit.coupons
-            : [];
+        couponVisitCommitted && runtime.customerLoadState === 'ready' && campaignsQuery.data !== undefined
+            ? runtime.activeCoupons
+            : !couponOwnerChanged && couponVisit.scope === couponScope
+              ? couponVisit.coupons
+              : [];
     const { language, configQuery, contentQuery, productsQuery } = runtime;
     usePageReadiness(
         contentQuery.isPending,

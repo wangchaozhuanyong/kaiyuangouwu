@@ -1175,11 +1175,16 @@ describe('HomePage carousel pointer interactions', () => {
         await render(false, [...heroes, block], 'en', {});
         expect(host.querySelector('.coupon-hub-section')).toBeNull();
     });
-    it('never inserts late offers after an unknown first frame', async () => {
+    it('reveals late eligible offers and removes the shell when the list becomes empty', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
         await render(false, [...heroes, block], 'en', { couponCampaignsLoading: true });
-        await render(false, [...heroes, block], 'en', { coupons: [homepageOffer] });
         expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        await render(false, [...heroes, block], 'en', { coupons: [homepageOffer] });
+        expect(host.querySelector('.coupon-claim-btn')).not.toBeNull();
+        const shell = requiredElement(host, '.coupon-hub-section').parentElement;
+        await render(false, [...heroes, block], 'en', { coupons: [] });
+        expect(host.querySelector('.coupon-hub-section')).toBeNull();
+        expect(shell?.isConnected).toBe(false);
     });
     it('removes the entire shell after the last claim and can show a later eligible campaign', async () => {
         const block = { ...heroBlock, id: 'offers', type: 'COUPONS' as const, imageUrl: null };
