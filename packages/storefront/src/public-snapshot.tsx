@@ -459,6 +459,7 @@ function SnapshotShell({ page }: { page: PublicPageData }) {
                             displayCurrencyCode={page.scope.currencyCode}
                             navigationBlock={navigationBlock}
                             publicMedia={page.media}
+                            publicMediaHost={page.scope.host}
                             publicMediaScope={JSON.stringify([
                                 page.scope.channelCode,
                                 page.scope.currencyCode,

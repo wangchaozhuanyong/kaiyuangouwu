@@ -28,6 +28,7 @@ export function StorefrontPageFrame({
     deferred,
     publicMedia,
     publicMediaScope,
+    publicMediaHost,
     children,
 }: {
     routeName: RouteName;
@@ -46,6 +47,7 @@ export function StorefrontPageFrame({
     deferred?: ReactNode;
     publicMedia?: readonly MediaDescriptor[];
     publicMediaScope?: string;
+    publicMediaHost?: string;
     children: ReactNode;
 }) {
     const isZh = language === 'zh';
@@ -63,7 +65,7 @@ export function StorefrontPageFrame({
     const headerClass = `${desktop ? '' : 'responsive-home-header-placeholder '}proto-desktop-header${desktop && routeName === 'search' ? ' is-search-page' : ''}`;
     return (
         <ImageLanguageContext.Provider value={language}>
-            <SafeImageMediaProvider media={publicMedia} scope={publicMediaScope}>
+            <SafeImageMediaProvider media={publicMedia} scope={publicMediaScope} host={publicMediaHost}>
                 <div
                     data-route={routeName}
                     data-page-family={desktopPageFamily(routeName)}

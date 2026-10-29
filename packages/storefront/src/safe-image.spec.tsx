@@ -101,6 +101,49 @@ function visibleFrameRect(top = 10, size = 180): DOMRect {
 }
 
 describe('SafeImage public presentation reuse', () => {
+    it.each(['a.test', 'b.test'])('keeps borrowed URL aliases inside the parent host (%s)', host => {
+        const markup = renderToStaticMarkup(
+            <SafeImageMediaProvider host="a.test" scope="store-a">
+                <CatalogImageMediaProvider
+                    borrowed={{
+                        generation: 1,
+                        media: [
+                            mediaDescriptor('/assets/preview/cover.webp?v=one', 'card', {
+                                inlinePreview: 'data:image/webp;base64,AAAA',
+                            }),
+                        ],
+                    }}
+                >
+                    <SafeImage
+                        src={`https://${host}/assets/preview/cover.webp?v=one`}
+                        imageKind="card"
+                        alt="Product"
+                    />
+                </CatalogImageMediaProvider>
+            </SafeImageMediaProvider>,
+        );
+        expect(markup.includes('safe-image-preview')).toBe(host === 'a.test');
+    });
+    it.each([
+        ['/assets/preview/cover.webp?v=one', 'https://a.test/assets/preview/cover.webp?v=one', true],
+        ['https://a.test/assets/preview/cover.webp?v=one', '/assets/preview/cover.webp?v=one', true],
+        ['/assets/preview/cover.webp?v=one', 'https://b.test/assets/preview/cover.webp?v=one', false],
+        ['/assets/preview/cover.webp?v=one', 'https://a.test/assets/preview/cover.webp?v=two', false],
+    ])(
+        'matches public preview URL forms only within their published host and version',
+        (hint, src, expected) => {
+            const markup = renderToStaticMarkup(
+                <SafeImageMediaProvider
+                    host="a.test"
+                    scope="store-a"
+                    media={[mediaDescriptor(hint, 'card', { inlinePreview: 'data:image/webp;base64,AAAA' })]}
+                >
+                    <SafeImage src={src} imageKind="card" alt="Product" />
+                </SafeImageMediaProvider>,
+            );
+            expect(markup.includes('safe-image-preview')).toBe(expected);
+        },
+    );
     it.each([
         { name: 'visible first-screen image', top: 0, expected: false },
         { name: 'new offscreen image', top: 2000, expected: true },

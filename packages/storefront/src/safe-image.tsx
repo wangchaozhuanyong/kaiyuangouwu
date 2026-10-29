@@ -27,7 +27,12 @@ import {
     isImageCandidateComplete,
 } from './image-readiness';
 import ImageRecovery from './image-recovery';
-import { imageSources, StorefrontImageKind, storefrontPlaceholderUrl } from './responsive-image';
+import {
+    imageSources,
+    publicMediaKey,
+    StorefrontImageKind,
+    storefrontPlaceholderUrl,
+} from './responsive-image';
 import { StorefrontContext } from './StorefrontContext';
 import { StorefrontLanguage } from './types';
 
@@ -40,21 +45,22 @@ export const SafeImageMediaContext = createContext<{
     previews: ReadonlyMap<string, string>;
     sources: ReadonlySet<string>;
     scope?: string;
+    host?: string;
     borrowedSources?: ReadonlySet<string>;
     borrowedGeneration?: number;
 }>({ previews: new Map(), sources: new Set() });
 export type BorrowedPublicMedia = { media: readonly MediaDescriptor[]; generation: number };
-const mediaPreviewKey = (source: string, kind?: StorefrontImageKind) =>
-    `${imageSources(source).identity}\u0000${kind ?? ''}`;
 
 /** Consume only the current page's query-owned public hints; this provider adds no DOM. */
 export function SafeImageMediaProvider({
     media = [],
     scope,
+    host,
     children,
 }: {
     media?: readonly MediaDescriptor[];
     scope?: string;
+    host?: string;
     children: ReactNode;
 }) {
     const value = useMemo(() => {
@@ -62,12 +68,12 @@ export function SafeImageMediaProvider({
         const previews = new Map<string, string>();
         for (const descriptor of boundedMediaPreviews(media)) {
             if (imageSources(descriptor.identity).version !== descriptor.version) continue;
-            const key = mediaPreviewKey(descriptor.identity, descriptor.kind);
+            const key = publicMediaKey(descriptor.identity, descriptor.kind, host);
             sources.add(key);
             if (descriptor.placeholder) previews.set(key, descriptor.placeholder.inlineData);
         }
-        return { scope, sources, previews };
-    }, [media, scope]);
+        return { scope, host, sources, previews };
+    }, [media, scope, host]);
     return <SafeImageMediaContext.Provider value={value}>{children}</SafeImageMediaContext.Provider>;
 }
 
@@ -145,16 +151,12 @@ export type SafeImageProps = {
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'onError'>;
 
 export function SafeImage(props: SafeImageProps) {
-    const { scope, borrowedSources, borrowedGeneration } = useContext(SafeImageMediaContext);
+    const { scope, host, borrowedSources, borrowedGeneration } = useContext(SafeImageMediaContext);
     const borrowedOwner =
-        !props.retainedOwnerKey && borrowedSources?.has(mediaPreviewKey(props.src, props.imageKind))
+        !props.retainedOwnerKey && borrowedSources?.has(publicMediaKey(props.src, props.imageKind, host))
             ? borrowedGeneration
             : undefined;
-    const ownerKey = stringify([
-        scope,
-        props.retainedOwnerKey,
-        ...(borrowedOwner === undefined ? [] : [borrowedOwner]),
-    ]);
+    const ownerKey = stringify([scope, host, props.retainedOwnerKey, borrowedOwner]);
     const identity = [
         props.src,
         props.fallbackSrc,
@@ -164,6 +166,7 @@ export function SafeImage(props: SafeImageProps) {
         props.sizes,
         props.retainedOwnerKey,
         scope,
+        host,
         borrowedOwner,
         stringify(props.mediaSources ?? []),
     ].join('\u0000');
@@ -342,7 +345,7 @@ function SafeImageSource({
     // Parent admission already checked the owner; keep this handoff until this node paints.
     const replacementPresentation = useRef(retainedPresentation).current;
     function inlinePreviewFor(source: string, dimensions?: PreviewSourceDimensions | null) {
-        const preview = publicMedia.previews.get(mediaPreviewKey(source, imageKind));
+        const preview = publicMedia.previews.get(publicMediaKey(source, imageKind, publicMedia.host));
         const { width = 0, height = 0 } = dimensions ?? {};
         if (
             !validInlineImagePreview(preview) ||
@@ -368,7 +371,8 @@ function SafeImageSource({
         mediaSources?.find(
             source => typeof window !== 'undefined' && window.matchMedia?.(source.media).matches,
         );
-    const currentArtworkKey = () => mediaPreviewKey(currentArtworkSource()?.src ?? src, imageKind);
+    const currentArtworkKey = () =>
+        publicMediaKey(currentArtworkSource()?.src ?? src, imageKind, publicMedia.host);
     const artworkSource = currentArtworkSource();
     const artworkInlinePreview = artworkSource
         ? inlinePreviewFor(artworkSource.src, artworkSource.previewSourceDimensions)

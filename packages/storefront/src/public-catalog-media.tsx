@@ -19,7 +19,7 @@ import { languageCodeFor } from './i18n';
 import { productImage } from './product-media';
 import { publicPageReadGeneration, watchPublicPageReadGeneration } from './public-page-transport';
 import { isStorefrontScopeAccessDenied, storefrontQueryKeys } from './query-client';
-import { imageSources } from './responsive-image';
+import { imageSources, publicMediaKey } from './responsive-image';
 import { SafeImageMediaContext, type BorrowedPublicMedia } from './safe-image';
 import { publicMediaOrigin, publicSeoQueryKey } from './storefront-page-data';
 
@@ -94,16 +94,17 @@ export function usePublicCatalogMedia({
                 !currentMedia(descriptors, marketCode, languageCode)
             )
                 return;
+            const host = publicMediaOrigin(descriptors)?.[1].host;
             const displayed = new Set(
                 catalog.products.flatMap(product => {
                     if (!currentMedia(descriptors, marketCode, languageCode, product)) return [];
                     const source = productImage(product);
-                    return source ? [imageSources(source).identity] : [];
+                    return source ? [publicMediaKey(source, undefined, host)] : [];
                 }),
             );
             for (const descriptor of descriptors) {
                 if (descriptor.kind !== 'card' && descriptor.kind !== 'thumbnail') continue;
-                const identity = imageSources(descriptor.identity).identity;
+                const identity = publicMediaKey(descriptor.identity, undefined, host);
                 if (!displayed.has(identity)) continue;
                 const key = JSON.stringify([identity, descriptor.kind, descriptor.version]);
                 if (!media.has(key)) media.set(key, descriptor);
@@ -130,7 +131,8 @@ function currentMedia(
         (!product ||
             Boolean(
                 source &&
-                imageSources(source).identity === imageSources(productImage(product) ?? '').identity,
+                publicMediaKey(source, undefined, scope.host) ===
+                    publicMediaKey(productImage(product) ?? '', undefined, scope.host),
             )) &&
         typeof window !== 'undefined' &&
         scope.host === window.location.host
@@ -178,14 +180,14 @@ export function CatalogImageMediaProvider({
         const borrowedSources = new Set<string>();
         for (const descriptor of boundedMediaPreviews(borrowed.media)) {
             if (imageSources(descriptor.identity).version !== descriptor.version) continue;
-            const key = `${imageSources(descriptor.identity).identity}\u0000${descriptor.kind ?? ''}`;
+            const key = publicMediaKey(descriptor.identity, descriptor.kind, parent.host);
             if (sources.has(key)) continue;
             sources.add(key);
             borrowedSources.add(key);
             if (descriptor.placeholder) previews.set(key, descriptor.placeholder.inlineData);
         }
         return {
-            scope: parent.scope,
+            ...parent,
             sources,
             previews,
             borrowedSources,
