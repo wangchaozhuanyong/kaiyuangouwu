@@ -93,6 +93,7 @@ const mockWritesEnabled =
     params.has('mockWrites') && !layoutAudit && !authFixture && !productEditorDesign && !adminRollout;
 const legacyOwnershipFixture = params.has('legacyOwnership') && digitalFixture && mockWritesEnabled;
 const productCreateResetFixture = params.has('productCreateReset') && mockWritesEnabled;
+const categoryReadbackFixture = params.has('categoryReadback') && mockWritesEnabled;
 const productCreateFieldsFixture = productCreateResetFixture && params.has('productUnifiedFields');
 const legacyStockLevel = {
     id: 'legacy-stock-demo',
@@ -485,7 +486,7 @@ const collections = Array.from(
         children: [],
         // The editor restores explicit membership from the same rule used by real collections.
         filters:
-            productEditorDesign && i === 0
+            (productEditorDesign || categoryReadbackFixture) && i === 0
                 ? [
                       {
                           code: 'product-id-filter',
@@ -1401,7 +1402,48 @@ const client = new ApolloClient({
                     }
                     const input = operation.variables.input ?? {};
                     let result: unknown;
-                    if (productCreateResetFixture && field.name.value === 'createProduct') {
+                    if (categoryReadbackFixture && field.name.value === 'updateProduct') {
+                        product.translations = input.translations;
+                        for (const fieldName of ['name', 'slug', 'description'] as const)
+                            product[fieldName] = input.translations[0][fieldName] ?? product[fieldName];
+                        result = product;
+                        const counter = document.getElementById('category-product-write-count');
+                        if (counter)
+                            counter.textContent = String(
+                                mutationReceipts.filter(item => item.field === 'updateProduct').length + 1,
+                            );
+                    } else if (categoryReadbackFixture && field.name.value === 'updateProductVariants') {
+                        result = (input as Array<Record<string, unknown>>).map(update => {
+                            const variant = variants.find(item => item.id === update.id);
+                            if (!variant) throw new Error('本地规格不存在');
+                            const translation = (update.translations as Array<{ name?: string }>)?.[0];
+                            Object.assign(variant, update, {
+                                name: translation?.name ?? variant.name,
+                            });
+                            return variant;
+                        });
+                    } else if (categoryReadbackFixture && field.name.value === 'updateCollection') {
+                        const collection = collections.find(item => item.id === input.id);
+                        if (!collection) {
+                            observer.error(new Error('本地分类不存在'));
+                            return;
+                        }
+                        collection.filters = input.filters.map(
+                            (filter: {
+                                code: string;
+                                arguments: Array<{ name: string; value: string }>;
+                            }) => ({
+                                code: filter.code,
+                                args: filter.arguments,
+                            }),
+                        );
+                        result = { id: collection.id };
+                        const counter = document.getElementById('category-write-count');
+                        if (counter)
+                            counter.textContent = String(
+                                mutationReceipts.filter(item => item.field === 'updateCollection').length + 1,
+                            );
+                    } else if (productCreateResetFixture && field.name.value === 'createProduct') {
                         result = {
                             id: `synthetic-created-${mutationReceipts.length + 1}`,
                             name: input.translations[0].name,
@@ -1899,6 +1941,12 @@ const client = new ApolloClient({
                         params.has('empty'),
                     );
                 }
+                if (categoryReadbackFixture) {
+                    responseData = {
+                        ...responseData,
+                        collection: collections.find(item => item.id === operation.variables.id) ?? null,
+                    };
+                }
                 const finish = () => {
                     if (operationTrace) operationTrace.completed = true;
                     observer.next({
@@ -1918,7 +1966,7 @@ const client = new ApolloClient({
     ),
 });
 // Domain writes use the exported client; keep this opt-in creation scenario on the same local-only link.
-if (productCreateResetFixture) adminClient.setLink(client.link);
+if (productCreateResetFixture || categoryReadbackFixture) adminClient.setLink(client.link);
 const tabOperations: Array<{
     name: string;
     variables: Record<string, unknown>;
@@ -2288,12 +2336,12 @@ if (view === 'performance') {
             <AdminPermissionsProvider
                 permissions={['SuperAdmin']}
                 capabilities={
-                    legacyOwnershipFixture
+                    legacyOwnershipFixture || categoryReadbackFixture
                         ? {
                               channelId: channel.id,
                               channelCode: channel.code,
                               scope: 'STORE',
-                              commerceMode: 'DIGITAL_ONLY',
+                              commerceMode: categoryReadbackFixture ? 'PHYSICAL_ONLY' : 'DIGITAL_ONLY',
                               capabilities: [
                                   {
                                       id: '/catalog/products',
@@ -2331,6 +2379,7 @@ if (view === 'performance') {
                         }}
                     >
                         <FeatureHelpProvider>
+                            {categoryReadbackFixture && <AdminFeedbackCenter />}
                             <div className="flex h-screen min-w-0">
                                 <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-5 md:block">
                                     <strong>后台布局验收</strong>
@@ -2347,15 +2396,41 @@ if (view === 'performance') {
                                     </nav>
                                 </aside>
                                 <div className="flex min-w-0 flex-1 flex-col">
-                                    <header className="h-24 shrink-0 border-b border-slate-200 bg-white text-xs">
+                                    <header
+                                        className={`${categoryReadbackFixture ? 'min-h-24' : 'h-24'} shrink-0 border-b border-slate-200 bg-white text-xs`}
+                                    >
                                         <div className="flex h-14 items-center justify-between gap-2 px-4">
                                             <strong className="text-slate-700">Vendure 管理后台</strong>
                                             <span className="rounded bg-amber-50 px-2 py-1 text-amber-900">
-                                                {legacyOwnershipFixture
+                                                {legacyOwnershipFixture || categoryReadbackFixture
                                                     ? '本地模拟操作 · 无网络写入'
                                                     : '模拟数据 · 写入已阻止'}
                                             </span>
                                         </div>
+                                        {categoryReadbackFixture && (
+                                            <div className="flex items-center gap-3 px-4">
+                                                <AdminButton
+                                                    onClick={() => {
+                                                        if (
+                                                            !product.collections.some(
+                                                                item => item.id === collections[0].id,
+                                                            )
+                                                        )
+                                                            product.collections.push(collections[0]);
+                                                        void client.refetchQueries({ include: 'active' });
+                                                    }}
+                                                >
+                                                    本地模拟：完成分类计算
+                                                </AdminButton>
+                                                <span>
+                                                    分类写入次数：<output id="category-write-count">0</output>
+                                                </span>
+                                                <span>
+                                                    商品写入次数：
+                                                    <output id="category-product-write-count">0</output>
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="flex h-10 items-center border-t border-slate-100 bg-slate-50 px-4 font-semibold text-slate-700">
                                             {viewLabels[view]} · 布局验收
                                         </div>

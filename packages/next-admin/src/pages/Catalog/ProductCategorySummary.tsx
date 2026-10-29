@@ -45,6 +45,15 @@ export function ProductCategorySummary() {
                   .map(collection => collection.id),
     );
     const assignedIds = [...new Set([...selectedCollectionIds, ...automaticIds])];
+    const pendingIds = groups
+        .flatMap(group => [group.parent, ...group.children])
+        .filter(
+            collection =>
+                selectedCollectionIds.includes(collection.id) &&
+                hasDirectProductAssignment(collection.filters, productId ?? '') &&
+                !existingById.has(collection.id),
+        )
+        .map(collection => collection.id);
     const missingIds = assignedIds.filter(id => !availableIds.has(id));
     const hiddenSelectedCount = assignedIds.filter(id => availableIds.has(id) && !visibleIds.has(id)).length;
     const automaticallyMatched = (collection: CollectionItem) => automaticIds.has(collection.id);
@@ -171,6 +180,11 @@ export function ProductCategorySummary() {
             {automaticIds.size > 0 && (
                 <p id={`${fieldId}-automatic`} className="text-xs text-slate-500">
                     其中 {automaticIds.size} 项自动匹配，由分类规则决定，需在分类规则中调整。
+                </p>
+            )}
+            {pendingIds.length > 0 && (
+                <p role="status" className="text-xs text-amber-700">
+                    其中 {pendingIds.length} 项分类规则已保存，但分类尚未生效，实际归属仍待后台更新。
                 </p>
             )}
             <p className="text-xs text-slate-500">直接勾选，保存商品后生效。</p>

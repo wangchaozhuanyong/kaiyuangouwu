@@ -6,8 +6,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LocalePreferencesSheet } from './components/common/locale-preferences';
+import { NoticeDetailSheet } from './components/common/notice-detail-sheet';
 import { DesktopLayoutContext } from './desktop-layout';
-import { buildHomeNoticeItems, HomePage, NoticeDetailSheet, type HomePageProps } from './pages/home-page';
+import { buildHomeNoticeItems, HomePage, type HomePageProps } from './pages/home-page';
 import { HomePageContext } from './storefront-page-contexts';
 import {
     aggregateFlashSaleProducts,

@@ -940,67 +940,10 @@ img {
 }
 
 .notice-strip-track {
-    display: inline-block;
-    will-change: transform;
-}
-
-.notice-detail-content {
-    min-height: 180px;
-    padding: 20px 18px 8px;
-    display: flex;
-    flex-direction: column;
-}
-
-.notice-detail-body {
-    margin: 0;
-    color: #334155;
-    font-size: var(--type-body-size);
-    line-height: var(--type-body-leading);
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-}
-
-.notice-detail-empty {
-    color: var(--muted);
-}
-
-.notice-detail-actions {
-    margin-top: 24px;
-    padding: 14px 0 max(8px, env(safe-area-inset-bottom, 8px));
-    position: sticky;
-    bottom: 0;
-    border-top: 0;
-    background: white;
-}
-
-.notice-detail-action {
-    width: 100%;
-    min-height: 46px;
-    padding: 0 16px;
-    border: 0;
-    border-radius: 10px;
-    background: var(--accent);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    font: inherit;
-    font-weight: var(--font-weight-semibold);
-}
-
-.notice-detail-action:hover {
-    filter: brightness(0.94);
-}
-
-.notice-detail-action:focus-visible {
-    outline: 3px solid rgba(0, 186, 255, 0.25);
-    outline-offset: 2px;
-}
-
-.notice-detail-action svg {
-    width: 17px;
-    height: 17px;
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 @keyframes notice-ticker-enter {

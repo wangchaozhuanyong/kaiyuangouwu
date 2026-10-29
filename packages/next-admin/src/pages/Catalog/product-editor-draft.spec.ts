@@ -45,6 +45,31 @@ const product: ProductDetailRecord = {
 };
 
 describe('product editor source projection', () => {
+    it('keeps saved manual categories selected while membership calculation is pending, including child categories', () => {
+        const manual = { code: 'product-id-filter', args: [{ name: 'productIds', value: '["p1"]' }] };
+        const stale = { id: 'removed', name: 'Removed manual rule', slug: 'removed', filters: [manual] };
+        const lookup = [
+            {
+                id: 'google',
+                name: 'Google',
+                slug: 'google',
+                filters: [manual],
+                children: [{ id: 'child', name: 'Child', slug: 'child', filters: [manual] }],
+            },
+            { ...stale, filters: [] },
+        ];
+        const draft = productEditorDraft(
+            { ...product, collections: [stale] },
+            'physical',
+            [],
+            undefined,
+            [],
+            lookup,
+        );
+        expect(draft.selectedCollectionIds).toEqual(['google', 'child']);
+        expect(product.collections).toEqual([]);
+    });
+
     it('uses source language, minor-unit prices, and stored variant delivery settings', () => {
         const draft = productEditorDraft(product, null, []);
         expect(draft).toMatchObject({

@@ -10,8 +10,8 @@ import type {
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ExternalLink, Megaphone } from 'lucide-react';
 
-import { ContentText } from '../../../storefront-content-plugin/src/shared/content-text';
 import { formatBusinessDate } from '../business-time';
+import { AnnouncementContent } from '../components/common/announcement-content';
 import { languageCodeFor } from '../i18n';
 import { resolveQueryLoadState, storefrontInitialQueryError } from '../loading-state';
 import { usePageReadiness } from '../page-readiness';
@@ -132,12 +132,15 @@ export function AnnouncementsPage({
                                     <AnnouncementDate item={detail} locale={locale} />
                                 </div>
                             </header>
-                            <ContentText as="div" className="announcement-body type-reading">
-                                {detail.content ||
+                            <AnnouncementContent
+                                className="announcement-body"
+                                content={
+                                    detail.content ||
                                     (isZh
                                         ? '此公告暂无更多内容。'
-                                        : 'There are no additional details for this announcement.')}
-                            </ContentText>
+                                        : 'There are no additional details for this announcement.')
+                                }
+                            />
                             {detail.linkUrl ? (
                                 <button
                                     type="button"

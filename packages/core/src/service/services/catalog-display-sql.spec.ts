@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import { RequestContext } from '../../api/common/request-context';
 import { RequestContextCacheService } from '../../cache/request-context-cache.service';
+import {
+    productIdCollectionFilter,
+    variantNameCollectionFilter,
+} from '../../config/catalog/default-collection-filters';
+import { Collection } from '../../entity/collection/collection.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 
 import { CollectionService } from './collection.service';
@@ -52,6 +57,112 @@ const translation = new EntitySchema<any>({
 });
 
 describe('catalog display SQL batches', () => {
+    it('materializes manual category membership once for multilingual SKU names and retains automatic matches', async () => {
+        const membershipVariant = new EntitySchema<any>({
+            name: 'ProductVariant',
+            target: ProductVariant,
+            columns: { id: { type: Number, primary: true }, productId: { type: Number } },
+            relations: {
+                translations: { type: 'one-to-many', target: 'MembershipTranslation', inverseSide: 'base' },
+                collections: { type: 'many-to-many', target: 'Collection', inverseSide: 'productVariants' },
+            },
+        });
+        const membershipCollection = new EntitySchema<any>({
+            name: 'Collection',
+            target: Collection,
+            columns: { id: { type: Number, primary: true } },
+            relations: {
+                productVariants: {
+                    type: 'many-to-many',
+                    target: 'ProductVariant',
+                    inverseSide: 'collections',
+                    joinTable: true,
+                },
+            },
+        });
+        const membershipTranslation = new EntitySchema<any>({
+            name: 'MembershipTranslation',
+            columns: {
+                id: { type: Number, primary: true },
+                name: { type: String },
+                languageCode: { type: String },
+                baseId: { type: Number },
+            },
+            relations: {
+                base: { type: 'many-to-one', target: 'ProductVariant', joinColumn: { name: 'baseId' } },
+            },
+        });
+        const db = await new DataSource({
+            type: 'sqljs',
+            entities: [membershipVariant, membershipCollection, membershipTranslation],
+            synchronize: true,
+        }).initialize();
+        try {
+            await db.getRepository(ProductVariant).insert([
+                { id: 13, productId: 10 },
+                { id: 42, productId: 11 },
+            ]);
+            await db.getRepository(Collection).insert({ id: 14 });
+            await db.getRepository(membershipTranslation).insert([
+                { id: 1, baseId: 13, languageCode: 'zh_Hans', name: '2011年老Gmail邮箱' },
+                { id: 2, baseId: 13, languageCode: 'en', name: '2011 Gmail account' },
+                { id: 3, baseId: 42, languageCode: 'zh_Hans', name: '谷歌自动分类商品' },
+                { id: 4, baseId: 42, languageCode: 'en', name: 'Automatic category sample' },
+            ]);
+            const filters = [
+                {
+                    code: 'variant-name-filter',
+                    args: [
+                        { name: 'operator', value: 'contains' },
+                        { name: 'term', value: '谷歌' },
+                        { name: 'combineWithAnd', value: 'true' },
+                    ],
+                },
+                {
+                    code: 'variant-name-filter',
+                    args: [
+                        { name: 'operator', value: 'contains' },
+                        { name: 'term', value: 'Google账号' },
+                        { name: 'combineWithAnd', value: 'false' },
+                    ],
+                },
+                {
+                    code: 'product-id-filter',
+                    args: [
+                        { name: 'productIds', value: '[10]' },
+                        { name: 'combineWithAnd', value: 'false' },
+                    ],
+                },
+            ];
+            const service = Object.assign(Reflect.construct(CollectionService, []), {
+                connection: { rawConnection: db },
+                configService: {
+                    catalogOptions: {
+                        collectionFilters: [variantNameCollectionFilter, productIdCollectionFilter],
+                    },
+                },
+            }) as { applyCollectionFiltersInternal(collection: Collection): Promise<number[]> };
+            const target = new Collection({ id: 14, inheritFilters: false, filters });
+            const changed = await service.applyCollectionFiltersInternal(target);
+            const readMembership = async () =>
+                (
+                    await db
+                        .getRepository(Collection)
+                        .findOneOrFail({ where: { id: 14 }, relations: { productVariants: true } })
+                ).productVariants
+                    .map(row => row.id)
+                    .sort();
+            expect(await readMembership()).toEqual([13, 42]);
+            expect([...changed].sort()).toEqual([13, 42]);
+            expect(await service.applyCollectionFiltersInternal(target)).toEqual([]);
+            target.filters = filters.slice(0, 2);
+            await service.applyCollectionFiltersInternal(target);
+            expect(await readMembership()).toEqual([42]);
+        } finally {
+            await db.destroy();
+        }
+    });
+
     it.each([
         'customFields.cfRelatedProducts.featuredAsset',
         'product.customFields.cfRelatedProducts.featuredAsset',

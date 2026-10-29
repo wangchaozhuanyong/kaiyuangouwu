@@ -6,6 +6,7 @@ import { hasDirectProductAssignment } from '../../utils/product-collection-assig
 import {
     serializeProductEditor,
     SOURCE_LANGUAGE_CODE,
+    type CollectionItem,
     type ProductDetailRecord,
     type ProductVariantState,
 } from './product-editor-types';
@@ -163,7 +164,16 @@ export function productEditorDraft(
         | DigitalWorkspaceVariant
     >,
     variantExtensionFields: Parameters<typeof customFieldValuesFromEntity>[0] = [],
+    collectionLookups?: CollectionItem[],
 ): Parameters<typeof serializeProductEditor>[0] {
+    // Rules are saved before the asynchronous calculation updates Product.collections.
+    // Prefer the current rule lookup, retaining known memberships if lookup data is unavailable.
+    const configuredCollections = new Map(
+        [
+            ...product.collections,
+            ...(collectionLookups?.flatMap(collection => [collection, ...(collection.children ?? [])]) ?? []),
+        ].map(collection => [collection.id, collection]),
+    );
     const sourceTranslation = getLocalizedEntityTranslation(product.translations, SOURCE_LANGUAGE_CODE);
     const fulfillmentType =
         fixedFulfillmentType ??
@@ -192,7 +202,7 @@ export function productEditorDraft(
         featuredAssetId: product.featuredAsset?.id ?? null,
         selectedAssetIds: product.assets.map(asset => asset.id),
         selectedFacetValueIds: product.facetValues.map(value => value.id),
-        selectedCollectionIds: product.collections
+        selectedCollectionIds: [...configuredCollections.values()]
             .filter(collection => hasDirectProductAssignment(collection.filters, product.id))
             .map(collection => collection.id),
         selectedChannelIds: product.channels.map(channel => channel.id),

@@ -5,6 +5,7 @@ import {
     ASSIGN_PRODUCTS_TO_CHANNEL,
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
+    UPDATE_COLLECTION_ASSIGNMENT,
     UPDATE_PRODUCT,
     UPDATE_PRODUCT_VARIANTS,
 } from '../../graphql/catalog.graphql';
@@ -173,6 +174,7 @@ function fixture(): SaveInput {
             setSaving: vi.fn(),
             showError: vi.fn(),
             showNotice: vi.fn(),
+            showPending: vi.fn(),
             onProductCreated: vi.fn(),
         },
     };
@@ -202,6 +204,107 @@ describe('product save orchestration', () => {
         mocks.mutations.clear();
         mocks.query.mockReset();
         mocks.mutate.mockReset();
+    });
+
+    it('does not report category completion before actual membership appears and retries reads without replaying writes', async () => {
+        const input = fixture();
+        input.draft = structuredClone(input.baselineDraft!);
+        input.draft.selectedCollectionIds = ['google'];
+        mocks.query.mockImplementation(async request =>
+            request.variables.id === 'google'
+                ? { data: { collection: { id: 'google', filters: [] } } }
+                : { data: { product: { id: 'product-1', collections: [] } } },
+        );
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).toHaveBeenCalledOnce();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        expect(input.controls.showPending).toHaveBeenCalledWith(expect.stringContaining('分类尚未生效'));
+        expect(input.controls.showError).not.toHaveBeenCalled();
+
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).toHaveBeenCalledOnce();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        mocks.query.mockResolvedValue({
+            data: { product: { id: 'product-1', collections: [{ id: 'google' }] } },
+        });
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).toHaveBeenCalledOnce();
+        expect(input.controls.showNotice).toHaveBeenCalledWith(expect.stringContaining('最新数据已重新读取'));
+    });
+
+    it('verifies pending membership on a reopened unchanged form without rewriting saved rules', async () => {
+        const input = fixture();
+        input.baselineDraft!.selectedCollectionIds = ['google'];
+        input.draft = structuredClone(input.baselineDraft!);
+        mocks.query.mockResolvedValue({ data: { product: { id: 'product-1', collections: [] } } });
+        await useProductEditorSave(input).handleSave();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        expect(input.controls.showPending).toHaveBeenCalledWith(expect.stringContaining('分类尚未生效'));
+        expect(input.controls.showError).not.toHaveBeenCalled();
+    });
+
+    it('still verifies previously saved pending categories when only the product name changes', async () => {
+        const input = fixture();
+        input.baselineDraft!.selectedCollectionIds = ['google'];
+        input.draft = structuredClone(input.baselineDraft!);
+        input.draft.productName = '更新商品名称';
+        mocks.query.mockResolvedValue({ data: { product: { id: 'product-1', collections: [] } } });
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        expect(input.controls.showPending).toHaveBeenCalledWith(expect.stringContaining('分类尚未生效'));
+        expect(input.controls.showError).not.toHaveBeenCalled();
+
+        mocks.query.mockResolvedValue({
+            data: { product: { id: 'product-1', collections: [{ id: 'google' }] } },
+        });
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_PRODUCT)).toHaveBeenCalledOnce();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).toHaveBeenCalledWith(expect.stringContaining('最新数据已重新读取'));
+    });
+
+    it('does not clear a newly created product form while its saved category is still pending', async () => {
+        const input = createFixture();
+        input.draft.selectedCollectionIds = ['google'];
+        mocks.query.mockImplementation(async request =>
+            request.variables.id === 'google'
+                ? { data: { collection: { id: 'google', filters: [] } } }
+                : { data: { product: { id: 'created-product', collections: [] } } },
+        );
+        await useProductEditorSave(input).handleSave();
+        expect(input.controls.onProductCreated).not.toHaveBeenCalled();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        expect(input.controls.showPending).toHaveBeenCalledWith(expect.stringContaining('分类尚未生效'));
+        expect(input.controls.showError).not.toHaveBeenCalled();
+        expect(input.controls.navigate).toHaveBeenCalledWith(
+            '/catalog/products/created-product?tab=variants',
+            { replace: true },
+        );
+        takeCreatedProductDraft('scope-a', 'created-product');
+    });
+
+    it('keeps read retries available when the membership query fails without replaying writes', async () => {
+        const input = fixture();
+        input.draft = structuredClone(input.baselineDraft!);
+        input.draft.selectedCollectionIds = ['google'];
+        mocks.query.mockImplementation(async request => {
+            if (request.variables.id === 'google')
+                return { data: { collection: { id: 'google', filters: [] } } };
+            throw new Error('Membership unavailable');
+        });
+        const { handleSave } = useProductEditorSave(input);
+        await handleSave();
+        await handleSave();
+        expect(mocks.mutations.get(UPDATE_COLLECTION_ASSIGNMENT)).toHaveBeenCalledOnce();
+        expect(input.controls.showNotice).not.toHaveBeenCalled();
+        expect(input.controls.showError).toHaveBeenLastCalledWith(
+            expect.stringContaining('再次点击保存只会重新读取'),
+        );
     });
 
     it('creates a product when the route has no explicit product ID', async () => {
@@ -1406,7 +1509,11 @@ describe('unified SKU sales draft', () => {
         expect(recovered.selectedCollectionIds).toEqual(['pending-category']);
         for (const mutation of mocks.mutations.values()) mutation.mockClear();
         mocks.mutate.mockReset().mockResolvedValue({});
-        mocks.query.mockResolvedValue({ data: { collection: { id: 'pending-category', filters: [] } } });
+        mocks.query.mockImplementation(async request =>
+            request.variables.id === 'pending-category'
+                ? { data: { collection: { id: 'pending-category', filters: [] } } }
+                : { data: { product: { id: 'created-product', collections: [{ id: 'pending-category' }] } } },
+        );
         input.productId = 'created-product';
         input.baselineDraft = baseline;
         input.draft = recovered;

@@ -8,9 +8,6 @@ import { HomeNoticeTicker } from './home-notice-ticker';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let host: HTMLDivElement;
 let root: Root;
-let lineWidth: number;
-let frameWidth: number;
-let resize: () => void;
 const animations: Array<{
     keyframes: Keyframe[];
     options: KeyframeAnimationOptions;
@@ -57,21 +54,7 @@ beforeEach(() => {
     host = document.createElement('div');
     document.body.append(host);
     root = createRoot(host);
-    lineWidth = 400;
-    frameWidth = 120;
     animations.length = 0;
-    vi.stubGlobal(
-        'ResizeObserver',
-        class {
-            constructor(callback: () => void) {
-                resize = callback;
-            }
-            observe = vi.fn();
-            disconnect = vi.fn();
-        },
-    );
-    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(() => lineWidth);
-    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => frameWidth);
     vi.stubGlobal('Animation', class {});
     Object.defineProperty(HTMLElement.prototype, 'animate', {
         configurable: true,
@@ -134,12 +117,11 @@ describe('home announcement playback', () => {
         expect(playback.playState).toBe('paused');
     });
 
-    it('measures a complete long pass instead of cutting it at the fixed interval', () => {
+    it('keeps long previews stationary and rotates whole notices at the configured interval', () => {
         render();
         const playback = required(animations.at(-1));
-        expect(playback.options.duration).toBe(13500);
-        expect(playback.keyframes[1].offset).toBe(1500 / 13500);
-        expect(playback.keyframes[2]).toEqual({ transform: 'translateX(-280px)', offset: 1 - 2000 / 13500 });
+        expect(playback.options.duration).toBe(5000);
+        expect(playback.keyframes.every(frame => frame.transform === 'translateX(0)')).toBe(true);
         expect(required(host.querySelector('.notice-strip-title')).textContent).toBe('Notice first');
         act(() => required(playback.onfinish)());
         expect(required(host.querySelector('.notice-strip-title')).textContent).toBe('Notice second');
@@ -161,7 +143,7 @@ describe('home announcement playback', () => {
         expect(playback.playState).toBe('running');
     });
 
-    it('scrolls title and content in one track with only full-notice and all-notice actions', () => {
+    it('keeps title and content in one preview with full-notice and all-notice actions', () => {
         render();
         const track = required(host.querySelector('.notice-strip-track'));
         expect(track.textContent).toBe('Notice first · Complete content first');
@@ -174,16 +156,15 @@ describe('home announcement playback', () => {
         expect(onAll).toHaveBeenCalledOnce();
     });
 
-    it('scrolls a long title even when the notice has no body', () => {
+    it('leaves a single long title stationary and keeps its full-detail action', () => {
         render({ items: [{ ...items[0], content: '' }] });
         expect(required(host.querySelector('.notice-strip-track')).textContent).toBe('Notice first');
-        expect(required(animations.at(-1)).keyframes[2].transform).toBe('translateX(-280px)');
+        expect(animations).toHaveLength(0);
         click('.notice-strip-open');
         expect(onOpen).toHaveBeenCalledWith('first');
     });
 
-    it('uses the configured hold for short text and leaves a single short notice static', () => {
-        lineWidth = 80;
+    it('uses the configured hold and stops rotation when only one notice remains', () => {
         render({ holdSeconds: 8 });
         expect(required(animations.at(-1)).options.duration).toBe(8000);
         expect(
@@ -193,17 +174,6 @@ describe('home announcement playback', () => {
         render({ items: items.slice(0, 1) });
         expect(previous.cancel).toHaveBeenCalled();
         expect(host.querySelector('.notice-strip-control')).toBeNull();
-    });
-
-    it('recomputes travel on resize and repeats a single long notice after the end hold', () => {
-        render({ items: items.slice(0, 1) });
-        frameWidth = 260;
-        act(() => resize());
-        expect(required(animations.at(-1)).options.duration).toBe(8500);
-        const previous = required(animations.at(-1));
-        act(() => required(previous.onfinish)());
-        expect(animations.at(-1)).not.toBe(previous);
-        expect(required(host.querySelector('.notice-strip-title')).textContent).toBe('Notice first');
     });
 
     it('keeps detail and all-announcement actions usable with reduced motion', () => {

@@ -95,13 +95,21 @@ try {
                     for (const control of geometry.controls)
                         assert(control.height >= 44, `${label}: touch target height`);
                     const titleBefore = await title().boundingBox();
+                    const frame = await page.locator('.notice-strip-content').boundingBox();
+                    assert(Math.abs(titleBefore.x - frame.x) < 1, `${label}: complete leading character`);
+                    assert.equal(
+                        await track().evaluate(element => getComputedStyle(element).textOverflow),
+                        'ellipsis',
+                        `${label}: trailing ellipsis instead of left-side clipping`,
+                    );
                     await seek(2400);
                     const moved = await animationState();
                     await page.waitForTimeout(220);
                     const moving = await animationState();
-                    assert(moving.x < moved.x - 3, `${label}: actual right-to-left motion`);
+                    assert.equal(moved.x, 0, `${label}: stationary preview`);
+                    assert.equal(moving.x, 0, `${label}: no sideways motion while reading`);
                     const titleAfter = await title().boundingBox();
-                    assert(titleAfter.x < titleBefore.x - 3, `${label}: title moves with its content`);
+                    assert.equal(titleAfter.x, titleBefore.x, `${label}: title stays aligned at the left`);
                     assert.equal(titleBefore.y, titleAfter.y, `${label}: stable single-line baseline`);
                     await page.screenshot({ path: `${output}/${label}.png`, fullPage: true });
                     report.cases.push({
@@ -113,8 +121,8 @@ try {
                             'single line',
                             'no document overflow',
                             '44px controls',
-                            'title and body share one moving track',
-                            'real right-to-left motion',
+                            'title and body stay stationary',
+                            'leading character visible and trailing ellipsis',
                         ],
                     });
                 }
@@ -130,23 +138,18 @@ try {
         await page.waitForTimeout(220);
         const still = await animationState();
         assert.equal(still.playState, 'paused');
-        assert(Math.abs(still.x - paused.x) < 1, 'Pause preserves current position');
+        assert(Math.abs(still.currentTime - paused.currentTime) < 1, 'Pause preserves the current hold');
         await page.mouse.move(0, 0);
         await page.waitForTimeout(220);
-        assert((await animationState()).x < still.x - 3, 'Resume continues from same position');
+        assert((await animationState()).currentTime > still.currentTime + 100, 'Resume continues the hold');
         report.cases.push({ label: 'hover-pause-resume-in-place', status: 'pass' });
 
         const duration = (await animationState()).duration;
-        await seek(duration - 1850);
-        const tail = await animationState();
+        assert.equal(duration, 5000, 'Long notices use the configured hold');
+        await seek(duration - 1000);
         await page.waitForTimeout(220);
         assert.equal(await title().innerText(), firstTitle, 'No early next notice');
-        assert(Math.abs((await animationState()).x - tail.x) < 1, 'Final two seconds hold the last words');
-        const endVisible = await track().evaluate(
-            element =>
-                element.getBoundingClientRect().right - element.parentElement.getBoundingClientRect().right,
-        );
-        assert(Math.abs(endVisible) < 2, 'Last words fully visible at end of movement');
+        assert.equal((await animationState()).x, 0, 'Preview never scrolls out of its left edge');
         await seek(duration - 120);
         await page.waitForFunction(
             expectedTitle => document.querySelector('.notice-strip-title')?.textContent !== expectedTitle,
@@ -159,7 +162,7 @@ try {
         await next();
         assert.equal(await title().innerText(), firstTitle, 'Fourth record excluded from ticker loop');
         report.cases.push({
-            label: 'tail-hold-complete-then-three-item-loop',
+            label: 'configured-hold-then-three-whole-notice-loop',
             status: 'pass',
             titles: [firstTitle, secondTitle, thirdTitle],
         });
@@ -205,17 +208,13 @@ try {
         report.cases.push({ label: 'two-notices-loop-without-missing-slot', status: 'pass' });
 
         await open('&count=1');
-        await waitAnimation();
-        const only = await title().innerText();
-        await track().evaluate(element => element.getAnimations()[0].finish());
-        await page.waitForTimeout(80);
-        assert.equal(await title().innerText(), only);
-        assert.equal((await animationState()).playState, 'running');
+        await page.locator('.notice-strip-track').waitFor();
+        assert.equal(await track().evaluate(element => element.getAnimations().length), 0);
         await open('&count=1&shortFirst');
         await page.locator('.notice-strip-track').waitFor();
         assert.equal(await track().evaluate(element => element.getAnimations().length), 0);
         assert.equal(await page.locator('.notice-strip-control').count(), 0);
-        report.cases.push({ label: 'one-notice-long-replay-and-short-static', status: 'pass' });
+        report.cases.push({ label: 'one-notice-always-static', status: 'pass' });
 
         await open('&state=empty');
         assert.equal(await page.locator('.notice-strip').count(), 0);
@@ -250,7 +249,10 @@ try {
         () => document.querySelector('.notice-strip-track')?.getAnimations()[0]?.playState === 'running',
     );
     await page.waitForTimeout(160);
-    assert((await animationState()).x < detailPause.x - 2, 'Pointer-opened detail closes then resumes');
+    assert(
+        (await animationState()).currentTime > detailPause.currentTime + 80,
+        'Pointer-opened detail closes then resumes the hold',
+    );
     report.cases.push({ label: 'pointer-detail-close-resumes-after-leaving-strip', status: 'pass' });
 
     await page.locator('.notice-strip-open').focus();
@@ -265,7 +267,7 @@ try {
     const keyboardPause = await animationState();
     await page.waitForTimeout(160);
     assert(
-        Math.abs((await animationState()).x - keyboardPause.x) < 1,
+        Math.abs((await animationState()).currentTime - keyboardPause.currentTime) < 1,
         'Keyboard focus retains reading pause',
     );
     await page.keyboard.press('Tab');
