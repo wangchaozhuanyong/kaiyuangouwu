@@ -39,6 +39,9 @@ async function harness() {
     const rootSpy = vi
         .spyOn(service as unknown as { artifactRoot(): string }, 'artifactRoot')
         .mockReturnValue(root);
+    const immutableSpy = vi
+        .spyOn(service as unknown as { immutableRoot(root: string): boolean }, 'immutableRoot')
+        .mockReturnValue(true);
     const page = syntheticPage('synthetic-a', 'en', 'home');
     const ctx = {
         apiType: 'shop',
@@ -48,7 +51,7 @@ async function harness() {
         currencyCode: page.scope.currencyCode,
     };
     const render = (value = page, context = ctx) => service.render(value, context as never);
-    return { service, render, page, ctx, cache, records, rootSpy, artifact, root };
+    return { service, render, page, ctx, cache, records, rootSpy, immutableSpy, artifact, root };
 }
 afterEach(() => vi.restoreAllMocks());
 
@@ -185,4 +188,91 @@ it('does not retain render failures', async () => {
     await expect(h.render()).rejects.toMatchObject({ renderStage: 'body-render' });
     expect(h.records.size).toBe(0);
     expect(load(await h.render())('#root').text()).toBe('Recovered');
+});
+
+it('reuses immutable asset inputs across different pages and discards them on a release switch', async () => {
+    const h = await harness();
+    const provider = [
+        'exports.publicRouteScriptPreloadScope="home-static-v1";',
+        'exports.renderPublicPage=async()=>"<main>Public</main>";',
+        'exports.getPublicRouteScriptPreloads=async(_page,_assets,read)=>[(await read("hint.js")).trim()];',
+    ].join('\n');
+    const configure = async (root: string, name: string) => {
+        await mkdir(path.join(root, 'assets'), { recursive: true });
+        await writeFile(path.join(root, '.server/public-page-renderer.cjs'), provider);
+        await writeFile(path.join(root, 'assets', name), '');
+        await writeFile(path.join(root, 'assets/hint.js'), name);
+    };
+    await configure(h.root, 'one.js');
+    expect(await h.render()).toContain('href="/assets/one.js"');
+    // Simulate a changed read result to prove a new page does not reread this immutable input.
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'two.js');
+    expect(await h.render({ ...h.page, version: 'next-page' })).toContain('href="/assets/one.js"');
+    const next = path.join(h.root, 'next-release');
+    await h.artifact(next);
+    await configure(next, 'two.js');
+    h.rootSpy.mockReturnValue(next);
+    const switched = await h.render();
+    expect(switched).toContain('href="/assets/two.js"');
+    expect(switched).not.toContain('href="/assets/one.js"');
+});
+
+it('does not reuse data-dependent hints from an older renderer without an explicit contract', async () => {
+    const h = await harness();
+    await mkdir(path.join(h.root, 'assets'));
+    await writeFile(path.join(h.root, 'assets/one.js'), '');
+    await writeFile(path.join(h.root, 'assets/two.js'), '');
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'one.js');
+    await writeFile(
+        path.join(h.root, '.server/public-page-renderer.cjs'),
+        [
+            'exports.renderPublicPage=async()=>"<main>Public</main>";',
+            'exports.getPublicRouteScriptPreloads=async(_page,_assets,read)=>[(await read("hint.js")).trim()];',
+        ].join('\n'),
+    );
+    expect(await h.render()).toContain('href="/assets/one.js"');
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'two.js');
+    const next = await h.render({ ...h.page, version: 'next-page' });
+    expect(next).toContain('href="/assets/two.js"');
+    expect(next).not.toContain('href="/assets/one.js"');
+});
+
+it('retries failed optional script reads instead of retaining a rejected promise', async () => {
+    const h = await harness();
+    await mkdir(path.join(h.root, 'assets'));
+    await writeFile(path.join(h.root, 'assets/one.js'), '');
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'one.js');
+    await writeFile(
+        path.join(h.root, '.server/public-page-renderer.cjs'),
+        [
+            'exports.publicRouteScriptPreloadScope="home-static-v1";',
+            'let calls=0;exports.renderPublicPage=async()=>"<main>Public</main>";',
+            'exports.getPublicRouteScriptPreloads=async(_page,_assets,read)=>{',
+            'if(++calls===1)require("node:fs").unlinkSync(require("node:path").resolve(__dirname,"../assets/hint.js"));',
+            'return [(await read("hint.js")).trim()]};',
+        ].join('\n'),
+    );
+    expect(await h.render()).not.toContain('href="/assets/one.js"');
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'one.js');
+    expect(await h.render({ ...h.page, version: 'next-page' })).toContain('href="/assets/one.js"');
+});
+
+it('rereads mutable local dist inputs when a local build changes in place', async () => {
+    const h = await harness();
+    h.immutableSpy.mockReturnValue(false);
+    await mkdir(path.join(h.root, 'assets'));
+    await writeFile(path.join(h.root, 'assets/one.js'), '');
+    await writeFile(path.join(h.root, 'assets/two.js'), '');
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'one.js');
+    await writeFile(
+        path.join(h.root, '.server/public-page-renderer.cjs'),
+        [
+            'exports.publicRouteScriptPreloadScope="home-static-v1";',
+            'exports.renderPublicPage=async()=>"<main>Public</main>";',
+            'exports.getPublicRouteScriptPreloads=async(_page,_assets,read)=>[(await read("hint.js")).trim()];',
+        ].join('\n'),
+    );
+    expect(await h.render()).toContain('href="/assets/one.js"');
+    await writeFile(path.join(h.root, 'assets/hint.js'), 'two.js');
+    expect(await h.render({ ...h.page, version: 'next-page' })).toContain('href="/assets/two.js"');
 });

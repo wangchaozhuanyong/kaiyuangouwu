@@ -29,6 +29,7 @@ import { PublicHtmlRenderError, type PublicHtmlRenderStage } from './public-rend
 
 type Renderer = {
     renderPublicPage(page: StorefrontPageData): Promise<string>;
+    publicRouteScriptPreloadScope?: 'home-static-v1';
     getPublicRouteScriptPreloads?(
         page: StorefrontPageData,
         assetNames: readonly string[],
@@ -41,6 +42,12 @@ const SNAPSHOT_LIFETIME = 30_000;
 const MAX_HTML_ENTRIES = 64;
 const MAX_HTML_BYTES = 32 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+const ACTIVE_STOREFRONT_ROOT = '/var/www/kaiyuangouwu-storefront-current';
+type ArtifactInputs = {
+    root: string;
+    assets?: Promise<string[]>;
+    scriptPreloads?: Promise<string[] | undefined>;
+};
 
 /** Replaces metadata without disturbing the matching artifact's styles, icons or script entry. */
 export function assemblePublicHtml(
@@ -190,10 +197,39 @@ export function assemblePublicHtml(
 @Injectable()
 export class StorefrontSeoHtmlService {
     private lastRendererPath?: string;
+    private artifactInputs?: ArtifactInputs;
     // Admission bookkeeping only. HTML and in-flight work stay in the existing public cache.
     private readonly admissions = new Map<symbol, { bytes: number; expiresAt: number }>();
 
     constructor(@Optional() private readonly publicCache?: StorefrontPublicCacheService) {}
+
+    private immutableRoot(root: string): boolean {
+        return existsSync(ACTIVE_STOREFRONT_ROOT) && realpathSync(ACTIVE_STOREFRONT_ROOT) === root;
+    }
+
+    private inputs(root: string): ArtifactInputs | undefined {
+        // Local dist can be rebuilt in place. Production roots identify immutable releases.
+        if (!this.immutableRoot(root)) return undefined;
+        if (this.artifactInputs?.root !== root) this.artifactInputs = { root };
+        return this.artifactInputs;
+    }
+
+    private assets(root: string, inputs?: ArtifactInputs): Promise<string[]> {
+        if (!inputs) return readdir(resolve(root, 'assets'));
+        if (!inputs.assets) {
+            inputs.assets = readdir(resolve(root, 'assets')).then(
+                names => {
+                    if (names.length > 4096) inputs.assets = undefined;
+                    return names;
+                },
+                error => {
+                    inputs.assets = undefined;
+                    throw error;
+                },
+            );
+        }
+        return inputs.assets;
+    }
 
     private admit(html: string, expiresAt: number): boolean {
         const now = Date.now();
@@ -222,9 +258,8 @@ export class StorefrontSeoHtmlService {
 
     private artifactRoot(): string {
         // Operational deployment pointer, never a merchant presentation choice.
-        const active = '/var/www/kaiyuangouwu-storefront-current';
         const local = resolve(__dirname, '../../../storefront/dist');
-        return existsSync(active) ? realpathSync(active) : local;
+        return existsSync(ACTIVE_STOREFRONT_ROOT) ? realpathSync(ACTIVE_STOREFRONT_ROOT) : local;
     }
 
     async render(page: StorefrontPageData, ctx?: RequestContext): Promise<string> {
@@ -241,6 +276,7 @@ export class StorefrontSeoHtmlService {
                 return { root: artifactRoot, renderer: artifactRenderer };
             });
             const generate = async () => {
+                const inputs = this.inputs(root);
                 stage = 'template-read';
                 const template = await measurePublicDocument('render-template', () =>
                     readFile(resolve(root, 'index.html'), 'utf8'),
@@ -262,7 +298,7 @@ export class StorefrontSeoHtmlService {
                     typeof renderer.getPublicRouteScriptPreloads === 'function';
                 const assets: string[] = await measurePublicDocument('render-styles', () =>
                     prefixes.length || preloadScripts
-                        ? readdir(resolve(root, 'assets')).catch(error => {
+                        ? this.assets(root, inputs).catch(error => {
                               if (prefixes.length) throw error;
                               // An optional download hint must not make an otherwise valid HTML response fail.
                               return [];
@@ -277,13 +313,36 @@ export class StorefrontSeoHtmlService {
                 let scriptPreloads: string[] = [];
                 if (preloadScripts) {
                     try {
-                        const hints = await measurePublicDocument('render-styles', async () =>
+                        const readHints = async () =>
                             renderer.getPublicRouteScriptPreloads?.(page, assets, async file => {
                                 if (!scriptAssetName.test(file) || !assets.includes(file))
                                     throw new Error('Invalid public script asset');
                                 return readFile(resolve(root, 'assets', file), 'utf8');
-                            }),
-                        );
+                            });
+                        const hints = await measurePublicDocument('render-styles', async () => {
+                            // Only an explicit renderer contract permits reuse across public data.
+                            if (!inputs || renderer.publicRouteScriptPreloadScope !== 'home-static-v1')
+                                return readHints();
+                            if (!inputs.scriptPreloads)
+                                inputs.scriptPreloads = readHints().then(
+                                    names => {
+                                        if (
+                                            !names?.length ||
+                                            names.length > 96 ||
+                                            !names.every(
+                                                file => scriptAssetName.test(file) && assets.includes(file),
+                                            )
+                                        )
+                                            inputs.scriptPreloads = undefined;
+                                        return names;
+                                    },
+                                    error => {
+                                        inputs.scriptPreloads = undefined;
+                                        throw error;
+                                    },
+                                );
+                            return inputs.scriptPreloads;
+                        });
                         if (hints?.every(file => scriptAssetName.test(file) && assets.includes(file)))
                             scriptPreloads = hints;
                     } catch {
