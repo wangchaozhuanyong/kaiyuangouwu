@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { readStorefrontStylesheet } from './test-stylesheet';
 
@@ -8,6 +8,7 @@ const indexHtml = readFileSync(new URL('../index.html', import.meta.url), 'utf8'
 const stylesheet = readStorefrontStylesheet();
 const viteConfig = readFileSync(new URL('../vite.config.ts', import.meta.url), 'utf8');
 const legacyGuard = readFileSync(new URL('../public/legacy-browser-guard.js', import.meta.url), 'utf8');
+const retiredWorker = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 const unsupportedBrowserHtml = readFileSync(
     new URL('../public/unsupported-browser.html', import.meta.url),
     'utf8',
@@ -38,6 +39,43 @@ function runLegacyGuard(options: { userAgent: string; documentMode?: number }) {
 }
 
 describe('browser compatibility policy', () => {
+    it.each([[], ['storefront-old-assets']])(
+        'retires an old worker without reloading already visible pages: %j',
+        async (...keys: string[]) => {
+            type WorkerEvent = { waitUntil: (work: Promise<unknown>) => void };
+            const listeners = new Map<string, (event: WorkerEvent) => void>();
+            const navigate = vi.fn();
+            const unregister = vi.fn().mockResolvedValue(true);
+            const claim = vi.fn().mockResolvedValue(undefined);
+            const removeCache = vi.fn().mockResolvedValue(true);
+            runInNewContext(retiredWorker, {
+                self: {
+                    addEventListener: (name: string, listener: (event: WorkerEvent) => void) =>
+                        listeners.set(name, listener),
+                    skipWaiting: vi.fn(),
+                    registration: { unregister },
+                    clients: {
+                        claim,
+                        matchAll: vi.fn().mockResolvedValue([{ url: 'https://store.test/zh/', navigate }]),
+                    },
+                },
+                caches: { keys: () => Promise.resolve(keys), delete: removeCache },
+            });
+            let activation: Promise<unknown> | undefined;
+            listeners.get('activate')?.({
+                waitUntil: work => {
+                    activation = work;
+                },
+            });
+            await activation;
+            expect(unregister).toHaveBeenCalledExactlyOnceWith();
+            expect(claim).toHaveBeenCalledExactlyOnceWith();
+            expect(removeCache).toHaveBeenCalledTimes(keys.length);
+            expect(navigate).not.toHaveBeenCalled();
+            expect(listeners.has('fetch')).toBe(false);
+        },
+    );
+
     it('keeps storefront fonts independent from Google-hosted resources', () => {
         expect(indexHtml).not.toMatch(/fonts\.(?:googleapis|gstatic)\.com/u);
         expect(stylesheet).not.toMatch(/['"]Inter['"]/u);

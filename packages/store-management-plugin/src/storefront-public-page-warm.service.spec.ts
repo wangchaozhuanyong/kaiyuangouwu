@@ -14,7 +14,7 @@ const route = (id: string, host = 'a.test'): PublicHotRoute => ({
     seenAt: Date.now(),
 });
 
-function harness(isWorker = false) {
+function harness(isWorker = false, sharedVersions = true) {
     let process: (job: { data: { channelId: string } }) => Promise<unknown> = () => Promise.resolve();
     const add = vi.fn().mockResolvedValue({});
     const jobs = {
@@ -61,7 +61,7 @@ function harness(isWorker = false) {
     };
     const access = { resolveRequest: vi.fn().mockResolvedValue({ ctx }) };
     const revision = { value: 'r1' };
-    const publicCache = { revision: vi.fn(() => Promise.resolve(revision.value)) };
+    const publicCache = { sharedVersions, revision: vi.fn(() => Promise.resolve(revision.value)) };
     const pages = {
         getAccessMode: vi.fn().mockResolvedValue('LIVE'),
         peek: vi.fn().mockResolvedValue(undefined),
@@ -93,6 +93,47 @@ function harness(isWorker = false) {
 
 describe('bounded public page preparation', () => {
     afterEach(() => vi.useRealTimers());
+    it('warms the serving API cache when the worker cannot share its cache generations', async () => {
+        vi.useFakeTimers();
+        const api = harness(false, false);
+        const worker = harness(true, false);
+        await worker.service.onApplicationBootstrap();
+        await worker.run('*');
+        await worker.run();
+        expect(api.pages.read).not.toHaveBeenCalled();
+        await api.service.onApplicationBootstrap();
+        await vi.waitFor(() => expect(api.pages.read).toHaveBeenCalledTimes(4));
+        expect(api.pages.read.mock.calls.filter(call => call[2].kind === 'home')).toHaveLength(2);
+        expect(api.add).not.toHaveBeenCalled();
+        expect(api.records.has('storefront-public-hot-routes:v2:a:r1')).toBe(true);
+        expect(api.records).not.toBe(worker.records);
+        await vi.advanceTimersByTimeAsync(20_000);
+        expect(api.pages.read).toHaveBeenCalledTimes(8);
+        api.service.onApplicationShutdown();
+        worker.service.onApplicationShutdown();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(api.pages.read).toHaveBeenCalledTimes(8);
+    });
+
+    it('coalesces local API warming and stops at revoked access without publishing another generation', async () => {
+        vi.useFakeTimers();
+        const h = harness(false, false);
+        let release!: (value: object) => void;
+        h.pages.read.mockReturnValueOnce(new Promise(resolve => (release = resolve)));
+        await h.service.onApplicationBootstrap();
+        await vi.waitFor(() => expect(h.pages.read).toHaveBeenCalledTimes(1));
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(h.pages.read).toHaveBeenCalledTimes(1);
+        h.pages.getAccessMode.mockResolvedValue('CLOSED');
+        h.revision.value = 'r2';
+        release({ collections: [] });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(h.cache.set).not.toHaveBeenCalled();
+        expect(h.pages.read).toHaveBeenCalledTimes(1);
+        expect(h.add).not.toHaveBeenCalled();
+        h.service.onApplicationShutdown();
+    });
+
     it.each(['PREVIEW', 'CLOSED'])(
         'never observes, queues, or reads shared hot routes for %s',
         async mode => {
