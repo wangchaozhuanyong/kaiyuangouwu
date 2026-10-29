@@ -83,12 +83,17 @@ printf 'PRODUCTION_RECOVERY_SOURCE expected=%s previous=%s selected=%s\n' \
 
 readonly recovery_pointer="/var/www/.kaiyuangouwu-current.recovery-${GITHUB_RUN_ID:-manual}-$$"
 created_pointer=0
+# shellcheck source=deploy/image-update-release-guard.sh
+source "${repository}/deploy/image-update-release-guard.sh"
 cleanup_pointer() {
     if [[ "${created_pointer}" == "1" && -L "${recovery_pointer}" ]]; then
         sudo -n rm -f -- "${recovery_pointer}"
     fi
+    restore_image_signature_updates
 }
 trap cleanup_pointer EXIT
+pause_image_signature_updates
+
 if [[ "${previous_pointer}" != "${candidate}" ]]; then
     sudo -n ln -s "${candidate}" "${recovery_pointer}"
     created_pointer=1
@@ -146,6 +151,7 @@ for attempt in $(seq 1 60); do
         fi
         sudo -n systemctl restart vendure-production-healthcheck.service ||
             fail 'runtime resumed but the production health service failed'
+        restore_image_signature_updates
         printf 'Production runtime recovered: %s\n' "${candidate_sha}"
         exit 0
     fi
