@@ -21,6 +21,7 @@ import {
     CREATE_PRODUCT,
     CREATE_PRODUCT_VARIANTS,
     GET_COLLECTION_ASSIGNMENT_DETAIL,
+    GET_PRODUCT_COLLECTION_MEMBERSHIP,
     GET_PRODUCTS,
     REMOVE_OPTION_GROUP_FROM_PRODUCT,
     REMOVE_PRODUCTS_FROM_CHANNEL,
@@ -80,6 +81,7 @@ interface ProductEditorSaveInput {
         setSaving: (saving: boolean) => void;
         showError: (message: string) => void;
         showNotice: (message: string) => void;
+        showPending: (message: string) => void;
         onProductCreated?: (productId: string) => void;
         acceptSavedDraft?: (saved: ProductEditorSaveDraft) => void;
         acceptSavedVariantIdentities?: (saved: Array<{ id: string; sku: string }>) => void;
@@ -226,7 +228,12 @@ export function useProductEditorSave({
     const { canUseCapability } = useAdminCapabilities();
     const saveScope = useRef({ queryScope: getAdminQueryScope(), channelToken: getActiveChannelToken() });
     const saveInFlight = useRef(false);
-    const pendingReadback = useRef<{ productId: string; name: string; partial?: boolean } | null>(null);
+    const pendingReadback = useRef<{
+        productId: string;
+        name: string;
+        partial?: boolean;
+        collectionIds?: string[];
+    } | null>(null);
     const writeAccess = useRef(canUseCapability);
     useLayoutEffect(() => {
         writeAccess.current = canUseCapability;
@@ -286,6 +293,7 @@ export function useProductEditorSave({
         setSaving,
         showError,
         showNotice,
+        showPending,
         acceptSavedDraft,
         onProductCreated,
         acceptSavedVariantIdentities,
@@ -516,9 +524,11 @@ export function useProductEditorSave({
         targetProductId: string,
         recordCompleted?: (stage: string) => void,
     ) => {
-        const originalIds = (productData?.product?.collections ?? [])
-            .filter(collection => hasDirectProductAssignment(collection.filters, targetProductId))
-            .map(collection => collection.id);
+        const originalIds =
+            baselineDraft?.selectedCollectionIds ??
+            (productData?.product?.collections ?? [])
+                .filter(collection => hasDirectProductAssignment(collection.filters, targetProductId))
+                .map(collection => collection.id);
         const originalIdSet = new Set(originalIds);
         const selectedIdSet = new Set(selectedCollectionIds);
         const changes = [
@@ -561,6 +571,24 @@ export function useProductEditorSave({
 
         if (changes.length > 0) await refetchCollections();
     };
+
+    const verifyCollectionMembership = async (targetProductId: string, requiredIds?: string[]) => {
+        if (!requiredIds?.length) return true;
+        const result = await client.query<{
+            product: { id: string; collections: Array<{ id: string }> } | null;
+        }>({
+            query: GET_PRODUCT_COLLECTION_MEMBERSHIP,
+            variables: { id: targetProductId },
+            fetchPolicy: 'network-only',
+            context: saveMutationContext(),
+        });
+        assertSaveAccess();
+        if (result.data?.product?.id !== targetProductId) throw new Error('商品分类归属读取失败');
+        const actual = new Set(result.data.product.collections.map(collection => collection.id));
+        return requiredIds.every(id => actual.has(id));
+    };
+    const pendingCollectionMessage =
+        '商品资料与分类规则已保存，但分类尚未生效。后台仍需更新实际归属；再次点击保存只会核对结果，不会重复写入。若持续未生效，请检查分类计算任务。';
 
     const syncProductChannels = async (
         targetProductId: string,
@@ -833,15 +861,29 @@ export function useProductEditorSave({
             }
             return;
         }
-        const savedReadback = pendingReadback.current;
+        const savedReadback =
+            pendingReadback.current ??
+            (!isCreateMode &&
+            !hasChanges &&
+            productId &&
+            selectedCollectionIds.some(
+                id => !productData?.product?.collections.some(collection => collection.id === id),
+            )
+                ? { productId, name: productName, collectionIds: [...selectedCollectionIds] }
+                : null);
         if (savedReadback && savedReadback.productId === productId) {
             const saved = savedReadback;
+            pendingReadback.current = saved;
             saveInFlight.current = true;
             setSaving(true);
             setErrorMessage('');
             try {
                 await Promise.all([refetchProduct(), data.refetchWorkspace?.()]);
                 assertSaveAccess();
+                if (!(await verifyCollectionMembership(saved.productId, saved.collectionIds))) {
+                    showPending(pendingCollectionMessage);
+                    return;
+                }
                 pendingReadback.current = null;
                 showNotice(
                     saved.partial
@@ -1065,6 +1107,11 @@ export function useProductEditorSave({
                     const activeChannelId = catalogChannelsData?.activeChannel.id;
                     await syncProductChannels(newProductId, activeChannelId ? [activeChannelId] : []);
                     await syncProductCollections(newProductId);
+                    if (!(await verifyCollectionMembership(newProductId, selectedCollectionIds))) {
+                        continuePartialCreate();
+                        showPending(pendingCollectionMessage);
+                        return;
+                    }
                 } catch (err: unknown) {
                     if (!isCurrentSaveScope()) return;
                     continuePartialCreate();
@@ -1315,10 +1362,20 @@ export function useProductEditorSave({
                     })),
                 };
                 acceptSavedDraft?.(confirmedDraft);
-                pendingReadback.current = { productId, name: productName };
+                pendingReadback.current = {
+                    productId,
+                    name: productName,
+                    collectionIds: [...selectedCollectionIds],
+                };
                 try {
                     await Promise.all([refetchProduct(), data.refetchWorkspace?.()]);
                     assertSaveAccess();
+                    if (
+                        !(await verifyCollectionMembership(productId, pendingReadback.current?.collectionIds))
+                    ) {
+                        showPending(pendingCollectionMessage);
+                        return;
+                    }
                     pendingReadback.current = null;
                     showNotice(
                         completedStages.length > 0

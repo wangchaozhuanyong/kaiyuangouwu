@@ -25,7 +25,11 @@ describe('homepage module spacing', () => {
 
     it('keeps mobile module edges and quick-link content balanced', () => {
         expect(stylesheet).toMatch(
-            /@media \(max-width: 1023px\)\s*\{\s*\.hero-carousel,\s*\.quick-grid,\s*\.quick-grid\.is-color-marketplace\s*\{\s*margin-inline:\s*var\(--space-8\);/,
+            new RegExp(
+                '@media \\(max-width: 1023px\\)\\s*\\{\\s*\\.home-page \\.notice-strip,' +
+                    '\\s*\\.hero-carousel,\\s*\\.quick-grid,\\s*\\.quick-grid\\.is-color-marketplace' +
+                    '\\s*\\{\\s*margin-inline:\\s*var\\(--space-8\\);',
+            ),
         );
         expect(stylesheet).toMatch(
             /\.quick-grid\s*\{[^}]*margin:\s*0 var\(--page-section-inset, var\(--experience-page-gutter-mobile\)\);[^}]*padding:\s*14px 8px;/,

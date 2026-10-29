@@ -4,7 +4,6 @@ import {
     ChevronRight,
     CircleCheck,
     Download,
-    ExternalLink,
     Headphones,
     LayoutGrid,
     Lock,
@@ -18,8 +17,10 @@ import {
     Zap,
 } from 'lucide-react';
 import {
+    lazy,
     memo,
     ReactNode,
+    Suspense,
     useEffect,
     useInsertionEffect,
     useLayoutEffect,
@@ -164,61 +165,11 @@ export function buildHomeNoticeItems(
     return systemNoticeItems;
 }
 
-export function NoticeDetailSheet({
-    item,
-    language,
-    onClose,
-    onFollowTarget,
-}: {
-    item: HomeNoticeItem;
-    language: StorefrontLanguage;
-    onClose: () => void;
-    onFollowTarget: () => void;
-}) {
-    const isZh = language === 'zh';
-    const hasTarget =
-        Boolean(item.linkUrl) || (item.targetType !== 'NONE' && Boolean(item.targetValue?.trim()));
-    const actionLabel =
-        item.ctaLabel.trim() ||
-        (item.linkUrl ? (isZh ? '前往链接' : 'Open link') : isZh ? '查看详情' : 'View details');
-
-    return (
-        <Sheet
-            title={item.title || (isZh ? '公告详情' : 'Notice details')}
-            language={language}
-            onClose={onClose}
-        >
-            <div className="notice-detail-content">
-                {item.content.trim() ? (
-                    <ContentText className="notice-detail-body">{item.content}</ContentText>
-                ) : (
-                    <p className="notice-detail-body notice-detail-empty">
-                        {isZh ? '此公告暂无更多内容。' : 'There are no additional details for this notice.'}
-                    </p>
-                )}
-                {hasTarget ? (
-                    <div className="notice-detail-actions">
-                        <button
-                            className="notice-detail-action"
-                            type="button"
-                            onClick={() => {
-                                onClose();
-                                onFollowTarget();
-                            }}
-                        >
-                            <span>{actionLabel}</span>
-                            {item.linkUrl ? (
-                                <ExternalLink aria-hidden="true" />
-                            ) : (
-                                <ChevronRight aria-hidden="true" />
-                            )}
-                        </button>
-                    </div>
-                ) : null}
-            </div>
-        </Sheet>
-    );
-}
+const NoticeDetailSheet = lazy(() =>
+    import('../components/common/notice-detail-sheet').then(module => ({
+        default: module.NoticeDetailSheet,
+    })),
+);
 
 const HomepageCouponHub = memo(function HomepageCouponHubContent({
     block,
@@ -668,15 +619,30 @@ export function HomePage() {
             />
 
             {openNoticeItem ? (
-                <NoticeDetailSheet
-                    item={openNoticeItem}
-                    language={language}
-                    onClose={() => setOpenNoticeId(null)}
-                    onFollowTarget={() => {
-                        if (openNoticeItem.linkUrl) window.location.assign(openNoticeItem.linkUrl);
-                        else onContentTarget(openNoticeItem.targetType, openNoticeItem.targetValue);
-                    }}
-                />
+                <Suspense
+                    fallback={
+                        <Sheet
+                            title={isZh ? '系统公告' : 'Announcement'}
+                            language={language}
+                            onClose={() => setOpenNoticeId(null)}
+                            initialFocus="dialog"
+                        >
+                            <SubpageBody>
+                                <p role="status">{isZh ? '正在打开公告…' : 'Opening announcement…'}</p>
+                            </SubpageBody>
+                        </Sheet>
+                    }
+                >
+                    <NoticeDetailSheet
+                        item={openNoticeItem}
+                        language={language}
+                        onClose={() => setOpenNoticeId(null)}
+                        onFollowTarget={() => {
+                            if (openNoticeItem.linkUrl) window.location.assign(openNoticeItem.linkUrl);
+                            else onContentTarget(openNoticeItem.targetType, openNoticeItem.targetValue);
+                        }}
+                    />
+                </Suspense>
             ) : null}
 
             {contentError && (

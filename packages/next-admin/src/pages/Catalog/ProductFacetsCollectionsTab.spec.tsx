@@ -168,6 +168,24 @@ describe('ProductCategorySummary inline draft selection', () => {
         expect(editorState.setSelectedCollectionIds).toHaveBeenCalledTimes(3);
     });
 
+    it('shows pending actual membership separately from a saved manual choice', async () => {
+        const collections = structuredClone(editorState.collectionsData);
+        collections.collections.items[0].children[1].filters = [
+            { code: 'product-id-filter', args: [{ name: 'productIds', value: '["product-1"]' }] },
+        ] as never[];
+        editorState.collectionsData = collections;
+        await mountSummary();
+        expect(
+            host?.querySelector<HTMLInputElement>('[aria-label="取消选择二级分类：GPT订阅"]')?.checked,
+        ).toBe(true);
+        expect(host?.querySelector('[role="status"]')?.textContent).toContain('分类尚未生效');
+        editorState.productData = {
+            product: { collections: [collections.collections.items[0].children[1]] },
+        } as typeof editorState.productData;
+        await renderSummary();
+        expect(host?.textContent).not.toContain('分类尚未生效');
+    });
+
     it('searches with the shared control, retains hidden selections and restores their checked state', async () => {
         await mountSummary();
         const search = host!.querySelector<HTMLInputElement>('[aria-label="搜索商品分类或专辑"]')!;

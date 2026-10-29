@@ -1,9 +1,11 @@
 import 'reflect-metadata';
 
+import { EMPTY } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RequestContext } from '../../api/common/request-context';
 import { CollectionEntityResolver } from '../../api/resolvers/entity/collection-entity.resolver';
+import { Logger } from '../../config/logger/vendure-logger';
 import { Collection } from '../../entity/collection/collection.entity';
 
 import { CollectionService } from './collection.service';
@@ -15,6 +17,92 @@ const rows = [
     { id: 'a-child', parentId: 'a', position: 1, channels: ['A'] },
     { id: 'b-child', parentId: 'a', position: 2, channels: ['B'] },
 ];
+
+describe('Collection calculation job results', () => {
+    it('propagates a membership transaction failure instead of returning calculated IDs as success', async () => {
+        const failure = new Error('membership insert failed');
+        const qb = {
+            select: vi.fn().mockReturnThis(),
+            distinct: vi.fn().mockReturnThis(),
+            setFindOptions: vi.fn().mockReturnThis(),
+            andWhere: vi.fn().mockReturnThis(),
+            innerJoin: vi.fn().mockReturnThis(),
+            addCommonTableExpression: vi.fn().mockReturnThis(),
+            from: vi.fn().mockReturnThis(),
+            leftJoin: vi.fn().mockReturnThis(),
+            where: vi.fn().mockReturnThis(),
+            setParameters: vi.fn().mockReturnThis(),
+            getRawMany: vi
+                .fn()
+                .mockResolvedValueOnce([{ id: 13 }])
+                .mockResolvedValueOnce([]),
+        };
+        const database = {
+            getRepository: () => ({ createQueryBuilder: () => qb }),
+            createQueryBuilder: () => qb,
+            transaction: vi.fn().mockRejectedValue(failure),
+            createQueryRunner: () => ({ connection: database }),
+        };
+        const service = Object.assign(Object.create(CollectionService.prototype), {
+            connection: { rawConnection: database },
+            getAncestorFilters: vi.fn().mockResolvedValue([]),
+            configService: { catalogOptions: { collectionFilters: [] } },
+        }) as { applyCollectionFiltersInternal(collection: Collection): Promise<unknown> };
+        const log = vi.spyOn(Logger, 'error').mockImplementation(() => undefined);
+        try {
+            await expect(service.applyCollectionFiltersInternal(new Collection({ id: 14 }))).rejects.toBe(
+                failure,
+            );
+        } finally {
+            log.mockRestore();
+        }
+    });
+
+    it('reports failed calculations while allowing the remaining collections to finish', async () => {
+        let processJob!: (job: {
+            data: { ctx: { languageCode: string; channelToken: string }; collectionIds: string[] };
+            setProgress: ReturnType<typeof vi.fn>;
+        }) => Promise<unknown>;
+        const apply = vi
+            .fn()
+            .mockRejectedValueOnce(new Error('database calculation failed'))
+            .mockResolvedValue([]);
+        const service = Object.assign(Object.create(CollectionService.prototype), {
+            connection: {
+                getEntityOrThrow: vi.fn((_ctx, _entity, id) =>
+                    Promise.resolve(new Collection({ id, name: id })),
+                ),
+            },
+            translator: { translate: (_collection: Collection) => _collection },
+            requestContextService: { create: vi.fn().mockResolvedValue({}) },
+            jobQueueService: {
+                createQueue: vi.fn(options => {
+                    processJob = options.process;
+                    return Promise.resolve({});
+                }),
+            },
+            eventBus: { ofType: () => EMPTY, publish: vi.fn() },
+            applyCollectionFiltersInternal: apply,
+        }) as CollectionService;
+        const log = vi.spyOn(Logger, 'error').mockImplementation(() => undefined);
+        try {
+            await service.onModuleInit();
+            await expect(
+                processJob({
+                    data: {
+                        ctx: { languageCode: 'en', channelToken: 'fixture' },
+                        collectionIds: ['broken', 'healthy'],
+                    },
+                    setProgress: vi.fn(),
+                }),
+            ).rejects.toThrow('broken');
+            expect(apply).toHaveBeenCalledTimes(2);
+            expect(apply.mock.calls[1][0].id).toBe('healthy');
+        } finally {
+            log.mockRestore();
+        }
+    });
+});
 
 describe('Collection traversal through a shared structural root', () => {
     it('uses one existing root across stores and translates its cached entity for each request', async () => {
