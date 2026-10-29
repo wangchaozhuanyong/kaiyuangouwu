@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { run as checkAccessibility } from 'axe-core';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -895,6 +897,40 @@ describe('HomePage localized trust bar layout', () => {
 });
 
 describe('HomePage public coupon campaigns', () => {
+    it.each([false, true])('updates an empty first frame when offers arrive on desktop=%s', desktop => {
+        vi.stubGlobal(
+            'matchMedia',
+            vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+        );
+        const host = document.createElement('div');
+        document.body.append(host);
+        const root = createRoot(host);
+        const show = (coupons: StorefrontCouponCampaign[]) =>
+            act(() =>
+                root.render(
+                    <DesktopLayoutContext.Provider value={desktop}>
+                        <HomePageContext.Provider
+                            value={{ ...baseProps, contentBlocks: [couponBlock], coupons }}
+                        >
+                            <HomePage />
+                        </HomePageContext.Provider>
+                    </DesktopLayoutContext.Provider>,
+                ),
+            );
+        try {
+            show([]);
+            expect(host.querySelector('.coupon-hub-section')).toBeNull();
+            show([couponCampaign]);
+            expect(host.querySelector('.coupon-hub-section')).not.toBeNull();
+            show([]);
+            expect(host.querySelector('.coupon-hub-section')).toBeNull();
+            expect(host.textContent).not.toContain('暂无可领取的优惠');
+        } finally {
+            act(() => root.unmount());
+            host.remove();
+            vi.unstubAllGlobals();
+        }
+    });
     it.each([false, true])('renders known offers without an account on desktop=%s', desktop => {
         const markup = renderHome({ contentBlocks: [couponBlock], coupons: [couponCampaign] }, desktop);
         expect(markup).toContain('领取 满100减10');

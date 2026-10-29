@@ -4,6 +4,7 @@ import {
     ArrowUpDown,
     ChevronDown,
     ChevronUp,
+    Headset,
     LayoutGrid,
     Search,
     SlidersHorizontal,
@@ -571,8 +572,13 @@ export function CategoryPage() {
                                     ? '咨询商品、订单与售后问题'
                                     : 'Get help with products, orders and after-sales'}
                             </p>
-                            <button type="button" onClick={() => navigateTo({ name: 'support' })}>
-                                {isZh ? '联系客服' : 'Contact support'}
+                            <button
+                                type="button"
+                                className="type-action mt-4 flex min-h-11 w-full items-center justify-center gap-2 px-3 py-2"
+                                onClick={() => navigateTo({ name: 'support' })}
+                            >
+                                <Headset size={16} aria-hidden="true" />
+                                <span>{isZh ? '联系客服' : 'Contact support'}</span>
                             </button>
                         </section>
                     </aside>
