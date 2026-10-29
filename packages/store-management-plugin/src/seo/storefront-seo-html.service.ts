@@ -198,8 +198,13 @@ export class StorefrontSeoHtmlService {
     private admit(html: string, expiresAt: number): boolean {
         const now = Date.now();
         for (const [id, entry] of this.admissions) if (entry.expiresAt <= now) this.admissions.delete(id);
-        const bytes = Buffer.byteLength(html, 'utf8');
+        // UTF-8 uses at most three bytes per UTF-16 code unit. Reserve that safe
+        // upper bound for ordinary documents without traversing a large HTML rope.
+        // Only count exact bytes when a limit would otherwise reject this fill.
+        let bytes = html.length * 3;
         const used = [...this.admissions.values()].reduce((sum, entry) => sum + entry.bytes, 0);
+        if (bytes > MAX_DOCUMENT_BYTES || used + bytes > MAX_HTML_BYTES)
+            bytes = Buffer.byteLength(html, 'utf8');
         if (
             expiresAt <= now ||
             bytes > MAX_DOCUMENT_BYTES ||
