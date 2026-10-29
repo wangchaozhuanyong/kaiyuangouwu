@@ -10,6 +10,91 @@ import { triggerSql, validateTriggerRows } from '../../../deploy/prepare-mysql-a
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 
+void test('image signature updates cannot interrupt runtime switching and their timer is restored on exit', async () => {
+    const helper = await readFile(path.join(repositoryRoot, 'deploy/image-update-release-guard.sh'), 'utf8');
+    const script = `
+set -Eeuo pipefail
+timer_active=active
+polls=0
+elapsed=0
+case "$SCENARIO" in inactive) timer_active=inactive ;; esac
+sudo() {
+    shift
+    [[ "$1" == systemctl ]] || return 90
+    shift
+    case "$*" in
+        'show vendure-image-signature-update.timer -p LoadState --value')
+            if [[ "$SCENARIO" == missing ]]; then echo not-found; else echo loaded; fi ;;
+        'show vendure-image-signature-update.timer -p ActiveState --value') echo "$timer_active" ;;
+        'stop vendure-image-signature-update.timer') echo timer-stopped; timer_active=inactive ;;
+        'show vendure-image-signature-update.service -p ActiveState --value')
+            if [[ "$SCENARIO" == stuck || "$polls" == 0 ]]; then echo activating; else echo inactive; fi ;;
+        'is-active --quiet vendure-clamd.service'|'is-active --quiet vendure-image-worker.service')
+            [[ "$SCENARIO" != unhealthy ]] ;;
+        'start vendure-image-signature-update.timer')
+            echo timer-restored
+            [[ "$SCENARIO" != restore-failed ]] ;;
+        *) echo "unexpected systemctl action: $*" >&2; return 91 ;;
+    esac
+}
+sleep() { polls=$((polls + 1)); elapsed=$((elapsed + 60)); }
+date() { echo "$elapsed"; }
+${helper}
+trap 'restore_image_signature_updates' EXIT
+pause_image_signature_updates
+echo runtime-switch
+if [[ "$SCENARIO" == deploy-failed ]]; then exit 7; fi
+`;
+    for (const scenario of [
+        'normal',
+        'deploy-failed',
+        'stuck',
+        'unhealthy',
+        'inactive',
+        'missing',
+        'restore-failed',
+    ]) {
+        const result = spawnSync('bash', ['-c', script], {
+            encoding: 'utf8',
+            env: { ...process.env, SCENARIO: scenario },
+            timeout: 5_000,
+        });
+        const output = result.stdout;
+        if (['stuck', 'unhealthy'].includes(scenario)) {
+            assert.notEqual(result.status, 0, scenario);
+            assert.doesNotMatch(output, /runtime-switch/u);
+        } else if (scenario === 'deploy-failed') {
+            assert.equal(result.status, 7, result.stderr);
+        } else if (scenario === 'restore-failed') {
+            assert.notEqual(result.status, 0);
+        } else {
+            assert.equal(result.status, 0, `${scenario}: ${result.stderr}`);
+        }
+        if (['inactive', 'missing'].includes(scenario)) {
+            assert.doesNotMatch(output, /timer-stopped|timer-restored/u);
+        } else {
+            assert.match(output, /timer-stopped[\s\S]*timer-restored/u);
+            if (output.includes('runtime-switch')) {
+                assert.ok(output.indexOf('timer-stopped') < output.indexOf('runtime-switch'));
+                assert.ok(output.indexOf('runtime-switch') < output.indexOf('timer-restored'));
+            }
+        }
+    }
+    assert.doesNotMatch(helper, /reset-failed|--job-mode|systemctl stop vendure-clamd|systemctl disable/u);
+    for (const name of ['deploy-production-from-s3.sh', 'recover-current-production-runtime.sh']) {
+        const source = await readFile(path.join(repositoryRoot, 'deploy', name), 'utf8');
+        const pause = source.indexOf('\npause_image_signature_updates\n');
+        assert.ok(source.indexOf('flock --exclusive') < pause, name);
+        assert.ok(source.indexOf(' EXIT') < pause, name);
+        assert.ok(
+            pause < source.indexOf('\nVENDURE_DEPLOYMENT_ID=', pause) ||
+                pause < source.indexOf('deploy_stage="failed-release-retention"'),
+            name,
+        );
+        assert.match(source, /restore_image_signature_updates/u);
+    }
+});
+
 void test('proxy subnets reject forged forwarded addresses and retain valid loopback forwarding', () => {
     // GHSA-jqcg-44mw-7w3h: short IPv4-mapped IPv6 prefixes must not trust every IPv4 peer.
     const proxyaddr = createRequire(import.meta.url)('proxy-addr');

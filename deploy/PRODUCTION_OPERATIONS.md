@@ -60,6 +60,15 @@ metadata, and the existing release retention plan. Backup contents, environment
 files and PM2 environment values are never logged. A blocked retention snapshot
 cannot produce an approval hash.
 
+Runtime deployment and recovery hold the existing deployment lock, temporarily
+stop an active `vendure-image-signature-update.timer`, and wait at most ten minutes
+for an already running update to finish before changing runtime processes. The
+updater itself is never stopped. Both image services must then be active. Exit
+cleanup restores a previously active timer on success or failure; an inactive or
+absent timer stays unchanged. Antivirus scanning, startup limits, timer enablement,
+and the update schedule are not changed. A timeout or unhealthy dependency blocks
+the runtime switch instead of bypassing the image readiness gate.
+
 Image diagnostics also report the fixed `vendure-clamd.service` and
 `vendure-image-worker.service` states, startup limits, dependencies, and local
 socket presence. A release with an existing image worker stops at preflight if

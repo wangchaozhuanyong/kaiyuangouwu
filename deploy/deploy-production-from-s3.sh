@@ -510,6 +510,9 @@ storefront_pointer_changed=0
 two_factor_pointer_changed=0
 admin_pointer_changed=0
 
+# shellcheck source=deploy/image-update-release-guard.sh
+source "${repository}/deploy/image-update-release-guard.sh"
+
 refresh_image_processor() {
     local runtime="${1}"
     if [[ ! -f "${runtime}/deploy/image-worker/server.cjs" ]]; then
@@ -545,6 +548,7 @@ cleanup() {
         "${migration_failure_log}" == /tmp/vendure-migration-output.* ]]; then
         rm -f -- "${migration_failure_log}"
     fi
+    restore_image_signature_updates
 }
 
 rollback() {
@@ -627,6 +631,9 @@ handle_deploy_exit() {
 
 trap handle_deploy_exit EXIT
 trap rollback ERR
+
+deploy_stage="image-signature-update-guard"
+pause_image_signature_updates
 
 sudo -n install -o root -g root -m 0755 "${swap_controller_source}" "${swap_controller}"
 sudo -n "${swap_controller}"
@@ -1334,6 +1341,7 @@ if [[ "$retain_frontends" == true ]]; then
 fi
 rollback_needed=0
 trap - ERR
+restore_image_signature_updates
 printf 'deployment_id=%s\n' "${deployment_id}"
 printf 'previous_runtime=%s\n' "${previous_runtime}"
 printf 'target_runtime=%s\n' "${candidate}"
