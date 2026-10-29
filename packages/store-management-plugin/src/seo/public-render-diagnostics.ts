@@ -4,7 +4,13 @@ export type PublicDocumentStage =
     'read-page' | 'resolve-seo' | 'required-content' | 'render-html' | 'verify-publication' | 'resolved-seo';
 
 export type PublicHtmlRenderStage =
-    'artifact-root' | 'renderer-load' | 'template-read' | 'route-styles' | 'body-render' | 'html-assemble';
+    | 'artifact-root'
+    | 'renderer-load'
+    | 'template-read'
+    | 'route-styles'
+    | 'body-render'
+    | 'html-assemble'
+    | 'html-cache';
 
 export class PublicHtmlRenderError extends ServiceUnavailableException {
     constructor(

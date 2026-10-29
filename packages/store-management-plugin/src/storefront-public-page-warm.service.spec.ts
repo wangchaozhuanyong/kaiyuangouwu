@@ -14,7 +14,7 @@ const route = (id: string, host = 'a.test'): PublicHotRoute => ({
     seenAt: Date.now(),
 });
 
-function harness(isWorker = false, sharedVersions = true) {
+function harness(isWorker = false, sharedVersions = true, prepareHtml = false) {
     let process: (job: { data: { channelId: string } }) => Promise<unknown> = () => Promise.resolve();
     const add = vi.fn().mockResolvedValue({});
     const jobs = {
@@ -61,13 +61,26 @@ function harness(isWorker = false, sharedVersions = true) {
     };
     const access = { resolveRequest: vi.fn().mockResolvedValue({ ctx }) };
     const revision = { value: 'r1' };
-    const publicCache = { sharedVersions, revision: vi.fn(() => Promise.resolve(revision.value)) };
+    const publicCache = {
+        sharedVersions,
+        revision: vi.fn(() => Promise.resolve(revision.value)),
+        runGuarded: vi.fn(async (guard, run) => {
+            await guard();
+            return run();
+        }),
+    };
     const pages = {
         getAccessMode: vi.fn().mockResolvedValue('LIVE'),
         peek: vi.fn().mockResolvedValue(undefined),
         read: vi.fn().mockResolvedValue({}),
         prepareBootMedia: vi.fn().mockResolvedValue(undefined),
+        readForDocument: vi.fn().mockResolvedValue({ failures: [] }),
     };
+    const publicSeo = {
+        enrich: vi.fn((_ctx, _host, page) => Promise.resolve(page)),
+        assertOutput: vi.fn().mockResolvedValue(undefined),
+    };
+    const html = { render: vi.fn().mockResolvedValue('<html>Prepared public document</html>') };
     const service = new StorefrontPublicPageWarmService(
         jobs as never,
         { isWorker } as never,
@@ -76,6 +89,8 @@ function harness(isWorker = false, sharedVersions = true) {
         access as never,
         pages as never,
         publicCache as never,
+        prepareHtml ? (publicSeo as never) : undefined,
+        prepareHtml ? (html as never) : undefined,
     );
     return {
         service,
@@ -83,6 +98,8 @@ function harness(isWorker = false, sharedVersions = true) {
         pages,
         revision,
         publicCache,
+        publicSeo,
+        html,
         access,
         add,
         records,
@@ -93,6 +110,34 @@ function harness(isWorker = false, sharedVersions = true) {
 
 describe('bounded public page preparation', () => {
     afterEach(() => vi.useRealTimers());
+    it('prepares both public audiences beside a local API cache without adding database jobs', async () => {
+        const h = harness(false, false, true);
+        h.pages.read.mockResolvedValue({ failures: [] });
+        await h.service.onApplicationBootstrap();
+        await vi.waitFor(() => expect(h.html.render).toHaveBeenCalledTimes(4));
+        expect(h.html.render.mock.calls.map(call => call[0].couponAudience)).toEqual([
+            'anonymous',
+            'unknown',
+            'anonymous',
+            'unknown',
+        ]);
+        expect(h.add).not.toHaveBeenCalled();
+        h.service.onApplicationShutdown();
+    });
+    it('keeps local worker HTML private to its cache and treats preparation failure as optional', async () => {
+        const worker = harness(true, false, true);
+        await worker.service.onApplicationBootstrap();
+        await worker.run();
+        expect(worker.html.render).not.toHaveBeenCalled();
+        worker.service.onApplicationShutdown();
+        const shared = harness(true, true, true);
+        shared.pages.read.mockResolvedValue({ failures: [] });
+        shared.publicSeo.assertOutput.mockRejectedValue(new Error('Publication changed'));
+        await shared.service.onApplicationBootstrap();
+        await expect(shared.run()).resolves.toMatchObject({ warmed: 4 });
+        expect(shared.html.render).not.toHaveBeenCalled();
+        shared.service.onApplicationShutdown();
+    });
     it('warms the serving API cache when the worker cannot share its cache generations', async () => {
         vi.useFakeTimers();
         const api = harness(false, false);

@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, OnApplicationShutdown, Optional } from '@nestjs/common';
 import {
     CacheService,
     ForbiddenError,
@@ -19,11 +19,14 @@ import {
     type PrimaryStorefrontMediaInput,
     type PublicNavigationCollection,
     type PublicPageRequest,
+    type StorefrontPageData,
 } from '@vendure/storefront-content-plugin';
 import type { Request } from 'express';
 
 import { StorefrontPublicCacheService } from './performance/storefront-public-cache.service';
 import { StorefrontPromotionAccessService } from './promotion/storefront-promotion-access.service';
+import { StorefrontPublicSeoService } from './seo/storefront-public-seo.service';
+import { StorefrontSeoHtmlService } from './seo/storefront-seo-html.service';
 import { StorefrontClosedError } from './storefront-activation.service';
 import { publicSectionWithinBudget, StorefrontPublicPageService } from './storefront-public-page.service';
 import { publicPagePreferences } from './storefront-public-request';
@@ -99,6 +102,8 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
         private readonly access: StorefrontPromotionAccessService,
         private readonly pages: StorefrontPublicPageService,
         private readonly publicCache: StorefrontPublicCacheService,
+        @Optional() private readonly publicSeo?: StorefrontPublicSeoService,
+        @Optional() private readonly html?: StorefrontSeoHtmlService,
     ) {}
 
     async onApplicationBootstrap() {
@@ -277,6 +282,7 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             if (refreshHome) warmed++;
             if ((await this.registryKey(ctx)) !== key) return { warmed };
             await this.pages.prepareBootMedia(ctx, base.host);
+            await this.prepareHomeHtml(ctx, base.host, home);
             const homeRoute = { ...base, request: homeRequest };
             preparedHomes.add(identity(homeRoute));
             defaults.push(homeRoute, { ...base, request: { kind: 'catalog', input: {} } });
@@ -328,6 +334,32 @@ export class StorefrontPublicPageWarmService implements OnApplicationBootstrap, 
             if (route.request.kind === 'home') await this.pages.prepareBootMedia(ctx, route.host);
         }
         return { warmed };
+    }
+
+    private async prepareHomeHtml(ctx: RequestContext, host: string, home: StorefrontPageData) {
+        const publicSeo = this.publicSeo;
+        const html = this.html;
+        // Render beside the cache owner: a local worker cannot populate the API's local entries.
+        if (!publicSeo || !html || (this.processContext.isWorker && !this.publicCache.sharedVersions)) return;
+        try {
+            const revision = await this.publicCache.revision(ctx.channelId);
+            if (!revision || home.failures.length) return;
+            const document = await this.pages.readForDocument(ctx, host, { kind: 'home' });
+            const page = await publicSeo.enrich(ctx, host, document);
+            const assertCurrent = async () => {
+                await publicSeo.assertOutput(ctx, page);
+                if (revision !== (await this.publicCache.revision(ctx.channelId)))
+                    throw new Error('Public preparation superseded');
+            };
+            await assertCurrent();
+            for (const couponAudience of ['anonymous', 'unknown'] as const)
+                await this.publicCache.runGuarded(assertCurrent, () =>
+                    html.render({ ...page, couponAudience }, ctx),
+                );
+        } catch {
+            // Optional HTML preparation cannot fail the existing data/media warm job.
+            this.failed();
+        }
     }
 
     private async verifiedContext(host: string, channelId: string): Promise<RequestContext | undefined> {

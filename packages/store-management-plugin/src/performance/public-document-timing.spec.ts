@@ -5,6 +5,7 @@ import {
     measurePublicDocumentSync,
     publicDocumentTimingHeader,
     recordPublicDocumentCache,
+    recordPublicHtmlCache,
     withPublicDocumentTiming,
 } from './public-document-timing';
 
@@ -16,6 +17,20 @@ function deferred() {
     return { promise, resolve };
 }
 afterEach(() => vi.restoreAllMocks());
+
+it('reports HTML reuse separately and ignores unsafe outcomes and late work', () => {
+    withPublicDocumentTiming(() => {
+        recordPublicDocumentCache('hit');
+        recordPublicHtmlCache('join');
+        recordPublicHtmlCache('private-host";desc="unsafe' as never);
+        const header = publicDocumentTimingHeader();
+        expect(header).toContain('storefront-page-cache;desc="hit"');
+        expect(header).toContain('storefront-html-cache;desc="join"');
+        expect(header.join(',')).not.toContain('private-host');
+        recordPublicHtmlCache('miss');
+        expect(publicDocumentTimingHeader()).toEqual(header);
+    });
+});
 
 describe('request-local public document timing', () => {
     it('isolates interleaved requests and leaves non-document reads untouched', async () => {
