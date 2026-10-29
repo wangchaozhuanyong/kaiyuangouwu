@@ -46,6 +46,7 @@ import {
     preservePublicMediaPreviews,
     publicMediaAssetIdentity,
     publicMediaPreviewGroups,
+    publicMediaPreviewPlan,
     publicMediaWithPreviews,
     publicPageMedia,
 } from './performance/storefront-public-media';
@@ -647,12 +648,6 @@ export class StorefrontPublicPageService {
                   catalogPath: request?.kind === 'catalog' ? request.path : undefined,
               })
             : [];
-        const priority = new Set(
-            first.map(
-                candidate =>
-                    publicMediaAssetIdentity(mediaDescriptor(candidate.source, candidate.kind), host)?.key,
-            ),
-        );
         const content = page.content as { blocks?: StorefrontContentBlock[] } | undefined;
         const visible = publicPageMedia({
             ...page,
@@ -677,15 +672,16 @@ export class StorefrontPublicPageService {
         });
         const eligible = new Set(visible.map(item => publicMediaAssetIdentity(item, host)?.key));
         const selected = media.filter(item => eligible.has(publicMediaAssetIdentity(item, host)?.key));
-        const ordered = [
-            ...selected.filter(item => priority.has(publicMediaAssetIdentity(item, host)?.key)),
-            ...selected.filter(item => !priority.has(publicMediaAssetIdentity(item, host)?.key)),
-        ];
+        const { media: ordered, assetLimit } = publicMediaPreviewPlan(
+            page,
+            selected,
+            first.map(candidate => mediaDescriptor(candidate.source, candidate.kind)),
+        );
         const available = new Map<string, string>();
         const documentPaths = new Set<string>();
         const logoUrl = (page.config as { logoUrl?: string | null }).logoUrl;
         if (document) {
-            const firstAssets = publicMediaPreviewGroups(ordered, host, logoUrl);
+            const firstAssets = publicMediaPreviewGroups(ordered, host, logoUrl, assetLimit);
             const versionsByPath = new Map<string, Set<string>>();
             for (const item of ordered) {
                 const identity = publicMediaAssetIdentity(item, host);
@@ -693,13 +689,15 @@ export class StorefrontPublicPageService {
                 const versions = versionsByPath.get(identity.path) ?? new Set<string>();
                 versions.add(identity.key);
                 versionsByPath.set(identity.path, versions);
-                if (validInlineImagePreview(item.placeholder?.inlineData))
-                    available.set(identity.path, item.placeholder.inlineData);
+                const preview = item.placeholder?.inlineData;
+                if (validInlineImagePreview(preview) && preview.length <= 512)
+                    available.set(identity.path, preview);
             }
             if (
-                [...firstAssets.values()].every(group =>
-                    validInlineImagePreview(ordered[group.indexes[0]]?.placeholder?.inlineData),
-                )
+                [...firstAssets.values()].every(group => {
+                    const preview = ordered[group.indexes[0]]?.placeholder?.inlineData;
+                    return validInlineImagePreview(preview) && preview.length <= 512;
+                })
             )
                 return media;
             for (const group of firstAssets.values()) documentPaths.add(group.path);
@@ -733,12 +731,13 @@ export class StorefrontPublicPageService {
                         throw error;
                     }
                 },
-                path => Promise.resolve(available.get(path) ?? reader.readPublicInlinePreview(path)),
+                path => Promise.resolve(available.get(path) ?? reader.readPublicInlinePreview(path, 512)),
                 // Ordinary public/preview reads keep 250ms; only queue-owned workers use 2s.
                 // The HTML response has its own bounded continuation; SSI remains cache-only.
                 document ? Math.max(0, document.deadline - Date.now()) : prepare ? 2_000 : 250,
                 preparation,
                 logoUrl,
+                assetLimit,
             );
             const result = [
                 ...populated,
@@ -754,7 +753,7 @@ export class StorefrontPublicPageService {
         // A page descriptor never grants asset access: verify the manifest before local storage reads.
         try {
             const reader = this.moduleRef.get<{
-                readPublicInlinePreview(path: string): Promise<string | undefined>;
+                readPublicInlinePreview(path: string, maxLength?: 512 | 1024): Promise<string | undefined>;
             }>('STOREFRONT_PUBLIC_IMAGE_PREVIEW', { strict: false });
             const manifest = this.moduleRef.get<StorefrontMediaManifestService>(
                 StorefrontMediaManifestService,

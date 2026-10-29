@@ -1,21 +1,6 @@
 export type StorefrontImageKind = 'card' | 'detail' | 'hero' | 'icon' | 'thumbnail';
 
-/** Match shared component geometry; these are CSS widths, before device pixel ratio. */
-export const STOREFRONT_IMAGE_SIZES = {
-    productRow: '(min-width: 1024px) 300px, 104px',
-    // category-layout sidebar = clamp(64px, 22%, 86px); list has 8px insets on each side.
-    categorySidebarRow:
-        '(min-width: 1024px) 300px, clamp(64px, calc((100vw - clamp(64px, 22vw, 86px) - 16px) * 0.3), 104px)',
-    // Desktop catalog: min(viewport - 64px, 1280px) shell; 220px sidebar + 20px gap;
-    // auto-fill min 180px cards with 16px gaps yields 3/4/5 tracks; full shell has 195.2px cards.
-    desktopCatalogCard:
-        '(min-width: 1344px) 195.2px, (min-width: 1268px) calc((100vw - 368px) / 5), ' +
-        '(min-width: 1072px) calc((100vw - 352px) / 4), ' +
-        '(min-width: 1024px) calc((100vw - 336px) / 3), 104px',
-    compactProductRow: '104px',
-    categoryNavigation: '(min-width: 1024px) 44px, 56px',
-    galleryThumbnail: '60px',
-} as const;
+export { STOREFRONT_IMAGE_SIZES, catalogCardImageSizes } from './storefront-image-layouts';
 
 interface ImagePreset {
     name: string;
@@ -141,17 +126,15 @@ export function mediaDescriptor(
     };
 }
 
+function imagePresets(prefix: string, widths: readonly number[]): ImagePreset[] {
+    return widths.map(width => ({ name: `${prefix}-${width}`, width }));
+}
+
 const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     card: {
         width: 960,
         height: 960,
-        presets: [
-            { name: 'storefront-card-square-160', width: 160 },
-            { name: 'storefront-card-square-240', width: 240 },
-            { name: 'storefront-card-square-320', width: 320 },
-            { name: 'storefront-card-square-640', width: 640 },
-            { name: 'storefront-card-square-960', width: 960 },
-        ],
+        presets: imagePresets('storefront-card-square', [160, 240, 320, 480, 640, 960]),
         placeholderPreset: 'storefront-placeholder-square-48',
         quality: 90,
         sizes: '(min-width: 900px) 300px, calc(50vw - 14px)',
@@ -159,11 +142,7 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     detail: {
         width: 1600,
         height: 1600,
-        presets: [
-            { name: 'storefront-detail-640', width: 640 },
-            { name: 'storefront-detail-1200', width: 1200 },
-            { name: 'storefront-detail-1600', width: 1600 },
-        ],
+        presets: imagePresets('storefront-detail', [640, 1200, 1600]),
         placeholderPreset: 'storefront-placeholder-square-48',
         quality: 90,
         sizes: '(min-width: 1024px) 600px, 100vw',
@@ -171,12 +150,7 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     hero: {
         width: 1600,
         height: 800,
-        presets: [
-            { name: 'storefront-hero-fit-480', width: 480 },
-            { name: 'storefront-hero-fit-960', width: 960 },
-            { name: 'storefront-hero-fit-1440', width: 1440 },
-            { name: 'storefront-hero-fit-1600', width: 1600 },
-        ],
+        presets: imagePresets('storefront-hero-fit', [480, 960, 1440, 1600]),
         placeholderPreset: 'storefront-placeholder-wide-64',
         quality: 90,
         sizes: '(min-width: 1024px) 850px, calc(100vw - 20px)',
@@ -184,10 +158,7 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     icon: {
         width: 96,
         height: 96,
-        presets: [
-            { name: 'storefront-icon-64', width: 64 },
-            { name: 'storefront-icon-96', width: 96 },
-        ],
+        presets: imagePresets('storefront-icon', [64, 96]),
         placeholderPreset: 'storefront-placeholder-square-48',
         quality: 82,
         sizes: '48px',
@@ -195,15 +166,24 @@ const IMAGE_PRESETS: Record<StorefrontImageKind, ImagePresetGroup> = {
     thumbnail: {
         width: 320,
         height: 320,
-        presets: [
-            { name: 'storefront-thumbnail-160', width: 160 },
-            { name: 'storefront-thumbnail-320', width: 320 },
-        ],
+        presets: imagePresets('storefront-thumbnail', [160, 320]),
         placeholderPreset: 'storefront-placeholder-square-48',
         quality: 90,
         sizes: '160px',
     },
 };
+
+/** Server registration and browser/worker candidates share the same finite presets. */
+export function storefrontResponsiveImagePresets() {
+    return Object.entries(IMAGE_PRESETS).flatMap(([kind, group]) =>
+        group.presets.map(preset => ({
+            name: preset.name,
+            width: preset.width,
+            height: preset.width,
+            mode: kind === 'icon' || kind === 'thumbnail' ? ('crop' as const) : ('resize' as const),
+        })),
+    );
+}
 
 function isTransformableAsset(url: URL): boolean {
     return /\/assets\/(?:preview|source)\//.test(url.pathname);

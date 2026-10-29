@@ -1,7 +1,7 @@
 import { preload } from 'react-dom';
 
 import {
-    primaryStorefrontMedia,
+    primaryStorefrontNavigationMedia,
     type PrimaryStorefrontMediaRoute,
 } from '../../storefront-content-plugin/src/shared/primary-media';
 
@@ -26,7 +26,7 @@ export function preloadRouteMedia(
         )
     )
         return;
-    const candidates = primaryStorefrontMedia({
+    const candidates = primaryStorefrontNavigationMedia({
         route: route.name as PrimaryStorefrontMediaRoute,
         blocks,
         product: route.name === 'product' ? products.find(item => item.id === route.id) : undefined,

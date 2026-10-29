@@ -43,12 +43,22 @@ export type CatalogRouteState = Pick<
 >;
 
 export function resolveCategoryRoute(route: RouteState, collections: CollectionSummary[]): RouteState {
-    if (route.name !== 'category' || (route.collectionId && route.collectionId !== 'all')) return route;
-    if (route.childId && route.childId !== 'all') {
+    if (route.name !== 'category') return route;
+    const explicitChild = route.childId && route.childId !== 'all';
+    if (
+        route.collectionId &&
+        route.collectionId !== 'all' &&
+        (explicitChild || collections.some(collection => collection.id === route.collectionId))
+    )
+        return route;
+    // Canonical public reads identify the effective child; browser links may spell
+    // out its parent. Resolve both into the same structure before hydration.
+    const childId = explicitChild ? route.childId : route.collectionId;
+    if (childId && childId !== 'all') {
         const parent = collections.find(collection =>
-            collection.children?.some(child => child.id === route.childId),
+            collection.children?.some(child => child.id === childId),
         );
-        return parent ? { ...route, collectionId: parent.id } : route;
+        return parent ? { ...route, collectionId: parent.id, childId } : route;
     }
     const first = collections.find(collection => collection.id && collection.id !== 'all');
     return first ? { ...route, collectionId: first.id, childId: 'all' } : route;

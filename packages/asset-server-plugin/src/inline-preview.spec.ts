@@ -39,6 +39,19 @@ async function harness(worker = false) {
 }
 
 describe('public inline media previews', () => {
+    it('fits the twelve-card budget with valid pixels and reuses the existing derivative cache', async () => {
+        const { server, storage } = await harness(true);
+        const compact = await server.readPublicInlinePreview('preview/landscape.png', 512);
+        expect(compact).toBeDefined();
+        if (!compact) throw new Error('Expected compact preview');
+        expect(compact.length).toBeLessThanOrEqual(512);
+        expect(await sharp(Buffer.from(compact.split(',')[1], 'base64')).metadata()).toMatchObject({
+            format: 'webp',
+        });
+        const writes = storage.writeFileFromBuffer.mock.calls.length;
+        expect(await server.readPublicInlinePreview('preview/landscape.png', 512)).toBe(compact);
+        expect(storage.writeFileFromBuffer).toHaveBeenCalledTimes(writes);
+    });
     it.each([false, true])('returns bounded real WebP pixels without cropping (worker=%s)', async worker => {
         const { server } = await harness(worker);
         for (const [identifier, width, height] of [

@@ -6,6 +6,7 @@ import {
     PUBLIC_MEDIA_USES,
     publicContentImageKinds,
     publicHeroMobileImage,
+    publicMediaPreviewPlan,
     publicMediaWithPreviews,
     publicPageMedia,
 } from './storefront-public-media';
@@ -28,6 +29,83 @@ const sources = (media: ReturnType<typeof publicPageMedia>, kind: string) =>
     media.filter(item => item.kind === kind).map(item => item.identity);
 
 describe('public page media projection', () => {
+    it.each(['/category', '/search'])('reserves previews for all twelve current cards on %s', async path => {
+        const products = Array.from({ length: 12 }, (_, index) => ({
+            id: String(index),
+            featuredAsset: { preview: `/assets/preview/product-${index}.webp?v=2` },
+        }));
+        const data = page({
+            request: { kind: 'catalog', path, input: { take: 12 } },
+            config: {
+                logoUrl: '/assets/preview/logo.webp',
+                logoOnDarkUrl: '/assets/preview/other-logo.webp',
+            },
+            content: {
+                blocks: [
+                    {
+                        type: 'QUICK_LINKS',
+                        items: Array.from({ length: 8 }, (_, index) => ({
+                            imageUrl: `/assets/preview/shortcut-${index}.webp`,
+                        })),
+                    },
+                ],
+            },
+            catalog: { items: products, totalItems: 15 },
+        });
+        const plan = publicMediaPreviewPlan(data, publicPageMedia(data), [
+            mediaDescriptor(products[0].featuredAsset.preview, 'card'),
+        ]);
+        const read = vi.fn(() => Promise.resolve('data:image/webp;base64,' + 'A'.repeat(487)));
+        const result = await publicMediaWithPreviews(
+            plan.media,
+            data.scope.host,
+            () => Promise.resolve(true),
+            read,
+            250,
+            undefined,
+            data.config.logoUrl,
+            plan.assetLimit,
+        );
+        const cards = result.filter(item => item.kind === 'card' && item.identity.includes('product-'));
+        expect(cards).toHaveLength(12);
+        expect(cards.every(item => item.placeholder?.inlineData.length === 510)).toBe(true);
+        expect(
+            cards.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(6144);
+        expect(
+            result.reduce((sum, item) => sum + (item.placeholder?.inlineData.length ?? 0), 0),
+        ).toBeLessThanOrEqual(8192);
+        expect(read).toHaveBeenCalledTimes(13);
+        expect(read.mock.calls.flat().some(value => String(value).includes('shortcut'))).toBe(false);
+        expect(result.find(item => item.identity.includes('other-logo'))?.placeholder).toBeUndefined();
+    });
+
+    it('keeps home art direction before current product previews and decoration after them', () => {
+        const data = page({
+            request: { kind: 'home' },
+            products: [{ id: 'p', featuredAsset: { preview: '/assets/preview/product.webp' } }],
+            content: {
+                blocks: [
+                    {
+                        type: 'HERO',
+                        imageUrl: '/assets/preview/hero.webp',
+                        settings: { mobileImageUrl: '/assets/preview/mobile.webp' },
+                    },
+                    { type: 'QUICK_LINKS', items: [{ imageUrl: '/assets/preview/shortcut.webp' }] },
+                ],
+            },
+        });
+        const plan = publicMediaPreviewPlan(data, publicPageMedia(data), [
+            mediaDescriptor('/assets/preview/mobile.webp', 'hero'),
+            mediaDescriptor('/assets/preview/hero.webp', 'hero'),
+        ]);
+        expect(plan.media.slice(0, 3).map(item => [item.identity, item.kind])).toEqual([
+            ['/assets/preview/mobile.webp', 'hero'],
+            ['/assets/preview/hero.webp', 'hero'],
+            ['/assets/preview/product.webp', 'card'],
+        ]);
+        expect(plan.assetLimit).toBe(3);
+    });
     it('includes all existing config logos, content items, collection children, product lists, galleries, variants and flash-sale media', () => {
         const media = publicPageMedia(
             page({

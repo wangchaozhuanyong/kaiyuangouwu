@@ -1492,6 +1492,35 @@ describe('SafeImage', () => {
         }
     });
 
+    it('retains the matching inline pixels when the full image fails, with local recovery', () => {
+        const host = document.createElement('div');
+        const root = createRoot(host);
+        const src = '/failed-full-image.webp';
+        const preview = 'data:image/png;base64,aW5saW5l';
+        try {
+            act(() =>
+                root.render(
+                    <SafeImageMediaProvider
+                        media={[mediaDescriptor(src, 'card', { inlinePreview: preview })]}
+                    >
+                        <SafeImage src={src} imageKind="card" alt="Product" />
+                    </SafeImageMediaProvider>,
+                ),
+            );
+            const frame = host.querySelector('.safe-image-frame');
+            const image = host.querySelector('.safe-image');
+            if (!image) throw new Error('Expected image');
+            act(() => {
+                image.dispatchEvent(new Event('error'));
+            });
+            expect(host.querySelector('.safe-image-frame')).toBe(frame);
+            expect(host.querySelector('[data-safe-image="error"]')).not.toBeNull();
+            expect(host.querySelector('.safe-image-preview')?.getAttribute('src')).toBe(preview);
+        } finally {
+            act(() => root.unmount());
+        }
+    });
+
     it('renders supplied bounded inline hints independently of request priority without another request', () => {
         const preview = 'data:image/png;base64,aW5saW5l';
         const media = [mediaDescriptor('/cover.png?v=one', 'hero', { inlinePreview: preview })];

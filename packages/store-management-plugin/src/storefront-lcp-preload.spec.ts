@@ -536,7 +536,7 @@ describe('storefront LCP preload', () => {
 
     it.each([
         ['parent', '/category', true],
-        ['child', '/category', false],
+        ['child', '/category', true],
         ['empty-parent', '/category', false],
         ['leaf', '/category', false],
         ['all', '/category', false],
@@ -581,8 +581,12 @@ describe('storefront LCP preload', () => {
             expect(mobile).toContain(`imagesizes="${descriptor.sizes}"`);
             expect(mobile).toContain(`imagesrcset="${descriptor.srcSet?.replace(/&/gu, '&amp;')}"`);
             const desktop = fragment.split('\n').find(line => line.includes('media="(min-width: 1024px)"'));
+            const desktopSizes =
+                path === '/search'
+                    ? STOREFRONT_IMAGE_SIZES.searchCard
+                    : STOREFRONT_IMAGE_SIZES.desktopCatalogCard;
             expect(desktop).toContain(
-                `imagesizes="${mediaDescriptor(source, 'card', { sizes: STOREFRONT_IMAGE_SIZES.desktopCatalogCard }).sizes}"`,
+                `imagesizes="${mediaDescriptor(source, 'card', { sizes: desktopSizes }).sizes}"`,
             );
         },
     );

@@ -1,6 +1,8 @@
+import { responsiveImageSources } from '@vendure/storefront-content-plugin';
 import { Subject } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { storefrontAssetPresets } from './storefront-asset-presets';
 import { publicDerivativePlans, StorefrontMediaJobsService } from './storefront-media-jobs.plugin';
 vi.mock('@vendure/store-management-plugin', () => ({
     StorefrontMediaDeliveryService: class {},
@@ -76,7 +78,31 @@ describe('finite media job queues', () => {
             kind,
         }));
         const plans = publicDerivativePlans([...uses, ...uses]);
-        expect(plans).toHaveLength(16);
+        expect(plans).toHaveLength(17);
+        for (const kind of ['card', 'detail', 'hero', 'icon', 'thumbnail'] as const) {
+            const source = responsiveImageSources('/assets/preview/image.jpg', kind);
+            if (!source) throw new Error('Expected responsive source');
+            const candidates = source.webpSrcSet;
+            for (const candidate of candidates.split(', ')) {
+                const [href, width] = candidate.split(' ');
+                const url = new URL(href, 'https://shop.example');
+                const preset = url.searchParams.get('preset');
+                expect(storefrontAssetPresets.find(item => item.name === preset)?.width).toBe(
+                    parseInt(width, 10),
+                );
+                expect(plans).toContainEqual({
+                    path: 'preview/image.jpg',
+                    preset,
+                    quality: Number(url.searchParams.get('q')),
+                });
+            }
+        }
+        expect(storefrontAssetPresets.find(item => item.name === 'storefront-card-square-480')).toMatchObject(
+            { width: 480, height: 480, mode: 'resize' },
+        );
+        expect(new Set(storefrontAssetPresets.map(item => item.name)).size).toBe(
+            storefrontAssetPresets.length,
+        );
         expect(plans.filter(plan => plan.preset.includes('icon')).map(plan => plan.quality)).toEqual([
             82, 82,
         ]);
@@ -103,6 +129,7 @@ describe('finite media job queues', () => {
                 await queue.process({ data: { channelId: 'a', host: 'shop.example', offset: 0 } }),
             ).toEqual({ prepared: 24, failed: 0 });
             expect(test.assets.readPublicInlinePreview).toHaveBeenCalledTimes(10);
+            expect(test.assets.readPublicInlinePreview).toHaveBeenCalledWith('preview/0.jpg', 512);
             expect(test.assets.preparePublicDerivative).toHaveBeenCalledTimes(14);
             expect(test.assets.readPublicInlinePreview.mock.invocationCallOrder.at(-1)).toBeLessThan(
                 test.assets.preparePublicDerivative.mock.invocationCallOrder[0],

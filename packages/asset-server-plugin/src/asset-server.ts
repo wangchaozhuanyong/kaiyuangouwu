@@ -64,7 +64,10 @@ export class AssetServer {
     }
 
     /** Callers must authorize this namespace-relative path with the store's public manifest first. */
-    async readPublicInlinePreview(identifier: string): Promise<string | undefined> {
+    async readPublicInlinePreview(
+        identifier: string,
+        maxLength: 512 | 1024 = 1024,
+    ): Promise<string | undefined> {
         this.assertPublicMediaPath(identifier);
         try {
             // Internal fixed transforms share the existing queue and persisted derivative cache.
@@ -85,7 +88,7 @@ export class AssetServer {
                     true,
                 );
                 const preview = `data:image/webp;base64,${image.toString('base64')}`;
-                if (preview.length <= 1024) return preview;
+                if (preview.length <= maxLength) return preview;
             }
         } catch {
             // A preview is optional: missing or busy media must not make public content unavailable.
