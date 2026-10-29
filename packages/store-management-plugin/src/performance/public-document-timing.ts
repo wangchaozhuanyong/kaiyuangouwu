@@ -16,6 +16,7 @@ const phases = [
     'page-loader-best-sellers',
     'page-loader-media',
     'render-artifact',
+    'render-key',
     'render-template',
     'render-styles',
     'render-react',
@@ -27,6 +28,7 @@ const outcomes = new Set<PublicCacheReadOutcome>(['hit', 'miss', 'join', 'bypass
 interface DocumentTiming {
     durations: Map<PublicDocumentPhase, number>;
     cache?: PublicCacheReadOutcome | 'mixed';
+    htmlCache?: PublicCacheReadOutcome | 'mixed';
     closed: boolean;
 }
 const requests = new AsyncLocalStorage<DocumentTiming>();
@@ -86,6 +88,12 @@ export function recordPublicDocumentCache(outcome: PublicCacheReadOutcome): void
     request.cache = request.cache && request.cache !== outcome ? 'mixed' : outcome;
 }
 
+export function recordPublicHtmlCache(outcome: PublicCacheReadOutcome): void {
+    const request = requests.getStore();
+    if (!request || request.closed || !outcomes.has(outcome)) return;
+    request.htmlCache = request.htmlCache && request.htmlCache !== outcome ? 'mixed' : outcome;
+}
+
 /** Seal before sending: optional reads finishing later cannot change a reported sample. */
 export function publicDocumentTimingHeader(): string[] {
     const request = requests.getStore();
@@ -95,5 +103,6 @@ export function publicDocumentTimingHeader(): string[] {
         ([phase, duration]) => `storefront-${phase};dur=${duration.toFixed(1)}`,
     );
     if (request.cache) entries.push(`storefront-page-cache;desc="${request.cache}"`);
+    if (request.htmlCache) entries.push(`storefront-html-cache;desc="${request.htmlCache}"`);
     return entries;
 }

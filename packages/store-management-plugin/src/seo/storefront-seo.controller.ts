@@ -199,7 +199,7 @@ export class StorefrontSeoController {
             if (page.failures.includes('content'))
                 throw new ServiceUnavailableException('Public content is unavailable');
             stage = 'render-html';
-            const rendered = await measure('render', () => this.html.render(page));
+            const rendered = await measure('render', () => this.html.render(page, ctx));
             stage = 'verify-publication';
             await measure('check', () => this.publicSeo.assertOutput(ctx, page));
             stage = 'resolved-seo';

@@ -306,7 +306,10 @@ describe('StorefrontSeoController public document and legacy redirects', () => {
             id: 'product-1',
         });
         expect(test.pages.read).not.toHaveBeenCalled();
-        expect(test.html.render).toHaveBeenCalledWith({ ...preparedPage, couponAudience: 'unknown' });
+        expect(test.html.render).toHaveBeenCalledWith(
+            { ...preparedPage, couponAudience: 'unknown' },
+            test.ctx,
+        );
         expect(response.status).toHaveBeenCalledWith(200);
     });
 

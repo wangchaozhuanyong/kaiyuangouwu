@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { RequestContext } from '@vendure/core';
 import {
+    isReusablePublicPageData,
     isStorefrontVisualPresetId,
     renderPublicSeoHead,
     resolveStorefrontSemanticPalette,
@@ -9,12 +11,18 @@ import {
     type StorefrontPageData,
 } from '@vendure/storefront-content-plugin';
 import { load } from 'cheerio';
+import { createHash } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
-import { measurePublicDocument, measurePublicDocumentSync } from '../performance/public-document-timing';
+import {
+    measurePublicDocument,
+    measurePublicDocumentSync,
+    recordPublicHtmlCache,
+} from '../performance/public-document-timing';
+import { StorefrontPublicCacheService } from '../performance/storefront-public-cache.service';
 import { renderStorefrontIconLinks } from '../storefront-lcp-preload.service';
 
 import { PublicHtmlRenderError, type PublicHtmlRenderStage } from './public-render-diagnostics';
@@ -29,6 +37,10 @@ type Renderer = {
 };
 const loadRenderer = createRequire(__filename);
 const scriptAssetName = /^[\w-]+\.js$/u;
+const SNAPSHOT_LIFETIME = 30_000;
+const MAX_HTML_ENTRIES = 64;
+const MAX_HTML_BYTES = 32 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 
 /** Replaces metadata without disturbing the matching artifact's styles, icons or script entry. */
 export function assemblePublicHtml(
@@ -178,6 +190,30 @@ export function assemblePublicHtml(
 @Injectable()
 export class StorefrontSeoHtmlService {
     private lastRendererPath?: string;
+    // Admission bookkeeping only. HTML and in-flight work stay in the existing public cache.
+    private readonly admissions = new Map<symbol, { bytes: number; expiresAt: number }>();
+
+    constructor(@Optional() private readonly publicCache?: StorefrontPublicCacheService) {}
+
+    private admit(html: string, expiresAt: number): boolean {
+        const now = Date.now();
+        for (const [id, entry] of this.admissions) if (entry.expiresAt <= now) this.admissions.delete(id);
+        const bytes = Buffer.byteLength(html, 'utf8');
+        const used = [...this.admissions.values()].reduce((sum, entry) => sum + entry.bytes, 0);
+        if (
+            expiresAt <= now ||
+            bytes > MAX_DOCUMENT_BYTES ||
+            this.admissions.size >= MAX_HTML_ENTRIES ||
+            used + bytes > MAX_HTML_BYTES
+        )
+            return false;
+        // Reserve beyond the public cache's maximum entry lifetime, including a
+        // fill which finishes near source expiry. Early eviction only makes this conservative.
+        // A changed public revision can retain another entry for the same content hash.
+        // Count every attempted fill independently, including conservative CAS losers.
+        this.admissions.set(Symbol(), { bytes, expiresAt: now + 60_000 });
+        return true;
+    }
 
     private artifactRoot(): string {
         // Operational deployment pointer, never a merchant presentation choice.
@@ -186,7 +222,7 @@ export class StorefrontSeoHtmlService {
         return existsSync(active) ? realpathSync(active) : local;
     }
 
-    async render(page: StorefrontPageData): Promise<string> {
+    async render(page: StorefrontPageData, ctx?: RequestContext): Promise<string> {
         let stage: PublicHtmlRenderStage = 'artifact-root';
         try {
             const { root, renderer } = measurePublicDocumentSync('render-artifact', () => {
@@ -199,59 +235,109 @@ export class StorefrontSeoHtmlService {
                 this.lastRendererPath = rendererPath;
                 return { root: artifactRoot, renderer: artifactRenderer };
             });
-            stage = 'template-read';
-            const template = await measurePublicDocument('render-template', () =>
-                readFile(resolve(root, 'index.html'), 'utf8'),
-            );
-            stage = 'route-styles';
-            const prefixes =
-                page.request?.kind === 'product'
-                    ? ['product-detail-page-']
-                    : page.request?.kind === 'catalog'
-                      ? [
-                            'account-catalog-surfaces-',
-                            ...(page.request.path === '/search' ? ['search-loading-', 'search-page-'] : []),
-                        ]
-                      : [];
-            const preloadScripts =
-                page.request?.kind === 'home' && typeof renderer.getPublicRouteScriptPreloads === 'function';
-            const assets: string[] = await measurePublicDocument('render-styles', () =>
-                prefixes.length || preloadScripts
-                    ? readdir(resolve(root, 'assets')).catch(error => {
-                          if (prefixes.length) throw error;
-                          // An optional download hint must not make an otherwise valid HTML response fail.
-                          return [];
-                      })
-                    : Promise.resolve([]),
-            );
-            const styles = prefixes.flatMap(prefix =>
-                assets.filter(file => file.endsWith('.css') && file.startsWith(prefix)).sort(),
-            );
-            if (prefixes.some(prefix => !styles.some(file => file.startsWith(prefix))))
-                throw new Error('Missing public route stylesheet');
-            let scriptPreloads: string[] = [];
-            if (preloadScripts) {
-                try {
-                    const hints = await measurePublicDocument('render-styles', async () =>
-                        renderer.getPublicRouteScriptPreloads?.(page, assets, async file => {
-                            if (!scriptAssetName.test(file) || !assets.includes(file))
-                                throw new Error('Invalid public script asset');
-                            return readFile(resolve(root, 'assets', file), 'utf8');
-                        }),
-                    );
-                    if (hints?.every(file => scriptAssetName.test(file) && assets.includes(file)))
-                        scriptPreloads = hints;
-                } catch {
-                    // Older or incompatible optional hint providers retain the existing rendering path.
+            const generate = async () => {
+                stage = 'template-read';
+                const template = await measurePublicDocument('render-template', () =>
+                    readFile(resolve(root, 'index.html'), 'utf8'),
+                );
+                stage = 'route-styles';
+                const prefixes =
+                    page.request?.kind === 'product'
+                        ? ['product-detail-page-']
+                        : page.request?.kind === 'catalog'
+                          ? [
+                                'account-catalog-surfaces-',
+                                ...(page.request.path === '/search'
+                                    ? ['search-loading-', 'search-page-']
+                                    : []),
+                            ]
+                          : [];
+                const preloadScripts =
+                    page.request?.kind === 'home' &&
+                    typeof renderer.getPublicRouteScriptPreloads === 'function';
+                const assets: string[] = await measurePublicDocument('render-styles', () =>
+                    prefixes.length || preloadScripts
+                        ? readdir(resolve(root, 'assets')).catch(error => {
+                              if (prefixes.length) throw error;
+                              // An optional download hint must not make an otherwise valid HTML response fail.
+                              return [];
+                          })
+                        : Promise.resolve([]),
+                );
+                const styles = prefixes.flatMap(prefix =>
+                    assets.filter(file => file.endsWith('.css') && file.startsWith(prefix)).sort(),
+                );
+                if (prefixes.some(prefix => !styles.some(file => file.startsWith(prefix))))
+                    throw new Error('Missing public route stylesheet');
+                let scriptPreloads: string[] = [];
+                if (preloadScripts) {
+                    try {
+                        const hints = await measurePublicDocument('render-styles', async () =>
+                            renderer.getPublicRouteScriptPreloads?.(page, assets, async file => {
+                                if (!scriptAssetName.test(file) || !assets.includes(file))
+                                    throw new Error('Invalid public script asset');
+                                return readFile(resolve(root, 'assets', file), 'utf8');
+                            }),
+                        );
+                        if (hints?.every(file => scriptAssetName.test(file) && assets.includes(file)))
+                            scriptPreloads = hints;
+                    } catch {
+                        // Older or incompatible optional hint providers retain the existing rendering path.
+                    }
                 }
+                stage = 'body-render';
+                const body = await measurePublicDocument('render-react', () =>
+                    renderer.renderPublicPage(page),
+                );
+                if (!body.trim()) throw new Error('Public renderer produced empty HTML');
+                stage = 'html-assemble';
+                return measurePublicDocumentSync('render-assemble', () =>
+                    assemblePublicHtml(template, page, body, styles, scriptPreloads),
+                );
+            };
+            const expiresAt = page.generatedAt + SNAPSHOT_LIFETIME;
+            const ttl = Math.min(SNAPSHOT_LIFETIME, expiresAt - Date.now());
+            if (
+                !this.publicCache ||
+                !ctx ||
+                ctx.apiType !== 'shop' ||
+                ctx.activeUserId ||
+                ctx.session ||
+                !isReusablePublicPageData(page) ||
+                (page.config as { accessMode?: string }).accessMode !== 'LIVE' ||
+                page.scope.priceContext !== 'public' ||
+                page.scope.channelCode !== ctx.channel.code ||
+                page.scope.languageCode !== String(ctx.languageCode) ||
+                page.scope.currencyCode !== String(ctx.currencyCode) ||
+                page.failures.length ||
+                !Number.isFinite(ttl) ||
+                ttl <= 0
+            ) {
+                recordPublicHtmlCache('bypass');
+                return await generate();
             }
-            stage = 'body-render';
-            const body = await measurePublicDocument('render-react', () => renderer.renderPublicPage(page));
-            if (!body.trim()) throw new Error('Public renderer produced empty HTML');
-            stage = 'html-assemble';
-            return measurePublicDocumentSync('render-assemble', () =>
-                assemblePublicHtml(template, page, body, styles, scriptPreloads),
+            stage = 'html-cache';
+            // Include every rendered input, including media, SEO and coupon audience.
+            // Resolve the actual renderer before a hit so a deployment switch changes its identity.
+            const key = measurePublicDocumentSync('render-key', () =>
+                createHash('sha256')
+                    .update(
+                        JSON.stringify([
+                            String(ctx.channelId),
+                            root,
+                            Object.fromEntries(
+                                Object.keys(page)
+                                    .sort()
+                                    .map(field => [field, page[field as keyof StorefrontPageData]]),
+                            ),
+                        ]),
+                    )
+                    .digest('hex'),
             );
+            return await this.publicCache.readThrough(ctx, `rendered-html:v1:${key}`, ttl, generate, {
+                shouldCache: html => this.admit(html, expiresAt),
+                observeRead: recordPublicHtmlCache,
+            });
         } catch (error) {
             // A broken/missing render artifact is temporary, never an indexable empty 200 page.
             throw new PublicHtmlRenderError(stage, error);
