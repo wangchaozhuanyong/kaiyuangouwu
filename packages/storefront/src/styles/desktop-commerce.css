@@ -1122,27 +1122,28 @@
         margin-top: 20px;
         background: var(--surface);
         border-radius: var(--skin-card-radius);
-        box-shadow: var(--skin-card-shadow);
-        border: var(--skin-card-outline, 0);
+        box-shadow: none;
+        border: 0;
     }
     .desktop-catalog-help h2 {
-        margin: 0 0 10px;
-        font-size: var(--type-section-size);
-        line-height: var(--type-section-leading);
+        margin: 0 0 8px;
+        font-size: var(--type-card-size);
+        line-height: var(--type-card-leading);
+        font-weight: var(--font-weight-semibold);
     }
     .desktop-catalog-help p {
+        margin: 0;
         color: var(--muted);
         font-size: var(--type-helper-size);
         line-height: var(--type-helper-leading);
     }
     .desktop-catalog-help button {
-        margin-top: 12px;
-        min-height: 44px;
-        border: 0;
-        padding: 8px 12px;
         border-radius: var(--skin-control-radius);
         color: var(--accent-ink);
         background: var(--accent-soft);
+    }
+    .desktop-catalog-help button:hover {
+        background: var(--interaction-pressed);
     }
     .desktop-catalog-workspace {
         min-width: 0;
