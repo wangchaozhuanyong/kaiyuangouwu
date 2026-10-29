@@ -15,6 +15,7 @@ import {
 
 import { ShopApi } from '../api';
 import allCategoriesIcon from '../assets/icons/catalog-directory-color.webp';
+import { paginatedMediaCatalogs } from '../catalog-media-pages';
 import { nextCatalogPageParam, validateCatalogPage } from '../catalog-pagination';
 import {
     catalogInputFromRoute,
@@ -33,6 +34,7 @@ import { isInputMethodKey } from '../input-method';
 import { offlineLoadError, storefrontInitialQueryError, storefrontQueryPresentation } from '../loading-state';
 import { PageReadinessError, usePageLoadingState, usePageReadiness } from '../page-readiness';
 import { priceSortActionLabel } from '../price-sort-label';
+import { PublicCatalogMediaProvider } from '../public-catalog-media';
 import {
     STOREFRONT_CATALOG_PAGE_SIZE,
     PUBLIC_QUERY_GC_TIME,
@@ -796,36 +798,43 @@ export function SearchPage({ embedded }: { embedded?: EmbeddedSearchControl } = 
                             className={`product-list${embedded ? '' : ' search-route-product-list'}`}
                             aria-busy={searchQuery.isPlaceholderData}
                         >
-                            {results.map((product, index) =>
-                                embedded ? (
-                                    <ProductRow
-                                        key={product.id}
-                                        priority={index < 2}
-                                        fetchPriority={index === 0 ? 'high' : 'auto'}
-                                        product={product}
-                                        layout="compact"
-                                        showDescription={false}
-                                        market={market}
-                                        locale={locale}
-                                        language={language}
-                                        onOpen={() => navigateTo({ name: 'product', id: product.id })}
-                                    />
-                                ) : (
-                                    <ProductCard
-                                        key={product.id}
-                                        priority={index === 0}
-                                        eager={index < 5}
-                                        imageSizes={STOREFRONT_IMAGE_SIZES.searchCard}
-                                        responsiveRow
-                                        appearance="plain"
-                                        product={product}
-                                        market={market}
-                                        locale={locale}
-                                        language={language}
-                                        onOpen={() => navigateTo({ name: 'product', id: product.id })}
-                                    />
-                                ),
-                            )}
+                            <PublicCatalogMediaProvider
+                                market={market}
+                                language={language}
+                                collections={collections}
+                                catalogs={paginatedMediaCatalogs(searchInput, searchQuery.data, '/search')}
+                            >
+                                {results.map((product, index) =>
+                                    embedded ? (
+                                        <ProductRow
+                                            key={product.id}
+                                            priority={index < 2}
+                                            fetchPriority={index === 0 ? 'high' : 'auto'}
+                                            product={product}
+                                            layout="compact"
+                                            showDescription={false}
+                                            market={market}
+                                            locale={locale}
+                                            language={language}
+                                            onOpen={() => navigateTo({ name: 'product', id: product.id })}
+                                        />
+                                    ) : (
+                                        <ProductCard
+                                            key={product.id}
+                                            priority={index === 0}
+                                            eager={index < 5}
+                                            imageSizes={STOREFRONT_IMAGE_SIZES.searchCard}
+                                            responsiveRow
+                                            appearance="plain"
+                                            product={product}
+                                            market={market}
+                                            locale={locale}
+                                            language={language}
+                                            onOpen={() => navigateTo({ name: 'product', id: product.id })}
+                                        />
+                                    ),
+                                )}
+                            </PublicCatalogMediaProvider>
                             {appendTimedOut && loadingState ? (
                                 <PageReadinessError inline state={{ ...loadingState, retry: retryAppend }} />
                             ) : loadMoreError ? (
