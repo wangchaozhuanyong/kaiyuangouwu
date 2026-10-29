@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-import { getPublicRouteScriptPreloads } from './entry-public-server';
+import { getPublicRouteScriptPreloads, publicRouteScriptPreloadScope } from './entry-public-server';
 import { type PublicPageData } from './storefront-page-data';
 
 vi.mock('./public-snapshot', () => ({ createPublicSnapshotApp: vi.fn() }));
@@ -12,6 +12,16 @@ const home = 'home-page-Abc_12-3.js';
 const emptySource = () => Promise.resolve('');
 
 describe('matching public route script hints', () => {
+    it('declares the existing home-only hints independent of public snapshot data', async () => {
+        expect(publicRouteScriptPreloadScope).toBe('home-static-v1');
+        expect(await getPublicRouteScriptPreloads(page('home'), [wrapper, home], emptySource)).toEqual(
+            await getPublicRouteScriptPreloads(
+                { ...page('home'), scope: { host: 'other.test' } } as PublicPageData,
+                [wrapper, home],
+                emptySource,
+            ),
+        );
+    });
     it('selects only the two actual home roots without guessing the entry or unrelated features', async () => {
         const assets = [
             'index-Abc_12-3.js',

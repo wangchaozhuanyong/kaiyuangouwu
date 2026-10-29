@@ -5,6 +5,9 @@ import { staticModuleImports } from '../scripts/initial-resource-budget.mjs';
 import { createPublicSnapshotApp } from './public-snapshot';
 import { type PublicPageData } from './storefront-page-data';
 
+/** These home hints depend only on this immutable artifact, never commerce or merchant data. */
+export const publicRouteScriptPreloadScope = 'home-static-v1' as const;
+
 /** Optional hints from this renderer's own asset directory; never execute route modules. */
 export async function getPublicRouteScriptPreloads(
     page: PublicPageData,
