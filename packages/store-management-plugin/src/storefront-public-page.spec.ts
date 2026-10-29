@@ -2202,37 +2202,46 @@ it('shares timed-out optional source reads across different public page assembli
 });
 
 describe('prepared homepage coupons', () => {
-    it('prepares only anonymous allowlisted fields and reuses the next snapshot', async () => {
-        const h = accessHarness('LIVE', true);
-        h.campaigns.findActiveCoupons.mockResolvedValue([
-            {
-                id: 7,
-                name: 'Prepared coupon',
-                kind: 'ORDER_FIXED',
-                claimed: false,
-                claimable: true,
-                minimumSpend: 1000,
-                discountAmount: 100,
-                currencyCode: 'MYR',
-                remainingIssueCount: 5,
-                customerIds: ['must-not-be-public'],
-                claimedCount: 999,
-            },
-        ]);
-        const page = await h.service.read(
-            h.ctx,
-            'a.test',
-            { kind: 'home' },
-            { refresh: true, prepareCoupons: true },
-        );
-        expect(page.couponCampaigns).toEqual([
-            expect.objectContaining({ id: '7', name: 'Prepared coupon', claimed: false }),
-        ]);
-        expect(JSON.stringify(page.couponCampaigns)).not.toContain('must-not-be-public');
-        expect(JSON.stringify(page.couponCampaigns)).not.toContain('claimedCount');
-        const next = await h.service.read(h.ctx, 'a.test', { kind: 'home' });
-        expect(next.couponCampaigns).toEqual(page.couponCampaigns);
-        expect(h.campaigns.findActiveCoupons).toHaveBeenCalledTimes(1);
+    it.each([true, false])(
+        'prepares only anonymous allowlisted fields in the cache owner (worker=%s)',
+        async worker => {
+            const h = accessHarness('LIVE', worker);
+            h.campaigns.findActiveCoupons.mockResolvedValue([
+                {
+                    id: 7,
+                    name: 'Prepared coupon',
+                    kind: 'ORDER_FIXED',
+                    claimed: false,
+                    claimable: true,
+                    minimumSpend: 1000,
+                    discountAmount: 100,
+                    currencyCode: 'MYR',
+                    remainingIssueCount: 5,
+                    customerIds: ['must-not-be-public'],
+                    claimedCount: 999,
+                },
+            ]);
+            const page = await h.service.read(
+                h.ctx,
+                'a.test',
+                { kind: 'home' },
+                { refresh: true, prepareCoupons: true },
+            );
+            expect(page.couponCampaigns).toEqual([
+                expect.objectContaining({ id: '7', name: 'Prepared coupon', claimed: false }),
+            ]);
+            expect(JSON.stringify(page.couponCampaigns)).not.toContain('must-not-be-public');
+            expect(JSON.stringify(page.couponCampaigns)).not.toContain('claimedCount');
+            const next = await h.service.read(h.ctx, 'a.test', { kind: 'home' });
+            expect(next.couponCampaigns).toEqual(page.couponCampaigns);
+            expect(h.campaigns.findActiveCoupons).toHaveBeenCalledTimes(1);
+        },
+    );
+    it('keeps a shared-cache API from doing coupon preparation even with the internal warm option', async () => {
+        const h = accessHarness('LIVE', false, { getOrCreateVersion: () => Promise.resolve('shared') });
+        const page = await h.service.read(h.ctx, 'a.test', { kind: 'home' }, { prepareCoupons: true });
+        expect(page.couponCampaigns).toBeUndefined();
+        expect(h.campaigns.findActiveCoupons).not.toHaveBeenCalled();
     });
     it('does not start or wait for coupon origin work on a cold visitor request', async () => {
         const h = accessHarness();
