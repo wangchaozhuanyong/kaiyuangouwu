@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RouteState, SortMode } from '../storefront-router';
 
 import { ShopApi } from '../api';
+import { paginatedMediaCatalogs } from '../catalog-media-pages';
 import { minimumProductPrice } from '../catalog-page-utils';
 import { catalogInputFromRoute } from '../catalog-route-query';
 import { animateCategoryScroll, centeredHorizontalScrollLeft } from '../category-navigation';
@@ -31,6 +32,7 @@ import { storefrontInitialQueryError, storefrontQueryPresentation } from '../loa
 import { PageReadinessError, usePageLoadingState, usePageReadiness } from '../page-readiness';
 import { priceSortActionLabel } from '../price-sort-label';
 import { productAvailability } from '../product-availability';
+import { PublicCatalogMediaProvider } from '../public-catalog-media';
 import { storefrontQueryKeys } from '../query-client';
 import { catalogCardImageSizes, STOREFRONT_IMAGE_SIZES } from '../responsive-image';
 import { CategoryPageContext } from '../storefront-page-contexts';
@@ -838,20 +840,31 @@ export function CategoryPage() {
                     ) : categoryProducts.length ? (
                         <>
                             <div className="category-product-list desktop-product-grid" data-content-reveal>
-                                {visibleProducts.map((product, index) => (
-                                    <ProductCard
-                                        key={product.id}
-                                        responsiveRow
-                                        eager={index < 5}
-                                        priority={index === 0}
-                                        imageSizes={catalogCardImageSizes(hasChildCategories)}
-                                        product={product}
-                                        market={market}
-                                        locale={locale}
-                                        language={language}
-                                        onOpen={() => navigateTo({ name: 'product', id: product.id })}
-                                    />
-                                ))}
+                                <PublicCatalogMediaProvider
+                                    market={market}
+                                    language={language}
+                                    collections={collections}
+                                    catalogs={paginatedMediaCatalogs(
+                                        catalogInput,
+                                        catalogQuery.data,
+                                        '/category',
+                                    )}
+                                >
+                                    {visibleProducts.map((product, index) => (
+                                        <ProductCard
+                                            key={product.id}
+                                            responsiveRow
+                                            eager={index < 5}
+                                            priority={index === 0}
+                                            imageSizes={catalogCardImageSizes(hasChildCategories)}
+                                            product={product}
+                                            market={market}
+                                            locale={locale}
+                                            language={language}
+                                            onOpen={() => navigateTo({ name: 'product', id: product.id })}
+                                        />
+                                    ))}
+                                </PublicCatalogMediaProvider>
                             </div>
                             <CategoryPaginationStatus
                                 sentinelRef={pagination.sentinelRef}

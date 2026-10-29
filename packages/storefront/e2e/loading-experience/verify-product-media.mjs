@@ -16,6 +16,7 @@ assert.ok(fixture.startsWith(project + path.sep) && output.startsWith(project + 
 await mkdir(output, { recursive: true });
 const baseline = process.argv.includes('--baseline');
 const visual = process.argv.includes('--visual');
+const append = process.argv.includes('--append');
 const rounds = Number(process.env.PRODUCT_MEDIA_ROUNDS ?? 5);
 const width = Number(process.env.PRODUCT_MEDIA_WIDTH ?? 1659);
 const height = width === 390 ? 844 : width === 1659 ? 1114 : 900;
@@ -326,6 +327,29 @@ try {
                             );
                     }
             }
+        }
+        if (append && !baseline) {
+            failImages = true;
+            await page.locator('.category-pagination-status').scrollIntoViewIfNeeded();
+            await page.waitForFunction(() => document.querySelectorAll('.product-card').length === 15);
+            await page.waitForTimeout(300);
+            const appended = await page.evaluate(() =>
+                [...document.querySelectorAll('.product-card')].slice(12).map(card => {
+                    const preview = card.querySelector('img.safe-image-preview');
+                    return {
+                        name: card.querySelector('.product-card-name')?.textContent,
+                        preview: !!preview?.complete && preview.naturalWidth > 0,
+                        height: card.getBoundingClientRect().height,
+                    };
+                }),
+            );
+            await page.screenshot({ path: path.join(output, `round-${round}-appended.png`) });
+            await writeFile(path.join(output, 'appended.json'), JSON.stringify(appended, null, 2));
+            assert.equal(appended.length, 3);
+            assert.ok(
+                appended.every(card => card.preview),
+                'Appended products retain their own inline previews',
+            );
         }
         await context.close();
     }

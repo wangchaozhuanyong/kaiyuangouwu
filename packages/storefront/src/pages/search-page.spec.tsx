@@ -5,13 +5,17 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { mediaDescriptor } from '../../../storefront-content-plugin/src/shared/responsive-image';
+import { syntheticPage } from '../../e2e/seo-public/fixtures.mjs';
 import { ShopApi } from '../api';
 import { CatalogPaginationError } from '../catalog-pagination';
+import { publicCatalogRequest } from '../catalog-route-query';
 import { enabledMarkets } from '../i18n';
 import { PageReadinessBoundary } from '../page-readiness';
 import { storefrontQueryKeys } from '../query-client';
 import { registerStorefrontNavigationHistory } from '../storefront-navigation-history';
 import { SearchPageContext } from '../storefront-page-contexts';
+import { seedPublicPage } from '../storefront-page-data';
 import { Product } from '../types';
 
 import { SearchPage, type EmbeddedSearchControl, type SearchPageProps } from './search-page';
@@ -57,6 +61,54 @@ describe('search result and product-detail cache separation', () => {
     let client: QueryClient;
     let root: ReturnType<typeof createRoot>;
     let container: HTMLDivElement;
+    it.each([false, true])(
+        'keeps matching previews when search appends another public page (desktop=%s)',
+        async desktop => {
+            viewport.desktop = desktop;
+            client.removeQueries({ queryKey: searchKey });
+            const preview = 'data:image/webp;base64,AAAA';
+            const catalog = vi.fn(input => {
+                const skip = input.skip ?? 0;
+                const items = Array.from({ length: skip ? 1 : 12 }, (_, offset) => {
+                    const id = String(skip + offset);
+                    return {
+                        ...product,
+                        id,
+                        featuredAsset: { id, preview: `/assets/preview/search-${id}.webp?v=one` },
+                    };
+                });
+                const page = syntheticPage('synthetic-a', 'en', 'catalog');
+                page.scope = {
+                    ...page.scope,
+                    host: location.host,
+                    channelCode: market.code,
+                    currencyCode: market.currencyCode,
+                };
+                page.config.code = market.code;
+                page.collections = [];
+                page.request = publicCatalogRequest(input, '/search', 'store');
+                page.catalog = { items, totalItems: 13 };
+                page.media = items.map(item =>
+                    mediaDescriptor(item.featuredAsset.preview, 'card', { inlinePreview: preview }),
+                );
+                seedPublicPage(client, page, true, false);
+                return Promise.resolve(page.catalog);
+            });
+            renderDiscovery({ initialQuery: 'coffee', api: { catalog } as unknown as ShopApi });
+            await vi.waitFor(() => expect(container.querySelector('.search-load-more')).not.toBeNull());
+            expect(container.querySelectorAll('.product-card img.safe-image-preview')).toHaveLength(12);
+            act(() => required(container.querySelector<HTMLButtonElement>('.search-load-more')).click());
+            await vi.waitFor(() => expect(container.querySelectorAll('.product-card')).toHaveLength(13));
+            expect(container.querySelectorAll('.product-card img.safe-image-preview')).toHaveLength(13);
+            expect(
+                container
+                    .querySelectorAll('.product-card')[12]
+                    .querySelector('img.safe-image-preview')
+                    ?.getAttribute('src'),
+            ).toBe(preview);
+            expect(catalog).toHaveBeenCalledTimes(2);
+        },
+    );
     function render() {
         void act(() =>
             root.render(
